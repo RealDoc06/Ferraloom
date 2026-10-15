@@ -82,7 +82,7 @@ impl BlockBehaviour for TripwireHookBlock {
     }
 
     fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
-        if args.moved || Block::from_state_id(args.old_state_id) == args.block {
+        if args.moved {
             return;
         }
         let props = TripwireHookProperties::from_state_id(args.old_state_id);
@@ -98,10 +98,11 @@ impl BlockBehaviour for TripwireHookBlock {
             );
         }
         if props.powered {
-            args.world.update_neighbor(args.position, args.block);
-            args.world.update_neighbor(
-                &args.position.offset(props.facing.opposite().to_offset()),
+            Self::update_neighbors_on_axis(
                 args.block,
+                args.world,
+                *args.position,
+                props.facing.to_block_direction(),
             );
         }
     }
@@ -262,16 +263,20 @@ impl TripwireHookBlock {
 
         if start_hook_props.attached != future_attached {
             for l in 1..j {
-                let current_wrie_pos =
+                let current_wire_pos =
                     start_hook_pos.offset_dir(start_hook_props.facing.to_offset(), l);
-                if let Some(mut lv8) = wires_props[l as usize] {
-                    lv8.attached = future_attached;
+                let current_block = world.get_block(&current_wire_pos);
+                if let Some(mut props) = wires_props[l as usize]
+                    && (current_block == &Block::TRIPWIRE || current_block == &Block::TRIPWIRE_HOOK)
+                {
+                    // calculateState may cache the removed wire as an override.
+                    // Never recreate it over air or a command's replacement.
+                    props.attached = future_attached;
                     world.set_block_state(
-                        &current_wrie_pos,
-                        lv8.to_state_id(&Block::TRIPWIRE),
+                        &current_wire_pos,
+                        props.to_state_id(&Block::TRIPWIRE),
                         BlockFlags::NOTIFY_ALL,
                     );
-                    // if world.get_block(&lv7) != Block::AIR {}
                 }
             }
         }
@@ -310,10 +315,11 @@ impl TripwireHookBlock {
         block_pos: BlockPos,
         direction: BlockDirection,
     ) {
-        world.update_neighbor(&block_pos, block);
-        world.update_neighbors(
+        world.update_neighbors_at(&block_pos, block, None);
+        world.update_neighbors_at(
             &block_pos.offset(direction.opposite().to_offset()),
-            Some(direction),
+            block,
+            None,
         );
     }
 }

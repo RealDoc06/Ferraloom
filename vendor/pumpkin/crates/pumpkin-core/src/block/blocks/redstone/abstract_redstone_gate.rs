@@ -132,7 +132,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         let facing = props.get_facing();
         let front_pos = pos.offset(facing.opposite().to_offset());
         world.update_neighbor(&front_pos, block);
-        world.update_neighbors(&front_pos, Some(facing.to_block_direction()));
+        world.update_neighbors_at(&front_pos, block, Some(facing.to_block_direction()));
     }
 
     fn on_place(&self, player: &Player, block: &Block) -> BlockStateId {
@@ -167,7 +167,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
     where
         Self: Send + Sync,
     {
-        if args.moved || Block::from_state_id(args.old_state_id) == args.block {
+        if args.moved {
             return;
         }
         RedstoneGateBlock::update_target(

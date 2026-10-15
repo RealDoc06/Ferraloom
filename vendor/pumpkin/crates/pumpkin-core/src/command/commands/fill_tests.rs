@@ -41,7 +41,9 @@ async fn world_in_dimension(dimension: Dimension) -> (tempfile::TempDir, Arc<Wor
 
 fn dispatcher() -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::new();
-    register(&mut dispatcher, &PermissionRegistry::default());
+    let registry = PermissionRegistry::default();
+    register(&mut dispatcher, &registry);
+    crate::command::commands::setblock::register(&mut dispatcher, &registry);
     dispatcher
 }
 
@@ -452,6 +454,312 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
     );
 }
 
+async fn gate_removal_notifies_past_the_front_block() {
+    use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs};
+    use pumpkin_data::BlockId;
+    use pumpkin_data::block_properties::{
+        ComparatorLikeProperties, HorizontalFacing, RepeaterLikeProperties,
+    };
+    use std::sync::Mutex;
+
+    struct ObserveFront(Arc<Mutex<Vec<BlockStateId>>>);
+    impl BlockMetadata for ObserveFront {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::STONE].into()
+        }
+    }
+    impl BlockBehaviour for ObserveFront {
+        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+            if args.position.0.x == 8 && args.position.0.y == 100 {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(
+                        args.world
+                            .get_block_state_id(&BlockPos::new(6, 100, args.position.0.z)),
+                    );
+            }
+        }
+    }
+
+    let (_folder, mut world) = world().await;
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry)
+        .unwrap()
+        .register(ObserveFront(observed.clone()));
+    let dispatcher = dispatcher();
+    let source = CommandSource::dummy().with_world(world.clone());
+    for (index, (block, destroy)) in [
+        (&Block::REPEATER, false),
+        (&Block::REPEATER, true),
+        (&Block::COMPARATOR, false),
+        (&Block::COMPARATOR, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let z = 2 + index as i32 * 3;
+        let gate = BlockPos::new(6, 100, z);
+        for pos in [
+            gate.down(),
+            BlockPos::new(7, 100, z),
+            BlockPos::new(8, 100, z),
+        ] {
+            put(&world, pos, Block::STONE.default_state.id);
+        }
+        let state = if block == &Block::REPEATER {
+            let mut props = RepeaterLikeProperties::default(block);
+            props.facing = HorizontalFacing::West;
+            props.powered = true;
+            props.to_state_id(block)
+        } else {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.facing = HorizontalFacing::West;
+            props.powered = true;
+            let entity =
+                Arc::new(crate::block::entities::comparator::ComparatorBlockEntity::new(gate));
+            entity
+                .output_signal
+                .store(15, std::sync::atomic::Ordering::Relaxed);
+            world.add_block_entity(entity);
+            props.to_state_id(block)
+        };
+        put(&world, gate, state);
+        assert_eq!(world.get_block_state_id(&gate), state);
+        observed.lock().unwrap().clear();
+        let command = if destroy {
+            format!("fill 6 100 {z} 6 100 {z} gold_block destroy")
+        } else {
+            format!("setblock 6 100 {z} air")
+        };
+        assert_eq!(dispatcher.execute_input(&command, &source).unwrap(), 1);
+        let observed = observed.lock().unwrap();
+        assert!(
+            observed.contains(&BlockStateId::AIR),
+            "{command}: immediate removal must notify past the front block"
+        );
+        if destroy {
+            assert!(
+                observed.contains(&Block::GOLD_BLOCK.default_state.id),
+                "{command}: deferred removal must use the original gate's facing"
+            );
+        }
+    }
+}
+
+/// Advance only the fixture's real scheduled block queues and handlers. This
+/// does not exercise world activation, entity ticking or terrain scheduling.
+fn step_fixture_block_ticks(world: &Arc<World>, steps: usize) {
+    use crate::block::OnScheduledTickArgs;
+    for _ in 0..steps {
+        let mut ticks = Vec::new();
+        for x in 0..=1 {
+            ticks.extend(
+                world
+                    .level
+                    .read_chunk_sync(&Vector2::new(x, 0), |chunk| chunk.block_ticks.step_tick())
+                    .unwrap(),
+            );
+        }
+        ticks.sort_unstable();
+        for tick in ticks {
+            if world.get_block(&tick.position) == tick.value
+                && let Some(behavior) = world.block_registry.get_pumpkin_block(tick.value.id)
+            {
+                behavior.on_scheduled_tick(OnScheduledTickArgs {
+                    world,
+                    block: tick.value,
+                    position: &tick.position,
+                });
+            }
+        }
+    }
+}
+
+async fn tripwire_removal_updates_attached_hooks_and_retains_replacements() {
+    use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs};
+    use pumpkin_data::BlockId;
+    use pumpkin_data::block_properties::{TripwireHookLikeProperties, TripwireLikeProperties};
+    use std::sync::Mutex;
+
+    struct ObserveHookSupport(Arc<Mutex<Vec<BlockStateId>>>);
+    impl BlockMetadata for ObserveHookSupport {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::STONE].into()
+        }
+    }
+    impl BlockBehaviour for ObserveHookSupport {
+        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+            if args.position.0.x == 3 && args.position.0.y == 100 {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(
+                        args.world
+                            .get_block_state_id(&BlockPos::new(5, 100, args.position.0.z)),
+                    );
+            }
+        }
+    }
+
+    let (_folder, mut world) = world().await;
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry)
+        .unwrap()
+        .register(ObserveHookSupport(observed.clone()));
+    let dispatcher = dispatcher();
+    let source = CommandSource::dummy().with_world(world.clone());
+    for (index, (remove_hook, disarmed, destroy)) in [
+        (false, false, false),
+        (false, false, true),
+        (false, true, false),
+        (false, true, true),
+        (true, false, false),
+        (true, false, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let z = 2 + index as i32 * 2;
+        for x in 3..=11 {
+            put(
+                &world,
+                BlockPos::new(x, 99, z),
+                Block::STONE.default_state.id,
+            );
+        }
+        for x in [3, 4, 10] {
+            put(
+                &world,
+                BlockPos::new(x, 100, z),
+                Block::STONE.default_state.id,
+            );
+        }
+        // Place hooks first and the middle string last. Actual command placement
+        // must establish attachment; no attached=true fixture shortcut is used.
+        for (x, block) in [
+            (5, "tripwire_hook[facing=east]"),
+            (9, "tripwire_hook[facing=west]"),
+            (6, "tripwire"),
+            (8, "tripwire"),
+            (7, "tripwire"),
+        ] {
+            assert_eq!(
+                dispatcher
+                    .execute_input(&format!("setblock {x} 100 {z} {block}"), &source)
+                    .unwrap(),
+                1
+            );
+        }
+        step_fixture_block_ticks(&world, 12);
+        let west = BlockPos::new(5, 100, z);
+        let east = BlockPos::new(9, 100, z);
+        let middle = BlockPos::new(7, 100, z);
+        for hook in [west, east] {
+            assert_eq!(world.get_block(&hook), &Block::TRIPWIRE_HOOK);
+            let props = TripwireHookLikeProperties::from_state_id(world.get_block_state_id(&hook));
+            assert!(props.attached && !props.powered);
+            assert!(!world.is_block_tick_scheduled(&hook, &Block::TRIPWIRE_HOOK));
+        }
+        if disarmed {
+            let mut props =
+                TripwireLikeProperties::from_state_id(world.get_block_state_id(&middle));
+            props.disarmed = true;
+            world.set_block_state(
+                &middle,
+                props.to_state_id(&Block::TRIPWIRE),
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+        }
+        if remove_hook {
+            // A powered attached line also exercises the removed hook's own
+            // output notifications around its support, two blocks away.
+            for hook in [west, east] {
+                let mut props =
+                    TripwireHookLikeProperties::from_state_id(world.get_block_state_id(&hook));
+                props.powered = true;
+                put(&world, hook, props.to_state_id(&Block::TRIPWIRE_HOOK));
+            }
+            let mut props =
+                TripwireLikeProperties::from_state_id(world.get_block_state_id(&middle));
+            props.powered = true;
+            put(&world, middle, props.to_state_id(&Block::TRIPWIRE));
+        }
+        observed.lock().unwrap().clear();
+        let x = if remove_hook { 5 } else { 7 };
+        let command = if destroy {
+            format!("fill {x} 100 {z} {x} 100 {z} gold_block destroy")
+        } else {
+            format!("setblock {x} 100 {z} air")
+        };
+        assert_eq!(dispatcher.execute_input(&command, &source).unwrap(), 1);
+        let replacement = if destroy {
+            Block::GOLD_BLOCK.default_state.id
+        } else {
+            BlockStateId::AIR
+        };
+        assert_eq!(
+            world.get_block_state_id(&BlockPos::new(x, 100, z)),
+            replacement
+        );
+        for hook in [west, east]
+            .into_iter()
+            .filter(|hook| *hook != BlockPos::new(x, 100, z))
+        {
+            let props = TripwireHookLikeProperties::from_state_id(world.get_block_state_id(&hook));
+            if remove_hook || disarmed {
+                assert!(
+                    !props.attached && !props.powered,
+                    "{command}: detach without a pulse"
+                );
+            } else {
+                assert!(
+                    props.attached && props.powered,
+                    "{command}: armed string removal pulses before reset"
+                );
+            }
+        }
+        if remove_hook {
+            let observed = observed.lock().unwrap();
+            assert!(
+                observed.contains(&BlockStateId::AIR),
+                "{command}: notify the removed hook's support"
+            );
+            if destroy {
+                assert!(observed.contains(&replacement));
+            }
+        } else {
+            let scheduled = world
+                .level
+                .read_chunk_sync(&west.chunk_position(), |chunk| chunk.block_ticks.to_vec())
+                .unwrap();
+            assert!(scheduled.iter().any(|tick| tick.position == west
+                && tick.value == &Block::TRIPWIRE_HOOK
+                && tick.delay == 10));
+        }
+        step_fixture_block_ticks(&world, 12);
+        assert_eq!(
+            world.get_block_state_id(&BlockPos::new(x, 100, z)),
+            replacement
+        );
+        for hook in [west, east]
+            .into_iter()
+            .filter(|hook| *hook != BlockPos::new(x, 100, z))
+        {
+            let props = TripwireHookLikeProperties::from_state_id(world.get_block_state_id(&hook));
+            assert!(
+                !props.attached && !props.powered,
+                "{command}: line must be detached after reset"
+            );
+        }
+        for wire in [BlockPos::new(6, 100, z), BlockPos::new(8, 100, z)] {
+            assert!(
+                !TripwireLikeProperties::from_state_id(world.get_block_state_id(&wire)).attached
+            );
+        }
+    }
+}
+
 /// A regressed synchronous lock acquisition cannot be cancelled by a Tokio
 /// timeout. Bound the actual dispatcher test in a child process instead.
 #[test]
@@ -468,6 +776,8 @@ fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
                 destroy_callbacks_shapes_and_fluids().await;
                 destroy_deferred_removal_preserves_lever_notifications().await;
                 destroy_replacements_retain_new_entities_and_poi().await;
+                gate_removal_notifies_past_the_front_block().await;
+                tripwire_removal_updates_attached_hooks_and_retains_replacements().await;
             });
         return;
     }
