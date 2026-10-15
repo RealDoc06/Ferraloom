@@ -315,6 +315,7 @@ def spectator_barrel_case(server: LoggedServer, client: Client) -> dict:
     server.command(f"gamemode spectator {NAME}")
     spectator_positive = open_menu(client, pos, contents())
     close_menu(client)
+    closed_positive = processing_boundary(server, client)
     setup = server.command(f'data merge block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}')
     before = client.state()["packets"]
     sent = client.request("use_item_on", **dict(zip(("x", "y", "z"), pos)))
@@ -332,7 +333,8 @@ def spectator_barrel_case(server: LoggedServer, client: Client) -> dict:
     positive = open_menu(client, pos, contents())
     suite.check_predicate(server, f"unless data block {pos_text(pos)} LootTable")
     close_menu(client)
-    return {"spectator_positive": spectator_positive, "setup": setup, "spectator_action": sent,
+    return {"spectator_positive": spectator_positive, "closed_positive_boundary": closed_positive,
+            "setup": setup, "spectator_action": sent,
             "refusal_overlays": overlays, "processing_boundary": boundary,
             "pending_after_spectator_predicate": predicate, "survival_positive": positive}
 
