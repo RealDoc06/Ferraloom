@@ -1,6 +1,12 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_data::world::RAW;
+use pumpkin_util::text::color::NamedColor;
+
+/// Shared by Java chat and command validation before either budget is charged.
+pub(super) fn is_chat_message_illegal(message: &str) -> bool {
+    message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F')
+}
 
 impl JavaClient {
     pub async fn handle_chat_message(
@@ -9,15 +15,6 @@ impl JavaClient {
         player: &Arc<Player>,
         chat_message: SChatMessage<'_>,
     ) {
-        player.update_last_action_time();
-
-        if let Some(command) = chat_message.message.strip_prefix('/') {
-            let command_packet = SChatCommand { command };
-            self.handle_chat_command(player, server, &command_packet)
-                .await;
-            return;
-        }
-
         let gameprofile = &player.gameprofile;
 
         if let Err(err) = self.validate_chat_message(server, player, &chat_message) {
@@ -36,9 +33,14 @@ impl JavaClient {
             return;
         }
 
-        if player.check_chat_spam(server, crate::entity::player::SpamType::Chat) {
+        if matches!(player.config.load().chat_mode, ChatMode::Hidden) {
+            player.send_system_message(
+                &TextComponent::translate(translation::java::CHAT_DISABLED_OPTIONS, [])
+                    .color_named(NamedColor::Red),
+            );
             return;
         }
+        player.update_last_action_time();
 
         send_cancellable! {{
             server;
@@ -80,6 +82,10 @@ impl JavaClient {
                         None,
                     );
                 }
+
+                // The threshold-reaching message is broadcast before disconnect.
+                // Packet type selects the budget, even for text starting with '/'.
+                player.check_chat_spam(server, crate::entity::player::SpamType::Chat);
             }
         }}
     }
@@ -97,11 +103,7 @@ impl JavaClient {
             return Err(ChatError::OversizedMessage);
         }
         // Check for illegal characters
-        if chat_message
-            .message
-            .chars()
-            .any(|c| c == '§' || c < ' ' || c == '\x7F')
-        {
+        if is_chat_message_illegal(chat_message.message) {
             return Err(ChatError::IllegalCharacters);
         }
         // These checks are only run in secure chat mode
@@ -281,5 +283,20 @@ impl JavaClient {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_chat_message_illegal;
+
+    #[test]
+    fn java_chat_text_rejects_formatting_and_controls() {
+        for message in ["say\ntext", "say\ttext", "say §atext", "say\u{7f}text"] {
+            assert!(is_chat_message_illegal(message));
+        }
+        for message in ["say text", "/trigger marker", "Ciao 世界 👋", ""] {
+            assert!(!is_chat_message_illegal(message));
+        }
     }
 }

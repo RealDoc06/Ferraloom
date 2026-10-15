@@ -1,5 +1,6 @@
 pub mod advancement;
 pub(crate) mod chunk_watches;
+mod spam;
 pub mod statistics;
 
 use core::f32;
@@ -50,6 +51,7 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
+use spam::SpamCounters;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
@@ -490,8 +492,8 @@ pub struct Player {
     pub is_movement_locked: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
-    /// Counter for tracking chat and command spam. Decays each server tick.
-    pub chat_spam_tick_count: AtomicU32,
+    /// Independent chat and command budgets, decayed on every player/network tick.
+    spam_counters: SpamCounters,
     /// Item usage tracking for bows, crossbows, etc.
     pub using_item: AtomicBool,
     pub item_use_start_time: AtomicI32,
@@ -783,7 +785,7 @@ impl Player {
             client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
-            chat_spam_tick_count: AtomicU32::new(0),
+            spam_counters: SpamCounters::default(),
             // Item usage tracking
             using_item: AtomicBool::new(false),
             item_use_start_time: AtomicI32::new(0),
@@ -2997,15 +2999,9 @@ impl Player {
         self.tick_raid_omen();
         self.tick_maps(server);
 
-        // Anti-spam counter decay
-        let anti_spam = &server.advanced_config.chat.anti_spam;
-        if anti_spam.enabled && anti_spam.decay_per_tick > 0 {
-            let _ = self.chat_spam_tick_count.fetch_update(
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-                |count| Some(count.saturating_sub(anti_spam.decay_per_tick)),
-            );
-        }
+        // Player::tick also runs while simulation is frozen.
+        self.spam_counters
+            .tick(&server.advanced_config.chat.anti_spam);
 
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
@@ -4297,31 +4293,26 @@ impl Player {
         self.last_action_time.store(std::time::Instant::now());
     }
 
-    /// Checks whether sending a chat message or command constitutes spam.
+    /// Charges one message/command and disconnects at its budget's threshold.
+    /// Java handlers call this after broadcast/dispatch, including command failures.
     pub fn check_chat_spam(&self, server: &Server, spam_type: SpamType) -> bool {
         let anti_spam = &server.advanced_config.chat.anti_spam;
-        if !anti_spam.enabled {
-            return false;
-        }
+        let violation = self.spam_counters.record(anti_spam, spam_type, || {
+            // Vanilla checks operator membership, including level-zero operators.
+            // The guard is released before kick callbacks run.
+            server
+                .data
+                .operator_config
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_entry(&self.gameprofile.id)
+                .is_some()
+        });
 
-        if anti_spam.ops_bypass && self.permission_lvl.load() > PermissionLvl::Zero {
-            return false;
-        }
-
-        let threshold = match spam_type {
-            SpamType::Chat => anti_spam.chat_threshold_ticks(),
-            SpamType::Command => anti_spam.command_threshold_ticks(),
-        };
-
-        let new_count = self
-            .chat_spam_tick_count
-            .fetch_add(anti_spam.message_cost, Ordering::SeqCst)
-            + anti_spam.message_cost;
-
-        if new_count > threshold {
+        if let Some(violation) = violation {
             warn!(
                 "Player {} kicked for spamming (spam score: {}/{})",
-                self.gameprofile.name, new_count, threshold
+                self.gameprofile.name, violation.count, violation.threshold
             );
             self.kick(
                 DisconnectReason::Kicked,
@@ -8159,43 +8150,5 @@ mod tests {
         nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
 
         assert_eq!(read_root_vehicle(&nbt), Some(expected));
-    }
-
-    #[test]
-    fn anti_spam_counter_decay_and_threshold() {
-        use std::sync::atomic::{AtomicU32, Ordering};
-        let counter = AtomicU32::new(0);
-        let message_cost = 20u32;
-        let spam_threshold = 200u32;
-        let decay_per_tick = 1u32;
-
-        // 10 messages -> count = 200 (within threshold)
-        for _ in 0..10 {
-            counter.fetch_add(message_cost, Ordering::SeqCst);
-        }
-        assert_eq!(counter.load(Ordering::SeqCst), 200);
-        assert!(counter.load(Ordering::SeqCst) <= spam_threshold);
-
-        // 11th message -> count = 220 (exceeds threshold)
-        counter.fetch_add(message_cost, Ordering::SeqCst);
-        assert_eq!(counter.load(Ordering::SeqCst), 220);
-        assert!(counter.load(Ordering::SeqCst) > spam_threshold);
-
-        // Simulate 25 ticks of decay
-        for _ in 0..25 {
-            let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
-                Some(count.saturating_sub(decay_per_tick))
-            });
-        }
-        assert_eq!(counter.load(Ordering::SeqCst), 195);
-        assert!(counter.load(Ordering::SeqCst) <= spam_threshold);
-
-        // Simulate decay down past 0 (saturating at 0)
-        for _ in 0..250 {
-            let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
-                Some(count.saturating_sub(decay_per_tick))
-            });
-        }
-        assert_eq!(counter.load(Ordering::SeqCst), 0);
     }
 }
