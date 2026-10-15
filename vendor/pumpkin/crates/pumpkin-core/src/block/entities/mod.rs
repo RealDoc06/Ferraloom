@@ -91,14 +91,11 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
-    /// Atomically takes the pending loot-table key and seed from this block entity.
-    ///
-    /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
-    /// process. Returns `None` for entities that do not support loot tables, or if the
-    /// loot has already been generated.
-    fn take_loot_table(&self) -> Option<(String, i64)> {
-        None
-    }
+    /// Binds the owning world's weak loot source without running world callbacks.
+    fn bind_world(&self, _world: &World) {}
+
+    /// Uses the same lazy unpack operation as direct inventory access.
+    fn unpack_loot_table(&self, _world: &Arc<World>) {}
 
     /// Returns `true` if this block entity has a pending deferred loot table that has
     /// not yet been unpacked. Does not consume the loot table.

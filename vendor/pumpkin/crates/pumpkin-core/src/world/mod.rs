@@ -6851,6 +6851,7 @@ impl World {
             .get(&chunk_pos)
             .and_then(|m| m.get(block_pos).cloned())
         {
+            entity.bind_world(self);
             unload.mark_live(chunk_pos);
             return Some(entity);
         }
@@ -6869,6 +6870,7 @@ impl World {
                 .insert(*block_pos, custom_data.clone());
         }
         let entity = block_entity_from_nbt(&nbt)?;
+        entity.bind_world(self);
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -6936,6 +6938,7 @@ impl World {
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        block_entity.bind_world(self);
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
@@ -7036,6 +7039,7 @@ impl World {
             return Err(BlockEntityLoadError::NotPublished);
         }
 
+        expected.bind_world(self);
         expected.load_nbt(nbt)?;
         // Save the complete live state, never the more limited client update tag.
         // No unload-coordinator acquisition while holding the publication guard.
@@ -7845,19 +7849,7 @@ impl World {
 
     #[must_use]
     pub fn get_loot_table(&self, key: &str) -> Option<crate::world::loot::LootTableHandle> {
-        self.server.upgrade().map_or_else(
-            || {
-                let full_key = if key.contains(':') {
-                    key.to_string()
-                } else {
-                    format!("minecraft:{key}")
-                };
-                pumpkin_data::loot_table::get_loot_table(key)
-                    .or_else(|| pumpkin_data::loot_table::get_loot_table(&full_key))
-                    .map(crate::world::loot::LootTableHandle::Static)
-            },
-            |server| server.datapack_manager.get_loot_table(key),
-        )
+        crate::world::loot::get_loot_table_for_server(&self.server, key)
     }
 
     pub fn generate_loot(&self, loot_table: String) {

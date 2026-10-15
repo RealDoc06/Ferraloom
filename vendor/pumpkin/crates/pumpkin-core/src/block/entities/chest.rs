@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex as StdMutex, RwLock, atomic::AtomicBool};
+use std::sync::{Arc, RwLock, atomic::AtomicBool};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
@@ -8,19 +8,16 @@ use crate::{
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
 };
 
-use super::chest_like_block_entity::ChestLootState;
+use super::chest_like_block_entity::ChestState;
 
 pub struct ChestBlockEntity {
     pub position: BlockPos,
-    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    state: RwLock<ChestState<{ Self::INVENTORY_SIZE }>>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 
     // Viewer
     viewers: ViewerCountTracker,
-
-    /// Pending loot key and seed, reloaded atomically and consumed on first open.
-    loot: StdMutex<ChestLootState>,
 }
 
 impl ChestBlockEntity {

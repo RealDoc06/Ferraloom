@@ -5,7 +5,6 @@ use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
@@ -30,7 +29,6 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::fill_chest_inventory;
 use pumpkin_data::BlockState;
 
 struct ChestScreenFactory {
@@ -179,10 +177,20 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
 fn get_chest_screen_handler_factory(
     args: GetScreenHandlerFactoryArgs<'_>,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
-    let state = args.world.get_block_state_id(args.position);
-    let first_chest = args.world.get_block_entity(args.position);
+    chest_screen_handler_factory(
+        args.world,
+        args.position,
+        args.player.gamemode.load() == GameMode::Spectator,
+    )
+}
 
-    let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
+pub(crate) fn chest_screen_handler_factory(
+    world: &Arc<World>,
+    position: &BlockPos,
+    player_is_spectator: bool,
+) -> Option<Box<dyn ScreenHandlerFactory>> {
+    let state = world.get_block_state_id(position);
+    let first_chest = world.get_block_entity(position);
 
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
@@ -191,19 +199,9 @@ fn get_chest_screen_handler_factory(
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
-    let unpack = |entity: &Arc<dyn BlockEntity>| {
-        if let Some((loot_key, seed)) = entity.take_loot_table()
-            && let Some(table) = get_loot_table(&loot_key)
-            && let Some(inv) = entity.clone().get_inventory()
-        {
-            fill_chest_inventory(&inv, table, seed);
-            inv.mark_dirty();
-        }
-    };
-
     // Unpack deferred loot table on first open (non-spectator only).
     if !player_is_spectator && let Some(ref entity) = first_chest {
-        unpack(entity);
+        entity.unpack_loot_table(world);
     }
 
     let first_loot_pending = first_chest
@@ -211,13 +209,13 @@ fn get_chest_screen_handler_factory(
         .is_some_and(|entity| entity.has_loot_table());
     let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
-    if is_chest_blocked(args.world, args.position) {
+    if is_chest_blocked(world, position) {
         return None;
     }
 
     if let Some(direction) = connected_towards {
-        let neighbor_pos = args.position.offset(direction.to_offset());
-        if is_chest_blocked(args.world, &neighbor_pos) {
+        let neighbor_pos = position.offset(direction.to_offset());
+        if is_chest_blocked(world, &neighbor_pos) {
             return None;
         }
     }
@@ -225,24 +223,21 @@ fn get_chest_screen_handler_factory(
     // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
     if !player_is_spectator
         && let Some(direction) = connected_towards
-        && let Some(second) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
+        && let Some(second) = world.get_block_entity(&position.offset(direction.to_offset()))
     {
-        unpack(&second);
+        second.unpack_loot_table(world);
     }
 
     let loot_pending = first_loot_pending
         || connected_towards.is_some_and(|direction| {
-            args.world
-                .get_block_entity(&args.position.offset(direction.to_offset()))
+            world
+                .get_block_entity(&position.offset(direction.to_offset()))
                 .is_some_and(|second| second.has_loot_table())
         });
 
     let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
+        && let Some(second_inventory) = world
+            .get_block_entity(&position.offset(direction.to_offset()))
             .and_then(BlockEntity::get_inventory)
     {
         // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;

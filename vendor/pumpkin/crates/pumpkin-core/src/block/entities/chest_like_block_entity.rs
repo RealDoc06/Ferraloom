@@ -3,8 +3,41 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::identifier::Identifier;
 
+use std::sync::{Arc, Weak};
+
+use crate::server::Server;
+
+/// Contents and pending loot share a lock so slot access cannot cross a reload.
+pub(super) struct ChestState<const N: usize> {
+    pub items: [ItemStack; N],
+    pub loot: ChestLootState,
+    pub load_token: Arc<()>,
+    // Only a weak datapack source is needed by World::get_loot_table. Binding on
+    // publication also covers hopper/comparator access before the first tick/open.
+    pub server: Option<Weak<Server>>,
+    #[cfg(test)]
+    pub generated_hook: Option<Box<dyn FnOnce() + Send + Sync>>,
+    #[cfg(test)]
+    pub before_access_hook: Option<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+impl<const N: usize> ChestState<N> {
+    pub fn from_nbt(nbt: &NbtCompound) -> Self {
+        let (items, loot) = read_chest_nbt(nbt);
+        Self {
+            items,
+            loot,
+            load_token: Arc::new(()),
+            server: None,
+            #[cfg(test)]
+            generated_hook: None,
+            #[cfg(test)]
+            before_access_hook: None,
+        }
+    }
+}
+
 /// The key and seed must be reloaded, saved and consumed as one state.
-#[derive(Default)]
 pub(super) struct ChestLootState {
     pub key: Option<String>,
     pub seed: i64,
@@ -58,15 +91,14 @@ macro_rules! impl_block_entity_for_chest {
             where
                 Self: Sized,
             {
-                let (items, loot) =
-                    $crate::block::entities::chest_like_block_entity::read_chest_nbt(nbt);
                 Self {
                     position,
-                    items: std::sync::RwLock::new(items),
+                    state: std::sync::RwLock::new(
+                        $crate::block::entities::chest_like_block_entity::ChestState::from_nbt(nbt),
+                    ),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     comparator_dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot: StdMutex::new(loot),
                 }
             }
 
@@ -77,43 +109,47 @@ macro_rules! impl_block_entity_for_chest {
                 let (items, loot) =
                     $crate::block::entities::chest_like_block_entity::read_chest_nbt(nbt);
                 {
-                    // All two-lock operations take items before loot. No world or
-                    // inventory callbacks run under either lock.
-                    let mut live_items = self
-                        .items
+                    let mut state = self
+                        .state
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let mut live_loot = self
-                        .loot
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    *live_items = items;
-                    *live_loot = loot;
+                    state.items = items;
+                    state.loot = loot;
+                    // Identity avoids ABA even when the replacement key/seed match.
+                    state.load_token = std::sync::Arc::new(());
                 }
                 <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
                 Ok(())
             }
 
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-                let items = self
-                    .items
+                let state = self
+                    .state
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let loot = self
-                    .loot
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(key) = &loot.key {
+                if let Some(key) = &state.loot.key {
                     // Persist deferred loot: write the key and seed; skip items.
                     nbt.put_string("LootTable", key.clone());
-                    if loot.seed != 0 {
-                        nbt.put_long("LootTableSeed", loot.seed);
+                    if state.loot.seed != 0 {
+                        nbt.put_long("LootTableSeed", state.loot.seed);
                     }
                 } else {
                     // Loot has already been generated, so persist the actual items.
                     nbt.put_list("Items", Vec::new());
-                    pumpkin_inventory::sync_write_items_to_nbt(&*items, nbt);
+                    pumpkin_inventory::sync_write_items_to_nbt(&state.items, nbt);
                 }
+            }
+
+            fn bind_world(&self, world: &$crate::world::World) {
+                self.state
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .server = Some(world.server.clone());
+            }
+
+            fn unpack_loot_table(&self, world: &Arc<$crate::world::World>) {
+                <Self as $crate::block::entities::BlockEntity>::bind_world(self, world);
+                self.ensure_unpacked();
             }
 
             fn tick(&self, world: &Arc<$crate::world::World>) {
@@ -150,14 +186,10 @@ macro_rules! impl_block_entity_for_chest {
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                if let Ok(items) = self.items.try_read() {
-                    let loot = self
-                        .loot
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if loot.key.is_none() {
-                        pumpkin_inventory::sync_write_items_to_nbt(&*items, &mut nbt);
-                    }
+                if let Ok(state) = self.state.try_read()
+                    && state.loot.key.is_none()
+                {
+                    pumpkin_inventory::sync_write_items_to_nbt(&state.items, &mut nbt);
                 }
                 Some(nbt)
             }
@@ -166,18 +198,11 @@ macro_rules! impl_block_entity_for_chest {
                 self
             }
 
-            fn take_loot_table(&self) -> Option<(String, i64)> {
-                let mut guard = self
-                    .loot
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.key.take().map(|key| (key, guard.seed))
-            }
-
             fn has_loot_table(&self) -> bool {
-                self.loot
-                    .lock()
+                self.state
+                    .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .loot
                     .key
                     .is_some()
             }
@@ -195,51 +220,37 @@ macro_rules! impl_inventory_for_chest {
             }
 
             fn is_empty(&self) -> bool {
-                let items = self
-                    .items
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                items.iter().all(|s| s.is_empty())
+                self.unpacked_state().items.iter().all(ItemStack::is_empty)
             }
 
             fn get_stack(&self, slot: usize) -> ItemStack {
-                let items = self
-                    .items
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                items[slot].clone()
+                self.unpacked_state().items[slot].clone()
             }
 
             fn remove_stack(&self, slot: usize) -> ItemStack {
-                let mut items = self
-                    .items
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
+                let removed = std::mem::replace(
+                    &mut self.unpacked_state().items[slot],
+                    ItemStack::EMPTY.clone(),
+                );
                 self.mark_dirty();
                 removed
             }
 
             fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-                let mut items = self
-                    .items
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let res = if !items[slot].is_empty() && amount > 0 {
-                    items[slot].split(amount)
-                } else {
-                    ItemStack::EMPTY.clone()
+                let res = {
+                    let mut state = self.unpacked_state();
+                    if !state.items[slot].is_empty() && amount > 0 {
+                        state.items[slot].split(amount)
+                    } else {
+                        ItemStack::EMPTY.clone()
+                    }
                 };
                 self.mark_dirty();
                 res
             }
 
             fn set_stack(&self, slot: usize, stack: ItemStack) {
-                let mut items = self
-                    .items
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                items[slot] = stack;
+                self.unpacked_state().items[slot] = stack;
                 self.mark_dirty();
             }
 
@@ -270,11 +281,11 @@ macro_rules! impl_clearable_for_chest {
     ($struct_name:ty) => {
         impl pumpkin_inventory::Clearable for $struct_name {
             fn clear(&self) {
-                let mut items = self
-                    .items
+                self.state
                     .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                items.fill_with(|| ItemStack::EMPTY.clone());
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .items
+                    .fill_with(|| ItemStack::EMPTY.clone());
                 <$struct_name as pumpkin_inventory::Inventory>::mark_dirty(self);
             }
         }
@@ -346,19 +357,135 @@ macro_rules! impl_chest_helper_methods {
 
             #[must_use]
             pub fn new(position: pumpkin_util::math::position::BlockPos) -> Self {
-                use std::array::from_fn;
-                use std::sync::Mutex as StdMutex;
                 use std::sync::RwLock;
                 use std::sync::atomic::AtomicBool;
 
                 Self {
                     position,
-                    items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+                    state: RwLock::new(
+                        $crate::block::entities::chest_like_block_entity::ChestState::from_nbt(
+                            &pumpkin_nbt::compound::NbtCompound::new(),
+                        ),
+                    ),
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot: StdMutex::default(),
                 }
+            }
+
+            /// Generate without holding chest state or calling back into this inventory.
+            /// A reload invalidates the detached result, including identical key/seed loads.
+            #[expect(
+                clippy::panic,
+                reason = "Inventory cannot return an unbound-context error"
+            )]
+            fn ensure_unpacked(&self) {
+                loop {
+                    let (token, key, seed, server) = {
+                        let state = self
+                            .state
+                            .read()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let Some(key) = &state.loot.key else {
+                            return;
+                        };
+                        (
+                            state.load_token.clone(),
+                            key.clone(),
+                            state.loot.seed,
+                            state.server.clone(),
+                        )
+                    };
+                    // Inventory has no error return. Refuse unattached pending access
+                    // before accepting an item that Java-compatible saving would omit.
+                    let server = server.unwrap_or_else(|| {
+                        panic!("pending chest loot requires a bound world before inventory access")
+                    });
+                    let detached: std::sync::Arc<dyn pumpkin_inventory::Inventory> =
+                        std::sync::Arc::new(pumpkin_inventory::SimpleInventory::new(
+                            Self::INVENTORY_SIZE,
+                        ));
+                    if let Some(table) =
+                        $crate::world::loot::get_loot_table_for_server(&server, &key)
+                    {
+                        $crate::world::loot::fill_chest_inventory_handle(&detached, &table, seed);
+                    }
+                    // Vanilla's registry resolves a missing table to the empty table.
+                    let items = std::array::from_fn(|slot| detached.get_stack(slot));
+
+                    #[cfg(test)]
+                    {
+                        let hook = self.state.write().unwrap().generated_hook.take();
+                        if let Some(hook) = hook {
+                            hook(); // Real generation has finished; no state lock is held.
+                        }
+                    }
+
+                    let committed = {
+                        let mut state = self
+                            .state
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if std::sync::Arc::ptr_eq(&token, &state.load_token)
+                            && state.loot.key.is_some()
+                        {
+                            state.items = items;
+                            state.loot.key = None;
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if committed {
+                        <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
+                        return;
+                    }
+                }
+            }
+
+            /// The pending check and slot access share a lock. A load can install
+            /// new loot after ensure_unpacked returns, in which case retry first.
+            fn unpacked_state(
+                &self,
+            ) -> std::sync::RwLockWriteGuard<
+                '_,
+                $crate::block::entities::chest_like_block_entity::ChestState<
+                    { Self::INVENTORY_SIZE },
+                >,
+            > {
+                loop {
+                    self.ensure_unpacked();
+                    #[cfg(test)]
+                    {
+                        let hook = self.state.write().unwrap().before_access_hook.take();
+                        if let Some(hook) = hook {
+                            hook();
+                        }
+                    }
+                    let state = self
+                        .state
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if state.loot.key.is_none() {
+                        return state;
+                    }
+                }
+            }
+
+            #[cfg(test)]
+            pub(super) fn set_loot_generated_hook(
+                &self,
+                hook: impl FnOnce() + Send + Sync + 'static,
+            ) {
+                self.state.write().unwrap().generated_hook = Some(Box::new(hook));
+            }
+
+            #[cfg(test)]
+            pub(super) fn set_before_access_hook(
+                &self,
+                hook: impl FnOnce() + Send + Sync + 'static,
+            ) {
+                self.state.write().unwrap().before_access_hook = Some(Box::new(hook));
             }
 
             fn play_sound(

@@ -1,7 +1,10 @@
 //! Focused Rust dispatcher/persistence coverage, not official paired acceptance.
 //! CustomName, lock behavior and block-entity components remain unmodeled.
 
-use std::sync::{Arc, Barrier, Mutex, Weak};
+use std::{
+    sync::{Arc, Mutex, Weak, mpsc},
+    time::Duration,
+};
 
 use arc_swap::ArcSwap;
 use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
@@ -16,7 +19,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
 };
 use pumpkin_inventory::{
-    Inventory,
+    Inventory, SimpleInventory,
     double::DoubleInventory,
     entity_equipment::EntityEquipment,
     generic_container_screen_handler::{create_generic_9x3, create_generic_9x6},
@@ -38,13 +41,14 @@ use pumpkin_world::{
 use super::ChestBlockEntity;
 use crate::{
     block::{
+        blocks::chests::chest_screen_handler_factory,
         entities::{
             BlockEntity, comparator::ComparatorBlockEntity, trapped_chest::TrappedChestBlockEntity,
         },
         registry::default_registry,
     },
     command::{CommandSource, commands::default_dispatcher, node::dispatcher::CommandDispatcher},
-    world::World,
+    world::{World, loot::fill_chest_inventory_handle},
 };
 
 const BLOCK_POS: BlockPos = BlockPos::new(0, 64, 0);
@@ -77,6 +81,36 @@ impl ChestKind {
         match self {
             Self::Normal => Arc::new(ChestBlockEntity::from_nbt(nbt, position)),
             Self::Trapped => Arc::new(TrappedChestBlockEntity::from_nbt(nbt, position)),
+        }
+    }
+
+    fn on_generated(self, entity: &dyn BlockEntity, hook: impl FnOnce() + Send + Sync + 'static) {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .set_loot_generated_hook(hook),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .set_loot_generated_hook(hook),
+        }
+    }
+
+    fn before_access(self, entity: &dyn BlockEntity, hook: impl FnOnce() + Send + Sync + 'static) {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .set_before_access_hook(hook),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .set_before_access_hook(hook),
         }
     }
 
@@ -212,14 +246,17 @@ impl Fixture {
 }
 
 // A real menu needs a player inventory, but these tests need no network client.
-struct MenuPlayer(Arc<PlayerInventory>);
+struct MenuPlayer(Arc<PlayerInventory>, bool);
 
 impl MenuPlayer {
     fn new() -> Self {
-        Self(Arc::new(PlayerInventory::new(
-            Arc::new(Mutex::new(EntityEquipment::new())),
-            Arc::default(),
-        )))
+        Self(
+            Arc::new(PlayerInventory::new(
+                Arc::new(Mutex::new(EntityEquipment::new())),
+                Arc::default(),
+            )),
+            false,
+        )
     }
 }
 
@@ -236,6 +273,9 @@ impl InventoryPlayer for MenuPlayer {
     }
     fn is_creative(&self) -> bool {
         false
+    }
+    fn is_spectator(&self) -> bool {
+        self.1
     }
     fn experience_level(&self) -> i32 {
         0
@@ -511,7 +551,7 @@ async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items
         fixture.install(kind.block(), chest.clone());
         assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L,Items:[{Slot:5b,id:'minecraft:apple',count:4}]}"), 1);
         assert!(chest.has_loot_table());
-        assert!(inventory.is_empty()); // Pending loot suppresses the supplied Items.
+        assert!(saved(chest.as_ref()).get("Items").is_none());
         assert_eq!(fixture.execute("data modify block 0 64 0 LootTable set value 'minecraft:chests/abandoned_mineshaft'"), 1);
         assert_eq!(
             fixture.execute("data modify block 0 64 0 LootTableSeed set value -44L"),
@@ -540,13 +580,12 @@ async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items
             pending.get_string("LootTable")
         );
         assert_eq!(reloaded_data.get_long("LootTableSeed"), Some(-44));
-        assert!(reloaded.clone().get_inventory().unwrap().is_empty());
+        assert!(reloaded_data.get("Items").is_none());
         assert_eq!(fixture.execute("data remove block 0 64 0 LootTableSeed"), 1);
         assert!(saved(reloaded.as_ref()).get("LootTableSeed").is_none());
         assert!(reloaded.has_loot_table());
         assert_eq!(fixture.execute("data remove block 0 64 0 LootTable"), 1);
         assert!(!reloaded.has_loot_table());
-        assert!(reloaded.take_loot_table().is_none());
         assert!(
             saved(reloaded.as_ref())
                 .get_list("Items")
@@ -559,39 +598,27 @@ async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items
             1
         );
         assert_eq!(
-            reloaded.take_loot_table(),
-            Some(("minecraft:chests/simple_dungeon".into(), 0))
+            saved(reloaded.as_ref()).get_string("LootTable"),
+            Some("minecraft:chests/simple_dungeon")
         );
+        // Use the production generation/commit path, never manual take/fill.
+        let world = fixture.source.world();
+        reloaded.unpack_loot_table(&world);
         assert!(!reloaded.has_loot_table());
-        assert!(reloaded.take_loot_table().is_none());
-        let generated_inventory = reloaded.clone().get_inventory().unwrap();
-        // Stand in for the loot fill after take_loot_table. This tests persistence,
-        // not loot generation, randomness, or the first-open spectator rules.
-        generated_inventory.set_stack(0, ItemStack::new(5, &Item::DIAMOND));
-        assert_eq!(
-            fixture.execute("data modify block 0 64 0 Items[0].count set value 6"),
-            1
-        );
+        assert!(!reloaded.clone().get_inventory().unwrap().is_empty());
+        world.update_block_entity(&reloaded);
         assert!(fixture.pending(BLOCK_POS).get("LootTable").is_none());
         assert!(fixture.pending(BLOCK_POS).get("LootTableSeed").is_none());
         let generated_reloaded = fixture.reload_saved_chunk(BLOCK_POS);
         assert!(!generated_reloaded.has_loot_table());
-        assert_eq!(
-            generated_reloaded
-                .get_inventory()
-                .unwrap()
-                .get_stack(0)
-                .item_count,
-            6
-        );
+        assert_eq!(saved(generated_reloaded.as_ref()), saved(reloaded.as_ref()));
     }
 }
 
 #[test]
 fn chest_reload_matches_constructor_defaults_and_preserves_runtime_state() {
-    // Supplementary javap inspection of the pinned 26.3 JAR: ChestBlockEntity
-    // loadAdditional, RandomizableContainer.tryLoadLootTable and TagValueInput
-    // getLongOr. REA's unsupported JVM workflow was not used as a decompiler.
+    // Pinned 26.3 javap references: ChestBlockEntity.loadAdditional,
+    // RandomizableContainer.tryLoadLootTable and TagValueInput.getLongOr.
     for kind in CHESTS {
         let live = kind.new(BLOCK_POS);
         let inventory = live.clone().get_inventory().unwrap();
@@ -652,46 +679,349 @@ fn chest_reload_matches_constructor_defaults_and_preserves_runtime_state() {
             if snbt.contains("INVALID KEY") {
                 assert_eq!(inventory.get_stack(26).item_count, 2);
             }
-            let expected_loot = expected_loot.map(|(key, seed)| (key.to_string(), seed));
-            assert_eq!(live.take_loot_table(), expected_loot);
-            assert_eq!(constructed.take_loot_table(), expected_loot);
+            for entity in [&live, &constructed] {
+                let nbt = saved(entity.as_ref());
+                let loot = nbt
+                    .get_string("LootTable")
+                    .map(|key| (key.to_string(), nbt.get_long("LootTableSeed").unwrap_or(0)));
+                assert_eq!(
+                    loot,
+                    expected_loot.map(|(key, seed)| (key.to_string(), seed)),
+                    "{snbt}"
+                );
+            }
         }
         inventory.on_close();
         assert_eq!(kind.viewers(live.as_ref()), 0);
     }
 }
 
-#[test]
-fn chest_loot_reload_save_and_take_never_mix_key_and_seed() {
+fn stacks(inventory: &dyn Inventory) -> [ItemStack; 27] {
+    std::array::from_fn(|slot| inventory.get_stack(slot))
+}
+
+fn generated_stacks(world: &World, key: &str, seed: i64) -> [ItemStack; 27] {
+    let detached: Arc<dyn Inventory> = Arc::new(SimpleInventory::new(27));
+    fill_chest_inventory_handle(&detached, &world.get_loot_table(key).unwrap(), seed);
+    let items = stacks(detached.as_ref());
+    assert!(items.iter().any(|stack| !stack.is_empty()));
+    items
+}
+
+fn assert_stacks(inventory: &dyn Inventory, expected: &[ItemStack; 27]) {
+    for (slot, expected) in expected.iter().enumerate() {
+        let actual = inventory.get_stack(slot);
+        if expected.is_empty() {
+            assert!(actual.is_empty(), "slot {slot}");
+        } else {
+            assert!(actual.are_equal(expected), "slot {slot}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
+    #[derive(Debug)]
+    enum Access {
+        Get,
+        IsEmpty,
+        Set,
+        Remove,
+        RemoveSpecific,
+    }
     for kind in CHESTS {
-        let chest = kind.new(BLOCK_POS);
-        let first = compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:111L}");
-        let second =
-            compound("{LootTable:'minecraft:chests/abandoned_mineshaft',LootTableSeed:222L}");
-        let barrier = Barrier::new(2);
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                barrier.wait();
-                for iteration in 0..256 {
-                    chest
-                        .load_nbt(if iteration % 2 == 0 { &first } else { &second })
-                        .unwrap();
+        for access in [
+            Access::Get,
+            Access::IsEmpty,
+            Access::Set,
+            Access::Remove,
+            Access::RemoveSpecific,
+        ] {
+            let fixture = Fixture::new().await;
+            let world = fixture.source.world();
+            let chest = kind.new(BLOCK_POS);
+            fixture.install(kind.block(), chest.clone());
+            let inventory = chest.clone().get_inventory().unwrap();
+            let player = MenuPlayer::new();
+            let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+            assert_eq!(kind.viewers(chest.as_ref()), 1);
+            assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L,Items:[{Slot:5b,id:'minecraft:apple',count:99}]}"), 1);
+            assert!(chest.has_loot_table());
+            let pending = fixture.pending(BLOCK_POS);
+            assert!(pending.get("Items").is_none());
+            assert_eq!(pending.get_long("LootTableSeed"), Some(73));
+            let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+            let occupied = expected.iter().position(|stack| !stack.is_empty()).unwrap();
+            let deposit = ItemStack::read_item_stack(&compound("{id:'minecraft:emerald',count:11,components:{'minecraft:custom_data':{marker:17}}}")).unwrap();
+
+            // Each operation is the FIRST inventory access after /data. In
+            // particular Set must unpack before it accepts the deposited stack.
+            match access {
+                Access::Get => assert!(
+                    handler.get_behaviour().slots[occupied]
+                        .get_stack()
+                        .are_equal(&expected[occupied])
+                ),
+                Access::IsEmpty => assert!(!handler.inventory.is_empty()),
+                Access::Set => {
+                    handler.get_behaviour().slots[26].set_stack(deposit.clone());
+                    expected[26] = deposit.clone();
                 }
-            });
-            barrier.wait();
-            for _ in 0..256 {
-                let nbt = saved(chest.as_ref());
-                let persisted = nbt
-                    .get_string("LootTable")
-                    .map(|key| (key.to_string(), nbt.get_long("LootTableSeed").unwrap()));
-                for pair in [persisted, chest.take_loot_table()].into_iter().flatten() {
+                Access::Remove => {
                     assert!(
-                        pair == ("minecraft:chests/simple_dungeon".into(), 111)
-                            || pair == ("minecraft:chests/abandoned_mineshaft".into(), 222),
-                        "mixed loot state: {pair:?}"
+                        handler
+                            .inventory
+                            .remove_stack(occupied)
+                            .are_equal(&expected[occupied])
+                    );
+                    expected[occupied] = ItemStack::EMPTY.clone();
+                }
+                Access::RemoveSpecific => {
+                    let removed = expected[occupied].split(1);
+                    assert!(
+                        handler.get_behaviour().slots[occupied]
+                            .take_stack(1)
+                            .are_equal(&removed)
                     );
                 }
             }
+            assert!(!chest.has_loot_table(), "{access:?}");
+            assert_stacks(handler.inventory.as_ref(), &expected);
+            handler.get_behaviour().slots[26].set_stack(deposit.clone());
+            expected[26] = deposit;
+            assert_eq!(kind.viewers(chest.as_ref()), 1);
+            assert!(Arc::ptr_eq(&handler.inventory, &inventory));
+            assert!(Arc::ptr_eq(
+                &chest,
+                &world.get_block_entity(&BLOCK_POS).unwrap()
+            ));
+
+            // Production save snapshots the full live block entity. Serialize the
+            // terrain and reconstruct through normal lazy World lookup as well.
+            world.update_block_entity(&chest);
+            let persisted = fixture.pending(BLOCK_POS);
+            assert!(persisted.get("LootTable").is_none());
+            assert!(persisted.get("LootTableSeed").is_none());
+            let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+            assert!(!reloaded.has_loot_table());
+            let reloaded_inventory = reloaded.get_inventory().unwrap();
+            assert_stacks(reloaded_inventory.as_ref(), &expected);
+            assert_marker(&reloaded_inventory.get_stack(26));
+            assert_stacks(handler.inventory.as_ref(), &expected);
+        }
+    }
+}
+
+#[tokio::test]
+async fn chest_stale_real_generation_cannot_fill_a_data_replacement() {
+    for kind in CHESTS {
+        // Cover explicit Items, a different pending key, and an identical
+        // key/seed reload. The last case requires identity rather than equality.
+        for replacement in [
+            "data merge block 0 64 0 {LootTable:'INVALID KEY',Items:[{Slot:7b,id:'minecraft:emerald',count:11,components:{'minecraft:custom_data':{marker:17}}}]}",
+            "data modify block 0 64 0 LootTable set value 'minecraft:chests/abandoned_mineshaft'",
+            "data modify block 0 64 0 Items set value [{Slot:7b,id:'minecraft:emerald',count:11}]",
+        ] {
+            let fixture = Fixture::new().await;
+            let world = fixture.source.world();
+            let chest = kind.new(BLOCK_POS);
+            fixture.install(kind.block(), chest.clone());
+            let inventory = chest.clone().get_inventory().unwrap();
+            let player = MenuPlayer::new();
+            let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+            assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), 1);
+            let (generated_tx, generated_rx) = mpsc::channel();
+            let (resume_tx, resume_rx) = mpsc::channel();
+            let resume_rx = Mutex::new(resume_rx);
+            kind.on_generated(chest.as_ref(), move || {
+                generated_tx.send(()).unwrap();
+                // Timeout is only a deadlock guard. The channels enforce the
+                // interleaving after actual generation, with no sleeps/retries.
+                resume_rx
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(10))
+                    .unwrap();
+            });
+            let regenerated = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            std::thread::scope(|scope| {
+                let worker = scope.spawn(|| handler.get_behaviour().slots[7].get_stack());
+                generated_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                // The old result exists, but has not been committed or consumed.
+                assert!(chest.has_loot_table());
+                assert_eq!(fixture.execute(replacement), 1);
+                let pending = chest.has_loot_table();
+                let replacement_data = fixture.pending(BLOCK_POS);
+                let expected = if pending {
+                    generated_stacks(
+                        &world,
+                        replacement_data.get_string("LootTable").unwrap(),
+                        73,
+                    )
+                } else {
+                    let mut items = std::array::from_fn(|_| ItemStack::EMPTY.clone());
+                    pumpkin_inventory::sync_read_items_from_nbt(&replacement_data, &mut items);
+                    assert_eq!(items[7].item.id, Item::EMERALD.id);
+                    assert_eq!(items[7].item_count, 11);
+                    assert_marker(&items[7]);
+                    items
+                };
+                let flag = regenerated.clone();
+                kind.on_generated(chest.as_ref(), move || {
+                    flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                });
+                resume_tx.send(()).unwrap();
+                let accessed = worker.join().unwrap();
+                assert_eq!(
+                    regenerated.load(std::sync::atomic::Ordering::Relaxed),
+                    pending
+                );
+                assert!(accessed.are_equal(&expected[7]));
+                assert_stacks(inventory.as_ref(), &expected);
+                assert!(!chest.has_loot_table());
+                assert_eq!(kind.viewers(chest.as_ref()), 1);
+                assert!(Arc::ptr_eq(&handler.inventory, &inventory));
+                world.update_block_entity(&chest);
+                let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+                assert_stacks(reloaded.get_inventory().unwrap().as_ref(), &expected);
+            });
+        }
+    }
+}
+
+#[tokio::test]
+async fn chest_menu_insertion_rechecks_loot_loaded_after_ensure_unpacked() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let chest = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), chest.clone());
+        let inventory = chest.clone().get_inventory().unwrap();
+        let player = MenuPlayer::new();
+        let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let resume_rx = Mutex::new(resume_rx);
+        kind.before_access(chest.as_ref(), move || {
+            ready_tx.send(()).unwrap();
+            resume_rx
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap();
         });
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                handler.get_behaviour().slots[26].set_stack(ItemStack::new(11, &Item::EMERALD));
+            });
+            ready_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            // ensure_unpacked saw no loot. Reload exactly before slot access.
+            assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), 1);
+            assert!(chest.has_loot_table());
+            resume_tx.send(()).unwrap();
+            worker.join().unwrap();
+        });
+        let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        expected[26] = ItemStack::new(11, &Item::EMERALD);
+        assert!(!chest.has_loot_table());
+        assert_stacks(inventory.as_ref(), &expected);
+        assert_eq!(kind.viewers(chest.as_ref()), 1);
+        world.update_block_entity(&chest);
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert_stacks(reloaded.get_inventory().unwrap().as_ref(), &expected);
+    }
+}
+
+#[tokio::test]
+async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_half() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let first = kind.new(BLOCK_POS);
+        let second = kind.new(OTHER_POS);
+        fixture.install(kind.block(), first.clone());
+        fixture.install(kind.block(), second.clone());
+        let mut player = MenuPlayer::new();
+        player.1 = true;
+        assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), 1);
+        let pending = saved(first.as_ref());
+        let single = chest_screen_handler_factory(&world, &BLOCK_POS, true).unwrap();
+        assert!(
+            single
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        assert_eq!(saved(first.as_ref()), pending);
+        assert_eq!(kind.viewers(first.as_ref()), 0);
+        assert_eq!(fixture.execute("data remove block 0 64 0 LootTable"), 1);
+        let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
+        properties.facing = HorizontalFacing::South;
+        properties.r#type = ChestType::Right;
+        fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
+        properties.r#type = ChestType::Left;
+        fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
+        for (position, entity) in [(BLOCK_POS, &first), (OTHER_POS, &second)] {
+            assert_eq!(fixture.execute(&format!("data merge block {} 64 0 {{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}}", position.0.x)), 1);
+            let pending = saved(entity.as_ref());
+            for clicked in [BLOCK_POS, OTHER_POS] {
+                let factory = chest_screen_handler_factory(&world, &clicked, true).unwrap();
+                assert!(
+                    factory
+                        .create_screen_handler(1, &player.0, &player)
+                        .is_none()
+                );
+                assert_eq!(saved(entity.as_ref()), pending);
+                assert_eq!(kind.viewers(first.as_ref()), 0);
+                assert_eq!(kind.viewers(second.as_ref()), 0);
+            }
+            // Opening through production logic unpacks the pending half and
+            // retains both Inventory Arcs in the actual double container menu.
+            player.1 = false;
+            let factory = chest_screen_handler_factory(&world, &BLOCK_POS, false).unwrap();
+            let menu = factory
+                .create_screen_handler(1, &player.0, &player)
+                .unwrap();
+            assert!(!entity.has_loot_table());
+            assert!(
+                !menu
+                    .lock()
+                    .unwrap()
+                    .get_behaviour()
+                    .slots
+                    .iter()
+                    .take(54)
+                    .all(|slot| slot.get_stack().is_empty())
+            );
+            menu.lock().unwrap().on_closed(&player);
+            assert_eq!(kind.viewers(first.as_ref()), 0);
+            assert_eq!(kind.viewers(second.as_ref()), 0);
+            player.1 = true;
+            let spectator = chest_screen_handler_factory(&world, &OTHER_POS, true).unwrap();
+            assert!(
+                spectator
+                    .create_screen_handler(2, &player.0, &player)
+                    .is_some()
+            );
+        }
+    }
+}
+
+#[test]
+fn chest_unbound_pending_inventory_refuses_deposits_without_consuming_loot() {
+    for kind in CHESTS {
+        let chest = kind.from_nbt(
+            &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
+            BLOCK_POS,
+        );
+        let pending = saved(chest.as_ref());
+        let inventory = chest.clone().get_inventory().unwrap();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                inventory.set_stack(0, ItemStack::new(11, &Item::EMERALD));
+            }))
+            .is_err()
+        );
+        assert_eq!(saved(chest.as_ref()), pending);
+        assert!(chest.has_loot_table());
     }
 }

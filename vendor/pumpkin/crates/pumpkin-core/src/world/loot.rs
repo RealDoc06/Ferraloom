@@ -550,6 +550,19 @@ pub fn get_loot_table(key: &str) -> Option<LootTableHandle> {
         .map(LootTableHandle::Static)
 }
 
+/// Shared world lookup for live chests. Keep only a weak server reference so
+/// inventories retained by menus cannot keep the server/world graph alive.
+#[must_use]
+pub(crate) fn get_loot_table_for_server(
+    server: &std::sync::Weak<crate::server::Server>,
+    key: &str,
+) -> Option<LootTableHandle> {
+    server.upgrade().map_or_else(
+        || get_loot_table(key),
+        |server| server.datapack_manager.get_loot_table(key),
+    )
+}
+
 #[must_use]
 pub fn generate_loot_from_handle(
     handle: &LootTableHandle,
