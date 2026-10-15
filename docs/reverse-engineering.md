@@ -164,9 +164,14 @@ Modern saves use signed integer cooking and fuel timers and a floating-point
 as burn duration. Copies of that Java save retain their timers and continue
 cooking correctly in Java. The `571b6ca` Rust executable loses those timers on
 load. Independent lava-bucket copies also expose the missing bucket crafting
-remainder and wet-sponge conversion. These are diagnostic failures pending a
-repair and a fresh comparison, not passing feature evidence. The source fixture
-is kept immutable under the ignored reference cache; its canonical file
+remainder and wet-sponge conversion. After the repair, executable `633b1d56…`
+from clean source `50adf82` passes the reproducible fresh-fixture check in
+`tools/check_furnaces.py`: both runtimes preserve saved values and match the
+63/100-tick cooking continuations and independent 1/199-tick bucket sequence.
+All five processes exit cleanly and all 14 source-integrity checks pass.
+An unchanged zero-step chunk is a preservation observation; the stepped
+phases establish continued cooking. The original source fixture remains
+immutable under the ignored reference cache; its canonical file
 manifest SHA-256 is
 `de91961415ddb941e59f4741b005b1d768a5beabb1461e2b8ccbf3952ecf3603`.
 

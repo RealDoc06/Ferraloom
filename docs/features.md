@@ -53,7 +53,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `world.nether` | Match Nether generation, travel scale and environment | 0/0/0 | 0/0/0 | unverified |
 | `world.end` | Match End islands, entry platform and gateway generation | 0/0/0 | 0/0/0 | unverified |
 | `world.portals` | Match portal creation, search, placement and entity transfer | 0/0/0 | 0/0/0 | unverified |
-| `world.chunk_tickets` | Honor player, spawn, portal and forced chunk ticket lifetimes | 2/0/0 | 2/0/0 | partial |
+| `world.chunk_tickets` | Honor player, spawn, portal and forced chunk ticket lifetimes | 3/0/0 | 3/0/0 | partial |
 | `world.simulation_distance` | Apply separate loading, tracking and ticking distances | 0/0/0 | 0/0/0 | unverified |
 | `world.spawn_location` | Match initial spawn search and world spawn constraints | 0/0/0 | 0/0/0 | unverified |
 | `world.world_border_gen` | Handle world borders and global coordinate limits consistently | 0/0/0 | 0/0/0 | unverified |
@@ -75,7 +75,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.level_data` | Maintain level.dat settings, seed and world metadata | 1/0/0 | 1/0/0 | partial |
 | `persistence.poi` | Persist and reload village and portal points of interest | 0/0/0 | 0/0/0 | unverified |
 | `persistence.scheduled_ticks` | Preserve block and fluid scheduled ticks across unloads | 0/0/0 | 0/0/0 | unverified |
-| `persistence.scoreboard_data` | Preserve objectives, scores, teams and display slots | 3/0/0 | 2/1/0 | partial |
+| `persistence.scoreboard_data` | Preserve objectives, scores, teams and display slots | 3/0/0 | 3/0/0 | partial |
 | `persistence.advancement_stats` | Save player progression and target file formats | 0/0/0 | 0/0/0 | unverified |
 | `persistence.map_data` | Preserve maps, markers and other vanilla saved data | 0/0/0 | 0/0/0 | unverified |
 | `persistence.upgrade` | Handle supported older data versions as the reference does | 0/0/0 | 0/0/0 | unverified |
@@ -185,12 +185,12 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.swimming` | Match movement modes, collision size and stamina interactions | 0/0/0 | 0/0/0 | unverified |
 | `players.oxygen` | Match air supply, powder snow and environmental damage | 0/0/0 | 0/0/0 | unverified |
 | `players.interaction` | Match spawn protection, adventure restrictions and operator bypass | 0/0/0 | 0/0/0 | unverified |
-| `players.commands` | Match complete target command tree and execution semantics | 8/0/0 | 8/0/0 | partial |
+| `players.commands` | Match complete target command tree and execution semantics | 9/0/0 | 9/0/0 | partial |
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |
 | `players.scoreboards` | Match criteria, operations, display slots and triggers | 5/0/0 | 5/0/0 | partial |
-| `players.teams` | Match team membership, visibility, collision and friendly fire | 1/0/0 | 0/1/0 | unverified |
+| `players.teams` | Match team membership, visibility, collision and friendly fire | 1/0/0 | 1/0/0 | partial |
 | `players.advancements` | Match trigger conditions, rewards, progress and revocation | 0/0/0 | 0/0/0 | unverified |
 | `players.statistics` | Match per-player stat increments and queries | 0/0/0 | 0/0/0 | unverified |
 | `players.recipes` | Match criteria-driven unlocks and recipe commands | 0/0/0 | 0/0/0 | unverified |

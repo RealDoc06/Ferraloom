@@ -3,7 +3,7 @@
   "protocol": 777,
   "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
   "rust_registry_sha256": "5467ebb012c2bf2284ca730660cee21927527abe06fc8937df8bd11d2f2ecf26",
-  "rust_binary_sha256": "1628b037014ed5a52c2c930bc677af8e82f6df90bbcbf3cef1dd730bf05edae0",
+  "rust_binary_sha256": "633b1d56a6be0c3e6d34750b4c618ba81260adf12e382f28d4a3a7211c97a874",
   "official_block_report_sha256": "7a0de8aaf7b04d00c40b8ffdc4cfe75184cff2e821d336a020573201867105a4",
   "result": "passed",
   "scope": "Complete block IDs, state IDs, property tuples and defaults. Does not test block behavior.",

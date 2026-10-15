@@ -4,19 +4,22 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest selected run tested source `571b6ca8ee705ff09a170d0c494972361e940bfe`
+The latest selected run tested source `50adf820ac2e2fa2bd65ee11dffe662a90a3e48d`
 with Rust executable SHA-256
-`1628b037014ed5a52c2c930bc677af8e82f6df90bbcbf3cef1dd730bf05edae0`.
-Vanilla passed 67 of 67 scenarios; Ferraloom passed 65 of 67. Mob team
-selection failed both before and after restart, and the vanilla-to-Rust world
-check failed on that same team predicate. Rust-to-vanilla interchange passed.
+`633b1d56a6be0c3e6d34750b4c618ba81260adf12e382f28d4a3a7211c97a874`.
+Both servers passed 69 of 69 selected scenarios. Team selection now passes
+before and after restart; score selectors also distinguish absent scores from
+zero. World interchange passes in both directions.
 The decoded command trees differ by two missing roots (`jfr`, `perf`) and 543
 missing advertised literal paths with argument names normalized. This checks
 advertised syntax, independently of command execution. All 16,384 block states
 in the selected underground chunk sample matched; that single sample does not
 establish general generation parity. The immutable
-[paired report](../compatibility/results/evidence/b2f55868c867c1be9c297f2ad9faa2b63d9b1210b332eb22113660032dc20cf3.json)
-retains every failure. The ledger has 19 partial and 181 unverified families.
+[paired report](../compatibility/results/evidence/315fa4902c0ae05a4f1f141c8499fddc53bd9130cfc9a5df5750618584ba31b1.json)
+retains the command-tree failure. The ledger has 20 partial and 180 unverified
+families. A separate fresh Java fixture and both runtimes' cooking continuations
+pass the selected furnace timer, speed and lava bucket checks; the fixture
+runner records zero-step preservation separately from actual stepped cooking.
 
 ## Inventory scope
 

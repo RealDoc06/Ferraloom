@@ -12,7 +12,7 @@
       "pumpkin-command"
     ]
   },
-  "created_at": "2026-10-15T18:03:57.607412+00:00",
+  "created_at": "2026-10-15T18:38:53.458805+00:00",
   "environment": {
     "host": "devbox",
     "platform": "linux",
@@ -34,7 +34,7 @@
         "features": [
           "blocks.registry"
         ],
-        "duration_seconds": 0.072
+        "duration_seconds": 0.071
       },
       {
         "result": "passed",
@@ -47,7 +47,7 @@
         "features": [
           "persistence.level_data"
         ],
-        "duration_seconds": 0.046
+        "duration_seconds": 0.025
       },
       {
         "result": "passed",
@@ -59,7 +59,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.015
+        "duration_seconds": 0.004
       },
       {
         "result": "passed",
@@ -71,7 +71,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.006
+        "duration_seconds": 0.002
       },
       {
         "result": "passed",
@@ -83,7 +83,7 @@
         "features": [
           "network.handshake"
         ],
-        "duration_seconds": 0.05
+        "duration_seconds": 0.033
       },
       {
         "result": "passed",
@@ -95,7 +95,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.005
+        "duration_seconds": 0.004
       },
       {
         "result": "passed",
@@ -106,7 +106,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.005
+        "duration_seconds": 0.008
       },
       {
         "result": "passed",
@@ -117,7 +117,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.006
+        "duration_seconds": 0.012
       },
       {
         "result": "passed",
@@ -129,7 +129,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.022
+        "duration_seconds": 0.033
       },
       {
         "result": "passed",
@@ -141,7 +141,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.011
+        "duration_seconds": 0.006
       },
       {
         "result": "passed",
@@ -156,7 +156,7 @@
           "network.configuration",
           "network.registries"
         ],
-        "duration_seconds": 1.033
+        "duration_seconds": 0.972
       },
       {
         "result": "passed",
@@ -200,7 +200,7 @@
         "features": [
           "players.teleport"
         ],
-        "duration_seconds": 0.128
+        "duration_seconds": 0.138
       },
       {
         "result": "passed",
@@ -216,7 +216,7 @@
         "features": [
           "network.movement"
         ],
-        "duration_seconds": 0.092
+        "duration_seconds": 0.065
       },
       {
         "result": "passed",
@@ -228,7 +228,7 @@
         "features": [
           "network.login"
         ],
-        "duration_seconds": 0.188
+        "duration_seconds": 0.218
       },
       {
         "result": "passed",
@@ -1685,7 +1685,7 @@
         "detail": {
           "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
           "server_to_client": {
-            "text": "FERRALOOM_CHAT_3a7bd750bd124d87a45e11a03699dd38",
+            "text": "FERRALOOM_CHAT_3af981da4d944b5f861e4ba813e625ae",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
@@ -1693,7 +1693,7 @@
             "signature_verified": false
           },
           "unsigned_offline_player_chat_echo": {
-            "text": "FERRALOOM_ECHO_94e6753dedd04db68727e24d11633208",
+            "text": "FERRALOOM_ECHO_c997bfddac6848bab8ca2ce1de57d7dc",
             "packet_id": 66,
             "packet_type": "player_chat",
             "text_scope": "message_body",
@@ -1705,7 +1705,7 @@
         "features": [
           "network.chat_delivery"
         ],
-        "duration_seconds": 0.254
+        "duration_seconds": 0.261
       },
       {
         "result": "passed",
@@ -1719,7 +1719,7 @@
         "features": [
           "blocks.placement"
         ],
-        "duration_seconds": 0.223
+        "duration_seconds": 0.195
       },
       {
         "result": "passed",
@@ -1733,7 +1733,7 @@
         "features": [
           "blocks.registry"
         ],
-        "duration_seconds": 0.254
+        "duration_seconds": 0.248
       },
       {
         "result": "passed",
@@ -1747,7 +1747,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.242
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -1762,7 +1762,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.299
+        "duration_seconds": 0.298
       },
       {
         "result": "passed",
@@ -1822,7 +1822,7 @@
         "features": [
           "blocks.redstone_power"
         ],
-        "duration_seconds": 0.651
+        "duration_seconds": 0.65
       },
       {
         "result": "passed",
@@ -1839,7 +1839,7 @@
         "features": [
           "blocks.pistons"
         ],
-        "duration_seconds": 1.248
+        "duration_seconds": 1.249
       },
       {
         "result": "passed",
@@ -1872,7 +1872,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.402
+        "duration_seconds": 0.4
       },
       {
         "result": "passed",
@@ -1891,7 +1891,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.499
+        "duration_seconds": 0.5
       },
       {
         "result": "passed",
@@ -1907,7 +1907,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.349
+        "duration_seconds": 0.35
       },
       {
         "result": "passed",
@@ -1955,7 +1955,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.301
+        "duration_seconds": 0.3
       },
       {
         "result": "passed",
@@ -2013,7 +2013,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.301
+        "duration_seconds": 0.3
       },
       {
         "result": "passed",
@@ -2041,7 +2041,7 @@
         "features": [
           "entities.spawning"
         ],
-        "duration_seconds": 0.251
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -2055,7 +2055,7 @@
         "features": [
           "entities.combat"
         ],
-        "duration_seconds": 0.252
+        "duration_seconds": 0.253
       },
       {
         "result": "passed",
@@ -2092,6 +2092,24 @@
       {
         "result": "passed",
         "detail": {
+          "predicate": "if score ForceListBefore parity = ForceListAfter parity if score ForceListOk parity matches 1 if score ForceQuery parity matches 1 if score ForceQueryOk parity matches 1 if score ForceQueryMissing parity matches 0 if score ForceEmpty parity matches 0 if score ForceEmptyOk parity matches 1",
+          "commands": [
+            "execute store result score ForceListBefore parity store success score ForceListOk parity run forceload query",
+            "execute store result score ForceQuery parity store success score ForceQueryOk parity run forceload query 0 0",
+            "execute store success score ForceQueryMissing parity run forceload query 160000 160000",
+            "execute in minecraft:the_end store result score ForceEmpty parity store success score ForceEmptyOk parity run forceload query",
+            "execute store result score ForceListAfter parity run forceload query"
+          ]
+        },
+        "id": "world.forceload_query",
+        "features": [
+          "world.chunk_tickets"
+        ],
+        "duration_seconds": 0.451
+      },
+      {
+        "result": "passed",
+        "detail": {
           "predicate": "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0",
           "commands": [
             "execute store result score ForceFirst parity store success score ForceFirstOk parity run forceload add 96 0",
@@ -2105,7 +2123,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.45
+        "duration_seconds": 0.55
       },
       {
         "result": "passed",
@@ -2119,7 +2137,7 @@
         "features": [
           "world.functions"
         ],
-        "duration_seconds": 0.249
+        "duration_seconds": 0.251
       },
       {
         "result": "passed",
@@ -2133,7 +2151,7 @@
         "features": [
           "world.nether"
         ],
-        "duration_seconds": 1.65
+        "duration_seconds": 1.747
       },
       {
         "result": "passed",
@@ -2147,7 +2165,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.251
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -2161,7 +2179,7 @@
         "features": [
           "world.end"
         ],
-        "duration_seconds": 1.149
+        "duration_seconds": 1.1
       },
       {
         "result": "passed",
@@ -2177,6 +2195,22 @@
           "persistence.entity_data"
         ],
         "duration_seconds": 0.301
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_saved,scores={selector_probe=-7},limit=1] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_unset=0}] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_absent=0}]",
+          "commands": [
+            "scoreboard objectives add selector_probe dummy",
+            "scoreboard objectives add selector_unset dummy",
+            "scoreboard players set @e[type=pig,tag=ferraloom_saved,limit=1] selector_probe -7"
+          ]
+        },
+        "id": "command.selector_scores",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.35
       },
       {
         "result": "passed",
@@ -2210,7 +2244,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.75
+        "duration_seconds": 0.751
       },
       {
         "result": "passed",
@@ -2242,7 +2276,7 @@
           "blocks.fluids",
           "world.chunk_tickets"
         ],
-        "duration_seconds": 2.902
+        "duration_seconds": 2.901
       },
       {
         "result": "passed",
@@ -2295,7 +2329,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.165
+        "duration_seconds": 0.194
       },
       {
         "result": "passed",
@@ -2307,7 +2341,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.195
+        "duration_seconds": 0.194
       },
       {
         "result": "passed",
@@ -2328,7 +2362,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.05
+        "duration_seconds": 0.051
       },
       {
         "result": "passed",
@@ -2341,13 +2375,13 @@
             444
           ],
           "health": 7,
-          "predicate": "if score EntityCopies fede61d82da579 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+          "predicate": "if score EntityCopies fe5b46ea9d73a5 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
         },
         "id": "persistence.entity_restart",
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.211
+        "duration_seconds": 0.21
       },
       {
         "result": "passed",
@@ -2368,7 +2402,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.141
+        "duration_seconds": 0.144
       },
       {
         "result": "passed",
@@ -2384,7 +2418,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.112
+        "duration_seconds": 0.089
       },
       {
         "result": "passed",
@@ -2398,7 +2432,7 @@
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.186
+        "duration_seconds": 0.206
       },
       {
         "result": "passed",
@@ -2425,7 +2459,7 @@
         "features": [
           "lifecycle.shutdown"
         ],
-        "duration_seconds": 0.565
+        "duration_seconds": 0.567
       },
       {
         "result": "passed",
@@ -2437,7 +2471,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.194
+        "duration_seconds": 0.205
       },
       {
         "result": "passed",
@@ -2450,13 +2484,13 @@
             444
           ],
           "health": 5,
-          "predicate": "if score EntityCopies fefb50b627c1cb matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+          "predicate": "if score EntityCopies feb56e2f2528c7 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
         },
         "id": "persistence.entity_signal_restart",
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.21
+        "duration_seconds": 0.207
       }
     ],
     "rust": [
@@ -2471,7 +2505,7 @@
         "features": [
           "blocks.registry"
         ],
-        "duration_seconds": 0.622
+        "duration_seconds": 0.61
       },
       {
         "result": "passed",
@@ -2484,7 +2518,7 @@
         "features": [
           "persistence.level_data"
         ],
-        "duration_seconds": 0.016
+        "duration_seconds": 0.015
       },
       {
         "result": "passed",
@@ -2496,7 +2530,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.0
+        "duration_seconds": 0.001
       },
       {
         "result": "passed",
@@ -2593,7 +2627,7 @@
           "network.configuration",
           "network.registries"
         ],
-        "duration_seconds": 0.287
+        "duration_seconds": 0.472
       },
       {
         "result": "passed",
@@ -2653,7 +2687,7 @@
         "features": [
           "network.movement"
         ],
-        "duration_seconds": 0.103
+        "duration_seconds": 0.105
       },
       {
         "result": "passed",
@@ -2665,7 +2699,7 @@
         "features": [
           "network.login"
         ],
-        "duration_seconds": 0.12
+        "duration_seconds": 0.121
       },
       {
         "result": "passed",
@@ -3600,7 +3634,7 @@
         "detail": {
           "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
           "server_to_client": {
-            "text": "FERRALOOM_CHAT_a529976d8e0346bcaad012d5c2070dce",
+            "text": "FERRALOOM_CHAT_97bb14cb430c416b9ff8503d0b572e30",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
@@ -3608,7 +3642,7 @@
             "signature_verified": false
           },
           "unsigned_offline_player_chat_echo": {
-            "text": "<FerraloomTest> FERRALOOM_ECHO_d526c2c6fef14c4eace2cf165382d134",
+            "text": "<FerraloomTest> FERRALOOM_ECHO_2f2b7462b0754bc3afffb5f0a02a0799",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
@@ -3620,7 +3654,7 @@
         "features": [
           "network.chat_delivery"
         ],
-        "duration_seconds": 0.104
+        "duration_seconds": 0.105
       },
       {
         "result": "passed",
@@ -3692,7 +3726,7 @@
         "features": [
           "blocks.fluids"
         ],
-        "duration_seconds": 1.502
+        "duration_seconds": 1.501
       },
       {
         "result": "passed",
@@ -3806,7 +3840,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.152
+        "duration_seconds": 0.153
       },
       {
         "result": "passed",
@@ -3822,7 +3856,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.151
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -3855,7 +3889,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.151
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -4007,6 +4041,24 @@
       {
         "result": "passed",
         "detail": {
+          "predicate": "if score ForceListBefore parity = ForceListAfter parity if score ForceListOk parity matches 1 if score ForceQuery parity matches 1 if score ForceQueryOk parity matches 1 if score ForceQueryMissing parity matches 0 if score ForceEmpty parity matches 0 if score ForceEmptyOk parity matches 1",
+          "commands": [
+            "execute store result score ForceListBefore parity store success score ForceListOk parity run forceload query",
+            "execute store result score ForceQuery parity store success score ForceQueryOk parity run forceload query 0 0",
+            "execute store success score ForceQueryMissing parity run forceload query 160000 160000",
+            "execute in minecraft:the_end store result score ForceEmpty parity store success score ForceEmptyOk parity run forceload query",
+            "execute store result score ForceListAfter parity run forceload query"
+          ]
+        },
+        "id": "world.forceload_query",
+        "features": [
+          "world.chunk_tickets"
+        ],
+        "duration_seconds": 0.152
+      },
+      {
+        "result": "passed",
+        "detail": {
           "predicate": "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0",
           "commands": [
             "execute store result score ForceFirst parity store success score ForceFirstOk parity run forceload add 96 0",
@@ -4020,7 +4072,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.387
+        "duration_seconds": 0.369
       },
       {
         "result": "passed",
@@ -4048,7 +4100,7 @@
         "features": [
           "world.nether"
         ],
-        "duration_seconds": 2.577
+        "duration_seconds": 2.571
       },
       {
         "result": "passed",
@@ -4076,7 +4128,7 @@
         "features": [
           "world.end"
         ],
-        "duration_seconds": 2.438
+        "duration_seconds": 2.407
       },
       {
         "result": "passed",
@@ -4091,11 +4143,37 @@
         "features": [
           "persistence.entity_data"
         ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_saved,scores={selector_probe=-7},limit=1] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_unset=0}] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_absent=0}]",
+          "commands": [
+            "scoreboard objectives add selector_probe dummy",
+            "scoreboard objectives add selector_unset dummy",
+            "scoreboard players set @e[type=pig,tag=ferraloom_saved,limit=1] selector_probe -7"
+          ]
+        },
+        "id": "command.selector_scores",
+        "features": [
+          "players.commands"
+        ],
         "duration_seconds": 0.152
       },
       {
-        "result": "failed",
-        "error": "AssertionError: Predicate failed: if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]; output: [' INFO [Server] FERRALOOM_END_13d6f2cc4689467d863283b50543c12a']",
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]",
+          "commands": [
+            "team add ferraloom",
+            "team join ferraloom @e[type=pig,tag=ferraloom_saved,limit=1]",
+            "team modify ferraloom color gold",
+            "team modify ferraloom friendlyFire false",
+            "team modify ferraloom nametagVisibility never",
+            "team modify ferraloom collisionRule pushOtherTeams"
+          ]
+        },
         "id": "scoreboard.team",
         "features": [
           "players.teams"
@@ -4147,7 +4225,7 @@
           "blocks.fluids",
           "world.chunk_tickets"
         ],
-        "duration_seconds": 2.42
+        "duration_seconds": 2.222
       },
       {
         "result": "passed",
@@ -4246,7 +4324,7 @@
             444
           ],
           "health": 7,
-          "predicate": "if score EntityCopies fe9caa968acdf2 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+          "predicate": "if score EntityCopies fe6baa5ae49bff matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
         },
         "id": "persistence.entity_restart",
         "features": [
@@ -4255,13 +4333,25 @@
         "duration_seconds": 0.001
       },
       {
-        "result": "failed",
-        "error": "AssertionError: Predicate failed: if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]; output: [' INFO [Server] FERRALOOM_END_d806936f955544b3ba0db6adf804e2c9']",
+        "result": "passed",
+        "detail": {
+          "team": "ferraloom",
+          "saved_properties": {
+            "TeamColor": "gold",
+            "AllowFriendlyFire": 0,
+            "NameTagVisibility": "never",
+            "CollisionRule": "pushOtherTeams",
+            "Players": [
+              "0000006f-0000-00de-0000-014d000001bc"
+            ]
+          },
+          "scope": "live membership and saved settings; combat, rendering and collision behavior excluded"
+        },
         "id": "persistence.scoreboard_team_restart",
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.0
+        "duration_seconds": 0.039
       },
       {
         "result": "passed",
@@ -4277,7 +4367,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.039
+        "duration_seconds": 0.04
       },
       {
         "result": "passed",
@@ -4343,42 +4433,62 @@
             444
           ],
           "health": 5,
-          "predicate": "if score EntityCopies fe5fd94886998e matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+          "predicate": "if score EntityCopies fe10ec5b0995c8 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
         },
         "id": "persistence.entity_signal_restart",
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.001
+        "duration_seconds": 0.002
       }
     ]
   },
   "harness_manifest": {
     "tools/parity/bot.py": "6ac6716bcba71f9babe08b220a6db668668d3ae487434b2058eb1fb437c76106",
+    "tools/parity/furnaces.py": "bf792b8155c55e60652b6f2ffee3bc8ea22e2061cacd137ed99d338c04fbf727",
     "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
-    "tools/parity/suite.py": "87bf90ca36147f8b343a4d31ff41d42083e508815d775b9d1f8d9719eba94694",
+    "tools/parity/suite.py": "bd3c185c2c090e92359de7408010b4a51f6031c28ccc4f9f5f791b0ff0fd249e",
     "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b",
     "tools/parity/client.ts": "6253c87bb3d2bf7d4955671e4429ee4452abc52d4c7f170fab6810d5ed73cc46",
     "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
     "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
-    "compatibility/scenario-map.json": "02705e502a126fb3f4578742b04edabd2bdc2c4d51b2db1f9ec8b992dedf52fa"
+    "compatibility/scenario-map.json": "633734f4f0e7bb2c196b867c8128dfaeb50af79cbe86686cdbfa1d5c67aedef9"
   },
-  "test_suite_sha256": "1628c73807eebf6a066d8668e90d1822e7239dc49f9e2618faec58375b9ced93",
+  "test_suite_sha256": "30933222bb4767fca57d6d5bae1dda0679d96ba09ddd17d06b2726f589574745",
   "source_state": {
-    "commit": "571b6ca8ee705ff09a170d0c494972361e940bfe",
+    "commit": "50adf820ac2e2fa2bd65ee11dffe662a90a3e48d",
     "dirty": false
   },
-  "rust_binary_sha256": "1628b037014ed5a52c2c930bc677af8e82f6df90bbcbf3cef1dd730bf05edae0",
+  "rust_binary_sha256": "633b1d56a6be0c3e6d34750b4c618ba81260adf12e382f28d4a3a7211c97a874",
   "cross_world": [
     {
-      "result": "failed",
-      "error": "AssertionError: Predicate failed: if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]; output: [' INFO [Server] FERRALOOM_END_55322150df664632bf010153914c008e']",
+      "result": "passed",
+      "detail": {
+        "source": "vanilla",
+        "destination": "rust",
+        "predicate": "if block 14 200 14 diamond_block",
+        "source_data_version": 5023,
+        "destination_data_version": 5023,
+        "external_conversion": false,
+        "dimension": "overworld",
+        "keep_inventory": true,
+        "daytime": 4321,
+        "load_save_errors": 0,
+        "entity_uuid": [
+          111,
+          222,
+          333,
+          444
+        ],
+        "entity_health": 5,
+        "scoreboard_scores_teams_and_display": true
+      },
       "id": "persistence.vanilla_to_rust",
       "features": [
         "persistence.chunk_data",
         "persistence.level_data"
       ],
-      "duration_seconds": 2.171
+      "duration_seconds": 2.27
     },
     {
       "result": "passed",
@@ -4407,7 +4517,7 @@
         "persistence.chunk_data",
         "persistence.level_data"
       ],
-      "duration_seconds": 11.91
+      "duration_seconds": 12.092
     }
   ],
   "terrain": {
@@ -4443,7 +4553,7 @@
     "features": [
       "world.terrain"
     ],
-    "duration_seconds": 0.352
+    "duration_seconds": 0.342
   },
   "command_tree": {
     "result": "failed",
@@ -5073,6 +5183,12 @@
       "result": "passed"
     },
     {
+      "id": "command.selector_scores",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
       "id": "command.store_chain",
       "vanilla": "passed",
       "rust": "passed",
@@ -5315,8 +5431,8 @@
     {
       "id": "persistence.scoreboard_team_restart",
       "vanilla": "passed",
-      "rust": "failed",
-      "result": "failed"
+      "rust": "passed",
+      "result": "passed"
     },
     {
       "id": "persistence.shutdown_restart",
@@ -5399,8 +5515,8 @@
     {
       "id": "scoreboard.team",
       "vanilla": "passed",
-      "rust": "failed",
-      "result": "failed"
+      "rust": "passed",
+      "result": "passed"
     },
     {
       "id": "scoreboard.trigger_enable",
@@ -5419,12 +5535,15 @@
       "vanilla": "passed",
       "rust": "passed",
       "result": "passed"
+    },
+    {
+      "id": "world.forceload_query",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
     }
   ],
   "failed": [
-    "rust:scoreboard.team",
-    "rust:persistence.scoreboard_team_restart",
-    "persistence.vanilla_to_rust",
     "commands.advertised_syntax"
   ]
 }
