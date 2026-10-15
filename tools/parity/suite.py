@@ -85,6 +85,7 @@ SCENARIOS = [
     Scenario("entity.summon", ("entities.spawning",), ('summon pig 8 201 8 {Tags:["ferraloom_probe"],NoAI:1b}',), "if entity @e[type=pig,tag=ferraloom_probe,limit=1]"),
     Scenario("entity.damage", ("entities.combat",), ("damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic",), "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]"),
     Scenario("entity.kill", ("entities.lifecycle",), ("kill @e[tag=ferraloom_probe]",), "unless entity @e[tag=ferraloom_probe]", 1.5, "if entity @e[tag=ferraloom_probe]"),
+    Scenario("command.entity_count", ("players.commands",), ('summon pig 14 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', 'summon pig 15 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', "scoreboard players set EntityCopies parity 0", "execute as @e[type=pig,tag=ferraloom_count_probe] run scoreboard players add EntityCopies parity 1", "kill @e[tag=ferraloom_count_probe]"), "if score EntityCopies parity matches 2"),
     Scenario("datapack.function", ("world.functions",), ("function ferraloom:probe",), "if score Datapack parity matches 37"),
     Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5, force_dimension="minecraft:the_nether"),
     Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5, force_dimension="minecraft:the_end"),
@@ -355,8 +356,7 @@ def run(server: Server, quick: bool) -> list[dict]:
             unflushed_read = Scenario("persistence.shutdown_restart", ("persistence.chunk_data",), (), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed_read.id, unflushed_read.features, lambda: run_scenario(server, unflushed_read)))
             results.append(recorded("persistence.metadata_restart", ("persistence.level_data",), lambda: check_metadata(server)))
-            entity_read = Scenario("persistence.entity_restart", ("persistence.entity_data",), (), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]')
-            results.append(recorded(entity_read.id, entity_read.features, lambda: run_scenario(server, entity_read)))
+            results.append(recorded("persistence.entity_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 7)))
             entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
             results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
@@ -369,8 +369,7 @@ def run(server: Server, quick: bool) -> list[dict]:
                 server.command("forceload add 0 0")
                 wait_loaded(server)
                 results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
-                entity_signal_read = Scenario("persistence.entity_signal_restart", ("persistence.entity_data",), (), entity_signal_write.predicate)
-                results.append(recorded(entity_signal_read.id, entity_signal_read.features, lambda: run_scenario(server, entity_signal_read)))
+                results.append(recorded("persistence.entity_signal_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 5)))
             else:
                 results.append({"id": signal_read.id, "features": list(signal_read.features), "result": "skipped",
                                 "reason": "SIGTERM did not complete cleanly; no shutdown durability claim"})
@@ -423,6 +422,23 @@ def check_metadata(server: Server) -> dict:
     protocol.require(any(re.search(r"Clock minecraft:overworld is at 4321 tick\(s\)$", line) for line in clock),
                      f"Non-default clock was lost: {clock[-6:]}")
     return {"keep_inventory": True, "daytime": 4321}
+
+
+def wait_saved_entity(server: Server, health: int, *, timeout: float = 10) -> dict:
+    """Wait for asynchronous entity loading, checking uniqueness as well as NBT."""
+    deadline = time.monotonic() + timeout
+    predicate = ("if score EntityCopies parity matches 1 "
+                 f"if entity @e[type=pig,tag=ferraloom_saved,nbt={{UUID:[I;111,222,333,444],Health:{health}.0f}}]")
+    while True:
+        server.command("scoreboard players set EntityCopies parity 0")
+        server.command("execute as @e[type=pig,tag=ferraloom_saved] run scoreboard players add EntityCopies parity 1")
+        try:
+            check_predicate(server, predicate)
+            return {"count": 1, "uuid": [111, 222, 333, 444], "health": health, "predicate": predicate}
+        except AssertionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.2)
 
 
 def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Namespace, source_cases: list[dict]) -> dict:

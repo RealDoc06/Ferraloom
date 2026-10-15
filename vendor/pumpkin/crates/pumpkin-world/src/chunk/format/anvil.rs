@@ -353,10 +353,17 @@ impl AnvilChunkData {
             .compress_data(&raw_bytes, level)
             .map_err(ChunkWritingError::Compression)?;
 
-        Ok(Self {
+        let serialized = Self {
             compression: Some(compression),
             compressed_data: compressed_data.into(),
-        })
+        };
+        if serialized.sector_count() > u8::MAX as u32 {
+            return Err(ChunkWritingError::ChunkSerializingError(format!(
+                "Chunk needs {} Anvil sectors; external .mcc chunk writing is not implemented",
+                serialized.sector_count()
+            )));
+        }
+        Ok(serialized)
     }
 }
 
@@ -1366,10 +1373,71 @@ mod tests {
  */
 #[cfg(test)]
 mod tests {
-    use super::{AnvilChunkFile, Compression, CompressionError, SECTOR_BYTES};
-    use crate::chunk::ChunkData;
-    use crate::chunk::io::ChunkSerializer;
+    use super::{
+        AnvilChunkFile, Compression, CompressionError, SECTOR_BYTES, SingleChunkDataSerializer,
+    };
+    use crate::chunk::io::{ChunkSerializer, Dirtiable};
+    use crate::chunk::{ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError};
     use bytes::{BufMut, Bytes, BytesMut};
+    use pumpkin_util::math::vector2::Vector2;
+    use std::sync::Arc;
+
+    struct RawChunk(Bytes);
+
+    impl Dirtiable for RawChunk {
+        fn is_dirty(&self) -> bool {
+            true
+        }
+        fn mark_dirty(&self, _flag: bool) {}
+    }
+
+    impl SingleChunkDataSerializer for RawChunk {
+        fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+            Ok(self.0.clone())
+        }
+        fn from_bytes(bytes: &Bytes, _position: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+            Ok(Self(bytes.clone()))
+        }
+        fn position(&self) -> (i32, i32) {
+            (0, 0)
+        }
+    }
+
+    #[tokio::test]
+    async fn oversized_chunks_cannot_corrupt_an_existing_region_header() {
+        let directory = tempfile::tempdir().unwrap();
+        for in_place in [true, false] {
+            let path = directory.path().join(format!("region-{in_place}.mca"));
+            let mut config = pumpkin_config::chunk::AnvilChunkConfig::default();
+            config.write_in_place = in_place;
+            config.compression.algorithm = pumpkin_config::chunk::Compression::ZLib;
+            config.compression.level = 0;
+            let mut region = AnvilChunkFile::<RawChunk>::default();
+            region
+                .update_chunk(
+                    Arc::new(RawChunk(Bytes::from_static(b"saved marker"))),
+                    &config,
+                )
+                .await
+                .unwrap();
+            region.write(&path).await.unwrap();
+            let before = std::fs::read(&path).unwrap();
+
+            let oversized = Arc::new(RawChunk(Bytes::from(vec![0; 256 * SECTOR_BYTES])));
+            assert!(matches!(region.update_chunk(oversized, &config).await,
+                Err(ChunkWritingError::ChunkSerializingError(message)) if message.contains("external .mcc")));
+            region.write(&path).await.unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            let reopened = AnvilChunkFile::<RawChunk>::read(before.into()).unwrap();
+            let saved = reopened.chunks_data[0]
+                .as_ref()
+                .unwrap()
+                .serialized_data
+                .to_chunk::<RawChunk>(Vector2::new(0, 0))
+                .unwrap();
+            assert_eq!(saved.0.as_ref(), b"saved marker");
+        }
+    }
 
     /// A region file whose first location entry is `location`, whose other
     /// 1023 entries are absent, and whose single payload sector starts with

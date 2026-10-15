@@ -92,6 +92,8 @@ pub struct Level {
     pending_entity_saves: DashMap<Vector2<i32>, SyncEntityChunk>,
     entity_save_scheduled: AtomicBool,
     entity_lifecycle: Mutex<()>,
+    save_failure: Mutex<Option<String>>,
+    pub(crate) fatal_save_failure: Arc<Mutex<Option<String>>>,
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
 
@@ -287,6 +289,8 @@ impl Level {
             pending_entity_saves: DashMap::new(),
             entity_save_scheduled: AtomicBool::new(false),
             entity_lifecycle: Mutex::new(()),
+            save_failure: Mutex::new(None),
+            fatal_save_failure: Arc::new(Mutex::new(None)),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
@@ -460,10 +464,16 @@ impl Level {
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
     ) -> Vec<Vector2<i32>> {
-        let mut chunks_to_clean = Vec::new();
         let chunks_vec: Vec<Vector2<i32>> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        let chunks_to_clean = self.release_chunk_watchers(&chunks_vec);
+        self.finish_entity_chunk_unwatch(&chunks_vec).await;
+        chunks_to_clean
+    }
 
-        for chunk in &chunks_vec {
+    /// Decrement watcher counts before the caller snapshots live chunk entities.
+    pub fn release_chunk_watchers(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
+        let mut chunks_to_clean = Vec::new();
+        for chunk in chunks {
             if let Entry::Occupied(mut entry) = self.chunk_watchers.entry(*chunk) {
                 *entry.get_mut() = entry.get().saturating_sub(1);
                 if *entry.get() == 0 {
@@ -473,10 +483,16 @@ impl Level {
             }
         }
 
-        self.entity_saver
-            .unwatch_chunks(&self.level_folder, &chunks_vec)
-            .await;
         chunks_to_clean
+    }
+
+    /// Release serializer references after the caller has snapshotted and queued
+    /// cleanup. Pass the original removed watcher references, including chunks
+    /// that remain watched by somebody else.
+    pub async fn finish_entity_chunk_unwatch(&self, chunks: &[Vector2<i32>]) {
+        self.entity_saver
+            .unwatch_chunks(&self.level_folder, chunks)
+            .await;
     }
 
     /// Returns whether the chunk should be removed from memory
@@ -800,7 +816,7 @@ impl Level {
                                 let first_load = !chunk.live.load(Ordering::Relaxed);
                                 let _ = sender.send((Arc::downgrade(&chunk), first_load)).await;
                             }
-                            LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                            LoadedData::Missing(pos) => {
                                 let (tx, rx) = oneshot::channel();
                                 match level.pending_entity_generations.entry(pos) {
                                     dashmap::mapref::entry::Entry::Occupied(mut entry) => {
@@ -819,6 +835,12 @@ impl Level {
                                     }
                                 });
                             }
+                            LoadedData::Error((pos, error)) => {
+                                let message =
+                                    format!("Could not load entity chunk {pos:?}: {error}");
+                                error!("{message}");
+                                level.record_fatal_save_failure(message);
+                            }
                         }
                     }
                 }
@@ -833,33 +855,39 @@ impl Level {
         receiver
     }
 
-    pub async fn get_entity_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncEntityChunk {
+    pub async fn get_entity_chunk(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+    ) -> Result<SyncEntityChunk, ChunkReadingError> {
         if let Some(chunk) = self.cached_entity_chunk(&pos) {
-            return chunk;
+            return Ok(chunk);
         }
 
-        if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
-            self.publish_entity_chunk(chunk)
-        } else {
-            let (tx, rx) = oneshot::channel();
-            match self.pending_entity_generations.entry(pos) {
-                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                    entry.get_mut().push(tx);
+        match self.load_single_entity_chunk(pos).await {
+            Ok((chunk, _)) => Ok(self.publish_entity_chunk(chunk)),
+            Err(ChunkReadingError::ChunkNotExist) => {
+                let (tx, rx) = oneshot::channel();
+                match self.pending_entity_generations.entry(pos) {
+                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                        entry.get_mut().push(tx);
+                    }
+                    dashmap::mapref::entry::Entry::Vacant(entry) => {
+                        entry.insert(vec![tx]);
+                        self.spawn_entity_generation(pos);
+                    }
                 }
-                dashmap::mapref::entry::Entry::Vacant(entry) => {
-                    entry.insert(vec![tx]);
-                    self.spawn_entity_generation(pos);
-                }
-            }
-            rx.await.unwrap_or_else(|_| {
-                Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: std::sync::Mutex::new(Vec::new()),
-                    live: AtomicBool::new(false),
-                    dirty: AtomicBool::new(false),
+                rx.await.map_err(|_| {
+                    ChunkReadingError::IoError(std::io::Error::other(
+                        "Entity chunk generation stopped",
+                    ))
                 })
-            })
+            }
+            Err(error) => {
+                self.record_fatal_save_failure(format!(
+                    "Could not read entity chunk {pos:?}: {error}"
+                ));
+                Err(error)
+            }
         }
     }
 
@@ -913,7 +941,22 @@ impl Level {
             .await
         {
             error!("Failed writing Chunk to disk {error}");
+            self.record_save_failure(error.to_string());
         }
+    }
+
+    pub(crate) fn record_save_failure(&self, error: String) {
+        self.save_failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_or_insert(error);
+    }
+
+    pub(crate) fn record_fatal_save_failure(&self, error: String) {
+        self.fatal_save_failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_or_insert(error);
     }
 
     /// Save through the scheduler's FIFO writer and await physical region writes.
@@ -952,7 +995,18 @@ impl Level {
             .await
             .map_err(|error| error.to_string());
         // Finish all independent writes before returning the first failure.
-        terrain.and(saved_entities).and(flushed_entities)
+        let written = terrain.and(saved_entities).and(flushed_entities);
+        let previous = self
+            .save_failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let fatal = self
+            .fatal_save_failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        fatal.or(previous).map_or(written, Err)
     }
 
     pub(crate) async fn save_pending_entity_chunks(&self) -> Result<(), String> {
@@ -1041,12 +1095,12 @@ impl Level {
         self: &Arc<Self>,
         pos: Vector2<i32>,
         f: F,
-    ) -> R {
+    ) -> Result<R, ChunkReadingError> {
         if let Some(res) = self.read_entity_chunk_sync(&pos, &f) {
-            return res;
+            return Ok(res);
         }
-        let chunk = self.get_entity_chunk(pos).await;
-        f(&chunk)
+        let chunk = self.get_entity_chunk(pos).await?;
+        Ok(f(&chunk))
     }
 
     pub fn try_get_entity_chunk(
@@ -1446,6 +1500,112 @@ mod tests {
         assert!(level.shutdown().await.is_err());
         std::fs::remove_dir(&region).unwrap();
         level.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn shutdown_reports_writer_init_failure_without_a_flush_request() {
+        use crate::chunk_system::worker_logic::{WriteRequest, io_write_work};
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let position = Vector2::new(0, 0);
+        let region = level.level_folder.region_folder.join("r.0.0.mca");
+        std::fs::create_dir(&region).unwrap();
+        let chunk = ChunkData::empty_sync(0, 0);
+        chunk.set_block_absolute_y(3, 200, 11, Block::GOLD_BLOCK.default_state.id);
+        chunk.mark_dirty(true);
+        let (send, receive) = mpsc::channel(1);
+        assert!(
+            send.send(WriteRequest::Chunks(vec![(
+                position,
+                crate::chunk_system::Chunk::Level(chunk),
+            )]))
+            .await
+            .is_ok()
+        );
+        drop(send);
+        let io_lock = Arc::new((
+            Mutex::new([(position, 1)].into_iter().collect()),
+            tokio::sync::Notify::new(),
+        ));
+        io_write_work(receive, level.clone(), io_lock).await;
+        // The writer exited without seeing a Flush message. Its failure must
+        // still reach shutdown, and the only source Arc must remain retained.
+        assert!(level.shutdown().await.is_err());
+        std::fs::remove_dir(&region).unwrap();
+        level.shutdown().await.unwrap();
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let (send, mut receive) = mpsc::channel(1);
+        reader
+            .fetch_chunks(&level.level_folder, &[position], send)
+            .await;
+        let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+            panic!("Retry must preserve the unloaded source chunk");
+        };
+        assert_eq!(
+            saved.section.get_block_absolute_y(3, 200, 11),
+            Some(Block::GOLD_BLOCK.default_state.id)
+        );
+    }
+
+    #[tokio::test]
+    async fn split_entity_unwatch_pairs_original_references_after_snapshots() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let a = Vector2::new(0, 0);
+        let b = Vector2::new(1, 0);
+        let chunk = entity_chunk(a, 61);
+        level.loaded_entity_chunks.insert(a, chunk.clone());
+        level.mark_chunks_as_newly_watched(&[a, b]).await;
+        level.mark_chunks_as_newly_watched(&[a]).await;
+        level
+            .save_entity_chunks(vec![(a, chunk.clone())])
+            .await
+            .unwrap();
+        let removed = [a, b];
+        let cleaned = level.release_chunk_watchers(&removed);
+        assert_eq!(cleaned, vec![b]);
+        level.clean_entity_chunks(&cleaned);
+        // Pair both original references, not only the now-unwatched position B.
+        level.finish_entity_chunk_unwatch(&removed).await;
+        level.entity_saver.flush().await.unwrap();
+        assert_eq!(saved_entity_marker(&level, a).await, 61);
+
+        chunk.data.lock().unwrap()[0].put_int("FerraloomProbe", 62);
+        chunk.mark_dirty(true);
+        assert_eq!(level.release_chunk_watchers(&[a]), vec![a]);
+        level.clean_entity_chunks([a]);
+        level.save_pending_entity_chunks().await.unwrap();
+        level.finish_entity_chunk_unwatch(&[a]).await;
+        // No explicit cache flush here: the final original watcher reference
+        // must have been released, making its pending snapshot reach disk.
+        assert_eq!(saved_entity_marker(&level, a).await, 62);
+        level.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn entity_region_read_error_does_not_generate_a_replacement_chunk() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        std::fs::create_dir(level.level_folder.entities_folder.join("r.0.0.mca")).unwrap();
+        assert!(level.get_entity_chunk(Vector2::new(0, 0)).await.is_err());
+        assert!(level.loaded_entity_chunks.is_empty());
+        assert!(level.pending_entity_generations.is_empty());
+        assert!(level.shutdown().await.is_err());
     }
 
     #[tokio::test]

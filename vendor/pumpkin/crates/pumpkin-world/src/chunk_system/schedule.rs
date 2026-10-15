@@ -77,9 +77,54 @@ pub struct GenerationSchedule {
     lighting_config: LightingEngineConfig,
     last_unload: std::time::Instant,
     generation_pool: Arc<rayon::ThreadPool>,
+    fatal_save_failure: Arc<Mutex<Option<String>>>,
 }
 
 impl GenerationSchedule {
+    fn record_save_failure(&self, message: &str) {
+        self.fatal_save_failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_or_insert_with(|| message.to_string());
+    }
+
+    fn queue_chunk_save(&self, chunks: Vec<(ChunkPos, Chunk)>) -> Result<(), String> {
+        {
+            let mut locks = self
+                .io_lock
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (position, _) in &chunks {
+                *locks.entry(*position).or_insert(0) += 1;
+            }
+        }
+        if let Err(error) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
+            if let WriteRequest::Chunks(chunks) = error.0 {
+                let mut locks = self
+                    .io_lock
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for (position, _) in chunks {
+                    if let Some(count) = locks.get_mut(&position) {
+                        if *count <= 1 {
+                            locks.remove(&position);
+                        } else {
+                            *count -= 1;
+                        }
+                    }
+                }
+            }
+            self.io_lock.1.notify_waiters();
+            let message = "Chunk writer stopped before accepting the save";
+            self.record_save_failure(message);
+            error!("{message}");
+            return Err(message.to_string());
+        }
+        Ok(())
+    }
+
     fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
         let previous = self.public_chunk_map.insert(pos, chunk);
         if previous.is_none() {
@@ -171,6 +216,7 @@ impl GenerationSchedule {
                     lighting_config,
                     last_unload: std::time::Instant::now(),
                     generation_pool,
+                    fatal_save_failure: level_sched.fatal_save_failure.clone(),
                 };
                 scheduler.work(&level_sched);
             })
@@ -900,21 +946,7 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        let mut data = self
-            .io_lock
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for (pos, _chunk) in &chunks {
-            *data.entry(*pos).or_insert(0) += 1;
-        }
-        drop(data);
-        if let Err(e) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
-            error!(
-                "Failed to send chunks to io write thread during save (may have shut down): {:?}",
-                e
-            );
-        }
+        let _ = self.queue_chunk_save(chunks);
     }
 
     fn save_all_chunk(&mut self, save_proto_chunk: bool) -> Result<(), String> {
@@ -954,21 +986,7 @@ impl GenerationSchedule {
             self.chunk_map.len()
         );
 
-        let mut data = self
-            .io_lock
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for (pos, _) in &chunks {
-            *data.entry(*pos).or_insert(0) += 1;
-        }
-        drop(data);
-
-        if let Err(e) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
-            error!("Failed to send chunks to io write thread: {:?}", e);
-            return Err("Chunk writer stopped before accepting the save".to_string());
-        }
-        Ok(())
+        self.queue_chunk_save(chunks)
     }
 
     fn drop_node(&mut self, node: NodeKey) {
@@ -1178,6 +1196,12 @@ impl GenerationSchedule {
                 // Neighbor chunks returned to holders — unblock waiting tasks
                 self.check_waiting_tasks();
             }
+            RecvChunk::ReadFailure(error) => {
+                // Keep the holder occupied: a read error is not an absent
+                // chunk, and must never cause replacement terrain generation.
+                error!("Preserving unreadable chunk {pos:?}: {error}");
+                self.record_save_failure(&error);
+            }
             RecvChunk::GenerationFailure {
                 pos: fail_pos,
                 stage,
@@ -1278,11 +1302,17 @@ impl GenerationSchedule {
                             .is_err()
                         {
                             error!("Chunk writer stopped before accepting the flush");
+                            self.record_save_failure(
+                                "Chunk writer stopped before accepting the flush",
+                            );
                         }
                     }
                     request => {
                         if self.io_write.blocking_send(request).is_err() {
                             error!("Chunk writer stopped before accepting an entity save");
+                            self.record_save_failure(
+                                "Chunk writer stopped before accepting an entity save",
+                            );
                         }
                     }
                 }

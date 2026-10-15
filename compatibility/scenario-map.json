@@ -191,6 +191,10 @@
     "persistence.metadata_restart": {
       "feature_id": "persistence.level_data",
       "scenario": "restart"
+    },
+    "command.entity_count": {
+      "feature_id": "players.commands",
+      "scenario": "execute as runs once for each selected entity"
     }
   }
 }

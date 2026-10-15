@@ -15,6 +15,7 @@ use tracing::{debug, error, warn};
 
 pub enum RecvChunk {
     IO(Chunk),
+    ReadFailure(String),
     Generation(Cache),
     GenerationFailure {
         pos: ChunkPos,
@@ -147,21 +148,22 @@ pub async fn io_read_work(
             match data {
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
-                    let level = level.clone();
-                    let result = run_blocking(move || process_loaded_chunk(chunk, &level)).await;
+                    let chunk_level = level.clone();
+                    let result =
+                        run_blocking(move || process_loaded_chunk(chunk, &chunk_level)).await;
                     let received = match result {
                         Ok(processed) => RecvChunk::IO(processed),
-                        Err(err) => RecvChunk::GenerationFailure {
-                            pos,
-                            stage: StagedChunkEnum::Empty,
-                            error: err.to_string(),
-                        },
+                        Err(err) => {
+                            let message = format!("Could not activate saved chunk {pos:?}: {err}");
+                            level.record_fatal_save_failure(message.clone());
+                            RecvChunk::ReadFailure(message)
+                        }
                     };
                     if send.send((pos, received)).is_err() {
                         break;
                     }
                 }
-                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                LoadedData::Missing(pos) => {
                     if send
                         .send((
                             pos,
@@ -173,6 +175,13 @@ pub async fn io_read_work(
                         ))
                         .is_err()
                     {
+                        break;
+                    }
+                }
+                LoadedData::Error((pos, error)) => {
+                    let message = format!("Could not read saved chunk {pos:?}: {error}");
+                    level.record_fatal_save_failure(message.clone());
+                    if send.send((pos, RecvChunk::ReadFailure(message))).is_err() {
                         break;
                     }
                 }
@@ -188,7 +197,6 @@ pub async fn io_write_work(
     level: Arc<Level>,
     lock: IOLock,
 ) {
-    let mut pending_error = None;
     loop {
         // Don't check cancel_token here (keep saving chunks)
         let Some(request) = recv.recv().await else {
@@ -199,7 +207,7 @@ pub async fn io_write_work(
             WriteRequest::Entities => {
                 if let Err(error) = level.save_pending_entity_chunks().await {
                     error!("Failed to save entity chunks: {error}");
-                    pending_error.get_or_insert(error);
+                    level.record_save_failure(error);
                 }
                 continue;
             }
@@ -207,12 +215,8 @@ pub async fn io_write_work(
                 // This barrier follows all chunks already enqueued by the
                 // scheduler. Cached watched regions also need a physical write.
                 let flushed = level.flush_chunk_files().await;
-                let result = match pending_error.take() {
-                    Some(error) => Err(error),
-                    None => flushed,
-                };
                 for waiter in waiters {
-                    let _ = waiter.send(result.clone());
+                    let _ = waiter.send(flushed.clone());
                 }
                 continue;
             }
@@ -247,7 +251,7 @@ pub async fn io_write_work(
                     .await
                 {
                     error!("Failed to save chunks: {:?}", e);
-                    pending_error.get_or_insert_with(|| e.to_string());
+                    level.record_save_failure(e.to_string());
                 }
                 false
             }
@@ -282,7 +286,7 @@ pub async fn io_write_work(
 
         if upgrade_failed {
             error!("Failed to upgrade chunks for saving");
-            break;
+            level.record_fatal_save_failure("Failed to upgrade chunks for saving".to_string());
         }
     }
 }

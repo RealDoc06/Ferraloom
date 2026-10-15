@@ -810,7 +810,6 @@ async fn execute_method(
         }
         "minecraft:server/stop" => {
             check_no_params(params)?;
-            server.management_hub.broadcast_server_stopping();
             crate::stop_server();
             Ok(json!(true))
         }

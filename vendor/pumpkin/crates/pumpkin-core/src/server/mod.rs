@@ -597,42 +597,50 @@ impl Server {
 
     pub async fn save_all(&self, flush: bool) -> Result<(), String> {
         self.management_hub.broadcast_server_saving();
-
-        if let Err(err) = self.save_world_info() {
-            error!("Failed to save world info: {err}");
-            return Err(format!("Failed to save world info: {err}"));
-        }
-
-        if let Err(err) = self.player_data_storage.save_all_players(self) {
-            error!("Failed to save player data: {err}");
-            return Err(format!("Failed to save player data: {err}"));
-        }
-
-        if let Err(err) = self
-            .advancement_manager
-            .save_all_players(&self.get_all_players())
-            .await
-        {
-            error!("Failed to save player advancements: {err}");
-            return Err(format!("Failed to save player advancements: {err}"));
-        }
-
-        for world in self.worlds.load().iter() {
-            if let Err(error) = world.save().await {
-                let message = format!("Failed to save {}: {error}", world.dimension.minecraft_name);
-                error!("{message}");
-                return Err(message);
+        let mut first_error = None;
+        let mut record_error = |result: Result<(), String>| {
+            if let Err(error) = result {
+                error!("{error}");
+                first_error.get_or_insert(error);
             }
-        }
+        };
 
+        record_error(
+            self.save_world_info()
+                .map_err(|error| format!("Failed to save world info: {error}")),
+        );
+        record_error(
+            self.player_data_storage
+                .save_all_players(self)
+                .map_err(|error| format!("Failed to save player data: {error}")),
+        );
+        record_error(
+            self.advancement_manager
+                .save_all_players(&self.get_all_players())
+                .await
+                .map_err(|error| format!("Failed to save player advancements: {error}")),
+        );
+
+        let worlds = self.worlds.load_full();
+        for world in worlds.iter() {
+            record_error(world.save().await.map_err(|error| {
+                format!("Failed to save {}: {error}", world.dimension.minecraft_name)
+            }));
+        }
         if flush {
-            for world in self.worlds.load_full().iter() {
-                world.level.save_and_flush().await?;
+            for world in worlds.iter() {
+                record_error(world.level.save_and_flush().await.map_err(|error| {
+                    format!(
+                        "Failed to flush {}: {error}",
+                        world.dimension.minecraft_name
+                    )
+                }));
             }
         }
-
+        if let Some(error) = first_error {
+            return Err(error);
+        }
         self.management_hub.broadcast_server_saved();
-
         Ok(())
     }
 
