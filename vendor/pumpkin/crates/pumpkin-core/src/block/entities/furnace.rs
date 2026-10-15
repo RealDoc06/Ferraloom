@@ -1,3 +1,4 @@
+use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::Inventory;
 
 use std::{
@@ -5,7 +6,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex as StdMutex, RwLock,
-        atomic::{AtomicBool, AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
 };
 
@@ -24,20 +25,22 @@ pub struct FurnaceBlockEntity {
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 
-    pub cooking_time_spent: AtomicU16,
-    pub cooking_total_time: AtomicU16,
-    pub lit_time_remaining: AtomicU16,
-    pub lit_total_time: AtomicU16,
+    pub cooking_time_spent: AtomicI32,
+    pub cooking_total_time: AtomicI32,
+    pub lit_time_remaining: AtomicI32,
+    pub lit_total_time: AtomicI32,
+    pub speed_multiplier: AtomicCell<f32>,
 
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
-    /// Maps result item ID -> craft count
+    /// Maps recipe ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
 }
 
 impl FurnaceBlockEntity {
     pub const INVENTORY_SIZE: usize = 3;
+    pub(crate) const RECIPE_KIND: CookingRecipeKind = CookingRecipeKind::Smelting;
     pub const ID: &'static str = "minecraft:furnace";
 
     #[must_use]
@@ -47,10 +50,11 @@ impl FurnaceBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
-            cooking_total_time: AtomicU16::new(0),
-            cooking_time_spent: AtomicU16::new(0),
-            lit_total_time: AtomicU16::new(0),
-            lit_time_remaining: AtomicU16::new(0),
+            cooking_total_time: AtomicI32::new(0),
+            cooking_time_spent: AtomicI32::new(0),
+            lit_total_time: AtomicI32::new(0),
+            lit_time_remaining: AtomicI32::new(0),
+            speed_multiplier: AtomicCell::new(1.0),
             recipes_used: StdMutex::new(HashMap::new()),
         }
     }

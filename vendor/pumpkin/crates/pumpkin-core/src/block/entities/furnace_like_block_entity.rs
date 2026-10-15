@@ -1,20 +1,80 @@
-use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
+use pumpkin_data::{
+    data_component_impl::{CookingFuelImpl, IntProvider},
+    item_stack::ItemStack,
+    recipes::CookingRecipe,
+};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
 pub use pumpkin_inventory::ExperienceContainer;
 use pumpkin_inventory::{Clearable, Inventory};
 
+/// `TagValueInput.getIntOr` accepts every NumericTag. Float/Double.intValue
+/// floors before Java's saturating conversion; Long.intValue keeps its low bits.
+pub(crate) fn read_cooking_int(nbt: &NbtCompound, key: &str) -> i32 {
+    match nbt.get(key) {
+        Some(NbtTag::Byte(value)) => i32::from(*value),
+        Some(NbtTag::Short(value)) => i32::from(*value),
+        Some(NbtTag::Int(value)) => *value,
+        Some(NbtTag::Long(value)) => *value as i32,
+        Some(NbtTag::Float(value)) => value.floor() as i32,
+        Some(NbtTag::Double(value)) => value.floor() as i32,
+        _ => 0,
+    }
+}
+
+pub(crate) fn read_cooking_speed(nbt: &NbtCompound) -> f32 {
+    match nbt.get("speed_multiplier") {
+        Some(NbtTag::Byte(value)) => f32::from(*value),
+        Some(NbtTag::Short(value)) => f32::from(*value),
+        Some(NbtTag::Int(value)) => *value as f32,
+        Some(NbtTag::Long(value)) => *value as f32,
+        Some(NbtTag::Float(value)) => *value,
+        Some(NbtTag::Double(value)) => *value as f32,
+        _ => 1.0,
+    }
+}
+
+pub(crate) fn cooking_time(recipe_time: i32, speed: f32) -> i32 {
+    if speed > 0.0 {
+        (recipe_time as f32 / speed).ceil() as i32
+    } else {
+        recipe_time
+    }
+}
+
+pub(crate) fn rescale_cooking_progress(spent: i32, total: i32, new_total: i32) -> i32 {
+    (spent as f32 / total as f32 * new_total as f32).ceil() as i32
+}
+
+pub(crate) fn cooking_fuel_duration(fuel: &CookingFuelImpl, is_fast: bool) -> i32 {
+    match &fuel.burn_time {
+        // A ResolvableInt.Constant is already resolved, including its sign/range.
+        IntProvider::Inline(value) => *value,
+        IntProvider::Id(_) => i32::from(fuel.get_burn_ticks(is_fast)),
+    }
+}
+
+pub(crate) fn write_cooking_state(entity: &impl CookingBlockEntityBase, nbt: &mut NbtCompound) {
+    nbt.put_int("cooking_total_time", entity.get_cooking_total_time());
+    nbt.put_int("cooking_time_spent", entity.get_cooking_time_spent());
+    nbt.put_int("lit_total_time", entity.get_lit_total_time());
+    nbt.put_int("lit_time_remaining", entity.get_lit_time_remaining());
+    nbt.put_float("speed_multiplier", entity.get_speed_multiplier());
+}
+
 /// Trait for extracting smelting experience from cooking block entities.
 pub trait CookingBlockEntityBase:
     Sync + Send + Inventory + PropertyDelegate + BlockEntity + Clearable
 {
-    fn get_cooking_time_spent(&self) -> u16;
-    fn get_cooking_total_time(&self) -> u16;
-    fn get_lit_time_remaining(&self) -> u16;
-    fn get_lit_total_time(&self) -> u16;
+    fn get_cooking_time_spent(&self) -> i32;
+    fn get_cooking_total_time(&self) -> i32;
+    fn get_lit_time_remaining(&self) -> i32;
+    fn get_lit_total_time(&self) -> i32;
+    fn get_speed_multiplier(&self) -> f32;
 
     /// Track that a recipe was used (for XP calculation on extraction)
-    /// Uses the result item ID as the recipe identifier
+    /// Uses the namespaced recipe ID as the recipe identifier.
     fn add_recipe_used(&self, recipe: &CookingRecipe);
     /// Extract and reset accumulated experience, returning the total as an integer
     /// Calculates XP from tracked recipes and clears the `recipes_used` map
@@ -24,10 +84,10 @@ pub trait CookingBlockEntityBase:
     fn get_fuel_item(&self) -> ItemStack;
     fn get_output_item(&self) -> ItemStack;
 
-    fn set_cooking_time_spent(&self, spent_time: u16);
-    fn set_cooking_total_time(&self, total_time: u16);
-    fn set_lit_time_remaining(&self, remaining_time: u16);
-    fn set_lit_total_time(&self, total_time: u16);
+    fn set_cooking_time_spent(&self, spent_time: i32);
+    fn set_cooking_total_time(&self, total_time: i32);
+    fn set_lit_time_remaining(&self, remaining_time: i32);
+    fn set_lit_total_time(&self, total_time: i32);
 
     fn is_burning(&self) -> bool;
     fn can_accept_recipe_output(&self, recipe: Option<&CookingRecipe>, max_count: u8) -> bool;
@@ -38,20 +98,24 @@ pub trait CookingBlockEntityBase:
 macro_rules! impl_cooking_block_entity_base {
     ($struct_name:ty) => {
         impl CookingBlockEntityBase for $struct_name {
-            fn get_cooking_time_spent(&self) -> u16 {
+            fn get_cooking_time_spent(&self) -> i32 {
                 self.cooking_time_spent.load(Ordering::Relaxed)
             }
 
-            fn get_cooking_total_time(&self) -> u16 {
+            fn get_cooking_total_time(&self) -> i32 {
                 self.cooking_total_time.load(Ordering::Relaxed)
             }
 
-            fn get_lit_time_remaining(&self) -> u16 {
+            fn get_lit_time_remaining(&self) -> i32 {
                 self.lit_time_remaining.load(Ordering::Relaxed)
             }
 
-            fn get_lit_total_time(&self) -> u16 {
+            fn get_lit_total_time(&self) -> i32 {
                 self.lit_total_time.load(Ordering::Relaxed)
+            }
+
+            fn get_speed_multiplier(&self) -> f32 {
+                self.speed_multiplier.load()
             }
 
             fn get_input_item(&self) -> ItemStack {
@@ -78,20 +142,20 @@ macro_rules! impl_cooking_block_entity_base {
                 items[2].clone()
             }
 
-            fn set_cooking_time_spent(&self, spent_time: u16) {
+            fn set_cooking_time_spent(&self, spent_time: i32) {
                 self.cooking_time_spent.store(spent_time, Ordering::Relaxed);
             }
 
-            fn set_cooking_total_time(&self, total_time: u16) {
+            fn set_cooking_total_time(&self, total_time: i32) {
                 self.cooking_total_time.store(total_time, Ordering::Relaxed);
             }
 
-            fn set_lit_time_remaining(&self, remaining_time: u16) {
+            fn set_lit_time_remaining(&self, remaining_time: i32) {
                 self.lit_time_remaining
                     .store(remaining_time, Ordering::Relaxed);
             }
 
-            fn set_lit_total_time(&self, total_time: u16) {
+            fn set_lit_total_time(&self, total_time: i32) {
                 self.lit_total_time.store(total_time, Ordering::Relaxed);
             }
 
@@ -210,16 +274,15 @@ macro_rules! impl_property_delegate_for_cooking {
         impl $crate::block::entities::PropertyDelegate for $struct_name {
             fn get_property(&self, index: i32) -> i32 {
                 match index {
-                    0 => self.get_lit_time_remaining() as i32,
-                    1 => self.get_lit_total_time() as i32,
-                    2 => self.get_cooking_time_spent() as i32,
-                    3 => self.get_cooking_total_time() as i32,
+                    0 => self.get_lit_time_remaining(),
+                    1 => self.get_lit_total_time(),
+                    2 => self.get_cooking_time_spent(),
+                    3 => self.get_cooking_total_time(),
                     _ => 0,
                 }
             }
 
             fn set_property(&self, index: i32, value: i32) {
-                let value = value as u16;
                 match index {
                     0 => self.set_lit_time_remaining(value),
                     1 => self.set_lit_total_time(value),
@@ -327,11 +390,16 @@ macro_rules! impl_inventory_for_cooking {
                 if slot == 0 && !is_same_item {
                     if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
                         stack.item,
-                        CookingRecipeKind::Smelting,
+                        Self::RECIPE_KIND,
                     ) {
-                        self.set_cooking_total_time(recipe.cookingtime as u16);
+                        self.set_cooking_total_time(
+                            $crate::block::entities::furnace_like_block_entity::cooking_time(
+                                recipe.cookingtime,
+                                self.get_speed_multiplier(),
+                            ),
+                        );
                     } else {
-                        self.set_cooking_total_time(0);
+                        self.set_cooking_total_time(200);
                     }
                     self.set_cooking_time_spent(0);
                 }
@@ -393,7 +461,11 @@ macro_rules! impl_block_entity_for_cooking {
                         let fuel_component = bottom_item
                             .get_data_component::<pumpkin_data::data_component_impl::CookingFuelImpl>();
                         let adjusted_fuel_ticks = fuel_component
-                            .map_or(0, |fuel| fuel.get_burn_ticks(is_fast));
+                            .map_or(0, |fuel| {
+                                $crate::block::entities::furnace_like_block_entity::cooking_fuel_duration(fuel, is_fast)
+                            });
+                        let speed_multiplier = fuel_component
+                            .map_or(1.0, |fuel| fuel.get_speed_multiplier(is_fast));
 
                         let mut burn_ticks = adjusted_fuel_ticks;
                         let mut burn_cancelled = false;
@@ -407,23 +479,39 @@ macro_rules! impl_block_entity_for_cooking {
                             if burn_event.cancelled {
                                 burn_cancelled = true;
                             } else {
-                                burn_ticks = burn_event.burn_time as u16;
+                                burn_ticks = burn_event.burn_time as i32;
                             }
                         }
                         if !burn_cancelled {
                             self.set_lit_time_remaining(burn_ticks);
                             self.set_lit_total_time(burn_ticks);
+                            self.speed_multiplier.store(speed_multiplier);
+                            let old_total = self.get_cooking_total_time();
+                            let spent = self.get_cooking_time_spent();
+                            if old_total > 0 && spent < old_total {
+                                if let Some(recipe) = furnace_recipe {
+                                    let new_total = $crate::block::entities::furnace_like_block_entity::cooking_time(
+                                        recipe.cookingtime,
+                                        speed_multiplier,
+                                    );
+                                    self.set_cooking_total_time(new_total);
+                                    self.set_cooking_time_spent(
+                                        $crate::block::entities::furnace_like_block_entity::rescale_cooking_progress(
+                                            spent, old_total, new_total,
+                                        ),
+                                    );
+                                }
+                            }
 
                             if self.is_burning() {
                                 is_dirty = true;
                                 if let Ok(mut items_guard) = self.items.try_write() {
                                     if !items_guard[1].is_empty() {
-                                        let remainder = items_guard[1]
-                                            .get_data_component::<
-                                                pumpkin_data::data_component_impl::UseRemainderImpl,
-                                            >()
-                                            .and_then(|component| component.remainder.as_deref())
-                                            .and_then(pumpkin_data::item::Item::from_registry_key);
+                                        // Vanilla consumes the item's crafting remainder,
+                                        // not its separate consume/use remainder component.
+                                        let remainder = (items_guard[1].item.id
+                                            == pumpkin_data::item::Item::LAVA_BUCKET.id)
+                                            .then_some(&pumpkin_data::item::Item::BUCKET);
                                         items_guard[1].decrement(1);
                                         if let Some(remainder_item) = remainder
                                         {
@@ -464,18 +552,22 @@ macro_rules! impl_block_entity_for_cooking {
                                 if start_event.cancelled {
                                     start_cancelled = true;
                                 } else {
-                                    self.set_cooking_total_time(start_event.cooking_time as u16);
+                                    self.set_cooking_total_time(start_event.cooking_time as i32);
                                 }
                             }
                         }
                         if !start_cancelled {
                             self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
-                            if self.get_cooking_time_spent() == self.get_cooking_total_time() {
+                            if self.get_cooking_time_spent() >= self.get_cooking_total_time() {
                                 self.set_cooking_time_spent(0);
                                 if let Some(cooking_recipe) = furnace_recipe {
-                                    let cooking_total_time = cooking_recipe.cookingtime;
-                                    self.set_cooking_total_time(cooking_total_time as u16);
+                                    self.set_cooking_total_time(
+                                        $crate::block::entities::furnace_like_block_entity::cooking_time(
+                                            cooking_recipe.cookingtime,
+                                            self.get_speed_multiplier(),
+                                        ),
+                                    );
 
                                     let mut smelt_cancelled = false;
                                     if let Some(server) = world.server.upgrade() {
@@ -505,7 +597,8 @@ macro_rules! impl_block_entity_for_cooking {
                         Ordering::Acquire,
                         |v| {
                             Some(
-                                v.saturating_sub(2)
+                                v.wrapping_sub(2)
+                                    .max(0)
                                     .min(self.cooking_total_time.load(Ordering::Acquire)),
                             )
                         },
@@ -544,21 +637,17 @@ macro_rules! impl_block_entity_for_cooking {
             where
                 Self: Sized,
             {
-                let cooking_total_time = AtomicU16::new(
-                    nbt.get_short("cooking_total_time")
-                        .map_or(0, |cooking_total_time| cooking_total_time as u16),
+                let cooking_total_time = AtomicI32::new(
+                    $crate::block::entities::furnace_like_block_entity::read_cooking_int(nbt, "cooking_total_time"),
                 );
-                let cooking_time_spent = AtomicU16::new(
-                    nbt.get_short("cooking_time_spent")
-                        .map_or(0, |cooking_time_spent| cooking_time_spent as u16),
+                let cooking_time_spent = AtomicI32::new(
+                    $crate::block::entities::furnace_like_block_entity::read_cooking_int(nbt, "cooking_time_spent"),
                 );
-                let lit_total_time = AtomicU16::new(
-                    nbt.get_short("lit_total_time")
-                        .map_or(0, |lit_total_time| lit_total_time as u16),
+                let lit_total_time = AtomicI32::new(
+                    $crate::block::entities::furnace_like_block_entity::read_cooking_int(nbt, "lit_total_time"),
                 );
-                let lit_time_remaining = AtomicU16::new(
-                    nbt.get_short("lit_time_remaining")
-                        .map_or(0, |lit_time_remaining| lit_time_remaining as u16),
+                let lit_time_remaining = AtomicI32::new(
+                    $crate::block::entities::furnace_like_block_entity::read_cooking_int(nbt, "lit_time_remaining"),
                 );
                 // Load RecipesUsed from NBT (vanilla format: map of recipe ID -> craft count)
                 let mut recipes_used_map = HashMap::new();
@@ -579,6 +668,9 @@ macro_rules! impl_block_entity_for_cooking {
                     cooking_time_spent,
                     lit_total_time,
                     lit_time_remaining,
+                    speed_multiplier: crossbeam::atomic::AtomicCell::new(
+                        $crate::block::entities::furnace_like_block_entity::read_cooking_speed(nbt),
+                    ),
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
                 };
                 pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
@@ -587,10 +679,7 @@ macro_rules! impl_block_entity_for_cooking {
             }
 
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-                nbt.put_short("cooking_total_time", self.get_cooking_total_time() as i16);
-                nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
-                nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
-                nbt.put_short("lit_time_remaining", self.get_lit_time_remaining() as i16);
+                $crate::block::entities::furnace_like_block_entity::write_cooking_state(self, nbt);
 
                 // Save RecipesUsed in vanilla format (map of recipe ID -> craft count)
                 {
@@ -637,10 +726,7 @@ macro_rules! impl_block_entity_for_cooking {
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                nbt.put_short("cooking_total_time", self.get_cooking_total_time() as i16);
-                nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
-                nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
-                nbt.put_short("lit_time_remaining", self.get_lit_time_remaining() as i16);
+                $crate::block::entities::furnace_like_block_entity::write_cooking_state(self, &mut nbt);
 
                 if let Ok(recipes) = self.recipes_used.lock() {
                     if !recipes.is_empty() {
@@ -687,4 +773,390 @@ macro_rules! impl_block_entity_for_cooking {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        block::entities::{
+            blasting_furnace::BlastingFurnaceBlockEntity, block_entity_from_nbt,
+            furnace::FurnaceBlockEntity, smoker::SmokerBlockEntity,
+        },
+        world::World,
+    };
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::{
+        Block, block_properties::FurnaceLikeProperties, data_component_impl::FloatProvider,
+        dimension::Dimension, item::Item,
+    };
+    use pumpkin_util::{
+        math::{position::BlockPos, vector2::Vector2},
+        world_seed::Seed,
+    };
+    use pumpkin_world::{chunk::ChunkData, level::Level, world_info::LevelData};
+    use std::sync::{Arc, Weak};
+
+    const POSITION: BlockPos = BlockPos::new(4097, 200, 1);
+
+    async fn world() -> (tempfile::TempDir, Arc<World>) {
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(256, 0), ChunkData::empty_sync(256, 0));
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            Weak::new(),
+            Arc::default(),
+        ));
+        (folder, world)
+    }
+
+    fn place(world: &World, position: BlockPos, block: &'static Block, lit: bool) {
+        let mut properties = FurnaceLikeProperties::default(block);
+        properties.lit = lit;
+        world
+            .level
+            .loaded_chunks
+            .get(&position.chunk_position())
+            .unwrap()
+            .set_block_absolute_y(
+                (position.0.x & 15) as usize,
+                position.0.y,
+                (position.0.z & 15) as usize,
+                properties.to_state_id(block),
+            );
+    }
+
+    fn saved_item(slot: i8, id: &str, count: i32) -> NbtTag {
+        let mut item = NbtCompound::new();
+        item.put_byte("Slot", slot);
+        item.put_string("id", id.to_string());
+        item.put_int("count", count);
+        NbtTag::Compound(item)
+    }
+
+    /// Observed after exactly 237 ticks in official Java 26.3. Source world
+    /// manifest SHA-256: de91961415ddb941e59f4741b005b1d768a5beabb1461e2b8ccbf3952ecf3603.
+    fn java_reference(kind: &str) -> NbtCompound {
+        let (x, input, output, recipe, inputs, outputs, total, remaining, lit_total, speed) =
+            match kind {
+                "furnace" => (
+                    4097,
+                    "raw_iron",
+                    "iron_ingot",
+                    "iron_ingot_from_smelting_raw_iron",
+                    15,
+                    1,
+                    200,
+                    1364,
+                    1600,
+                    1.0,
+                ),
+                "blast_furnace" => (
+                    4099,
+                    "raw_iron",
+                    "iron_ingot",
+                    "iron_ingot_from_blasting_raw_iron",
+                    14,
+                    2,
+                    100,
+                    564,
+                    800,
+                    2.0,
+                ),
+                "smoker" => (
+                    4101,
+                    "porkchop",
+                    "cooked_porkchop",
+                    "cooked_porkchop_from_smoking",
+                    14,
+                    2,
+                    100,
+                    564,
+                    800,
+                    2.0,
+                ),
+                _ => unreachable!(),
+            };
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", format!("minecraft:{kind}"));
+        nbt.put_int("x", x);
+        nbt.put_int("y", 200);
+        nbt.put_int("z", 1);
+        nbt.put_int("cooking_time_spent", 37);
+        nbt.put_int("cooking_total_time", total);
+        nbt.put_int("lit_time_remaining", remaining);
+        nbt.put_int("lit_total_time", lit_total);
+        nbt.put_float("speed_multiplier", speed);
+        nbt.put_list(
+            "Items",
+            vec![
+                saved_item(0, &format!("minecraft:{input}"), inputs),
+                saved_item(2, &format!("minecraft:{output}"), outputs),
+            ],
+        );
+        let mut recipes = NbtCompound::new();
+        recipes.put_int(&format!("minecraft:{recipe}"), outputs);
+        nbt.put_compound("RecipesUsed", recipes);
+        nbt
+    }
+
+    #[tokio::test]
+    async fn cooking_continues_the_actual_java_237_tick_furnace_blast_and_smoker_states() {
+        let (_folder, world) = world().await;
+        let entities: Vec<_> = ["furnace", "blast_furnace", "smoker"]
+            .into_iter()
+            .map(|kind| {
+                let nbt = java_reference(kind);
+                let entity = block_entity_from_nbt(&nbt).unwrap();
+                let block = match kind {
+                    "furnace" => &Block::FURNACE,
+                    "blast_furnace" => &Block::BLAST_FURNACE,
+                    _ => &Block::SMOKER,
+                };
+                place(&world, entity.get_position(), block, true);
+                let recipe = nbt
+                    .get_compound("RecipesUsed")
+                    .unwrap()
+                    .child_tags
+                    .keys()
+                    .next()
+                    .unwrap()
+                    .to_string();
+                (entity, recipe)
+            })
+            .collect();
+        for (ticks, expected) in [
+            (
+                0,
+                [
+                    (37, 200, 1364, 1600, 1.0, 15, 1),
+                    (37, 100, 564, 800, 2.0, 14, 2),
+                    (37, 100, 564, 800, 2.0, 14, 2),
+                ],
+            ),
+            (
+                63,
+                [
+                    (100, 200, 1301, 1600, 1.0, 15, 1),
+                    (0, 100, 501, 800, 2.0, 13, 3),
+                    (0, 100, 501, 800, 2.0, 13, 3),
+                ],
+            ),
+            (
+                100,
+                [
+                    (0, 200, 1201, 1600, 1.0, 14, 2),
+                    (0, 100, 401, 800, 2.0, 12, 4),
+                    (0, 100, 401, 800, 2.0, 12, 4),
+                ],
+            ),
+        ] {
+            for _ in 0..ticks {
+                for (entity, _) in &entities {
+                    entity.tick(&world);
+                }
+            }
+            for ((entity, recipe), (spent, total, remaining, lit_total, speed, input, output)) in
+                entities.iter().zip(expected)
+            {
+                let mut saved = NbtCompound::new();
+                entity.write_internal(&mut saved);
+                for (key, value) in [
+                    ("cooking_time_spent", spent),
+                    ("cooking_total_time", total),
+                    ("lit_time_remaining", remaining),
+                    ("lit_total_time", lit_total),
+                ] {
+                    assert_eq!(
+                        saved.get_int(key),
+                        Some(value),
+                        "{} {key}",
+                        entity.resource_location()
+                    );
+                }
+                assert_eq!(saved.get_float("speed_multiplier"), Some(speed));
+                assert_eq!(
+                    saved.get_compound("RecipesUsed").unwrap().get_int(recipe),
+                    Some(output)
+                );
+                let inventory = entity.clone().get_inventory().unwrap();
+                assert_eq!(i32::from(inventory.get_stack(0).item_count), input);
+                assert!(inventory.get_stack(1).is_empty());
+                assert_eq!(i32::from(inventory.get_stack(2).item_count), output);
+            }
+        }
+    }
+
+    #[test]
+    fn cooking_numeric_nbt_matches_java_floor_truncation_and_saturation() {
+        for (tag, expected) in [
+            (NbtTag::Byte(-7), -7),
+            (NbtTag::Short(37), 37),
+            (NbtTag::Int(70000), 70000),
+            (NbtTag::Int(i32::MIN), i32::MIN),
+            (NbtTag::Long(0x1_0000_0001), 1),
+            (NbtTag::Long(0xffff_ffff), -1),
+            (NbtTag::Float(-1.5), -2),
+            (NbtTag::Double(-1.5), -2),
+            (NbtTag::Float(f32::NAN), 0),
+            (NbtTag::Double(f64::NAN), 0),
+            (NbtTag::Float(f32::INFINITY), i32::MAX),
+            (NbtTag::Double(f64::NEG_INFINITY), i32::MIN),
+        ] {
+            let mut nbt = NbtCompound::new();
+            nbt.put("cooking_total_time", tag);
+            let furnace = FurnaceBlockEntity::from_nbt(&nbt, POSITION);
+            assert_eq!(furnace.get_cooking_total_time(), expected);
+            assert_eq!(furnace.get_speed_multiplier(), 1.0);
+            let mut saved = NbtCompound::new();
+            furnace.write_nbt(&mut saved);
+            assert_eq!(saved.get_int("cooking_total_time"), Some(expected));
+        }
+        let mut nbt = NbtCompound::new();
+        nbt.put("speed_multiplier", NbtTag::Double(0.5));
+        let furnace = FurnaceBlockEntity::from_nbt(&nbt, POSITION);
+        assert_eq!(furnace.get_speed_multiplier(), 0.5);
+        assert_eq!(furnace.get_cooking_time_spent(), 0);
+        assert_eq!(furnace.get_lit_time_remaining(), 0);
+        furnace.set_lit_time_remaining(-1);
+        furnace.set_lit_total_time(i32::MAX);
+        let mut saved = NbtCompound::new();
+        furnace.write_nbt(&mut saved);
+        assert_eq!(saved.get_int("lit_time_remaining"), Some(-1));
+        assert_eq!(saved.get_int("lit_total_time"), Some(i32::MAX));
+        assert_eq!(saved.get_float("speed_multiplier"), Some(0.5));
+    }
+
+    #[test]
+    fn cooking_speed_special_values_and_literal_fuel_follow_java_resolution() {
+        for (speed, expected) in [
+            (2.0, 100),
+            (3.0, 67),
+            (0.0, 200),
+            (-2.0, 200),
+            (f32::NAN, 200),
+            (f32::INFINITY, 0),
+            (f32::MIN_POSITIVE, i32::MAX),
+        ] {
+            assert_eq!(cooking_time(200, speed), expected);
+        }
+        assert_eq!(rescale_cooking_progress(37, 200, 100), 19);
+        for duration in [-7, 1600, 100000, i32::MAX] {
+            let fuel = CookingFuelImpl {
+                burn_time: IntProvider::Inline(duration),
+                speed_multiplier: FloatProvider::Inline(2.0),
+            };
+            assert_eq!(cooking_fuel_duration(&fuel, false), duration);
+            assert_eq!(cooking_fuel_duration(&fuel, true), duration);
+        }
+        let coal = ItemStack::new(1, &Item::COAL);
+        let fuel = coal.get_data_component::<CookingFuelImpl>().unwrap();
+        assert_eq!(cooking_fuel_duration(fuel, false), 1600);
+        assert_eq!(cooking_fuel_duration(fuel, true), 800);
+        assert_eq!(fuel.get_speed_multiplier(false), 1.0);
+        assert_eq!(fuel.get_speed_multiplier(true), 2.0);
+    }
+
+    #[tokio::test]
+    async fn cooking_new_fuel_rescales_partial_progress_without_halving_literal_duration() {
+        let (_folder, world) = world().await;
+        place(&world, POSITION, &Block::BLAST_FURNACE, false);
+        let furnace = BlastingFurnaceBlockEntity::new(POSITION);
+        furnace.set_stack(0, ItemStack::new(16, &Item::RAW_IRON));
+        furnace.set_cooking_time_spent(37);
+        let mut coal = ItemStack::new(1, &Item::COAL);
+        coal.set_data_component(CookingFuelImpl {
+            burn_time: IntProvider::Inline(1600),
+            speed_multiplier: FloatProvider::Inline(2.0),
+        });
+        furnace.set_stack(1, coal);
+        furnace.tick(&world);
+        assert_eq!(furnace.get_lit_time_remaining(), 1600);
+        assert_eq!(furnace.get_lit_total_time(), 1600);
+        assert_eq!(furnace.get_speed_multiplier(), 2.0);
+        assert_eq!(furnace.get_cooking_total_time(), 100);
+        assert_eq!(furnace.get_cooking_time_spent(), 20);
+        assert!(furnace.get_stack(1).is_empty());
+    }
+
+    #[test]
+    fn cooking_input_uses_its_own_recipe_kind_and_retained_speed() {
+        let smoker = SmokerBlockEntity::new(POSITION);
+        smoker.speed_multiplier.store(2.0);
+        smoker.set_stack(0, ItemStack::new(1, &Item::PORKCHOP));
+        assert_eq!(smoker.get_cooking_total_time(), 100);
+        smoker.set_stack(0, ItemStack::new(1, &Item::RAW_IRON));
+        assert_eq!(
+            smoker.get_cooking_total_time(),
+            200,
+            "No smoking recipe uses Java's 200-tick fallback"
+        );
+        let blast = BlastingFurnaceBlockEntity::new(POSITION);
+        blast.speed_multiplier.store(2.0);
+        blast.set_stack(0, ItemStack::new(1, &Item::PORKCHOP));
+        assert_eq!(blast.get_cooking_total_time(), 200);
+        blast.set_stack(0, ItemStack::new(1, &Item::RAW_IRON));
+        assert_eq!(blast.get_cooking_total_time(), 100);
+    }
+
+    #[tokio::test]
+    async fn cooking_lava_retains_its_bucket_then_fills_it_when_drying_sponge() {
+        let (_folder, world) = world().await;
+        place(&world, POSITION, &Block::FURNACE, false);
+        let furnace = FurnaceBlockEntity::new(POSITION);
+        furnace.set_stack(0, ItemStack::new(16, &Item::WET_SPONGE));
+        furnace.set_stack(1, ItemStack::new(1, &Item::LAVA_BUCKET));
+        furnace.tick(&world);
+        assert_eq!(furnace.get_stack(1).item.id, Item::BUCKET.id);
+        assert_eq!(furnace.get_lit_time_remaining(), 20000);
+        assert_eq!(furnace.get_cooking_time_spent(), 1);
+        for _ in 0..199 {
+            furnace.tick(&world);
+        }
+        assert_eq!(furnace.get_stack(1).item.id, Item::WATER_BUCKET.id);
+        assert_eq!(furnace.get_stack(0).item_count, 15);
+        assert_eq!(furnace.get_stack(2).item.id, Item::SPONGE.id);
+        assert_eq!(furnace.get_stack(2).item_count, 1);
+        assert_eq!(furnace.get_lit_time_remaining(), 19801);
+        assert_eq!(furnace.get_cooking_time_spent(), 0);
+    }
+
+    #[tokio::test]
+    async fn cooking_signed_timer_boundaries_complete_or_wrap_without_panicking() {
+        let (_folder, world) = world().await;
+        place(&world, POSITION, &Block::FURNACE, true);
+        for (spent, total, outputs, expected_spent) in [
+            (10, 5, 1, 0),
+            (0, 0, 1, 0),
+            (0, -2, 1, 0),
+            (i32::MAX, i32::MAX, 0, i32::MIN),
+        ] {
+            let furnace = FurnaceBlockEntity::new(POSITION);
+            furnace.set_stack(0, ItemStack::new(1, &Item::RAW_IRON));
+            furnace.set_cooking_time_spent(spent);
+            furnace.set_cooking_total_time(total);
+            furnace.set_lit_time_remaining(2);
+            furnace.tick(&world);
+            assert_eq!(furnace.get_stack(2).item_count, outputs);
+            assert_eq!(furnace.get_cooking_time_spent(), expected_spent);
+        }
+        let furnace = FurnaceBlockEntity::new(POSITION);
+        furnace.set_cooking_time_spent(1);
+        furnace.set_cooking_total_time(-2);
+        furnace.tick(&world);
+        assert_eq!(furnace.get_cooking_time_spent(), -2);
+    }
 }
