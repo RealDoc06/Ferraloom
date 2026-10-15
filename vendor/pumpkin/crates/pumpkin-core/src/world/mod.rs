@@ -5387,9 +5387,7 @@ impl World {
         self.players.rcu(|current_list| {
             let mut new_list = (**current_list).clone();
             // Find the player before we filter them out
-            let pos = new_list
-                .iter()
-                .position(|p| p.gameprofile.id == player.gameprofile.id);
+            let pos = new_list.iter().position(|p| Arc::ptr_eq(p, player));
             if let Some(pos) = pos {
                 removed_player = Some(new_list.remove(pos));
             }

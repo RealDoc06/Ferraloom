@@ -6,13 +6,15 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage, PlayerSnapshot};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+use tokio::sync::{Mutex as AsyncMutex, Notify, OwnedMutexGuard};
 use tracing::{debug, error};
 
 /// Helper for managing player data in the server context.
@@ -23,23 +25,48 @@ pub struct ServerPlayerData {
     storage: Arc<PlayerDataStorage>,
     save_interval: Duration,
     last_save: AtomicCell<Instant>,
-    leaving: Mutex<HashSet<uuid::Uuid>>,
+    sessions: Mutex<HashMap<uuid::Uuid, Weak<PlayerSessionSlot>>>,
 }
 
-/// Keeps a departing UUID unavailable through callbacks and its final save.
-/// Dropping a cancelled or failed leave also releases admission.
-pub(crate) struct PlayerLeaveGuard<'a> {
-    data: &'a ServerPlayerData,
-    uuid: uuid::Uuid,
+#[derive(Default)]
+struct PlayerSessionSlot {
+    gate: Arc<AsyncMutex<()>>,
+    player: Mutex<Weak<Player>>,
+    leaving: AtomicBool,
+    changed: Notify,
 }
 
-impl Drop for PlayerLeaveGuard<'_> {
-    fn drop(&mut self) {
-        self.data
-            .leaving
+/// Exclusive ownership from admission through the final player and advancement
+/// saves. Keep this on the Player, then move it into the disconnect future.
+pub(crate) struct PlayerSession {
+    slot: Arc<PlayerSessionSlot>,
+    _guard: OwnedMutexGuard<()>,
+}
+
+impl PlayerSession {
+    pub(crate) fn publish(&self, player: &Arc<Player>) {
+        *self
+            .slot
+            .player
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&self.uuid);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::downgrade(player);
+        self.slot.changed.notify_waiters();
+    }
+
+    pub(crate) fn begin_leave(&self) {
+        self.slot.leaving.store(true, Ordering::Release);
+    }
+}
+
+impl Drop for PlayerSession {
+    fn drop(&mut self) {
+        *self
+            .slot
+            .player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Weak::new();
+        self.slot.leaving.store(false, Ordering::Release);
+        self.slot.changed.notify_waiters();
     }
 }
 
@@ -50,29 +77,55 @@ impl ServerPlayerData {
             storage: Arc::new(PlayerDataStorage::new(data_path, enabled)),
             save_interval,
             last_save: AtomicCell::new(Instant::now()),
-            leaving: Mutex::new(HashSet::new()),
+            sessions: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Call before removing the player from a world. The guard owns no mutex
-    /// lock, so callbacks, disk IO and awaits can safely run while it is alive.
-    pub(crate) fn begin_player_leave(
-        &self,
-        uuid: uuid::Uuid,
-    ) -> Result<PlayerLeaveGuard<'_>, PlayerDataError> {
-        let inserted = self
-            .leaving
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(uuid);
-        if !inserted {
-            return Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "Player leave is already in progress",
-            )
-            .into());
+    /// Reserve before loading either saved file. A replaced owner is closed,
+    /// then its final save must release the lease before the new load can start.
+    pub(crate) async fn reserve_player_session(&self, uuid: uuid::Uuid) -> PlayerSession {
+        let slot = {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(slot) = sessions.get(&uuid).and_then(Weak::upgrade) {
+                slot
+            } else {
+                let slot = Arc::new(PlayerSessionSlot::default());
+                sessions.insert(uuid, Arc::downgrade(&slot));
+                slot
+            }
+        };
+        let lock = slot.gate.clone().lock_owned();
+        tokio::pin!(lock);
+        loop {
+            let changed = slot.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            // Do not retain the old Player across an await: its destructor may
+            // itself be what releases an unpublished or abandoned session.
+            {
+                let player = slot
+                    .player
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .upgrade();
+                if let Some(player) = player
+                    && !player.client.closed()
+                {
+                    player.kick(crate::net::DisconnectReason::LoggedInOtherLocation, &pumpkin_util::text::TextComponent::translate_cross(
+                        pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                        pumpkin_data::translation::bedrock::DISCONNECTIONSCREEN_LOGGEDINOTHERLOCATION,
+                        [],
+                    ));
+                }
+            }
+            tokio::select! {
+                guard = &mut lock => return PlayerSession { slot: slot.clone(), _guard: guard },
+                () = &mut changed => {},
+            }
         }
-        Ok(PlayerLeaveGuard { data: self, uuid })
     }
 
     /// Handles a player leaving the server.
@@ -168,12 +221,14 @@ impl ServerPlayerData {
     /// Loads returning-player data. Only absent files or disabled saving permit
     /// defaults; storage errors must prevent the caller from admitting the player.
     pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
-        if self
-            .leaving
+        let leaving = self
+            .sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(uuid)
-        {
+            .get(uuid)
+            .and_then(Weak::upgrade)
+            .is_some_and(|slot| slot.leaving.load(Ordering::Acquire));
+        if leaving {
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Previous player session is still saving",
@@ -252,6 +307,29 @@ mod test {
         _remote: tokio::net::TcpStream,
     }
 
+    async fn java_client(
+        server: &Arc<Server>,
+        profile: &GameProfile,
+    ) -> (Arc<ClientPlatform>, tokio::net::TcpStream) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (remote, accepted) =
+            tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
+        let remote = remote.unwrap();
+        let (stream, address) = accepted.unwrap();
+        let pending = PendingConnection::new(
+            stream,
+            address,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(server),
+        );
+        pending.connection_state.store(ConnectionState::Play);
+        let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        java.start_outgoing_packet_task();
+        (Arc::new(ClientPlatform::Java(java)), remote)
+    }
+
     async fn player_fixture() -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
@@ -289,24 +367,7 @@ mod test {
             properties: ArcSwap::from_pointee(Vec::new()),
             profile_actions: None,
         };
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        let (remote, accepted) =
-            tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
-        let _remote = remote.unwrap();
-        let (stream, address) = accepted.unwrap();
-        drop(listener);
-        let pending = PendingConnection::new(
-            stream,
-            address,
-            0,
-            PacketRateLimiter::new(false, 0.0, 0.0),
-            Arc::downgrade(&server),
-        );
-        pending.connection_state.store(ConnectionState::Play);
-        let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
-        java.start_outgoing_packet_task();
-        let client = Arc::new(ClientPlatform::Java(java));
+        let (client, _remote) = java_client(&server, &profile).await;
         let world = server.worlds.load().first().cloned().unwrap();
         let player = Arc::new(Player::new(
             client.clone(),
@@ -318,6 +379,12 @@ mod test {
         player
             .screen_handler_sync_handler
             .store_player(player.clone());
+        let session = server
+            .player_data_storage
+            .reserve_player_session(uuid)
+            .await;
+        session.publish(&player);
+        *player.session.lock().unwrap() = Some(session);
         // Exercise the real world registry without Server::add_player's user-cache IO.
         world.add_player(&player).unwrap();
         PlayerFixture {
@@ -330,6 +397,15 @@ mod test {
     }
 
     async fn close_fixture(fixture: &PlayerFixture) {
+        if fixture
+            .server
+            .get_player_by_uuid(fixture.player.gameprofile.id)
+            .is_some_and(|player| Arc::ptr_eq(&player, &fixture.player))
+        {
+            crate::finish_player_session(&fixture.server, &fixture.player)
+                .await
+                .unwrap();
+        }
         let java = fixture.client.java().unwrap();
         java.close();
         tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
@@ -340,7 +416,8 @@ mod test {
 
     struct ReloginDuringLeave {
         observed: AtomicBool,
-        pause: bool,
+        pause: AtomicBool,
+        resume: tokio::sync::Notify,
     }
 
     impl EventHandler<PlayerLeaveEvent> for ReloginDuringLeave {
@@ -359,9 +436,17 @@ mod test {
                 assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
                 // Leave callbacks may still change the final persisted state.
                 event.player.experience_level.store(9, Ordering::Relaxed);
+                event
+                    .player
+                    .advancements
+                    .lock()
+                    .unwrap()
+                    .progress
+                    .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
+                    .grant_progress("crafting_table");
                 self.observed.store(true, Ordering::Relaxed);
-                if self.pause {
-                    std::future::pending::<()>().await;
+                if self.pause.swap(false, Ordering::Relaxed) {
+                    self.resume.notified().await;
                 }
             })
         }
@@ -376,7 +461,8 @@ mod test {
         data.extract_data_and_save_player(&fixture.player).unwrap();
         let handler = Arc::new(ReloginDuringLeave {
             observed: AtomicBool::new(false),
-            pause: false,
+            pause: AtomicBool::new(false),
+            resume: tokio::sync::Notify::new(),
         });
         fixture
             .server
@@ -399,10 +485,32 @@ mod test {
         );
         rejoined.read_nbt(&mut loaded);
         assert_eq!(rejoined.experience_level.load(Ordering::Relaxed), 9);
+        assert_eq!(
+            rejoined.stats.lock().unwrap().get(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::LeaveGame as i32
+            ),
+            1
+        );
+        let mut advancements = fixture
+            .server
+            .advancement_manager
+            .clone()
+            .new_player_advancement(uuid);
+        advancements.load().unwrap();
+        assert!(
+            advancements
+                .progress
+                .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
+                .is_done()
+        );
         let rejoined = Arc::new(rejoined);
         rejoined
             .screen_handler_sync_handler
             .store_player(rejoined.clone());
+        let session = data.reserve_player_session(uuid).await;
+        session.publish(&rejoined);
+        *rejoined.session.lock().unwrap() = Some(session);
         world.add_player(&rejoined).unwrap();
 
         // A failed final write also releases admission. Repair the deliberately
@@ -411,10 +519,16 @@ mod test {
         let previous = std::fs::read(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
         std::fs::create_dir(&path).unwrap();
+        let advancement_path = rejoined.advancements.lock().unwrap().path.clone();
+        std::fs::remove_file(&advancement_path).unwrap();
         assert!(
             crate::finish_player_session(&fixture.server, &rejoined)
                 .await
                 .is_err()
+        );
+        assert!(
+            advancement_path.is_file(),
+            "advancements must still save after player.dat fails"
         );
         std::fs::remove_dir(&path).unwrap();
         std::fs::write(&path, previous).unwrap();
@@ -434,7 +548,8 @@ mod test {
         data.extract_data_and_save_player(&fixture.player).unwrap();
         let handler = Arc::new(ReloginDuringLeave {
             observed: AtomicBool::new(false),
-            pause: true,
+            pause: AtomicBool::new(true),
+            resume: tokio::sync::Notify::new(),
         });
         fixture
             .server
@@ -452,6 +567,216 @@ mod test {
             Some(1)
         );
         close_fixture(&fixture).await;
+    }
+
+    /// Common admission writes usercache through a cwd-based legacy API. Run
+    /// that one test in a separate process, keeping the test runner's cwd intact.
+    fn isolated_admission_test(name: &str) -> bool {
+        const CHILD: &str = "FERRALOOM_SESSION_ADMISSION_TEST";
+        if std::env::var(CHILD).is_ok_and(|value| value == name) {
+            return false;
+        }
+        let directory = tempdir().unwrap();
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", name, "--nocapture", "--test-threads=1"])
+            .env(CHILD, name)
+            .current_dir(directory.path())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while child.try_wait().unwrap().is_none() {
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                let output = child.wait_with_output().unwrap();
+                panic!(
+                    "admission test timed out: {} {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+            "isolated admission test failed: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        true
+    }
+
+    #[tokio::test]
+    async fn server_admission_waits_for_final_data_and_cleans_exact_duplicate() {
+        if isolated_admission_test(
+            "data::player_server::test::server_admission_waits_for_final_data_and_cleans_exact_duplicate",
+        ) {
+            return;
+        }
+        let fixture = player_fixture().await;
+        let data = &fixture.server.player_data_storage;
+        let uuid = fixture.player.gameprofile.id;
+        fixture.player.experience_level.store(1, Ordering::Relaxed);
+        data.extract_data_and_save_player(&fixture.player).unwrap();
+        let path = data.storage.get_player_data_path(&uuid);
+        let before = std::fs::read(&path).unwrap();
+
+        // A legacy caller can bypass common admission. Its cleanup must remove
+        // that exact object without releasing or persisting the admitted owner.
+        let world = fixture.player.world();
+        let duplicate = Arc::new(Player::new(
+            fixture.client.clone(),
+            fixture.player.gameprofile.clone(),
+            PlayerConfig::default(),
+            &world,
+            pumpkin_util::GameMode::Survival,
+        ));
+        world.add_player(&duplicate).unwrap();
+        crate::finish_player_session(&fixture.server, &duplicate)
+            .await
+            .unwrap();
+        assert!(Arc::ptr_eq(
+            &fixture.server.get_player_by_uuid(uuid).unwrap(),
+            &fixture.player
+        ));
+        assert_eq!(world.players.load().len(), 1);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+
+        let handler = Arc::new(ReloginDuringLeave {
+            observed: AtomicBool::new(false),
+            pause: AtomicBool::new(true),
+            resume: tokio::sync::Notify::new(),
+        });
+        fixture
+            .server
+            .plugin_manager
+            .register::<PlayerLeaveEvent, _>(handler.clone(), EventPriority::Normal, false);
+        let mut leave = Box::pin(crate::finish_player_session(
+            &fixture.server,
+            &fixture.player,
+        ));
+        assert!(futures::poll!(&mut leave).is_pending());
+        assert!(handler.observed.load(Ordering::Relaxed));
+        let profile = fixture.player.gameprofile.clone();
+        let (cancelled_client, _cancelled_remote) = java_client(&fixture.server, &profile).await;
+        let mut cancelled = Box::pin(fixture.server.add_player(
+            cancelled_client.clone(),
+            profile.clone(),
+            None,
+        ));
+        assert!(futures::poll!(&mut cancelled).is_pending());
+        cancelled_client.java().unwrap().close();
+        assert!(
+            tokio::time::timeout(Duration::from_secs(5), cancelled)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            cancelled_client.java().unwrap().await_tasks(),
+        )
+        .await
+        .unwrap();
+        let (client, _remote) = java_client(&fixture.server, &profile).await;
+        let mut admission = Box::pin(fixture.server.add_player(
+            client.clone(),
+            profile.clone(),
+            None,
+        ));
+        assert!(futures::poll!(&mut admission).is_pending());
+        assert!(
+            !client.closed(),
+            "a pending final save must wait instead of kicking the new client"
+        );
+        assert!(fixture.server.get_player_by_uuid(uuid).is_none());
+        handler.resume.notify_one();
+        leave.await.unwrap();
+        let (rejoined, _) = tokio::time::timeout(Duration::from_secs(5), admission)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(rejoined.experience_level.load(Ordering::Relaxed), 9);
+        assert_eq!(
+            rejoined.stats.lock().unwrap().get(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::LeaveGame as i32
+            ),
+            1
+        );
+        assert!(
+            rejoined
+                .advancements
+                .lock()
+                .unwrap()
+                .progress
+                .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
+                .is_done()
+        );
+        assert_eq!(world.players.load().len(), 1);
+
+        // Repeated cleanup of an old Player cannot remove or unlock its successor.
+        crate::finish_player_session(&fixture.server, &fixture.player)
+            .await
+            .unwrap();
+        assert!(Arc::ptr_eq(
+            &fixture.server.get_player_by_uuid(uuid).unwrap(),
+            &rejoined
+        ));
+        let (next_client, _next_remote) = java_client(&fixture.server, &profile).await;
+        let mut next = Box::pin(
+            fixture
+                .server
+                .add_player(next_client.clone(), profile, None),
+        );
+        assert!(futures::poll!(&mut next).is_pending());
+        assert!(
+            client.closed(),
+            "an active duplicate is closed before waiting for its final saves"
+        );
+        crate::finish_player_session(&fixture.server, &fixture.player)
+            .await
+            .unwrap();
+        assert!(futures::poll!(&mut next).is_pending());
+        drop(next);
+        next_client.java().unwrap().close();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            next_client.java().unwrap().await_tasks(),
+        )
+        .await
+        .unwrap();
+        crate::finish_player_session(&fixture.server, &rejoined)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), client.java().unwrap().await_tasks())
+            .await
+            .unwrap();
+        close_fixture(&fixture).await;
+    }
+
+    #[tokio::test]
+    async fn server_pending_session_reservations_release_on_timeout_and_cancellation() {
+        let directory = tempdir().unwrap();
+        let data = ServerPlayerData::new(directory.path(), Duration::from_secs(30), true);
+        let uuid = Uuid::from_u128(103);
+        let first = data.reserve_player_session(uuid).await;
+        let mut cancelled = Box::pin(data.reserve_player_session(uuid));
+        assert!(futures::poll!(&mut cancelled).is_pending());
+        drop(cancelled);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), data.reserve_player_session(uuid))
+                .await
+                .is_err()
+        );
+        drop(first);
+        let next = tokio::time::timeout(Duration::from_secs(1), data.reserve_player_session(uuid))
+            .await
+            .unwrap();
+        drop(next);
+        assert!(data.load_data(&uuid).unwrap().is_none());
     }
 
     #[tokio::test]

@@ -599,7 +599,7 @@ impl PumpkinServer {
                                      java_client.start_outgoing_packet_task();
 
                                      if let Some((player, world)) = server_clone
-                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
+                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config)).await
                                  {
 
                                      if let ClientPlatform::Java(client) = player.client.as_ref() {
@@ -617,13 +617,8 @@ impl PumpkinServer {
                                          client.await_tasks().await;
                                      }
                                     if let Err(e) = finish_player_session(&server_clone, &player).await {
-                                        error!("Failed to save player data on disconnect: {e}");
+                                        error!("Failed to save player session on disconnect: {e}");
                                     }
-                                    if let Err(e) = server_clone.advancement_manager
-                                        .save_player(&player)
-                                        .await {
-                                            error!("Failed to save player advancement on disconnect: {e}");
-                                        }
                                     }
                                 },
                             }
@@ -708,17 +703,20 @@ impl PumpkinServer {
                     client.await_tasks().await;
                 }
                 PacketHandlerResult::ReadyToPlay(profile, config) => {
-                    if let Some((player, _world)) = server.add_player(
-                        Arc::new(ClientPlatform::Bedrock(client.clone())),
-                        profile,
-                        Some(config),
-                    ) {
+                    if let Some((player, _world)) = server
+                        .add_player(
+                            Arc::new(ClientPlatform::Bedrock(client.clone())),
+                            profile,
+                            Some(config),
+                        )
+                        .await
+                    {
                         client.set_player(player.clone());
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
                         if let Err(error) = finish_player_session(&server, &player).await {
-                            error!("Failed to save player data on disconnect: {error}");
+                            error!("Failed to save player session on disconnect: {error}");
                         }
                     }
                 }
@@ -727,18 +725,50 @@ impl PumpkinServer {
     }
 }
 
-/// World removal exposes the UUID before awaited leave callbacks finish. Keep
-/// login blocked until those callbacks, removal statistics and the final save complete.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PlayerSessionSaveError {
+    #[error("Player data: {0}")]
+    Player(pumpkin_world::data::player_data::PlayerDataError),
+    #[error("Advancements: {0}")]
+    Advancements(entity::player::advancement::AdvancementDataError),
+    #[error("Player data: {player}; advancements: {advancements}")]
+    Both {
+        player: pumpkin_world::data::player_data::PlayerDataError,
+        advancements: entity::player::advancement::AdvancementDataError,
+    },
+}
+
+/// Keep this Player's admission lease through callbacks and both independent
+/// persistence attempts. A duplicate cleanup never releases another session's lease.
 pub(crate) async fn finish_player_session(
     server: &Server,
     player: &Arc<entity::player::Player>,
-) -> Result<(), pumpkin_world::data::player_data::PlayerDataError> {
-    let _leaving = server
-        .player_data_storage
-        .begin_player_leave(player.gameprofile.id)?;
+) -> Result<(), PlayerSessionSaveError> {
+    let session = player
+        .session
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    let Some(session) = session else {
+        // Legacy/injected duplicates and repeated cleanup must still release
+        // their world state, but cannot save over the admitted session's data.
+        player.remove().await;
+        return Ok(());
+    };
+    session.begin_leave();
     player.remove().await;
     server.remove_player(player);
-    server.player_data_storage.handle_player_leave(player)
+    let player_data = server.player_data_storage.handle_player_leave(player);
+    let advancements = server.advancement_manager.save_player(player).await;
+    match (player_data, advancements) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(player), Ok(())) => Err(PlayerSessionSaveError::Player(player)),
+        (Ok(()), Err(error)) => Err(PlayerSessionSaveError::Advancements(error)),
+        (Err(player), Err(advancements)) => Err(PlayerSessionSaveError::Both {
+            player,
+            advancements,
+        }),
+    }
 }
 
 fn setup_stdin_console(server: &Arc<Server>) {

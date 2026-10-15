@@ -410,6 +410,8 @@ pub struct Player {
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<ClientPlatform>,
+    /// Held from common admission until both final persistence attempts finish.
+    pub(crate) session: Mutex<Option<crate::data::player_server::PlayerSession>>,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's `EnderChest` inventory.
@@ -739,6 +741,7 @@ impl Player {
             )),
             gameprofile,
             client,
+            session: Mutex::new(None),
             awaiting_teleport: Mutex::new(None),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
@@ -1213,10 +1216,6 @@ impl Player {
                 .remove_passenger_on_disconnect(self.entity_id());
         }
 
-        self.stats
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
         world.remove_player(self, true).await;
 

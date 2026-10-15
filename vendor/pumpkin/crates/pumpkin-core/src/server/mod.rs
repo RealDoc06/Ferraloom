@@ -658,7 +658,7 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub fn add_player(
+    pub async fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
@@ -671,6 +671,39 @@ impl Server {
             .gamemode;
 
         let first_world = self.worlds.load().first().cloned()?;
+
+        // One lease covers loading, publication and final saves for this UUID.
+        // Wait for a replaced session without blocking any other player's IO.
+        let admission_deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        let session = tokio::select! {
+            biased;
+            () = client.await_close_interrupt() => return None,
+            result = tokio::time::timeout_at(
+                admission_deadline,
+                self.player_data_storage.reserve_player_session(profile.id),
+            ) => match result {
+                Ok(session) => session,
+                Err(_) => {
+                    client.try_kick(DisconnectReason::LoggedInOtherLocation, &TextComponent::text("The previous session has not disconnected yet. Please try again."));
+                    return None;
+                }
+            },
+        };
+        if client.closed() {
+            return None;
+        }
+        // An atomic advancement write may still be finishing on a blocking
+        // worker after its old disconnect future was cancelled.
+        tokio::select! {
+            biased;
+            () = client.await_close_interrupt() => return None,
+            result = tokio::time::timeout_at(admission_deadline, self.advancement_manager.wait_for_pending_saves()) => {
+                if result.is_err() {
+                    client.try_kick(DisconnectReason::LoggedInOtherLocation, &TextComponent::text("The previous session has not finished saving. Please try again."));
+                    return None;
+                }
+            },
+        }
 
         // Reject before constructing or publishing a player, so disconnect and
         // autosave paths cannot replace unreadable data with a default player.
@@ -723,6 +756,7 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        session.publish(&player);
         {
             let mut advancements = player
                 .advancements
@@ -738,6 +772,10 @@ impl Server {
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
+                if player.client.closed() {
+                    return None;
+                }
+                *player.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(session);
                 player.screen_handler_sync_handler.store_player(player.clone());
                 world.add_player(&player).is_ok().then(|| {
                     {
@@ -1455,7 +1493,20 @@ mod player_data_tests {
         java.start_outgoing_packet_task();
         let client = Arc::new(ClientPlatform::Java(java));
 
-        assert!(server.add_player(client.clone(), profile, None).is_none());
+        assert!(
+            server
+                .add_player(client.clone(), profile, None)
+                .await
+                .is_none()
+        );
+        drop(
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                server.player_data_storage.reserve_player_session(uuid),
+            )
+            .await
+            .unwrap(),
+        );
         let java = client.java().unwrap();
         assert!(java.is_closed());
         assert!(java.player.load().is_none());
