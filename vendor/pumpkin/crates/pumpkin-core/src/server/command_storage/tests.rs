@@ -320,7 +320,14 @@ async fn storage_save_failures_preserve_previous_file_and_attempt_other_namespac
     assert!(error.contains("command storage"), "{error}");
     assert_eq!(fs::read(&path).unwrap(), previous);
     assert_eq!(entry(&saved(folder.path(), "zeta"), "probe"), value(4));
-    let bytes = fs::read(folder.path().join("pumpkin_custom_data.nbt")).unwrap();
+    let bytes = fs::read(
+        world
+            .level
+            .level_folder
+            .dim_folder
+            .join("pumpkin_custom_data.nbt"),
+    )
+    .unwrap();
     let custom = pumpkin_nbt::Nbt::read(&mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(
         Cursor::new(bytes),
     ))
