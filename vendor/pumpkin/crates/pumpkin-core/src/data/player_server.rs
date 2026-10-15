@@ -6,7 +6,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage, PlayerSnapshot};
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::io;
+use std::sync::{Arc, Mutex};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -21,6 +23,24 @@ pub struct ServerPlayerData {
     storage: Arc<PlayerDataStorage>,
     save_interval: Duration,
     last_save: AtomicCell<Instant>,
+    leaving: Mutex<HashSet<uuid::Uuid>>,
+}
+
+/// Keeps a departing UUID unavailable through callbacks and its final save.
+/// Dropping a cancelled or failed leave also releases admission.
+pub(crate) struct PlayerLeaveGuard<'a> {
+    data: &'a ServerPlayerData,
+    uuid: uuid::Uuid,
+}
+
+impl Drop for PlayerLeaveGuard<'_> {
+    fn drop(&mut self) {
+        self.data
+            .leaving
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.uuid);
+    }
 }
 
 impl ServerPlayerData {
@@ -30,7 +50,29 @@ impl ServerPlayerData {
             storage: Arc::new(PlayerDataStorage::new(data_path, enabled)),
             save_interval,
             last_save: AtomicCell::new(Instant::now()),
+            leaving: Mutex::new(HashSet::new()),
         }
+    }
+
+    /// Call before removing the player from a world. The guard owns no mutex
+    /// lock, so callbacks, disk IO and awaits can safely run while it is alive.
+    pub(crate) fn begin_player_leave(
+        &self,
+        uuid: uuid::Uuid,
+    ) -> Result<PlayerLeaveGuard<'_>, PlayerDataError> {
+        let inserted = self
+            .leaving
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(uuid);
+        if !inserted {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Player leave is already in progress",
+            )
+            .into());
+        }
+        Ok(PlayerLeaveGuard { data: self, uuid })
     }
 
     /// Handles a player leaving the server.
@@ -126,6 +168,18 @@ impl ServerPlayerData {
     /// Loads returning-player data. Only absent files or disabled saving permit
     /// defaults; storage errors must prevent the caller from admitting the player.
     pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
+        if self
+            .leaving
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(uuid)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Previous player session is still saving",
+            )
+            .into());
+        }
         let (should_load, data) = self.storage.load_player_data(uuid)?;
         Ok(should_load.then_some(data))
     }
@@ -158,9 +212,24 @@ impl ServerPlayerData {
 
 #[cfg(test)]
 mod test {
+    use crate::data::VanillaData;
     use crate::data::player_server::ServerPlayerData;
+    use crate::entity::{NBTStorage, player::Player};
+    use crate::net::java::{JavaClient, pending::PendingConnection};
+    use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
+    use crate::plugin::EventHandler;
+    use crate::plugin::api::events::{EventPriority, player::PlayerLeaveEvent};
+    use crate::server::Server;
+    use arc_swap::ArcSwap;
+    use futures::future::BoxFuture;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
     use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_util::world_seed::Seed;
     use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
+    use std::io;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
     use std::time::Instant;
     use tempfile::tempdir;
@@ -175,19 +244,15 @@ mod test {
         storage.save_player_data(snapshot)
     }
 
-    #[tokio::test]
-    async fn server_queued_periodic_snapshot_cannot_roll_back_disconnect_or_save_all() {
-        use crate::data::VanillaData;
-        use crate::net::java::{JavaClient, pending::PendingConnection};
-        use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
-        use crate::server::Server;
-        use arc_swap::ArcSwap;
-        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
-        use pumpkin_protocol::ConnectionState;
-        use pumpkin_util::world_seed::Seed;
-        use std::sync::Arc;
-        use std::sync::atomic::Ordering;
+    struct PlayerFixture {
+        _directory: tempfile::TempDir,
+        server: Arc<Server>,
+        player: Arc<Player>,
+        client: Arc<ClientPlatform>,
+        _remote: tokio::net::TcpStream,
+    }
 
+    async fn player_fixture() -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -242,23 +307,175 @@ mod test {
         let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
         java.start_outgoing_packet_task();
         let client = Arc::new(ClientPlatform::Java(java));
-        let (player, _) = server.add_player(client.clone(), profile, None).unwrap();
+        let world = server.worlds.load().first().cloned().unwrap();
+        let player = Arc::new(Player::new(
+            client.clone(),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            pumpkin_util::GameMode::Survival,
+        ));
+        player
+            .screen_handler_sync_handler
+            .store_player(player.clone());
+        // Exercise the real world registry without Server::add_player's user-cache IO.
+        world.add_player(&player).unwrap();
+        PlayerFixture {
+            _directory: directory,
+            server,
+            player,
+            client,
+            _remote,
+        }
+    }
+
+    async fn close_fixture(fixture: &PlayerFixture) {
+        let java = fixture.client.java().unwrap();
+        java.close();
+        tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
+            .await
+            .unwrap();
+        fixture.server.shutdown().await;
+    }
+
+    struct ReloginDuringLeave {
+        observed: AtomicBool,
+        pause: bool,
+    }
+
+    impl EventHandler<PlayerLeaveEvent> for ReloginDuringLeave {
+        fn handle<'a>(
+            &'a self,
+            server: &'a Arc<Server>,
+            event: &'a PlayerLeaveEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let uuid = event.player.gameprofile.id;
+                assert!(server.get_player_by_uuid(uuid).is_none());
+                let Err(PlayerDataError::Io(error)) = server.player_data_storage.load_data(&uuid)
+                else {
+                    panic!("removed UUID must remain unavailable until its final save completes");
+                };
+                assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+                // Leave callbacks may still change the final persisted state.
+                event.player.experience_level.store(9, Ordering::Relaxed);
+                self.observed.store(true, Ordering::Relaxed);
+                if self.pause {
+                    std::future::pending::<()>().await;
+                }
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn server_immediate_relogin_loads_final_leave_callback_changes() {
+        let fixture = player_fixture().await;
+        let data = &fixture.server.player_data_storage;
+        let uuid = fixture.player.gameprofile.id;
+        fixture.player.experience_level.store(1, Ordering::Relaxed);
+        data.extract_data_and_save_player(&fixture.player).unwrap();
+        let handler = Arc::new(ReloginDuringLeave {
+            observed: AtomicBool::new(false),
+            pause: false,
+        });
+        fixture
+            .server
+            .plugin_manager
+            .register::<PlayerLeaveEvent, _>(handler.clone(), EventPriority::Normal, false);
+        crate::finish_player_session(&fixture.server, &fixture.player)
+            .await
+            .unwrap();
+        assert!(handler.observed.load(Ordering::Relaxed));
+        assert!(fixture.server.get_player_by_uuid(uuid).is_none());
+
+        let mut loaded = data.load_data(&uuid).unwrap().unwrap();
+        let world = fixture.player.world();
+        let mut rejoined = Player::new(
+            fixture.client.clone(),
+            fixture.player.gameprofile.clone(),
+            PlayerConfig::default(),
+            &world,
+            pumpkin_util::GameMode::Survival,
+        );
+        rejoined.read_nbt(&mut loaded);
+        assert_eq!(rejoined.experience_level.load(Ordering::Relaxed), 9);
+        let rejoined = Arc::new(rejoined);
+        rejoined
+            .screen_handler_sync_handler
+            .store_player(rejoined.clone());
+        world.add_player(&rejoined).unwrap();
+
+        // A failed final write also releases admission. Repair the deliberately
+        // blocked temp file and verify the existing save can be loaded again.
+        let path = data.storage.get_player_data_path(&uuid);
+        let previous = std::fs::read(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(
+            crate::finish_player_session(&fixture.server, &rejoined)
+                .await
+                .is_err()
+        );
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::write(&path, previous).unwrap();
+        assert_eq!(
+            data.load_data(&uuid).unwrap().unwrap().get_int("XpLevel"),
+            Some(9)
+        );
+        close_fixture(&fixture).await;
+    }
+
+    #[tokio::test]
+    async fn server_cancelled_leave_releases_login_admission() {
+        let fixture = player_fixture().await;
+        let data = &fixture.server.player_data_storage;
+        let uuid = fixture.player.gameprofile.id;
+        fixture.player.experience_level.store(1, Ordering::Relaxed);
+        data.extract_data_and_save_player(&fixture.player).unwrap();
+        let handler = Arc::new(ReloginDuringLeave {
+            observed: AtomicBool::new(false),
+            pause: true,
+        });
+        fixture
+            .server
+            .plugin_manager
+            .register::<PlayerLeaveEvent, _>(handler.clone(), EventPriority::Normal, false);
+        let mut leave = Box::pin(crate::finish_player_session(
+            &fixture.server,
+            &fixture.player,
+        ));
+        assert!(futures::poll!(&mut leave).is_pending());
+        assert!(handler.observed.load(Ordering::Relaxed));
+        drop(leave);
+        assert_eq!(
+            data.load_data(&uuid).unwrap().unwrap().get_int("XpLevel"),
+            Some(1)
+        );
+        close_fixture(&fixture).await;
+    }
+
+    #[tokio::test]
+    async fn server_queued_periodic_snapshot_cannot_roll_back_disconnect_or_save_all() {
+        let fixture = player_fixture().await;
+        let server = &fixture.server;
+        let player = &fixture.player;
+        let uuid = player.gameprofile.id;
         let data = &server.player_data_storage;
         player.experience_level.store(1, Ordering::Relaxed);
-        data.extract_data_and_save_player(&player).unwrap();
+        data.extract_data_and_save_player(player).unwrap();
         let path = data.storage.get_player_data_path(&uuid);
         let backup = path.with_extension("dat_old");
 
         for (new_level, disconnect) in [(2, true), (4, false)] {
             // Hold exactly the payload captured by tick(), without scheduling or
             // blocking any Rayon worker, then drain it after the newer save.
-            let queued = data.snapshot_players(&server);
+            let queued = data.snapshot_players(server);
             assert_eq!(queued.len(), 1);
             player.experience_level.store(new_level, Ordering::Relaxed);
             if disconnect {
-                data.handle_player_leave(&player).unwrap();
+                data.handle_player_leave(player).unwrap();
             } else {
-                data.save_all_players(&server).unwrap();
+                data.save_all_players(server).unwrap();
             }
             let primary_bytes = std::fs::read(&path).unwrap();
             let backup_bytes = std::fs::read(&backup).unwrap();
@@ -273,12 +490,7 @@ mod test {
             );
         }
 
-        let java = client.java().unwrap();
-        java.close();
-        tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
-            .await
-            .unwrap();
-        server.shutdown().await;
+        close_fixture(&fixture).await;
     }
 
     #[test]

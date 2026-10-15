@@ -616,12 +616,7 @@ impl PumpkinServer {
                                          client.close();
                                          client.await_tasks().await;
                                      }
-                                     player.remove().await;
-                                     server_clone.remove_player(&player);
-                                    if let Err(e) = server_clone
-                                        .player_data_storage
-                                        .handle_player_leave(&player)
-                                    {
+                                    if let Err(e) = finish_player_session(&server_clone, &player).await {
                                         error!("Failed to save player data on disconnect: {e}");
                                     }
                                     if let Err(e) = server_clone.advancement_manager
@@ -722,10 +717,7 @@ impl PumpkinServer {
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
-                        player.remove().await;
-                        server.remove_player(&player);
-                        if let Err(error) = server.player_data_storage.handle_player_leave(&player)
-                        {
+                        if let Err(error) = finish_player_session(&server, &player).await {
                             error!("Failed to save player data on disconnect: {error}");
                         }
                     }
@@ -733,6 +725,20 @@ impl PumpkinServer {
             }
         });
     }
+}
+
+/// World removal exposes the UUID before awaited leave callbacks finish. Keep
+/// login blocked until those callbacks, removal statistics and the final save complete.
+pub(crate) async fn finish_player_session(
+    server: &Server,
+    player: &Arc<entity::player::Player>,
+) -> Result<(), pumpkin_world::data::player_data::PlayerDataError> {
+    let _leaving = server
+        .player_data_storage
+        .begin_player_leave(player.gameprofile.id)?;
+    player.remove().await;
+    server.remove_player(player);
+    server.player_data_storage.handle_player_leave(player)
 }
 
 fn setup_stdin_console(server: &Arc<Server>) {
