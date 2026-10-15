@@ -262,3 +262,8 @@ webpki-root-certs = { version = "1.0.9", default-features = false }
 # ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+
+[patch."https://github.com/Pumpkin-MC/Pumpkin.git"]
+pumpkin-core = { path = "crates/pumpkin-core" }
+pumpkin-world = { path = "crates/pumpkin-world" }
+pumpkin-command = { path = "crates/pumpkin-command" }

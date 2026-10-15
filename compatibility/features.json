@@ -24,8 +24,35 @@
         "unsupported protocol",
         "malformed handshake"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.incompatible_login",
+          "scenario": "unsupported protocol",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "client_protocol": 776,
+              "version_rejection": true
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "client_protocol": 776,
+              "version_rejection": true
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.status",
@@ -39,8 +66,87 @@
         "favicon and player sample",
         "ping echo"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.ping_before_status",
+          "scenario": "ping echo",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "signed_payload_echoed": true,
+              "closed_after_ping": true
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "signed_payload_echoed": true,
+              "closed_after_ping": true
+            }
+          }
+        },
+        {
+          "test_id": "network.status_fields",
+          "scenario": "status fields",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "protocol": 777,
+              "version": "26.3"
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "protocol": 777,
+              "version": "26.3"
+            }
+          }
+        },
+        {
+          "test_id": "network.status_other_version",
+          "scenario": "status fields",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "client_protocol": 776,
+              "advertised_protocol": 777
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "client_protocol": 776,
+              "advertised_protocol": 777
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.framing",
@@ -54,8 +160,33 @@
         "coalesced frames",
         "oversized frame"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.fragmented",
+          "scenario": "split frame",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "split_frame_accepted": true
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "split_frame_accepted": true
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.serialization",
@@ -69,8 +200,35 @@
         "invalid encodings",
         "round-trip reference packets"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.malformed_length",
+          "scenario": "invalid encodings",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "malformed_disconnected": true,
+              "server_alive": true
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "malformed_disconnected": true,
+              "server_alive": true
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.login",
@@ -84,8 +242,37 @@
         "invalid state transition",
         "duplicate login"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.play_login",
+          "scenario": "successful login",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "auth": "offline",
+              "protocol": 777,
+              "registry_packets": 32
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "auth": "offline",
+              "protocol": 777,
+              "registry_packets": 32
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.online_auth",
@@ -204,8 +391,65 @@
         "system message",
         "filtered recipient"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.chat_delivery",
+          "scenario": "system message",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
+              "server_to_client": {
+                "text": "FERRALOOM_CHAT_81727549784d45609a47246e5aa1a2eb",
+                "packet_id": 33,
+                "packet_type": "disguised_chat",
+                "text_scope": "component_text",
+                "signature": "not_applicable",
+                "signature_verified": false
+              },
+              "unsigned_offline_player_chat_echo": {
+                "text": "FERRALOOM_ECHO_decf33429e6646709fa38c38f1b4d35a",
+                "packet_id": 66,
+                "packet_type": "player_chat",
+                "text_scope": "message_body",
+                "signature": "absent",
+                "signature_verified": false
+              }
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
+              "server_to_client": {
+                "text": "FERRALOOM_CHAT_194f3ce7f1ad487f943d51f97b2cb0c0",
+                "packet_id": 33,
+                "packet_type": "disguised_chat",
+                "text_scope": "component_text",
+                "signature": "not_applicable",
+                "signature_verified": false
+              },
+              "unsigned_offline_player_chat_echo": {
+                "text": "<FerraloomTest> FERRALOOM_ECHO_733bd6ae668e46249564f5b48ec9b525",
+                "packet_id": 33,
+                "packet_type": "disguised_chat",
+                "text_scope": "component_text",
+                "signature": "not_applicable",
+                "signature_verified": false
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.secure_profile",
@@ -249,8 +493,83 @@
         "invalid coordinates",
         "teleport acknowledgment"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.movement",
+          "scenario": "legal movement",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "sent_position": {
+                "x": 4.75,
+                "y": 201,
+                "z": 4.5
+              },
+              "server_predicate": "if entity @a[name=FerraloomTest,x=4.75,y=201,z=4.5,distance=..0.05]"
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "sent_position": {
+                "x": 4.75,
+                "y": 201,
+                "z": 4.5
+              },
+              "server_predicate": "if entity @a[name=FerraloomTest,x=4.75,y=201,z=4.5,distance=..0.05]"
+            }
+          }
+        },
+        {
+          "test_id": "network.teleport",
+          "scenario": "teleport acknowledgment",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "server_position": {
+                "x": 4.5,
+                "y": 201,
+                "z": 4.5,
+                "yaw": 90,
+                "pitch": 0
+              },
+              "teleport_confirmations": 2,
+              "server_predicate": "if entity @a[name=FerraloomTest,x=4.5,y=201,z=4.5,distance=..0.01]"
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "server_position": {
+                "x": 4.5,
+                "y": 201,
+                "z": 4.5,
+                "yaw": 90,
+                "pitch": 0
+              },
+              "teleport_confirmations": 2,
+              "server_predicate": "if entity @a[name=FerraloomTest,x=4.5,y=201,z=4.5,distance=..0.01]"
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.interaction",
@@ -324,8 +643,33 @@
         "cross view boundary",
         "chunk batch acknowledgment"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "network.chunk_stream",
+          "scenario": "join initial chunks",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "unique_chunk_coordinates": 9
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "unique_chunk_coordinates": 9
+            }
+          }
+        }
+      ]
     },
     {
       "id": "network.entity_stream",
@@ -714,8 +1058,35 @@
         "palette expansion",
         "empty sections"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "persistence.restart",
+          "scenario": "save reload",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 14 200 14 diamond_block",
+              "commands": []
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 14 200 14 diamond_block",
+              "commands": []
+            }
+          }
+        }
+      ]
     },
     {
       "id": "persistence.entity_data",
@@ -879,8 +1250,37 @@
         "stale session",
         "clean shutdown"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "lifecycle.world_lock",
+          "scenario": "second server",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "holder": "vanilla",
+              "contender": "rust",
+              "world_lock_rejected": true
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "holder": "rust",
+              "contender": "rust",
+              "world_lock_rejected": true
+            }
+          }
+        }
+      ]
     },
     {
       "id": "persistence.atomic_save",
@@ -924,8 +1324,97 @@
         "placement state",
         "invalid state"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "block.setblock",
+          "scenario": "placement state",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 0 200 0 stone",
+              "commands": [
+                "setblock 0 200 0 stone"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 0 200 0 stone",
+              "commands": [
+                "setblock 0 200 0 stone"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "block.state",
+          "scenario": "placement state",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
+              "commands": [
+                "setblock 0 200 0 oak_stairs[facing=east,half=top]"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
+              "commands": [
+                "setblock 0 200 0 oak_stairs[facing=east,half=top]"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "blocks.registry_tables",
+          "scenario": "registry coverage",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "blocks": 1286,
+              "states": 35723,
+              "scope": "IDs, defaults and all property tuples; mechanics excluded"
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "blocks": 1286,
+              "states": 35723,
+              "scope": "IDs, defaults and all property tuples; mechanics excluded"
+            }
+          }
+        }
+      ]
     },
     {
       "id": "blocks.placement",
@@ -1344,8 +1833,39 @@
         "unload reload",
         "despawn boundary"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "entity.summon",
+          "scenario": "spawn",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
+              "commands": [
+                "summon pig 8 201 8 {Tags:[\"ferraloom_probe\"],NoAI:1b}"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
+              "commands": [
+                "summon pig 8 201 8 {Tags:[\"ferraloom_probe\"],NoAI:1b}"
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "id": "entities.physics",
@@ -2167,7 +2687,13 @@
       "required_scenarios": [
         "command registry coverage",
         "argument validation",
-        "permission failure"
+        "permission failure",
+        "execute score store preserves a zero command result",
+        "execute score store preserves a signed command result",
+        "execute score success differs from a zero command result",
+        "execute score store records nested command failure",
+        "chained execute score stores preserve both callbacks",
+        "execute score store preserves prior scores when a conditional branch is empty"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2229,8 +2755,45 @@
         "trigger",
         "display update"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "scoreboard.arithmetic",
+          "scenario": "objective operation",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28",
+          "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if score A parity matches 12",
+              "commands": [
+                "scoreboard objectives add parity dummy",
+                "scoreboard players set A parity 7",
+                "scoreboard players set B parity 5",
+                "scoreboard players operation A parity += B parity"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+            "artifact": "compatibility/results/evidence/61f3cbad11bcfa234e33372294b3201407169f050e5eee99d7fa4cd965df0f28.json",
+            "detail": {
+              "predicate": "if score A parity matches 12",
+              "commands": [
+                "scoreboard objectives add parity dummy",
+                "scoreboard players set A parity 7",
+                "scoreboard players set B parity 5",
+                "scoreboard players operation A parity += B parity"
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "id": "players.teams",

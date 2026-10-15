@@ -75,6 +75,12 @@ SCENARIOS = [
     Scenario("redstone.piston_push", ("blocks.pistons",), ("fill 0 200 8 4 202 10 air", "setblock 1 200 9 stone", "setblock 0 200 9 piston[facing=east]", "setblock -1 200 9 redstone_block"), "if block 2 200 9 stone", 1.0),
     Scenario("redstone.daylight", ("blocks.redstone_power",), ("time set 6000", "weather clear", "setblock 12 200 0 daylight_detector"), "if block 12 200 0 daylight_detector[power=15]", 1.5),
     Scenario("scoreboard.arithmetic", ("players.scoreboards",), ("scoreboard objectives add parity dummy", "scoreboard players set A parity 7", "scoreboard players set B parity 5", "scoreboard players operation A parity += B parity"), "if score A parity matches 12"),
+    Scenario("command.store_result_false", ("players.commands",), ("gamerule keep_inventory false", "scoreboard players set Stored parity 17", "execute store result score Stored parity run gamerule keep_inventory"), "if score Stored parity matches 0"),
+    Scenario("command.store_result_signed", ("players.commands",), ("scoreboard players set Query parity -7", "execute store result score Stored parity run scoreboard players get Query parity"), "if score Stored parity matches -7"),
+    Scenario("command.store_success", ("players.commands",), ("execute store success score Stored parity run gamerule keep_inventory",), "if score Stored parity matches 1"),
+    Scenario("command.store_failure", ("players.commands",), ("scoreboard players set Stored parity 17", "execute store result score Stored parity run scoreboard players get NeverSet parity"), "if score Stored parity matches 0"),
+    Scenario("command.store_chain", ("players.commands",), ("execute store result score Stored parity store success score Succeeded parity run gamerule keep_inventory",), "if score Stored parity matches 0 if score Succeeded parity matches 1"),
+    Scenario("command.store_condition", ("players.commands",), ("scoreboard players set Stored parity 17", "execute store result score Stored parity if score A parity matches 999 run gamerule keep_inventory"), "if score Stored parity matches 17"),
     Scenario("data.storage", ("players.commands",), ('data modify storage ferraloom:probe answer set value 42',), "if data storage ferraloom:probe {answer:42}"),
     Scenario("entity.summon", ("entities.spawning",), ('summon pig 8 201 8 {Tags:["ferraloom_probe"],NoAI:1b}',), "if entity @e[type=pig,tag=ferraloom_probe,limit=1]"),
     Scenario("entity.damage", ("entities.combat",), ("damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic",), "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]"),
@@ -420,11 +426,12 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             wait_loaded(server)
             predicate = "if block 14 200 14 diamond_block"
             check_predicate(server, predicate)
-            server.command("scoreboard objectives add migration_probe dummy")
-            server.command("execute store result score Rule migration_probe run gamerule keep_inventory")
-            check_predicate(server, "if score Rule migration_probe matches 1")
-            server.command("execute store result score Clock migration_probe run time query daytime")
-            check_predicate(server, "if score Clock migration_probe matches 4321")
+            rule = server.command("gamerule keep_inventory")
+            protocol.require(any(re.search(r"Game rule keep_inventory is currently set to true$", line) for line in rule),
+                             f"Non-default game rule was lost: {rule[-6:]}")
+            clock = server.command("time query time")
+            protocol.require(any(re.search(r"Clock minecraft:overworld is at 4321 tick\(s\)$", line) for line in clock),
+                             f"Non-default clock was lost: {clock[-6:]}")
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()

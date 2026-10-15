@@ -365,10 +365,12 @@ where
                         let was_dirty = chunk.is_dirty();
                         chunk.mark_dirty(false);
 
-                        if was_dirty {
-                            writer
-                                .update_chunk(chunk.clone(), &self.chunk_config)
-                                .await?;
+                        if was_dirty
+                            && let Err(error) =
+                                writer.update_chunk(chunk.clone(), &self.chunk_config).await
+                        {
+                            chunk.mark_dirty(true);
+                            return Err(error);
                         }
                     }
                     // Write-lock released here — flush can proceed under a read-lock.
@@ -436,6 +438,24 @@ where
         });
 
         join_all(drain_tasks).await;
+    }
+
+    async fn flush(&self) -> Result<(), ChunkWritingError> {
+        let loaders: Vec<_> = self.file_locks.read().await.values().cloned().collect();
+        let writes = loaders.into_iter().map(|loader| async move {
+            if let Some(serializer) = loader.internal.get() {
+                // Keep the serializer exclusively locked through the physical
+                // write; active watcher registrations remain intact.
+                let writer = serializer.write().await;
+                writer
+                    .write(&loader.path)
+                    .await
+                    .map_err(ChunkWritingError::IoError)?;
+            }
+            Ok(())
+        });
+        let results: Vec<Result<(), ChunkWritingError>> = join_all(writes).await;
+        results.into_iter().find(Result::is_err).unwrap_or(Ok(()))
     }
 }
 
@@ -516,6 +536,14 @@ where
             Self::Linear(io) => io.block_and_await_ongoing_tasks().await,
             Self::Anvil(io) => io.block_and_await_ongoing_tasks().await,
             Self::Pump(io) => io.block_and_await_ongoing_tasks().await,
+        }
+    }
+
+    async fn flush(&self) -> Result<(), ChunkWritingError> {
+        match self {
+            Self::Linear(io) => io.flush().await,
+            Self::Anvil(io) => io.flush().await,
+            Self::Pump(io) => io.flush().await,
         }
     }
 }

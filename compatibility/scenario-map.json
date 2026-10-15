@@ -149,6 +149,30 @@
     "lifecycle.world_lock": {
       "feature_id": "persistence.locking",
       "scenario": "second server"
+    },
+    "command.store_result_false": {
+      "feature_id": "players.commands",
+      "scenario": "execute score store preserves a zero command result"
+    },
+    "command.store_result_signed": {
+      "feature_id": "players.commands",
+      "scenario": "execute score store preserves a signed command result"
+    },
+    "command.store_success": {
+      "feature_id": "players.commands",
+      "scenario": "execute score success differs from a zero command result"
+    },
+    "command.store_failure": {
+      "feature_id": "players.commands",
+      "scenario": "execute score store records nested command failure"
+    },
+    "command.store_chain": {
+      "feature_id": "players.commands",
+      "scenario": "chained execute score stores preserve both callbacks"
+    },
+    "command.store_condition": {
+      "feature_id": "players.commands",
+      "scenario": "execute score store preserves prior scores when a conditional branch is empty"
     }
   }
 }

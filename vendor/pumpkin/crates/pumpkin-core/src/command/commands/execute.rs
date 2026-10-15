@@ -36,6 +36,7 @@ use crate::command::commands::data::{
     BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor,
 };
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::{ReturnValue, ReturnValueCallable};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
@@ -46,6 +47,7 @@ use crate::command::node::{
 };
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
+use crate::world::World;
 use crate::world::scoreboard::Scoreboard;
 use crate::world::stopwatches::Stopwatches;
 use pumpkin_data::biome::Biome;
@@ -74,6 +76,63 @@ const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
 );
 
 static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
+
+struct StoreScoreCallback {
+    world: Arc<World>,
+    holders: Vec<String>,
+    objective: String,
+    store_result: bool,
+}
+
+impl ReturnValueCallable for StoreScoreCallback {
+    fn call(&self, value: ReturnValue) {
+        let score = if self.store_result {
+            value.result_value()
+        } else {
+            i32::from(value.success_value())
+        };
+        let mut scoreboard = self
+            .world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for holder in &self.holders {
+            scoreboard.set_score_value(&self.world, holder, &self.objective, score);
+        }
+    }
+}
+
+fn execute_store_score_modifier(
+    context: &CommandContext,
+    store_result: bool,
+) -> RedirectModifierResult {
+    let holders = ScoreHolderArgumentType::get_score_holders(context, "targets")?
+        .into_iter()
+        .map(|holder| holder.name)
+        .collect();
+    let objective = ObjectiveArgumentType::get(context, "objective")?.to_string();
+    let world = context.world().clone();
+    {
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // ExecuteCommand uses getObjective, allowing stores into read-only criteria too.
+        ObjectiveArgumentType::objective_or_error(&scoreboard, &objective)?;
+    }
+    let mut source = context.source.as_ref().clone();
+    // Keep earlier stores: each nested command completion updates every registered target.
+    source
+        .command_result_taker
+        .0
+        .push(Arc::new(StoreScoreCallback {
+            world,
+            holders,
+            objective,
+            store_result,
+        }));
+    Ok(vec![Arc::new(source)])
+}
 
 fn execute_as_modifier(context: &CommandContext) -> crate::command::node::RedirectModifierResult {
     let targets = EntityArgumentType::get_optional_entities(context, "targets")?;
@@ -1111,6 +1170,29 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         .requires(PERMISSION)
         .then(literal("run").redirect(Redirection::Root))
         .then(
+            literal("store")
+                .then(literal("result").then(literal("score").then(
+                    argument("targets", ScoreHolderArgumentType::Multiple).then(
+                        argument("objective", ObjectiveArgumentType).redirect_with_modifier(
+                            Redirection::Root,
+                            RedirectModifier::Custom(Arc::new(|context| {
+                                execute_store_score_modifier(context, true)
+                            })),
+                        ),
+                    ),
+                )))
+                .then(literal("success").then(literal("score").then(
+                    argument("targets", ScoreHolderArgumentType::Multiple).then(
+                        argument("objective", ObjectiveArgumentType).redirect_with_modifier(
+                            Redirection::Root,
+                            RedirectModifier::Custom(Arc::new(|context| {
+                                execute_store_score_modifier(context, false)
+                            })),
+                        ),
+                    ),
+                ))),
+        )
+        .then(
             literal("as").then(argument("targets", EntityArgumentType::Entities).fork(
                 Redirection::Root,
                 RedirectModifier::Custom(Arc::new(execute_as_modifier)),
@@ -1578,6 +1660,54 @@ mod tests {
     use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
+
+    #[test]
+    fn stores_redirect_to_execute_then_the_nested_command() {
+        let mut dispatcher = CommandDispatcher::new();
+        let permissions = PermissionRegistry::default();
+        register(&mut dispatcher, &permissions);
+        crate::command::commands::gamerule::register(&mut dispatcher, &permissions);
+        let source = Arc::new(CommandSource::dummy());
+        for prefix in [
+            "store result score Rule migration_probe",
+            "store success score #result migration_probe",
+            "store result score @a migration_probe",
+            "store success score * migration_probe",
+            "store result score Rule migration_probe store success score Other second",
+            "positioned 1 2 3 store result score Rule migration_probe",
+            "store result score Rule migration_probe if score Rule migration_probe matches 1..",
+        ] {
+            let input = format!("execute {prefix} run gamerule keep_inventory");
+            let result = dispatcher.parse_input(&input, &source);
+            assert!(result.errors.is_empty(), "{input}: {:?}", result.errors);
+            assert_eq!(result.reader.remaining_length(), 0, "{input}");
+            assert!(
+                result
+                    .context
+                    .build(&input)
+                    .get_last_child()
+                    .command
+                    .is_some(),
+                "{input}"
+            );
+        }
+        for input in [
+            "execute store result score Rule migration_probe",
+            "execute store success score Rule",
+            "execute store result score Rule migration_probe run",
+        ] {
+            let result = dispatcher.parse_input(input, &source);
+            assert!(
+                result
+                    .context
+                    .build(input)
+                    .get_last_child()
+                    .command
+                    .is_none(),
+                "{input}"
+            );
+        }
+    }
 
     #[test]
     fn score_lookup_distinguishes_missing_objectives_and_scores() {

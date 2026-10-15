@@ -12,11 +12,11 @@ Regenerate with `python3 tools/report_features.py`.
 
 | Feature ID | Expected behavior | Vanilla P/F/S | Rust P/F/S | Rust status |
 | --- | --- | --- | --- | --- |
-| `network.handshake` | Decode exact target protocol handshake and route status or login | 0/0/0 | 0/0/0 | unverified |
-| `network.status` | Return vanilla-compatible status JSON and ping payload | 0/0/0 | 0/0/0 | unverified |
-| `network.framing` | Decode length-prefixed packets across arbitrary stream boundaries | 0/0/0 | 0/0/0 | unverified |
-| `network.serialization` | Match VarInt, strings, identifiers, positions and registry codecs | 0/0/0 | 0/0/0 | unverified |
-| `network.login` | Follow target-version login sequence and disconnect reasons | 0/0/0 | 0/0/0 | unverified |
+| `network.handshake` | Decode exact target protocol handshake and route status or login | 1/0/0 | 1/0/0 | partial |
+| `network.status` | Return vanilla-compatible status JSON and ping payload | 3/0/0 | 3/0/0 | partial |
+| `network.framing` | Decode length-prefixed packets across arbitrary stream boundaries | 1/0/0 | 1/0/0 | partial |
+| `network.serialization` | Match VarInt, strings, identifiers, positions and registry codecs | 1/0/0 | 1/0/0 | partial |
+| `network.login` | Follow target-version login sequence and disconnect reasons | 1/0/0 | 1/0/0 | partial |
 | `network.online_auth` | Perform the reference server's session-service authentication | 0/0/0 | 0/0/0 | unverified |
 | `network.encryption` | Negotiate and apply vanilla encryption to the complete stream | 0/0/0 | 0/0/0 | unverified |
 | `network.compression` | Apply target compression threshold and validate compressed frames | 0/0/0 | 0/0/0 | unverified |
@@ -24,15 +24,15 @@ Regenerate with `python3 tools/report_features.py`.
 | `network.registries` | Send the target version's synchronized registries and identifiers | 0/0/0 | 0/0/0 | unverified |
 | `network.keepalive` | Match keepalive timing, IDs and timeout behavior | 0/0/0 | 0/0/0 | unverified |
 | `network.signed_chat` | Enforce target chat signing and acknowledgement rules | 0/0/0 | 0/0/0 | unverified |
-| `network.chat_delivery` | Match chat visibility, message decoration and system messages | 0/0/0 | 0/0/0 | unverified |
+| `network.chat_delivery` | Match chat visibility, message decoration and system messages | 1/0/0 | 1/0/0 | partial |
 | `network.secure_profile` | Honor secure-profile settings and certificate validation | 0/0/0 | 0/0/0 | unverified |
 | `network.transfer` | Match target transfer packets and accepted-transfer policy | 0/0/0 | 0/0/0 | unverified |
-| `network.movement` | Apply vanilla movement limits and correction packets | 0/0/0 | 0/0/0 | unverified |
+| `network.movement` | Apply vanilla movement limits and correction packets | 2/0/0 | 2/0/0 | partial |
 | `network.interaction` | Validate reach, sequence and interaction target | 0/0/0 | 0/0/0 | unverified |
 | `network.custom_payload` | Handle built-in plugin-channel messages without loading plugins | 0/0/0 | 0/0/0 | unverified |
 | `network.resource_pack` | Send packs and process target-version acceptance and rejection states | 0/0/0 | 0/0/0 | unverified |
 | `network.cookies` | Match target cookie request, storage and transfer use where present | 0/0/0 | 0/0/0 | unverified |
-| `network.chunk_stream` | Send vanilla chunk, light, batch and unload messages | 0/0/0 | 0/0/0 | unverified |
+| `network.chunk_stream` | Send vanilla chunk, light, batch and unload messages | 1/0/0 | 1/0/0 | partial |
 | `network.entity_stream` | Synchronize spawn, metadata, movement and removal per viewer | 0/0/0 | 0/0/0 | unverified |
 | `network.inventory_stream` | Match slot, cursor, state ID and transaction recovery messages | 0/0/0 | 0/0/0 | unverified |
 | `network.disconnect` | Deliver appropriate reasons and release connection-owned state | 0/0/0 | 0/0/0 | unverified |
@@ -68,7 +68,7 @@ Regenerate with `python3 tools/report_features.py`.
 | --- | --- | --- | --- | --- |
 | `persistence.nbt` | Read and write target binary NBT types and limits | 0/0/0 | 0/0/0 | unverified |
 | `persistence.region` | Read and write target region storage and compression formats | 0/0/0 | 0/0/0 | unverified |
-| `persistence.chunk_data` | Persist section palettes, biomes, heightmaps and block states | 0/0/0 | 0/0/0 | unverified |
+| `persistence.chunk_data` | Persist section palettes, biomes, heightmaps and block states | 1/0/0 | 1/0/0 | partial |
 | `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 0/0/0 | 0/0/0 | unverified |
 | `persistence.block_entities` | Persist container, command and other block entity state | 0/0/0 | 0/0/0 | unverified |
 | `persistence.player_data` | Persist inventory, position, abilities and dimension | 0/0/0 | 0/0/0 | unverified |
@@ -79,7 +79,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.advancement_stats` | Save player progression and target file formats | 0/0/0 | 0/0/0 | unverified |
 | `persistence.map_data` | Preserve maps, markers and other vanilla saved data | 0/0/0 | 0/0/0 | unverified |
 | `persistence.upgrade` | Handle supported older data versions as the reference does | 0/0/0 | 0/0/0 | unverified |
-| `persistence.locking` | Prevent conflicting writers and release locks on shutdown | 0/0/0 | 0/0/0 | unverified |
+| `persistence.locking` | Prevent conflicting writers and release locks on shutdown | 1/0/0 | 1/0/0 | partial |
 | `persistence.atomic_save` | Match reference recovery behavior and avoid partial committed saves | 0/0/0 | 0/0/0 | unverified |
 | `persistence.imports` | Open a vanilla-created world and reopen Rust saves in vanilla | 0/0/0 | 0/0/0 | unverified |
 
@@ -87,7 +87,7 @@ Regenerate with `python3 tools/report_features.py`.
 
 | Feature ID | Expected behavior | Vanilla P/F/S | Rust P/F/S | Rust status |
 | --- | --- | --- | --- | --- |
-| `blocks.registry` | Implement every target block state and valid property combination | 0/0/0 | 0/0/0 | unverified |
+| `blocks.registry` | Implement every target block state and valid property combination | 3/0/0 | 3/0/0 | partial |
 | `blocks.placement` | Match placement restrictions, hardness and breaking results | 0/0/0 | 0/0/0 | unverified |
 | `blocks.neighbors` | Match update propagation, ordering and recursion limits | 0/0/0 | 0/0/0 | unverified |
 | `blocks.scheduled` | Match priority, timing and duplicate scheduling behavior | 0/0/0 | 0/0/0 | unverified |
@@ -120,7 +120,7 @@ Regenerate with `python3 tools/report_features.py`.
 | Feature ID | Expected behavior | Vanilla P/F/S | Rust P/F/S | Rust status |
 | --- | --- | --- | --- | --- |
 | `entities.registry` | Implement all target entity types and metadata defaults | 0/0/0 | 0/0/0 | unverified |
-| `entities.lifecycle` | Match creation, removal, despawn and tick eligibility | 0/0/0 | 0/0/0 | unverified |
+| `entities.lifecycle` | Match creation, removal, despawn and tick eligibility | 1/0/0 | 1/0/0 | partial |
 | `entities.physics` | Match movement, bounding boxes, stepping and collision shapes | 0/0/0 | 0/0/0 | unverified |
 | `entities.gravity` | Match acceleration, terminal behavior and landing damage | 0/0/0 | 0/0/0 | unverified |
 | `entities.attributes` | Match base values, modifiers and synchronized attributes | 0/0/0 | 0/0/0 | unverified |
@@ -189,7 +189,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |
-| `players.scoreboards` | Match criteria, operations, display slots and triggers | 0/0/0 | 0/0/0 | unverified |
+| `players.scoreboards` | Match criteria, operations, display slots and triggers | 1/0/0 | 1/0/0 | partial |
 | `players.teams` | Match team membership, visibility, collision and friendly fire | 0/0/0 | 0/0/0 | unverified |
 | `players.advancements` | Match trigger conditions, rewards, progress and revocation | 0/0/0 | 0/0/0 | unverified |
 | `players.statistics` | Match per-player stat increments and queries | 0/0/0 | 0/0/0 | unverified |

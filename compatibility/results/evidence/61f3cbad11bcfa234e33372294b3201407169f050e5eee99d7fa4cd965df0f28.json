@@ -1,0 +1,1546 @@
+{
+  "schema_version": 1,
+  "target_version": "26.3",
+  "protocol": 777,
+  "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+  "rust_upstream": {
+    "repository": "https://github.com/Pumpkin-MC/Pumpkin.git",
+    "revision": "5b53f064af8708ba33fcaa533b81ca29a53a3310",
+    "local_modules": [
+      "pumpkin-core",
+      "pumpkin-world",
+      "pumpkin-command"
+    ]
+  },
+  "created_at": "2026-10-15T14:39:54.569814+00:00",
+  "environment": {
+    "host": "devbox",
+    "platform": "linux",
+    "auth": "isolated offline loopback",
+    "seed": "12345678",
+    "workers": 2
+  },
+  "scope": "Selected scenarios only; passing does not establish full vanilla parity.",
+  "servers": {
+    "vanilla": [
+      {
+        "result": "passed",
+        "detail": {
+          "blocks": 1286,
+          "states": 35723,
+          "scope": "IDs, defaults and all property tuples; mechanics excluded"
+        },
+        "id": "blocks.registry_tables",
+        "features": [
+          "blocks.registry"
+        ],
+        "duration_seconds": 0.075
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "holder": "vanilla",
+          "contender": "rust",
+          "world_lock_rejected": true
+        },
+        "id": "lifecycle.world_lock",
+        "features": [
+          "persistence.level_data"
+        ],
+        "duration_seconds": 0.092
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "protocol": 777,
+          "version": "26.3"
+        },
+        "id": "network.status_fields",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.005
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "client_protocol": 776,
+          "advertised_protocol": 777
+        },
+        "id": "network.status_other_version",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.002
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "client_protocol": 776,
+          "version_rejection": true
+        },
+        "id": "network.incompatible_login",
+        "features": [
+          "network.handshake"
+        ],
+        "duration_seconds": 0.045
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "signed_payload_echoed": true,
+          "closed_after_ping": true
+        },
+        "id": "network.ping_before_status",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.007
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "duplicate_disconnected": true
+        },
+        "id": "network.duplicate_status",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.005
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "split_frame_accepted": true
+        },
+        "id": "network.fragmented",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.005
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "requests": 24,
+          "concurrency": 12
+        },
+        "id": "network.concurrent_status",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.056
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "malformed_disconnected": true,
+          "server_alive": true
+        },
+        "id": "network.malformed_length",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.012
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "auth": "offline",
+          "protocol": 777,
+          "registry_packets": 32
+        },
+        "id": "network.play_login",
+        "features": [
+          "network.login",
+          "network.configuration",
+          "network.registries"
+        ],
+        "duration_seconds": 1.332
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "unique_chunk_coordinates": 9
+        },
+        "id": "network.chunk_stream",
+        "features": [
+          "network.chunk_stream"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "inventory_packets": 1,
+          "slot_packets": 0,
+          "health": 20,
+          "food": 20
+        },
+        "id": "network.inventory_stream",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "server_position": {
+            "x": 4.5,
+            "y": 201,
+            "z": 4.5,
+            "yaw": 90,
+            "pitch": 0
+          },
+          "teleport_confirmations": 2,
+          "server_predicate": "if entity @a[name=FerraloomTest,x=4.5,y=201,z=4.5,distance=..0.01]"
+        },
+        "id": "network.teleport",
+        "features": [
+          "players.teleport"
+        ],
+        "duration_seconds": 0.157
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "sent_position": {
+            "x": 4.75,
+            "y": 201,
+            "z": 4.5
+          },
+          "server_predicate": "if entity @a[name=FerraloomTest,x=4.75,y=201,z=4.5,distance=..0.05]"
+        },
+        "id": "network.movement",
+        "features": [
+          "network.movement"
+        ],
+        "duration_seconds": 0.166
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "command": "scoreboard players set Wire wireprobe 777",
+          "server_predicate": "if score Wire wireprobe matches 777"
+        },
+        "id": "network.client_command",
+        "features": [
+          "network.login"
+        ],
+        "duration_seconds": 0.216
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
+          "server_to_client": {
+            "text": "FERRALOOM_CHAT_81727549784d45609a47246e5aa1a2eb",
+            "packet_id": 33,
+            "packet_type": "disguised_chat",
+            "text_scope": "component_text",
+            "signature": "not_applicable",
+            "signature_verified": false
+          },
+          "unsigned_offline_player_chat_echo": {
+            "text": "FERRALOOM_ECHO_decf33429e6646709fa38c38f1b4d35a",
+            "packet_id": 66,
+            "packet_type": "player_chat",
+            "text_scope": "message_body",
+            "signature": "absent",
+            "signature_verified": false
+          }
+        },
+        "id": "network.chat_delivery",
+        "features": [
+          "network.chat_delivery"
+        ],
+        "duration_seconds": 0.245
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 stone",
+          "commands": [
+            "setblock 0 200 0 stone"
+          ]
+        },
+        "id": "block.setblock",
+        "features": [
+          "blocks.placement"
+        ],
+        "duration_seconds": 0.223
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
+          "commands": [
+            "setblock 0 200 0 oak_stairs[facing=east,half=top]"
+          ]
+        },
+        "id": "block.state",
+        "features": [
+          "blocks.registry"
+        ],
+        "duration_seconds": 0.248
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 glass if block 0 200 1 glass if block 0 200 2 glass if block 0 201 0 glass if block 0 201 1 glass if block 0 201 2 glass if block 1 200 0 glass if block 1 200 1 glass if block 1 200 2 glass if block 1 201 0 glass if block 1 201 1 glass if block 1 201 2 glass if block 2 200 0 glass if block 2 200 1 glass if block 2 200 2 glass if block 2 201 0 glass if block 2 201 1 glass if block 2 201 2 glass",
+          "commands": [
+            "fill 0 200 0 2 201 2 glass"
+          ]
+        },
+        "id": "block.fill",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.251
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 5 200 5 diamond_block",
+          "commands": [
+            "setblock 0 200 0 diamond_block",
+            "clone 0 200 0 0 200 0 5 200 5"
+          ]
+        },
+        "id": "block.clone",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.299
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 1 202 1 water",
+          "commands": [
+            "fill 0 200 0 3 204 3 air",
+            "setblock 1 203 1 water"
+          ]
+        },
+        "id": "block.water_flow",
+        "features": [
+          "blocks.fluids"
+        ],
+        "duration_seconds": 1.649
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 1 200 1 sand",
+          "commands": [
+            "fill 0 200 0 3 204 3 air",
+            "setblock 1 203 1 sand"
+          ]
+        },
+        "id": "block.gravity",
+        "features": [
+          "blocks.falling"
+        ],
+        "duration_seconds": 1.65
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 8 200 0 redstone_lamp[lit=true]",
+          "commands": [
+            "setblock 8 200 0 redstone_lamp",
+            "setblock 9 200 0 redstone_block"
+          ]
+        },
+        "id": "redstone.lamp",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 0.651
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 8 200 3 redstone_wire[power=15]",
+          "commands": [
+            "setblock 8 200 3 redstone_wire",
+            "setblock 9 200 3 redstone_block"
+          ]
+        },
+        "id": "redstone.wire",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 0.65
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 2 200 9 stone",
+          "commands": [
+            "fill 0 200 8 4 202 10 air",
+            "setblock 1 200 9 stone",
+            "setblock 0 200 9 piston[facing=east]",
+            "setblock -1 200 9 redstone_block"
+          ]
+        },
+        "id": "redstone.piston_push",
+        "features": [
+          "blocks.pistons"
+        ],
+        "duration_seconds": 1.25
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 0 daylight_detector[power=15]",
+          "commands": [
+            "time set 6000",
+            "weather clear",
+            "setblock 12 200 0 daylight_detector"
+          ]
+        },
+        "id": "redstone.daylight",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 1.699
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if score A parity matches 12",
+          "commands": [
+            "scoreboard objectives add parity dummy",
+            "scoreboard players set A parity 7",
+            "scoreboard players set B parity 5",
+            "scoreboard players operation A parity += B parity"
+          ]
+        },
+        "id": "scoreboard.arithmetic",
+        "features": [
+          "players.scoreboards"
+        ],
+        "duration_seconds": 0.4
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if data storage ferraloom:probe {answer:42}",
+          "commands": [
+            "data modify storage ferraloom:probe answer set value 42"
+          ]
+        },
+        "id": "data.storage",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.252
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
+          "commands": [
+            "summon pig 8 201 8 {Tags:[\"ferraloom_probe\"],NoAI:1b}"
+          ]
+        },
+        "id": "entity.summon",
+        "features": [
+          "entities.spawning"
+        ],
+        "duration_seconds": 0.251
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]",
+          "commands": [
+            "damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic"
+          ]
+        },
+        "id": "entity.damage",
+        "features": [
+          "entities.combat"
+        ],
+        "duration_seconds": 0.254
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "unless entity @e[tag=ferraloom_probe]",
+          "commands": [
+            "kill @e[tag=ferraloom_probe]"
+          ]
+        },
+        "id": "entity.kill",
+        "features": [
+          "entities.lifecycle"
+        ],
+        "duration_seconds": 1.644
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if score Datapack parity matches 37",
+          "commands": [
+            "function ferraloom:probe"
+          ]
+        },
+        "id": "datapack.function",
+        "features": [
+          "world.functions"
+        ],
+        "duration_seconds": 0.25
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "in minecraft:the_nether if block 0 100 0 gold_block",
+          "commands": [
+            "execute in minecraft:the_nether run setblock 0 100 0 gold_block"
+          ]
+        },
+        "id": "dimension.nether",
+        "features": [
+          "world.nether"
+        ],
+        "duration_seconds": 1.599
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "in minecraft:the_end if block 0 100 0 emerald_block",
+          "commands": [
+            "execute in minecraft:the_end run setblock 0 100 0 emerald_block"
+          ]
+        },
+        "id": "dimension.end",
+        "features": [
+          "world.end"
+        ],
+        "duration_seconds": 1.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 14 200 14 diamond_block",
+          "commands": [
+            "setblock 14 200 14 diamond_block",
+            "save-all flush"
+          ]
+        },
+        "id": "persistence.write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.799
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 13 200 14 emerald_block",
+          "commands": [
+            "setblock 13 200 14 emerald_block"
+          ]
+        },
+        "id": "persistence.unflushed_write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.251
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "exit_code": 0
+        },
+        "id": "lifecycle.clean_shutdown",
+        "features": [
+          "lifecycle.shutdown"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 14 200 14 diamond_block",
+          "commands": []
+        },
+        "id": "persistence.restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.201
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 13 200 14 emerald_block",
+          "commands": []
+        },
+        "id": "persistence.shutdown_restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.194
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 14 lapis_block",
+          "commands": [
+            "setblock 12 200 14 lapis_block"
+          ]
+        },
+        "id": "persistence.signal_write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.251
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "exit_code": 143,
+          "signal": "SIGTERM",
+          "durability": "checked separately by persistence.signal_restart"
+        },
+        "id": "lifecycle.sigterm_exit",
+        "features": [
+          "lifecycle.shutdown"
+        ],
+        "duration_seconds": 0.615
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 14 lapis_block",
+          "commands": []
+        },
+        "id": "persistence.signal_restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.198
+      }
+    ],
+    "rust": [
+      {
+        "result": "passed",
+        "detail": {
+          "blocks": 1286,
+          "states": 35723,
+          "scope": "IDs, defaults and all property tuples; mechanics excluded"
+        },
+        "id": "blocks.registry_tables",
+        "features": [
+          "blocks.registry"
+        ],
+        "duration_seconds": 0.679
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "holder": "rust",
+          "contender": "rust",
+          "world_lock_rejected": true
+        },
+        "id": "lifecycle.world_lock",
+        "features": [
+          "persistence.level_data"
+        ],
+        "duration_seconds": 0.016
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "protocol": 777,
+          "version": "26.3"
+        },
+        "id": "network.status_fields",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.001
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "client_protocol": 776,
+          "advertised_protocol": 777
+        },
+        "id": "network.status_other_version",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "client_protocol": 776,
+          "version_rejection": true
+        },
+        "id": "network.incompatible_login",
+        "features": [
+          "network.handshake"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "signed_payload_echoed": true,
+          "closed_after_ping": true
+        },
+        "id": "network.ping_before_status",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "duplicate_disconnected": true
+        },
+        "id": "network.duplicate_status",
+        "features": [
+          "network.status"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "split_frame_accepted": true
+        },
+        "id": "network.fragmented",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "requests": 24,
+          "concurrency": 12
+        },
+        "id": "network.concurrent_status",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.011
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "malformed_disconnected": true,
+          "server_alive": true
+        },
+        "id": "network.malformed_length",
+        "features": [
+          "network.framing"
+        ],
+        "duration_seconds": 0.001
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "auth": "offline",
+          "protocol": 777,
+          "registry_packets": 32
+        },
+        "id": "network.play_login",
+        "features": [
+          "network.login",
+          "network.configuration",
+          "network.registries"
+        ],
+        "duration_seconds": 0.351
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "unique_chunk_coordinates": 9
+        },
+        "id": "network.chunk_stream",
+        "features": [
+          "network.chunk_stream"
+        ],
+        "duration_seconds": 0.101
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "inventory_packets": 1,
+          "slot_packets": 0,
+          "health": 20,
+          "food": 20
+        },
+        "id": "network.inventory_stream",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "server_position": {
+            "x": 4.5,
+            "y": 201,
+            "z": 4.5,
+            "yaw": 90,
+            "pitch": 0
+          },
+          "teleport_confirmations": 2,
+          "server_predicate": "if entity @a[name=FerraloomTest,x=4.5,y=201,z=4.5,distance=..0.01]"
+        },
+        "id": "network.teleport",
+        "features": [
+          "players.teleport"
+        ],
+        "duration_seconds": 0.002
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "sent_position": {
+            "x": 4.75,
+            "y": 201,
+            "z": 4.5
+          },
+          "server_predicate": "if entity @a[name=FerraloomTest,x=4.75,y=201,z=4.5,distance=..0.05]"
+        },
+        "id": "network.movement",
+        "features": [
+          "network.movement"
+        ],
+        "duration_seconds": 0.103
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "command": "scoreboard players set Wire wireprobe 777",
+          "server_predicate": "if score Wire wireprobe matches 777"
+        },
+        "id": "network.client_command",
+        "features": [
+          "network.login"
+        ],
+        "duration_seconds": 0.105
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
+          "server_to_client": {
+            "text": "FERRALOOM_CHAT_194f3ce7f1ad487f943d51f97b2cb0c0",
+            "packet_id": 33,
+            "packet_type": "disguised_chat",
+            "text_scope": "component_text",
+            "signature": "not_applicable",
+            "signature_verified": false
+          },
+          "unsigned_offline_player_chat_echo": {
+            "text": "<FerraloomTest> FERRALOOM_ECHO_733bd6ae668e46249564f5b48ec9b525",
+            "packet_id": 33,
+            "packet_type": "disguised_chat",
+            "text_scope": "component_text",
+            "signature": "not_applicable",
+            "signature_verified": false
+          }
+        },
+        "id": "network.chat_delivery",
+        "features": [
+          "network.chat_delivery"
+        ],
+        "duration_seconds": 0.204
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 stone",
+          "commands": [
+            "setblock 0 200 0 stone"
+          ]
+        },
+        "id": "block.setblock",
+        "features": [
+          "blocks.placement"
+        ],
+        "duration_seconds": 0.152
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
+          "commands": [
+            "setblock 0 200 0 oak_stairs[facing=east,half=top]"
+          ]
+        },
+        "id": "block.state",
+        "features": [
+          "blocks.registry"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 0 200 0 glass if block 0 200 1 glass if block 0 200 2 glass if block 0 201 0 glass if block 0 201 1 glass if block 0 201 2 glass if block 1 200 0 glass if block 1 200 1 glass if block 1 200 2 glass if block 1 201 0 glass if block 1 201 1 glass if block 1 201 2 glass if block 2 200 0 glass if block 2 200 1 glass if block 2 200 2 glass if block 2 201 0 glass if block 2 201 1 glass if block 2 201 2 glass",
+          "commands": [
+            "fill 0 200 0 2 201 2 glass"
+          ]
+        },
+        "id": "block.fill",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 5 200 5 diamond_block",
+          "commands": [
+            "setblock 0 200 0 diamond_block",
+            "clone 0 200 0 0 200 0 5 200 5"
+          ]
+        },
+        "id": "block.clone",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 1 202 1 water",
+          "commands": [
+            "fill 0 200 0 3 204 3 air",
+            "setblock 1 203 1 water"
+          ]
+        },
+        "id": "block.water_flow",
+        "features": [
+          "blocks.fluids"
+        ],
+        "duration_seconds": 1.501
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 1 200 1 sand",
+          "commands": [
+            "fill 0 200 0 3 204 3 air",
+            "setblock 1 203 1 sand"
+          ]
+        },
+        "id": "block.gravity",
+        "features": [
+          "blocks.falling"
+        ],
+        "duration_seconds": 1.502
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 8 200 0 redstone_lamp[lit=true]",
+          "commands": [
+            "setblock 8 200 0 redstone_lamp",
+            "setblock 9 200 0 redstone_block"
+          ]
+        },
+        "id": "redstone.lamp",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 0.504
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 8 200 3 redstone_wire[power=15]",
+          "commands": [
+            "setblock 8 200 3 redstone_wire",
+            "setblock 9 200 3 redstone_block"
+          ]
+        },
+        "id": "redstone.wire",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 0.502
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 2 200 9 stone",
+          "commands": [
+            "fill 0 200 8 4 202 10 air",
+            "setblock 1 200 9 stone",
+            "setblock 0 200 9 piston[facing=east]",
+            "setblock -1 200 9 redstone_block"
+          ]
+        },
+        "id": "redstone.piston_push",
+        "features": [
+          "blocks.pistons"
+        ],
+        "duration_seconds": 1.002
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 0 daylight_detector[power=15]",
+          "commands": [
+            "time set 6000",
+            "weather clear",
+            "setblock 12 200 0 daylight_detector"
+          ]
+        },
+        "id": "redstone.daylight",
+        "features": [
+          "blocks.redstone_power"
+        ],
+        "duration_seconds": 1.502
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if score A parity matches 12",
+          "commands": [
+            "scoreboard objectives add parity dummy",
+            "scoreboard players set A parity 7",
+            "scoreboard players set B parity 5",
+            "scoreboard players operation A parity += B parity"
+          ]
+        },
+        "id": "scoreboard.arithmetic",
+        "features": [
+          "players.scoreboards"
+        ],
+        "duration_seconds": 0.152
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if data storage ferraloom:probe {answer:42}",
+          "commands": [
+            "data modify storage ferraloom:probe answer set value 42"
+          ]
+        },
+        "id": "data.storage",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
+          "commands": [
+            "summon pig 8 201 8 {Tags:[\"ferraloom_probe\"],NoAI:1b}"
+          ]
+        },
+        "id": "entity.summon",
+        "features": [
+          "entities.spawning"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]",
+          "commands": [
+            "damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic"
+          ]
+        },
+        "id": "entity.damage",
+        "features": [
+          "entities.combat"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "unless entity @e[tag=ferraloom_probe]",
+          "commands": [
+            "kill @e[tag=ferraloom_probe]"
+          ]
+        },
+        "id": "entity.kill",
+        "features": [
+          "entities.lifecycle"
+        ],
+        "duration_seconds": 1.502
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if score Datapack parity matches 37",
+          "commands": [
+            "function ferraloom:probe"
+          ]
+        },
+        "id": "datapack.function",
+        "features": [
+          "world.functions"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "in minecraft:the_nether if block 0 100 0 gold_block",
+          "commands": [
+            "execute in minecraft:the_nether run setblock 0 100 0 gold_block"
+          ]
+        },
+        "id": "dimension.nether",
+        "features": [
+          "world.nether"
+        ],
+        "duration_seconds": 2.511
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "in minecraft:the_end if block 0 100 0 emerald_block",
+          "commands": [
+            "execute in minecraft:the_end run setblock 0 100 0 emerald_block"
+          ]
+        },
+        "id": "dimension.end",
+        "features": [
+          "world.end"
+        ],
+        "duration_seconds": 2.31
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 14 200 14 diamond_block",
+          "commands": [
+            "setblock 14 200 14 diamond_block",
+            "save-all flush"
+          ]
+        },
+        "id": "persistence.write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.501
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 13 200 14 emerald_block",
+          "commands": [
+            "setblock 13 200 14 emerald_block"
+          ]
+        },
+        "id": "persistence.unflushed_write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "exit_code": 0
+        },
+        "id": "lifecycle.clean_shutdown",
+        "features": [
+          "lifecycle.shutdown"
+        ],
+        "duration_seconds": 0.0
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 14 200 14 diamond_block",
+          "commands": []
+        },
+        "id": "persistence.restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 13 200 14 emerald_block",
+          "commands": []
+        },
+        "id": "persistence.shutdown_restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 14 lapis_block",
+          "commands": [
+            "setblock 12 200 14 lapis_block"
+          ]
+        },
+        "id": "persistence.signal_write",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.151
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "exit_code": 0,
+          "signal": "SIGTERM",
+          "durability": "checked separately by persistence.signal_restart"
+        },
+        "id": "lifecycle.sigterm_exit",
+        "features": [
+          "lifecycle.shutdown"
+        ],
+        "duration_seconds": 0.164
+      },
+      {
+        "result": "passed",
+        "detail": {
+          "predicate": "if block 12 200 14 lapis_block",
+          "commands": []
+        },
+        "id": "persistence.signal_restart",
+        "features": [
+          "persistence.chunk_data"
+        ],
+        "duration_seconds": 0.151
+      }
+    ]
+  },
+  "harness_manifest": {
+    "tools/parity/bot.py": "1b4f1e0d009aa0f1579e32c0e3f13ed27abdfdd8886b82eda4a2c5fc4f83d5f7",
+    "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
+    "tools/parity/suite.py": "09c386818311dfa2c88e906b834fa54cf53ad4408a2de30e0bb5f6ea0d4efabb",
+    "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b",
+    "tools/parity/client.ts": "cbcee0951a0545b101f5968cceffd7a815d5f4c6d6220a13f1643c1d9434e4cd",
+    "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
+    "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
+    "compatibility/scenario-map.json": "7ca1410cff2e1495b7a6fdbd421eddf933004b23ce4e4f53169aee6e74ca5afa"
+  },
+  "test_suite_sha256": "7f54374cd03cbf7c0d0e5bd6f393482b09ca3bfbf26a8476313c311ae8f33589",
+  "source_state": {
+    "commit": "988d9f6372dd6163975ca3f084c8edadb73cf0ba",
+    "dirty": false
+  },
+  "rust_binary_sha256": "7be4526aeaa6764e2f8f96523f2ff8b8d92dfbaf1e8dcdc8926a926ba445d095",
+  "cross_world": [
+    {
+      "result": "failed",
+      "error": "AssertionError: Predicate failed: if score Rule migration_probe matches 1; output: [' INFO [Server] FERRALOOM_END_85e62ce0c80c478aba373c8b7e622d97']",
+      "id": "persistence.vanilla_to_rust",
+      "features": [
+        "persistence.chunk_data",
+        "persistence.level_data"
+      ],
+      "duration_seconds": 2.167
+    },
+    {
+      "result": "failed",
+      "error": "AssertionError: Predicate failed: if score Clock migration_probe matches 4321; output: ['[16:41:39] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_a6777b3316fe4782a6b8a714238aa76d']",
+      "id": "persistence.rust_to_vanilla",
+      "features": [
+        "persistence.chunk_data",
+        "persistence.level_data"
+      ],
+      "duration_seconds": 11.671
+    }
+  ],
+  "terrain": {
+    "result": "failed",
+    "error": "ValueError: Cannot read region $REPO/.cache/runs/parity-pboqjzjy/terrain/rust/dimensions/minecraft/overworld/region/r.0.0.mca: [Errno 2] No such file or directory: '$REPO/.cache/runs/parity-pboqjzjy/terrain/rust/dimensions/minecraft/overworld/region/r.0.0.mca'",
+    "id": "worldgen.underground_chunk",
+    "features": [
+      "world.terrain"
+    ],
+    "duration_seconds": 0.217
+  },
+  "comparison": [
+    {
+      "id": "block.clone",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "block.fill",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "block.gravity",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "block.setblock",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "block.state",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "block.water_flow",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "blocks.registry_tables",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "data.storage",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "datapack.function",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "dimension.end",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "dimension.nether",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "entity.damage",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "entity.kill",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "entity.summon",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "lifecycle.clean_shutdown",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "lifecycle.sigterm_exit",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "lifecycle.world_lock",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.chat_delivery",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.chunk_stream",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.client_command",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.concurrent_status",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.duplicate_status",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.fragmented",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.incompatible_login",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.inventory_stream",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.malformed_length",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.movement",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.ping_before_status",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.play_login",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.status_fields",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.status_other_version",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "network.teleport",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.restart",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.shutdown_restart",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.signal_restart",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.signal_write",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.unflushed_write",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "persistence.write",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "redstone.daylight",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "redstone.lamp",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "redstone.piston_push",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "redstone.wire",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "scoreboard.arithmetic",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    }
+  ],
+  "failed": [
+    "persistence.vanilla_to_rust",
+    "persistence.rust_to_vanilla",
+    "worldgen.underground_chunk"
+  ]
+}

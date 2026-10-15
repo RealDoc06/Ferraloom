@@ -1,6 +1,7 @@
 use super::{ChunkLevel, ChunkPos, HashMapType};
 use crate::chunk_system::chunk_state::StagedChunkEnum;
 use crate::level::Level;
+use crossbeam::queue::SegQueue;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
 use std::sync::atomic::Ordering::SeqCst;
@@ -14,6 +15,7 @@ pub type LevelChange = (
 pub struct LevelChannel {
     pub value: Mutex<(Option<LevelChange>, Option<Vec<ChunkPos>>)>,
     pub notify: Condvar,
+    flush_requests: SegQueue<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
 impl Default for LevelChannel {
@@ -28,7 +30,31 @@ impl LevelChannel {
         Self {
             value: Mutex::new((None, None)),
             notify: Condvar::new(),
+            flush_requests: SegQueue::new(),
         }
+    }
+
+    pub fn request_flush(&self) -> tokio::sync::oneshot::Receiver<Result<(), String>> {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        // Share the waiter's mutex to avoid losing a wakeup between its
+        // empty-queue check and condvar wait.
+        let _guard = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.flush_requests.push(send);
+        self.notify.notify_one();
+        receive
+    }
+
+    pub(crate) fn take_flush_requests(
+        &self,
+    ) -> Vec<tokio::sync::oneshot::Sender<Result<(), String>>> {
+        let mut requests = Vec::new();
+        while let Some(request) = self.flush_requests.pop() {
+            requests.push(request);
+        }
+        requests
     }
     pub fn set_both(
         &self,
@@ -130,6 +156,7 @@ impl LevelChannel {
             && lock.1.is_none()
             && !level.should_unload.load(SeqCst)
             && !level.should_save.load(SeqCst)
+            && self.flush_requests.is_empty()
             && !level.shut_down_chunk_system.load(SeqCst)
         {
             let (new_lock, timeout_res) = self

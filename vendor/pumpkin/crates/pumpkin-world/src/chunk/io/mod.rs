@@ -93,6 +93,9 @@ where
 
     /// Ensure that all ongoing operations are finished
     fn block_and_await_ongoing_tasks(&self) -> impl Future<Output = ()> + Send + '_;
+
+    /// Write cached regions to disk, including regions that still have watchers.
+    fn flush(&self) -> impl Future<Output = Result<(), ChunkWritingError>> + Send + '_;
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.

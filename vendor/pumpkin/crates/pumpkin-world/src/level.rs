@@ -863,6 +863,36 @@ impl Level {
         }
     }
 
+    /// Save through the scheduler's FIFO writer and await physical region writes.
+    pub async fn save_and_flush(&self) -> Result<(), String> {
+        let completed = self.level_channel.request_flush();
+        tokio::select! {
+            result = completed => result.map_err(|_| "Chunk writer stopped before completing the save".to_string())?,
+            () = self.cancel_token.cancelled() => Err("Level stopped before completing the save".to_string()),
+        }
+    }
+
+    pub(crate) async fn flush_chunk_files(&self) -> Result<(), String> {
+        self.chunk_saver
+            .flush()
+            .await
+            .map_err(|error| error.to_string())?;
+        let entities = self
+            .loaded_entity_chunks
+            .iter()
+            .filter(|entry| entry.value().is_dirty())
+            .map(|entry| (*entry.key(), entry.value().clone()))
+            .collect();
+        self.entity_saver
+            .save_chunks(&self.level_folder, entities)
+            .await
+            .map_err(|error| error.to_string())?;
+        self.entity_saver
+            .flush()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub async fn write_entity_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncEntityChunk)>) {
         if chunks_to_write.is_empty() {
             return;
@@ -1022,6 +1052,84 @@ mod tests {
     use super::*;
     use pumpkin_config::world::LevelConfig;
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn explicit_flush_writes_watched_regions_before_returning() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let position = Vector2::new(0, 0);
+        let chunk = ChunkData::empty_sync(0, 0);
+        level
+            .chunk_saver
+            .watch_chunks(&level.level_folder, &[position])
+            .await;
+        let region = level.level_folder.region_folder.join("r.0.0.mca");
+        let mut previous_file = None;
+
+        for block in [&Block::DIAMOND_BLOCK, &Block::EMERALD_BLOCK] {
+            chunk.set_block_absolute_y(3, 200, 11, block.default_state.id);
+            chunk.mark_dirty(true);
+            level
+                .chunk_saver
+                .save_chunks(&level.level_folder, vec![(position, chunk.clone())])
+                .await
+                .unwrap();
+            // Ordinary saves remain cached while the chunk is watched, even
+            // after an earlier explicit flush: flushing must retain watchers.
+            assert_eq!(std::fs::read(&region).ok(), previous_file);
+            level.save_and_flush().await.unwrap();
+            previous_file = Some(std::fs::read(&region).unwrap());
+
+            let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+            let (send, mut receive) = mpsc::channel(1);
+            reader
+                .fetch_chunks(&level.level_folder, &[position], send)
+                .await;
+            let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+                panic!("Flushed chunk must be readable through a fresh region cache");
+            };
+            assert_eq!(
+                saved.section.get_block_absolute_y(3, 200, 11),
+                Some(block.default_state.id)
+            );
+        }
+        level.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn explicit_flush_reports_region_write_failure() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let position = Vector2::new(0, 0);
+        let chunk = ChunkData::empty_sync(0, 0);
+        chunk.mark_dirty(true);
+        level
+            .chunk_saver
+            .watch_chunks(&level.level_folder, &[position])
+            .await;
+        level
+            .chunk_saver
+            .save_chunks(&level.level_folder, vec![(position, chunk)])
+            .await
+            .unwrap();
+        // A directory at the region filename reliably rejects writes, including
+        // tests run as root where permission-bit failures would be ineffective.
+        let region = level.level_folder.region_folder.join("r.0.0.mca");
+        std::fs::create_dir(&region).unwrap();
+        assert!(level.save_and_flush().await.is_err());
+        std::fs::remove_dir(&region).unwrap();
+        level.shutdown().await;
+    }
 
     #[tokio::test]
     async fn dimension_paths_26_2() {

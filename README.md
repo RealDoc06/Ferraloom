@@ -28,6 +28,8 @@ Requires Python 3.11+, Node.js 24+, and Java 25. Both servers run sequentially i
 cargo build --locked
 # This flag accepts the Minecraft EULA for the local reference run.
 python3 tools/parity/suite.py --accept-eula --java /path/to/java25/bin/java
+# Independently check the default LZ4 world format with the official decoder and server.
+python3 tools/check_default_storage.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
 ```
 
 The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. `--record` preserves those failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.

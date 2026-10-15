@@ -189,7 +189,12 @@ impl Compression {
                 encoder
                     .write_all(uncompressed_data)
                     .map_err(CompressionError::LZ4Error)?;
+                encoder.flush().map_err(CompressionError::LZ4Error)?;
                 drop(encoder);
+                // This crate only flushes data blocks; Java's finish() also writes an EOF block.
+                compressed_data.extend_from_slice(b"LZ4Block");
+                compressed_data.push(0x10 | compression_level as u8);
+                compressed_data.extend_from_slice(&[0; 12]);
                 Ok(compressed_data)
             }
             Self::Custom => Err(CompressionError::UnknownCompression),
@@ -1423,6 +1428,42 @@ mod tests {
             Compression::Custom.compress_data(b"chunk data", 6),
             Err(CompressionError::UnknownCompression)
         ));
+    }
+
+    #[test]
+    fn lz4_streams_end_with_a_java_compatible_empty_block() {
+        // Level zero uses 1024-byte blocks: cover empty, partial, full and multiple blocks.
+        for length in [0, 1, 1023, 1024, 1025, 2048] {
+            let input: Vec<u8> = (0..length).map(|index| (index % 251) as u8).collect();
+            let encoded = Compression::LZ4.compress_data(&input, 0).unwrap();
+            let mut offset = 0;
+            let mut decoded_length = 0;
+            loop {
+                let header = encoded
+                    .get(offset..offset + 21)
+                    .expect("Java requires a complete terminal block, even at physical EOF");
+                assert_eq!(&header[..8], b"LZ4Block");
+                let compressed = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
+                let decompressed = u32::from_le_bytes(header[13..17].try_into().unwrap()) as usize;
+                offset += 21;
+                if compressed == 0 {
+                    // LZ4BlockOutputStream.finish(): raw method, level zero, lengths/checksum zero.
+                    assert_eq!(header[8], 0x10);
+                    assert_eq!(&header[9..], &[0; 12]);
+                    assert_eq!(offset, encoded.len(), "terminal block must be last");
+                    break;
+                }
+                assert!(decompressed > 0 && decompressed <= 1024);
+                assert!(offset + compressed <= encoded.len());
+                offset += compressed;
+                decoded_length += decompressed;
+            }
+            assert_eq!(decoded_length, input.len());
+            assert_eq!(
+                Compression::LZ4.decompress_data(&encoded).unwrap().as_ref(),
+                input
+            );
+        }
     }
 
     #[test]

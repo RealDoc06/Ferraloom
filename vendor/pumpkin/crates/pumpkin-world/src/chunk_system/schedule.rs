@@ -3,7 +3,7 @@ use super::chunk_holder::ChunkHolder;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::dag::{DAG, EdgeKey, Node, NodeKey};
 use super::generation_cache::{Cache, SurfaceBiomeNeighborhood};
-use super::worker_logic::{RecvChunk, io_read_work, io_write_work};
+use super::worker_logic::{RecvChunk, WriteRequest, io_read_work, io_write_work};
 use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
@@ -71,7 +71,7 @@ pub struct GenerationSchedule {
     queue_dirty: bool,
     recv_chunk: crossbeam::channel::Receiver<(ChunkPos, RecvChunk)>,
     io_read: tokio::sync::mpsc::Sender<Vec<ChunkPos>>,
-    io_write: tokio::sync::mpsc::Sender<Vec<(ChunkPos, Chunk)>>,
+    io_write: tokio::sync::mpsc::Sender<WriteRequest>,
     send_chunk: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
@@ -909,7 +909,7 @@ impl GenerationSchedule {
             *data.entry(*pos).or_insert(0) += 1;
         }
         drop(data);
-        if let Err(e) = self.io_write.blocking_send(chunks) {
+        if let Err(e) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
             error!(
                 "Failed to send chunks to io write thread during save (may have shut down): {:?}",
                 e
@@ -917,7 +917,7 @@ impl GenerationSchedule {
         }
     }
 
-    fn save_all_chunk(&mut self, save_proto_chunk: bool) {
+    fn save_all_chunk(&mut self, save_proto_chunk: bool) -> Result<(), String> {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
 
         for (pos, holder) in &mut self.chunk_map {
@@ -945,7 +945,7 @@ impl GenerationSchedule {
         }
 
         if chunks.is_empty() {
-            return;
+            return Ok(());
         }
 
         info!(
@@ -964,9 +964,11 @@ impl GenerationSchedule {
         }
         drop(data);
 
-        if let Err(e) = self.io_write.blocking_send(chunks) {
+        if let Err(e) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
             error!("Failed to send chunks to io write thread: {:?}", e);
+            return Err("Chunk writer stopped before accepting the save".to_string());
         }
+        Ok(())
     }
 
     fn drop_node(&mut self, node: NodeKey) {
@@ -1261,13 +1263,27 @@ impl GenerationSchedule {
                 self.process_unload_queue();
             }
             if level.should_save.swap(false, Relaxed) {
-                self.save_all_chunk(false);
+                let _ = self.save_all_chunk(false);
+            }
+            let flushes = self.send_level.take_flush_requests();
+            if !flushes.is_empty() {
+                if let Err(error) = self.save_all_chunk(false) {
+                    for completed in flushes {
+                        let _ = completed.send(Err(error.clone()));
+                    }
+                } else if self
+                    .io_write
+                    .blocking_send(WriteRequest::Flush(flushes))
+                    .is_err()
+                {
+                    error!("Chunk writer stopped before accepting the flush");
+                }
             }
             if level.shut_down_chunk_system.load(Relaxed) {
                 info!("Saving chunks before shutdown...");
                 self.garbage_collect_dependencies();
                 self.process_unload_queue();
-                self.save_all_chunk(true);
+                let _ = self.save_all_chunk(true);
                 break;
             }
 
@@ -1303,7 +1319,7 @@ impl GenerationSchedule {
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
                     info!("Shutdown detected during task processing, saving chunks...");
-                    self.save_all_chunk(true);
+                    let _ = self.save_all_chunk(true);
                     break 'out2;
                 }
 
@@ -1399,7 +1415,7 @@ impl GenerationSchedule {
                                 .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
-                            self.save_all_chunk(true);
+                            let _ = self.save_all_chunk(true);
                             break 'out2;
                         }
                     } else {
@@ -1411,7 +1427,7 @@ impl GenerationSchedule {
                                 .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
-                            self.save_all_chunk(true);
+                            let _ = self.save_all_chunk(true);
                             break 'out2;
                         }
 
@@ -1565,7 +1581,7 @@ impl GenerationSchedule {
                     .is_err()
             {
                 info!("IO read thread closed, saving remaining chunks...");
-                self.save_all_chunk(true);
+                let _ = self.save_all_chunk(true);
             }
 
             // 5. Wait for work or results

@@ -23,6 +23,11 @@ pub enum RecvChunk {
     },
 }
 
+pub enum WriteRequest {
+    Chunks(Vec<(ChunkPos, Chunk)>),
+    Flush(Vec<tokio::sync::oneshot::Sender<Result<(), String>>>),
+}
+
 /// Checks if a chunk needs relighting based on the current lighting configuration
 /// Returns true if the chunk has uniform lighting (from full/dark mode) but the server
 /// is now running in default mode (which needs proper lighting calculation)
@@ -178,13 +183,32 @@ pub async fn io_read_work(
 }
 
 pub async fn io_write_work(
-    mut recv: tokio::sync::mpsc::Receiver<Vec<(ChunkPos, Chunk)>>,
+    mut recv: tokio::sync::mpsc::Receiver<WriteRequest>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
+    let mut pending_error = None;
     loop {
         // Don't check cancel_token here (keep saving chunks)
-        let Some(data) = recv.recv().await else { break };
+        let Some(request) = recv.recv().await else {
+            break;
+        };
+        let data = match request {
+            WriteRequest::Chunks(data) => data,
+            WriteRequest::Flush(waiters) => {
+                // This barrier follows all chunks already enqueued by the
+                // scheduler. Cached watched regions also need a physical write.
+                let flushed = level.flush_chunk_files().await;
+                let result = match pending_error.take() {
+                    Some(error) => Err(error),
+                    None => flushed,
+                };
+                for waiter in waiters {
+                    let _ = waiter.send(result.clone());
+                }
+                continue;
+            }
+        };
         // debug!("io write thread receive chunks size {}", data.len());
         let positions = data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
         let level_for_upgrade = level.clone();
@@ -215,6 +239,7 @@ pub async fn io_write_work(
                     .await
                 {
                     error!("Failed to save chunks: {:?}", e);
+                    pending_error.get_or_insert_with(|| e.to_string());
                 }
                 false
             }

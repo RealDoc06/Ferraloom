@@ -24,6 +24,8 @@ class FeatureInventoryTests(unittest.TestCase):
         self.document['features'] = [copy.deepcopy(self.document['features'][0])]
         self.feature = self.document['features'][0]
         self.feature['required_scenarios'] = ['happy path', 'failure path']
+        self.feature['evidence'] = []
+        self.feature['rust_status'] = 'unverified'
 
     def add_passing_evidence(self):
         self.feature['evidence'] = [

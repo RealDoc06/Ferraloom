@@ -13,7 +13,9 @@ const DESCRIPTION: &str = "Saves the server to disk.";
 
 const PERMISSION: &str = "minecraft:command.save-all";
 
-struct SaveAllExecutor;
+struct SaveAllExecutor {
+    flush: bool,
+}
 
 impl CommandExecutor for SaveAllExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
@@ -29,8 +31,19 @@ impl CommandExecutor for SaveAllExecutor {
         let server_arc = context.server().clone();
         let server_clone = server_arc.clone();
         let source = context.source.clone();
+        let flush = self.flush;
         server_arc.spawn_task(async move {
-            if let Err(err) = server_clone.save_all().await {
+            let saved = async {
+                server_clone.save_all().await?;
+                if flush {
+                    for world in server_clone.worlds.load_full().iter() {
+                        world.level.save_and_flush().await?;
+                    }
+                }
+                Ok::<(), String>(())
+            }
+            .await;
+            if let Err(err) = saved {
                 error!("Failed to save server data: {err}");
                 source.send_error(TextComponent::translate_cross(
                     translation::java::COMMANDS_SAVE_FAILED,
@@ -63,7 +76,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     dispatcher.register(
         command("save-all", DESCRIPTION)
             .requires(PERMISSION)
-            .executes(SaveAllExecutor)
-            .then(literal("flush").executes(SaveAllExecutor)),
+            .executes(SaveAllExecutor { flush: false })
+            .then(literal("flush").executes(SaveAllExecutor { flush: true })),
     );
 }
