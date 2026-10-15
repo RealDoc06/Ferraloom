@@ -415,14 +415,20 @@ mod tests {
                     );
                     assert_eq!(entity.success_count.load(Ordering::Relaxed), 1);
                     settle_simulation(&world).await;
+                    *entity.command.lock().unwrap() =
+                        "scoreboard objectives remove absent".to_owned();
+                    world.level_time.lock().unwrap().world_age += 1;
+                    world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
+                    world.tick_chunks(&server);
+                    assert_eq!(entity.success_count.load(Ordering::Relaxed), 0);
                     *entity.command.lock().unwrap() = "forceload remove all".to_owned();
+                    world.level_time.lock().unwrap().world_age += 1;
                     world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
                     world.tick_chunks(&server);
                     assert!(world.forced_chunks.lock().unwrap().is_empty());
-                    assert_eq!(entity.success_count.load(Ordering::Relaxed), 2);
+                    assert_eq!(entity.success_count.load(Ordering::Relaxed), 1);
                     settle_simulation(&world).await;
-                    server.tasks.close();
-                    tokio::time::timeout(std::time::Duration::from_secs(5), server.tasks.wait())
+                    tokio::time::timeout(std::time::Duration::from_secs(5), server.finish_tasks())
                         .await
                         .expect("forced owner tasks must finish");
                     assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());

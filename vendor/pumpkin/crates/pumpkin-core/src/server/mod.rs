@@ -464,6 +464,12 @@ impl Server {
         self.tasks.spawn_on(task, &self.runtime)
     }
 
+    /// Close the task tracker and drain accepted work before saving worlds.
+    pub(crate) async fn finish_tasks(&self) {
+        self.tasks.close();
+        self.tasks.wait().await;
+    }
+
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         let worlds = self.worlds.load();
         worlds
@@ -777,9 +783,8 @@ impl Server {
     pub async fn shutdown(&self) {
         self.management_hub.broadcast_server_stopping();
 
-        self.tasks.close();
         debug!("Awaiting tasks for server");
-        self.tasks.wait().await;
+        self.finish_tasks().await;
         debug!("Done awaiting tasks for server");
 
         let _save_guard = self.saving.lock().await;
