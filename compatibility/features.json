@@ -1317,7 +1317,9 @@
         "block entity replacement",
         "barrel real client deposit survives clean restart",
         "chest real client deposit survives clean restart",
-        "trapped chest real client deposit survives clean restart"
+        "trapped chest real client deposit survives clean restart",
+        "standing sign both faces and wax survive clean restart in received chunk data with editing controls",
+        "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2818,7 +2820,13 @@
       "required_scenarios": [
         "door interaction",
         "bed safety",
-        "anchor charges"
+        "anchor charges",
+        "standing sign live data updates both faces and wax while retaining the active editor",
+        "standing sign rejects unsolicited text and accepts the legitimate editor face",
+        "standing sign wax blocks editor interaction until unwaxed with positive controls",
+        "ceiling hanging sign live data updates both faces and wax while retaining the active editor",
+        "ceiling hanging sign rejects unsolicited text and accepts the legitimate editor face",
+        "ceiling hanging sign wax blocks editor interaction until unwaxed with positive controls"
       ],
       "rust_status": "unverified",
       "evidence": []

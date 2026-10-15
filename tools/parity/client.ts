@@ -41,6 +41,7 @@ export function readVarInt(buffer: Buffer, start = 0): { value: number; bytes: n
 
 class Reader {
   offset = 0;
+  nbtNodes = 0;
   buffer: Buffer;
   constructor(buffer: Buffer) { this.buffer = buffer; }
   take(count: number): Buffer {
@@ -114,9 +115,128 @@ function packedBlockPos(x: number, y: number, z: number): Buffer {
   return buffer;
 }
 
-export function encodeUseItemOn(x: number, y: number, z: number, sequence: number): Buffer {
+export function encodeUseItemOn(x: number, y: number, z: number, sequence: number, face = 1): Buffer {
   if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > 2147483647) throw new Error('Invalid interaction sequence');
-  return Buffer.concat([varInt(0), packedBlockPos(x, y, z), varInt(1), floats(0.5, 1, 0.5), Buffer.from([0, 0]), varInt(sequence)]);
+  if (![1, 2, 3].includes(face)) throw new Error('Probe supports UP/NORTH/SOUTH hit faces');
+  return Buffer.concat([varInt(0), packedBlockPos(x, y, z), varInt(face),
+    floats(0.5, face === 1 ? 1 : 0.5, face === 2 ? 0 : face === 3 ? 1 : 0.5), Buffer.from([0, 0]), varInt(sequence)]);
+}
+
+export type SignSlot = 0 | 1; // 26.3 SignTextSlot: BACK, FRONT.
+type BlockPosition = { x: number; y: number; z: number };
+export type SignFace = { messages: string[]; color: string; has_glowing_text: boolean };
+export type SignData = { front_text: SignFace; back_text: SignFace; is_waxed: boolean };
+export type SignObservation = BlockPosition & (
+  | { kind: 'editor'; packet_id: 61; slot: SignSlot }
+  | { kind: 'block_entity' | 'chunk'; packet_id: 6 | 46; block_entity_type: 7 | 8; data: SignData }
+);
+
+function signLines(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length !== 4 || !value.every((line): line is string =>
+    typeof line === 'string' && line.length <= 384 && !/[\u0000\r\n]/u.test(line))) {
+    throw new Error('Sign probe supports exactly four bounded plain component strings; rich/filter components are unmodeled');
+  }
+  return value;
+}
+
+/** The official SignText codec uses ComponentSerialization.CODEC, whose plain
+ * branch is a direct NBT string. Never JSON.parse a sign message. */
+export function decodeSignData(value: unknown): SignData {
+  if (!record(value)) throw new Error('Expected sign compound');
+  const boolean = (value: unknown) => {
+    if (value === undefined) return false;
+    if (value !== 0 && value !== 1) throw new Error('Invalid sign boolean');
+    return value === 1;
+  };
+  const face = (value: unknown): SignFace => {
+    if (!record(value)) throw new Error('Missing sign face');
+    const messages = signLines(value.messages);
+    if (value.filtered_messages !== undefined && JSON.stringify(signLines(value.filtered_messages)) !== JSON.stringify(messages)) {
+      throw new Error('Filtered sign messages are unmodeled');
+    }
+    const color = value.color ?? 'black';
+    if (typeof color !== 'string' || !['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray',
+      'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'].includes(color)) throw new Error('Invalid sign dye color');
+    return { messages, color, has_glowing_text: boolean(value.has_glowing_text) };
+  };
+  return { front_text: face(value.front_text), back_text: face(value.back_text), is_waxed: boolean(value.is_waxed) };
+}
+
+function blockPosition(reader: Reader): BlockPosition {
+  const packed = reader.take(8).readBigUInt64BE();
+  return { x: Number(BigInt.asIntN(26, packed >> 38n)), y: Number(BigInt.asIntN(12, packed)),
+    z: Number(BigInt.asIntN(26, packed >> 12n)) };
+}
+
+export function encodeSignUpdate(x: number, y: number, z: number, messages: string[], slot: SignSlot): Buffer {
+  if (slot !== 0 && slot !== 1) throw new Error('Invalid SignTextSlot');
+  return Buffer.concat([packedBlockPos(x, y, z), ...signLines(messages).map(string), varInt(slot)]);
+}
+
+/** Decode the complete editor/BEData packet. Non-sign BE data is consumed but
+ * deliberately not interpreted as sign state. */
+export function decodeSignPacket(payload: Buffer): SignObservation | null {
+  if (payload.length > MAX_PACKET) throw new Error('Sign packet exceeds probe budget');
+  const reader = new Reader(payload), packet_id = reader.varInt(), position = blockPosition(reader);
+  let result: SignObservation | null;
+  if (packet_id === 61) {
+    const slot = reader.varInt();
+    if (slot !== 0 && slot !== 1) throw new Error('Invalid SignTextSlot');
+    result = { kind: 'editor', packet_id, ...position, slot };
+  } else if (packet_id === 6) {
+    const block_entity_type = reader.varInt();
+    if (block_entity_type < 0) throw new Error('Invalid block entity type');
+    if (reader.byte() !== 10) throw new Error('BEData requires network compound NBT');
+    const data = nbt(reader, 10);
+    result = block_entity_type === 7 || block_entity_type === 8
+      ? { kind: 'block_entity', packet_id, ...position, block_entity_type, data: decodeSignData(data) } : null;
+  } else throw new Error(`Unsupported sign packet ${packet_id}`);
+  if (reader.offset !== payload.length) throw new Error('Trailing sign packet bytes');
+  return result;
+}
+
+function boundedCount(reader: Reader, maximum: number, label: string): number {
+  const value = reader.varInt();
+  if (value < 0 || value > maximum) throw new Error(`Invalid ${label} (probe budget ${maximum})`);
+  return value;
+}
+
+/** Read chunk metadata only, skipping length-delimited terrain and light data.
+ * Optional compound NBT is TAG_End or TAG_Compound, without a presence boolean. */
+export function decodeChunkBlockEntities(payload: Buffer) {
+  if (payload.length > MAX_PACKET) throw new Error('Chunk exceeds probe budget');
+  const reader = new Reader(payload);
+  if (reader.varInt() !== 46) throw new Error('Expected chunk packet');
+  const x = reader.int(), z = reader.int();
+  const heightmaps = boundedCount(reader, 6, 'heightmap count');
+  const seen = new Set<number>();
+  for (let index = 0; index < heightmaps; index++) {
+    const type = boundedCount(reader, 5, 'heightmap type');
+    if (seen.has(type)) throw new Error('Duplicate heightmap');
+    seen.add(type);
+    reader.take(boundedCount(reader, 1024, 'heightmap longs') * 8);
+  }
+  const section_bytes = boundedCount(reader, 2097152, 'chunk section bytes');
+  reader.take(section_bytes);
+  const block_entity_count = boundedCount(reader, 4096, 'chunk block entity count');
+  const signs: SignObservation[] = [];
+  for (let index = 0; index < block_entity_count; index++) {
+    const local = reader.byte(), y = reader.take(2).readInt16BE();
+    const block_entity_type = boundedCount(reader, 65535, 'block entity type');
+    const tag = reader.byte();
+    if (tag !== 0 && tag !== 10) throw new Error('Chunk BE requires optional compound NBT');
+    const data = tag === 0 ? null : nbt(reader, 10);
+    if (block_entity_type === 7 || block_entity_type === 8) signs.push({ kind: 'chunk', packet_id: 46,
+      x: x * 16 + (local >> 4), y, z: z * 16 + (local & 15), block_entity_type, data: decodeSignData(data) });
+  }
+  // ClientboundLightUpdatePacketData: four bitsets and two lists of byte arrays.
+  for (let index = 0; index < 4; index++) reader.take(boundedCount(reader, 64, 'light bitset longs') * 8);
+  for (let kind = 0; kind < 2; kind++) {
+    const count = boundedCount(reader, 256, 'light array count');
+    for (let index = 0; index < count; index++) reader.take(boundedCount(reader, 2048, 'light array bytes'));
+  }
+  if (reader.offset !== payload.length) throw new Error('Trailing chunk bytes outside supported metadata/light schema');
+  return { x, z, section_bytes, block_entity_count, signs, decoded_bytes: reader.offset };
 }
 
 function plainStackHash(stack: PlainStack): Buffer {
@@ -381,6 +501,7 @@ function doubles(...values: number[]): Buffer {
 /** Decodes network NBT text without executing component data. */
 function nbt(reader: Reader, type = reader.byte(), depth = 0): unknown {
   if (depth > 64) throw new Error('NBT depth limit exceeded');
+  if (++reader.nbtNodes > 131072) throw new Error('NBT node budget exceeded');
   switch (type) {
     case 0: return null;
     case 1: return reader.take(1).readInt8();
@@ -438,7 +559,8 @@ type Command = { id: string | number } & (
   | { action: 'quit' }
   | { action: 'chat' | 'command'; text: string }
   | { action: 'move'; x: number; y: number; z: number; yaw?: number; pitch?: number }
-  | { action: 'use_item_on'; x: number; y: number; z: number }
+  | { action: 'use_item_on'; x: number; y: number; z: number; face?: number }
+  | { action: 'sign_update'; x: number; y: number; z: number; messages: string[]; slot: SignSlot }
   | { action: 'close_menu' }
   | { action: 'swap'; slot: number; hotbar: number }
 );
@@ -448,11 +570,17 @@ export function parseCommand(value: unknown): Command {
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
   if (value.action === 'state' || value.action === 'quit') return { id, action: value.action };
   if (value.action === 'close_menu') return { id, action: value.action };
-  if (value.action === 'use_item_on') {
+  if (value.action === 'use_item_on' || value.action === 'sign_update') {
     const { x, y, z } = value;
     if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') throw new Error('Interaction requires block coordinates');
     packedBlockPos(x, y, z);
-    return { id, action: value.action, x, y, z };
+    if (value.action === 'sign_update') {
+      const messages = signLines(value.messages), slot = value.slot;
+      if (slot !== 0 && slot !== 1) throw new Error('Invalid SignTextSlot');
+      return { id, action: value.action, x, y, z, messages, slot };
+    }
+    if (value.face !== undefined && (typeof value.face !== 'number' || ![1, 2, 3].includes(value.face))) throw new Error('Invalid interaction face');
+    return { id, action: value.action, x, y, z, ...(typeof value.face === 'number' ? { face: value.face } : {}) };
   }
   if (value.action === 'swap') {
     const { slot, hotbar } = value;
@@ -514,10 +642,12 @@ function main() {
     command_tree: null as Omit<ReturnType<typeof decodeCommandTree>, 'nodes'> | null,
     command_tree_error: null as { packet_id: number; payload_bytes: number; payload_sha256: string; message: string } | null,
     chats: [] as string[],
-    chat_messages: [] as ChatObservation[],
+    chat_messages: [] as (ChatObservation & { sequence: number })[],
     menu: null as { container_id: number; menu_type: number; opened_sequence: number; state_id: number;
       slots: PlainStack[]; carried: PlainStack } | null,
     menu_packets: [] as (ContainerPacket & { sequence: number })[],
+    sign_packets: [] as (SignObservation & { sequence: number })[],
+    chunk_packets: [] as { x: number; z: number; sequence: number; block_entity_count: number; section_bytes: number }[],
   };
 
   function send(id: number, ...parts: Buffer[]) {
@@ -543,9 +673,16 @@ function main() {
   function receiveChat(observation: ChatObservation) {
     state.chats.push(observation.text);
     if (state.chats.length > 100) state.chats.shift();
-    state.chat_messages.push(observation);
+    state.chat_messages.push({ ...observation, sequence: state.packets });
     if (state.chat_messages.length > 100) state.chat_messages.shift();
     emit({ event: 'chat', ...observation });
+  }
+
+  function receiveSign(observation: SignObservation) {
+    const received = { ...observation, sequence: state.packets };
+    state.sign_packets.push(received);
+    if (state.sign_packets.length > 256) state.sign_packets.shift();
+    emit({ event: 'sign_packet', ...received });
   }
 
   function packet(payload: Buffer) {
@@ -600,6 +737,16 @@ function main() {
     if (id === ids.play.chunk) {
       const key = `${reader.int()},${reader.int()}`;
       chunks.add(key); state.chunks = chunks.size;
+      if (values['block-data']) {
+        const { signs, decoded_bytes: _bytes, ...chunk } = decodeChunkBlockEntities(payload);
+        state.chunk_packets.push({ ...chunk, sequence: state.packets });
+        if (state.chunk_packets.length > 128) state.chunk_packets.shift();
+        signs.forEach(receiveSign);
+      }
+    }
+    if (values['block-data'] && (id === 6 || id === 61)) {
+      const observation = decodeSignPacket(payload);
+      if (observation) receiveSign(observation);
     }
     if (id === ids.play.chunkBatch) send(11, floats(64));
     if (id === ids.play.inventory) state.inventory_packets++;
@@ -716,10 +863,14 @@ function main() {
           const previous = state.position!;
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
-        } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap') {
-          if (!values['block-data']) throw new Error('Menu actions require --block-data');
+        } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap' || command.action === 'sign_update') {
+          if (!values['block-data']) throw new Error('Block interaction actions require --block-data');
           if (command.action === 'use_item_on') {
-            send(66, encodeUseItemOn(command.x, command.y, command.z, ++interactionSequence));
+            send(66, encodeUseItemOn(command.x, command.y, command.z, ++interactionSequence, command.face));
+          } else if (command.action === 'sign_update') {
+            // Deliberately permit unsolicited sends: acceptance must exercise
+            // server authorization, not a client-side editor precondition.
+            send(62, encodeSignUpdate(command.x, command.y, command.z, command.messages, command.slot));
           } else {
             const menu = state.menu;
             if (!menu || menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container menu');

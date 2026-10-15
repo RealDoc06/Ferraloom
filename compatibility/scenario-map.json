@@ -410,6 +410,38 @@
     "block_data.trapped_chest_cleared_loot_menu": {
       "feature_id": "blocks.containers",
       "scenario": "trapped chest first open preserves items after pending loot removal"
+    },
+    "block_data.sign_live": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign live data updates both faces and wax while retaining the active editor"
+    },
+    "block_data.sign_editor_none": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign rejects unsolicited text and accepts the legitimate editor face"
+    },
+    "block_data.sign_wax": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign wax blocks editor interaction until unwaxed with positive controls"
+    },
+    "block_data.sign_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "standing sign both faces and wax survive clean restart in received chunk data with editing controls"
+    },
+    "block_data.hanging_sign_live": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign live data updates both faces and wax while retaining the active editor"
+    },
+    "block_data.hanging_sign_editor_none": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign rejects unsolicited text and accepts the legitimate editor face"
+    },
+    "block_data.hanging_sign_wax": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign wax blocks editor interaction until unwaxed with positive controls"
+    },
+    "block_data.hanging_sign_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls"
     }
   }
 }

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Observe selected live container changes through actual protocol-777 menus.
+"""Observe selected live container and sign changes through protocol-777 clients.
 
 Runs fresh, sequential Java/Rust loopback fixtures and a clean restart of each.
-Only plain item stacks and single barrel/chest/trapped-chest menus are covered.
-No rich components, general click correctness, automation or full parity claim.
+Only plain stacks, single barrel/chest/trapped-chest menus and plain standing /
+ceiling hanging signs are covered. No rich components, filtering, click commands,
+editor expiry, general click correctness, automation or full parity claim.
 """
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -20,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 sys.dont_write_bytecode = True
 from oracle import CACHE, ROOT, TARGET, acquire
@@ -30,12 +33,17 @@ from parity.protocol import require
 
 CONTAINERS = {"barrel": (4097, 200, 1), "chest": (4101, 200, 1), "trapped_chest": (4105, 200, 1)}
 LOOT_POSITIONS = {"chest": (4109, 200, 1), "trapped_chest": (4109, 200, 5)}
+SIGNS = {"sign": ((4098, 200, 11), "oak_sign[rotation=0,waterlogged=false]", 7),
+         "hanging_sign": ((4106, 201, 11), "oak_hanging_sign[rotation=0,attached=false,waterlogged=false]", 8)}
 ITEMS = {"diamond": 1012, "emerald": 1013, "gold_ingot": 1022}
 CASES = {
     **{f"block_data.{name}_menu": "network.inventory_stream" for name in CONTAINERS},
     **{f"block_data.{name}_swap": "network.inventory_stream" for name in CONTAINERS},
     **{f"block_data.{name}_restart": "persistence.block_entities" for name in CONTAINERS},
     **{f"block_data.{name}_cleared_loot_menu": "blocks.containers" for name in LOOT_POSITIONS},
+    **{f"block_data.{name}_{case}": "blocks.interactives" for name in SIGNS
+       for case in ("live", "editor_none", "wax")},
+    **{f"block_data.{name}_restart": "persistence.block_entities" for name in SIGNS},
 }
 WORLD_ERRORS = re.compile(r"\bERROR\b|Failed to parse saved data|Couldn't load chunk|Failed to (?:load|read|write|save|parse).*?(?:chunk|region|world|data)", re.IGNORECASE)
 
@@ -209,6 +217,236 @@ def loot_case(server: LoggedServer, client: Client, name: str) -> dict:
             "scope": "Pending empty loot removed before the first open; inserted items must survive."}
 
 
+def sign_state(name: str, stage: str, waxed: bool = False) -> dict:
+    return {"front_text": {"messages": [f"{name}/{stage}/front", "south", "plain", "four"],
+                           "color": "red", "has_glowing_text": True},
+            "back_text": {"messages": [f"{name}/{stage}/back", "north", "other", "face"],
+                          "color": "blue", "has_glowing_text": False}, "is_waxed": waxed}
+
+
+def sign_snbt(data: dict) -> str:
+    # Direct component strings are supported by the pinned official codec.
+    # NBT booleans need byte tags; JSON booleans are not SNBT byte literals.
+    def face(value: dict) -> str:
+        return (f'{{messages:{json.dumps(value["messages"])},color:{json.dumps(value["color"])},'
+                f'has_glowing_text:{int(value["has_glowing_text"])}b}}')
+    return (f'{{front_text:{face(data["front_text"])},back_text:{face(data["back_text"])},'
+            f'is_waxed:{int(data["is_waxed"])}b}}')
+
+
+def sign_packets(state: dict, name: str, after: int, kind: str | None = None) -> list[dict]:
+    pos = SIGNS[name][0]
+    return [packet for packet in state["sign_packets"] if packet["sequence"] > after
+            and tuple(packet[axis] for axis in ("x", "y", "z")) == pos
+            and (kind is None or packet["kind"] == kind)]
+
+
+def received_sign(client: Client, name: str, expected: dict, after: int, kind: str = "block_entity") -> dict:
+    def matching(state: dict) -> bool:
+        packets = sign_packets(state, name, after, kind)
+        return bool(packets and packets[-1]["block_entity_type"] == SIGNS[name][2] and packets[-1]["data"] == expected)
+    state = client.wait_state(matching)
+    return sign_packets(state, name, after, kind)[-1]
+
+
+def processing_boundary(server: LoggedServer, client: Client) -> dict:
+    """Same-connection command follows the tested packet on the server executor.
+
+    Its scoreboard effect, exact tick step, and a later received server marker
+    establish processing and outgoing wire boundaries. A timeout only fails.
+    """
+    marker = "SIGN_BOUNDARY_" + uuid.uuid4().hex
+    fence = int(uuid.uuid4().hex[:7], 16)
+    before = client.state()["packets"]
+    server.command("scoreboard players set SignFence blockdata -1")
+    sent = client.request("command", text=f"scoreboard players set SignFence blockdata {fence}")
+    predicate = f"if score SignFence blockdata matches {fence}"
+    deadline = time.monotonic() + 15
+    while True:
+        try:
+            suite.check_predicate(server, predicate)
+            break
+        except AssertionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+    ticks = step_exact(server, 1)
+    output = server.command("say " + marker)
+    state = client.wait_state(lambda state: any(message["sequence"] > before and marker in message["text"]
+                                               for message in state["chat_messages"]))
+    received = next(message for message in state["chat_messages"] if marker in message["text"])
+    return {"client_command": sent, "server_predicate": predicate, "ticks": ticks,
+            "server_output": output, "received_marker": received}
+
+
+def sign_teleport(server: LoggedServer, client: Client, name: str, slot: int) -> None:
+    x, _, z = SIGNS[name][0]
+    target = {"x": x + 0.5, "y": 200, "z": z + (2.5 if slot == 1 else -1.5)}
+    before = client.state()["teleport_confirmations"]
+    server.command(f"tp {NAME} {target['x']} 200 {target['z']} {180 if slot == 1 else 0} 0")
+    client.wait_state(lambda state: state["teleport_confirmations"] > before
+                      and all(abs((state.get("server_position") or {}).get(axis, float("inf")) - value) < 0.01
+                              for axis, value in target.items()))
+
+
+def edit_sign_data(server: LoggedServer, client: Client, name: str, expected: dict) -> dict:
+    before = client.state()["packets"]
+    command = f"data merge block {pos_text(SIGNS[name][0])} {sign_snbt(expected)}"
+    output = server.command(command)
+    ticks = step_exact(server, 1)
+    observed = received_sign(client, name, expected, before)
+    return {"command": command, "output": output, "ticks": ticks, "before_sequence": before, "received": observed}
+
+
+def fresh_sign(server: LoggedServer, client: Client, name: str) -> dict:
+    close_menu(client)
+    server.command(f"clear {NAME}")
+    pos, block, _ = SIGNS[name]
+    sign_teleport(server, client, name, 1)
+    before = client.state()["packets"]
+    server.command(f"setblock {pos_text(pos)} air")
+    if name == "hanging_sign":
+        server.command(f"setblock {pos[0]} {pos[1] + 1} {pos[2]} stone")
+    server.command(f"setblock {pos_text(pos)} {block}")
+    suite.check_predicate(server, f"if block {pos_text(pos)} {block}")
+    suite.check_predicate(server, f"if block {pos[0]} {pos[1] + (1 if name == 'hanging_sign' else -1)} {pos[2]} stone")
+    initial = edit_sign_data(server, client, name, sign_state(name, "base"))
+    require(not sign_packets(client.state(), name, before, "editor"), "Fresh sign unexpectedly granted an editor")
+    return {**initial, "fresh_block_before_sequence": before}
+
+
+def interact_sign(client: Client, name: str, slot: int) -> int:
+    before = client.state()["packets"]
+    client.request("use_item_on", **dict(zip(("x", "y", "z"), SIGNS[name][0])), face=3 if slot == 1 else 2)
+    return before
+
+
+def open_sign(server: LoggedServer, client: Client, name: str, slot: int) -> dict:
+    sign_teleport(server, client, name, slot)
+    before = interact_sign(client, name, slot)
+    state = client.wait_state(lambda state: bool(sign_packets(state, name, before, "editor")))
+    editor = sign_packets(state, name, before, "editor")[-1]
+    require(editor["slot"] == slot, f"Wrong face from {'south' if slot == 1 else 'north'}: {editor}")
+    return editor
+
+
+def submit_sign(server: LoggedServer, client: Client, name: str, expected: dict, slot: int) -> dict:
+    before = client.state()["packets"]
+    action = client.request("sign_update", **dict(zip(("x", "y", "z"), SIGNS[name][0])),
+                            slot=slot, messages=expected["front_text" if slot == 1 else "back_text"]["messages"])
+    boundary = processing_boundary(server, client)
+    observed = received_sign(client, name, expected, before)
+    return {"sent": action, "before_sequence": before, "boundary": boundary, "received": observed}
+
+
+def fresh_sign_chunk(server: LoggedServer, client: Client, name: str, expected: dict) -> dict:
+    # Leave the view before returning. A NEW chunk packet is mandatory even
+    # though the forced fixture remains loaded on the server throughout.
+    before = client.state()["packets"]
+    teleport(server, client, (0, 200, 0))
+    client.wait_state(lambda state: any(chunk["sequence"] > before and chunk["x"] == 0 and chunk["z"] == 0
+                                        for chunk in state["chunk_packets"]))
+    boundary = processing_boundary(server, client)
+    before_return = client.state()["packets"]
+    sign_teleport(server, client, name, 1)
+    observed = received_sign(client, name, expected, before_return, "chunk")
+    return {"away_boundary": boundary, "before_return_sequence": before_return, "received": observed}
+
+
+def sign_live_case(server: LoggedServer, client: Client, name: str) -> dict:
+    initial = fresh_sign(server, client, name)
+    editor = open_sign(server, client, name, 1)
+    changed = sign_state(name, "data")
+    changed["front_text"].update(color="green", has_glowing_text=False)
+    changed["back_text"].update(color="yellow", has_glowing_text=True)
+    edits = [edit_sign_data(server, client, name, changed)]
+    for waxed in (True, False):
+        changed["is_waxed"] = waxed
+        edits.append(edit_sign_data(server, client, name, changed))
+    require(not sign_packets(client.state(), name, editor["sequence"], "editor"), "Unexpected replacement editor")
+    changed["front_text"]["messages"] = [f"{name}/owner/front", "retained", "after data", "four"]
+    front = submit_sign(server, client, name, changed, 1)
+    back_editor = open_sign(server, client, name, 0)
+    changed["back_text"]["messages"] = [f"{name}/owner/back", "north", "preserved front", "four"]
+    back = submit_sign(server, client, name, changed, 0)
+    return {"initial": initial, "front_editor": editor, "live_edits": edits,
+            "retained_owner_submission": front, "back_editor": back_editor, "back_submission": back}
+
+
+def sign_editor_none_case(server: LoggedServer, client: Client, name: str) -> dict:
+    initial = fresh_sign(server, client, name)
+    expected = sign_state(name, "base")
+    before = client.state()["packets"]
+    attack = client.request("sign_update", **dict(zip(("x", "y", "z"), SIGNS[name][0])),
+                            slot=1, messages=["UNSOLICITED", "must", "not", "apply"])
+    boundary = processing_boundary(server, client)
+    state = client.state()
+    require(not sign_packets(state, name, before, "editor"), "Fixture unexpectedly granted editor ownership")
+    # A real unchanged initial BE packet, a typed server read, and a fresh
+    # received chunk are independent witnesses; absence of BEData cannot pass.
+    predicate = f"if data block {pos_text(SIGNS[name][0])} {sign_snbt(expected)}"
+    suite.check_predicate(server, predicate)
+    for packet in sign_packets(state, name, before):
+        if packet["kind"] != "editor":
+            require(packet["data"] == expected, "Unsolicited submission changed received sign data")
+    chunk = fresh_sign_chunk(server, client, name, expected)
+    editor = open_sign(server, client, name, 1)
+    expected["front_text"]["messages"] = [f"{name}/authorized", "positive", "same face", "four"]
+    legitimate = submit_sign(server, client, name, expected, 1)
+    return {"initial": initial, "unsolicited": attack, "before_sequence": before, "boundary": boundary,
+            "unchanged_server_predicate": predicate, "fresh_unchanged_chunk": chunk,
+            "positive_editor": editor, "legitimate_submission": legitimate}
+
+
+def waxed_interaction(server: LoggedServer, client: Client, name: str, expected: dict, slot: int) -> dict:
+    require(expected["is_waxed"], "Waxed interaction needs a positively observed waxed sign")
+    observations = [packet for packet in sign_packets(client.state(), name, 0) if packet["kind"] != "editor"]
+    require(observations and observations[-1]["data"] == expected, "Missing received waxed-state precondition")
+    sign_teleport(server, client, name, slot)
+    before = interact_sign(client, name, slot)
+    boundary = processing_boundary(server, client)
+    state = client.state()
+    require(not sign_packets(state, name, before, "editor"), "Waxed sign opened an editor after processing boundary")
+    return {"before_sequence": before, "slot": slot, "received_precondition": observations[-1], "boundary": boundary,
+            "packets": sign_packets(state, name, before)}
+
+
+def sign_wax_case(server: LoggedServer, client: Client, name: str) -> dict:
+    initial = fresh_sign(server, client, name)
+    expected = sign_state(name, "base")
+    control = open_sign(server, client, name, 1)
+    expected["front_text"]["messages"] = [f"{name}/control", "south", "positive", "four"]
+    positive = submit_sign(server, client, name, expected, 1)
+    expected["is_waxed"] = True
+    wax = edit_sign_data(server, client, name, expected)
+    blocked = waxed_interaction(server, client, name, expected, 0)
+    expected["is_waxed"] = False
+    unwax = edit_sign_data(server, client, name, expected)
+    editor = open_sign(server, client, name, 0)
+    expected["back_text"]["messages"] = [f"{name}/resumed", "north", "positive", "four"]
+    resumed = submit_sign(server, client, name, expected, 0)
+    expected["is_waxed"] = True
+    persisted = edit_sign_data(server, client, name, expected)
+    return {"initial": initial, "unwaxed_control_editor": control, "unwaxed_control_submission": positive,
+            "wax": wax, "blocked_interaction": blocked, "unwax": unwax,
+            "resumed_editor": editor, "resumed_submission": resumed, "persisted": persisted,
+            "persisted_state": deepcopy(expected)}
+
+
+def sign_restart_case(server: LoggedServer, client: Client, name: str, expected: dict) -> dict:
+    chunk = fresh_sign_chunk(server, client, name, expected)
+    blocked = waxed_interaction(server, client, name, expected, 1)
+    expected = deepcopy(expected)
+    expected["is_waxed"] = False
+    unwax = edit_sign_data(server, client, name, expected)
+    edits = []
+    for slot in (1, 0):
+        editor = open_sign(server, client, name, slot)
+        expected["front_text" if slot == 1 else "back_text"]["messages"] = [f"{name}/restart/{slot}", "editable", "other intact", "four"]
+        edits.append({"editor": editor, "submission": submit_sign(server, client, name, expected, slot)})
+    return {"after_clean_restart_chunk": chunk, "waxed_interaction": blocked, "unwax": unwax, "edits": edits}
+
+
 def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict) -> list[dict]:
     server = LoggedServer(kind, directory, args)
     results: dict[str, dict] = {}
@@ -251,6 +489,8 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
             require_frozen(server)
             server.command("forceload add 4096 0")
             suite.wait_loaded(server, x=4096, z=0)
+            server.command("forceload add 0 0")
+            suite.wait_loaded(server, x=0, z=0)
             if boot == "initial":
                 server.command("fill 4096 199 0 4111 199 7 stone")
                 server.command("difficulty peaceful")
@@ -263,6 +503,11 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                     record(f"block_data.{name}_swap", lambda name=name: swap_case(server, client, name))
                 for name in LOOT_POSITIONS:
                     record(f"block_data.{name}_cleared_loot_menu", lambda name=name: loot_case(server, client, name))
+                server.command("fill 4096 199 8 4111 199 15 stone")
+                server.command(f"op {NAME}")
+                for name in SIGNS:
+                    for case, action in (("live", sign_live_case), ("editor_none", sign_editor_none_case), ("wax", sign_wax_case)):
+                        record(f"block_data.{name}_{case}", lambda name=name, action=action: action(server, client, name))
             else:
                 for name, pos in CONTAINERS.items():
                     test_id = f"block_data.{name}_restart"
@@ -278,6 +523,16 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                         return {"after_clean_restart": observed, "scope": "Real SWAP deposit survives save, stop, reload and menu reopen."}
 
                     record(test_id, restarted)
+                server.command(f"op {NAME}")
+                for name in SIGNS:
+                    test_id = f"block_data.{name}_restart"
+                    prerequisite = results[f"block_data.{name}_wax"]
+                    if prerequisite["result"] != "passed":
+                        results[test_id] = {"id": test_id, "features": [CASES[test_id]], "result": "skipped",
+                                            "detail": {"reason": "Wax, legitimate edits and persisted wire-state prerequisite failed."}}
+                        continue
+                    expected = prerequisite["detail"]["persisted_state"]
+                    record(test_id, lambda name=name, expected=expected: sign_restart_case(server, client, name, expected))
             close_client(client)
             server.save_flush()
             require_frozen(server)
@@ -350,13 +605,14 @@ def main() -> int:
         version = subprocess.run([args.java, "-version"], capture_output=True, text=True, timeout=15, check=True)
         report["java"] = {"path": args.java, "sha256": digest(Path(args.java)), "version": version.stdout + version.stderr}
         for kind in ("vanilla", "rust"):
-            print(f"Running {kind} menus on {socket.gethostname()} loopback: {run / kind}", flush=True)
+            print(f"Running {kind} menus and signs on {socket.gethostname()} loopback: {run / kind}", flush=True)
             report["servers"][kind] = run_side(kind, run / kind, args, report)
         if manifest() != report["harness_manifest"]:
             report["failed"].append("harness.changed_during_run")
         if suite.git_state() != report["source_state"]:
             report["failed"].append("source.changed_during_run")
-        if digest(args.rust_binary) != report["rust_binary_sha256"] or digest(official) != report["server_sha256"]:
+        if (digest(args.rust_binary) != report["rust_binary_sha256"] or digest(original) != before
+                or digest(official) != report["server_sha256"]):
             report["failed"].append("executables.changed_during_run")
         report["failed"].extend(f"{kind}:{case['id']}" for kind, cases in report["servers"].items() for case in cases if case["result"] != "passed")
         report["result"] = "failed" if report["failed"] else "passed"
