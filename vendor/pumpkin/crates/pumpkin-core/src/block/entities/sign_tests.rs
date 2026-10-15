@@ -893,3 +893,86 @@ async fn sign_unknown_slot_decoding_preserves_entire_authored_faces_through_chun
         }
     }
 }
+
+#[tokio::test]
+async fn sign_opaque_index_edits_refuse_before_callbacks_and_preserve_authored_state() {
+    let fixture = Fixture::new().await;
+    for (messages, command) in [
+        (
+            "['A',17,{selector:'@a'},'B','C']",
+            "data modify block 0 64 0 front_text.messages[2] set value X",
+        ),
+        (
+            "['A',{selector:'@bad'},'C','D']",
+            "data modify block 0 64 0 front_text.messages[1] set value S",
+        ),
+        (
+            "['A',{selector:'@a'},'B','C','D']",
+            "data remove block 0 64 0 front_text.messages[1]",
+        ),
+    ] {
+        for hanging in [false, true] {
+            let original = compound(&format!("{{front_text:{{messages:{messages}}}}}"));
+            let (block, live) = entity(hanging, &original);
+            fixture.install(block, live.clone());
+            let before = fixture.block_data();
+            let pending = fixture.pending_data();
+            let entered = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let observed = entered.clone();
+            let sign = SignEntityRef::from_block_entity(live.as_ref()).unwrap();
+            sign.on_next_edit(move || observed.store(true, std::sync::atomic::Ordering::SeqCst));
+            assert!(fixture.execute(command).is_err(), "{messages}");
+            assert!(!entered.load(std::sync::atomic::Ordering::SeqCst));
+            assert_eq!(fixture.block_data(), before);
+            assert_eq!(fixture.pending_data(), pending);
+            assert_eq!(saved(fixture.reload_saved_chunk().as_ref()), before);
+        }
+    }
+}
+
+#[tokio::test]
+async fn sign_opaque_item_changes_preserve_all_authored_lines_through_chunk_reload() {
+    let fixture = Fixture::new().await;
+    for hanging in [false, true] {
+        let original = compound("{front_text:{messages:['A',{selector:'@a'},'B','C','D']}}");
+        let (block, live) = entity(hanging, &original);
+        fixture.install(block, live.clone());
+        let sign = SignEntityRef::from_block_entity(live.as_ref()).unwrap();
+        assert!(!sign.front_text().has_editable_text());
+        let mut expected = fixture.block_data();
+        let mut front = expected.get_compound("front_text").unwrap().clone();
+        front.put_string("color", "red".into());
+        front.put_bool("has_glowing_text", true);
+        expected.put_compound("front_text", front);
+        expected.put_bool("is_waxed", true);
+        let player = uuid::Uuid::from_u128(76);
+        assert!(sign.apply_color(player, true, DyeColor::Red));
+        assert!(sign.apply_glowing(player, true, true));
+        assert!(sign.apply_wax(player));
+        assert!(!sign.front_text().has_editable_text());
+        assert_eq!(fixture.block_data(), expected);
+        fixture
+            .source
+            .world()
+            .save_block_entities(POS.chunk_position());
+        assert_eq!(fixture.pending_data(), expected);
+        let reloaded = fixture.reload_saved_chunk();
+        assert_eq!(saved(reloaded.as_ref()), expected);
+        assert!(
+            !SignEntityRef::from_block_entity(reloaded.as_ref())
+                .unwrap()
+                .front_text()
+                .has_editable_text()
+        );
+        assert_eq!(
+            expected
+                .get_compound("front_text")
+                .unwrap()
+                .get_list("messages"),
+            original
+                .get_compound("front_text")
+                .unwrap()
+                .get_list("messages")
+        );
+    }
+}

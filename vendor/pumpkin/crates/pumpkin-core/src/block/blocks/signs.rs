@@ -791,7 +791,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn another_players_click_preserves_the_assigned_editor_until_tick_expiry() {
+    fn another_players_click_does_not_clear_the_assigned_editor() {
         let owner = Uuid::from_u128(1);
         let other = Uuid::from_u128(2);
         let editor = Mutex::new(Some(owner));

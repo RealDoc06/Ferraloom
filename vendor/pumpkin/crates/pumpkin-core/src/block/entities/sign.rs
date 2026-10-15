@@ -57,8 +57,8 @@ pub struct SignText {
     opaque: Arc<Mutex<Option<NbtCompound>>>,
 }
 
-/// Unknown loaded forms stay in their original line and on disk. They are never
-/// interpreted as commands, and live NBT edits refuse them before committing.
+/// Unknown loaded forms render as placeholders. Their owning face keeps its
+/// authored NBT, and live edits refuse it before interpreting command paths.
 #[derive(Clone, Debug, PartialEq)]
 enum SignLine {
     Known { component: TextComponent },
@@ -592,12 +592,7 @@ impl SignText {
 
     #[must_use]
     pub fn has_editable_text(&self) -> bool {
-        if self
-            .opaque
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
+        if self.has_opaque_data() {
             return false;
         }
         self.messages
@@ -605,6 +600,13 @@ impl SignText {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .all(|line| matches!(line, SignLine::Known { .. }))
+    }
+
+    fn has_opaque_data(&self) -> bool {
+        self.opaque
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 
     #[cfg(test)]
@@ -756,6 +758,11 @@ impl SignState {
             .gate
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Authored opaque lists are not Java's canonical four-slot edit input.
+        // Refuse before the callback can delete the wrong authored index.
+        if self.front.has_opaque_data() || self.back.has_opaque_data() {
+            return Err(BlockEntityLoadError::Unsupported("sign component form"));
+        }
         let mut nbt = self.full_nbt_unlocked(id, position);
         #[cfg(test)]
         {
