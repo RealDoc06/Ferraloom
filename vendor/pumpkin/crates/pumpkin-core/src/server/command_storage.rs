@@ -95,6 +95,7 @@ impl NamespaceFiles {
             Err(error) => return Err(error),
         };
         let mut namespaces = BTreeSet::new();
+        let mut legacy_namespaces = BTreeSet::new();
         for entry in directory_entries {
             let entry = entry?;
             let name = entry.file_name();
@@ -127,6 +128,7 @@ impl NamespaceFiles {
                 // DimensionStorageFileFix (4772) moved these names into namespace
                 // directories. Keep the old file and prefer any modern file.
                 namespaces.insert(namespace.to_owned());
+                legacy_namespaces.insert(namespace.to_owned());
             }
         }
         for namespace in namespaces {
@@ -134,6 +136,11 @@ impl NamespaceFiles {
             let (path, file) = match open_existing(&modern)? {
                 Some(file) => (modern, file),
                 None => {
+                    // A legal modern namespace directory can itself have the
+                    // name command_storage_<namespace>.dat. It is not a legacy file.
+                    if !legacy_namespaces.contains(&namespace) {
+                        continue;
+                    }
                     let legacy = directory.join(format!("command_storage_{namespace}.dat"));
                     let Some(file) = open_existing(&legacy)? else {
                         continue;

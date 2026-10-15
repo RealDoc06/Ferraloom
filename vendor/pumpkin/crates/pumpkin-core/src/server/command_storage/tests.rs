@@ -465,6 +465,39 @@ async fn legacy_java_storage_is_loaded_without_deleting_or_overriding_its_modern
 }
 
 #[tokio::test]
+async fn namespace_named_like_a_legacy_file_survives_save_and_restart() {
+    let folder = tempfile::tempdir().unwrap();
+    metadata(folder.path());
+    let data = folder.path().join("data");
+    fs::create_dir_all(data.join("minecraft")).unwrap();
+    let namespace = "command_storage_minecraft.dat";
+    let id = format!("{namespace}:probe");
+    let server = server_at(folder.path()).await.unwrap();
+    set(&server, &id, &value(37));
+    server.save_all(true).await.unwrap();
+    assert!(data.join(namespace).is_dir());
+    assert!(storage_path(folder.path(), namespace).is_file());
+    assert!(!storage_path(folder.path(), "minecraft").exists());
+    server.shutdown().await;
+    drop(server);
+
+    let restarted = server_at(folder.path()).await.unwrap();
+    assert_eq!(restarted.command_storage.lock().unwrap()[&id], value(37));
+    assert!(
+        !restarted
+            .command_storage
+            .lock()
+            .unwrap()
+            .contains_key("minecraft:probe")
+    );
+    set(&restarted, &id, &value(41));
+    restarted.save_all(true).await.unwrap();
+    assert_eq!(entry(&saved(folder.path(), namespace), "probe"), value(41));
+    assert!(!storage_path(folder.path(), "minecraft").exists());
+    restarted.shutdown().await;
+}
+
+#[tokio::test]
 async fn malformed_public_map_entries_do_not_erase_their_namespace_or_block_healthy_saves() {
     let folder = tempfile::tempdir().unwrap();
     metadata(folder.path());
