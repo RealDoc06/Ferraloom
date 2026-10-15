@@ -2,15 +2,226 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::identifier::Identifier;
+use pumpkin_util::text::TextComponent;
 
 use std::sync::{Arc, Weak};
 
 use crate::server::Server;
 
-/// Contents and pending loot share a lock so slot access cannot cross a reload.
+/// Preserve the original tags even when the runtime only understands a subset.
+/// 26.3 BaseContainerBlockEntity uses CustomName/lock; BlockEntity separately
+/// persists its components map. These belong to the same transaction as Items.
+pub(super) struct ContainerMetadata {
+    custom_name: Option<NbtTag>,
+    title: Option<TextComponent>,
+    lock: Option<NbtTag>,
+    predicate: ContainerLock,
+    components: Option<NbtTag>,
+}
+
+enum ContainerLock {
+    Any,
+    CustomName(TextComponent),
+    Unsupported,
+}
+
+impl ContainerLock {
+    fn decode(tag: Option<&NbtTag>) -> Self {
+        let Some(tag) = tag else { return Self::Any };
+        let NbtTag::Compound(predicate) = tag else {
+            return Self::Unsupported;
+        };
+        // ItemPredicate also supports items, count and partial predicates. Do not
+        // interpret these as an unlocked container until their codecs are ported.
+        if predicate
+            .child_tags
+            .keys()
+            .any(|key| !matches!(key.as_ref(), "components" | "predicates"))
+            || predicate.get("predicates").is_some_and(
+                |tag| !matches!(tag, NbtTag::Compound(value) if value.child_tags.is_empty()),
+            )
+        {
+            return Self::Unsupported;
+        }
+        let Some(components) = predicate.get("components") else {
+            return Self::Any;
+        };
+        let NbtTag::Compound(components) = components else {
+            return Self::Unsupported;
+        };
+        if components.child_tags.is_empty() {
+            return Self::Any;
+        }
+        if components.child_tags.len() != 1 {
+            return Self::Unsupported;
+        }
+        let Some(name) = components
+            .get("minecraft:custom_name")
+            .or_else(|| components.get("custom_name"))
+        else {
+            return Self::Unsupported;
+        };
+        // The pinned item CustomNameImpl codec currently only retains literal
+        // names. Refuse rich key predicates instead of promising broken matching.
+        let Some(name) = container_name(name, 0) else {
+            return Self::Unsupported;
+        };
+        if !name.0.style.is_empty() || !name.0.extra.is_empty() {
+            return Self::Unsupported;
+        }
+        Self::CustomName(name)
+    }
+
+    fn matches(&self, main_hand: &ItemStack) -> bool {
+        match self {
+            Self::Any => true,
+            // DataComponentExactPredicate compares component values, not the
+            // flattened display name (nor item_name or the item's default name).
+            Self::CustomName(expected) => main_hand.get_custom_name() == Some(expected),
+            Self::Unsupported => false,
+        }
+    }
+}
+
+impl ContainerMetadata {
+    pub(super) fn from_nbt(nbt: &NbtCompound) -> Self {
+        Self {
+            custom_name: nbt.get("CustomName").cloned(),
+            title: nbt.get("CustomName").and_then(|tag| container_name(tag, 0)),
+            lock: nbt.get("lock").cloned(),
+            predicate: ContainerLock::decode(nbt.get("lock")),
+            components: nbt.get("components").cloned(),
+        }
+    }
+
+    /// Unrelated edits may retain opaque loaded values; newly introduced forms
+    /// must be understood before any state, loot token or publication changes.
+    pub(super) fn validate_edit(&self, previous: &Self) -> Result<(), super::BlockEntityLoadError> {
+        let unsupported = if self.custom_name != previous.custom_name
+            && self.custom_name.is_some()
+            && self.title.is_none()
+        {
+            Some("container CustomName component")
+        } else if self.lock != previous.lock && matches!(self.predicate, ContainerLock::Unsupported)
+        {
+            Some("container lock predicate")
+        } else if self.components != previous.components
+            && self
+                .components
+                .as_ref()
+                .is_some_and(|tag| !matches!(tag, NbtTag::Compound(_)))
+        {
+            Some("block entity components map")
+        } else {
+            None
+        };
+        match unsupported {
+            Some(field) => Err(super::BlockEntityLoadError::Unsupported(field)),
+            None => Ok(()),
+        }
+    }
+
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        for (key, value) in [
+            ("CustomName", &self.custom_name),
+            ("lock", &self.lock),
+            ("components", &self.components),
+        ] {
+            if let Some(value) = value {
+                nbt.put(key, value.clone());
+            }
+        }
+    }
+
+    pub(super) fn can_unlock(&self, main_hand: &ItemStack) -> bool {
+        self.predicate.matches(main_hand)
+    }
+
+    pub(super) fn custom_name(&self) -> Option<TextComponent> {
+        self.custom_name.as_ref().map(|_| {
+            self.title
+                .clone()
+                .unwrap_or_else(|| TextComponent::text("[Unsupported container name]"))
+        })
+    }
+}
+
+/// Bounded literal-component support. Unknown content/style forms remain opaque
+/// on disk and are rejected on live replacement, never flattened or defaulted.
+fn container_name(tag: &NbtTag, depth: usize) -> Option<TextComponent> {
+    if depth > 64 {
+        return None;
+    }
+    if let NbtTag::String(text) = tag {
+        return Some(TextComponent::text(text.to_string()));
+    }
+    let NbtTag::Compound(nbt) = tag else {
+        return None;
+    };
+    let mut name = TextComponent::text(nbt.get_string("text")?.to_owned());
+    for (key, value) in &nbt.child_tags {
+        match key.as_ref() {
+            "text" | "type" => {
+                if key.as_ref() == "type" && value.extract_string()? != "text" {
+                    return None;
+                }
+            }
+            "color" => {
+                let color = value.extract_string()?;
+                // Validate ASCII hex before the upstream decoder slices it.
+                if color == "reset"
+                    || (color.starts_with('#')
+                        && (color.len() != 7
+                            || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)))
+                {
+                    return None;
+                }
+                name.0.style.color =
+                    Some(serde_json::from_value(serde_json::Value::String(color.into())).ok()?);
+            }
+            "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" => {
+                let flag = match value {
+                    NbtTag::Byte(value) => *value != 0,
+                    NbtTag::Short(value) => *value != 0,
+                    NbtTag::Int(value) => *value != 0,
+                    NbtTag::Long(value) => *value != 0,
+                    NbtTag::Float(value) => *value != 0.0,
+                    NbtTag::Double(value) => *value != 0.0,
+                    _ => return None,
+                };
+                match key.as_ref() {
+                    "bold" => name.0.style.bold = Some(flag),
+                    "italic" => name.0.style.italic = Some(flag),
+                    "underlined" => name.0.style.underlined = Some(flag),
+                    "strikethrough" => name.0.style.strikethrough = Some(flag),
+                    "obfuscated" => name.0.style.obfuscated = Some(flag),
+                    _ => return None,
+                }
+            }
+            "insertion" => name.0.style.insertion = Some(value.extract_string()?.to_owned()),
+            "extra" => {
+                let NbtTag::List(extra) = value else {
+                    return None;
+                };
+                if extra.is_empty() {
+                    return None;
+                }
+                name.0.extra = extra
+                    .iter()
+                    .map(|tag| container_name(tag, depth + 1).map(|name| name.0))
+                    .collect::<Option<_>>()?;
+            }
+            _ => return None,
+        }
+    }
+    Some(name)
+}
+
+/// Contents, pending loot and metadata share a lock so access cannot cross a reload.
 pub(super) struct ChestState<const N: usize> {
     pub items: [ItemStack; N],
     pub loot: ChestLootState,
+    pub metadata: ContainerMetadata,
     pub load_token: Arc<()>,
     // Only a weak datapack source is needed by World::get_loot_table. Binding on
     // publication also covers hopper/comparator access before the first tick/open.
@@ -28,6 +239,7 @@ pub(super) struct ChestState<const N: usize> {
 impl<const N: usize> ChestState<N> {
     /// Pure serializer: never accesses Inventory or unpacks deferred loot.
     pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.metadata.write_nbt(nbt);
         if let Some(key) = &self.loot.key {
             nbt.put_string("LootTable", key.clone());
             if self.loot.seed != 0 {
@@ -58,6 +270,7 @@ impl<const N: usize> ChestState<N> {
         Self {
             items,
             loot,
+            metadata: ContainerMetadata::from_nbt(nbt),
             load_token: Arc::new(()),
             server: None,
             #[cfg(test)]
@@ -143,13 +356,19 @@ macro_rules! impl_block_entity_for_chest {
             ) -> Result<(), $crate::block::entities::BlockEntityLoadError> {
                 let (items, loot) =
                     $crate::block::entities::chest_like_block_entity::read_chest_nbt(nbt);
+                let metadata =
+                    $crate::block::entities::chest_like_block_entity::ContainerMetadata::from_nbt(
+                        nbt,
+                    );
                 {
                     let mut state = self
                         .state
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    metadata.validate_edit(&state.metadata)?;
                     state.items = items;
                     state.loot = loot;
+                    state.metadata = metadata;
                     // Identity avoids ABA even when the replacement key/seed match.
                     state.load_token = std::sync::Arc::new(());
                 }
@@ -201,12 +420,42 @@ macro_rules! impl_block_entity_for_chest {
                 }
                 let (items, loot) =
                     $crate::block::entities::chest_like_block_entity::read_chest_nbt(&candidate);
+                let metadata =
+                    $crate::block::entities::chest_like_block_entity::ContainerMetadata::from_nbt(
+                        &candidate,
+                    );
+                metadata.validate_edit(&state.metadata)?;
                 state.items = items;
                 state.loot = loot;
+                state.metadata = metadata;
                 state.load_token = std::sync::Arc::new(());
                 <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
                 publish(state.snapshot(Self::ID, self.position));
                 Ok(true)
+            }
+
+            fn container_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.state
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .metadata
+                    .custom_name()
+            }
+
+            fn can_open_container(
+                &self,
+                main_hand: &pumpkin_data::item_stack::ItemStack,
+                spectator: bool,
+            ) -> bool {
+                let state = self
+                    .state
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if spectator {
+                    state.loot.key.is_none()
+                } else {
+                    state.metadata.can_unlock(main_hand)
+                }
             }
 
             fn bind_world(&self, world: &$crate::world::World) {

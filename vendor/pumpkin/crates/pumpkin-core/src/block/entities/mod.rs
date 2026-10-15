@@ -129,6 +129,17 @@ pub trait BlockEntity: Any + Send + Sync {
         false
     }
 
+    /// Current container title override, without accessing or unpacking inventory.
+    fn container_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        None
+    }
+
+    /// Pure access check. Callers snapshot the main hand before acquiring entity
+    /// state; menu creation and notifications run after this method returns.
+    fn can_open_container(&self, _main_hand: &ItemStack, _spectator: bool) -> bool {
+        true
+    }
+
     fn write_internal(&self, nbt: &mut NbtCompound) {
         nbt.put_string("id", self.resource_location().to_string());
         let position = self.get_position();

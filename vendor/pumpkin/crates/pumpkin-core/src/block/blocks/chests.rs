@@ -14,8 +14,8 @@ use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
-use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;
@@ -33,7 +33,8 @@ use pumpkin_data::BlockState;
 
 struct ChestScreenFactory {
     inventory: Arc<dyn Inventory>,
-    loot_pending: bool,
+    entities: Vec<Arc<dyn BlockEntity>>,
+    world: Arc<World>,
 }
 
 impl ScreenHandlerFactory for ChestScreenFactory {
@@ -43,8 +44,30 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        if self.loot_pending && player.is_spectator() {
+        let main_hand = player_inventory.held_item();
+        if self
+            .entities
+            .iter()
+            .any(|entity| !entity.can_open_container(&main_hand, player.is_spectator()))
+        {
+            if !player.is_spectator() {
+                let first = self.entities[0].get_position().to_centered_f64();
+                let last = self.entities[self.entities.len() - 1]
+                    .get_position()
+                    .to_centered_f64();
+                send_container_locked_notifications(
+                    &self.world,
+                    (first + last) * 0.5,
+                    player,
+                    self.get_display_name(),
+                );
+            }
             return None;
+        }
+        // Lock checks for BOTH halves precede any loot generation or menu/viewer
+        // callbacks. The factory retains the live entities, not metadata copies.
+        for entity in &self.entities {
+            entity.unpack_loot_table(&self.world);
         }
 
         let concrete_handler = if self.inventory.size() > 27 {
@@ -59,6 +82,13 @@ impl ScreenHandlerFactory for ChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
+        if let Some(name) = self
+            .entities
+            .iter()
+            .find_map(|entity| entity.container_custom_name())
+        {
+            return name;
+        }
         if self.inventory.size() > 27 {
             pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHESTDOUBLE,
@@ -170,80 +200,50 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
     }
 }
 
-/// Returns a screen handler factory for opening a chest or double chest inventory.
-///
-/// Unpacks deferred loot tables on first open (for non-spectator players) and combines
-/// connected inventories for double chests if neither chest half is obstructed.
+/// Retains both live halves; access checks and deferred loot run at menu creation.
 fn get_chest_screen_handler_factory(
     args: GetScreenHandlerFactoryArgs<'_>,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
-    chest_screen_handler_factory(
-        args.world,
-        args.position,
-        args.player.gamemode.load() == GameMode::Spectator,
-    )
+    chest_screen_handler_factory(args.world, args.position)
 }
 
 pub(crate) fn chest_screen_handler_factory(
     world: &Arc<World>,
     position: &BlockPos,
-    player_is_spectator: bool,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
     let state = world.get_block_state_id(position);
-    let first_chest = world.get_block_entity(position);
-
+    let first_chest = world.get_block_entity(position)?;
+    let first_inventory = first_chest.clone().get_inventory()?;
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
-
-    // Unpack deferred loot table on first open (non-spectator only).
-    if !player_is_spectator && let Some(ref entity) = first_chest {
-        entity.unpack_loot_table(world);
-    }
-
-    let first_loot_pending = first_chest
-        .as_ref()
-        .is_some_and(|entity| entity.has_loot_table());
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
-
     if is_chest_blocked(world, position) {
         return None;
     }
-
-    if let Some(direction) = connected_towards {
+    let second_chest = if let Some(direction) = connected_towards {
         let neighbor_pos = position.offset(direction.to_offset());
         if is_chest_blocked(world, &neighbor_pos) {
             return None;
         }
-    }
+        world.get_block_entity(&neighbor_pos)
+    } else {
+        None
+    };
 
-    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
-    if !player_is_spectator
-        && let Some(direction) = connected_towards
-        && let Some(second) = world.get_block_entity(&position.offset(direction.to_offset()))
+    let mut entities = vec![first_chest];
+    let inventory = if let Some(second) = second_chest
+        && let Some(second_inventory) = second.clone().get_inventory()
     {
-        second.unpack_loot_table(world);
-    }
-
-    let loot_pending = first_loot_pending
-        || connected_towards.is_some_and(|direction| {
-            world
-                .get_block_entity(&position.offset(direction.to_offset()))
-                .is_some_and(|second| second.has_loot_table())
-        });
-
-    let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = world
-            .get_block_entity(&position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+        // Java FIRST is the RIGHT half: both item order and title precedence
+        // must remain independent of which half the player clicked.
         if matches!(chest_props.r#type, ChestType::Right) {
+            entities.push(second);
             DoubleInventory::new(first_inventory, second_inventory)
         } else {
+            entities.insert(0, second);
             DoubleInventory::new(second_inventory, first_inventory)
         }
     } else {
@@ -252,8 +252,32 @@ pub(crate) fn chest_screen_handler_factory(
 
     Some(Box::new(ChestScreenFactory {
         inventory,
-        loot_pending,
+        entities,
+        world: world.clone(),
     }))
+}
+
+pub(super) fn send_container_locked_notifications(
+    world: &World,
+    position: Vector3<f64>,
+    player: &dyn InventoryPlayer,
+    title: TextComponent,
+) {
+    // InventoryPlayer is implemented outside pumpkin-core. Production players
+    // support the overlay; headless menu tests do not need a network transport.
+    if let Some(player) = player.as_any().downcast_ref::<Player>() {
+        player.send_system_message_raw(
+            &TextComponent::translate("container.isLocked", [title]),
+            true,
+        );
+    }
+    world.play_sound_fine(
+        pumpkin_data::sound::Sound::BlockChestLocked,
+        pumpkin_data::sound::SoundCategory::Blocks,
+        &position,
+        1.0,
+        1.0,
+    );
 }
 
 fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {

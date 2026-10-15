@@ -1,5 +1,5 @@
 //! Focused Rust dispatcher/persistence coverage, not official paired acceptance.
-//! CustomName, lock behavior and block-entity components remain unmodeled.
+//! Container locks cover a bounded predicate subset; opaque tags are retained.
 
 use std::{
     sync::{Arc, Mutex, Weak, mpsc},
@@ -41,7 +41,7 @@ use pumpkin_world::{
 use super::ChestBlockEntity;
 use crate::{
     block::{
-        blocks::chests::chest_screen_handler_factory,
+        blocks::{barrel::barrel_screen_handler_factory, chests::chest_screen_handler_factory},
         entities::{
             BlockEntity, barrel::BarrelBlockEntity, comparator::ComparatorBlockEntity,
             trapped_chest::TrappedChestBlockEntity,
@@ -66,6 +66,18 @@ const CHESTS: [ChestKind; 2] = [ChestKind::Normal, ChestKind::Trapped];
 const CONTAINERS: [ChestKind; 3] = [ChestKind::Normal, ChestKind::Trapped, ChestKind::Barrel];
 
 impl ChestKind {
+    fn factory(
+        self,
+        world: &Arc<World>,
+        position: &BlockPos,
+    ) -> Box<dyn pumpkin_inventory::screen_handler::ScreenHandlerFactory> {
+        match self {
+            Self::Normal | Self::Trapped => chest_screen_handler_factory(world, position),
+            Self::Barrel => barrel_screen_handler_factory(world, position),
+        }
+        .unwrap()
+    }
+
     fn block(self) -> &'static Block {
         match self {
             Self::Normal => &Block::CHEST,
@@ -358,7 +370,14 @@ impl MenuPlayer {
         Self(
             Arc::new(PlayerInventory::new(
                 Arc::new(Mutex::new(EntityEquipment::new())),
-                Arc::default(),
+                Arc::new(
+                    [(
+                        PlayerInventory::OFF_HAND_SLOT,
+                        pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND,
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
             )),
             false,
         )
@@ -1118,7 +1137,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
         player.1 = true;
         assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), 1);
         let pending = saved(first.as_ref());
-        let single = chest_screen_handler_factory(&world, &BLOCK_POS, true).unwrap();
+        let single = chest_screen_handler_factory(&world, &BLOCK_POS).unwrap();
         assert!(
             single
                 .create_screen_handler(1, &player.0, &player)
@@ -1137,7 +1156,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             assert_eq!(fixture.execute(&format!("data merge block {} 64 0 {{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}}", position.0.x)), 1);
             let pending = saved(entity.as_ref());
             for clicked in [BLOCK_POS, OTHER_POS] {
-                let factory = chest_screen_handler_factory(&world, &clicked, true).unwrap();
+                let factory = chest_screen_handler_factory(&world, &clicked).unwrap();
                 assert!(
                     factory
                         .create_screen_handler(1, &player.0, &player)
@@ -1150,7 +1169,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             // Opening through production logic unpacks the pending half and
             // retains both Inventory Arcs in the actual double container menu.
             player.1 = false;
-            let factory = chest_screen_handler_factory(&world, &BLOCK_POS, false).unwrap();
+            let factory = chest_screen_handler_factory(&world, &BLOCK_POS).unwrap();
             let menu = factory
                 .create_screen_handler(1, &player.0, &player)
                 .unwrap();
@@ -1169,7 +1188,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             assert_eq!(kind.viewers(first.as_ref()), 0);
             assert_eq!(kind.viewers(second.as_ref()), 0);
             player.1 = true;
-            let spectator = chest_screen_handler_factory(&world, &OTHER_POS, true).unwrap();
+            let spectator = chest_screen_handler_factory(&world, &OTHER_POS).unwrap();
             assert!(
                 spectator
                     .create_screen_handler(2, &player.0, &player)
@@ -1570,5 +1589,399 @@ async fn live_container_comparator_callback_can_reenter_inventory_publication_an
                 .take_flushed_block_changes()
                 .contains(&(BLOCK_POS, kind.block().default_state.id))
         );
+    }
+}
+
+#[tokio::test]
+async fn container_metadata_survives_recursive_commands_retained_menu_writes_and_disk_reload() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let initial = compound(
+            "{CustomName:{text:'Vault',color:'gold',bold:1b,extra:[{text:'!'}]},lock:{components:{'minecraft:custom_name':'key'}},components:{'minecraft:custom_data':{keep:7,nested:{left:1}}}}",
+        );
+        let live = kind.from_nbt(&initial, BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let inventory = live.clone().get_inventory().unwrap();
+        let player = MenuPlayer::new();
+        let mut key = ItemStack::new(1, &Item::STICK);
+        key.set_custom_name("key".into());
+        player.0.set_held_item(key);
+        let factory = kind.factory(&world, &BLOCK_POS);
+        let menu = factory
+            .create_screen_handler(1, &player.0, &player)
+            .unwrap();
+        assert_eq!(factory.get_display_name().get_text(), "Vault!");
+        assert_eq!(factory.get_display_name().0.style.bold, Some(true));
+
+        assert_eq!(fixture.execute("data merge block 0 64 0 {CustomName:{text:'Updated'},components:{'minecraft:custom_data':{nested:{right:2}}}}"), 1);
+        assert_eq!(factory.get_display_name().get_text(), "Updated!");
+        assert_eq!(factory.get_display_name().0.style.bold, Some(true));
+        assert_eq!(
+            factory.get_display_name().0.style.color,
+            Some(pumpkin_util::text::color::Color::Named(
+                pumpkin_util::text::color::NamedColor::Gold
+            ))
+        );
+        assert!(Arc::ptr_eq(
+            &live,
+            &world.get_block_entity(&BLOCK_POS).unwrap()
+        ));
+        assert!(Arc::ptr_eq(
+            &inventory,
+            &world
+                .get_block_entity(&BLOCK_POS)
+                .unwrap()
+                .get_inventory()
+                .unwrap()
+        ));
+        assert_eq!(fixture.pending(BLOCK_POS), saved(live.as_ref()));
+
+        // A retained real menu and direct inventory edits share this same entity.
+        menu.lock().unwrap().get_behaviour().slots[0].set_stack(ItemStack::new(4, &Item::DIAMOND));
+        inventory.set_stack(1, ItemStack::new(3, &Item::APPLE));
+        world.update_block_entity(&live);
+        let persisted = fixture.pending(BLOCK_POS);
+        assert_eq!(persisted.get("lock"), initial.get("lock"));
+        assert_eq!(
+            persisted.get_compound("components"),
+            Some(&compound(
+                "{'minecraft:custom_data':{keep:7,nested:{left:1,right:2}}}"
+            ))
+        );
+        menu.lock().unwrap().on_closed(&player);
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert_eq!(saved(reloaded.as_ref()), persisted);
+        assert_eq!(
+            kind.factory(&world, &BLOCK_POS)
+                .get_display_name()
+                .get_text(),
+            "Updated!"
+        );
+        assert_eq!(
+            reloaded
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .item_count,
+            4
+        );
+        assert_eq!(
+            reloaded
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(1)
+                .item_count,
+            3
+        );
+        assert_eq!(fixture.execute("data remove block 0 64 0 CustomName"), 1);
+        assert!(reloaded.container_custom_name().is_none());
+        assert!(saved(reloaded.as_ref()).get("CustomName").is_none());
+        assert_ne!(
+            kind.factory(&world, &BLOCK_POS)
+                .get_display_name()
+                .get_text(),
+            "Updated!"
+        );
+    }
+}
+
+#[tokio::test]
+async fn container_lock_checks_actual_main_hand_and_spectator_at_menu_creation() {
+    // 26.3 LockCode.canUnlock: spectator || predicate(main hand).
+    // DataComponentExactPredicate.test compares full component equality, not
+    // display text, item_name, or either hand. Creative has no special bypass.
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let factory = kind.factory(&world, &BLOCK_POS);
+        let mut player = MenuPlayer::new();
+        assert_eq!(
+            fixture.execute(
+                "data merge block 0 64 0 {lock:{components:{'minecraft:custom_name':'key'}}}"
+            ),
+            1
+        );
+        assert!(
+            factory
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        let mut key = ItemStack::new(1, &Item::STICK);
+        key.set_custom_name("key".into());
+        player
+            .0
+            .set_stack_in_hand(pumpkin_util::Hand::Left, key.clone());
+        assert_eq!(
+            player.0.off_hand_item().get_custom_name(),
+            key.get_custom_name()
+        );
+        assert!(
+            factory
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        player.0.set_held_item(
+            ItemStack::read_item_stack(&compound(
+                "{id:'minecraft:stick',count:1,components:{'minecraft:item_name':'key'}}",
+            ))
+            .unwrap(),
+        );
+        assert!(
+            factory
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        let mut styled_key = key.clone();
+        styled_key.patch = vec![(
+            pumpkin_data::data_component::DataComponent::CustomName,
+            Some(Box::new(
+                pumpkin_data::data_component_impl::CustomNameImpl {
+                    name: pumpkin_util::text::TextComponent::text("key").bold(),
+                },
+            )),
+        )];
+        player.0.set_held_item(styled_key);
+        assert!(
+            factory
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        player.0.set_held_item(key);
+        let menu = factory
+            .create_screen_handler(1, &player.0, &player)
+            .unwrap();
+        menu.lock().unwrap().on_closed(&player);
+        player.0.set_held_item(ItemStack::EMPTY.clone());
+        player.1 = true;
+        let spectator = factory
+            .create_screen_handler(2, &player.0, &player)
+            .unwrap();
+        spectator.lock().unwrap().on_closed(&player);
+        player.1 = false;
+        assert_eq!(
+            fixture.execute("data modify block 0 64 0 lock set value {}"),
+            1
+        );
+        let unlocked = factory
+            .create_screen_handler(3, &player.0, &player)
+            .unwrap();
+        unlocked.lock().unwrap().on_closed(&player);
+        assert_eq!(kind.viewers(live.as_ref()), 0);
+    }
+}
+
+#[tokio::test]
+async fn container_denied_open_never_consumes_loot_or_increments_viewers() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let live = kind.from_nbt(&compound("{lock:{components:{'minecraft:custom_name':'key'}},LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let before = saved(live.as_ref());
+        let token = kind.token(live.as_ref());
+        let factory = kind.factory(&world, &BLOCK_POS);
+        let mut player = MenuPlayer::new();
+        assert!(
+            factory
+                .create_screen_handler(1, &player.0, &player)
+                .is_none()
+        );
+        player.1 = true;
+        assert!(
+            factory
+                .create_screen_handler(2, &player.0, &player)
+                .is_none()
+        );
+        assert_eq!(saved(live.as_ref()), before);
+        assert!(Arc::ptr_eq(&token, &kind.token(live.as_ref())));
+        assert_eq!(kind.viewers(live.as_ref()), 0);
+    }
+}
+
+#[tokio::test]
+async fn double_container_title_precedence_and_both_locks_follow_live_entities() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let first = kind.from_nbt(
+            &compound("{CustomName:'Right',lock:{components:{'minecraft:custom_name':'key'}}}"),
+            BLOCK_POS,
+        );
+        let second = kind.from_nbt(
+            &compound("{CustomName:'Left',lock:{components:{'minecraft:custom_name':'other'}}}"),
+            OTHER_POS,
+        );
+        fixture.install(kind.block(), first.clone());
+        fixture.install(kind.block(), second.clone());
+        let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
+        properties.facing = HorizontalFacing::South;
+        properties.r#type = ChestType::Right;
+        fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
+        properties.r#type = ChestType::Left;
+        fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
+        let factories = [
+            kind.factory(&world, &BLOCK_POS),
+            kind.factory(&world, &OTHER_POS),
+        ];
+        let player = MenuPlayer::new();
+        let mut key = ItemStack::new(1, &Item::STICK);
+        key.set_custom_name("key".into());
+        player.0.set_held_item(key);
+        for factory in &factories {
+            assert_eq!(factory.get_display_name().get_text(), "Right");
+            assert!(
+                factory
+                    .create_screen_handler(1, &player.0, &player)
+                    .is_none()
+            );
+        }
+        assert_eq!(fixture.execute("data remove block 0 64 0 CustomName"), 1);
+        assert_eq!(
+            fixture.execute(
+                "data modify block 1 64 0 lock.components.'minecraft:custom_name' set value 'key'"
+            ),
+            1
+        );
+        for factory in &factories {
+            assert_eq!(factory.get_display_name().get_text(), "Left");
+            let menu = factory
+                .create_screen_handler(2, &player.0, &player)
+                .unwrap();
+            assert_eq!(menu.lock().unwrap().get_behaviour().slots.len(), 90);
+            menu.lock().unwrap().on_closed(&player);
+        }
+        assert_eq!(kind.viewers(first.as_ref()), 0);
+        assert_eq!(kind.viewers(second.as_ref()), 0);
+    }
+}
+
+#[tokio::test]
+async fn opaque_container_metadata_survives_unrelated_edits_and_restart() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let input = compound(
+            "{CustomName:{translate:'container.chest',fallback:'Storage'},lock:{items:'#minecraft:planks',count:{min:2},predicates:{'minecraft:custom_data':{key:1}}},components:{'minecraft:custom_data':{unknown:[I;1,2,3]}}}",
+        );
+        let live = kind.from_nbt(&input, BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:2}]"), 1);
+        live.clone()
+            .get_inventory()
+            .unwrap()
+            .set_stack(1, ItemStack::new(3, &Item::APPLE));
+        world.update_block_entity(&live);
+        for key in ["CustomName", "lock", "components"] {
+            assert_eq!(saved(live.as_ref()).get(key), input.get(key));
+        }
+        assert!(!live.can_open_container(&ItemStack::new(64, &Item::OAK_PLANKS), false));
+        assert!(live.can_open_container(&ItemStack::EMPTY, true));
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert_eq!(saved(reloaded.as_ref()), saved(live.as_ref()));
+        assert_eq!(fixture.execute("data remove block 0 64 0 lock"), 1);
+        assert!(reloaded.can_open_container(&ItemStack::EMPTY, false));
+    }
+}
+
+#[tokio::test]
+async fn unsupported_container_metadata_edits_are_typed_atomic_refusals() {
+    use crate::block::entities::{BlockEntityLoadError, NbtEditDecision};
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let live = kind.from_nbt(
+            &compound(
+                "{CustomName:'Keep',LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}",
+            ),
+            BLOCK_POS,
+        );
+        fixture.install(kind.block(), live.clone());
+        let before = saved(live.as_ref());
+        let token = kind.token(live.as_ref());
+        live.clear_dirty();
+        for candidate in [
+            "{lock:{items:'minecraft:stick'}}",
+            "{lock:{count:2}}",
+            "{lock:{predicates:{'minecraft:custom_data':{key:1}}}}",
+            "{lock:{components:{'minecraft:custom_name':{text:'key',bold:1b}}}}",
+            "{CustomName:{translate:'container.chest'}}",
+            "{components:1}",
+        ] {
+            let update = compound(candidate);
+            let mut published = false;
+            let result = live.edit_nbt(
+                &mut |nbt| {
+                    for (key, value) in &update.child_tags {
+                        nbt.put(key, value.clone());
+                    }
+                    nbt.put_long("LootTableSeed", 99);
+                    NbtEditDecision::Commit
+                },
+                &mut |_| published = true,
+            );
+            assert!(matches!(result, Err(BlockEntityLoadError::Unsupported(_))));
+            assert!(!published);
+            assert!(!live.is_dirty());
+            assert!(Arc::ptr_eq(&token, &kind.token(live.as_ref())));
+            assert_eq!(saved(live.as_ref()), before);
+            assert_eq!(fixture.pending(BLOCK_POS), before);
+            assert!(
+                fixture
+                    .dispatcher
+                    .execute_input(
+                        &format!("data merge block 0 64 0 {candidate}"),
+                        &fixture.source
+                    )
+                    .is_err()
+            );
+            assert_eq!(saved(live.as_ref()), before);
+        }
+        let mut replacement = before.clone();
+        replacement.put("lock", compound("{items:'minecraft:stick'}"));
+        assert!(matches!(
+            live.load_nbt(&replacement),
+            Err(BlockEntityLoadError::Unsupported(_))
+        ));
+        assert_eq!(saved(live.as_ref()), before);
+        assert!(Arc::ptr_eq(&token, &kind.token(live.as_ref())));
+    }
+}
+
+#[test]
+fn container_load_replaces_metadata_without_replacing_retained_inventory_or_menu() {
+    for kind in CONTAINERS {
+        let live = kind.from_nbt(&compound("{CustomName:'Old',lock:{components:{'minecraft:custom_name':'old key'}},components:{'minecraft:custom_data':{keep:1}}}"), BLOCK_POS);
+        let inventory = live.clone().get_inventory().unwrap();
+        let player = MenuPlayer::new();
+        let menu = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+        let old_token = kind.token(live.as_ref());
+        let replacement = compound(
+            "{CustomName:{text:'New',italic:0b},lock:{components:{'minecraft:custom_name':'new key'}},components:{'minecraft:custom_data':{keep:2}},Items:[{Slot:0b,id:'minecraft:apple',count:3}]}",
+        );
+        live.load_nbt(&replacement).unwrap();
+        assert!(Arc::ptr_eq(
+            &inventory,
+            &live.clone().get_inventory().unwrap()
+        ));
+        assert!(!Arc::ptr_eq(&old_token, &kind.token(live.as_ref())));
+        assert_eq!(menu.get_behaviour().slots[0].get_stack().item_count, 3);
+        menu.get_behaviour().slots[1].set_stack(ItemStack::new(2, &Item::DIAMOND));
+        for field in ["CustomName", "lock", "components"] {
+            assert_eq!(saved(live.as_ref()).get(field), replacement.get(field));
+        }
+        assert_eq!(live.container_custom_name().unwrap().get_text(), "New");
+        assert_eq!(
+            live.container_custom_name().unwrap().0.style.italic,
+            Some(false)
+        );
+        let mut key = ItemStack::new(1, &Item::STICK);
+        key.set_custom_name("old key".into());
+        assert!(!live.can_open_container(&key, false));
+        key.set_custom_name("new key".into());
+        assert!(live.can_open_container(&key, false));
     }
 }
