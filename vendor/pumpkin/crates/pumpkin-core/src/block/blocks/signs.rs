@@ -524,10 +524,8 @@ impl BlockBehaviour for SignBlock {
         } else if executed_click_command {
             BlockActionResult::SuccessServer
         } else if !other_player_is_editing_sign(
-            args.player,
+            args.player.gameprofile.id,
             sign_entity.currently_editing_player(),
-            args.world,
-            args.position,
         ) && args.player.may_build()
             && has_editable_text(text)
         {
@@ -570,10 +568,8 @@ impl BlockBehaviour for SignBlock {
         if has_applicator_to_use
             && !sign_entity.is_waxed()
             && !other_player_is_editing_sign(
-                args.player,
+                args.player.gameprofile.id,
                 sign_entity.currently_editing_player(),
-                args.world,
-                args.position,
             )
         {
             let is_front_text =
@@ -643,33 +639,15 @@ fn open_text_edit(
     player.try_send_client_packet(&COpenSignEditor::new(*position, is_front_text));
 }
 
-/// Checks if another player is actively editing the sign within reach.
+/// Clicks only compare ownership. The sign tick expires distant editors.
 fn other_player_is_editing_sign(
-    player: &Player,
-    currently_editing_player: &Arc<Mutex<Option<Uuid>>>,
-    world: &World,
-    position: &BlockPos,
+    player_id: Uuid,
+    currently_editing_player: &Mutex<Option<Uuid>>,
 ) -> bool {
-    let currently_editing = *currently_editing_player
+    currently_editing_player
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(editing_player_id) = currently_editing
-        && editing_player_id != player.gameprofile.id
-    {
-        if world
-            .get_player_by_uuid(editing_player_id)
-            .is_some_and(|editing_player| editing_player.can_interact_with_block_at(position, 4.0))
-        {
-            return true;
-        }
-        let mut current = currently_editing_player
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if *current == Some(editing_player_id) {
-            *current = None;
-        }
-    }
-    false
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_some_and(|editor| editor != player_id)
 }
 
 /// All understood contents are plain text, even when they carry trusted styling.
@@ -811,6 +789,18 @@ fn get_yaw_from_rotation_16(rotation: u8) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn another_players_click_preserves_the_assigned_editor_until_tick_expiry() {
+        let owner = Uuid::from_u128(1);
+        let other = Uuid::from_u128(2);
+        let editor = Mutex::new(Some(owner));
+        assert!(other_player_is_editing_sign(other, &editor));
+        assert_eq!(*editor.lock().unwrap(), Some(owner));
+        assert!(!other_player_is_editing_sign(owner, &editor));
+        *editor.lock().unwrap() = None;
+        assert!(!other_player_is_editing_sign(other, &editor));
+    }
 
     fn placement(block: &Block, waterlogged: bool) -> SignPlacement {
         SignPlacement {

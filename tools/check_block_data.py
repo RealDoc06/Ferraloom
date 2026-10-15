@@ -311,9 +311,11 @@ def pending_barrel_case(server: LoggedServer, client: Client) -> dict:
 def spectator_barrel_case(server: LoggedServer, client: Client) -> dict:
     pos = PENDING_BARREL
     fresh_container(server, client, "barrel", pos)
-    setup = server.command(f'data merge block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}')
     server.command(f"op {NAME}")
     server.command(f"gamemode spectator {NAME}")
+    spectator_positive = open_menu(client, pos, contents())
+    close_menu(client)
+    setup = server.command(f'data merge block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}')
     before = client.state()["packets"]
     sent = client.request("use_item_on", **dict(zip(("x", "y", "z"), pos)))
     boundary = processing_boundary(server, client)
@@ -321,13 +323,17 @@ def spectator_barrel_case(server: LoggedServer, client: Client) -> dict:
     require(state.get("menu") is None and not any(packet["kind"] == "open" and packet["sequence"] > before
                                                  for packet in state["menu_packets"]),
             "Spectator opened a barrel whose loot was still pending")
+    overlays = [message for message in state["chat_messages"] if message["sequence"] > before
+                and message.get("overlay") is True and "container.spectatorCantOpen" in message["text"]]
+    require(overlays, "Missing fresh spectator menu-refusal overlay")
     predicate = f'if data block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}'
     suite.check_predicate(server, predicate)
     server.command(f"gamemode survival {NAME}")
     positive = open_menu(client, pos, contents())
     suite.check_predicate(server, f"unless data block {pos_text(pos)} LootTable")
     close_menu(client)
-    return {"setup": setup, "spectator_action": sent, "processing_boundary": boundary,
+    return {"spectator_positive": spectator_positive, "setup": setup, "spectator_action": sent,
+            "refusal_overlays": overlays, "processing_boundary": boundary,
             "pending_after_spectator_predicate": predicate, "survival_positive": positive}
 
 
@@ -746,6 +752,8 @@ def click_rich(server: LoggedServer, client: Client, fixture: tuple, expected_sc
                     and message.get("overlay") is True and "sign.click_actions_disabled" in message["text"]]
         if disabled:
             require(overlays, "Missing fresh disabled-click overlay after processed interaction")
+        else:
+            require(not overlays, "Enabled or literal sign interaction incorrectly reported disabled actions")
     return {"sent": sent, "boundary": boundary, "score_predicate": predicate, "changed_wire": observed, "disabled_overlays": overlays}
 
 
@@ -871,7 +879,11 @@ def rich_text_case(server: LoggedServer, client: Client, name: str) -> dict:
     expected.update(is_waxed=True, allow_op_features=True)
     expected["front_text"]["messages"][0]["click_event"] = command_component()["click_event"]
     expected["front_text"]["filtered_messages"] = deepcopy(expected["front_text"]["messages"])
-    persisted = edit_rich(server, client, fixture, expected)
+    command = f"data merge block {pos_text(fixture[0])} {component_snbt(expected)}"
+    # Author distinct filtered text, then require 26.3 privileged resolution to
+    # rebuild it from raw through SignText.Mutable, including the back face.
+    expected["back_text"]["filtered_messages"] = deepcopy(expected["back_text"]["messages"])
+    persisted = edit_rich(server, client, fixture, expected, command)
     positive = click_rich(server, client, fixture, 18)
     return {"nonop_control": control, "initial_raw_and_filtered": initial, "fresh_chunk": chunk, "editor": editor,
             "styled_literal_edit": edited, "persisted_styled_click": persisted, "positive_click": positive,

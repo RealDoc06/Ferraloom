@@ -54,6 +54,7 @@ pub struct SignText {
     color: Arc<AtomicI8>,
     messages: Arc<Mutex<[SignLine; 4]>>,
     filtered_messages: Arc<Mutex<[SignLine; 4]>>,
+    opaque: Arc<Mutex<Option<NbtCompound>>>,
 }
 
 /// Unknown loaded forms stay in their original line and on disk. They are never
@@ -129,6 +130,125 @@ impl SignLine {
         Self::Known {
             component: replacement,
         }
+    }
+}
+
+/// Codec errors with a partial value still occupy a raw line, but invalidate
+/// the optional filtered field. Unknown rich forms retain their whole face.
+enum ComponentDecode {
+    NoValue,
+    Success(SignLine),
+    Partial(SignLine),
+    Unknown(NbtTag),
+}
+
+fn content_may_decode(nbt: &NbtCompound, content: &str) -> bool {
+    match content {
+        "text" | "translate" | "keybind" | "selector" => nbt.get_string(content).is_some(),
+        "score" => nbt.get_compound("score").is_some_and(|score| {
+            score.get_string("name").is_some() && score.get_string("objective").is_some()
+        }),
+        "nbt" => {
+            nbt.get_string("nbt").is_some()
+                && ["block", "entity", "storage"]
+                    .iter()
+                    .any(|key| nbt.get_string(key).is_some())
+        }
+        "object" => match nbt.get("object") {
+            None => nbt.get("sprite").is_some() || nbt.get("player").is_some(),
+            Some(NbtTag::String(kind)) if kind.as_ref() == "atlas" => nbt.get("sprite").is_some(),
+            Some(NbtTag::String(kind)) if kind.as_ref() == "player" => nbt.get("player").is_some(),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn decode_component(tag: &NbtTag, depth: usize) -> ComponentDecode {
+    if depth > 64 {
+        return ComponentDecode::Unknown(tag.clone());
+    }
+    match tag {
+        NbtTag::String(_) => ComponentDecode::Success(SignLine::from_nbt(tag)),
+        NbtTag::Compound(nbt) => {
+            // Explicit type is strict. Untyped content tries other branches when
+            // one cannot decode, e.g. a bad text field with a valid translate.
+            let may_decode = if let Some(kind) = nbt.get("type") {
+                kind.extract_string().is_some_and(|kind| match kind {
+                    "translatable" => content_may_decode(nbt, "translate"),
+                    "text" | "score" | "selector" | "keybind" | "nbt" | "object" => {
+                        content_may_decode(nbt, kind)
+                    }
+                    _ => false,
+                })
+            } else {
+                [
+                    "text",
+                    "translate",
+                    "score",
+                    "selector",
+                    "keybind",
+                    "nbt",
+                    "object",
+                ]
+                .iter()
+                .any(|kind| content_may_decode(nbt, kind))
+            };
+            if !may_decode {
+                return ComponentDecode::NoValue;
+            }
+            let line = SignLine::from_nbt(tag);
+            if matches!(line, SignLine::Known { .. }) {
+                ComponentDecode::Success(line)
+            } else {
+                // Selector/path/profile grammar and partial style decoding are
+                // not established here. Preserve the authored face unchanged.
+                ComponentDecode::Unknown(tag.clone())
+            }
+        }
+        NbtTag::List(children) => {
+            let mut components = Vec::new();
+            let mut partial = false;
+            let mut unknown = false;
+            for child in children {
+                let line = match decode_component(child, depth + 1) {
+                    ComponentDecode::NoValue => {
+                        partial = true;
+                        continue;
+                    }
+                    ComponentDecode::Success(line) => line,
+                    ComponentDecode::Partial(line) => {
+                        partial = true;
+                        line
+                    }
+                    ComponentDecode::Unknown(_) => {
+                        unknown = true;
+                        continue;
+                    }
+                };
+                if let SignLine::Known { component } = line {
+                    components.push(component);
+                }
+            }
+            if unknown {
+                return ComponentDecode::Unknown(tag.clone());
+            }
+            let mut components = components.into_iter();
+            let Some(mut first) = components.next() else {
+                return ComponentDecode::NoValue;
+            };
+            first
+                .0
+                .extra
+                .extend(components.map(|component| component.0));
+            let line = SignLine::Known { component: first };
+            if partial {
+                ComponentDecode::Partial(line)
+            } else {
+                ComponentDecode::Success(line)
+            }
+        }
+        _ => ComponentDecode::NoValue,
     }
 }
 
@@ -245,6 +365,7 @@ struct FaceData {
     filtered_messages: [SignLine; 4],
     color: DyeColor,
     has_glowing_text: bool,
+    opaque: Option<NbtCompound>,
 }
 
 impl Default for FaceData {
@@ -255,33 +376,50 @@ impl Default for FaceData {
             messages,
             color: DyeColor::Black,
             has_glowing_text: false,
+            opaque: None,
         }
     }
 }
 
 impl FaceData {
-    fn decode_lines(tag: Option<&NbtTag>, filtered: bool) -> Option<[SignLine; 4]> {
+    fn decode_lines(tag: Option<&NbtTag>, filtered: bool) -> Option<([SignLine; 4], bool)> {
         let NbtTag::List(lines) = tag? else {
             return None;
         };
-        // These scalar/array forms have no Component codec partial value. Valid
-        // unmodeled compound/list components stay preserved as Unsupported.
-        let usable = |line: &NbtTag| {
-            matches!(
-                line,
-                NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_)
-            )
-        };
-        if filtered && (lines.len() != 4 || lines.iter().any(|line| !usable(line))) {
+        if filtered && lines.len() != 4 {
             return None;
         }
-        let mut lines = lines.iter().filter(|line| usable(line));
-        let lines = [lines.next()?, lines.next()?, lines.next()?, lines.next()?];
+        let mut decoded = Vec::new();
+        let mut opaque = false;
+        for line in lines {
+            match decode_component(line, 0) {
+                ComponentDecode::NoValue if filtered => return None,
+                ComponentDecode::NoValue => {}
+                ComponentDecode::Partial(_) if filtered => return None,
+                ComponentDecode::Success(line) | ComponentDecode::Partial(line) => {
+                    decoded.push(line)
+                }
+                ComponentDecode::Unknown(nbt) => {
+                    opaque = true;
+                    decoded.push(SignLine::Unsupported(nbt));
+                }
+            }
+            if !filtered && decoded.len() == 4 {
+                break;
+            }
+        }
+        let mut decoded = decoded.into_iter();
+        let lines = [
+            decoded.next()?,
+            decoded.next()?,
+            decoded.next()?,
+            decoded.next()?,
+        ];
         // The binary NBT reader already unwraps exactly one empty-key transport
         // wrapper at each list-element boundary. Remaining compounds are authored
         // values (including protected nested wrappers), never another wrapper to
         // peel here. Already decoded semantic compounds remain intact.
-        Some(lines.map(SignLine::from_nbt))
+        Some((lines, opaque))
     }
 
     fn from_nbt(tag: Option<&NbtTag>) -> Self {
@@ -290,31 +428,44 @@ impl FaceData {
         };
         // ValueInput accepts the raw codec's first-four partial for overlong
         // lists. The lenient filtered field discards errors and uses raw text.
-        let Some(messages) = Self::decode_lines(nbt.get("messages"), false) else {
+        let Some((messages, raw_opaque)) = Self::decode_lines(nbt.get("messages"), false) else {
             return Self::default();
         };
+        let (filtered_messages, filtered_opaque) =
+            Self::decode_lines(nbt.get("filtered_messages"), true)
+                .unwrap_or_else(|| (messages.clone(), false));
         let color = DyeColor::by_name(nbt.get_string("color").unwrap_or("black"))
             .unwrap_or(DyeColor::Black);
         Self {
-            filtered_messages: Self::decode_lines(nbt.get("filtered_messages"), true)
-                .unwrap_or_else(|| messages.clone()),
+            filtered_messages,
             messages,
             color,
             has_glowing_text: codec_bool(nbt.get("has_glowing_text")).unwrap_or(false),
+            opaque: (raw_opaque || filtered_opaque).then(|| nbt.clone()),
         }
     }
 
     fn supported(&self) -> bool {
-        self.messages
-            .iter()
-            .chain(&self.filtered_messages)
-            .all(|line| matches!(line, SignLine::Known { .. }))
+        self.opaque.is_none()
+            && self
+                .messages
+                .iter()
+                .chain(&self.filtered_messages)
+                .all(|line| matches!(line, SignLine::Known { .. }))
     }
 
     fn to_nbt(&self, for_client: bool) -> NbtTag {
-        let mut nbt = NbtCompound::new();
+        let mut nbt = if for_client {
+            None
+        } else {
+            self.opaque.clone()
+        }
+        .unwrap_or_default();
         nbt.put_bool("has_glowing_text", self.has_glowing_text);
         nbt.put_string("color", self.color.name().to_string());
+        if !for_client && self.opaque.is_some() {
+            return NbtTag::Compound(nbt);
+        }
         nbt.put_list("messages", encode_lines(&self.messages, for_client));
         if self.messages != self.filtered_messages {
             nbt.put_list(
@@ -341,6 +492,7 @@ impl SignText {
             color: Arc::new(AtomicI8::new(data.color.id() as i8)),
             messages: Arc::new(Mutex::new(data.messages)),
             filtered_messages: Arc::new(Mutex::new(data.filtered_messages)),
+            opaque: Arc::new(Mutex::new(data.opaque)),
         }
     }
 
@@ -358,6 +510,11 @@ impl SignText {
             filtered_messages: filtered.clone(),
             color: self.get_color(),
             has_glowing_text: self.has_glowing_text(),
+            opaque: self
+                .opaque
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
         }
     }
 
@@ -372,6 +529,10 @@ impl SignText {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *messages = data.messages;
         *filtered = data.filtered_messages;
+        *self
+            .opaque
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = data.opaque;
         self.color.store(data.color.id() as i8, Ordering::Relaxed);
         self.has_glowing_text
             .store(data.has_glowing_text, Ordering::Relaxed);
@@ -431,6 +592,14 @@ impl SignText {
 
     #[must_use]
     pub fn has_editable_text(&self) -> bool {
+        if self
+            .opaque
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
+            return false;
+        }
         self.messages
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -457,11 +626,29 @@ struct SignData {
 
 impl SignData {
     fn from_nbt(nbt: &NbtCompound) -> Self {
+        let allow_op_features = value_input_bool(nbt.get("allow_op_features"));
+        let mut front = FaceData::from_nbt(nbt.get("front_text"));
+        let mut back = FaceData::from_nbt(nbt.get("back_text"));
+        if allow_op_features {
+            // 26.3 resolves privileged text through SignText.Mutable, whose
+            // constructor initializes both line arrays from the raw messages.
+            front.filtered_messages = front.messages.clone();
+            back.filtered_messages = back.messages.clone();
+            for face in [&mut front, &mut back] {
+                if face
+                    .messages
+                    .iter()
+                    .all(|line| matches!(line, SignLine::Known { .. }))
+                {
+                    face.opaque = None;
+                }
+            }
+        }
         Self {
-            front: FaceData::from_nbt(nbt.get("front_text")),
-            back: FaceData::from_nbt(nbt.get("back_text")),
+            front,
+            back,
             waxed: value_input_bool(nbt.get("is_waxed")),
-            allow_op_features: value_input_bool(nbt.get("allow_op_features")),
+            allow_op_features,
         }
     }
 

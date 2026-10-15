@@ -489,35 +489,77 @@ async fn sign_real_dispatcher_self_and_opposite_sources_complete_and_failed_edit
 
 #[test]
 fn sign_packet_text_keeps_selected_style_but_never_interprets_new_literal_contents() {
-    let initial = compound(
+    let mut initial = compound(
         "{front_text:{messages:[{text:'raw',color:red,extra:['suffix']},'','',''],filtered_messages:[{text:'filtered',color:blue,bold:1b},'','','']},allow_op_features:1b}",
     );
     let attack =
         r#"{"text":"attack","click_event":{"action":"run_command","command":"op player"}}"#;
+    for (allow, color, bold) in [(false, "blue", Some(true)), (true, "red", None)] {
+        initial.put_bool("allow_op_features", allow);
+        for hanging in [false, true] {
+            let (_, live) = entity(hanging, &initial);
+            let sign = SignEntityRef::from_block_entity(live.as_ref()).unwrap();
+            let editor = uuid::Uuid::from_u128(75);
+            *sign.currently_editing_player().lock().unwrap() = Some(editor);
+            assert!(sign.update_player_text(
+                editor,
+                true,
+                true,
+                [attack, "", "", ""].map(Box::from)
+            ));
+            assert_eq!(sign.front_text().get_message(0, false).as_ref(), attack);
+            assert_eq!(
+                sign.front_text().get_messages(false),
+                sign.front_text().get_messages(true)
+            );
+            assert_eq!(sign.click_commands(true, false), (allow, Vec::new()));
+            let after = saved(live.as_ref());
+            let line = after
+                .get_compound("front_text")
+                .unwrap()
+                .get_list("messages")
+                .unwrap()[0]
+                .extract_compound()
+                .unwrap();
+            assert_eq!(line.get_string("color"), Some(color));
+            assert_eq!(line.get_bool("bold"), bold);
+            assert!(line.get("extra").is_none());
+            assert_eq!(line.get_string("text"), Some(attack));
+        }
+    }
+}
+
+#[tokio::test]
+async fn sign_privileged_reload_rebuilds_both_filtered_faces_from_raw_lines() {
+    let fixture = Fixture::new().await;
     for hanging in [false, true] {
-        let (_, live) = entity(hanging, &initial);
-        let sign = SignEntityRef::from_block_entity(live.as_ref()).unwrap();
-        let editor = uuid::Uuid::from_u128(75);
-        *sign.currently_editing_player().lock().unwrap() = Some(editor);
-        assert!(sign.update_player_text(editor, true, true, [attack, "", "", ""].map(Box::from)));
-        assert_eq!(sign.front_text().get_message(0, false).as_ref(), attack);
-        assert_eq!(
-            sign.front_text().get_messages(false),
-            sign.front_text().get_messages(true)
+        let original = compound(
+            "{front_text:{messages:[{text:'front',color:red},'','',''],filtered_messages:['filtered front','','','']},back_text:{messages:['back','','',''],filtered_messages:['filtered back','','','']}}",
         );
-        assert_eq!(sign.click_commands(true, false), (true, Vec::new()));
-        let after = saved(live.as_ref());
-        let line = after
-            .get_compound("front_text")
-            .unwrap()
-            .get_list("messages")
-            .unwrap()[0]
-            .extract_compound()
+        let (block, live) = entity(hanging, &original);
+        fixture.install(block, live.clone());
+        let sign = SignEntityRef::from_block_entity(live.as_ref()).unwrap();
+        assert_eq!(
+            sign.front_text().get_message(0, true).as_ref(),
+            "filtered front"
+        );
+        assert_eq!(
+            sign.back_text().get_message(0, true).as_ref(),
+            "filtered back"
+        );
+        fixture
+            .execute("data merge block 0 64 0 {allow_op_features:1b}")
             .unwrap();
-        assert_eq!(line.get_string("color"), Some("blue"));
-        assert_eq!(line.get_bool("bold"), Some(true));
-        assert!(line.get("extra").is_none());
-        assert_eq!(line.get_string("text"), Some(attack));
+        for face in [sign.front_text(), sign.back_text()] {
+            assert_eq!(face.get_messages(true), face.get_messages(false));
+        }
+        let snapshot = fixture.block_data();
+        assert_eq!(fixture.pending_data(), snapshot);
+        assert_eq!(saved(fixture.reload_saved_chunk().as_ref()), snapshot);
+        let mut privileged = original;
+        privileged.put_bool("allow_op_features", true);
+        let (_, loaded) = entity(hanging, &privileged);
+        assert_eq!(saved(loaded.as_ref()), snapshot);
     }
 }
 
@@ -624,15 +666,16 @@ fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_for_semantic_
     assert_eq!(lines[1], NbtTag::Compound(inner.clone()));
     assert_eq!(lines[2], NbtTag::Compound(multiple_fields));
     let (_, live) = entity(false, &nbt);
-    assert!(live.load_nbt(&nbt).is_err());
+    // Remaining semantic maps have no component content. Java skips them and
+    // defaults this short face; peeling again would wrongly create literal text.
+    assert!(live.load_nbt(&nbt).is_ok());
     let snapshot = saved(live.as_ref());
     let saved_lines = snapshot
         .get_compound("front_text")
         .unwrap()
         .get_list("messages")
         .unwrap();
-    assert_eq!(saved_lines[1], NbtTag::Compound(inner.clone()));
-    assert_eq!(saved_lines[2], lines[2]);
+    assert_eq!(saved_lines, &vec![NbtTag::String("".into()); 4]);
     assert_eq!(
         SignData::from_nbt(&client_nbt_from_persisted(&snapshot)).validate(),
         Ok(())
@@ -660,16 +703,16 @@ fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_for_semantic_
             .unwrap()[1],
         NbtTag::Compound(inner)
     );
-    assert!(SignData::from_nbt(&authored).validate().is_err());
+    assert!(SignData::from_nbt(&authored).validate().is_ok());
     let (_, authored_sign) = entity(false, &authored);
-    assert!(authored_sign.load_nbt(&authored).is_err());
+    assert!(authored_sign.load_nbt(&authored).is_ok());
     assert_eq!(
         SignEntityRef::from_block_entity(authored_sign.as_ref())
             .unwrap()
             .front_text()
             .get_message(2, false)
             .as_ref(),
-        "C"
+        ""
     );
 }
 
@@ -739,4 +782,114 @@ fn sign_face_optional_errors_and_overlong_raw_lists_keep_java_partial_values() {
     );
     assert_eq!(face.color, DyeColor::Black);
     assert!(!face.has_glowing_text);
+}
+
+#[test]
+fn sign_faces_skip_proven_invalid_components_and_keep_usable_list_partials() {
+    for invalid in [
+        "{}",
+        "[]",
+        "{color:red}",
+        "{extra:['usable']}",
+        "[17]",
+        "[[]]",
+        "{text:17}",
+        "{text:['usable']}",
+        "{score:{}}",
+        "{type:17,text:'bad'}",
+        "{type:unknown,text:'bad'}",
+        "{type:text,translate:'key'}",
+    ] {
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(&format!(
+            "{{messages:['A',{invalid},'B','C','D']}}"
+        )))));
+        assert_eq!(
+            face.messages.map(|line| line.text().to_string()),
+            ["A", "B", "C", "D"],
+            "{invalid}"
+        );
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(&format!(
+            "{{messages:['A',{invalid},'C','D'],color:red}}"
+        )))));
+        assert_eq!(
+            face.messages.map(|line| line.text().to_string()),
+            ["", "", "", ""],
+            "{invalid}"
+        );
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(&format!(
+            "{{messages:['A','B','C','D'],filtered_messages:['one',{invalid},'three','four']}}"
+        )))));
+        assert_eq!(
+            face.filtered_messages.map(|line| line.text().to_string()),
+            ["A", "B", "C", "D"],
+            "{invalid}"
+        );
+    }
+    for partial in [
+        "[17,'usable']",
+        "['usable',17]",
+        "[{},'usable']",
+        "[[17,'usable']]",
+    ] {
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(&format!(
+            "{{messages:['A',{partial},'B','C','D']}}"
+        )))));
+        assert!(face.supported());
+        assert_eq!(
+            face.messages.map(|line| line.text().to_string()),
+            ["A", "usable", "B", "C"],
+            "{partial}"
+        );
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(&format!(
+            "{{messages:['A','B','C','D'],filtered_messages:['one',{partial},'three','four']}}"
+        )))));
+        assert!(face.supported());
+        assert_eq!(
+            face.filtered_messages.map(|line| line.text().to_string()),
+            ["A", "B", "C", "D"],
+            "{partial}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn sign_unknown_slot_decoding_preserves_entire_authored_faces_through_chunk_reload() {
+    let fixture = Fixture::new().await;
+    for unknown in [
+        "{selector:'@a'}",
+        "{text:17,translate:'key'}",
+        "{sprite:'minecraft:foo'}",
+        "{object:player,player:'Notch'}",
+    ] {
+        let original = compound(&format!(
+            "{{front_text:{{messages:['A',{unknown},'B','C','D']}}}}"
+        ));
+        for hanging in [false, true] {
+            let (block, live) = entity(hanging, &original);
+            fixture.install(block, live.clone());
+            let before = fixture.block_data();
+            let authored = original
+                .get_compound("front_text")
+                .unwrap()
+                .get_list("messages")
+                .unwrap();
+            assert_eq!(
+                before
+                    .get_compound("front_text")
+                    .unwrap()
+                    .get_list("messages"),
+                Some(authored)
+            );
+            assert!(
+                fixture
+                    .execute("data merge block 0 64 0 {is_waxed:1b}")
+                    .is_err()
+            );
+            assert_eq!(fixture.block_data(), before);
+            assert_eq!(fixture.pending_data(), before);
+            assert_eq!(saved(fixture.reload_saved_chunk().as_ref()), before);
+            let client = client_nbt_from_persisted(&before);
+            assert!(SignData::from_nbt(&client).validate().is_ok());
+        }
+    }
 }
