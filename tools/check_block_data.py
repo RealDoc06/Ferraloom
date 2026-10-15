@@ -643,7 +643,9 @@ def prepare_nonop_boundary(server: LoggedServer, client: Client) -> dict:
 
 
 def marker_boundary(server: LoggedServer, client: Client, before: int) -> dict:
-    ticks = step_exact(server, 1)
+    # Non-op commands cost 20 throttle ticks. Allow two commands' decay for
+    # the permission control plus its trigger without accumulating spam debt.
+    ticks = step_exact(server, 40)
     marker = "SIGN_NONOP_" + uuid.uuid4().hex
     output = server.command("say " + marker)
     state = client.wait_state(lambda state: any(message["sequence"] > before and marker in message["text"]
