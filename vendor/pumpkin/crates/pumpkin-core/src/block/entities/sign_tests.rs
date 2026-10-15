@@ -377,7 +377,7 @@ fn sign_opaque_mixed_components_round_trip_through_real_nbt_without_client_leaka
     use pumpkin_nbt::deserializer::{NbtReadHelperJava, NbtStreamReader};
 
     let original = compound(
-        "{front_text:{messages:['first',17,{translate:'unknown',extra:['nested',{text:'last'}]},['a',{selector:'@p'}]]},is_waxed:1b,allow_op_features:1b}",
+        "{front_text:{messages:['first',{selector:'@a'},{translate:'unknown',extra:['nested',{text:'last'}]},['a',{selector:'@p'}]]},is_waxed:1b,allow_op_features:1b}",
     );
     for hanging in [false, true] {
         let (_, live) = entity(hanging, &original);
