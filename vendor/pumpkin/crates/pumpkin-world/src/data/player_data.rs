@@ -439,10 +439,15 @@ mod tests {
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
         fs::remove_file(&path).unwrap();
         fs::remove_dir(directory.path()).unwrap();
-        assert!(matches!(
-            storage.load_player_data(&uuid),
-            Err(PlayerDataError::Io(_))
-        ));
+        let Err(PlayerDataError::Load { primary, backup }) = storage.load_player_data(&uuid) else {
+            panic!("missing player directory must fail both file reads");
+        };
+        for error in [primary, backup] {
+            let PlayerDataError::Io(error) = *error else {
+                panic!("missing directory must report an IO error");
+            };
+            assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        }
     }
 
     #[test]
