@@ -522,29 +522,24 @@ impl EntitySelectorPredicate {
                 has_tag ^ invert
             }
             Self::Team(expected_team, invert) => {
-                let actual_name = entity_actual_name(entity);
-                let world = entity.get_entity().world.load();
-                let scoreboard = world
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let has_team = scoreboard.get_teams().iter().any(|(name, team)| {
-                    name == expected_team && team.players.contains(&actual_name)
-                });
-                has_team ^ invert
+                let actual_team = entity.get_team_name().unwrap_or_default();
+                (actual_team == *expected_team) ^ invert
             }
             Self::Scores(scores_map) => {
-                let actual_name = entity_actual_name(entity);
+                let actual_name = entity.get_scoreboard_name();
                 let world = entity.get_entity().world.load();
                 let scoreboard = world
                     .scoreboard
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let entity_scores = scoreboard.get_scores().get(&actual_name);
                 for (objective, bounds) in scores_map {
-                    let score_val = entity_scores
-                        .and_then(|obj_map| obj_map.get(objective))
-                        .map_or(0, |score| score.value.0);
+                    if scoreboard.get_objective(objective).is_none() {
+                        return false;
+                    }
+                    let Some(score_val) = scoreboard.get_score_value(&actual_name, objective)
+                    else {
+                        return false;
+                    };
                     if !bounds.matches(score_val) {
                         return false;
                     }

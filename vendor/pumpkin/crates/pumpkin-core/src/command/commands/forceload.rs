@@ -292,6 +292,11 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
     }
 }
 
+static ERROR_NOT_FORCED: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
+    "Chunk is not force loaded",
+);
+
 struct ForceloadQueryExecutor;
 
 impl CommandExecutor for ForceloadQueryExecutor {
@@ -301,94 +306,81 @@ impl CommandExecutor for ForceloadQueryExecutor {
             .world
             .as_ref()
             .ok_or_else(|| ERROR_FAILED_QUERY.create_without_context())?;
-
-        let chunk_pos = if context.get_argument::<Coordinates>("pos").is_ok() {
-            let pos = ColumnPosArgumentType::get_column_pos(context, "pos")?;
-            Vector2::new(pos.0.x >> 4, pos.0.y >> 4)
-        } else {
-            let block_x = context.source.position.x.floor() as i32;
-            let block_z = context.source.position.z.floor() as i32;
-            Vector2::new(block_x >> 4, block_z >> 4)
-        };
-
-        let is_forced = {
-            let forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            forced.contains(&chunk_pos)
-        };
-
-        let dimension_name = world.dimension.minecraft_name.to_string();
-
-        if is_forced {
-            let text = TextComponent::translate_cross(
-                translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
-                translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
-                [
-                    TextComponent::text(format!("[{}, {}]", chunk_pos.x, chunk_pos.y)),
-                    TextComponent::text(dimension_name),
-                ],
-            );
-            context.source.send_feedback(text, false);
-        } else {
-            let text = TextComponent::translate_cross(
-                translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
-                translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
-                [
-                    TextComponent::text(format!("[{}, {}]", chunk_pos.x, chunk_pos.y)),
-                    TextComponent::text(dimension_name),
-                ],
-            );
-            context.source.send_error(text);
+        let pos = ColumnPosArgumentType::get_column_pos(context, "pos")?;
+        let chunk_pos = Vector2::new(pos.0.x >> 4, pos.0.y >> 4);
+        let is_forced = world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&chunk_pos);
+        let position = TextComponent::text(format!("[{}, {}]", chunk_pos.x, chunk_pos.y));
+        let dimension = TextComponent::text(world.dimension.minecraft_name.to_string());
+        if !is_forced {
+            return Err(ERROR_NOT_FORCED.create_without_context(position, dimension));
         }
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
+                translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
+                [position, dimension],
+            ),
+            false,
+        );
+        Ok(1)
+    }
+}
 
-        let all_forced = {
-            let forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            forced
-                .iter()
-                .map(|pos| format!("[{}, {}]", pos.x, pos.y))
-                .collect::<Vec<_>>()
-        };
+struct ForceloadListExecutor;
 
-        if all_forced.is_empty() {
-            let text = TextComponent::translate_cross(
+impl CommandExecutor for ForceloadListExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let world = context
+            .source
+            .world
+            .as_ref()
+            .ok_or_else(|| ERROR_FAILED_QUERY.create_without_context())?;
+        let mut forced = world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        // Vanilla sorts the signed packed ChunkPos longs, rather than X/Z pairs.
+        forced.sort_unstable_by_key(|pos| (i64::from(pos.y) << 32) | i64::from(pos.x as u32));
+        let count = forced.len() as i32;
+        let dimension = TextComponent::text(world.dimension.minecraft_name.to_string());
+        if forced.is_empty() {
+            context.source.send_error(TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_ADDED_NONE,
                 translation::java::COMMANDS_FORCELOAD_ADDED_NONE,
-                [TextComponent::text(
-                    world.dimension.minecraft_name.to_string(),
-                )],
-            );
-            context.source.send_error(text);
+                [dimension],
+            ));
         } else {
-            let list_str = all_forced.join(", ");
-            let text = if all_forced.len() == 1 {
-                TextComponent::translate_cross(
+            let list = TextComponent::text(
+                forced
+                    .iter()
+                    .map(|pos| format!("[{}, {}]", pos.x, pos.y))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            let (key, arguments) = if count == 1 {
+                (
                     translation::java::COMMANDS_FORCELOAD_LIST_SINGLE,
-                    translation::java::COMMANDS_FORCELOAD_LIST_SINGLE,
-                    [
-                        TextComponent::text(world.dimension.minecraft_name.to_string()),
-                        TextComponent::text(list_str),
-                    ],
+                    vec![dimension, list],
                 )
             } else {
-                TextComponent::translate_cross(
+                (
                     translation::java::COMMANDS_FORCELOAD_LIST_MULTIPLE,
-                    translation::java::COMMANDS_FORCELOAD_LIST_MULTIPLE,
-                    [
-                        TextComponent::text(all_forced.len().to_string()),
-                        TextComponent::text(world.dimension.minecraft_name.to_string()),
-                        TextComponent::text(list_str),
-                    ],
+                    vec![TextComponent::text(count.to_string()), dimension, list],
                 )
             };
-            context.source.send_feedback(text, false);
+            context
+                .source
+                .send_feedback(TextComponent::translate_cross(key, key, arguments), false);
         }
-
-        Ok(i32::from(is_forced))
+        // An empty list sends failure text but still completes with result zero.
+        Ok(count)
     }
 }
 
@@ -421,7 +413,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("query")
-                .executes(ForceloadQueryExecutor)
+                .executes(ForceloadListExecutor)
                 .then(argument("pos", ColumnPosArgumentType).executes(ForceloadQueryExecutor)),
         );
 

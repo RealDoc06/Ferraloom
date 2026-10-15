@@ -210,3 +210,98 @@ async fn malformed_scoreboard_aborts_startup_before_any_world_metadata_write() {
     assert_eq!(fs::read(&path).unwrap(), before);
     assert!(!folder.path().join("level.dat").exists());
 }
+
+#[tokio::test]
+async fn entity_selectors_use_scoreboard_identity_and_distinguish_missing_scores() {
+    use crate::{
+        command::argument_types::entity_selector::EntitySelectorPredicate,
+        entity::{Entity, EntityBase},
+        world::scoreboard::{CollisionRule, NameTagVisibility, Team},
+    };
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::{bounds::IntBounds, vector3::Vector3};
+
+    let folder = tempfile::tempdir().unwrap();
+    save_metadata(folder.path());
+    let server = server_at(folder.path()).await.unwrap();
+    let world = server.worlds.load()[0].clone();
+    let entity = Entity::from_uuid(
+        uuid::Uuid::from_u128(42),
+        world.clone(),
+        Vector3::new(0.0, 200.0, 0.0),
+        &EntityType::PIG,
+    );
+    entity
+        .custom_name
+        .store(Arc::new(Some(TextComponent::text("Named pig"))));
+    let team = |name: &str, invert| EntitySelectorPredicate::Team(name.into(), invert);
+    let scores = |objective: &str, value| {
+        EntitySelectorPredicate::Scores(
+            [(objective.into(), IntBounds::new(value, value))]
+                .into_iter()
+                .collect(),
+        )
+    };
+    assert!(team("", false).test(&entity));
+    assert!(!team("", true).test(&entity));
+    assert!(!scores("missing", 0).test(&entity));
+    {
+        let mut scoreboard = server.scoreboard.lock().unwrap();
+        scoreboard.add_team(
+            &NoTarget,
+            Team {
+                name: "ferraloom".into(),
+                display_name: TextComponent::text("Ferraloom"),
+                options: 3,
+                nametag_visibility: NameTagVisibility::Always,
+                collision_rule: CollisionRule::Always,
+                color: NamedColor::Gold,
+                player_prefix: TextComponent::empty(),
+                player_suffix: TextComponent::empty(),
+                players: vec![entity.get_scoreboard_name()],
+            },
+        );
+        scoreboard.add_objective(
+            &NoTarget,
+            ScoreboardObjective::new(
+                "parity",
+                TextComponent::text("Parity"),
+                RenderType::Integer,
+                None,
+                "dummy",
+            ),
+        );
+        // A same-named holder must not stand in for this mob's UUID.
+        scoreboard.set_score_value(&NoTarget, "Named pig", "parity", 12);
+    }
+    assert!(team("ferraloom", false).test(&entity));
+    assert!(!team("ferraloom", true).test(&entity));
+    assert!(!team("", false).test(&entity));
+    assert!(team("", true).test(&entity));
+    assert!(!scores("parity", 0).test(&entity));
+    assert!(!scores("parity", 12).test(&entity));
+    server.scoreboard.lock().unwrap().set_score_value(
+        &NoTarget,
+        entity.get_scoreboard_name(),
+        "parity",
+        0,
+    );
+    assert!(scores("parity", 0).test(&entity));
+    server.scoreboard.lock().unwrap().set_score_value(
+        &NoTarget,
+        entity.get_scoreboard_name(),
+        "parity",
+        -7,
+    );
+    assert!(scores("parity", -7).test(&entity));
+    assert!(!scores("parity", 0).test(&entity));
+    // Deleted objectives cannot be matched even if an orphan score is retained.
+    server.scoreboard.lock().unwrap().set_score_value(
+        &NoTarget,
+        entity.get_scoreboard_name(),
+        "missing",
+        0,
+    );
+    assert!(!scores("missing", 0).test(&entity));
+    server.shutdown().await;
+}

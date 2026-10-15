@@ -434,22 +434,27 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let path_old = level_folder.join(LEVEL_DAT_BACKUP_FILE_NAME);
 
-        let mut root = existing_level_dat_root(&path)?;
-        let mut data_comp = root
-            .get_compound(LEVEL_DATA_TAG)
-            .cloned()
-            .unwrap_or_default();
-        level_data_to_nbt(&level_data, &mut data_comp);
-        root.put_compound(LEVEL_DATA_TAG, data_comp);
+        let level_save = (|| -> Result<(), WorldInfoError> {
+            let mut root = existing_level_dat_root(&path)?;
+            let mut data_comp = root
+                .get_compound(LEVEL_DATA_TAG)
+                .cloned()
+                .unwrap_or_default();
+            level_data_to_nbt(&level_data, &mut data_comp);
+            root.put_compound(LEVEL_DATA_TAG, data_comp);
 
-        crate::nbt_io::write_gzip_compound_atomic_with_backup(&path, &path_old, root)
-            .map_err(crate::world_info::data_files::nbt_file_error)?;
+            crate::nbt_io::write_gzip_compound_atomic_with_backup(&path, &path_old, root)
+                .map_err(crate::world_info::data_files::nbt_file_error)
+        })();
+        if let Err(error) = &level_save {
+            error!("Failed to write level.dat: {error}");
+        }
 
         let data_version = level_data.data_version;
 
         // ── Write data/minecraft/*.dat files ─────────────────────────────────
 
-        let mut first_error = None;
+        let mut first_error = level_save.err();
 
         // game_rules.dat
         if let Err(e) = write_game_rules(level_folder, &info.game_rules, data_version) {
@@ -591,6 +596,55 @@ mod test {
         assert_eq!(fs::read(main).unwrap(), previous);
         assert_eq!(fs::read(backup).unwrap(), previous_backup);
         assert!(!directory.path().join("level.dat_new").exists());
+    }
+
+    #[test]
+    fn level_file_failure_does_not_skip_independent_clock_and_weather_saves() {
+        for corrupt_primary in [false, true] {
+            let directory = TempDir::new().unwrap();
+            let mut data = LevelData::default(Seed(42));
+            AnvilLevelInfo
+                .write_world_info(&data, directory.path())
+                .unwrap();
+            let main = directory.path().join(LEVEL_DAT_FILE_NAME);
+            let backup = directory.path().join("level.dat_old");
+            if corrupt_primary {
+                fs::write(&main, b"invalid level data").unwrap();
+            } else {
+                fs::create_dir(&backup).unwrap();
+                fs::write(backup.join("sentinel"), b"preserve backup").unwrap();
+            }
+            let previous = fs::read(&main).unwrap();
+            data.day_time = 1234;
+            data.clear_weather_time = 5678;
+            assert!(
+                AnvilLevelInfo
+                    .write_world_info(&data, directory.path())
+                    .is_err()
+            );
+            assert_eq!(fs::read(&main).unwrap(), previous);
+            if !corrupt_primary {
+                assert_eq!(
+                    fs::read(backup.join("sentinel")).unwrap(),
+                    b"preserve backup"
+                );
+            }
+            assert_eq!(
+                crate::world_info::data_files::read_world_clocks(directory.path()).clocks
+                    ["minecraft:overworld"]
+                    .total_ticks,
+                1234
+            );
+            assert_eq!(
+                crate::world_info::data_files::read_weather(directory.path()).clear_weather_time,
+                5678
+            );
+            assert!(
+                minecraft_data_dir(directory.path())
+                    .join("stopwatches.dat")
+                    .is_file()
+            );
+        }
     }
 
     #[test]
