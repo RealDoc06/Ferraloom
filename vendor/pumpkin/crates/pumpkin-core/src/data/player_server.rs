@@ -92,6 +92,9 @@ impl ServerPlayerData {
             if let Some(slot) = sessions.get(&uuid).and_then(Weak::upgrade) {
                 slot
             } else {
+                // Owners and waiters retain their slots. Only expired UUIDs
+                // can be discarded without allowing two admissions at once.
+                sessions.retain(|_, slot| slot.strong_count() != 0);
                 let slot = Arc::new(PlayerSessionSlot::default());
                 sessions.insert(uuid, Arc::downgrade(&slot));
                 slot
@@ -577,33 +580,32 @@ mod test {
             return false;
         }
         let directory = tempdir().unwrap();
+        let output = tempfile::NamedTempFile::new_in(directory.path()).unwrap();
         let mut child = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", name, "--nocapture", "--test-threads=1"])
             .env(CHILD, name)
             .current_dir(directory.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stdout(output.as_file().try_clone().unwrap())
+            .stderr(output.as_file().try_clone().unwrap())
             .spawn()
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(60);
         while child.try_wait().unwrap().is_none() {
             if Instant::now() >= deadline {
                 child.kill().unwrap();
-                let output = child.wait_with_output().unwrap();
+                child.wait().unwrap();
                 panic!(
-                    "admission test timed out: {} {}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
+                    "admission test timed out: {}",
+                    std::fs::read_to_string(output.path()).unwrap()
                 );
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        let output = child.wait_with_output().unwrap();
+        let status = child.wait().unwrap();
+        let output = std::fs::read_to_string(output.path()).unwrap();
         assert!(
-            output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
-            "isolated admission test failed: {} {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            status.success() && output.contains("1 passed"),
+            "isolated admission test failed: {output}"
         );
         true
     }
@@ -765,6 +767,12 @@ mod test {
         let first = data.reserve_player_session(uuid).await;
         let mut cancelled = Box::pin(data.reserve_player_session(uuid));
         assert!(futures::poll!(&mut cancelled).is_pending());
+        let expired_uuid = Uuid::from_u128(104);
+        drop(data.reserve_player_session(expired_uuid).await);
+        let unrelated = data.reserve_player_session(Uuid::from_u128(105)).await;
+        assert!(!data.sessions.lock().unwrap().contains_key(&expired_uuid));
+        assert!(futures::poll!(&mut cancelled).is_pending());
+        drop(unrelated);
         drop(cancelled);
         assert!(
             tokio::time::timeout(Duration::from_millis(1), data.reserve_player_session(uuid))
