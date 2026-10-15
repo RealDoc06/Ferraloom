@@ -77,7 +77,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.scheduled_ticks` | Preserve block and fluid scheduled ticks across unloads | 0/0/0 | 0/0/0 | unverified |
 | `persistence.scoreboard_data` | Preserve objectives, scores, teams and display slots | 3/0/0 | 3/0/0 | partial |
 | `persistence.advancement_stats` | Save player progression and target file formats | 0/0/0 | 0/0/0 | unverified |
-| `persistence.map_data` | Preserve maps, markers and other vanilla saved data | 0/0/0 | 0/0/0 | unverified |
+| `persistence.map_data` | Preserve maps, markers and other vanilla saved data | 3/0/0 | 3/0/0 | partial |
 | `persistence.upgrade` | Handle supported older data versions as the reference does | 0/0/0 | 0/0/0 | unverified |
 | `persistence.locking` | Prevent conflicting writers and release locks on shutdown | 1/0/0 | 1/0/0 | partial |
 | `persistence.atomic_save` | Match reference recovery behavior and avoid partial committed saves | 0/0/0 | 0/0/0 | unverified |
@@ -93,7 +93,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `blocks.scheduled` | Match priority, timing and duplicate scheduling behavior | 0/0/0 | 0/0/0 | unverified |
 | `blocks.random_ticks` | Match eligible blocks and randomTickSpeed behavior | 0/0/0 | 0/0/0 | unverified |
 | `blocks.redstone_power` | Match weak and strong power, wire levels and update order | 0/0/0 | 0/0/0 | unverified |
-| `blocks.redstone_logic` | Match repeaters, comparators, observers and torches | 0/0/0 | 0/0/0 | unverified |
+| `blocks.redstone_logic` | Match repeaters, comparators, observers and torches | 5/0/0 | 5/0/0 | partial |
 | `blocks.pistons` | Match push limits, adhesion, block entities and update timing | 0/0/0 | 0/0/0 | unverified |
 | `blocks.fluids` | Match water, lava, source formation and scheduled flow | 1/0/0 | 1/0/0 | partial |
 | `blocks.waterlogging` | Match contained fluid state and interacting block behavior | 0/0/0 | 0/0/0 | unverified |
@@ -185,7 +185,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.swimming` | Match movement modes, collision size and stamina interactions | 0/0/0 | 0/0/0 | unverified |
 | `players.oxygen` | Match air supply, powder snow and environmental damage | 0/0/0 | 0/0/0 | unverified |
 | `players.interaction` | Match spawn protection, adventure restrictions and operator bypass | 0/0/0 | 0/0/0 | unverified |
-| `players.commands` | Match complete target command tree and execution semantics | 19/0/0 | 19/0/0 | partial |
+| `players.commands` | Match complete target command tree and execution semantics | 26/0/0 | 26/0/0 | partial |
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |

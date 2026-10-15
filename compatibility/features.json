@@ -31,12 +31,12 @@
           "scenario": "unsupported protocol",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "client_protocol": 776,
               "version_rejection": true
@@ -44,8 +44,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "client_protocol": 776,
               "version_rejection": true
@@ -73,12 +73,12 @@
           "scenario": "ping echo",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "signed_payload_echoed": true,
               "closed_after_ping": true
@@ -86,8 +86,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "signed_payload_echoed": true,
               "closed_after_ping": true
@@ -99,12 +99,12 @@
           "scenario": "status fields",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "protocol": 777,
               "version": "26.3"
@@ -112,8 +112,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "protocol": 777,
               "version": "26.3"
@@ -125,12 +125,12 @@
           "scenario": "status fields",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "client_protocol": 776,
               "advertised_protocol": 777
@@ -138,8 +138,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "client_protocol": 776,
               "advertised_protocol": 777
@@ -167,20 +167,20 @@
           "scenario": "split frame",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "split_frame_accepted": true
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "split_frame_accepted": true
             }
@@ -207,12 +207,12 @@
           "scenario": "invalid encodings",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "malformed_disconnected": true,
               "server_alive": true
@@ -220,8 +220,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "malformed_disconnected": true,
               "server_alive": true
@@ -249,12 +249,12 @@
           "scenario": "successful login",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "auth": "offline",
               "protocol": 777,
@@ -263,8 +263,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "auth": "offline",
               "protocol": 777,
@@ -398,16 +398,16 @@
           "scenario": "system message",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
               "server_to_client": {
-                "text": "FERRALOOM_CHAT_2db7656c8e79407db44b36596a968645",
+                "text": "FERRALOOM_CHAT_f8818d254b214f5a827c67735cabacb2",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -415,7 +415,7 @@
                 "signature_verified": false
               },
               "unsigned_offline_player_chat_echo": {
-                "text": "FERRALOOM_ECHO_e8488b91c4aa4a53b3e6485ebc17b206",
+                "text": "FERRALOOM_ECHO_77c1e6f5dbcc4ce183c72c80f2f46b2d",
                 "packet_id": 66,
                 "packet_type": "player_chat",
                 "text_scope": "message_body",
@@ -426,12 +426,12 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
               "server_to_client": {
-                "text": "FERRALOOM_CHAT_fb3c1ad381664e07bd1f67a741e4aeb4",
+                "text": "FERRALOOM_CHAT_a6eca4f70e394be7b31e722053dbf40c",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -439,7 +439,7 @@
                 "signature_verified": false
               },
               "unsigned_offline_player_chat_echo": {
-                "text": "<FerraloomTest> FERRALOOM_ECHO_311a12dbea7d476eac37ad6c6cb06fec",
+                "text": "<FerraloomTest> FERRALOOM_ECHO_fd2a3d5f79ba4d23b4899f991213ae32",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -500,12 +500,12 @@
           "scenario": "legal movement",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "sent_position": {
                 "x": 4.75,
@@ -517,8 +517,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "sent_position": {
                 "x": 4.75,
@@ -534,12 +534,12 @@
           "scenario": "teleport acknowledgment",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "server_position": {
                 "x": 4.5,
@@ -554,8 +554,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "server_position": {
                 "x": 4.5,
@@ -650,20 +650,20 @@
           "scenario": "join initial chunks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "unique_chunk_coordinates": 9
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "unique_chunk_coordinates": 10
             }
@@ -918,12 +918,12 @@
           "scenario": "forced chunks activate while simulation is frozen",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "chunk": {
                 "x": 4,
@@ -935,8 +935,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "chunk": {
                 "x": 4,
@@ -952,12 +952,12 @@
           "scenario": "force-load commands count only changed chunks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0",
               "commands": [
@@ -971,8 +971,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0",
               "commands": [
@@ -990,12 +990,12 @@
           "scenario": "force-load query distinguishes missing chunks and empty lists",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ForceListBefore parity = ForceListAfter parity if score ForceListOk parity matches 1 if score ForceQuery parity matches 1 if score ForceQueryOk parity matches 1 if score ForceQueryMissing parity matches 0 if score ForceEmpty parity matches 0 if score ForceEmptyOk parity matches 1",
               "commands": [
@@ -1009,8 +1009,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ForceListBefore parity = ForceListAfter parity if score ForceListOk parity matches 1 if score ForceQuery parity matches 1 if score ForceQueryOk parity matches 1 if score ForceQueryMissing parity matches 0 if score ForceEmpty parity matches 0 if score ForceEmptyOk parity matches 1",
               "commands": [
@@ -1179,12 +1179,12 @@
           "scenario": "save reload",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 14 200 14 diamond_block",
               "commands": []
@@ -1192,8 +1192,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 14 200 14 diamond_block",
               "commands": []
@@ -1221,12 +1221,12 @@
           "scenario": "entity reload",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "count": 1,
               "uuid": [
@@ -1236,13 +1236,13 @@
                 444
               ],
               "health": 7,
-              "predicate": "if score EntityCopies fe0390c0925bb3 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+              "predicate": "if score EntityCopies fe7679d276592d matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "count": 1,
               "uuid": [
@@ -1252,7 +1252,7 @@
                 444
               ],
               "health": 7,
-              "predicate": "if score EntityCopies fe27c4fe8ce5bf matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+              "predicate": "if score EntityCopies fe33550b67b308 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
             }
           }
         },
@@ -1261,12 +1261,12 @@
           "scenario": "entity reload",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "count": 1,
               "uuid": [
@@ -1276,13 +1276,13 @@
                 444
               ],
               "health": 5,
-              "predicate": "if score EntityCopies fec81fb6659ccf matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+              "predicate": "if score EntityCopies fedb52e9307f4d matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "count": 1,
               "uuid": [
@@ -1292,7 +1292,7 @@
                 444
               ],
               "health": 5,
-              "predicate": "if score EntityCopies fe489b3fb16232 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+              "predicate": "if score EntityCopies fef2e373f6751e matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
             }
           }
         }
@@ -1347,12 +1347,12 @@
           "scenario": "restart",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "keep_inventory": true,
               "daytime": 4321
@@ -1360,8 +1360,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "keep_inventory": true,
               "daytime": 4321
@@ -1419,12 +1419,12 @@
           "scenario": "display slot",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "slot": "sidebar",
               "objective": "parity",
@@ -1436,8 +1436,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "slot": "sidebar",
               "objective": "parity",
@@ -1453,18 +1453,18 @@
           "scenario": "objective values",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": null
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": null
           }
         },
@@ -1473,12 +1473,12 @@
           "scenario": "restart with teams",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "team": "ferraloom",
               "saved_properties": {
@@ -1495,8 +1495,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "team": "ferraloom",
               "saved_properties": {
@@ -1544,8 +1544,321 @@
         "console shutdown saves and reloads namespaced command storage",
         "SIGTERM saves and reloads namespaced command storage"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "persistence.command_storage_manual",
+          "scenario": "explicit save with save-off writes namespaced command storage",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 2,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:2} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:2} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 2
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 2
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 2,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:2} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:2} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 2
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 2
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          }
+        },
+        {
+          "test_id": "persistence.command_storage_restart",
+          "scenario": "console shutdown saves and reloads namespaced command storage",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 3,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:3} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:3} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 3
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 3
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 3,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:3} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:3} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 3
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 3
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          }
+        },
+        {
+          "test_id": "persistence.command_storage_signal_restart",
+          "scenario": "SIGTERM saves and reloads namespaced command storage",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 4,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:4} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:4} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 4
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 4
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "phase": 4,
+              "predicate": "if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:4} if data storage ferraloom_other:path/probe {text:\"other namespace\",phase:4} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value",
+              "namespaces": {
+                "ferraloom": {
+                  "key": "persist",
+                  "contents": {
+                    "nested": {
+                      "answer": 42
+                    },
+                    "values": [
+                      3,
+                      4
+                    ],
+                    "phase": 4
+                  },
+                  "empty_key_absent": true
+                },
+                "ferraloom_other": {
+                  "key": "path/probe",
+                  "contents": {
+                    "text": "other namespace",
+                    "phase": 4
+                  },
+                  "empty_key_absent": true
+                },
+                ".": {
+                  "key": "dot",
+                  "contents": {
+                    "answer": 73
+                  },
+                  "empty_key_absent": true
+                },
+                "command_storage_minecraft.dat": {
+                  "key": "probe",
+                  "contents": {
+                    "value": 47
+                  },
+                  "empty_key_absent": true
+                }
+              },
+              "data_version": 5023
+            }
+          }
+        }
+      ]
     },
     {
       "id": "persistence.upgrade",
@@ -1581,12 +1894,12 @@
           "scenario": "second server",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "holder": "vanilla",
               "contender": "rust",
@@ -1595,8 +1908,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "holder": "rust",
               "contender": "rust",
@@ -1655,12 +1968,12 @@
           "scenario": "placement state",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 0 200 0 stone",
               "commands": [
@@ -1670,8 +1983,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 0 200 0 stone",
               "commands": [
@@ -1685,12 +1998,12 @@
           "scenario": "placement state",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
               "commands": [
@@ -1700,8 +2013,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
               "commands": [
@@ -1715,12 +2028,12 @@
           "scenario": "registry coverage",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "blocks": 1286,
               "states": 35723,
@@ -1729,8 +2042,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "blocks": 1286,
               "states": 35723,
@@ -1832,8 +2145,257 @@
         "removing attached string pulses hooks then detaches the line",
         "removing one attached hook detaches the opposite hook"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "redstone.comparator_remove_setblock",
+          "scenario": "comparator removal notifies indirectly powered blocks",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 comparator[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 comparator[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "setblock 1 240 8 air",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 air if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 comparator[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 comparator[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "setblock 1 240 8 air",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 air if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          }
+        },
+        {
+          "test_id": "redstone.repeater_remove_fill_destroy",
+          "scenario": "fill destroy of a repeater notifies indirectly powered blocks",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 repeater[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 repeater[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "fill 1 240 8 1 240 8 gold_block destroy",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 gold_block if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 repeater[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 repeater[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "fill 1 240 8 1 240 8 gold_block destroy",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 gold_block if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          }
+        },
+        {
+          "test_id": "redstone.repeater_remove_setblock",
+          "scenario": "repeater removal notifies indirectly powered blocks",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 repeater[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 repeater[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "setblock 1 240 8 air",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 air if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 7 4 242 9 air",
+                "fill -1 239 7 4 239 9 stone",
+                "setblock 3 240 8 redstone_lamp",
+                "setblock 2 240 8 stone",
+                "setblock 1 240 8 repeater[facing=west]",
+                "setblock 0 240 8 redstone_block"
+              ],
+              "precondition": "if block 1 240 8 repeater[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]",
+              "command": "setblock 1 240 8 air",
+              "predicate": "if score GateRemoved parity matches 1 if block 1 240 8 air if block 3 240 8 redstone_lamp[lit=false]",
+              "setup_ticks": 10,
+              "after_removal_ticks": 10
+            }
+          }
+        },
+        {
+          "test_id": "redstone.tripwire_remove_hook",
+          "scenario": "removing one attached hook detaches the opposite hook",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 3 5 242 5 air",
+                "fill -1 239 3 5 239 5 stone",
+                "setblock 0 240 4 stone",
+                "setblock 4 240 4 stone",
+                "setblock 1 240 4 tripwire_hook[facing=east]",
+                "setblock 3 240 4 tripwire_hook[facing=west]",
+                "setblock 2 240 4 tripwire"
+              ],
+              "precondition": "if block 1 240 4 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 4 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 4 tripwire[attached=true]",
+              "command": "setblock 1 240 4 air",
+              "predicate": "if score TripwireRemoved parity matches 1 if block 1 240 4 air if block 3 240 4 tripwire_hook[attached=false,powered=false]",
+              "removal_predicate": null,
+              "setup_ticks": 20,
+              "after_removal_ticks": 20
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 3 5 242 5 air",
+                "fill -1 239 3 5 239 5 stone",
+                "setblock 0 240 4 stone",
+                "setblock 4 240 4 stone",
+                "setblock 1 240 4 tripwire_hook[facing=east]",
+                "setblock 3 240 4 tripwire_hook[facing=west]",
+                "setblock 2 240 4 tripwire"
+              ],
+              "precondition": "if block 1 240 4 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 4 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 4 tripwire[attached=true]",
+              "command": "setblock 1 240 4 air",
+              "predicate": "if score TripwireRemoved parity matches 1 if block 1 240 4 air if block 3 240 4 tripwire_hook[attached=false,powered=false]",
+              "removal_predicate": null,
+              "setup_ticks": 20,
+              "after_removal_ticks": 20
+            }
+          }
+        },
+        {
+          "test_id": "redstone.tripwire_remove_string",
+          "scenario": "removing attached string pulses hooks then detaches the line",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 0 5 242 2 air",
+                "fill -1 239 0 5 239 2 stone",
+                "setblock 0 240 1 stone",
+                "setblock 4 240 1 stone",
+                "setblock 1 240 1 tripwire_hook[facing=east]",
+                "setblock 3 240 1 tripwire_hook[facing=west]",
+                "setblock 2 240 1 tripwire"
+              ],
+              "precondition": "if block 1 240 1 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 1 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 1 tripwire[attached=true]",
+              "command": "setblock 2 240 1 air",
+              "predicate": "if score TripwireRemoved parity matches 1 if block 2 240 1 air if block 3 240 1 tripwire_hook[attached=false,powered=false] if block 1 240 1 tripwire_hook[attached=false,powered=false]",
+              "removal_predicate": "if block 1 240 1 tripwire_hook[attached=true,powered=true] if block 3 240 1 tripwire_hook[attached=true,powered=true]",
+              "setup_ticks": 20,
+              "after_removal_ticks": 20
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "setup": [
+                "fill -1 240 0 5 242 2 air",
+                "fill -1 239 0 5 239 2 stone",
+                "setblock 0 240 1 stone",
+                "setblock 4 240 1 stone",
+                "setblock 1 240 1 tripwire_hook[facing=east]",
+                "setblock 3 240 1 tripwire_hook[facing=west]",
+                "setblock 2 240 1 tripwire"
+              ],
+              "precondition": "if block 1 240 1 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 1 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 1 tripwire[attached=true]",
+              "command": "setblock 2 240 1 air",
+              "predicate": "if score TripwireRemoved parity matches 1 if block 2 240 1 air if block 3 240 1 tripwire_hook[attached=false,powered=false] if block 1 240 1 tripwire_hook[attached=false,powered=false]",
+              "removal_predicate": "if block 1 240 1 tripwire_hook[attached=true,powered=true] if block 3 240 1 tripwire_hook[attached=true,powered=true]",
+              "setup_ticks": 20,
+              "after_removal_ticks": 20
+            }
+          }
+        }
+      ]
     },
     {
       "id": "blocks.pistons",
@@ -1870,12 +2432,12 @@
           "scenario": "scheduled flow crosses the block-ticking ring",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "forced_chunk": {
                 "x": 6,
@@ -1902,8 +2464,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "forced_chunk": {
                 "x": 6,
@@ -2103,12 +2665,12 @@
           "scenario": "furnace blast furnace and smoker continue saved progress at exact ticks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1",
-          "test_suite_sha256": "512ba43f095ac873a2a1d6e8f587e9f6bb20353e47a9d0d7f256f7515f9381eb",
+          "report_sha256": "222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3",
+          "test_suite_sha256": "c226c0009dc73767d73aeb805d407320d2ab072061a981fa4d51634f09bf4d43",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "main",
@@ -2121,8 +2683,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "main",
@@ -2139,12 +2701,12 @@
           "scenario": "lava fuel leaves a bucket and wet sponge fills it with water",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1",
-          "test_suite_sha256": "512ba43f095ac873a2a1d6e8f587e9f6bb20353e47a9d0d7f256f7515f9381eb",
+          "report_sha256": "222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3",
+          "test_suite_sha256": "c226c0009dc73767d73aeb805d407320d2ab072061a981fa4d51634f09bf4d43",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "lava",
@@ -2157,8 +2719,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "lava",
@@ -2175,12 +2737,12 @@
           "scenario": "saved cooking timers and fuel speed survive a zero-step reload",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1",
-          "test_suite_sha256": "512ba43f095ac873a2a1d6e8f587e9f6bb20353e47a9d0d7f256f7515f9381eb",
+          "report_sha256": "222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3",
+          "test_suite_sha256": "c226c0009dc73767d73aeb805d407320d2ab072061a981fa4d51634f09bf4d43",
           "vanilla": {
             "result": "skipped",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "main",
@@ -2199,8 +2761,8 @@
           },
           "rust": {
             "result": "skipped",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json",
             "detail": {
               "healthy_process": true,
               "mode": "main",
@@ -2359,12 +2921,12 @@
           "scenario": "spawn",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
               "commands": [
@@ -2374,8 +2936,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
               "commands": [
@@ -3241,12 +3803,12 @@
           "scenario": "fill destroy completes and counts block replacements",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillDestroyed parity matches 4 if block 0 210 0 glass if block 0 210 1 glass if block 1 210 0 glass if block 1 210 1 glass",
               "commands": [
@@ -3257,8 +3819,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillDestroyed parity matches 4 if block 0 210 0 glass if block 0 210 1 glass if block 1 210 0 glass if block 1 210 1 glass",
               "commands": [
@@ -3273,12 +3835,12 @@
           "scenario": "fill destroy preserves a replacement container block entity",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score SignChest parity matches 1 if block 0 232 0 chest if data block 0 232 0 {id:\"minecraft:chest\"}",
               "commands": [
@@ -3290,8 +3852,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score SignChest parity matches 1 if block 0 232 0 chest if data block 0 232 0 {id:\"minecraft:chest\"}",
               "commands": [
@@ -3307,12 +3869,12 @@
           "scenario": "fill destroy dries wet sponge in the Nether",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillNetherSponge parity matches 1 in minecraft:the_nether if block 1 225 1 sponge",
               "commands": [
@@ -3323,8 +3885,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillNetherSponge parity matches 1 in minecraft:the_nether if block 1 225 1 sponge",
               "commands": [
@@ -3339,12 +3901,12 @@
           "scenario": "fill destroy of identical source fluid is unchanged and fails",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillFluidControl parity matches 1 if score FillFluidControlSuccess parity matches 1 if score FillFluidResult parity matches 0 if score FillFluidSuccess parity matches 0 if block 9 225 5 water[level=0]",
               "commands": [
@@ -3355,15 +3917,15 @@
               ],
               "expected_last_feedback": "No blocks were filled",
               "last_command_output": [
-                "[22:06:57] [Server thread/INFO]: System chat: No blocks were filled",
-                "[22:06:57] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_0ae3f09c711d48538aa4bb4573614689"
+                "[23:27:40] [Server thread/INFO]: System chat: No blocks were filled",
+                "[23:27:40] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_70b6ddd17f8d4f51baf5406d727d0640"
               ]
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillFluidControl parity matches 1 if score FillFluidControlSuccess parity matches 1 if score FillFluidResult parity matches 0 if score FillFluidSuccess parity matches 0 if block 9 225 5 water[level=0]",
               "commands": [
@@ -3375,7 +3937,7 @@
               "expected_last_feedback": "No blocks were filled",
               "last_command_output": [
                 "No blocks were filled",
-                " INFO [Server] FERRALOOM_END_3dd6fe97ff9445b08f8088612f07265a"
+                " INFO [Server] FERRALOOM_END_deef7b8c22d44f0c97dfe1a215b65b40"
               ]
             }
           }
@@ -3385,12 +3947,12 @@
           "scenario": "fill destroy connects new and neighboring fences",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillFence parity matches 1 if block 4 225 4 oak_fence[east=true] if block 5 225 4 oak_fence[west=true]",
               "commands": [
@@ -3404,8 +3966,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillFence parity matches 1 if block 4 225 4 oak_fence[east=true] if block 5 225 4 oak_fence[west=true]",
               "commands": [
@@ -3423,12 +3985,12 @@
           "scenario": "fill destroy preserves a replacement sign block entity",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score SignSign parity matches 1 if block 2 232 0 spruce_sign if data block 2 232 0 {id:\"minecraft:sign\"}",
               "commands": [
@@ -3440,8 +4002,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score SignSign parity matches 1 if block 2 232 0 spruce_sign if data block 2 232 0 {id:\"minecraft:sign\"}",
               "commands": [
@@ -3457,12 +4019,12 @@
           "scenario": "fill destroy applies sponge absorption callbacks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillSponge parity matches 1 if block 0 225 0 wet_sponge if block 1 225 0 air",
               "commands": [
@@ -3476,8 +4038,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score FillSponge parity matches 1 if block 0 225 0 wet_sponge if block 1 225 0 air",
               "commands": [
@@ -3491,16 +4053,80 @@
           }
         },
         {
+          "test_id": "command.data_conditions",
+          "scenario": "execute data conditions distinguish present and absent paths for all providers",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MissingBlock parity matches 1 if score PresentBlock parity matches 1 if score MissingEntity parity matches 1 if score PresentEntity parity matches 1 if score MissingStorage parity matches 1 if score PresentStorage parity matches 1",
+              "commands": [
+                "scoreboard players set MissingBlock parity 0",
+                "execute unless data block 4 230 4 missing.nested run scoreboard players set MissingBlock parity 1",
+                "execute if data block 4 230 4 missing.nested run scoreboard players set MissingBlock parity 99",
+                "scoreboard players set PresentBlock parity 0",
+                "execute if data block 4 230 4 id run scoreboard players set PresentBlock parity 1",
+                "execute unless data block 4 230 4 id run scoreboard players set PresentBlock parity 99",
+                "scoreboard players set MissingEntity parity 0",
+                "execute unless data entity @e[type=pig,tag=ferraloom_data_source,limit=1] missing.nested run scoreboard players set MissingEntity parity 1",
+                "execute if data entity @e[type=pig,tag=ferraloom_data_source,limit=1] missing.nested run scoreboard players set MissingEntity parity 99",
+                "scoreboard players set PresentEntity parity 0",
+                "execute if data entity @e[type=pig,tag=ferraloom_data_source,limit=1] Health run scoreboard players set PresentEntity parity 1",
+                "execute unless data entity @e[type=pig,tag=ferraloom_data_source,limit=1] Health run scoreboard players set PresentEntity parity 99",
+                "scoreboard players set MissingStorage parity 0",
+                "execute unless data storage ferraloom:modify_source missing.nested run scoreboard players set MissingStorage parity 1",
+                "execute if data storage ferraloom:modify_source missing.nested run scoreboard players set MissingStorage parity 99",
+                "scoreboard players set PresentStorage parity 0",
+                "execute if data storage ferraloom:modify_source answer run scoreboard players set PresentStorage parity 1",
+                "execute unless data storage ferraloom:modify_source answer run scoreboard players set PresentStorage parity 99"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MissingBlock parity matches 1 if score PresentBlock parity matches 1 if score MissingEntity parity matches 1 if score PresentEntity parity matches 1 if score MissingStorage parity matches 1 if score PresentStorage parity matches 1",
+              "commands": [
+                "scoreboard players set MissingBlock parity 0",
+                "execute unless data block 4 230 4 missing.nested run scoreboard players set MissingBlock parity 1",
+                "execute if data block 4 230 4 missing.nested run scoreboard players set MissingBlock parity 99",
+                "scoreboard players set PresentBlock parity 0",
+                "execute if data block 4 230 4 id run scoreboard players set PresentBlock parity 1",
+                "execute unless data block 4 230 4 id run scoreboard players set PresentBlock parity 99",
+                "scoreboard players set MissingEntity parity 0",
+                "execute unless data entity @e[type=pig,tag=ferraloom_data_source,limit=1] missing.nested run scoreboard players set MissingEntity parity 1",
+                "execute if data entity @e[type=pig,tag=ferraloom_data_source,limit=1] missing.nested run scoreboard players set MissingEntity parity 99",
+                "scoreboard players set PresentEntity parity 0",
+                "execute if data entity @e[type=pig,tag=ferraloom_data_source,limit=1] Health run scoreboard players set PresentEntity parity 1",
+                "execute unless data entity @e[type=pig,tag=ferraloom_data_source,limit=1] Health run scoreboard players set PresentEntity parity 99",
+                "scoreboard players set MissingStorage parity 0",
+                "execute unless data storage ferraloom:modify_source missing.nested run scoreboard players set MissingStorage parity 1",
+                "execute if data storage ferraloom:modify_source missing.nested run scoreboard players set MissingStorage parity 99",
+                "scoreboard players set PresentStorage parity 0",
+                "execute if data storage ferraloom:modify_source answer run scoreboard players set PresentStorage parity 1",
+                "execute unless data storage ferraloom:modify_source answer run scoreboard players set PresentStorage parity 99"
+              ]
+            }
+          }
+        },
+        {
           "test_id": "command.entity_count",
           "scenario": "execute as runs once for each selected entity",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score EntityCopies parity matches 2",
               "commands": [
@@ -3514,8 +4140,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score EntityCopies parity matches 2",
               "commands": [
@@ -3533,12 +4159,12 @@
           "scenario": "score selectors use entity UUIDs and require existing scores",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_saved,scores={selector_probe=-7},limit=1] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_unset=0}] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_absent=0}]",
               "commands": [
@@ -3550,8 +4176,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_saved,scores={selector_probe=-7},limit=1] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_unset=0}] unless entity @e[type=pig,tag=ferraloom_saved,scores={selector_absent=0}]",
               "commands": [
@@ -3567,12 +4193,12 @@
           "scenario": "chained execute score stores preserve both callbacks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0 if score Succeeded parity matches 1",
               "commands": [
@@ -3582,8 +4208,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0 if score Succeeded parity matches 1",
               "commands": [
@@ -3597,12 +4223,12 @@
           "scenario": "execute score store preserves prior scores when a conditional branch is empty",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 17",
               "commands": [
@@ -3613,8 +4239,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 17",
               "commands": [
@@ -3629,12 +4255,12 @@
           "scenario": "execute score store records nested command failure",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -3645,8 +4271,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -3661,12 +4287,12 @@
           "scenario": "execute score store preserves a zero command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -3678,8 +4304,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -3695,12 +4321,12 @@
           "scenario": "execute score store preserves a signed command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches -7",
               "commands": [
@@ -3711,8 +4337,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches -7",
               "commands": [
@@ -3727,12 +4353,12 @@
           "scenario": "execute score success differs from a zero command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 1",
               "commands": [
@@ -3742,8 +4368,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Stored parity matches 1",
               "commands": [
@@ -3757,12 +4383,12 @@
           "scenario": "data modify indexes insertion and extracts strings from all providers",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if data storage ferraloom:modify_destination {entity_values:[7.0f],storage_text:\"bcd\",block_text:\"chest\",entity_text:\"ferraloom\"} if score DataLength parity matches 5 if score DataIndex0 parity matches 4 if score DataIndex1 parity matches 10 if score DataIndex2 parity matches 15 if score DataIndex3 parity matches 20 if score DataIndex4 parity matches 42 if score DataNoChange parity matches 0 if score DataBadIndex parity matches 0 unless entity @e[tag=ferraloom_data_source]",
               "commands": [
@@ -3789,8 +4415,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if data storage ferraloom:modify_destination {entity_values:[7.0f],storage_text:\"bcd\",block_text:\"chest\",entity_text:\"ferraloom\"} if score DataLength parity matches 5 if score DataIndex0 parity matches 4 if score DataIndex1 parity matches 10 if score DataIndex2 parity matches 15 if score DataIndex3 parity matches 20 if score DataIndex4 parity matches 42 if score DataNoChange parity matches 0 if score DataBadIndex parity matches 0 unless entity @e[tag=ferraloom_data_source]",
               "commands": [
@@ -3812,6 +4438,218 @@
                 "execute store success score DataNoChange parity run data modify storage ferraloom:modify_destination answer set from storage ferraloom:modify_source answer",
                 "execute store success score DataBadIndex parity run data modify storage ferraloom:modify_destination values insert 99 value 7",
                 "kill @e[tag=ferraloom_data_source]"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "data.modify_merge_counts",
+          "scenario": "data modify merge counts changed compounds and rejects unchanged results",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeChanged parity matches 2 if score MergeMatched parity matches 2 if score MergeUnchanged parity matches 0 if data storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5},added:8}},{kind:hit,payload:{keep:2,nested:{value:2,extra:5},added:8}},{kind:skip,payload:{keep:3,nested:{value:2,extra:5}}}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_counts_source {parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}",
+                "data merge storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},{kind:hit,payload:{keep:2,nested:{value:0}}},{kind:skip,payload:{keep:3,nested:{value:0}}}]}",
+                "execute store result score MergeChanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]",
+                "execute store result score MergeMatched parity run data modify storage ferraloom:merge_counts rows[{kind:hit}].payload merge value {added:8}",
+                "execute store success score MergeUnchanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]"
+              ],
+              "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+              "last_command_output": [
+                "[23:27:45] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
+                "[23:27:45] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_fd2f0555057a49b2a3e79009af8f5295"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeChanged parity matches 2 if score MergeMatched parity matches 2 if score MergeUnchanged parity matches 0 if data storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5},added:8}},{kind:hit,payload:{keep:2,nested:{value:2,extra:5},added:8}},{kind:skip,payload:{keep:3,nested:{value:2,extra:5}}}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_counts_source {parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}",
+                "data merge storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},{kind:hit,payload:{keep:2,nested:{value:0}}},{kind:skip,payload:{keep:3,nested:{value:0}}}]}",
+                "execute store result score MergeChanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]",
+                "execute store result score MergeMatched parity run data modify storage ferraloom:merge_counts rows[{kind:hit}].payload merge value {added:8}",
+                "execute store success score MergeUnchanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]"
+              ],
+              "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+              "last_command_output": [
+                "Nothing changed. The specified properties already have these values",
+                " INFO [Server] FERRALOOM_END_287c690b6f014543a8756b4c40138947"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "data.modify_merge_invalid_source",
+          "scenario": "data modify merge validates every source before creating targets",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeBadSource parity matches 0 unless data storage ferraloom:merge_bad_target missing if data storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]} if data storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}",
+                "data merge storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]}",
+                "execute store success score MergeBadSource parity run data modify storage ferraloom:merge_bad_target missing.path merge from storage ferraloom:merge_bad_source mixed[].value"
+              ],
+              "expected_last_feedback": "Expected an object: got 7",
+              "last_command_output": [
+                "[23:27:45] [Server thread/INFO]: System chat: Expected an object: got 7",
+                "[23:27:45] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_c23204f6b125496a9b24d33085c093d4"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeBadSource parity matches 0 unless data storage ferraloom:merge_bad_target missing if data storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]} if data storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}",
+                "data merge storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]}",
+                "execute store success score MergeBadSource parity run data modify storage ferraloom:merge_bad_target missing.path merge from storage ferraloom:merge_bad_source mixed[].value"
+              ],
+              "expected_last_feedback": "Expected an object: got 7",
+              "last_command_output": [
+                "Expected an object: got 7",
+                " INFO [Server] FERRALOOM_END_990800f989034a3f90eed2d7ad499f4b"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "data.modify_merge_partial_failure",
+          "scenario": "data modify merge preserves vanilla partial storage changes on failure",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergePartial parity matches 0 if data storage ferraloom:merge_partial rows[2].value if data storage ferraloom:merge_partial {rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}",
+              "commands": [
+                "data merge storage ferraloom:merge_partial {rows:[{value:{keep:1}},{value:7},{}],keep:9}",
+                "execute store success score MergePartial parity run data modify storage ferraloom:merge_partial rows[].value merge value {added:2}"
+              ],
+              "expected_last_feedback": "Expected an object: got 7",
+              "last_command_output": [
+                "[23:27:46] [Server thread/INFO]: System chat: Expected an object: got 7",
+                "[23:27:46] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_592f7a679e104a60b3946afb8bee9677"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergePartial parity matches 0 if data storage ferraloom:merge_partial rows[2].value if data storage ferraloom:merge_partial {rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}",
+              "commands": [
+                "data merge storage ferraloom:merge_partial {rows:[{value:{keep:1}},{value:7},{}],keep:9}",
+                "execute store success score MergePartial parity run data modify storage ferraloom:merge_partial rows[].value merge value {added:2}"
+              ],
+              "expected_last_feedback": "Expected an object: got 7",
+              "last_command_output": [
+                "Expected an object: got 7",
+                " INFO [Server] FERRALOOM_END_6238a937fafb4ed7a66eb11eb0a43941"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "data.modify_merge_primitive_parent",
+          "scenario": "data modify merge through a primitive array parent reports unchanged",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeArrayParent parity matches 0 if data storage ferraloom:merge_array {numbers:[I;3,4]}",
+              "commands": [
+                "data merge storage ferraloom:merge_array {numbers:[I;3,4]}",
+                "execute store success score MergeArrayParent parity run data modify storage ferraloom:merge_array numbers[].child merge value {added:2}"
+              ],
+              "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+              "last_command_output": [
+                "[23:27:46] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
+                "[23:27:46] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_d6e88fbe0dc84b8e999742f2985c4c9c"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeArrayParent parity matches 0 if data storage ferraloom:merge_array {numbers:[I;3,4]}",
+              "commands": [
+                "data merge storage ferraloom:merge_array {numbers:[I;3,4]}",
+                "execute store success score MergeArrayParent parity run data modify storage ferraloom:merge_array numbers[].child merge value {added:2}"
+              ],
+              "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+              "last_command_output": [
+                "Nothing changed. The specified properties already have these values",
+                " INFO [Server] FERRALOOM_END_e8e0a8cf27ba4ea98502fabc838670c5"
+              ]
+            }
+          }
+        },
+        {
+          "test_id": "data.modify_merge_recursive",
+          "scenario": "data modify merge recursively retains siblings and source order",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeRecursive parity matches 1 if score MergeListLength parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
+                "data merge storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,replace:0},list:[1],scalar:0,object:{old:1}}}",
+                "execute store result score MergeRecursive parity run data modify storage ferraloom:merge_recursive object merge from storage ferraloom:merge_source parts[]",
+                "execute store result score MergeListLength parity run data get storage ferraloom:merge_recursive object.list"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score MergeRecursive parity matches 1 if score MergeListLength parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
+              "commands": [
+                "data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
+                "data merge storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,replace:0},list:[1],scalar:0,object:{old:1}}}",
+                "execute store result score MergeRecursive parity run data modify storage ferraloom:merge_recursive object merge from storage ferraloom:merge_source parts[]",
+                "execute store result score MergeListLength parity run data get storage ferraloom:merge_recursive object.list"
               ]
             }
           }
@@ -3821,12 +4659,12 @@
           "scenario": "data modify copies block entity and storage sources without changing them",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if data storage ferraloom:modify_destination {block_x:4,entity_health:7.0f,answer:42} if data storage ferraloom:modify_source {answer:42,text:\"abcdef\"} if block 4 230 4 chest if entity @e[type=pig,tag=ferraloom_data_source,nbt={Health:7.0f},limit=1]",
               "commands": [
@@ -3843,8 +4681,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if data storage ferraloom:modify_destination {block_x:4,entity_health:7.0f,answer:42} if data storage ferraloom:modify_source {answer:42,text:\"abcdef\"} if block 4 230 4 chest if entity @e[type=pig,tag=ferraloom_data_source,nbt={Health:7.0f},limit=1]",
               "commands": [
@@ -3861,16 +4699,60 @@
           }
         },
         {
+          "test_id": "data.storage_namespace_rejection",
+          "scenario": "invalid storage namespace fails parsing without changing a stored score",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score NamespaceEscape parity matches 99 if data storage .:dot {answer:73} if data storage ferraloom:persist {nested:{answer:42},phase:1}",
+              "commands": [
+                "scoreboard players set NamespaceEscape parity 99",
+                "execute store success score NamespaceEscape parity run data modify storage ..:unsafe value set value 1"
+              ],
+              "expected_last_feedback": "Invalid ID",
+              "last_command_output": [
+                "[23:27:47] [Server thread/INFO]: System chat: Invalid ID",
+                "[23:27:47] [Server thread/INFO]: System chat: ...y storage ..:unsafe value set value 1<--[HERE]",
+                "[23:27:47] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_6a6bc03e4027480da9783c5f1e0a1734"
+              ]
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
+            "detail": {
+              "predicate": "if score NamespaceEscape parity matches 99 if data storage .:dot {answer:73} if data storage ferraloom:persist {nested:{answer:42},phase:1}",
+              "commands": [
+                "scoreboard players set NamespaceEscape parity 99",
+                "execute store success score NamespaceEscape parity run data modify storage ..:unsafe value set value 1"
+              ],
+              "expected_last_feedback": "Invalid ID",
+              "last_command_output": [
+                "Invalid ID",
+                "...y storage ..:unsafe value set value 1<--[HERE]",
+                " INFO [Server] FERRALOOM_END_bd67286b748840e08793c6d85fdd19f4"
+              ]
+            }
+          }
+        },
+        {
           "test_id": "entity.dying_selector",
           "scenario": "entity selectors exclude dying living entities before removal",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DyingKilled parity matches 1 unless entity @e[type=pig,tag=ferraloom_dying_selector]",
               "commands": [
@@ -3881,8 +4763,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DyingKilled parity matches 1 unless entity @e[type=pig,tag=ferraloom_dying_selector]",
               "commands": [
@@ -3897,12 +4779,12 @@
           "scenario": "wire command tree decodes completely",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "root_index": 0,
               "node_count": 2399,
@@ -5348,8 +6230,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "root_index": 0,
               "node_count": 1649,
@@ -6400,12 +7282,12 @@
           "scenario": "objective operation",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score A parity matches 12",
               "commands": [
@@ -6418,8 +7300,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score A parity matches 12",
               "commands": [
@@ -6436,12 +7318,12 @@
           "scenario": "display update",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DisplayResult parity matches 0 if score DisplaySuccess parity matches 1",
               "commands": [
@@ -6453,8 +7335,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DisplayResult parity matches 0 if score DisplaySuccess parity matches 1",
               "commands": [
@@ -6470,12 +7352,12 @@
           "scenario": "scores are shared across dimensions",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DimensionScore parity matches 41",
               "commands": [
@@ -6485,8 +7367,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score DimensionScore parity matches 41",
               "commands": [
@@ -6500,12 +7382,12 @@
           "scenario": "objective add and remove return the current total",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ObjectiveSecond parity = ObjectiveFirst parity if score ObjectiveRemovedA parity = ObjectiveFirst parity if score ObjectiveRemovedB parity = ObjectiveFirst parity",
               "commands": [
@@ -6520,8 +7402,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score ObjectiveSecond parity = ObjectiveFirst parity if score ObjectiveRemovedA parity = ObjectiveFirst parity if score ObjectiveRemovedB parity = ObjectiveFirst parity",
               "commands": [
@@ -6540,12 +7422,12 @@
           "scenario": "trigger",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Candidate unlock matches 13 if score EnableAgain parity matches 0",
               "commands": [
@@ -6558,8 +7440,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if score Candidate unlock matches 13 if score EnableAgain parity matches 0",
               "commands": [
@@ -6593,12 +7475,12 @@
           "scenario": "team membership",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9",
-          "test_suite_sha256": "a04dbbaaccb9631de6ed14c46c8bd11c0c359a8a8ee9464e1bedf7ebf753974c",
+          "report_sha256": "8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725",
+          "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]",
               "commands": [
@@ -6613,8 +7495,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-            "artifact": "compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json",
+            "build_id": "sha256:541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+            "artifact": "compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]",
               "commands": [

@@ -153,6 +153,25 @@ evidence.
 - `LivingEntity.isAlive` requires positive health and no removal flag. Dying
   entities can remain in the world for animation while `@e` excludes them.
   Both runtimes now pass the immediate selector case.
+- `DataCommands` merges source compounds before applying them to selected target
+  compounds. Selected tests cover recursive siblings, changed-target counts,
+  source validation and partial target mutations on failure. A primitive array
+  used as the final parent produces an unchanged result when it cannot supply
+  the requested child. NBT execute conditions use match counts, including zero
+  for absent paths, rather than throwing the data-get error.
+- `Identifier.read` rejects the exact `..` namespace and restores its cursor;
+  `.` remains valid. Command storage maps `.` into the data directory, uses
+  `data/<namespace>/command_storage.dat` otherwise, and removes empty entries.
+  `DimensionStorageFileFix` at version 4772 explains the legacy filename mapping.
+  Ferraloom reads discovered legacy files without overriding modern files and
+  distinguishes those files from legal namespace directories with similar names.
+  The explicit-save and shutdown checks now change their values between phases.
+  A separate Java run observed periodic command-storage saving during save-off;
+  the Rust coordinator test covers the corresponding autosave path.
+- Diode removal notifies beyond its immediate output block. Tripwire string
+  removal supplies the old state with `POWERED` set to produce the pulse;
+  hook removal notifies the hook and its supporting block. Stepped paired cases
+  cover selected repeater, comparator, string and hook removals.
 
 The original underground sample differed in three unsupported glow-lichen
 states and four gold-ore cells. Deferred postprocessing removed the lichen
@@ -164,6 +183,16 @@ generation ordering. A diagnostic build of an earlier Rust revision had also
 matched vanilla, so its trace failed the required original-output baseline and
 could not explain the uninstrumented failure conclusively.
 
+The later clean `8f35f97` run again missed four gold cells, with Rust sample hash
+`6a530e9b503c7265da745c6d713e3754bbe5d5541de435ea4790b51516ac595f`
+against Java's `794c69a80d31522a8e7515a06bc841323e14664dfcc0b4e92fcec625e347197a`.
+Both `5ce6ee0` runs matched Java, with no intervening generation fix. The
+[failed report](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
+is retained. Neighbor decoration order could alter ore discard draws when a
+trial chamber replaces western candidate blocks, but the failing runtime's
+interleaving has not been observed. A controlled replay is prepared; it has not
+established a fix. General deterministic generation remains unfinished.
+
 A separate official-server fixture captures a furnace, blast furnace and smoker
 after exactly 237 stepped ticks, with coal consumed and cooking in progress.
 Modern saves use signed integer cooking and fuel timers and a floating-point
@@ -171,17 +200,18 @@ Modern saves use signed integer cooking and fuel timers and a floating-point
 as burn duration. Copies of that Java save retain their timers and continue
 cooking correctly in Java. The `571b6ca` Rust executable loses those timers on
 load. Independent lava-bucket copies also expose the missing bucket crafting
-remainder and wet-sponge conversion. The current executable `08af1478…`
-from clean source `3157c3d` passes the reproducible fresh-fixture check in
+remainder and wet-sponge conversion. The current executable `541f7521…`
+built from clean Rust source `5ce6ee0`, tested with harness `f6a24a1`, passes the
+reproducible fresh-fixture check in
 `tools/check_furnaces.py`: both runtimes preserve saved values and match the
 63/100-tick cooking continuations and independent 1/199-tick bucket sequence.
 All five processes exit cleanly and all 14 source-integrity checks pass.
 The zero-step phase is a preservation observation, and its imported codec
 acceptance result is skipped even when chunk bytes change. The stepped phases
 establish continued cooking. The original source fixture remains
-immutable under the ignored reference cache; its canonical file
+immutable under the ignored reference cache; the latest fresh fixture's canonical file
 manifest SHA-256 is
-`de91961415ddb941e59f4741b005b1d768a5beabb1461e2b8ccbf3952ecf3603`.
+`c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062`.
 
 ## Boundaries and remaining work
 

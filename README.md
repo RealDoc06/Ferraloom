@@ -34,7 +34,7 @@ python3 tools/check_default_storage.py --accept-eula --java /path/to/java25/bin/
 python3 tools/check_furnaces.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
 ```
 
-The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. The restart and world-interchange checks include unflushed blocks, a mob's UUID and health, a frozen clock and game rule, and scoreboard scores, teams and display slots. Separate cases exercise chunk activation during freeze and scheduled fluid ticks beyond entity-ticking range. The client also decodes the exact release's advertised command tree; syntax presence does not establish working commands. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
+The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. The restart and world-interchange checks include unflushed blocks, a mob's UUID and health, a frozen clock and game rule, scoreboard state, and namespaced command storage. Separate cases exercise recursive data merging, redstone removal, chunk activation during freeze, and scheduled fluid ticks beyond entity-ticking range. The client also decodes the exact release's advertised command tree; syntax presence does not establish working commands. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
 
 ```sh
 python3 tools/oracle.py inventory --java /path/to/java25/bin/java

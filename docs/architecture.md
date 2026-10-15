@@ -37,6 +37,14 @@ Deferred neighbor notifications have their own hook, separate from immediate
 block-entity, POI and multiblock cleanup. Final client updates use the resulting
 world state after placement and neighbor callbacks.
 
+Command storage belongs to the server and uses vanilla's namespaced gzip NBT
+files. Namespace `.` resolves into the data directory itself. Legacy files are
+read only when discovered as files, with modern files taking precedence. Saves
+preserve unknown fields, attempt healthy namespaces after another fails, and
+continue during save-off alongside other global saved data. Each save currently
+rewrites every namespace; dirty tracking and semantic data fixes for older world
+versions remain unfinished.
+
 The official artifact is pinned by metadata URL, SHA-1, size, release, Java major, and protocol. The test tool verifies the download before launching it. Registry identifiers and datapack paths come from the exact official artifact and its built-in data generator. REA artifact/process evidence and supplementary JVM codec inspection are documented separately.
 
 Reference tests use identical scenario inputs, fixed seeds, isolated worlds, offline authentication, and loopback listeners. A scenario must pass on both servers. Tests use explicit world predicates, packet observations, and restart checks. Results identify the tested Rust binary by SHA-256. These observations cover selected behavior, not every property in a feature family. Feature completion requires paired evidence for every required scenario and the strict ledger gate.

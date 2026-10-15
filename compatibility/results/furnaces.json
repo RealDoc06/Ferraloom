@@ -9,21 +9,21 @@
         "$REPO/.cache/vanilla/26.3/server.jar",
         "nogui"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main/commands.jsonl",
+      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/commands.jsonl",
       "configs": {
         "eula.txt": {
           "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
           "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
         },
         "server.properties": {
-          "sha256": "da71561b1a3c266ce2c137fdde4f29614de6601077ae31c34d8cc46861aeef84",
-          "text": "server-ip=127.0.0.1\nserver-port=32989\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+          "sha256": "9771d1a6107e2d3f54bd5140469aa2da8de736a9b66f6e8e2c63653bb8fe5a37",
+          "text": "server-ip=127.0.0.1\nserver-port=37835\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main/console.log",
-      "console_sha256": "30611635e6dc516c4186730b1d4ae9094073eaf5016039be5d52a4ffd86a9e4a",
-      "copied_world_manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
-      "directory": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main",
+      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/console.log",
+      "console_sha256": "c6685795635733bb42f220dbe765b44af7c333d7cc3d3630779ebfe95155216e",
+      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -34,13 +34,13 @@
         "after": 406,
         "before": 406
       },
-      "finished": "2026-10-15T20:05:34.942574+00:00",
+      "finished": "2026-10-15T21:30:37.020788+00:00",
       "fixture_loading_game_time": {
         "after": 243,
         "before": 243
       },
       "load_save_errors": [],
-      "loopback_port": 32989,
+      "loopback_port": 37835,
       "mode": "main",
       "phases": [
         {
@@ -434,7 +434,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:24.984521+00:00",
+          "finished": "2026-10-15T21:30:27.013263+00:00",
           "name": "zero-step",
           "requested_advance": 0,
           "result": "passed",
@@ -869,9 +869,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main/zero-step-snapshot.json",
-          "snapshot_sha256": "88fc8443ea82832315443fa68cb94d38a977379ab2f99ea90019cadb8cfba10d",
-          "started": "2026-10-15T20:05:24.525334+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/zero-step-snapshot.json",
+          "snapshot_sha256": "19f188536d9253a6393bc596b0ea63da8592639548d2f3a655d9dd113b77a5f6",
+          "started": "2026-10-15T21:30:26.553761+00:00",
           "storage_observation": {
             "raw_chunk_unchanged": false,
             "scope": "Zero-step preservation only; unchanged bytes do not establish a codec round-trip. Later stepped phases exercise continuation."
@@ -1274,7 +1274,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:28.583819+00:00",
+          "finished": "2026-10-15T21:30:30.613304+00:00",
           "name": "after-63",
           "requested_advance": 63,
           "result": "passed",
@@ -1709,9 +1709,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main/after-63-snapshot.json",
-          "snapshot_sha256": "d8fa959558258147b0b873b3c14570a0bc762eb20db85b362a9ccba3e6412e6a",
-          "started": "2026-10-15T20:05:24.984882+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/after-63-snapshot.json",
+          "snapshot_sha256": "be8fb23a4bd3ede7e83cf8f0412f2a4622f7162d88d37029b5466ebb21fab927",
+          "started": "2026-10-15T21:30:27.013609+00:00",
           "timing": {
             "after": 306,
             "before": 243,
@@ -2110,7 +2110,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:34.033398+00:00",
+          "finished": "2026-10-15T21:30:36.062655+00:00",
           "name": "after-163",
           "requested_advance": 100,
           "result": "passed",
@@ -2545,9 +2545,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-main/after-163-snapshot.json",
-          "snapshot_sha256": "7432ab872d7c1ea7d5a32b63b71a9e1aebeeaf5dca780c9c60514eea265241b0",
-          "started": "2026-10-15T20:05:28.584166+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/after-163-snapshot.json",
+          "snapshot_sha256": "f8a0c4fe9fdc489f8cf480ad6dfcc97dce085e016c24c5e60727cc76cd277b78",
+          "started": "2026-10-15T21:30:30.613672+00:00",
           "timing": {
             "after": 406,
             "before": 306,
@@ -2556,55 +2556,55 @@
           }
         }
       ],
-      "pid": 180212,
+      "pid": 284090,
       "result": "passed",
       "runtime": "vanilla",
       "shutdown_tail": [
-        "[22:05:34] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_5c86c20f91e84250a88ac93e50dfac84",
-        "[22:05:34] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-        "[22:05:34] [Server thread/INFO]: System chat: Saved the game",
-        "[22:05:34] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_dcd72ec7a608440fb0c48e423edd02a3",
-        "[22:05:34] [Server thread/INFO]: System chat: The game is frozen",
-        "[22:05:34] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_8a46006781c7400f92dd182ce1fb9214",
+        "[23:30:36] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+        "[23:30:36] [Server thread/INFO]: System chat: Saved the game",
+        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_e4d4e59db201433c92c7003ce6bcceb1",
+        "[23:30:36] [Server thread/INFO]: System chat: The game is frozen",
+        "[23:30:36] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
         "Average time per tick: 1.2ms (Target: 50.0ms)",
-        "[22:05:34] [Server thread/INFO]: System chat: Percentiles: P50: 0.6ms P95: 1.5ms P99: 27.9ms. Sample: 100",
-        "[22:05:34] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_2a1ac7ee221b4023b3d9867c2cd8cf5d",
-        "[22:05:34] [Server thread/INFO]: System chat: The game time is 406 tick(s)",
-        "[22:05:34] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_e48b714f761c47d9b7bc685854fccc82",
-        "[22:05:34] [Server thread/INFO]: System chat: Stopping the server",
-        "[22:05:34] [Server thread/INFO]: Stopping server",
-        "[22:05:34] [Server thread/INFO]: Saving players",
-        "[22:05:34] [Server thread/INFO]: Saving worlds",
-        "[22:05:34] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-        "[22:05:34] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
-        "[22:05:34] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
+        "[23:30:36] [Server thread/INFO]: System chat: Percentiles: P50: 0.6ms P95: 1.7ms P99: 33.3ms. Sample: 100",
+        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_bdf6d20861284f2cbb8d1f3013316e93",
+        "[23:30:36] [Server thread/INFO]: System chat: The game time is 406 tick(s)",
+        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_1ec981f9a0ad4d8b930aeb7327380262",
+        "[23:30:36] [Server thread/INFO]: System chat: Stopping the server",
+        "[23:30:36] [Server thread/INFO]: Stopping server",
+        "[23:30:36] [Server thread/INFO]: Saving players",
+        "[23:30:36] [Server thread/INFO]: Saving worlds",
+        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
+        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
       ],
-      "started": "2026-10-15T20:05:14.170104+00:00",
+      "started": "2026-10-15T21:30:15.069007+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T20:05:34.374696+00:00"
+      "stop_started": "2026-10-15T21:30:36.403209+00:00"
     },
     {
       "argv": [
-        "$REPO/.cache/runs/furnaces-mozmqbai/bin/ferraloom",
+        "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
         "--data-dir",
-        "$REPO/.cache/runs/furnaces-mozmqbai/rust-main",
+        "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main",
         "--bind",
-        "127.0.0.1:34363",
+        "127.0.0.1:33747",
         "--offline",
         "--workers",
         "2"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main/commands.jsonl",
+      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/commands.jsonl",
       "configs": {
         "pumpkin.toml": {
-          "sha256": "b4c7c4ae79c9324ad37723734725304eb1fa1003e46d8704cb8f2f7c47ff9ad4",
-          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:34363\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
+          "sha256": "1727021b2653bbfa06ddbea2b8f433a8a20b11f1e673446f5fa6ea8199148912",
+          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:33747\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main/console.log",
-      "console_sha256": "9f27e31b8257f46beb10ecc914ba6f67133e4991cf27b190821f22981d874608",
-      "copied_world_manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
-      "directory": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main",
+      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/console.log",
+      "console_sha256": "4c4420ff768f8ffc10ad136ca4c3fb5dccd32bfb55e50ed33d7c810d6b943e80",
+      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -2615,13 +2615,13 @@
         "after": 167,
         "before": 167
       },
-      "finished": "2026-10-15T20:05:45.624921+00:00",
+      "finished": "2026-10-15T21:30:47.724607+00:00",
       "fixture_loading_game_time": {
         "after": 4,
         "before": 4
       },
       "load_save_errors": [],
-      "loopback_port": 34363,
+      "loopback_port": 33747,
       "mode": "main",
       "phases": [
         {
@@ -3015,7 +3015,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:37.084583+00:00",
+          "finished": "2026-10-15T21:30:39.170342+00:00",
           "name": "zero-step",
           "requested_advance": 0,
           "result": "passed",
@@ -3450,9 +3450,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main/zero-step-snapshot.json",
-          "snapshot_sha256": "5e1e8dd957ae944b9041fb81469dd0daace6f85171dbc65734c5c5dd12f31108",
-          "started": "2026-10-15T20:05:37.029380+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/zero-step-snapshot.json",
+          "snapshot_sha256": "edd96a14dab270a5d8c970c488df9276040e34d0b6a77e52f83e597a7483866a",
+          "started": "2026-10-15T21:30:39.108507+00:00",
           "storage_observation": {
             "raw_chunk_unchanged": false,
             "scope": "Zero-step preservation only; unchanged bytes do not establish a codec round-trip. Later stepped phases exercise continuation."
@@ -3855,7 +3855,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:40.356573+00:00",
+          "finished": "2026-10-15T21:30:42.445322+00:00",
           "name": "after-63",
           "requested_advance": 63,
           "result": "passed",
@@ -4290,9 +4290,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main/after-63-snapshot.json",
-          "snapshot_sha256": "afe5e18fe4d6052036db0fdf023f195ad42b12aac1b08f9533cb7956760996b9",
-          "started": "2026-10-15T20:05:37.084930+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/after-63-snapshot.json",
+          "snapshot_sha256": "3584e5856d05744b4a3ff29b00dfd029c1a41fdae9626e2b06695175fab0c37f",
+          "started": "2026-10-15T21:30:39.170833+00:00",
           "timing": {
             "after": 67,
             "before": 4,
@@ -4691,7 +4691,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:45.429499+00:00",
+          "finished": "2026-10-15T21:30:47.527358+00:00",
           "name": "after-163",
           "requested_advance": 100,
           "result": "passed",
@@ -5126,9 +5126,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-main/after-163-snapshot.json",
-          "snapshot_sha256": "bf283dd0edcc0513be767902842e3e1fe0d0cbf4eff46f2c9b07d56793893010",
-          "started": "2026-10-15T20:05:40.356910+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/after-163-snapshot.json",
+          "snapshot_sha256": "61db8b2813ef362bec0b6f821d90515c67a622ac333858849fa325f291e20fa7",
+          "started": "2026-10-15T21:30:42.445668+00:00",
           "timing": {
             "after": 167,
             "before": 67,
@@ -5137,7 +5137,7 @@
           }
         }
       ],
-      "pid": 180730,
+      "pid": 284533,
       "result": "passed",
       "runtime": "rust",
       "shutdown_tail": [
@@ -5160,9 +5160,9 @@
         " INFO Completed worlds",
         " INFO Completed save!"
       ],
-      "started": "2026-10-15T20:05:34.955642+00:00",
+      "started": "2026-10-15T21:30:37.033978+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T20:05:45.461178+00:00"
+      "stop_started": "2026-10-15T21:30:47.560848+00:00"
     },
     {
       "argv": [
@@ -5173,21 +5173,21 @@
         "$REPO/.cache/vanilla/26.3/server.jar",
         "nogui"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-lava/commands.jsonl",
+      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/commands.jsonl",
       "configs": {
         "eula.txt": {
           "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
           "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
         },
         "server.properties": {
-          "sha256": "601ec31763ed7175a4bfc4ada70ecc1a6e9eba44daf9ac1b34c75fb491906b34",
-          "text": "server-ip=127.0.0.1\nserver-port=51119\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+          "sha256": "bdf59ad6c0b040f3353d0f06c16d83e25f197f320592b07612654d75e870f8e7",
+          "text": "server-ip=127.0.0.1\nserver-port=43331\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-lava/console.log",
-      "console_sha256": "b7fafade6f78ee0bc5d7541c86eea54c594c625f50821bd89aa3af725b2290c8",
-      "copied_world_manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
-      "directory": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-lava",
+      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/console.log",
+      "console_sha256": "84a09ab7799c04d3f179c102fb93b0139c1655bca36a6034bfbb8a09c8d78979",
+      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -5195,16 +5195,16 @@
         "process_reaped": true
       },
       "final_save_game_time": {
-        "after": 443,
-        "before": 443
+        "after": 446,
+        "before": 446
       },
-      "finished": "2026-10-15T20:06:08.262597+00:00",
+      "finished": "2026-10-15T21:31:10.410858+00:00",
       "fixture_loading_game_time": {
-        "after": 243,
-        "before": 243
+        "after": 246,
+        "before": 246
       },
       "load_save_errors": [],
-      "loopback_port": 51119,
+      "loopback_port": 43331,
       "mode": "lava",
       "phases": [
         {
@@ -5304,13 +5304,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:05:56.954017+00:00",
+          "finished": "2026-10-15T21:30:59.100865+00:00",
           "name": "lava-after-1",
           "requested_advance": 1,
           "result": "passed",
           "save_game_time": {
-            "after": 244,
-            "before": 244
+            "after": 247,
+            "before": 247
           },
           "semantic_checks": [
             {
@@ -5418,12 +5418,12 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-lava/lava-after-1-snapshot.json",
-          "snapshot_sha256": "748a89dd77d971d6803a4892658183221e9a5e94a4f10b5b5a71e7dba86692f4",
-          "started": "2026-10-15T20:05:56.445283+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/lava-after-1-snapshot.json",
+          "snapshot_sha256": "2745813230640233afd8a041958359212033e54627d6e7957a540f8998991053",
+          "started": "2026-10-15T21:30:58.541872+00:00",
           "timing": {
-            "after": 244,
-            "before": 243,
+            "after": 247,
+            "before": 246,
             "delta": 1,
             "frozen_after": true
           }
@@ -5553,13 +5553,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:06:07.353447+00:00",
+          "finished": "2026-10-15T21:31:09.501193+00:00",
           "name": "lava-after-200",
           "requested_advance": 199,
           "result": "passed",
           "save_game_time": {
-            "after": 443,
-            "before": 443
+            "after": 446,
+            "before": 446
           },
           "semantic_checks": [
             {
@@ -5683,66 +5683,66 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/vanilla-lava/lava-after-200-snapshot.json",
-          "snapshot_sha256": "4ae90fb2dad7176330fc8086f02992066b1e407a70443fdeb0f0614d6edfcdc9",
-          "started": "2026-10-15T20:05:56.954206+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/lava-after-200-snapshot.json",
+          "snapshot_sha256": "6f6d5297391ce91fad3ad5253600d558c56775a24a785af2d43f57dc619f221d",
+          "started": "2026-10-15T21:30:59.101097+00:00",
           "timing": {
-            "after": 443,
-            "before": 244,
+            "after": 446,
+            "before": 247,
             "delta": 199,
             "frozen_after": true
           }
         }
       ],
-      "pid": 180890,
+      "pid": 284725,
       "result": "passed",
       "runtime": "vanilla",
       "shutdown_tail": [
-        "[22:06:07] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_76dc42c404024b63af99ccd4c794981e",
-        "[22:06:07] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-        "[22:06:07] [Server thread/INFO]: System chat: Saved the game",
-        "[22:06:07] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_2a025aa70b99496c863d475774816138",
-        "[22:06:07] [Server thread/INFO]: System chat: The game is frozen",
-        "[22:06:07] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_95c7c026e66e4e7dbcc1f7cd6e146c89",
+        "[23:31:09] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+        "[23:31:09] [Server thread/INFO]: System chat: Saved the game",
+        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_48612e1d0dd3420f92bcd264339fc32f",
+        "[23:31:09] [Server thread/INFO]: System chat: The game is frozen",
+        "[23:31:09] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
         "Average time per tick: 1.2ms (Target: 50.0ms)",
-        "[22:06:07] [Server thread/INFO]: System chat: Percentiles: P50: 0.5ms P95: 1.7ms P99: 28.3ms. Sample: 100",
-        "[22:06:07] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_272efb286c8e441b86179604c4b19297",
-        "[22:06:07] [Server thread/INFO]: System chat: The game time is 443 tick(s)",
-        "[22:06:07] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_734be435c29642749c185e87d05e88b8",
-        "[22:06:07] [Server thread/INFO]: System chat: Stopping the server",
-        "[22:06:07] [Server thread/INFO]: Stopping server",
-        "[22:06:07] [Server thread/INFO]: Saving players",
-        "[22:06:07] [Server thread/INFO]: Saving worlds",
-        "[22:06:07] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-        "[22:06:07] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
-        "[22:06:07] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
+        "[23:31:09] [Server thread/INFO]: System chat: Percentiles: P50: 0.6ms P95: 1.7ms P99: 31.9ms. Sample: 100",
+        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_b9abe7af731b47b8842968e05c119d07",
+        "[23:31:09] [Server thread/INFO]: System chat: The game time is 446 tick(s)",
+        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_f726a84d83b34d5a96b6cb790867ceb5",
+        "[23:31:09] [Server thread/INFO]: System chat: Stopping the server",
+        "[23:31:09] [Server thread/INFO]: Stopping server",
+        "[23:31:09] [Server thread/INFO]: Saving players",
+        "[23:31:09] [Server thread/INFO]: Saving worlds",
+        "[23:31:09] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+        "[23:31:10] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end",
+        "[23:31:10] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether"
       ],
-      "started": "2026-10-15T20:05:45.637937+00:00",
+      "started": "2026-10-15T21:30:47.737559+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T20:06:07.694305+00:00"
+      "stop_started": "2026-10-15T21:31:09.841490+00:00"
     },
     {
       "argv": [
-        "$REPO/.cache/runs/furnaces-mozmqbai/bin/ferraloom",
+        "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
         "--data-dir",
-        "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava",
+        "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava",
         "--bind",
-        "127.0.0.1:54947",
+        "127.0.0.1:45167",
         "--offline",
         "--workers",
         "2"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava/commands.jsonl",
+      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/commands.jsonl",
       "configs": {
         "pumpkin.toml": {
-          "sha256": "9183f9a7a52731fe2b6b6af060e233ccc3c191b9e5fd0800dfdaec4079308459",
-          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:54947\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
+          "sha256": "d17122e8d3896878231cc477d3c82b2903516291c951ea6d567b3154605b486d",
+          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:45167\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava/console.log",
-      "console_sha256": "4e991b8cbc17380381618efdce0851b0da90f5164706785df46085c37ec4a6ef",
-      "copied_world_manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
-      "directory": "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava",
+      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/console.log",
+      "console_sha256": "621c6937a4d01db0d3791cc42a734b17bd2f34ca48f5fe1e68d4e605460d165c",
+      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -5750,16 +5750,16 @@
         "process_reaped": true
       },
       "final_save_game_time": {
-        "after": 202,
-        "before": 202
+        "after": 204,
+        "before": 204
       },
-      "finished": "2026-10-15T20:06:20.718077+00:00",
+      "finished": "2026-10-15T21:31:22.879131+00:00",
       "fixture_loading_game_time": {
-        "after": 2,
-        "before": 2
+        "after": 4,
+        "before": 4
       },
       "load_save_errors": [],
-      "loopback_port": 54947,
+      "loopback_port": 45167,
       "mode": "lava",
       "phases": [
         {
@@ -5859,13 +5859,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:06:10.507023+00:00",
+          "finished": "2026-10-15T21:31:12.658434+00:00",
           "name": "lava-after-1",
           "requested_advance": 1,
           "result": "passed",
           "save_game_time": {
-            "after": 3,
-            "before": 3
+            "after": 5,
+            "before": 5
           },
           "semantic_checks": [
             {
@@ -5973,12 +5973,12 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava/lava-after-1-snapshot.json",
-          "snapshot_sha256": "a6c16ad7a78c595e5b195a96f7ac26cd19753047a43165f0d884c5028ae363c9",
-          "started": "2026-10-15T20:06:10.351380+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/lava-after-1-snapshot.json",
+          "snapshot_sha256": "9843bcd0bc22f5f49365f45ac3b00a973991a3b261d7e69c77033a1c119ed016",
+          "started": "2026-10-15T21:31:12.500619+00:00",
           "timing": {
-            "after": 3,
-            "before": 2,
+            "after": 5,
+            "before": 4,
             "delta": 1,
             "frozen_after": true
           }
@@ -6108,13 +6108,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T20:06:20.523079+00:00",
+          "finished": "2026-10-15T21:31:22.683116+00:00",
           "name": "lava-after-200",
           "requested_advance": 199,
           "result": "passed",
           "save_game_time": {
-            "after": 202,
-            "before": 202
+            "after": 204,
+            "before": 204
           },
           "semantic_checks": [
             {
@@ -6238,18 +6238,18 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-mozmqbai/rust-lava/lava-after-200-snapshot.json",
-          "snapshot_sha256": "9d52cb82c6d66713e9b863414105f2aa0d460e82221b158d67f9764ac1ce8cd7",
-          "started": "2026-10-15T20:06:10.507219+00:00",
+          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/lava-after-200-snapshot.json",
+          "snapshot_sha256": "b4d1efd66fe0803c9660c135df6f2f505d88a09439242b51287123e899944a83",
+          "started": "2026-10-15T21:31:12.658663+00:00",
           "timing": {
-            "after": 202,
-            "before": 3,
+            "after": 204,
+            "before": 5,
             "delta": 199,
             "frozen_after": true
           }
         }
       ],
-      "pid": 181214,
+      "pid": 285096,
       "result": "passed",
       "runtime": "rust",
       "shutdown_tail": [
@@ -6272,13 +6272,13 @@
         " INFO Completed worlds",
         " INFO Completed save!"
       ],
-      "started": "2026-10-15T20:06:08.276404+00:00",
+      "started": "2026-10-15T21:31:10.424702+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T20:06:20.554347+00:00"
+      "stop_started": "2026-10-15T21:31:22.715358+00:00"
     }
   ],
   "comparison": "Semantic values and canonical numeric NBT types are separate. Java accepts NumericTag widths such as Short; a different canonical type alone is not a semantic failure.",
-  "duration_seconds": 98.226,
+  "duration_seconds": 99.449,
   "environment": {
     "auth": "isolated offline loopback",
     "host": "devbox",
@@ -6290,9 +6290,9 @@
     "vanilla:blocks.furnace_saved_state",
     "rust:blocks.furnace_saved_state"
   ],
-  "finished": "2026-10-15T20:06:20.928049+00:00",
+  "finished": "2026-10-15T21:31:23.091361+00:00",
   "harness_manifest": {
-    "compatibility/scenario-map.json": "73260228edaaba9aad2764597f747f887a5592f51c5166c8009a5c9582a477d9",
+    "compatibility/scenario-map.json": "a4f0bf324afc321013bbd94d0c86ac666cf4aa580788759ce7b5c6a4fa6d24b2",
     "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
     "tools/check_furnaces.py": "5e7f179297ba639a9ada996876b0483de14c898235791a4b73e89ac04c3b3b65",
     "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
@@ -6300,7 +6300,7 @@
     "tools/parity/client.ts": "6253c87bb3d2bf7d4955671e4429ee4452abc52d4c7f170fab6810d5ed73cc46",
     "tools/parity/furnaces.py": "bf792b8155c55e60652b6f2ffee3bc8ea22e2061cacd137ed99d338c04fbf727",
     "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
-    "tools/parity/suite.py": "2f95a81f0b38825a16659e5f83f6a54e6403362ae9d96bd5b17229c6935d8ace",
+    "tools/parity/suite.py": "776182cf34a23c816a80b3a571cdb10f53a4f05185ece94a7fe5ac0ff88477a4",
     "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b"
   },
   "host": "devbox",
@@ -6319,16 +6319,16 @@
   "protocol": 777,
   "publishes_compatibility_results": false,
   "result": "passed",
-  "run_directory": "$REPO/.cache/runs/furnaces-mozmqbai",
+  "run_directory": "$REPO/.cache/runs/furnaces-ky3i84m4",
   "rust_binary": {
-    "bytes": 119218304,
-    "pinned_path": "$REPO/.cache/runs/furnaces-mozmqbai/bin/ferraloom",
-    "pinned_sha256": "08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
+    "bytes": 119266616,
+    "pinned_path": "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
+    "pinned_sha256": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
     "source_path": "$REPO/target/debug/ferraloom",
-    "source_sha256_after": "08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
-    "source_sha256_before": "08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7"
+    "source_sha256_after": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+    "source_sha256_before": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9"
   },
-  "rust_binary_sha256": "08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7",
+  "rust_binary_sha256": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
   "schema_version": 1,
   "scope": "Timer/speed/fuel remainder fixtures only, not full furnace/inventory/XP/name/lock/Minecraft parity.",
   "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
@@ -6447,7 +6447,7 @@
     ]
   },
   "source_code": {
-    "commit": "3157c3d75f7ce9e7d9a99b4911206985bf955799",
+    "commit": "f6a24a10985a3e1e4feecffc78aa833e2054eb63",
     "dirty": false,
     "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tracked_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -6462,20 +6462,20 @@
       "$REPO/.cache/vanilla/26.3/server.jar",
       "nogui"
     ],
-    "commands_path": "$REPO/.cache/runs/furnaces-mozmqbai/java-source/commands.jsonl",
+    "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/commands.jsonl",
     "configs": {
       "eula.txt": {
         "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
         "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
       },
       "server.properties": {
-        "sha256": "930a204c72e174d5939cfa7830a92586308653be00f004b9165cda240e51c31d",
-        "text": "server-ip=127.0.0.1\nserver-port=40483\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+        "sha256": "2eb877e3b36a433cc622dbfc1826f9d32b43cf392c3a9e7f7e9cdffc498c862e",
+        "text": "server-ip=127.0.0.1\nserver-port=50109\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
       }
     },
-    "console_path": "$REPO/.cache/runs/furnaces-mozmqbai/java-source/console.log",
-    "console_sha256": "e1f0dd4b415ea2a6e027471891bc48dc577b1f8f5e309cde8781a7421b8abf96",
-    "directory": "$REPO/.cache/runs/furnaces-mozmqbai/java-source",
+    "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/console.log",
+    "console_sha256": "b48c09d5cf95d0c1c43fe09293b64486993215febf3d2d79fd9ffdbbe3c61d78",
+    "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source",
     "exit": {
       "code": 0,
       "forced_stop": false,
@@ -6486,14 +6486,14 @@
       "after": 239,
       "before": 239
     },
-    "finished": "2026-10-15T20:05:14.140220+00:00",
+    "finished": "2026-10-15T21:30:15.038610+00:00",
     "fixture_loading_game_time": {
       "after": 2,
       "before": 2
     },
     "load_save_errors": [],
-    "loopback_port": 40483,
-    "pid": 179753,
+    "loopback_port": 50109,
+    "pid": 283603,
     "result": "passed",
     "runtime": "vanilla",
     "saved": {
@@ -6611,8 +6611,8 @@
       },
       "chunk_data_version": 5023,
       "raw_chunk_nbt_sha256": "8501d6b41f54e2c6089ca9f997aec730e6101b3fe673942fce3db1d2f84a718a",
-      "region_path": "$REPO/.cache/runs/furnaces-mozmqbai/java-source/world/dimensions/minecraft/overworld/region/r.8.0.mca",
-      "region_sha256": "5757c07a64e52cbf7312d6cd670f33b7070c351df3416f46819674fd71835fad",
+      "region_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/world/dimensions/minecraft/overworld/region/r.8.0.mca",
+      "region_sha256": "a40b5df4a2a9a2e5427212cb08a40d5818ba8918f1f872acfecfff028e9e89f6",
       "typed_block_entities": {
         "blast_furnace": {
           "Items": [
@@ -6892,28 +6892,28 @@
       }
     },
     "shutdown_tail": [
-      "[22:05:12] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_d550dff8831644e2a3b8a88474394789",
-      "[22:05:12] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-      "[22:05:12] [Server thread/INFO]: System chat: Saved the game",
-      "[22:05:12] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_7ee9ce57e7a344029e4d1ae1fbec8475",
-      "[22:05:12] [Server thread/INFO]: System chat: The game is frozen",
-      "[22:05:12] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
-      "Average time per tick: 3.5ms (Target: 50.0ms)",
-      "[22:05:12] [Server thread/INFO]: System chat: Percentiles: P50: 0.4ms P95: 1.4ms P99: 253.5ms. Sample: 100",
-      "[22:05:12] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_09234aab9de2452abfddb5751fbd0825",
-      "[22:05:12] [Server thread/INFO]: System chat: The game time is 239 tick(s)",
-      "[22:05:12] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_bd27cf56d7e44f909cd845b8afa2bcb5",
-      "[22:05:12] [Server thread/INFO]: System chat: Stopping the server",
-      "[22:05:12] [Server thread/INFO]: Stopping server",
-      "[22:05:12] [Server thread/INFO]: Saving players",
-      "[22:05:12] [Server thread/INFO]: Saving worlds",
-      "[22:05:12] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-      "[22:05:13] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end",
-      "[22:05:13] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether"
+      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_067146f47c8a4508bf8b8f72b312a433",
+      "[23:30:13] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+      "[23:30:13] [Server thread/INFO]: System chat: Saved the game",
+      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_62cf62df3c3645a8b454a37364e47639",
+      "[23:30:13] [Server thread/INFO]: System chat: The game is frozen",
+      "[23:30:13] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+      "Average time per tick: 3.6ms (Target: 50.0ms)",
+      "[23:30:13] [Server thread/INFO]: System chat: Percentiles: P50: 0.5ms P95: 1.8ms P99: 253.8ms. Sample: 100",
+      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_0300d301c49341b18b38bebcedfbb323",
+      "[23:30:13] [Server thread/INFO]: System chat: The game time is 239 tick(s)",
+      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_9d9c5a8ecf2b4bb194134cbdc5454f37",
+      "[23:30:13] [Server thread/INFO]: System chat: Stopping the server",
+      "[23:30:13] [Server thread/INFO]: Stopping server",
+      "[23:30:13] [Server thread/INFO]: Saving players",
+      "[23:30:13] [Server thread/INFO]: Saving worlds",
+      "[23:30:13] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+      "[23:30:14] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
+      "[23:30:14] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
     ],
-    "started": "2026-10-15T20:04:43.267724+00:00",
+    "started": "2026-10-15T21:29:44.188407+00:00",
     "stop_command": "stop",
-    "stop_started": "2026-10-15T20:05:12.723965+00:00",
+    "stop_started": "2026-10-15T21:30:13.569315+00:00",
     "timing": {
       "after": 239,
       "before": 2,
@@ -7627,104 +7627,104 @@
       ],
       "semantic_result": "passed"
     },
-    "world_manifest_path": "$REPO/.cache/runs/furnaces-mozmqbai/source-world-manifest.json",
-    "world_manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
-    "world_path": "$REPO/.cache/runs/furnaces-mozmqbai/java-source/world"
+    "world_manifest_path": "$REPO/.cache/runs/furnaces-ky3i84m4/source-world-manifest.json",
+    "world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+    "world_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/world"
   },
   "source_integrity_checks": [
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "initial verified source"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "before clone vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after clone vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after execution vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "before clone rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after clone rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after execution rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "before clone vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after clone vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after execution vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "before clone rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after clone rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "after execution rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "9c77831a6b738432f86905c34926d3c7e1216beab0d52e8a9ac5790723b8313b",
+      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
       "passed": true,
       "stage": "final verified source"
     }
   ],
   "source_state": {
-    "commit": "3157c3d75f7ce9e7d9a99b4911206985bf955799",
+    "commit": "f6a24a10985a3e1e4feecffc78aa833e2054eb63",
     "dirty": false,
     "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tracked_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "untracked_source_sha256": {}
   },
-  "started": "2026-10-15T20:04:42.702414+00:00",
+  "started": "2026-10-15T21:29:43.642850+00:00",
   "target": {
     "edition": "java",
     "java_major": 25,
@@ -7748,6 +7748,6 @@
     "version": "26.3"
   },
   "target_version": "26.3",
-  "test_suite_sha256": "512ba43f095ac873a2a1d6e8f587e9f6bb20353e47a9d0d7f256f7515f9381eb",
+  "test_suite_sha256": "c226c0009dc73767d73aeb805d407320d2ab072061a981fa4d51634f09bf4d43",
   "transport": "fresh sequential offline 127.0.0.1 processes"
 }

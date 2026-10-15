@@ -4,31 +4,42 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest selected run tested source `3157c3d75f7ce9e7d9a99b4911206985bf955799`
-with Rust executable SHA-256
-`08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7`.
-Both servers passed 79 of 79 selected scenarios, including data-modification
-sources, indexed insertion, dying-entity selectors, and fill-destroy callbacks
-and replacement block entities. World interchange passes in both directions.
+The latest selected run used Rust code from
+`5ce6ee068096c8140516b9d1e1591d64350952b1` and the isolated tripwire fixtures in
+`f6a24a10985a3e1e4feecffc78aa833e2054eb63`, with executable SHA-256
+`541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9`.
+Both servers passed 95 of 95 selected scenarios. New observations cover recursive
+data merging, missing-path conditions, namespace parsing, repeater/comparator and
+tripwire removal, and namespaced command storage across manual saves, console
+shutdown, SIGTERM and restart. World interchange passes in both directions,
+including command storage under `.` and a namespace resembling a legacy filename.
 The decoded command trees differ by two missing roots (`jfr`, `perf`) and 468
 missing advertised literal paths with argument names normalized. This checks
 advertised syntax, independently of command execution; some differences are
 argument representation, while others are missing behavior. All 16,384 block states
-in the selected underground chunk sample matched; that single sample does not
-establish general generation parity. The immutable
-[paired report](../compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json)
-retains the command-tree failure. The ledger has 21 partial and 179 unverified
+in the selected underground chunk sample matched. An
+[earlier run](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
+on the same generation code differed at four gold-ore cells. That failure remains
+unresolved; a later matching sample does not establish deterministic generation.
+The immutable
+[paired report](../compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json)
+retains the command-tree failure. A
+[prior fixture failure](../compatibility/results/evidence/fc13bba3a3595c4f37415dca8285932dd85eceb9b1054733f4856556c2dc5e7d.json)
+is also retained: Java's hook-removal setup failed before removal in an area
+reused by other redstone tests. The latest fixtures use separate footprints with
+the same assertions. The ledger has 23 partial and 177 unverified
 families. A separate fresh Java fixture and both runtimes' cooking continuations
 pass the selected furnace timer, speed and lava bucket checks in the
-[furnace report](../compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json).
+[furnace report](../compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json).
 Zero-step preservation remains visible, with codec acceptance marked skipped;
 changed chunk bytes alone cannot prove furnace decoding or encoding.
 
 Rust tests also cover ordered player snapshots, admission through final player
 and advancement saves, atomic advancement-write failures, and renewed chunk
 tickets protecting live inventories. Remaining work includes command branches,
-redstone removal behavior, full multiplayer and gameplay coverage, generation
-ordering, and measured multicore performance. Duplicate-login replacement
+other redstone behavior, live block-entity data mutation, full multiplayer and
+gameplay coverage, generation ordering, and measured multicore performance.
+Duplicate-login replacement
 currently starts after configuration; vanilla begins it before configuration.
 
 ## Inventory scope
