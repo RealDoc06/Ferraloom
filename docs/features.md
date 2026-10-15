@@ -69,10 +69,10 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.nbt` | Read and write target binary NBT types and limits | 0/0/0 | 0/0/0 | unverified |
 | `persistence.region` | Read and write target region storage and compression formats | 0/0/0 | 0/0/0 | unverified |
 | `persistence.chunk_data` | Persist section palettes, biomes, heightmaps and block states | 1/0/0 | 1/0/0 | partial |
-| `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 0/0/0 | 0/0/0 | unverified |
+| `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 2/0/0 | 2/0/0 | partial |
 | `persistence.block_entities` | Persist container, command and other block entity state | 0/0/0 | 0/0/0 | unverified |
 | `persistence.player_data` | Persist inventory, position, abilities and dimension | 0/0/0 | 0/0/0 | unverified |
-| `persistence.level_data` | Maintain level.dat settings, seed and world metadata | 0/0/0 | 0/0/0 | unverified |
+| `persistence.level_data` | Maintain level.dat settings, seed and world metadata | 1/0/0 | 1/0/0 | partial |
 | `persistence.poi` | Persist and reload village and portal points of interest | 0/0/0 | 0/0/0 | unverified |
 | `persistence.scheduled_ticks` | Preserve block and fluid scheduled ticks across unloads | 0/0/0 | 0/0/0 | unverified |
 | `persistence.scoreboard_data` | Preserve objectives, scores, teams and display slots | 0/0/0 | 0/0/0 | unverified |

@@ -31,12 +31,12 @@
           "scenario": "unsupported protocol",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "client_protocol": 776,
               "version_rejection": true
@@ -44,8 +44,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "client_protocol": 776,
               "version_rejection": true
@@ -73,12 +73,12 @@
           "scenario": "ping echo",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "signed_payload_echoed": true,
               "closed_after_ping": true
@@ -86,8 +86,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "signed_payload_echoed": true,
               "closed_after_ping": true
@@ -99,12 +99,12 @@
           "scenario": "status fields",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "protocol": 777,
               "version": "26.3"
@@ -112,8 +112,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "protocol": 777,
               "version": "26.3"
@@ -125,12 +125,12 @@
           "scenario": "status fields",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "client_protocol": 776,
               "advertised_protocol": 777
@@ -138,8 +138,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "client_protocol": 776,
               "advertised_protocol": 777
@@ -167,20 +167,20 @@
           "scenario": "split frame",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "split_frame_accepted": true
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "split_frame_accepted": true
             }
@@ -207,12 +207,12 @@
           "scenario": "invalid encodings",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "malformed_disconnected": true,
               "server_alive": true
@@ -220,8 +220,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "malformed_disconnected": true,
               "server_alive": true
@@ -249,12 +249,12 @@
           "scenario": "successful login",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "auth": "offline",
               "protocol": 777,
@@ -263,8 +263,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "auth": "offline",
               "protocol": 777,
@@ -398,16 +398,16 @@
           "scenario": "system message",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
               "server_to_client": {
-                "text": "FERRALOOM_CHAT_e1e37f23f5184a42bbeb19eeb6956e17",
+                "text": "FERRALOOM_CHAT_57bfe5813987496d9c57d543ae2fea77",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -415,7 +415,7 @@
                 "signature_verified": false
               },
               "unsigned_offline_player_chat_echo": {
-                "text": "FERRALOOM_ECHO_5956410376654cd6bd8cbd29b58d2bcc",
+                "text": "FERRALOOM_ECHO_217d4c6301c448f48c4cdf23f7949c60",
                 "packet_id": 66,
                 "packet_type": "player_chat",
                 "text_scope": "message_body",
@@ -426,12 +426,12 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
               "server_to_client": {
-                "text": "FERRALOOM_CHAT_e5da30fc7d494928aaa4d2f27ee5eb44",
+                "text": "FERRALOOM_CHAT_11435afaab0f4be58f66a28c4693562b",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -439,7 +439,7 @@
                 "signature_verified": false
               },
               "unsigned_offline_player_chat_echo": {
-                "text": "<FerraloomTest> FERRALOOM_ECHO_7fc82de4253b432190d4cb3e7090c207",
+                "text": "<FerraloomTest> FERRALOOM_ECHO_5f27b11c343a455e903c243c705a65a6",
                 "packet_id": 33,
                 "packet_type": "disguised_chat",
                 "text_scope": "component_text",
@@ -500,12 +500,12 @@
           "scenario": "legal movement",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "sent_position": {
                 "x": 4.75,
@@ -517,8 +517,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "sent_position": {
                 "x": 4.75,
@@ -534,12 +534,12 @@
           "scenario": "teleport acknowledgment",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "server_position": {
                 "x": 4.5,
@@ -554,8 +554,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "server_position": {
                 "x": 4.5,
@@ -650,22 +650,22 @@
           "scenario": "join initial chunks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "unique_chunk_coordinates": 9
             }
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
-              "unique_chunk_coordinates": 9
+              "unique_chunk_coordinates": 10
             }
           }
         }
@@ -1065,12 +1065,12 @@
           "scenario": "save reload",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 14 200 14 diamond_block",
               "commands": []
@@ -1078,8 +1078,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 14 200 14 diamond_block",
               "commands": []
@@ -1100,8 +1100,61 @@
         "passenger hierarchy",
         "entity crosses chunk"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "persistence.entity_restart",
+          "scenario": "entity reload",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]",
+              "commands": []
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]",
+              "commands": []
+            }
+          }
+        },
+        {
+          "test_id": "persistence.entity_signal_restart",
+          "scenario": "entity reload",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]",
+              "commands": []
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "predicate": "if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]",
+              "commands": []
+            }
+          }
+        }
+      ]
     },
     {
       "id": "persistence.block_entities",
@@ -1145,8 +1198,35 @@
         "restart",
         "metadata backup"
       ],
-      "rust_status": "unverified",
-      "evidence": []
+      "rust_status": "partial",
+      "evidence": [
+        {
+          "test_id": "persistence.metadata_restart",
+          "scenario": "restart",
+          "target_version": "26.3",
+          "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
+          "vanilla": {
+            "result": "passed",
+            "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "keep_inventory": true,
+              "daytime": 4321
+            }
+          },
+          "rust": {
+            "result": "passed",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
+            "detail": {
+              "keep_inventory": true,
+              "daytime": 4321
+            }
+          }
+        }
+      ]
     },
     {
       "id": "persistence.poi",
@@ -1257,12 +1337,12 @@
           "scenario": "second server",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "holder": "vanilla",
               "contender": "rust",
@@ -1271,8 +1351,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "holder": "rust",
               "contender": "rust",
@@ -1331,12 +1411,12 @@
           "scenario": "placement state",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 0 200 0 stone",
               "commands": [
@@ -1346,8 +1426,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 0 200 0 stone",
               "commands": [
@@ -1361,12 +1441,12 @@
           "scenario": "placement state",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
               "commands": [
@@ -1376,8 +1456,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if block 0 200 0 oak_stairs[facing=east,half=top]",
               "commands": [
@@ -1391,12 +1471,12 @@
           "scenario": "registry coverage",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "blocks": 1286,
               "states": 35723,
@@ -1405,8 +1485,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "blocks": 1286,
               "states": 35723,
@@ -1840,12 +1920,12 @@
           "scenario": "spawn",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
               "commands": [
@@ -1855,8 +1935,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if entity @e[type=pig,tag=ferraloom_probe,limit=1]",
               "commands": [
@@ -2693,7 +2773,8 @@
         "execute score success differs from a zero command result",
         "execute score store records nested command failure",
         "chained execute score stores preserve both callbacks",
-        "execute score store preserves prior scores when a conditional branch is empty"
+        "execute score store preserves prior scores when a conditional branch is empty",
+        "execute as runs once for each selected entity"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -2702,12 +2783,12 @@
           "scenario": "chained execute score stores preserve both callbacks",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0 if score Succeeded parity matches 1",
               "commands": [
@@ -2717,8 +2798,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0 if score Succeeded parity matches 1",
               "commands": [
@@ -2732,12 +2813,12 @@
           "scenario": "execute score store preserves prior scores when a conditional branch is empty",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 17",
               "commands": [
@@ -2748,8 +2829,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 17",
               "commands": [
@@ -2764,12 +2845,12 @@
           "scenario": "execute score store records nested command failure",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -2780,8 +2861,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -2796,12 +2877,12 @@
           "scenario": "execute score store preserves a zero command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -2813,8 +2894,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 0",
               "commands": [
@@ -2830,12 +2911,12 @@
           "scenario": "execute score store preserves a signed command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches -7",
               "commands": [
@@ -2846,8 +2927,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches -7",
               "commands": [
@@ -2862,12 +2943,12 @@
           "scenario": "execute score success differs from a zero command result",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 1",
               "commands": [
@@ -2877,8 +2958,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score Stored parity matches 1",
               "commands": [
@@ -2953,12 +3034,12 @@
           "scenario": "objective operation",
           "target_version": "26.3",
           "environment": "{\"auth\": \"isolated offline loopback\", \"host\": \"devbox\", \"platform\": \"linux\", \"seed\": \"12345678\", \"workers\": 2}",
-          "report_sha256": "7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139",
-          "test_suite_sha256": "a2ae26f2c8dda99d72e393b59f37dd5ebb35b158b05c0867d66605827e0aae2d",
+          "report_sha256": "27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179",
+          "test_suite_sha256": "e48df2b1fdde8bd4bcdc331eaf5f377ea6a12138d38dd867dcc8df5d1c0e59de",
           "vanilla": {
             "result": "passed",
             "build_id": "sha1:33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score A parity matches 12",
               "commands": [
@@ -2971,8 +3052,8 @@
           },
           "rust": {
             "result": "passed",
-            "build_id": "sha256:4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-            "artifact": "compatibility/results/evidence/7d30b6b77c50d5be674b49107e89f07a245a3d424cd22b50d3839733228bc139.json",
+            "build_id": "sha256:069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+            "artifact": "compatibility/results/evidence/27be46c1e8414ba08d4a31a0193d8a92d8e1a7e241e9ba32e0c8780d77125179.json",
             "detail": {
               "predicate": "if score A parity matches 12",
               "commands": [

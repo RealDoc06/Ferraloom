@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "created_at": "2026-10-15T15:03:30.842775+00:00",
+  "created_at": "2026-10-15T15:36:37.139983+00:00",
   "result": "passed",
   "target_version": "26.3",
   "protocol": 777,
   "scope": "One default-LZ4 Rust overworld chunk and marker loaded by vanilla, without conversion. No other storage, entities, dimensions, crash durability or full parity claim.",
-  "fixture": "$REPO/.cache/runs/default-storage-9z8r_rsk",
+  "fixture": "$REPO/.cache/runs/default-storage-bc0_2ryg",
   "transport": "isolated offline 127.0.0.1",
   "workers": 2,
-  "tool_sha256": "aae8e58481aef78ee1b410e105f4699c5ce8950989fad75308c27ad6a4cbcbfa",
+  "tool_sha256": "18696596f18f1a2065e50fa858d64034a9a3da3a70acbb5c394e228ee9bab7b2",
   "observations": {
     "rust_marker": "if block 3 200 11 amethyst_block",
     "rust_shutdown": {
@@ -18,8 +18,8 @@
     "source_compression_byte": 4,
     "source_chunk_data_version": 5023,
     "source_level_data_version": 5023,
-    "source_region_sha256": "26471821d9ce616b0d39cc65a77515504581463b9b9f57237f6864f980a52b2f",
-    "copied_region_sha256": "26471821d9ce616b0d39cc65a77515504581463b9b9f57237f6864f980a52b2f",
+    "source_region_sha256": "e15c7f34fc7a9ee5d0e5b850fc766b6333f09e52e2fa29002a057315e14092e9",
+    "copied_region_sha256": "e15c7f34fc7a9ee5d0e5b850fc766b6333f09e52e2fa29002a057315e14092e9",
     "vanilla_marker": "if block 3 200 11 amethyst_block",
     "vanilla_shutdown": {
       "exit_code": 0,
@@ -28,13 +28,27 @@
     "destination_load_save_errors": 0,
     "destination_level_data_version": 5023
   },
+  "source_state": {
+    "commit": "00891a7f4ff88d3b0945fcf2230dce2aa0c12ada",
+    "dirty": true
+  },
+  "harness_manifest": {
+    "tools/parity/bot.py": "1b4f1e0d009aa0f1579e32c0e3f13ed27abdfdd8886b82eda4a2c5fc4f83d5f7",
+    "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
+    "tools/parity/suite.py": "dcd23b0b279c3687701f057b04e1663d0db002b22d36d2a3ac032d22b55c7417",
+    "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b",
+    "tools/parity/client.ts": "cbcee0951a0545b101f5968cceffd7a815d5f4c6d6220a13f1643c1d9434e4cd",
+    "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
+    "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
+    "compatibility/scenario-map.json": "a796e566d10bcaaa4f2ebfdbdb5a9246d9d86f6760a8c1b00dd9da7b10b087a2"
+  },
   "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
   "server_sha256": "d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64",
-  "rust_binary_sha256": "4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
-  "rust_config_sha256": "f799b96ed5cdbfa69b92169d0ace96448779013e572a1664bf4edd23acefeeba",
+  "rust_binary_sha256": "069c9f2b2ed2a89dd13ebfba869096b57372ae7f1cc39e0df629529978e1323a",
+  "rust_config_sha256": "a248e8cc346e9aa5fe2373d15d408761a04ac489e8cdd4df92afd66fb3bcfdbc",
   "lz4_decoder": {
     "coordinate": "at.yawk.lz4:lz4-java:1.10.1",
     "sha256": "a58a84c4271e50df4c96ed916ccb7e48a869f8ed9cdcda1ad5d3d4c33b0214a3"
   },
-  "duration_seconds": 22.891
+  "duration_seconds": 25.29
 }
