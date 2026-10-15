@@ -17,6 +17,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::tick::TickPriority;
 use uuid::Uuid;
 
@@ -722,6 +723,12 @@ pub(crate) fn execute_sign_click_commands(
         for command in commands {
             dispatcher.handle_command(source, command.strip_prefix('/').unwrap_or(&command));
         }
+    } else if has_command && let Some(player) = source.player_or_none() {
+        player.send_system_message_raw(
+            &TextComponent::translate("sign.click_actions_disabled", [])
+                .color_named(NamedColor::Red),
+            true,
+        );
     }
     has_command
 }
