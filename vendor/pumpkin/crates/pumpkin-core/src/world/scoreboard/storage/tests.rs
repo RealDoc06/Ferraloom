@@ -390,42 +390,58 @@ fn malformed_existing_files_fail_loading_without_modifying_the_original() {
 }
 
 #[test]
-fn failed_atomic_write_preserves_original_and_cleans_partial_temporary_file() {
+fn failed_scoreboard_replacement_preserves_destination_and_cleans_stage() {
     let folder = tempfile::tempdir().unwrap();
     let board = Scoreboard::from_saved_data(target_fixture()).unwrap();
-    board.save(folder.path()).unwrap();
     let path = folder.path().join("data/minecraft/scoreboard.dat");
-    let before = fs::read(&path).unwrap();
-    let error = atomic_write(&path, |file| {
-        file.write_all(b"partial gzip bytes")?;
-        Err(io::Error::new(
-            io::ErrorKind::StorageFull,
-            "injected disk full",
-        ))
-    })
-    .unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::StorageFull);
-    assert_eq!(fs::read(&path).unwrap(), before);
+    fs::create_dir_all(&path).unwrap();
+    fs::write(path.join("sentinel"), b"preserve").unwrap();
+    assert!(board.save(folder.path()).is_err());
+    assert_eq!(fs::read(path.join("sentinel")).unwrap(), b"preserve");
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+}
+
+#[test]
+fn legacy_scoreboard_is_loaded_and_saved_in_current_layout_without_losing_original() {
+    let folder = tempfile::tempdir().unwrap();
+    let legacy = folder.path().join("data/scoreboard.dat");
+    let modern = folder.path().join("data/minecraft/scoreboard.dat");
+    fs::create_dir(legacy.parent().unwrap()).unwrap();
+    let mut fixture = target_fixture();
+    fixture.put_int("DataVersion", 4765);
+    write_gzip_compound_tag(fixture, File::create(&legacy).unwrap()).unwrap();
+    let previous = fs::read(&legacy).unwrap();
+    let mut board = Scoreboard::load(folder.path()).unwrap();
+    assert_eq!(board.get_score_value("Query", "parity"), Some(-7));
+    assert!(
+        !modern.exists(),
+        "loading does not rewrite the source world"
+    );
+    board.set_score_value(&NoTarget, "Query", "parity", -19);
+    board.save(folder.path()).unwrap();
+    assert_eq!(fs::read(&legacy).unwrap(), previous);
     assert_eq!(
         Scoreboard::load(folder.path())
             .unwrap()
-            .get_score_value("A", "parity"),
-        Some(12)
+            .get_score_value("Query", "parity"),
+        Some(-19),
+        "the committed current-layout file takes precedence over the old copy"
     );
-    // Rename failures are returned too, without deleting the destination.
-    let destination = folder.path().join("directory.dat");
-    fs::create_dir(&destination).unwrap();
-    fs::write(destination.join("sentinel"), b"keep").unwrap();
-    assert!(atomic_write(&destination, |file| file.write_all(b"staged")).is_err());
-    assert_eq!(fs::read(destination.join("sentinel")).unwrap(), b"keep");
-    assert!(fs::read_dir(folder.path()).unwrap().all(|entry| {
-        !entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .ends_with(".tmp")
-    }));
+    fs::write(&modern, b"unreadable current save").unwrap();
+    assert!(Scoreboard::load(folder.path()).is_err());
+    assert_eq!(fs::read(&modern).unwrap(), b"unreadable current save");
+    assert_eq!(fs::read(&legacy).unwrap(), previous);
+}
+
+#[test]
+fn unreadable_legacy_scoreboard_does_not_become_an_empty_board() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("data/scoreboard.dat");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, b"invalid legacy save").unwrap();
+    assert!(Scoreboard::load(folder.path()).is_err());
+    assert_eq!(fs::read(&path).unwrap(), b"invalid legacy save");
+    assert!(!folder.path().join("data/minecraft/scoreboard.dat").exists());
 }
 
 #[test]

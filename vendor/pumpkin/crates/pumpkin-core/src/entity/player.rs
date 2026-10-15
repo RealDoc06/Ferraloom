@@ -506,6 +506,8 @@ pub struct Player {
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
     pub(crate) held_chunk_tickets: Mutex<Option<HeldChunkTickets>>,
     pub(crate) chunk_watches: PlayerChunkWatches,
+    /// Serializes dimension changes and respawns before their current-world reads.
+    pub(crate) world_transfer: tokio::sync::Mutex<()>,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
@@ -805,6 +807,7 @@ impl Player {
             chunk_listener: Mutex::new(world.level.chunk_listener.add_global_chunk_listener()),
             held_chunk_tickets: Mutex::new(None),
             chunk_watches: PlayerChunkWatches::default(),
+            world_transfer: tokio::sync::Mutex::new(()),
             chunk_send_epoch: AtomicU32::new(0),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
@@ -1182,6 +1185,7 @@ impl Player {
 
     /// Removes the [`Player`] out of the current [`World`].
     pub async fn remove(self: &Arc<Self>) {
+        let _transfer = self.world_transfer.lock().await;
         if !self
             .current_screen_handler
             .lock()
@@ -2796,7 +2800,27 @@ impl Player {
 
         let view_distance = self.watched_section.load().view_distance;
         let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
+            if self.chunk_send_epoch.load(Ordering::Relaxed) != epoch
+                || !Arc::ptr_eq(&self.world(), &world)
+            {
+                return None;
+            }
+            let generation_policy = crate::net::chunk_sender::ChunkGenerationPolicy::for_player(
+                self.is_spectator(),
+                world
+                    .level_info
+                    .load()
+                    .game_rules
+                    .spectators_generate_chunks,
+            );
+            sender.prepare_batch(
+                &world.level,
+                player_chunk,
+                view_distance,
+                generation_policy,
+                epoch,
+                version,
+            )
         });
 
         let total_sent_chunks = prepared_batch.map_or_else(
@@ -3994,7 +4018,20 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
+        let _transfer = self.world_transfer.lock().await;
+        if self.client.closed() {
+            return;
+        }
         let current_world = self.living_entity.entity.world.load_full();
+        if Arc::ptr_eq(&current_world, &new_world) {
+            self.request_teleport(
+                position,
+                yaw.unwrap_or_else(|| self.get_entity().yaw.load()),
+                pitch.unwrap_or_else(|| self.get_entity().pitch.load()),
+            );
+            crate::world::chunker::update_position(self);
+            return;
+        }
         let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
         let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 
@@ -4020,6 +4057,16 @@ impl Player {
                 let yaw = event.yaw;
                 let pitch = event.pitch;
                 let new_world = event.new_world;
+
+                if self.client.closed() {
+                    return;
+                }
+                // Plugins may redirect a dimension change to the current world.
+                if Arc::ptr_eq(&current_world, &new_world) {
+                    self.request_teleport(position, yaw, pitch);
+                    crate::world::chunker::update_position(self);
+                    return;
+                }
 
                 self.set_client_loaded(false);
                 let Some(player) = current_world.remove_player(self, false).await else {
@@ -4924,6 +4971,7 @@ impl Player {
             },
         );
 
+        self.update_chunk_tickets_for_gamemode();
         true
     }
 

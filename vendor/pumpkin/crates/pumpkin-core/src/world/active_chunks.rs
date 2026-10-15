@@ -1,6 +1,10 @@
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::level::ChunkActivationDemand;
+use pumpkin_world::{
+    chunk_system::ChunkLoading,
+    level::{ChunkActivationDemand, Level},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::Weak;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -15,8 +19,31 @@ pub(super) struct ActiveChunkTracker {
     pub players: FxHashMap<Uuid, ActivePlayerArea>,
     pub requested_chunks: FxHashSet<Vector2<i32>>,
     pub loaded_active_chunks: FxHashSet<Vector2<i32>>,
+    pub requested_block_chunks: FxHashSet<Vector2<i32>>,
+    pub owned_block_chunks: FxHashSet<Vector2<i32>>,
+    pub watched_block_chunks: FxHashSet<Vector2<i32>>,
+    pub loaded_block_ticking_chunks: FxHashSet<Vector2<i32>>,
+    pub reconciling_block_chunks: bool,
+    pub block_ticket_level: Option<Weak<Level>>,
     watcher_counts: FxHashMap<Vector2<i32>, u32>,
     forced_chunks: FxHashSet<Vector2<i32>>,
+}
+
+impl Drop for ActiveChunkTracker {
+    fn drop(&mut self) {
+        if let Some(level) = self.block_ticket_level.as_ref().and_then(Weak::upgrade) {
+            let mut loading = level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for pos in &self.owned_block_chunks {
+                loading.remove_ticket(*pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            }
+            if !self.owned_block_chunks.is_empty() {
+                loading.send_change();
+            }
+        }
+    }
 }
 
 impl ActiveChunkTracker {

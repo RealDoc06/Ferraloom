@@ -128,9 +128,327 @@ mod tests {
                         .into_boxed_slice(),
                 };
                 world.level.loaded_chunks.insert(Vector2::new(x, z), chunk);
+                world
+                    .level
+                    .get_entity_chunk(Vector2::new(x, z))
+                    .await
+                    .unwrap();
             }
         }
         (folder, world)
+    }
+
+    async fn settle_simulation(world: &Arc<World>) {
+        world.update_active_chunks();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while world
+                .active_chunk_tracker
+                .lock()
+                .unwrap()
+                .reconciling_block_chunks
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("simulation owner reconciliation must finish");
+        world.update_active_chunks();
+    }
+
+    fn assert_simulation_leases(world: &World) {
+        let tracker = world.active_chunk_tracker.lock().unwrap();
+        let loading = world.level.chunk_loading.lock().unwrap();
+        for pos in &tracker.requested_block_chunks {
+            assert!(loading.ticket[pos].contains(&ChunkLoading::FULL_CHUNK_LEVEL));
+        }
+    }
+
+    async fn test_server_world() -> (
+        tempfile::TempDir,
+        tempfile::TempDir,
+        Arc<crate::server::Server>,
+        Arc<World>,
+    ) {
+        use crate::{data::VanillaData, server::Server};
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_world::world_info::{WorldInfoWriter, anvil::AnvilLevelInfo};
+
+        let server_folder = tempfile::tempdir().unwrap();
+        AnvilLevelInfo
+            .write_world_info(&LevelData::default(Seed(0)), server_folder.path())
+            .unwrap();
+        let basic = BasicConfiguration {
+            default_level_name: server_folder.path().to_string_lossy().into_owned(),
+            seed: Seed(0),
+            allow_nether: false,
+            allow_end: false,
+            allow_chat_reports: false,
+            use_favicon: false,
+            ..BasicConfiguration::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.java.online_mode = false;
+        advanced.networking.bedrock.online_mode = false;
+        let data = VanillaData {
+            banned_ip_list: Default::default(),
+            banned_player_list: Default::default(),
+            operator_config: Default::default(),
+            user_cache: Default::default(),
+            whitelist_config: Default::default(),
+        };
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            data,
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        for world in server.worlds.load().iter() {
+            world.level.shutdown().await.unwrap();
+        }
+        let (folder, mut world) = test_world().await;
+        Arc::get_mut(&mut world).unwrap().server = Arc::downgrade(&server);
+        server.worlds.store(Arc::new(vec![world.clone()]));
+        (server_folder, folder, server, world)
+    }
+
+    #[tokio::test]
+    async fn block_entity_phase_ticks_outer_block_ring_after_entities_load_but_leaves_full_halo_pending()
+     {
+        use crate::block::entities::{BlockEntity, hopper::HopperBlockEntity};
+        use pumpkin_data::block_properties::HopperLikeProperties;
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let (_folder, world) = test_world().await;
+        let center = Vector2::new(-1, 0);
+        let outer = BlockPos::new(1, 100, 1);
+        let halo = BlockPos::new(17, 100, 1);
+        let mut properties = HopperLikeProperties::default(&Block::HOPPER);
+        properties.enabled = false;
+        for pos in [outer, halo] {
+            let relative = pos.chunk_relative_position();
+            world.level.read_chunk_sync(&pos.chunk_position(), |chunk| {
+                chunk.set_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                    properties.to_state_id(&Block::HOPPER),
+                );
+            });
+            let mut nbt = NbtCompound::new();
+            nbt.put_string("id", "minecraft:hopper".to_owned());
+            nbt.put_int("x", pos.0.x);
+            nbt.put_int("y", pos.0.y);
+            nbt.put_int("z", pos.0.z);
+            nbt.put_int("TransferCooldown", 20);
+            world.add_block_entity_nbt(pos, &nbt);
+        }
+        world.forced_chunks.lock().unwrap().insert(center);
+        world.update_active_chunks();
+        assert!(!world.block_entities.contains_key(&outer.chunk_position()));
+        settle_simulation(&world).await;
+        assert!(!world.is_entity_ticking_loaded(&outer));
+        assert!(!world.is_entity_ticking_loaded(&halo));
+        assert!(!world.block_entities.contains_key(&halo.chunk_position()));
+        let entity_chunk = world
+            .level
+            .get_entity_chunk_sync(&outer.chunk_position())
+            .unwrap();
+        entity_chunk.live.store(false, Ordering::Relaxed);
+        for _ in 0..5 {
+            assert_eq!(
+                world.tick_block_entities(&tokio::runtime::Handle::current()),
+                0
+            );
+        }
+        let outer_entity = world.get_block_entity(&outer).unwrap();
+        let hopper = outer_entity
+            .as_any()
+            .downcast_ref::<HopperBlockEntity>()
+            .unwrap();
+        assert_eq!(hopper.cooldown_time.load(Ordering::Relaxed), 20);
+        entity_chunk.live.store(true, Ordering::Relaxed);
+        for _ in 0..5 {
+            assert_eq!(
+                world.tick_block_entities(&tokio::runtime::Handle::current()),
+                1
+            );
+        }
+        assert_eq!(hopper.cooldown_time.load(Ordering::Relaxed), 15);
+        let pending = world
+            .level
+            .read_chunk_sync(&halo.chunk_position(), |chunk| {
+                chunk.pending_block_entities.lock().unwrap()[&halo].clone()
+            })
+            .unwrap();
+        assert_eq!(pending.get_int("TransferCooldown"), Some(20));
+        let mut nbt = NbtCompound::new();
+        hopper.write_nbt(&mut nbt);
+        assert_eq!(nbt.get_int("TransferCooldown"), Some(15));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scheduled_dispenser_inventory_survives_final_simulation_unwatch_and_disk_reload() {
+        use crate::block::entities::{BlockEntity, dispenser::DispenserBlockEntity};
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+        use pumpkin_inventory::Inventory;
+        use pumpkin_nbt::compound::NbtCompound;
+        use pumpkin_world::{
+            chunk::{
+                format::anvil::AnvilChunkFile,
+                io::{FileIO, LoadedData, file_manager::ChunkFileManager},
+            },
+            tick::TickPriority,
+        };
+
+        let (_server_folder, _folder, server, world) = test_server_world().await;
+        let center = Vector2::new(-1, 0);
+        let pos = BlockPos::new(1, 100, 1);
+        world.forced_chunks.lock().unwrap().insert(center);
+        settle_simulation(&world).await;
+        assert!(!world.is_entity_ticking_loaded(&pos));
+        world.set_block_state(
+            &pos,
+            Block::DISPENSER.default_state.id,
+            BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        let dispenser = Arc::new(DispenserBlockEntity::from_nbt(&NbtCompound::new(), pos));
+        dispenser.set_stack(0, ItemStack::new(3, &Item::STONE));
+        world.add_block_entity(dispenser.clone());
+        world.schedule_block_tick(&Block::DISPENSER, pos, 0, TickPriority::Normal);
+        world.tick_chunks(&server);
+        assert_eq!(dispenser.get_stack(0).item_count, 2);
+
+        // A running callback may finish an inventory change after removing its
+        // owner. The final snapshot and terrain-ticket release must wait for it.
+        let callbacks = world.enter_simulation_callbacks();
+        world.forced_chunks.lock().unwrap().clear();
+        world.update_active_chunks();
+        tokio::task::yield_now().await;
+        assert!(
+            world.level.chunk_loading.lock().unwrap().ticket[&pos.chunk_position()]
+                .contains(&ChunkLoading::FULL_CHUNK_LEVEL)
+        );
+        dispenser.set_stack(0, ItemStack::new(1, &Item::STONE));
+        drop(callbacks);
+        settle_simulation(&world).await;
+        assert!(!world.level.is_chunk_watched(&pos.chunk_position()));
+        assert!(!world.block_entities.contains_key(&pos.chunk_position()));
+        let loading = world.level.chunk_loading.lock().unwrap();
+        assert!(
+            loading
+                .pos_level
+                .get(&pos.chunk_position())
+                .is_none_or(|level| *level > ChunkLoading::FULL_CHUNK_LEVEL)
+        );
+        drop(loading);
+
+        let (_, chunk) = world
+            .level
+            .loaded_chunks
+            .remove(&pos.chunk_position())
+            .unwrap();
+        world
+            .level
+            .write_chunks(vec![(pos.chunk_position(), chunk)])
+            .await;
+        world.level.chunk_saver.flush().await.unwrap();
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let (send, mut receive) = tokio::sync::mpsc::channel(1);
+        reader
+            .fetch_chunks(&world.level.level_folder, &[pos.chunk_position()], send)
+            .await;
+        let Some(LoadedData::Loaded(chunk)) = receive.recv().await else {
+            panic!("unwatched dispenser chunk must reach disk");
+        };
+        world
+            .level
+            .loaded_chunks
+            .insert(pos.chunk_position(), chunk);
+        let entity = world.get_block_entity(&pos).unwrap();
+        let restored = entity
+            .as_any()
+            .downcast_ref::<DispenserBlockEntity>()
+            .unwrap();
+        assert_eq!(restored.get_stack(0).item_count, 1);
+    }
+
+    /// Run the real callback in a child test process so a regressed Rayon lock
+    /// deadlock is killed, rather than leaving a timed-out Tokio task alive.
+    #[test]
+    fn scheduled_command_block_forceload_add_and_remove_all_complete() {
+        const CHILD: &str = "FERRALOOM_FORCELOAD_CALLBACK_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    use crate::block::entities::command_block::CommandBlockEntity;
+                    use pumpkin_world::tick::TickPriority;
+
+                    let (_server_folder, _folder, server, world) = test_server_world().await;
+                    let center = Vector2::new(-1, 0);
+                    world.forced_chunks.lock().unwrap().insert(center);
+                    settle_simulation(&world).await;
+                    let pos = BlockPos::new(-8, 100, 8);
+                    world.set_block_state(
+                        &pos,
+                        Block::COMMAND_BLOCK.default_state.id,
+                        BlockFlags::UPDATE_KNOWN_SHAPE,
+                    );
+                    let entity = Arc::new(CommandBlockEntity::new(pos, false, false));
+                    entity.condition_met.store(true, Ordering::Relaxed);
+                    *entity.command.lock().unwrap() = "forceload add 16 0".to_owned();
+                    world.add_block_entity(entity.clone());
+                    world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
+                    world.tick_chunks(&server);
+                    assert!(
+                        world
+                            .forced_chunks
+                            .lock()
+                            .unwrap()
+                            .contains(&Vector2::new(1, 0))
+                    );
+                    assert_eq!(entity.success_count.load(Ordering::Relaxed), 1);
+                    settle_simulation(&world).await;
+                    *entity.command.lock().unwrap() = "forceload remove all".to_owned();
+                    world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
+                    world.tick_chunks(&server);
+                    assert!(world.forced_chunks.lock().unwrap().is_empty());
+                    assert_eq!(entity.success_count.load(Ordering::Relaxed), 2);
+                    settle_simulation(&world).await;
+                    server.tasks.close();
+                    tokio::time::timeout(std::time::Duration::from_secs(5), server.tasks.wait())
+                        .await
+                        .expect("forced owner tasks must finish");
+                    assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+                });
+            return;
+        }
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "world::postprocessing::tests::scheduled_command_block_forceload_add_and_remove_all_complete", "--nocapture"])
+            .env(CHILD, "1")
+            .spawn().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(25);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(
+                    status.success(),
+                    "scheduled forceload callback child failed: {status}"
+                );
+                return;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                let _ = child.wait();
+                panic!("scheduled forceload callbacks did not complete within 25 seconds");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     #[tokio::test]
@@ -220,7 +538,7 @@ mod tests {
 
         let (_, west_chunk) = world.level.loaded_chunks.remove(&west).unwrap();
         world.forced_chunks.lock().unwrap().insert(center);
-        world.update_active_chunks();
+        settle_simulation(&world).await;
         assert!(!world.level.is_chunk_ready(&center));
         assert!(world.active_chunks.read().unwrap().is_empty());
         assert_eq!(world.get_block_state_id(&invalid), west_only);
@@ -251,10 +569,8 @@ mod tests {
         assert!(world.is_block_tick_scheduled(&invalid, &Block::GLOW_LICHEN));
         {
             let loading = world.level.chunk_loading.lock().unwrap();
-            assert_eq!(
-                loading.ticket.get(&center),
-                Some(&vec![ChunkLoading::FULL_CHUNK_LEVEL - 1])
-            );
+            assert!(loading.ticket[&center].contains(&(ChunkLoading::FULL_CHUNK_LEVEL - 1)));
+            assert!(loading.ticket[&center].contains(&ChunkLoading::FULL_CHUNK_LEVEL));
             assert!(loading.pos_level[&west] <= ChunkLoading::FULL_CHUNK_LEVEL);
             assert!(
                 loading
@@ -277,7 +593,7 @@ mod tests {
         }
         world.level.loaded_chunks.insert(west, west_chunk);
         center_chunk.dirty.store(false, Ordering::Relaxed);
-        world.update_active_chunks();
+        settle_simulation(&world).await;
         assert!(world.level.is_chunk_ready(&center));
         assert!(world.active_chunks.read().unwrap().contains(&center));
         assert_eq!(
@@ -303,13 +619,13 @@ mod tests {
                 .all(Vec::is_empty)
         );
         assert!(center_chunk.dirty.load(Ordering::Relaxed));
-        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_simulation_leases(&world);
         assert!(world.level.is_chunk_ready(&west));
         assert!(!world.active_chunks.read().unwrap().contains(&west));
 
         // A later ordinary palette change is not replayed as a generation mark.
         center_chunk.set_block_absolute_y(0, invalid.0.y, invalid.0.z as usize, west_only);
-        world.update_active_chunks();
+        settle_simulation(&world).await;
         assert_eq!(world.get_block_state_id(&invalid), west_only);
     }
 
@@ -345,7 +661,7 @@ mod tests {
                 .level
                 .schedule_fluid_tick(&Fluid::WATER, pos, 0, TickPriority::Normal);
         }
-        world.update_active_chunks();
+        settle_simulation(&world).await;
         let entity_chunks = world.active_chunks.read().unwrap();
         let block_chunks = world.block_ticking_chunks.read().unwrap();
         assert_eq!(*entity_chunks, rustc_hash::FxHashSet::from_iter([center]));
@@ -384,7 +700,7 @@ mod tests {
             !world.level.is_chunk_ready(&outside.chunk_position()),
             "postprocessing-only FULL halo must not request another halo"
         );
-        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_simulation_leases(&world);
     }
 
     #[tokio::test]

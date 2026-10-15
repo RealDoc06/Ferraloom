@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufWriter, ErrorKind},
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -156,8 +156,20 @@ fn write_data_root(
     data.child_tags.remove("DataVersion");
     root.put_int("DataVersion", data_version);
     root.put_compound("data", data);
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(File::create(path)?))
-        .map_err(|error| WorldInfoError::SerializationError(error.to_string()))
+    write_gzip_root(path, root)
+}
+
+fn write_gzip_root(path: &Path, root: NbtCompound) -> Result<(), WorldInfoError> {
+    crate::nbt_io::write_gzip_compound_atomic(path, root).map_err(nbt_file_error)
+}
+
+pub(super) fn nbt_file_error(error: crate::nbt_io::NbtFileError) -> WorldInfoError {
+    match error {
+        crate::nbt_io::NbtFileError::Nbt(error) => {
+            WorldInfoError::SerializationError(error.to_string())
+        }
+        crate::nbt_io::NbtFileError::Io(error) => WorldInfoError::IoError(error),
+    }
 }
 
 pub fn read_weather(level_folder: &Path) -> WeatherData {
@@ -649,15 +661,11 @@ pub fn write_wandering_trader(
 ) -> Result<(), WorldInfoError> {
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("wandering_trader.dat");
-    let file = File::create(&path)?;
-    let mut data_comp = NbtCompound::new();
+    let root = existing_data_root(&path)?;
+    let mut data_comp = saved_data_payload(&root);
     data_comp.put_int("spawn_delay", data.spawn_delay);
     data_comp.put_int("spawn_chance", data.spawn_chance);
-    let mut root = NbtCompound::new();
-    root.put_int("DataVersion", data.data_version);
-    root.put_compound("data", data_comp);
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
-        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+    write_data_root(&path, root, data_comp, data.data_version)
 }
 
 pub fn write_custom_boss_events_stub(
@@ -674,9 +682,7 @@ pub fn write_custom_boss_events_stub(
     root.put_int("DataVersion", data_version);
     root.put_compound("data", NbtCompound::new());
 
-    let file = File::create(&path)?;
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
-        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+    write_gzip_root(&path, root)
 }
 
 pub fn write_scheduled_events_stub(
@@ -695,9 +701,7 @@ pub fn write_scheduled_events_stub(
     root.put_int("DataVersion", data_version);
     root.put_compound("data", inner);
 
-    let file = File::create(&path)?;
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
-        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+    write_gzip_root(&path, root)
 }
 
 pub fn write_random_sequences_stub(
@@ -717,9 +721,7 @@ pub fn write_random_sequences_stub(
     root.put_int("DataVersion", data_version);
     root.put_compound("data", inner);
 
-    let file = File::create(&path)?;
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
-        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+    write_gzip_root(&path, root)
 }
 
 pub fn write_stopwatches_stub(
@@ -738,9 +740,7 @@ pub fn write_stopwatches_stub(
     root.put_int("DataVersion", data_version);
     root.put_compound("data", inner);
 
-    let file = File::create(&path)?;
-    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
-        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+    write_gzip_root(&path, root)
 }
 
 #[cfg(test)]
@@ -748,6 +748,41 @@ mod tests {
     use super::*;
     use pumpkin_util::world_seed::Seed;
     use tempfile::TempDir;
+
+    #[test]
+    fn durable_nbt_saved_data_encode_failure_preserves_previous_bytes() {
+        let directory = TempDir::new().unwrap();
+        let clocks = WorldClocksData {
+            data_version: 5023,
+            clocks: [(
+                "minecraft:overworld".into(),
+                DimensionClock { total_ticks: 123 },
+            )]
+            .into(),
+        };
+        write_world_clocks(directory.path(), &clocks).unwrap();
+        let path = minecraft_data_dir(directory.path()).join("world_clocks.dat");
+        let previous = fs::read(&path).unwrap();
+        let mut invalid = clocks.clone();
+        invalid
+            .clocks
+            .insert("\0".repeat(32_768), DimensionClock::default());
+        assert!(matches!(
+            write_world_clocks(directory.path(), &invalid),
+            Err(WorldInfoError::SerializationError(_))
+        ));
+        assert_eq!(fs::read(&path).unwrap(), previous);
+        assert_eq!(read_world_clocks(directory.path()), clocks);
+
+        // Every saved-data codec shares this root writer, including preserved tags.
+        let mut payload = NbtCompound::new();
+        payload.put_string("unknown:oversized", "a".repeat(65_536));
+        assert!(matches!(
+            write_data_root(&path, NbtCompound::new(), payload, 5023),
+            Err(WorldInfoError::SerializationError(_))
+        ));
+        assert_eq!(fs::read(&path).unwrap(), previous);
+    }
 
     #[test]
     fn saved_rule_codec_keeps_version_outside_namespaced_rule_map() {

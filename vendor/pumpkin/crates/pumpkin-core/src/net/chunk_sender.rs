@@ -23,6 +23,22 @@ const MAX_CHUNKS_PER_TICK: f32 = 500.0;
 const INITIAL_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_CONCURRENT_BATCHES: u16 = 10;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChunkGenerationPolicy {
+    Generate,
+    ExistingOnly,
+}
+
+impl ChunkGenerationPolicy {
+    pub const fn for_player(is_spectator: bool, spectators_generate_chunks: bool) -> Self {
+        if is_spectator && !spectators_generate_chunks {
+            Self::ExistingOnly
+        } else {
+            Self::Generate
+        }
+    }
+}
+
 pub struct PreparedChunk {
     pub position: Vector2<i32>,
     pub chunk: SyncChunk,
@@ -182,12 +198,18 @@ impl ChunkSender {
         }
     }
 
-    fn sync_activation_demand(
+    pub(crate) fn sync_activation_demand(
         &mut self,
         level: &Arc<Level>,
         center: Vector2<i32>,
         view_distance: NonZero<u8>,
+        generation_policy: ChunkGenerationPolicy,
     ) {
+        if generation_policy == ChunkGenerationPolicy::ExistingOnly {
+            // Watching existing terrain must never request its generation halo.
+            self.activation_demand = None;
+            return;
+        }
         if self
             .activation_demand
             .as_ref()
@@ -285,10 +307,11 @@ impl ChunkSender {
         level: &Arc<Level>,
         player_chunk: Vector2<i32>,
         view_distance: NonZero<u8>,
+        generation_policy: ChunkGenerationPolicy,
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
-        self.sync_activation_demand(level, player_chunk, view_distance);
+        self.sync_activation_demand(level, player_chunk, view_distance, generation_policy);
         if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
         {
             return None;
@@ -464,6 +487,147 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn existing_only_pending_chunks_never_request_generation() {
+        use pumpkin_config::world::LevelConfig;
+        use pumpkin_data::dimension::Dimension;
+
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        let center = Vector2::new(0, 0);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(center);
+        assert!(
+            sender
+                .prepare_batch(
+                    &level,
+                    center,
+                    NonZero::new(2).unwrap(),
+                    ChunkGenerationPolicy::for_player(true, false),
+                    0,
+                    CURRENT_MC_VERSION,
+                )
+                .is_none()
+        );
+        assert!(sender.pending_chunks.contains(&center));
+        assert!(!level.loaded_chunks.contains_key(&center));
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+    }
+
+    #[tokio::test]
+    async fn existing_only_policy_releases_demand_under_backpressure_and_sends_ready_chunks() {
+        use pumpkin_config::world::LevelConfig;
+        use pumpkin_data::dimension::Dimension;
+
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        let center = Vector2::new(0, 0);
+        let missing = Vector2::new(3, 0);
+        let view = NonZero::new(2).unwrap();
+        assert!(Cylindrical::new(center, view).is_within_distance(missing.x, missing.y));
+        for x in -1..=1 {
+            for z in -1..=1 {
+                level
+                    .loaded_chunks
+                    .insert(Vector2::new(x, z), ChunkData::empty_sync(x, z));
+            }
+        }
+        // Another owner has already activated this cached center.
+        let mut other = level.activation_demand();
+        other.replace([center]);
+        level.process_chunk_activations(|chunk| chunk.process_post_processing(|_| true));
+        drop(other);
+        assert!(level.is_chunk_ready(&center));
+
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(center);
+        sender.enqueue_chunk(missing);
+        sender.in_flight_batches = sender.max_in_flight;
+        assert!(
+            sender
+                .prepare_batch(
+                    &level,
+                    center,
+                    view,
+                    ChunkGenerationPolicy::for_player(true, true),
+                    0,
+                    CURRENT_MC_VERSION,
+                )
+                .is_none()
+        );
+        assert!(
+            level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&missing)
+        );
+        let existing_only = ChunkGenerationPolicy::for_player(true, false);
+        assert!(
+            sender
+                .prepare_batch(&level, center, view, existing_only, 0, CURRENT_MC_VERSION)
+                .is_none()
+        );
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+
+        // Quota starvation also cannot recreate a request after the policy flip.
+        sender.in_flight_batches = 0;
+        sender.desired_rate = MIN_CHUNKS_PER_TICK;
+        assert!(
+            sender
+                .prepare_batch(&level, center, view, existing_only, 0, CURRENT_MC_VERSION)
+                .is_none()
+        );
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+        sender.desired_rate = 1.0;
+        let batch = sender
+            .prepare_batch(&level, center, view, existing_only, 0, CURRENT_MC_VERSION)
+            .unwrap();
+        assert_eq!(batch.chunks.len(), 1);
+        assert_eq!(batch.chunks[0].position, center);
+        let dispatched = sender.commit_bedrock_batch(&batch, 0);
+        assert_eq!(dispatched.len(), 1);
+        assert_eq!(
+            sender.mark_delivered(&[(center, dispatched[0].delivery_token)]),
+            vec![center]
+        );
+        assert!(sender.is_chunk_ready(&center));
+        assert!(sender.pending_chunks.contains(&missing));
+        assert!(!level.loaded_chunks.contains_key(&missing));
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+
+        // Leaving spectator restores generation for the same still-pending view.
+        sender.sync_activation_demand(
+            &level,
+            center,
+            view,
+            ChunkGenerationPolicy::for_player(false, false),
+        );
+        assert!(
+            level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&missing)
+        );
+        drop(sender);
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+    }
+
+    #[tokio::test]
     async fn candidates_wait_for_activation_without_activating_their_halo() {
         use pumpkin_config::world::LevelConfig;
         use pumpkin_data::dimension::Dimension;
@@ -490,13 +654,27 @@ mod tests {
         let view = NonZero::new(2).unwrap();
         assert!(
             sender
-                .prepare_batch(&level, center, view, 0, CURRENT_MC_VERSION)
+                .prepare_batch(
+                    &level,
+                    center,
+                    view,
+                    ChunkGenerationPolicy::Generate,
+                    0,
+                    CURRENT_MC_VERSION,
+                )
                 .is_none()
         );
         assert_eq!(level.chunk_loading.lock().unwrap().ticket.len(), 1);
         level.process_chunk_activations(|chunk| chunk.process_post_processing(|_| true));
         let ready = sender
-            .prepare_batch(&level, center, view, 0, CURRENT_MC_VERSION)
+            .prepare_batch(
+                &level,
+                center,
+                view,
+                ChunkGenerationPolicy::Generate,
+                0,
+                CURRENT_MC_VERSION,
+            )
             .unwrap();
         assert_eq!(ready.chunks.len(), 1);
         assert_eq!(ready.chunks[0].position, center);
@@ -521,7 +699,7 @@ mod tests {
         let view = NonZero::new(2).unwrap();
         let mut sender = ChunkSender::new();
         sender.enqueue_chunk(old);
-        sender.sync_activation_demand(&level, old, view);
+        sender.sync_activation_demand(&level, old, view, ChunkGenerationPolicy::Generate);
         assert!(
             level
                 .chunk_loading
@@ -532,7 +710,7 @@ mod tests {
         );
         // Queued positions outside the new view never keep its old halo pinned.
         sender.enqueue_chunk(next);
-        sender.sync_activation_demand(&level, next, view);
+        sender.sync_activation_demand(&level, next, view, ChunkGenerationPolicy::Generate);
         assert!(
             !level
                 .chunk_loading
@@ -551,17 +729,17 @@ mod tests {
         );
         sender.mark_sent_out_of_band(next);
         assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
-        sender.sync_activation_demand(&level, next, view);
+        sender.sync_activation_demand(&level, next, view, ChunkGenerationPolicy::Generate);
         assert!(
             level.chunk_loading.lock().unwrap().ticket.is_empty(),
             "delivered chunks create no demand"
         );
         sender.enqueue_chunk(next);
-        sender.sync_activation_demand(&level, next, view);
+        sender.sync_activation_demand(&level, next, view, ChunkGenerationPolicy::Generate);
         sender.reset();
         assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
         sender.enqueue_chunk(next);
-        sender.sync_activation_demand(&level, next, view);
+        sender.sync_activation_demand(&level, next, view, ChunkGenerationPolicy::Generate);
         drop(sender);
         assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
     }

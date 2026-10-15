@@ -53,7 +53,8 @@ where
 
     async fn write(&self, backend: &Self::WriteBackend) -> Result<(), std::io::Error> {
         let data = self.data.clone();
-        let bytes = run_blocking(move || {
+        let backend = backend.clone();
+        run_blocking(move || {
             let mut root = pumpkin_nbt::compound::NbtCompound::new();
             root.put_int("x", data.x);
             root.put_int("z", data.z);
@@ -63,11 +64,12 @@ where
                 chunks_comp.put(&k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
             }
             root.put_compound("chunks", chunks_comp);
-            pumpkin_nbt::Nbt::from(root).write_unnamed()
+            let bytes = crate::nbt_io::encode_unnamed_compound(root)
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+            crate::nbt_io::write_atomic(&backend, &bytes)
         })
         .await
-        .map_err(|_| std::io::Error::other("pump serialization task failed"))?;
-        tokio::fs::write(backend, bytes).await
+        .map_err(|_| std::io::Error::other("pump serialization task failed"))?
     }
 
     fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
@@ -105,8 +107,6 @@ where
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let (x, z) = chunk_data.position();
-        self.data.x = x >> 5;
-        self.data.z = z >> 5;
         let rel_x = x.rem_euclid(32);
         let rel_z = z.rem_euclid(32);
         let index = (rel_x + rel_z * 32) as usize;
@@ -122,6 +122,8 @@ where
             ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
         })??;
 
+        self.data.x = x >> 5;
+        self.data.z = z >> 5;
         self.data
             .chunks
             .insert(index.to_string(), compressed.into());
@@ -193,6 +195,29 @@ mod tests {
     use bytes::Bytes;
     use pumpkin_util::math::vector2::Vector2;
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn durable_nbt_pump_wrapper_encode_failure_preserves_existing_file() {
+        let directory = TempDir::new().unwrap();
+        let path = directory.path().join("r.0.0.pump");
+        let mut region = PumpFile::<MockChunk>::default();
+        region
+            .data
+            .chunks
+            .insert("0".into(), Bytes::from_static(b"cached"));
+        region.write(&path).await.unwrap();
+        let previous = std::fs::read(&path).unwrap();
+        region
+            .data
+            .chunks
+            .insert("a".repeat(65_536), Bytes::from_static(b"new"));
+        assert_eq!(
+            region.write(&path).await.unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert_eq!(std::fs::read(path).unwrap(), previous);
+        assert_eq!(region.data.chunks["0"].as_ref(), b"cached");
+    }
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
     struct MockChunk {

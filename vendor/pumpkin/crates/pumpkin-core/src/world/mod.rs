@@ -311,8 +311,8 @@ fn save_auxiliary_data(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let path = custom_folder.join("pumpkin_custom_data.nbt");
-    let encoded = pumpkin_nbt::Nbt::from(custom_data.clone()).write();
-    std::fs::write(path, encoded).map_err(WorldSaveError::CustomData)?;
+    pumpkin_world::nbt_io::write_compound_atomic(&path, custom_data.clone())
+        .map_err(|error| WorldSaveError::CustomData(error.into()))?;
     portal_result
 }
 
@@ -371,6 +371,10 @@ pub struct World {
     forced_chunk_tickets: tokio::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Serializes watcher transitions with entity activation and unload snapshots.
     entity_lifecycle: tokio::sync::Mutex<()>,
+    /// Simulation owners keep FULL terrain alive through the final live snapshot.
+    block_simulation_changed: tokio::sync::Notify,
+    simulation_callbacks: std::sync::atomic::AtomicUsize,
+    simulation_callbacks_finished: tokio::sync::Notify,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
@@ -399,6 +403,16 @@ impl PartialEq for World {
 }
 
 impl Eq for World {}
+
+struct SimulationCallbacks<'a>(&'a World);
+
+impl Drop for SimulationCallbacks<'_> {
+    fn drop(&mut self) {
+        if self.0.simulation_callbacks.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.0.simulation_callbacks_finished.notify_waiters();
+        }
+    }
+}
 
 impl World {
     const TAB_LIST_ADD_FLAGS: u8 = PlayerInfoFlags::ADD_PLAYER.bits()
@@ -522,6 +536,9 @@ impl World {
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             forced_chunk_tickets: tokio::sync::Mutex::new(FxHashSet::default()),
             entity_lifecycle: tokio::sync::Mutex::new(()),
+            block_simulation_changed: tokio::sync::Notify::new(),
+            simulation_callbacks: std::sync::atomic::AtomicUsize::new(0),
+            simulation_callbacks_finished: tokio::sync::Notify::new(),
             server,
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
@@ -601,7 +618,172 @@ impl World {
         });
     }
 
+    fn enter_simulation_callbacks(&self) -> SimulationCallbacks<'_> {
+        self.simulation_callbacks.fetch_add(1, Ordering::AcqRel);
+        SimulationCallbacks(self)
+    }
+
+    async fn await_simulation_callbacks(&self) {
+        loop {
+            let finished = self.simulation_callbacks_finished.notified();
+            tokio::pin!(finished);
+            finished.as_mut().enable();
+            if self.simulation_callbacks.load(Ordering::Acquire) == 0 {
+                return;
+            }
+            finished.await;
+        }
+    }
+
+    /// One worker owns simulation watches and entity loading. Desired-set changes
+    /// interrupt its receiver, so moving players cannot queue unload tasks behind
+    /// old entity reads. Terrain tickets are acquired synchronously by the caller.
+    async fn reconcile_block_simulation_chunks(self: Arc<Self>) {
+        use pumpkin_world::chunk_system::ChunkLoading;
+
+        loop {
+            let changed = self.block_simulation_changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            let (added, removed, abandoned) = {
+                let mut tracker = self
+                    .active_chunk_tracker
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let added: Vec<_> = tracker
+                    .requested_block_chunks
+                    .difference(&tracker.watched_block_chunks)
+                    .copied()
+                    .collect();
+                let removed: Vec<_> = tracker
+                    .watched_block_chunks
+                    .difference(&tracker.requested_block_chunks)
+                    .copied()
+                    .collect();
+                let abandoned: Vec<_> = tracker
+                    .owned_block_chunks
+                    .iter()
+                    .filter(|pos| {
+                        !tracker.requested_block_chunks.contains(*pos)
+                            && !tracker.watched_block_chunks.contains(*pos)
+                    })
+                    .copied()
+                    .collect();
+                // Withdraw readiness before awaiting old callbacks. A request
+                // that returns while cleanup waits must reacquire its watch.
+                for pos in &removed {
+                    tracker.watched_block_chunks.remove(pos);
+                    tracker.loaded_active_chunks.remove(pos);
+                    tracker.loaded_block_ticking_chunks.remove(pos);
+                }
+                if !removed.is_empty() {
+                    let mut active = self
+                        .active_chunks
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let mut block_ticking = self
+                        .block_ticking_chunks
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    for pos in &removed {
+                        active.remove(pos);
+                        block_ticking.remove(pos);
+                    }
+                }
+                (added, removed, abandoned)
+            };
+
+            if !removed.is_empty() || !abandoned.is_empty() {
+                // Scheduled commands may remove their own simulation owner.
+                // Finish that callback before taking its final inventory snapshot.
+                self.await_simulation_callbacks().await;
+            }
+            self.update_chunk_watches(&added, &removed).await;
+            if !abandoned.is_empty() {
+                let _lifecycle = self.entity_lifecycle.lock().await;
+                for pos in &abandoned {
+                    self.save_block_entities(*pos);
+                    if !self.level.is_chunk_watched(pos) {
+                        self.block_entities.remove(pos);
+                    }
+                }
+            }
+
+            let desired = {
+                let mut tracker = self
+                    .active_chunk_tracker
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                tracker.watched_block_chunks.extend(added);
+                let released: Vec<_> = tracker
+                    .owned_block_chunks
+                    .difference(&tracker.requested_block_chunks)
+                    .filter(|pos| !tracker.watched_block_chunks.contains(*pos))
+                    .copied()
+                    .collect();
+                if !released.is_empty() {
+                    let mut loading = self
+                        .level
+                        .chunk_loading
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    for pos in released {
+                        tracker.owned_block_chunks.remove(&pos);
+                        loading.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+                    }
+                    loading.send_change();
+                }
+                tracker.requested_block_chunks.clone()
+            };
+
+            let mut missing_entities = Vec::new();
+            for pos in &desired {
+                if let Some(chunk) = self.level.get_entity_chunk_sync(pos) {
+                    self.activate_entity_chunk(&chunk, None).await;
+                } else {
+                    missing_entities.push(*pos);
+                }
+            }
+            if !missing_entities.is_empty() {
+                let mut entities = self.level.receive_entity_chunks(missing_entities);
+                let mut interrupted = false;
+                loop {
+                    let received = tokio::select! {
+                        () = &mut changed => {
+                            interrupted = true;
+                            break;
+                        },
+                        () = crate::STOP_INTERRUPT.cancelled() => break,
+                        () = self.level.cancel_token.cancelled() => break,
+                        received = entities.recv() => received,
+                    };
+                    let Some((chunk, _)) = received else {
+                        break;
+                    };
+                    if let Some(chunk) = chunk.upgrade() {
+                        self.activate_entity_chunk(&chunk, None).await;
+                    }
+                }
+                if interrupted {
+                    continue;
+                }
+            }
+
+            let mut tracker = self
+                .active_chunk_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if tracker.requested_block_chunks == tracker.watched_block_chunks
+                && tracker.requested_block_chunks == tracker.owned_block_chunks
+            {
+                tracker.reconciling_block_chunks = false;
+                return;
+            }
+        }
+    }
+
     pub fn update_active_chunks(self: &Arc<Self>) {
+        let _simulation_callbacks = self.enter_simulation_callbacks();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
@@ -648,16 +830,55 @@ impl World {
         tracker.sync_forced_chunks(&forced_chunks, &mut requested, &mut newly_active);
         tracker.requested_chunks = requested;
         let block_requested = tracker.requested_block_ticking_chunks();
+        let changed = tracker.requested_block_chunks != block_requested;
+        tracker.requested_block_chunks.clone_from(&block_requested);
+        let added: Vec<_> = block_requested
+            .difference(&tracker.owned_block_chunks)
+            .copied()
+            .collect();
+        if !added.is_empty() {
+            tracker.block_ticket_level = Some(Arc::downgrade(&self.level));
+            let mut loading = self
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for pos in added {
+                loading.add_ticket(
+                    pos,
+                    pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL,
+                );
+                tracker.owned_block_chunks.insert(pos);
+            }
+            loading.send_change();
+        }
+        let reconcile = !tracker.reconciling_block_chunks
+            && (tracker.watched_block_chunks != block_requested
+                || tracker.owned_block_chunks != block_requested
+                || (!self.level.cancel_token.is_cancelled()
+                    && block_requested.iter().any(|pos| {
+                        self.level
+                            .get_entity_chunk_sync(pos)
+                            .is_none_or(|chunk| !chunk.live.load(Relaxed))
+                    })));
+        if reconcile {
+            tracker.reconciling_block_chunks = true;
+        }
+        if changed {
+            self.block_simulation_changed.notify_one();
+        }
         for change in self.level.loaded_chunk_changes() {
             match change {
                 pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
                     // Halo-only loads never request another halo.
                     if block_requested.contains(&pos) {
                         tracker.loaded_active_chunks.remove(&pos);
+                        tracker.loaded_block_ticking_chunks.remove(&pos);
                     }
                 }
                 pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
                     tracker.loaded_active_chunks.remove(&pos);
+                    tracker.loaded_block_ticking_chunks.remove(&pos);
                 }
             }
         }
@@ -667,16 +888,28 @@ impl World {
             .replace(block_requested.iter().copied());
         drop(tracker);
 
+        if reconcile {
+            let world = self.clone();
+            if let Some(server) = self.server.upgrade() {
+                server.spawn_task(world.reconcile_block_simulation_chunks());
+            } else {
+                tokio::spawn(world.reconcile_block_simulation_chunks());
+            }
+        }
+
         self.process_chunk_postprocessing();
 
         let mut tracker = self
             .active_chunk_tracker
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let block_ready: FxHashSet<_> = block_requested
+        let block_ready: FxHashSet<_> = tracker
+            .requested_block_chunks
             .iter()
             .copied()
-            .filter(|pos| self.level.is_chunk_ready(pos))
+            .filter(|pos| {
+                tracker.watched_block_chunks.contains(pos) && self.level.is_chunk_ready(pos)
+            })
             .collect();
         let ready: FxHashSet<_> = tracker
             .requested_chunks
@@ -684,16 +917,26 @@ impl World {
             .copied()
             .filter(|pos| block_ready.contains(pos))
             .collect();
-        let mut migrations: FxHashSet<_> = ready
-            .difference(&tracker.loaded_active_chunks)
+        let block_entities_ready: FxHashSet<_> = block_ready
+            .iter()
+            .copied()
+            .filter(|pos| {
+                self.level
+                    .get_entity_chunk_sync(pos)
+                    .is_some_and(|chunk| chunk.live.load(Relaxed))
+            })
+            .collect();
+        let mut migrations: FxHashSet<_> = block_entities_ready
+            .difference(&tracker.loaded_block_ticking_chunks)
             .copied()
             .collect();
         while let Some(pos) = self.pending_block_entity_migrations.pop() {
-            if ready.contains(&pos) {
+            if block_entities_ready.contains(&pos) {
                 migrations.insert(pos);
             }
         }
         tracker.loaded_active_chunks.clone_from(&ready);
+        tracker.loaded_block_ticking_chunks = block_entities_ready;
         let spawnable_chunks = ready.len() as i32;
         *self
             .block_ticking_chunks
@@ -1748,6 +1991,7 @@ impl World {
         let t_chunks = std::time::Instant::now();
         self.tick_chunks(server);
         let chunk_elapsed = t_chunks.elapsed();
+        let _simulation_callbacks = self.enter_simulation_callbacks();
 
         let handle = server.runtime.clone();
 
@@ -1780,7 +2024,8 @@ impl World {
         let active_chunks = self
             .active_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let level_for_entities = self.level.clone();
         let entity_handle = handle.clone();
 
@@ -1835,38 +2080,8 @@ impl World {
 
         self.entity_tracker.update_all(self);
 
-        let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
-        if self.block_entities.len() < active_chunks.len() {
-            for chunk_block_entities in &self.block_entities {
-                if active_chunks.contains(chunk_block_entities.key())
-                    && self.level.is_chunk_ready(chunk_block_entities.key())
-                {
-                    block_entities.extend(chunk_block_entities.values().cloned());
-                }
-            }
-        } else {
-            for chunk_pos in active_chunks.iter() {
-                if self.level.is_chunk_ready(chunk_pos)
-                    && let Some(chunk_block_entities) = self.block_entities.get(chunk_pos)
-                {
-                    block_entities.extend(chunk_block_entities.values().cloned());
-                }
-            }
-        }
-        let block_entity_count = block_entities.len();
-
         let t_be = std::time::Instant::now();
-        let be_handle = handle;
-        block_entities.par_chunks(16).for_each(|batch| {
-            let _guard = be_handle.enter();
-            for be in batch {
-                be.tick(self);
-            }
-        });
-        // Drained after all ticks, so changes (hopper -> chest) land in the same tick.
-        let guard = be_handle.enter();
-        self.flush_comparator_updates(&block_entities);
-        drop(guard);
+        let block_entity_count = self.tick_block_entities(&handle);
         let block_entity_elapsed = t_be.elapsed();
 
         self.level
@@ -1878,7 +2093,6 @@ impl World {
         if let Some(ref fight_mutex) = self.dragon_fight {
             dragon_fight::DragonFight::tick(fight_mutex, self);
         }
-
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
@@ -1893,6 +2107,61 @@ impl World {
                 block_entity_elapsed,
             );
         }
+    }
+
+    /// Runs the production block-entity phase on the block ticking ring, once
+    /// persisted entities are loaded. FULL postprocessing neighbors stay dormant.
+    fn tick_block_entities(self: &Arc<Self>, handle: &tokio::runtime::Handle) -> usize {
+        let _simulation_callbacks = self.enter_simulation_callbacks();
+        let block_chunks = self
+            .block_ticking_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let eligible = |pos: &Vector2<i32>| {
+            self.level.is_chunk_ready(pos)
+                && self
+                    .level
+                    .get_entity_chunk_sync(pos)
+                    .is_some_and(|chunk| chunk.live.load(Relaxed))
+        };
+        let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
+        if self.block_entities.len() < block_chunks.len() {
+            for chunk_block_entities in &self.block_entities {
+                if block_chunks.contains(chunk_block_entities.key())
+                    && eligible(chunk_block_entities.key())
+                {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
+            }
+        } else {
+            for chunk_pos in &block_chunks {
+                if eligible(chunk_pos)
+                    && let Some(chunk_block_entities) = self.block_entities.get(chunk_pos)
+                {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
+            }
+        }
+        block_entities.par_chunks(16).for_each(|batch| {
+            let _guard = handle.enter();
+            for be in batch {
+                let pos = be.get_position();
+                let valid_block =
+                    u32::from(self.get_block_state(&pos).block_entity_type) == be.get_id();
+                let inside_border = self
+                    .worldborder
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_block(pos.0.x, pos.0.z);
+                if valid_block && inside_border {
+                    be.tick(self);
+                }
+            }
+        });
+        let _guard = handle.enter();
+        self.flush_comparator_updates(&block_entities);
+        block_entities.len()
     }
 
     pub fn register_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {
@@ -2146,19 +2415,21 @@ impl World {
         const BATCH_SIZE: usize = 32;
         const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
+        let _simulation_callbacks = self.enter_simulation_callbacks();
 
         let active_chunks = self
             .active_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let block_ticking_chunks = self
             .block_ticking_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let tick_data =
             self.level
                 .get_tick_data(&active_chunks, &block_ticking_chunks, random_tick_speed);
-        drop(block_ticking_chunks);
         let handle = server.runtime.clone();
 
         // 1. Parallel Block Ticks via Rayon
@@ -4087,6 +4358,11 @@ impl World {
 
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
+        let _transfer = player.world_transfer.lock().await;
+        if player.client.closed() {
+            return;
+        }
+        let current_world = player.world();
         let last_pos = player.get_entity().last_pos.load();
         let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
@@ -4097,9 +4373,9 @@ impl World {
 
         let data_kept = u8::from(alive);
 
-        let server = self.server.upgrade();
+        let server = current_world.server.upgrade();
         let default_world = server.as_ref().map_or_else(
-            || self.clone(),
+            || current_world.clone(),
             |s| s.get_world_from_dimension(&Dimension::OVERWORLD),
         );
 
@@ -4185,7 +4461,7 @@ impl World {
         let position = spawn_loc_event.spawn_pos;
 
         // Candidate destination world for a cross-dimension respawn.
-        let candidate_world = if respawn_dimension == self.dimension {
+        let candidate_world = if respawn_dimension == current_world.dimension {
             None
         } else {
             server.as_ref().map_or_else(
@@ -4209,7 +4485,7 @@ impl World {
             if let Some(ref s) = server {
                 let mut event = PlayerChangeWorldEvent {
                     player: player.clone(),
-                    previous_world: self.clone(),
+                    previous_world: current_world.clone(),
                     new_world: new_world.clone(),
                     position,
                     yaw,
@@ -4227,17 +4503,18 @@ impl World {
                     let pitch = event.pitch;
 
                     // Skip the transfer if redirected back to the current world.
-                    if destination.uuid != self.uuid {
+                    if destination.uuid != current_world.uuid {
                         debug!(
                             "Cross-dimension respawn: {} -> {}",
-                            self.dimension.minecraft_name, destination.dimension.minecraft_name
+                            current_world.dimension.minecraft_name,
+                            destination.dimension.minecraft_name
                         );
 
                         // Detach from the old world before publishing into the new one, so no
                         // observer sees the player in a world whose chunk manager doesn't match.
-                        self.remove_player(player, false).await;
-                        player.unload_watched_chunks(self).await;
-                        player.change_world_chunks(&self.level, &destination);
+                        current_world.remove_player(player, false).await;
+                        player.unload_watched_chunks(&current_world).await;
+                        player.change_world_chunks(&current_world.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
                             let mut new_list = (**current_list).clone();
@@ -4253,10 +4530,10 @@ impl World {
                 (None, position, yaw, pitch)
             }
         } else {
-            if respawn_dimension != self.dimension {
+            if respawn_dimension != current_world.dimension {
                 warn!(
                     "Target world {:?} not found, using world spawn in {:?}",
-                    respawn_dimension, self.dimension
+                    respawn_dimension, current_world.dimension
                 );
             }
             (None, position, yaw, pitch)
@@ -4265,19 +4542,19 @@ impl World {
         // Cancelled or unresolved cross-dimension respawns fall back to the current
         // world's spawn below; otherwise the resolved values from the event apply.
         let (target_world, position, yaw, pitch) = resolved_world.as_ref().map_or_else(
-            || (self.clone(), position, yaw, pitch),
+            || (current_world.clone(), position, yaw, pitch),
             |new_world| (new_world.clone(), position, yaw, pitch),
         );
 
         // Notify plugins that the player has respawned (non-cancellable).
-        if let Some(server) = self.server.upgrade() {
+        if let Some(server) = current_world.server.upgrade() {
             server
                 .plugin_manager
                 .fire(
                     &server,
                     &mut PlayerRespawnEvent::new(
                         player.clone(),
-                        self.clone(),
+                        current_world.clone(),
                         target_world.clone(),
                         position,
                         yaw,
@@ -4357,7 +4634,7 @@ impl World {
         // TODO: difficulty, exp bar, status effect
 
         // Registered after positioning; a same-dimension respawn keeps its client entities.
-        if target_world.uuid == self.uuid {
+        if target_world.uuid == current_world.uuid {
             // Clients never remove a dead entity themselves, so viewers would keep the corpse.
             target_world
                 .entity_tracker
@@ -7630,6 +7907,31 @@ mod tests {
         decode_custom_world_data, load_custom_world_data, merge_entity_records,
         save_auxiliary_data,
     };
+
+    #[test]
+    fn durable_nbt_custom_world_encode_failure_preserves_previous_bytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let portals = std::sync::Mutex::new(super::portal::PortalPoiStorage::new(
+            directory.path().join("poi"),
+        ));
+        let mut data = NbtCompound::new();
+        data.put_string("unknown:tag", "keep\0😀".into());
+        let custom = std::sync::Mutex::new(data.clone());
+        save_auxiliary_data(&portals, &custom, directory.path(), None).unwrap();
+        let path = directory.path().join("pumpkin_custom_data.nbt");
+        let previous = std::fs::read(&path).unwrap();
+        let mut nested = NbtCompound::new();
+        nested.put_string("value", "😀".repeat(10_923));
+        custom.lock().unwrap().put_compound("custom_data", nested);
+        let Err(WorldSaveError::CustomData(error)) =
+            save_auxiliary_data(&portals, &custom, directory.path(), None)
+        else {
+            panic!("oversized custom world NBT must fail");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(std::fs::read(path).unwrap(), previous);
+        assert_eq!(decode_custom_world_data(&previous).unwrap(), data);
+    }
 
     #[test]
     fn world_save_auxiliary_save_waits_for_portal_lock_and_persists_real_state() {

@@ -169,8 +169,9 @@ async fn scoreboard_save_failure_does_not_skip_independent_dimension_writes() {
     fs::remove_file(path.join("sentinel")).unwrap();
     fs::remove_dir(&path).unwrap();
     // Conversely, a preceding metadata failure must still attempt scoreboard I/O.
-    let metadata_temporary = folder.path().join("level.dat_new");
-    fs::create_dir(&metadata_temporary).unwrap();
+    let metadata_backup = folder.path().join("level.dat_old");
+    fs::remove_file(&metadata_backup).unwrap();
+    fs::create_dir(&metadata_backup).unwrap();
     server.scoreboard.lock().unwrap().add_objective(
         &NoTarget,
         ScoreboardObjective::new(
@@ -189,7 +190,7 @@ async fn scoreboard_save_failure_does_not_skip_independent_dimension_writes() {
             .get_objective("after_failure")
             .is_some()
     );
-    fs::remove_dir(&metadata_temporary).unwrap();
+    fs::remove_dir(&metadata_backup).unwrap();
     server.shutdown().await;
     assert!(Scoreboard::load(folder.path()).is_ok());
 }

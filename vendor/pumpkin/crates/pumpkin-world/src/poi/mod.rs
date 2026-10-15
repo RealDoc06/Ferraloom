@@ -198,7 +198,8 @@ impl PoiRegion {
         }
         root.put_compound("Sections", sections_comp);
 
-        let uncompressed = pumpkin_nbt::Nbt::from(root).write();
+        let uncompressed = crate::nbt_io::encode_compound(root)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&uncompressed)?;
         encoder.finish()
@@ -326,22 +327,18 @@ impl PoiRegion {
             std::fs::create_dir_all(parent)?;
         }
 
-        let mut file = std::fs::File::create(path)?;
-
-        // Write location table
-        for loc in &location_table {
-            file.write_all(&loc.to_be_bytes())?;
-        }
-
-        // Write timestamp table
-        for ts in &timestamp_table {
-            file.write_all(&ts.to_be_bytes())?;
-        }
-
-        // Write chunk data
-        for data in &sector_data {
-            file.write_all(data)?;
-        }
+        crate::nbt_io::write_atomic_with(path, |file| {
+            for loc in &location_table {
+                file.write_all(&loc.to_be_bytes())?;
+            }
+            for ts in &timestamp_table {
+                file.write_all(&ts.to_be_bytes())?;
+            }
+            for data in &sector_data {
+                file.write_all(data)?;
+            }
+            Ok(())
+        })?;
 
         self.dirty = false;
         self.dirty_chunks.clear();
@@ -611,6 +608,34 @@ impl PoiStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn durable_nbt_poi_encode_failure_keeps_previous_region_and_dirty_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("r.0.0.mca");
+        let mut region = PoiRegion::new();
+        let position = BlockPos::new(0, 64, 0);
+        region.add(PoiEntry::new_portal(position));
+        region.save(&path).unwrap();
+        let previous = std::fs::read(&path).unwrap();
+        let mut oversized = PoiEntry::new_portal(position);
+        oversized.poi_type = "😀".repeat(10_923);
+        region.add(oversized);
+        assert_eq!(
+            region.save(&path).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        assert!(region.is_dirty());
+        assert!(region.dirty_chunks.contains(&(0, 0)));
+
+        region.add(PoiEntry::new_portal(position));
+        region.save(&path).unwrap();
+        assert!(!region.is_dirty());
+        assert!(region.dirty_chunks.is_empty());
+        let reloaded = PoiRegion::load(&path).unwrap();
+        assert_eq!(reloaded.get_all()[0].poi_type, POI_TYPE_NETHER_PORTAL);
+    }
 
     #[test]
     fn poi_entry() {

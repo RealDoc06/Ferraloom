@@ -42,7 +42,7 @@ impl SingleChunkDataSerializer for ChunkData {
 
     #[inline]
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        Ok(self.internal_to_bytes())
+        self.internal_to_bytes()
     }
 
     #[inline]
@@ -497,7 +497,7 @@ impl ChunkData {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn internal_to_bytes(&self) -> Bytes {
+    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -707,8 +707,8 @@ impl ChunkData {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }
 
-        let nbt = pumpkin_nbt::Nbt::from(root_compound);
-        nbt.write()
+        crate::nbt_io::encode_compound(root_compound)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
@@ -800,7 +800,7 @@ impl SingleChunkDataSerializer for ChunkEntityData {
 
     #[inline]
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        Ok(self.internal_to_bytes())
+        self.internal_to_bytes()
     }
 
     #[inline]
@@ -871,7 +871,7 @@ impl ChunkEntityData {
         })
     }
 
-    fn internal_to_bytes(&self) -> Bytes {
+    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         let mut root = NbtCompound::new();
         root.put_int("DataVersion", WORLD_DATA_VERSION);
         root.put(
@@ -887,8 +887,7 @@ impl ChunkEntityData {
             .collect();
         root.put_list("Entities", entities_tag);
 
-        let nbt = pumpkin_nbt::Nbt::from(root);
-        nbt.write()
+        crate::nbt_io::encode_compound(root).map_err(ChunkSerializingError::ErrorSerializingChunk)
     }
 }
 
@@ -1028,6 +1027,130 @@ mod tests {
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
 
+    async fn cached_chunk_data<S>(region: &S) -> NbtCompound
+    where
+        S: crate::chunk::io::ChunkSerializer,
+        S::Data: SingleChunkDataSerializer,
+    {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        region.get_chunks(vec![Vector2::new(0, 0)], sender).await;
+        let Some(crate::chunk::io::LoadedData::Loaded(cached)) = receiver.recv().await else {
+            panic!("previous cached chunk must remain readable");
+        };
+        let bytes = cached.to_bytes().unwrap();
+        pumpkin_nbt::Nbt::read(&mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            std::io::Cursor::new(bytes.as_ref()),
+        ))
+        .unwrap()
+        .root_tag
+    }
+
+    async fn assert_failed_update_keeps_cache<S>(
+        data: std::sync::Arc<S::Data>,
+        config: S::ChunkConfig,
+        invalidate: impl FnOnce(&S::Data),
+    ) where
+        S: crate::chunk::io::ChunkSerializer<WriteBackend = PathBuf>,
+        S::Data: SingleChunkDataSerializer,
+    {
+        use crate::chunk::ChunkWritingError;
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("region");
+        let mut region = S::default();
+        region.update_chunk(data.clone(), &config).await.unwrap();
+        region.write(&path).await.unwrap();
+        let previous = std::fs::read(&path).unwrap();
+        let previous_cached = cached_chunk_data(&region).await;
+
+        invalidate(&data);
+        data.mark_dirty(true);
+        assert!(matches!(
+            data.to_bytes(),
+            Err(ChunkSerializingError::ErrorSerializingChunk(
+                pumpkin_nbt::Error::LargeLength(_)
+            ))
+        ));
+        assert!(matches!(
+            region.update_chunk(data.clone(), &config).await,
+            Err(ChunkWritingError::ChunkSerializingError(_))
+        ));
+        assert!(data.is_dirty());
+        assert_eq!(cached_chunk_data(&region).await, previous_cached);
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        // A later explicit flush may reorder the container's NBT keys. Its
+        // persisted chunk must still contain the previous valid data.
+        region.write(&path).await.unwrap();
+        let persisted = S::read(Bytes::from(std::fs::read(&path).unwrap())).unwrap();
+        assert_eq!(cached_chunk_data(&persisted).await, previous_cached);
+    }
+
+    async fn assert_chunk_encode_failure<S>(config: S::ChunkConfig)
+    where
+        S: crate::chunk::io::ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    {
+        let chunk = std::sync::Arc::new(ChunkData::empty(0, 0));
+        chunk.set_custom_data("example", "unknown", NbtTag::Long(42));
+        let encoded = chunk.to_bytes().unwrap();
+        let decoded = ChunkData::from_bytes(&encoded, Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            decoded.get_custom_data("example", "unknown"),
+            Some(NbtTag::Long(42))
+        );
+        assert_failed_update_keeps_cache::<S>(chunk, config, |chunk| {
+            chunk.set_custom_data(
+                "example",
+                "oversized",
+                NbtTag::String("😀".repeat(10_923).into()),
+            );
+        })
+        .await;
+    }
+
+    async fn assert_entity_encode_failure<S>(config: S::ChunkConfig)
+    where
+        S: crate::chunk::io::ChunkSerializer<Data = ChunkEntityData, WriteBackend = PathBuf>,
+    {
+        let mut item = NbtCompound::new();
+        item.put_string("unknown:tag", "keep".into());
+        let chunk = std::sync::Arc::new(ChunkEntityData {
+            x: 0,
+            z: 0,
+            data: std::sync::Mutex::new(vec![item.clone()]),
+            live: AtomicBool::new(true),
+            dirty: AtomicBool::new(false),
+        });
+        let encoded = chunk.to_bytes().unwrap();
+        let decoded = ChunkEntityData::from_bytes(&encoded, Vector2::new(0, 0)).unwrap();
+        assert_eq!(*decoded.data.lock().unwrap(), vec![item]);
+        assert_failed_update_keeps_cache::<S>(chunk.clone(), config, |chunk| {
+            let mut custom = NbtCompound::new();
+            custom.put_int(&"a".repeat(65_536), 1);
+            chunk.data.lock().unwrap()[0].put_compound("custom_data", custom);
+        })
+        .await;
+        assert!(chunk.live.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn durable_nbt_anvil_failed_encoding_keeps_chunk_and_entity_cache() {
+        assert_chunk_encode_failure::<anvil::AnvilChunkFile<ChunkData>>(Default::default()).await;
+        assert_entity_encode_failure::<anvil::AnvilChunkFile<ChunkEntityData>>(Default::default())
+            .await;
+    }
+
+    #[tokio::test]
+    async fn durable_nbt_linear_failed_encoding_keeps_chunk_and_entity_cache() {
+        assert_chunk_encode_failure::<linear::LinearV2File<ChunkData>>(()).await;
+        assert_entity_encode_failure::<linear::LinearV2File<ChunkEntityData>>(()).await;
+    }
+
+    #[tokio::test]
+    async fn durable_nbt_pump_failed_encoding_keeps_chunk_and_entity_cache() {
+        assert_chunk_encode_failure::<pump::PumpFile<ChunkData>>(()).await;
+        assert_entity_encode_failure::<pump::PumpFile<ChunkEntityData>>(()).await;
+    }
+
     #[test]
     fn post_processing_uses_vanilla_short_lists_and_legacy_chunks_default_to_empty() {
         let mut nbt = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
@@ -1044,7 +1167,7 @@ mod tests {
         assert_eq!(chunk.post_processing.lock().unwrap()[2], vec![0xfff]);
         assert!(!chunk.is_post_processing_ready());
 
-        let encoded = chunk.internal_to_bytes();
+        let encoded = chunk.internal_to_bytes().unwrap();
         let mut cursor = std::io::Cursor::new(encoded.as_ref());
         let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
         let saved = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
@@ -1300,7 +1423,7 @@ mod tests {
 
         let bytes = test_chunk(vec![test_section(-4, "minecraft:stone", true)]).write();
         let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
-        let encoded = chunk.internal_to_bytes();
+        let encoded = chunk.internal_to_bytes().unwrap();
         let mut cursor = std::io::Cursor::new(encoded.as_ref());
         let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
         let nbt = pumpkin_nbt::Nbt::read(&mut reader).unwrap();

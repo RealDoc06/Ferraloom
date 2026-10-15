@@ -37,6 +37,39 @@ impl RequestedWatches {
         self.retired_tickets.push(tickets);
     }
 
+    /// Publish the new ticket tuple before retiring its predecessor. The watch
+    /// coordinator releases the predecessor after preserving departing live data.
+    pub(crate) fn update_tickets(
+        &mut self,
+        held: &mut Option<HeldChunkTickets>,
+        level: &Arc<Level>,
+        center: Vector2<i32>,
+        view: Option<i8>,
+        simulation: Option<i8>,
+    ) -> bool {
+        if held
+            .as_ref()
+            .is_some_and(|held| held.matches(level, center, view, simulation))
+        {
+            return false;
+        }
+        let mut loading = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(view) = view {
+            loading.add_ticket(center, view);
+        }
+        if let Some(simulation) = simulation {
+            loading.add_ticket(center, simulation);
+        }
+        if let Some(old) = held.replace(HeldChunkTickets::new(level, center, view, simulation)) {
+            self.retire(old);
+        }
+        loading.send_change();
+        true
+    }
+
     pub(crate) fn publish(&mut self, world: &Arc<World>, view: Cylindrical) -> u64 {
         self.revision = self.revision.wrapping_add(1);
         self.blocked_world = None;
@@ -159,6 +192,19 @@ pub(crate) struct HeldChunkTickets {
 }
 
 impl HeldChunkTickets {
+    fn matches(
+        &self,
+        level: &Arc<Level>,
+        center: Vector2<i32>,
+        view: Option<i8>,
+        simulation: Option<i8>,
+    ) -> bool {
+        self.level.ptr_eq(&Arc::downgrade(level))
+            && self.center == center
+            && self.view == view
+            && self.simulation == simulation
+    }
+
     pub(crate) fn new(
         level: &Arc<Level>,
         center: Vector2<i32>,
@@ -315,6 +361,99 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn chunk_watches_queued_transfer_then_current_world_move_preserves_positions_and_refs() {
+        use crate::entity::Entity;
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+
+        let (_source_folder, source) = world().await;
+        let (_destination_folder, destination) = world().await;
+        let source_view = view(0);
+        let first_view = view(20);
+        let second_view = view(40);
+        let first_position = Vector3::new(320.0, 100.0, 0.0);
+        let second_position = Vector3::new(640.0, 110.0, 0.0);
+        let owner = Arc::new(PlayerChunkWatches::default());
+        let neighbor = PlayerChunkWatches::default();
+        owner
+            .apply(publish(&owner, &source, source_view))
+            .await
+            .unwrap();
+        neighbor
+            .apply(publish(&neighbor, &source, source_view))
+            .await
+            .unwrap();
+        let entity = Arc::new(Entity::from_uuid(
+            Uuid::new_v4(),
+            source.clone(),
+            Vector3::new(0.0, 100.0, 0.0),
+            &EntityType::PLAYER,
+        ));
+        let gate = Arc::new(tokio::sync::Mutex::new(()));
+        let (arrived, first_arrived) = tokio::sync::oneshot::channel();
+        let (finish, finish_first) = tokio::sync::oneshot::channel();
+        let first = {
+            let gate = gate.clone();
+            let entity = entity.clone();
+            let owner = owner.clone();
+            let destination = destination.clone();
+            tokio::spawn(async move {
+                let _transfer = gate.lock().await;
+                let previous = entity.world.load_full();
+                assert!(!Arc::ptr_eq(&previous, &destination));
+                owner.clear(previous.uuid, false).await;
+                entity.set_world(destination.clone());
+                entity.set_pos(first_position);
+                owner
+                    .apply(publish(&owner, &destination, first_view))
+                    .await
+                    .unwrap();
+                arrived.send(()).unwrap();
+                finish_first.await.unwrap();
+            })
+        };
+        first_arrived.await.unwrap();
+        assert_eq!(entity.pos.load(), first_position);
+        assert_watched(&destination, first_view, true);
+        assert_watched(&source, source_view, true);
+        let (queued, second_queued) = tokio::sync::oneshot::channel();
+        let second = {
+            let gate = gate.clone();
+            let entity = entity.clone();
+            let owner = owner.clone();
+            let destination = destination.clone();
+            tokio::spawn(async move {
+                queued.send(()).unwrap();
+                let _transfer = gate.lock().await;
+                // Read the current world after the first transfer completes.
+                let current = entity.world.load_full();
+                assert!(Arc::ptr_eq(&current, &destination));
+                // A same-world teleport moves the view without clearing its owner.
+                entity.set_pos(second_position);
+                assert!(owner.request().accepts(current.uuid));
+                owner
+                    .apply(publish(&owner, &current, second_view))
+                    .await
+                    .unwrap();
+            })
+        };
+        second_queued.await.unwrap();
+        assert_eq!(entity.pos.load(), first_position);
+        finish.send(()).unwrap();
+        first.await.unwrap();
+        second.await.unwrap();
+        assert_eq!(entity.pos.load(), second_position);
+        assert_eq!(entity.chunk_pos.load(), second_view.center);
+        assert_watched(&destination, first_view, false);
+        assert_watched(&destination, second_view, true);
+        assert_watched(&source, source_view, true);
+        owner.clear(destination.uuid, true).await;
+        assert_watched(&destination, second_view, false);
+        neighbor.clear(source.uuid, true).await;
+        assert_watched(&source, source_view, false);
+    }
+
+    #[tokio::test]
     async fn chunk_watches_movement_pins_old_terrain_until_live_chest_snapshot() {
         use crate::block::entities::{BlockEntity, chest::ChestBlockEntity};
         use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
@@ -455,5 +594,101 @@ mod tests {
                 .get(&current),
             Some(&vec![level])
         );
+    }
+
+    #[tokio::test]
+    async fn chunk_watches_same_view_simulation_and_generation_changes_retire_exact_tickets() {
+        use pumpkin_world::chunk_system::ChunkLoading;
+
+        let (_folder, world) = world().await;
+        let owner = PlayerChunkWatches::default();
+        let neighbor = PlayerChunkWatches::default();
+        let section = view(0);
+        neighbor
+            .apply(publish(&neighbor, &world, section))
+            .await
+            .unwrap();
+        let view_level = ChunkLoading::get_level_from_view_distance(3);
+        let old_simulation = ChunkLoading::get_level_from_simulation_distance(4);
+        let new_simulation = ChunkLoading::get_level_from_simulation_distance(7);
+        assert_ne!(old_simulation, new_simulation);
+        let mut held = None;
+        let first = {
+            let mut requested = owner.request();
+            assert!(requested.update_tickets(
+                &mut held,
+                &world.level,
+                section.center,
+                Some(view_level),
+                Some(old_simulation),
+            ));
+            requested.publish(&world, section)
+        };
+        owner.apply(first).await.unwrap();
+        let changed_simulation = {
+            let mut requested = owner.request();
+            assert!(requested.update_tickets(
+                &mut held,
+                &world.level,
+                section.center,
+                Some(view_level),
+                Some(new_simulation),
+            ));
+            requested.publish(&world, section)
+        };
+        assert!(
+            world.level.chunk_loading.lock().unwrap().ticket[&section.center]
+                .contains(&old_simulation)
+        );
+        let (_, added) = owner.apply(changed_simulation).await.unwrap();
+        assert!(
+            added.is_empty(),
+            "policy changes preserve the same watch references"
+        );
+        {
+            let loading = world.level.chunk_loading.lock().unwrap();
+            let tickets = &loading.ticket[&section.center];
+            assert_eq!(tickets.len(), 2);
+            assert!(tickets.contains(&view_level));
+            assert!(tickets.contains(&new_simulation));
+        }
+        let spectator = {
+            let mut requested = owner.request();
+            assert!(requested.update_tickets(&mut held, &world.level, section.center, None, None,));
+            requested.publish(&world, section)
+        };
+        assert!(!world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(owner.apply(spectator).await.unwrap().1.is_empty());
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_watched(&world, section, true);
+        assert!(!owner.request().update_tickets(
+            &mut held,
+            &world.level,
+            section.center,
+            None,
+            None,
+        ));
+        let survival = {
+            let mut requested = owner.request();
+            assert!(requested.update_tickets(
+                &mut held,
+                &world.level,
+                section.center,
+                Some(view_level),
+                Some(new_simulation),
+            ));
+            requested.publish(&world, section)
+        };
+        assert!(owner.apply(survival).await.unwrap().1.is_empty());
+        assert_eq!(
+            world.level.chunk_loading.lock().unwrap().ticket[&section.center].len(),
+            2
+        );
+        owner.clear(world.uuid, true).await;
+        held.take().unwrap().release().unwrap();
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_watched(&world, section, true);
+        neighbor.clear(world.uuid, true).await;
+        assert_watched(&world, section, false);
     }
 }

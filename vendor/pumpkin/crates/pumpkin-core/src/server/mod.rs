@@ -616,13 +616,15 @@ impl Server {
         self.datapack_manager.is_feature_enabled(self, feature)
     }
 
-    /// Hold the shared lock through replacement, so concurrent saves cannot commit
-    /// an older snapshot after a newer one.
+    /// The save coordinator orders writers. Hold the live scoreboard lock only
+    /// while taking its snapshot, leaving gameplay free during compression and IO.
     fn save_scoreboard(&self) -> std::io::Result<()> {
-        self.scoreboard
+        let snapshot = self
+            .scoreboard
             .lock()
             .map_err(|_| std::io::Error::other("Scoreboard lock poisoned"))?
-            .save(&self.basic_config.get_world_path())
+            .to_saved_data()?;
+        Scoreboard::write_saved_data(&self.basic_config.get_world_path(), snapshot)
     }
 
     /// Adds a new player to the server.

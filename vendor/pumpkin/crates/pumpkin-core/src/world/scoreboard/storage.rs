@@ -3,16 +3,12 @@
 //! codecs, checked against an actual DataVersion 5023 scoreboard.dat.
 
 use std::{
-    fs::{self, File, OpenOptions},
-    io::{self, Write},
+    fs::{self, File},
+    io,
     path::Path,
 };
 
-use flate2::{Compression, write::GzEncoder};
-use pumpkin_nbt::{
-    COMPOUND_ID, NbtCompound, nbt_compress::read_gzip_compound_tag, serializer::NbtWriteHelperJava,
-    tag::NbtTag,
-};
+use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
 use pumpkin_util::{
     text::{TextContent, color::ARGBColor, style::Style},
     version::JavaMinecraftVersion,
@@ -47,6 +43,20 @@ fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
 
+fn open_existing(path: &Path) -> io::Result<Option<File>> {
+    match File::open(path) {
+        Ok(file) => Ok(Some(file)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            // A broken symlink is an unreadable save, not a missing save.
+            match fs::symlink_metadata(path) {
+                Err(missing) if missing.kind() == io::ErrorKind::NotFound => Ok(None),
+                _ => Err(error),
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn field<'a, T>(
     data: &'a NbtCompound,
     key: &str,
@@ -78,39 +88,35 @@ impl Scoreboard {
     /// loading before a server or any world can save replacement defaults.
     pub(crate) fn load(world_path: &Path) -> io::Result<Self> {
         let path = world_path.join("data/minecraft/scoreboard.dat");
-        let file = match File::open(&path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                // A broken symlink is an existing, unreadable file, not a new world.
-                match fs::symlink_metadata(&path) {
-                    Err(missing) if missing.kind() == io::ErrorKind::NotFound => {
-                        return Ok(Self::new());
-                    }
-                    _ => return Err(error),
-                }
+        let (path, file) = match open_existing(&path)? {
+            Some(file) => (path, file),
+            None => {
+                // DimensionStorageFileFix (4772) moved saved data into this
+                // namespace. Preserve the legacy file until a new save commits.
+                let legacy = world_path.join("data/scoreboard.dat");
+                let Some(file) = open_existing(&legacy)? else {
+                    return Ok(Self::new());
+                };
+                (legacy, file)
             }
-            Err(error) => return Err(error),
         };
         let root = read_gzip_compound_tag(file)
             .map_err(|error| invalid(format!("{}: {error}", path.display())))?;
         Self::from_saved_data(root).map_err(|error| invalid(format!("{}: {error}", path.display())))
     }
 
+    #[cfg(test)]
     pub(crate) fn save(&self, world_path: &Path) -> io::Result<()> {
-        let root = self.to_saved_data()?;
-        atomic_write(&world_path.join("data/minecraft/scoreboard.dat"), |file| {
-            let mut encoder = GzEncoder::new(file, Compression::default());
-            // Nbt::write_to_writer silently discards serialization errors.
-            // Use the fallible encoder so invalid data cannot replace a good save.
-            encoder.write_all(&[COMPOUND_ID, 0, 0])?; // Named root, empty name.
-            root.serialize_content(&mut NbtWriteHelperJava::new(&mut encoder))
-                .map_err(|error| match error {
-                    pumpkin_nbt::Error::Incomplete(error) => error,
-                    error => invalid(error.to_string()),
-                })?;
-            encoder.finish()?;
-            Ok(())
-        })
+        Self::write_saved_data(world_path, self.to_saved_data()?)
+    }
+
+    /// The server save coordinator serializes writers; callers can release the
+    /// live scoreboard mutex after creating the snapshot and before filesystem IO.
+    pub(crate) fn write_saved_data(world_path: &Path, root: NbtCompound) -> io::Result<()> {
+        let directory = world_path.join("data/minecraft");
+        fs::create_dir_all(&directory)?;
+        pumpkin_world::nbt_io::write_gzip_compound_atomic(&directory.join("scoreboard.dat"), root)
+            .map_err(Into::into)
     }
 
     fn from_saved_data(mut root: NbtCompound) -> io::Result<Self> {
@@ -277,7 +283,7 @@ impl Scoreboard {
         Ok(board)
     }
 
-    fn to_saved_data(&self) -> io::Result<NbtCompound> {
+    pub(crate) fn to_saved_data(&self) -> io::Result<NbtCompound> {
         let mut root = self.preserved.root.clone();
         root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
         let mut data = root.get_compound("data").cloned().unwrap_or_default();
@@ -654,34 +660,6 @@ fn component_object(value: serde_json::Value) -> serde_json::Value {
         }
         value => value,
     }
-}
-
-/// Stage bytes beside the destination and sync them before the only operation
-/// that replaces the original. Every failure before rename leaves it intact.
-fn atomic_write(path: &Path, write: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
-    let directory = path
-        .parent()
-        .ok_or_else(|| invalid("Scoreboard path has no parent"))?;
-    fs::create_dir_all(directory)?;
-    let temporary = directory.join(format!(".scoreboard-{}.tmp", uuid::Uuid::new_v4()));
-    let result = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)?;
-        write(&mut file)?;
-        file.flush()?;
-        file.sync_all()?;
-        drop(file);
-        fs::rename(&temporary, path)?;
-        #[cfg(unix)]
-        File::open(directory)?.sync_all()?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
 }
 
 pub(crate) const SLOTS: [(ScoreboardDisplaySlot, &str); 19] = {

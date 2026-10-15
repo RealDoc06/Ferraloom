@@ -137,21 +137,50 @@ impl PlayerDataStorage {
             return Err(PlayerDataError::Io(e));
         }
 
-        // Create the file and write directly with GZip compression
-        match File::create(&path) {
-            Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
-                    error!("Failed to write compressed player data for {uuid}: {e}");
-                    Err(PlayerDataError::Nbt(e.to_string()))
-                } else {
-                    debug!("Saved player data for {uuid} to disk");
-                    Ok(())
-                }
+        crate::nbt_io::write_gzip_compound_atomic(&path, data).map_err(|error| {
+            error!("Failed to save player data for {uuid}: {error}");
+            match error {
+                crate::nbt_io::NbtFileError::Nbt(error) => PlayerDataError::Nbt(error.to_string()),
+                crate::nbt_io::NbtFileError::Io(error) => PlayerDataError::Io(error),
             }
-            Err(e) => {
-                error!("Failed to create player data file for {uuid}: {e}");
-                Err(PlayerDataError::Io(e))
-            }
-        }
+        })?;
+        debug!("Saved player data for {uuid} to disk");
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn durable_nbt_player_encode_failure_keeps_previous_file_and_can_retry() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = PlayerDataStorage::new(directory.path(), true);
+        let uuid = Uuid::from_u128(42);
+        let mut data = NbtCompound::new();
+        data.put_string("unknown:tag", "keep\0😀".into());
+        storage.save_player_data(&uuid, data.clone()).unwrap();
+        let path = storage.get_player_data_path(&uuid);
+        let previous = std::fs::read(&path).unwrap();
+
+        let mut item = NbtCompound::new();
+        item.put_string("minecraft:custom_data", "😀".repeat(10_923));
+        let mut invalid = data.clone();
+        invalid.put_list("Inventory", vec![pumpkin_nbt::tag::NbtTag::Compound(item)]);
+        assert!(matches!(
+            storage.save_player_data(&uuid, invalid),
+            Err(PlayerDataError::Nbt(_))
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        assert_eq!(
+            storage.load_player_data(&uuid).unwrap(),
+            (true, data.clone())
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+
+        data.put_int("updated", 42);
+        storage.save_player_data(&uuid, data.clone()).unwrap();
+        assert_eq!(storage.load_player_data(&uuid).unwrap(), (true, data));
     }
 }

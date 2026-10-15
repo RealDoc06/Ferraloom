@@ -14,6 +14,7 @@ pub mod dimension;
 pub mod generation;
 pub mod level;
 pub mod lighting;
+pub mod nbt_io;
 pub mod poi;
 pub mod test_instance;
 pub mod tick;
