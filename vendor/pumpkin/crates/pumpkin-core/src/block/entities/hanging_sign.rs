@@ -1,10 +1,7 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
-use super::BlockEntity;
-use crate::block::entities::sign::Text;
+use super::{BlockEntity, BlockEntityLoadError};
+use crate::block::entities::sign::{SignData, Text};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Mutex;
@@ -30,37 +27,28 @@ impl BlockEntity for HangingSignBlockEntity {
     where
         Self: Sized,
     {
-        let front_text = nbt
-            .get("front_text")
-            .cloned()
-            .map(Text::from)
-            .unwrap_or_default();
-        let back_text = nbt
-            .get("back_text")
-            .cloned()
-            .map(Text::from)
-            .unwrap_or_default();
-        let is_waxed = nbt.get_bool("is_waxed").unwrap_or(false);
+        let data = SignData::from_nbt(nbt);
         Self {
             position,
-            front_text,
-            back_text,
-            is_waxed: AtomicBool::new(is_waxed),
+            front_text: data.front_text,
+            back_text: data.back_text,
+            is_waxed: AtomicBool::new(data.is_waxed),
             currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
 
+    fn load_nbt(&self, nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
+        SignData::from_nbt(nbt).apply(&self.front_text, &self.back_text, &self.is_waxed);
+        Ok(())
+    }
+
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put("front_text", self.front_text.clone());
-        nbt.put("back_text", self.back_text.clone());
-        nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
+        SignData::write_nbt(&self.front_text, &self.back_text, &self.is_waxed, nbt);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put("front_text", self.front_text.clone());
-        nbt.put("back_text", self.back_text.clone());
-        nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
+        self.write_nbt(&mut nbt);
         Some(nbt)
     }
 

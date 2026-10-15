@@ -22,6 +22,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
+use crate::block::entities::{BlockEntity, BlockEntityLoadError};
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
@@ -82,6 +83,10 @@ pub const ERROR_INVALID_SUBSTRING: CommandErrorType<2> = CommandErrorType::new(
 pub const ERROR_BLOCK_INVALID: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_DATA_BLOCK_INVALID,
     translation::java::COMMANDS_DATA_BLOCK_INVALID,
+);
+
+pub const ERROR_BLOCK_DATA_UNSUPPORTED: LiteralCommandErrorType = LiteralCommandErrorType::new(
+    "In-place block data loading is unsupported for this block entity (supported: barrel items, sign and hanging sign text/wax).",
 );
 
 pub const ERROR_ENTITY_INVALID: CommandErrorType<0> = CommandErrorType::new(
@@ -279,31 +284,42 @@ impl DataAccessor for EntityDataAccessor {
 pub struct BlockDataAccessor {
     pos: BlockPos,
     world: Arc<World>,
+    block_entity: Arc<dyn BlockEntity>,
 }
 
 impl BlockDataAccessor {
     pub fn new(pos: BlockPos, world: Arc<World>) -> Result<Self, CommandSyntaxError> {
-        if world.get_block_entity(&pos).is_none() {
-            return Err(ERROR_BLOCK_INVALID.create_without_context());
-        }
-        Ok(Self { pos, world })
+        let block_entity = world
+            .get_block_entity(&pos)
+            .ok_or_else(|| ERROR_BLOCK_INVALID.create_without_context())?;
+        Ok(Self {
+            pos,
+            world,
+            block_entity,
+        })
     }
 }
 
 impl DataAccessor for BlockDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
-        if self.world.get_block_entity(&self.pos).is_some() {
-            self.world.add_block_entity_nbt(self.pos, tag);
-            Ok(())
-        } else {
-            Err(ERROR_BLOCK_INVALID.create_without_context())
-        }
+        self.world
+            .apply_block_entity_nbt(&self.block_entity, tag)
+            .map_err(|error| match error {
+                BlockEntityLoadError::Unsupported(_) => {
+                    ERROR_BLOCK_DATA_UNSUPPORTED.create_without_context()
+                }
+                BlockEntityLoadError::NotPublished => ERROR_BLOCK_INVALID.create_without_context(),
+            })
     }
 
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError> {
-        if let Some(block_entity) = self.world.get_block_entity(&self.pos) {
+        if self
+            .world
+            .get_block_entity(&self.pos)
+            .is_some_and(|entity| Arc::ptr_eq(&entity, &self.block_entity))
+        {
             let mut nbt = NbtCompound::new();
-            block_entity.write_internal(&mut nbt);
+            self.block_entity.write_internal(&mut nbt);
             Ok(nbt)
         } else {
             Err(ERROR_BLOCK_INVALID.create_without_context())

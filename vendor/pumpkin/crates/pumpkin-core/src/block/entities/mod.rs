@@ -67,12 +67,26 @@ pub mod vault;
 pub use furnace_like_block_entity::ExperienceContainer;
 pub use pumpkin_inventory::PropertyDelegate;
 
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum BlockEntityLoadError {
+    #[error("In-place NBT loading is unsupported for {0}")]
+    Unsupported(&'static str),
+    #[error("The block entity is no longer published at its position")]
+    NotPublished,
+}
+
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Any + Send + Sync {
     fn write_nbt(&self, nbt: &mut NbtCompound);
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
+    /// Reloads persisted fields without replacing inventory, menu or editor handles.
+    /// Implementations must decode before committing and must not call world callbacks.
+    /// The supplied id and coordinates never determine the live entity's identity.
+    fn load_nbt(&self, _nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
+        Err(BlockEntityLoadError::Unsupported(self.resource_location()))
+    }
     fn tick(&self, _world: &Arc<World>) {}
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;

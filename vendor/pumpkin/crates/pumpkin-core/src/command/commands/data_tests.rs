@@ -1,5 +1,10 @@
 use super::*;
+use crate::block::entities::barrel::BarrelBlockEntity;
+use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
+use crate::block::entities::comparator::ComparatorBlockEntity;
+use crate::block::entities::hanging_sign::HangingSignBlockEntity;
+use crate::block::entities::sign::{DyeColor, SignBlockEntity, SignEntityRef};
 use crate::command::CommandSource;
 use crate::command::argument_types::nbt_path::{
     ERROR_EXPECTED_LIST, ERROR_INVALID_INDEX, ERROR_NOTHING_FOUND,
@@ -9,13 +14,27 @@ use crate::data::VanillaData;
 use crate::entity::r#type::from_type;
 use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
-use pumpkin_data::{Block, entity::EntityType, item::Item, item_stack::ItemStack};
-use pumpkin_inventory::Inventory;
+use pumpkin_data::{
+    Block, BlockStateId,
+    block_properties::{BarrelLikeProperties, ComparatorLikeProperties, HorizontalFacing},
+    entity::EntityType,
+    item::Item,
+    item_stack::ItemStack,
+};
+use pumpkin_inventory::{
+    Inventory,
+    entity_equipment::EntityEquipment,
+    generic_container_screen_handler::create_generic_9x3,
+    player::player_inventory::PlayerInventory,
+    screen_handler::{InventoryPlayer, ScreenHandler},
+};
 use pumpkin_util::{math::vector2::Vector2, math::vector3::Vector3, world_seed::Seed};
 use pumpkin_world::{
     chunk::ChunkData,
+    chunk::{format::anvil::SingleChunkDataSerializer, io::Dirtiable},
     world_info::{LevelData, WorldInfoWriter, anvil::AnvilLevelInfo},
 };
+use std::sync::Mutex;
 
 const BLOCK_POS: BlockPos = BlockPos::new(0, 64, 0);
 const SOURCES: [&str; 3] = ["block 0 64 0", "entity @s", "storage repair:source"];
@@ -144,6 +163,450 @@ impl Fixture {
             self.storage("repair:source"),
         ]
     }
+
+    fn set_state(&self, position: BlockPos, state: BlockStateId) {
+        let relative = position.chunk_relative_position();
+        self.source
+            .world()
+            .level
+            .read_chunk_sync(&position.chunk_position(), |chunk| {
+                chunk.set_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                    state,
+                );
+            })
+            .unwrap();
+    }
+
+    fn install(&self, block: &Block, entity: Arc<dyn BlockEntity>) {
+        self.set_state(entity.get_position(), block.default_state.id);
+        self.source.world().add_block_entity(entity);
+    }
+
+    fn block_data(&self) -> NbtCompound {
+        BlockDataAccessor::new(BLOCK_POS, self.source.world().clone())
+            .unwrap()
+            .get_data()
+            .unwrap()
+    }
+
+    fn pending_data(&self) -> NbtCompound {
+        self.source
+            .world()
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .get(&BLOCK_POS)
+                    .unwrap()
+                    .clone()
+            })
+            .unwrap()
+    }
+
+    /// Round trip the actual terrain serializer, then use normal lazy BE loading.
+    /// Caller retains the old Arc deliberately: the reloaded instance must be new.
+    fn reload_saved_chunk(&self) -> Arc<dyn BlockEntity> {
+        let world = self.source.world();
+        let chunk_pos = BLOCK_POS.chunk_position();
+        let bytes = world
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| chunk.to_bytes().unwrap())
+            .unwrap();
+        let reloaded = ChunkData::from_bytes(&bytes, chunk_pos).unwrap();
+        world.block_entities.remove(&chunk_pos);
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, Arc::new(reloaded));
+        world.get_block_entity(&BLOCK_POS).unwrap()
+    }
+}
+
+// Only the menu's player inventory is needed; no network client or game tick is started.
+struct MenuPlayer(Arc<PlayerInventory>);
+
+impl InventoryPlayer for MenuPlayer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) {}
+    fn get_inventory(&self) -> Arc<PlayerInventory> {
+        self.0.clone()
+    }
+    fn has_infinite_materials(&self) -> bool {
+        false
+    }
+    fn is_creative(&self) -> bool {
+        false
+    }
+    fn experience_level(&self) -> i32 {
+        0
+    }
+    fn add_experience_levels(&self, _levels: i32) {}
+    fn enchantment_seed(&self) -> i32 {
+        0
+    }
+    fn set_enchantment_seed(&self, _seed: i32) {}
+    fn enqueue_inventory_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerContent,
+        _window_type: Option<pumpkin_data::screen::WindowType>,
+    ) {
+    }
+    fn enqueue_slot_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerSlot,
+        _window_type: Option<pumpkin_data::screen::WindowType>,
+        _total_slots: usize,
+    ) {
+    }
+    fn enqueue_cursor_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetCursorItem,
+    ) {
+    }
+    fn enqueue_property_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerProperty,
+    ) {
+    }
+    fn enqueue_slot_set_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetPlayerInventory,
+    ) {
+    }
+    fn enqueue_set_held_item_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetSelectedSlot,
+    ) {
+    }
+    fn enqueue_equipment_change(
+        &self,
+        _slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+        _stack: &ItemStack,
+    ) {
+    }
+    fn award_experience(&self, _amount: i32) {}
+    fn increment_stat(
+        &self,
+        _category: pumpkin_data::statistic::StatisticCategory,
+        _stat_id: i32,
+        _amount: i32,
+    ) {
+    }
+    fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+}
+
+#[tokio::test]
+async fn barrel_data_mutates_the_open_menu_inventory_and_survives_terrain_reload() {
+    let fixture = Fixture::new().await;
+    let world = fixture.source.world();
+    let barrel = Arc::new(BarrelBlockEntity::new(BLOCK_POS));
+    barrel.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+    barrel.set_stack(26, ItemStack::new(1, &Item::APPLE));
+    fixture.install(&Block::BARREL, barrel.clone());
+    let live: Arc<dyn BlockEntity> = barrel.clone();
+    let inventory: Arc<dyn Inventory> = barrel.clone();
+    let player = MenuPlayer(Arc::new(PlayerInventory::new(
+        Arc::new(Mutex::new(EntityEquipment::new())),
+        Arc::default(),
+    )));
+    let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+    assert_eq!(handler.get_behaviour().slots[0].get_stack().item_count, 3);
+
+    // Put a real comparator beside the barrel. The command must schedule its
+    // output update without waiting for a later block-entity tick.
+    let comparator_pos = BlockPos::new(1, 64, 0);
+    fixture.set_state(comparator_pos.down(), Block::STONE.default_state.id);
+    let mut comparator =
+        ComparatorLikeProperties::from_state_id(Block::COMPARATOR.default_state.id);
+    comparator.facing = HorizontalFacing::West;
+    fixture.install(
+        &Block::COMPARATOR,
+        Arc::new(ComparatorBlockEntity::new(comparator_pos)),
+    );
+    fixture.set_state(comparator_pos, comparator.to_state_id(&Block::COMPARATOR));
+    assert!(!world.is_block_tick_scheduled(&comparator_pos, &Block::COMPARATOR));
+    world
+        .level
+        .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.mark_dirty(false))
+        .unwrap();
+    world
+        .custom_block_entity_data
+        .insert(BLOCK_POS, compound("{retained:9}"));
+
+    assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:1b,id:'minecraft:emerald',count:32,components:{'minecraft:custom_data':{marker:17}}}]").unwrap(), 1);
+    assert!(Arc::ptr_eq(
+        &live,
+        &world.get_block_entity(&BLOCK_POS).unwrap()
+    ));
+    assert!(Arc::ptr_eq(&inventory, &handler.inventory));
+    assert!(handler.get_behaviour().slots[0].get_stack().is_empty());
+    assert!(handler.get_behaviour().slots[26].get_stack().is_empty());
+    let changed = handler.get_behaviour().slots[1].get_stack();
+    assert_eq!(changed.item.id, Item::EMERALD.id);
+    assert_eq!(changed.item_count, 32);
+    let mut item_nbt = NbtCompound::new();
+    changed.write_item_stack(&mut item_nbt);
+    assert_eq!(
+        item_nbt
+            .get_compound("components")
+            .unwrap()
+            .get_compound("minecraft:custom_data"),
+        Some(&compound("{marker:17}"))
+    );
+    assert!(barrel.is_dirty());
+    assert!(
+        world
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.is_dirty())
+            .unwrap()
+    );
+    assert!(world.is_block_tick_scheduled(&comparator_pos, &Block::COMPARATOR));
+    assert_eq!(
+        crate::block::calculate_comparator_output(barrel.as_ref()),
+        1
+    );
+    assert_eq!(
+        fixture
+            .execute("data get block 0 64 0 Items[0].count")
+            .unwrap(),
+        32
+    );
+    assert_eq!(
+        fixture.pending_data().get_compound("PumpkinCustomData"),
+        Some(&compound("{retained:9}"))
+    );
+    assert_eq!(
+        fixture.pending_data().get_list("Items"),
+        fixture.block_data().get_list("Items")
+    );
+
+    world.flush_block_updates();
+    assert!(
+        world
+            .take_flushed_block_changes()
+            .contains(&(BLOCK_POS, Block::BARREL.default_state.id))
+    );
+    // Opening happened before reload. Its viewer tracker must still open the
+    // barrel on the next tick, even though the item array has been replaced.
+    barrel.tick(world);
+    assert!(BarrelLikeProperties::from_state_id(world.get_block_state_id(&BLOCK_POS)).open);
+    let reloaded = fixture.reload_saved_chunk();
+    assert!(!Arc::ptr_eq(&live, &reloaded));
+    let reloaded_inventory = reloaded.clone().get_inventory().unwrap();
+    assert!(reloaded_inventory.get_stack(0).is_empty());
+    assert!(reloaded_inventory.get_stack(1).are_equal(&changed));
+    assert!(reloaded_inventory.get_stack(26).is_empty());
+    // The old menu remains attached to its original instance even after this
+    // explicit test-only unload/reload, proving no menu reference was substituted.
+    assert!(
+        handler.get_behaviour().slots[1]
+            .get_stack()
+            .are_equal(&changed)
+    );
+}
+
+#[tokio::test]
+async fn barrel_data_remove_items_clears_every_slot_and_ignores_spoofed_identity() {
+    let fixture = Fixture::new().await;
+    let barrel = Arc::new(BarrelBlockEntity::new(BLOCK_POS));
+    barrel.set_stack(0, ItemStack::new(2, &Item::DIAMOND));
+    barrel.set_stack(26, ItemStack::new(1, &Item::APPLE));
+    fixture.install(&Block::BARREL, barrel.clone());
+    assert_eq!(
+        fixture
+            .execute("data merge block 0 64 0 {id:'minecraft:chest',x:99,y:1,z:-8}")
+            .unwrap(),
+        1
+    );
+    let actual = fixture.block_data();
+    assert_eq!(actual.get_string("id"), Some(BarrelBlockEntity::ID));
+    assert_eq!(actual.get_int("x"), Some(0));
+    assert_eq!(actual.get_int("y"), Some(64));
+    assert_eq!(actual.get_int("z"), Some(0));
+    assert_eq!(barrel.get_stack(0).item_count, 2);
+    assert_eq!(barrel.get_stack(26).item_count, 1);
+    assert_eq!(
+        fixture.execute("data remove block 0 64 0 Items").unwrap(),
+        1
+    );
+    assert!((0..BarrelBlockEntity::INVENTORY_SIZE).all(|slot| barrel.get_stack(slot).is_empty()));
+    assert_eq!(
+        crate::block::calculate_comparator_output(barrel.as_ref()),
+        0
+    );
+    assert!(fixture.block_data().get_list("Items").unwrap().is_empty());
+    assert!(fixture.pending_data().get_list("Items").unwrap().is_empty());
+    let reloaded = fixture.reload_saved_chunk().get_inventory().unwrap();
+    assert!(reloaded.is_empty());
+}
+
+#[tokio::test]
+async fn sign_data_reloads_both_faces_wax_and_client_data_without_replacing_editor_handles() {
+    let fixture = Fixture::new().await;
+    let editor = uuid::Uuid::from_u128(97);
+    for hanging in [false, true] {
+        let (block, entity): (&Block, Arc<dyn BlockEntity>) = if hanging {
+            (
+                &Block::OAK_HANGING_SIGN,
+                Arc::new(HangingSignBlockEntity::empty(BLOCK_POS)),
+            )
+        } else {
+            (
+                &Block::OAK_SIGN,
+                Arc::new(SignBlockEntity::empty(BLOCK_POS)),
+            )
+        };
+        fixture.install(block, entity.clone());
+        let sign = SignEntityRef::from_block_entity(entity.as_ref()).unwrap();
+        let editor_handle = sign.currently_editing_player().clone();
+        *editor_handle.lock().unwrap() = Some(editor);
+        let front_handle = sign.front_text().messages.clone();
+        let back_handle = sign.back_text().filtered_messages.clone();
+        assert_eq!(fixture.execute("data merge block 0 64 0 {front_text:{messages:['front','two','three','four'],filtered_messages:['filtered','','',''],color:red,has_glowing_text:1b},back_text:{messages:['back','','',''],color:blue,has_glowing_text:0b},is_waxed:1b,id:'minecraft:furnace',x:8,y:9,z:10}").unwrap(), 1);
+        assert!(Arc::ptr_eq(
+            &entity,
+            &fixture.source.world().get_block_entity(&BLOCK_POS).unwrap()
+        ));
+        assert!(Arc::ptr_eq(&editor_handle, sign.currently_editing_player()));
+        assert!(Arc::ptr_eq(&front_handle, &sign.front_text().messages));
+        assert!(Arc::ptr_eq(
+            &back_handle,
+            &sign.back_text().filtered_messages
+        ));
+        assert_eq!(*editor_handle.lock().unwrap(), Some(editor));
+        assert_eq!(&*front_handle.lock().unwrap()[0], "front");
+        assert_eq!(&*back_handle.lock().unwrap()[0], "back");
+        assert_eq!(sign.front_text().get_message(0, true).as_ref(), "filtered");
+        assert_eq!(sign.front_text().get_color(), DyeColor::Red);
+        assert!(sign.front_text().has_glowing_text());
+        assert_eq!(sign.back_text().get_color(), DyeColor::Blue);
+        assert!(!sign.back_text().has_glowing_text());
+        assert!(sign.is_waxed());
+        let data = fixture.block_data();
+        assert_eq!(data.get_string("id"), Some(entity.resource_location()));
+        assert_eq!(data.get_int("x"), Some(0));
+        assert_eq!(data.get_int("y"), Some(64));
+        assert_eq!(data.get_int("z"), Some(0));
+        let client = entity.chunk_data_nbt().unwrap();
+        for key in ["front_text", "back_text", "is_waxed"] {
+            assert_eq!(client.get(key), data.get(key));
+            assert_eq!(fixture.pending_data().get(key), data.get(key));
+        }
+        assert_eq!(
+            fixture
+                .execute("data get block 0 64 0 front_text.messages[0]")
+                .unwrap(),
+            5
+        );
+        fixture.source.world().flush_block_updates();
+        assert!(
+            fixture
+                .source
+                .world()
+                .take_flushed_block_changes()
+                .contains(&(BLOCK_POS, block.default_state.id))
+        );
+        let reloaded = fixture.reload_saved_chunk();
+        let reloaded_sign = SignEntityRef::from_block_entity(reloaded.as_ref()).unwrap();
+        assert_eq!(reloaded.chunk_data_nbt(), Some(client));
+        assert_eq!(
+            *reloaded_sign.currently_editing_player().lock().unwrap(),
+            None
+        );
+        assert_eq!(*editor_handle.lock().unwrap(), Some(editor));
+
+        // Removing persisted fields follows constructor defaults, and the other
+        // face survives an independent edit/removal on the front face.
+        fixture
+            .execute("data remove block 0 64 0 front_text")
+            .unwrap();
+        fixture
+            .execute("data remove block 0 64 0 is_waxed")
+            .unwrap();
+        assert!(!reloaded_sign.front_text().has_message(false));
+        assert_eq!(reloaded_sign.front_text().get_color(), DyeColor::Black);
+        assert!(!reloaded_sign.front_text().has_glowing_text());
+        assert_eq!(
+            reloaded_sign.back_text().get_message(0, false).as_ref(),
+            "back"
+        );
+        assert!(!reloaded_sign.is_waxed());
+    }
+}
+
+#[tokio::test]
+async fn unsupported_block_data_returns_an_explicit_error_without_staging_nbt() {
+    let fixture = Fixture::new().await;
+    let live = fixture.source.world().get_block_entity(&BLOCK_POS).unwrap();
+    let before = fixture.block_data();
+    let pending = fixture.pending_data();
+    for command in [
+        "data modify block 0 64 0 Items set value []",
+        "data merge block 0 64 0 {unimplemented:9}",
+        "data remove block 0 64 0 Items",
+    ] {
+        let error = fixture.execute(command).unwrap_err();
+        assert!(
+            error.is(&ERROR_BLOCK_DATA_UNSUPPORTED),
+            "{command}: {error:?}"
+        );
+        assert_eq!(fixture.block_data(), before);
+        assert_eq!(fixture.pending_data(), pending);
+        assert!(Arc::ptr_eq(
+            &live,
+            &fixture.source.world().get_block_entity(&BLOCK_POS).unwrap()
+        ));
+    }
+}
+
+#[tokio::test]
+async fn captured_block_accessor_rejects_a_replacement_at_the_same_position() {
+    let fixture = Fixture::new().await;
+    let original = Arc::new(BarrelBlockEntity::new(BLOCK_POS));
+    fixture.install(&Block::BARREL, original.clone());
+    let accessor = BlockDataAccessor::new(BLOCK_POS, fixture.source.world().clone()).unwrap();
+    let replacement = Arc::new(BarrelBlockEntity::new(BLOCK_POS));
+    replacement.set_stack(0, ItemStack::new(5, &Item::APPLE));
+    fixture.install(&Block::BARREL, replacement.clone());
+    let pending = fixture.pending_data();
+    let error = accessor
+        .set_data(&compound(
+            "{Items:[{Slot:0b,id:'minecraft:diamond',count:7}]}",
+        ))
+        .unwrap_err();
+    assert!(error.is(&ERROR_BLOCK_INVALID));
+    assert!(accessor.get_data().unwrap_err().is(&ERROR_BLOCK_INVALID));
+    assert!(original.is_empty());
+    assert_eq!(replacement.get_stack(0).item_count, 5);
+    assert_eq!(fixture.pending_data(), pending);
+}
+
+#[tokio::test]
+async fn block_entity_notification_saves_full_state_instead_of_its_limited_client_tag() {
+    let fixture = Fixture::new().await;
+    let entity: Arc<dyn BlockEntity> = Arc::new(BrushableBlockBlockEntity::from_nbt(
+        &compound("{LootTable:'minecraft:archaeology/desert_pyramid',LootTableSeed:12L,hits:3}"),
+        BLOCK_POS,
+    ));
+    fixture.install(&Block::SUSPICIOUS_SAND, entity.clone());
+    let client = entity.chunk_data_nbt().unwrap();
+    assert!(!client.has("LootTable"));
+    assert!(!client.has("hits"));
+    fixture.source.world().update_block_entity(&entity);
+    let mut full = NbtCompound::new();
+    entity.write_internal(&mut full);
+    assert_eq!(fixture.pending_data(), full);
+    let reloaded = fixture.reload_saved_chunk();
+    let mut saved = NbtCompound::new();
+    reloaded.write_internal(&mut saved);
+    assert_eq!(saved, full);
 }
 
 #[tokio::test]

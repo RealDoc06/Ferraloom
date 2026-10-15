@@ -20,7 +20,7 @@ use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerCountT
 use crate::world::{BlockFlags, World};
 use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
-use super::BlockEntity;
+use super::{BlockEntity, BlockEntityLoadError};
 
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
@@ -45,27 +45,34 @@ impl BlockEntity for BarrelBlockEntity {
     where
         Self: Sized,
     {
-        let mut barrel = Self {
+        Self {
             position,
-            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            items: RwLock::new(Self::read_items(nbt)),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
-        };
+        }
+    }
 
-        pumpkin_inventory::sync_read_items_from_nbt(
-            nbt,
-            barrel
-                .items
-                .get_mut()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
-
-        barrel
+    fn load_nbt(&self, nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
+        let items = Self::read_items(nbt);
+        let mut live_items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *live_items = items;
+        self.mark_dirty();
+        Ok(())
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_inventory_nbt(nbt, true);
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Persist an empty list too, matching write_inventory_nbt(include_empty).
+        nbt.put_list("Items", Vec::new());
+        sync_write_items_to_nbt(&*items, nbt);
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -95,9 +102,7 @@ impl BlockEntity for BarrelBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        if let Ok(guard) = self.items.try_read() {
-            sync_write_items_to_nbt(&*guard, &mut nbt);
-        }
+        self.write_nbt(&mut nbt);
         Some(nbt)
     }
 
@@ -121,6 +126,13 @@ impl ViewerCountListener for BarrelBlockEntity {
 impl BarrelBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const ID: &'static str = "minecraft:barrel";
+
+    /// Inventory decoding only writes listed slots, so every reload starts empty.
+    fn read_items(nbt: &NbtCompound) -> [ItemStack; Self::INVENTORY_SIZE] {
+        let mut items = from_fn(|_| ItemStack::EMPTY.clone());
+        pumpkin_inventory::sync_read_items_from_nbt(nbt, &mut items);
+        items
+    }
 
     #[must_use]
     pub fn new(position: BlockPos) -> Self {

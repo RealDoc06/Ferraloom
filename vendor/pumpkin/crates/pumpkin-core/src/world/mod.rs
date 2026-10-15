@@ -1,4 +1,4 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crate::block::entities::{BlockEntity, BlockEntityLoadError, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
@@ -1140,15 +1140,7 @@ impl World {
         };
 
         for block_entity in block_entities {
-            let mut nbt = NbtCompound::new();
-            block_entity.write_internal(&mut nbt);
-            if let Some(custom_data) = self
-                .custom_block_entity_data
-                .get(&block_entity.get_position())
-                && !custom_data.is_empty()
-            {
-                nbt.put_compound("PumpkinCustomData", custom_data.clone());
-            }
+            let nbt = self.block_entity_save_nbt(block_entity.as_ref());
             self.add_block_entity_nbt(block_entity.get_position(), &nbt);
         }
     }
@@ -6994,6 +6986,76 @@ impl World {
         self.write_pending_block_entity_nbt(block_pos, nbt);
     }
 
+    fn block_entity_save_nbt(&self, block_entity: &dyn BlockEntity) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        block_entity.write_internal(&mut nbt);
+        if let Some(custom_data) = self
+            .custom_block_entity_data
+            .get(&block_entity.get_position())
+            && !custom_data.is_empty()
+        {
+            nbt.put_compound("PumpkinCustomData", custom_data.clone());
+        }
+        nbt
+    }
+
+    /// Applies command NBT to the exact live instance captured by the accessor.
+    /// The retained Arc excludes unload retirement. The map guard fences replacement
+    /// during reload/persistence only; callbacks run after releasing it. This does
+    /// not make a command's earlier snapshot/edit or other inventory operations one
+    /// transaction, nor serialize a concurrent block-state write.
+    pub fn apply_block_entity_nbt(
+        self: &Arc<Self>,
+        expected: &Arc<dyn BlockEntity>,
+        nbt: &NbtCompound,
+    ) -> Result<(), BlockEntityLoadError> {
+        let position = expected.get_position();
+        let chunk_pos = position.chunk_position();
+        let chunk = self
+            .level
+            .loaded_chunks
+            .get(&chunk_pos)
+            .map(|chunk| chunk.value().clone())
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        let published = self
+            .block_entities
+            .get(&chunk_pos)
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        if !published
+            .get(&position)
+            .is_some_and(|entity| Arc::ptr_eq(entity, expected))
+        {
+            return Err(BlockEntityLoadError::NotPublished);
+        }
+        let relative = position.chunk_relative_position();
+        let state_id = chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        if u32::from(BlockState::from_id(state_id).block_entity_type) != expected.get_id() {
+            return Err(BlockEntityLoadError::NotPublished);
+        }
+
+        expected.load_nbt(nbt)?;
+        // Save the complete live state, never the more limited client update tag.
+        // No unload-coordinator acquisition while holding the publication guard.
+        let saved = self.block_entity_save_nbt(expected.as_ref());
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(position, saved);
+        chunk.mark_dirty(true);
+        drop(published);
+
+        // setChanged and sendBlockUpdated(oldState, oldState, 3). The ordinary
+        // flush sends both the unchanged state and the block entity's client tag.
+        expected.clear_comparator_dirty();
+        self.update_neighbour_for_output_signal(&position, state_id.to_block());
+        self.register_block_change(position, state_id);
+        Ok(())
+    }
+
     fn write_pending_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
         if self
             .level
@@ -7074,6 +7136,13 @@ impl World {
     }
 
     pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
+        let saved = self.block_entity_save_nbt(block_entity.as_ref());
+        self.add_block_entity_nbt(block_entity.get_position(), &saved);
+        self.notify_block_entity(block_entity);
+    }
+
+    /// Client tags can omit persisted fields, so notification never saves them.
+    fn notify_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
@@ -7088,17 +7157,7 @@ impl World {
                     bytes.as_ref().into(),
                 ),
             );
-            let mut full_nbt = nbt.clone();
-            full_nbt.put_string("id", block_entity.resource_location().to_string());
-            let pos = block_entity.get_position();
-            full_nbt.put_int("x", pos.0.x);
-            full_nbt.put_int("y", pos.0.y);
-            full_nbt.put_int("z", pos.0.z);
-            self.add_block_entity_nbt(block_pos, &full_nbt);
         }
-        self.level.read_chunk_sync(&chunk_pos, |chunk| {
-            chunk.mark_dirty(true);
-        });
     }
 
     #[must_use]
