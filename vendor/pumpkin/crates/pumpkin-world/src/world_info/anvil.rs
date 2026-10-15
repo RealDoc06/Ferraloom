@@ -21,8 +21,8 @@ use crate::world_info::{
         minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
         read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
         write_game_rules, write_random_sequences_stub, write_scheduled_events_stub,
-        write_scoreboard_stub, write_stopwatches_stub, write_wandering_trader, write_weather,
-        write_world_clocks, write_world_gen_settings,
+        write_stopwatches_stub, write_wandering_trader, write_weather, write_world_clocks,
+        write_world_gen_settings,
     },
     default_data_packs,
 };
@@ -514,11 +514,6 @@ impl WorldInfoWriter for AnvilLevelInfo {
         // random_sequences.dat
         if let Err(e) = write_random_sequences_stub(level_folder, data_version) {
             error!("Failed to write random_sequences.dat: {e}");
-        }
-
-        // scoreboard.dat
-        if let Err(e) = write_scoreboard_stub(level_folder, data_version) {
-            error!("Failed to write scoreboard.dat: {e}");
         }
 
         // stopwatches.dat
@@ -1071,7 +1066,6 @@ mod test {
         let expected_files = [
             "game_rules.dat",
             "random_sequences.dat",
-            "scoreboard.dat",
             "stopwatches.dat",
             "wandering_trader.dat",
             "world_clocks.dat",

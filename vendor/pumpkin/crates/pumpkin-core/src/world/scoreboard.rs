@@ -1,5 +1,7 @@
 use rustc_hash::FxHashMap;
 
+mod storage;
+
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, NumberFormat,
@@ -35,11 +37,21 @@ impl ScoreboardTarget for World {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.broadcast_editioned(je_packet, be_packet);
+        if let Some(server) = self.server.upgrade() {
+            for world in server.worlds.load().iter() {
+                world.broadcast_editioned(je_packet, be_packet);
+            }
+        } else {
+            self.broadcast_editioned(je_packet, be_packet);
+        }
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.broadcast_packet_all(je_packet);
+        if let Some(server) = self.server.upgrade() {
+            server.broadcast_packet_all(je_packet);
+        } else {
+            self.broadcast_packet_all(je_packet);
+        }
     }
 }
 
@@ -63,11 +75,11 @@ impl ScoreboardTarget for std::sync::Arc<World> {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.broadcast_editioned(je_packet, be_packet);
+        ScoreboardTarget::send_editioned(self.as_ref(), je_packet, be_packet);
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.broadcast_packet_all(je_packet);
+        ScoreboardTarget::send_je(self.as_ref(), je_packet);
     }
 }
 
@@ -118,6 +130,7 @@ pub struct Scoreboard {
     display_slots: FxHashMap<ScoreboardDisplaySlot, String>,
     scores: FxHashMap<String, FxHashMap<String, ScoreboardScore>>,
     teams: FxHashMap<String, Team>,
+    preserved: storage::PreservedData,
 }
 
 impl Scoreboard {
@@ -344,6 +357,9 @@ impl Scoreboard {
 
         target.send_editioned(&je_packet, &be_packet);
 
+        self.preserved.objectives.remove(name);
+        self.preserved.scores.remove(name);
+        self.preserved.remove_display_objective(name);
         self.objectives.remove(name);
         self.scores.remove(name);
         self.display_slots.retain(|_, obj| obj != name);
@@ -444,6 +460,9 @@ impl Scoreboard {
 
         target.send_editioned(&je_packet, &be_packet);
 
+        if let Some(scores) = self.preserved.scores.get_mut(objective_name) {
+            scores.remove(entity_name);
+        }
         if let Some(objective_scores) = self.scores.get_mut(objective_name) {
             objective_scores.remove(entity_name);
         }
@@ -473,6 +492,9 @@ impl Scoreboard {
 
         target.send_editioned(&je_packet, &be_packet);
 
+        for scores in self.preserved.scores.values_mut() {
+            scores.remove(entity_name);
+        }
         for obj_scores in self.scores.values_mut() {
             obj_scores.remove(entity_name);
         }
@@ -547,6 +569,7 @@ impl Scoreboard {
             players: Box::new([]),
         });
 
+        self.preserved.teams.remove(name);
         self.teams.remove(name);
     }
 

@@ -14,6 +14,7 @@ use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
+use crate::world::scoreboard::Scoreboard;
 use crate::{
     command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
     world::map::MapManager,
@@ -50,6 +51,9 @@ use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
+
+#[cfg(test)]
+mod scoreboard_tests;
 
 mod connection_cache;
 pub(crate) mod debug_profiler;
@@ -97,6 +101,8 @@ pub struct Server {
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
     pub worlds: ArcSwap<Vec<Arc<World>>>,
+    /// One scoreboard for all dimensions; persisted only by the server lifecycle.
+    pub scoreboard: Arc<std::sync::Mutex<Scoreboard>>,
     /// All the dimensions that exist on the server.
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
@@ -175,6 +181,9 @@ impl Server {
         );
 
         let world_path = basic_config.get_world_path();
+        // Load before creating worlds or writing new-world metadata. A broken existing
+        // scoreboard is a startup error, never a reason to save an empty replacement.
+        let scoreboard = Arc::new(std::sync::Mutex::new(Scoreboard::load(&world_path)?));
 
         let block_registry = super::block::registry::default_registry();
 
@@ -297,6 +306,7 @@ impl Server {
             bedrock_oidc_keys: Arc::new(OnceCell::new()),
             listing,
             branding: CachedBranding::new(),
+            scoreboard,
             bossbars: std::sync::Mutex::new(CustomBossbars::new()),
             map_manager: MapManager::new(),
             defaultgamemode,
@@ -400,6 +410,7 @@ impl Server {
                 dim.clone(),
                 block_registry.clone(),
                 Arc::downgrade(&server),
+                server.scoreboard.clone(),
             ));
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));
@@ -484,7 +495,14 @@ impl Server {
 
         let level =
             pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
-        let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+        let world: World = World::load(
+            level.clone(),
+            l_info,
+            dimension,
+            registry,
+            weak,
+            self.scoreboard.clone(),
+        );
         let world = Arc::new(world);
         let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
         level.world_portal.store(Arc::new(Some(portal)));
@@ -595,6 +613,15 @@ impl Server {
         self.datapack_manager.is_feature_enabled(self, feature)
     }
 
+    /// Hold the shared lock through replacement, so concurrent saves cannot commit
+    /// an older snapshot after a newer one.
+    fn save_scoreboard(&self) -> std::io::Result<()> {
+        self.scoreboard
+            .lock()
+            .map_err(|_| std::io::Error::other("Scoreboard lock poisoned"))?
+            .save(&self.basic_config.get_world_path())
+    }
+
     pub async fn save_all(&self, flush: bool) -> Result<(), String> {
         self.management_hub.broadcast_server_saving();
         let mut first_error = None;
@@ -621,6 +648,10 @@ impl Server {
                 .map_err(|error| format!("Failed to save player advancements: {error}")),
         );
 
+        record_error(
+            self.save_scoreboard()
+                .map_err(|error| format!("Failed to save scoreboard: {error}")),
+        );
         let worlds = self.worlds.load_full();
         for world in worlds.iter() {
             record_error(world.save().await.map_err(|error| {
@@ -811,6 +842,10 @@ impl Server {
         }
         if let Err(err) = self.save_world_info() {
             error!("Failed to save level.dat: {err}");
+            crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
+        }
+        if let Err(error) = self.save_scoreboard() {
+            error!("Failed to save scoreboard during shutdown: {error}");
             crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
         info!("Completed worlds");

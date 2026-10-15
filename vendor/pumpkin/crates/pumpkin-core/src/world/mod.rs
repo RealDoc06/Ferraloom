@@ -336,8 +336,8 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
-    /// The world's scoreboard, used for tracking scores, objectives, and display information.
-    pub scoreboard: std::sync::Mutex<Scoreboard>,
+    /// The server's shared scoreboard, visible in every dimension.
+    pub scoreboard: Arc<std::sync::Mutex<Scoreboard>>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
     pub worldborder: std::sync::Mutex<Worldborder>,
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
@@ -453,6 +453,7 @@ impl World {
         dimension: Dimension,
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
+        scoreboard: Arc<std::sync::Mutex<Scoreboard>>,
     ) -> Self {
         // TODO
         let generation_settings = NoiseSettings::from_dimension(&dimension);
@@ -492,7 +493,7 @@ impl World {
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
-            scoreboard: std::sync::Mutex::new(Scoreboard::default()),
+            scoreboard,
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
                 0.0,

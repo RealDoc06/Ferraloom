@@ -113,6 +113,9 @@ mod tests {
             Dimension::OVERWORLD,
             crate::block::registry::default_registry(),
             Weak::new(),
+            Arc::new(std::sync::Mutex::new(
+                super::super::scoreboard::Scoreboard::new(),
+            )),
         ));
         for x in -2..=0 {
             for z in -1..=1 {
