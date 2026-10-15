@@ -4,6 +4,7 @@ use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
 use crate::block::entities::comparator::ComparatorBlockEntity;
 use crate::block::entities::hanging_sign::HangingSignBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::sign::{DyeColor, SignBlockEntity, SignEntityRef};
 use crate::command::CommandSource;
 use crate::command::argument_types::nbt_path::{
@@ -544,6 +545,13 @@ async fn sign_data_reloads_both_faces_wax_and_client_data_without_replacing_edit
 #[tokio::test]
 async fn unsupported_block_data_returns_an_explicit_error_without_staging_nbt() {
     let fixture = Fixture::new().await;
+    fixture.install(
+        &Block::HOPPER,
+        Arc::new(HopperBlockEntity::from_nbt(
+            &compound("{Items:[{Slot:0b,id:'minecraft:diamond',count:3}]}"),
+            BLOCK_POS,
+        )),
+    );
     let live = fixture.source.world().get_block_entity(&BLOCK_POS).unwrap();
     let before = fixture.block_data();
     let pending = fixture.pending_data();

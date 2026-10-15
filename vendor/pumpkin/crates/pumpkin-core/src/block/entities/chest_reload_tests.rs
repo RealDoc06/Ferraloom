@@ -720,6 +720,66 @@ fn assert_stacks(inventory: &dyn Inventory, expected: &[ItemStack; 27]) {
 }
 
 #[tokio::test]
+async fn pending_chest_loaded_by_world_unpacks_on_first_inventory_access() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        fixture.set_state(BLOCK_POS, kind.block().default_state.id);
+        let pending = kind.from_nbt(
+            &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
+            BLOCK_POS,
+        );
+        world
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .insert(BLOCK_POS, saved(pending.as_ref()));
+            })
+            .unwrap();
+
+        // Normal lazy lookup must bind context before a hopper, comparator or
+        // command reads the inventory. No menu or /data call supplies it here.
+        let live = world.get_block_entity(&BLOCK_POS).unwrap();
+        assert!(live.has_loot_table());
+        let expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        let inventory = live.clone().get_inventory().unwrap();
+        assert_stacks(inventory.as_ref(), &expected);
+        assert!(!live.has_loot_table());
+        world.update_block_entity(&live);
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert_stacks(reloaded.get_inventory().unwrap().as_ref(), &expected);
+    }
+}
+
+#[tokio::test]
+async fn published_pending_chest_unpacks_before_first_inventory_deposit() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let live = kind.from_nbt(
+            &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
+            BLOCK_POS,
+        );
+        fixture.install(kind.block(), live.clone());
+        let inventory = live.clone().get_inventory().unwrap();
+        let deposit = ItemStack::new(11, &Item::EMERALD);
+
+        // add_block_entity is the only binding path before this first access.
+        inventory.set_stack(26, deposit.clone());
+        let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        expected[26] = deposit;
+        assert_stacks(inventory.as_ref(), &expected);
+        assert!(!live.has_loot_table());
+        world.update_block_entity(&live);
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert_stacks(reloaded.get_inventory().unwrap().as_ref(), &expected);
+    }
+}
+
+#[tokio::test]
 async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
     #[derive(Debug)]
     enum Access {
