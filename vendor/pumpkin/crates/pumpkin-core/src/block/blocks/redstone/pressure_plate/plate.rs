@@ -44,8 +44,8 @@ impl BlockBehaviour for PressurePlateBlock {
         }
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        self.on_state_replaced_pp(args);
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
+        self.affect_neighbors_after_removal_pp(args);
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {

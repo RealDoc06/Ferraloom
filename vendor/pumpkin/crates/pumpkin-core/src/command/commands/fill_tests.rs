@@ -313,23 +313,26 @@ async fn destroy_callbacks_shapes_and_fluids() {
     assert_eq!(client_changes[&sponge], Block::SPONGE.default_state.id);
 }
 
-async fn destroy_deferred_removal_uses_original_state() {
-    use crate::block::{BlockBehaviour, BlockMetadata, OnStateReplacedArgs};
+async fn destroy_deferred_removal_preserves_lever_notifications() {
+    use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs};
     use pumpkin_data::BlockId;
+    use pumpkin_data::block_properties::{AttachFace, LeverLikeProperties};
     use std::sync::Mutex;
 
-    struct ObserveRemoval(Arc<Mutex<Vec<(BlockStateId, BlockStateId)>>>);
-    impl BlockMetadata for ObserveRemoval {
+    struct ObserveNeighbors(Arc<Mutex<Vec<BlockStateId>>>);
+    impl BlockMetadata for ObserveNeighbors {
         fn ids() -> Box<[BlockId]> {
             [BlockId::STONE].into()
         }
     }
-    impl BlockBehaviour for ObserveRemoval {
-        fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-            self.0.lock().unwrap().push((
-                args.old_state_id,
-                args.world.get_block_state_id(args.position),
-            ));
+    impl BlockBehaviour for ObserveNeighbors {
+        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+            if *args.position == BlockPos::new(4, 98, 4) {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(args.world.get_block_state_id(&BlockPos::new(4, 100, 4)));
+            }
         }
     }
 
@@ -337,9 +340,14 @@ async fn destroy_deferred_removal_uses_original_state() {
     let observations = Arc::new(Mutex::new(Vec::new()));
     Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry)
         .unwrap()
-        .register(ObserveRemoval(observations.clone()));
+        .register(ObserveNeighbors(observations.clone()));
     let pos = BlockPos::new(4, 100, 4);
-    put(&world, pos, Block::STONE.default_state.id);
+    put(&world, pos.down(), Block::STONE.default_state.id);
+    put(&world, pos.down().down(), Block::STONE.default_state.id);
+    let mut lever = LeverLikeProperties::default(&Block::LEVER);
+    lever.face = AttachFace::Floor;
+    lever.powered = true;
+    put(&world, pos, lever.to_state_id(&Block::LEVER));
     let source = CommandSource::dummy().with_world(world);
     assert_eq!(
         dispatcher()
@@ -347,16 +355,100 @@ async fn destroy_deferred_removal_uses_original_state() {
             .unwrap(),
         1
     );
+    let observations = observations.lock().unwrap();
+    assert!(observations.contains(&BlockStateId::AIR));
+    assert!(
+        observations.contains(&Block::GOLD_BLOCK.default_state.id),
+        "Java's powered-lever removal also notifies around its support after placement; the generic update at the fill position cannot reach two blocks below"
+    );
+}
+
+async fn destroy_replacements_retain_new_entities_and_poi() {
+    use crate::block::entities::{block_entity_from_nbt, sign::SignBlockEntity};
+    use pumpkin_nbt::compound::NbtCompound;
+
+    let (_folder, world) = world().await;
+    let source = CommandSource::dummy().with_world(world.clone());
+    let dispatcher = dispatcher();
+    for (x, replacement, expected_id) in [
+        (4, "chest", "minecraft:chest"),
+        (8, "spruce_sign", "minecraft:sign"),
+    ] {
+        let pos = BlockPos::new(x, 100, 4);
+        put(&world, pos.down(), Block::STONE.default_state.id);
+        world.set_block_state(
+            &pos,
+            Block::OAK_SIGN.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        let old_entity = world.get_block_entity(&pos).expect("source sign entity");
+        old_entity
+            .as_any()
+            .downcast_ref::<SignBlockEntity>()
+            .unwrap()
+            .front_text
+            .messages
+            .lock()
+            .unwrap()[0] = "old sign text".into();
+        assert_eq!(
+            dispatcher
+                .execute_input(
+                    &format!("fill {x} 100 4 {x} 100 4 {replacement} destroy"),
+                    &source,
+                )
+                .unwrap(),
+            1
+        );
+        let entity = world.get_block_entity(&pos).expect("replacement entity");
+        assert!(!Arc::ptr_eq(&entity, &old_entity));
+        if replacement == "chest" {
+            assert!(entity.as_any().is::<ChestBlockEntity>());
+            assert_eq!(world.get_block(&pos), &Block::CHEST);
+        } else {
+            let sign = entity.as_any().downcast_ref::<SignBlockEntity>().unwrap();
+            assert!(
+                sign.front_text
+                    .messages
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|line| line.is_empty())
+            );
+            assert_eq!(world.get_block(&pos), &Block::SPRUCE_SIGN);
+        }
+        // The new handle must remain available to both packet and save paths.
+        let mut saved = NbtCompound::new();
+        entity.write_internal(&mut saved);
+        assert_eq!(saved.get_string("id"), Some(expected_id));
+        assert_eq!(saved.get_int("x"), Some(x));
+        assert!(block_entity_from_nbt(&saved).is_some());
+    }
+
+    // A supported 2x3 portal, with POI entries for its actual interior blocks.
+    for x in 11..=14 {
+        for y in 99..=103 {
+            let pos = BlockPos::new(x, y, 8);
+            if x == 11 || x == 14 || y == 99 || y == 103 {
+                put(&world, pos, Block::OBSIDIAN.default_state.id);
+            } else {
+                put(&world, pos, Block::NETHER_PORTAL.default_state.id);
+                world.portal_poi.lock().unwrap().add_portal(pos);
+            }
+        }
+    }
+    let pos = BlockPos::new(12, 100, 8);
     assert_eq!(
-        *observations.lock().unwrap(),
-        [
-            (Block::STONE.default_state.id, BlockStateId::AIR),
-            (
-                Block::STONE.default_state.id,
-                Block::GOLD_BLOCK.default_state.id
-            ),
-        ],
-        "Java runs removal during destruction and again after placement using the pre-destroy state"
+        dispatcher
+            .execute_input("fill 12 100 8 12 100 8 stonecutter destroy", &source)
+            .unwrap(),
+        1
+    );
+    assert_eq!(world.get_block(&pos), &Block::STONECUTTER);
+    let mut poi = world.portal_poi.lock().unwrap();
+    assert_eq!(poi.get_in_square(pos, 0, Some("minecraft:mason")), [pos]);
+    assert!(
+        !poi.get_in_square(pos, 0, Some("minecraft:nether_portal"))
+            .contains(&pos)
     );
 }
 
@@ -374,7 +466,8 @@ fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
             .block_on(async {
                 destroy_commands().await;
                 destroy_callbacks_shapes_and_fluids().await;
-                destroy_deferred_removal_uses_original_state().await;
+                destroy_deferred_removal_preserves_lever_notifications().await;
+                destroy_replacements_retain_new_entities_and_poi().await;
             });
         return;
     }

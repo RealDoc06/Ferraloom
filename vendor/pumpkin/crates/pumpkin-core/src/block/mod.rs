@@ -166,7 +166,14 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn on_scheduled_tick(&self, _args: OnScheduledTickArgs<'_>) {}
 
-    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {}
+    /// Immediate replacement cleanup, before the replacement's placement hook.
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        self.affect_neighbors_after_removal(args);
+    }
+
+    /// Vanilla's neighbour-only removal hook. Commands may defer this until
+    /// after placement; it must not remove the position's new entity or POI.
+    fn affect_neighbors_after_removal(&self, _args: OnStateReplacedArgs<'_>) {}
 
     // --- Redstone/Comparator Methods ---
 

@@ -33,7 +33,7 @@ pub(crate) trait PressurePlate {
         }
     }
 
-    fn on_state_replaced_pp(&self, args: OnStateReplacedArgs<'_>) {
+    fn affect_neighbors_after_removal_pp(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved && self.get_redstone_output(args.block, args.old_state_id) > 0 {
             args.world.update_neighbors(args.position, None);
             args.world.update_neighbors(&args.position.down(), None);

@@ -243,7 +243,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
         update_neighbors(args.world, args.position);
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
         update_neighbors(args.world, args.position);
     }
 }

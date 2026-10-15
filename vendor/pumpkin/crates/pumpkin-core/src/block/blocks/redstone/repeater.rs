@@ -159,8 +159,8 @@ impl BlockBehaviour for RepeaterBlock {
         RedstoneGateBlock::player_placed(self, args);
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        RedstoneGateBlock::on_state_replaced(self, args);
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
+        RedstoneGateBlock::affect_neighbors_after_removal(self, args);
     }
 }
 

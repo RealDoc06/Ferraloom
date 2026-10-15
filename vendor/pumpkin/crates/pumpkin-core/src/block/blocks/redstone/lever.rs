@@ -82,7 +82,7 @@ impl BlockBehaviour for LeverBlock {
         }
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
         let block_pos = args.position;
 
         let lever_props = LeverLikeProperties::from_state_id(args.old_state_id);

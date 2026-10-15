@@ -38,6 +38,10 @@ use super::common::{
 pub struct PoweredRailBlock;
 
 impl BlockBehaviour for PoweredRailBlock {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
+        super::affect_neighbors_after_removal(args);
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut rail_props = RailProperties::default(args.block);
         let player_facing = args.player.get_entity().get_horizontal_facing();

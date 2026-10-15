@@ -256,7 +256,7 @@ fn fill_blocks(
         let current_state = world.get_block_state_id(&pos);
         let block = current_state.to_block();
         if old_state.to_block() != block {
-            world.block_registry.on_state_replaced(
+            world.block_registry.affect_neighbors_after_removal(
                 &world,
                 old_state.to_block(),
                 &pos,

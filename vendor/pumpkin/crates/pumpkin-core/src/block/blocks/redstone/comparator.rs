@@ -137,8 +137,8 @@ impl BlockBehaviour for ComparatorBlock {
         self.update(args.world, *args.position, state, block);
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        RedstoneGateBlock::on_state_replaced(self, args);
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
+        RedstoneGateBlock::affect_neighbors_after_removal(self, args);
     }
 }
 

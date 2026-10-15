@@ -1287,6 +1287,25 @@ impl BlockRegistry {
         }
     }
 
+    pub fn affect_neighbors_after_removal(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        position: &BlockPos,
+        old_state_id: BlockStateId,
+        moved: bool,
+    ) {
+        if let Some(behavior) = self.get_pumpkin_block(block.id) {
+            behavior.affect_neighbors_after_removal(OnStateReplacedArgs {
+                world,
+                block,
+                old_state_id,
+                position,
+                moved,
+            });
+        }
+    }
+
     /// Updates state of all neighbors of the block
     pub fn post_process_state(
         &self,

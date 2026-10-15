@@ -118,7 +118,7 @@ impl BlockBehaviour for ButtonBlock {
         }
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved {
             let button_props = ButtonLikeProperties::from_state_id(args.old_state_id);
             if button_props.powered {

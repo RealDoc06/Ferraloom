@@ -8,6 +8,7 @@ use crate::block::BlockBehaviour;
 use crate::block::CanPlaceAtArgs;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
+use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 
 use super::StraightRailShapeExt;
@@ -18,6 +19,10 @@ use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties};
 pub struct RailBlock;
 
 impl BlockBehaviour for RailBlock {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
+        super::affect_neighbors_after_removal(args);
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let world = args.world;
         let block_pos = args.position;

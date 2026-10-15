@@ -81,7 +81,7 @@ impl BlockBehaviour for TripwireHookBlock {
         Self::update(args.world, *args.position, state_id, false, true, -1, None);
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>) {
         if args.moved || Block::from_state_id(args.old_state_id) == args.block {
             return;
         }

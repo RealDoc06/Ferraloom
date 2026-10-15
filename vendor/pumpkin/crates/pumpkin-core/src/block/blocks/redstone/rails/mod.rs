@@ -8,6 +8,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 
+use crate::block::OnStateReplacedArgs;
 use crate::world::World;
 
 mod common;
@@ -16,6 +17,25 @@ pub mod activator_rail;
 pub mod detector_rail;
 pub mod powered_rail;
 pub mod rail;
+
+/// BaseRailBlock.affectNeighborsAfterRemoval does not rerun rail placement or
+/// connection maintenance against a command's replacement block.
+fn affect_neighbors_after_removal(args: OnStateReplacedArgs<'_>) {
+    if args.moved {
+        return;
+    }
+    let properties = RailProperties::new(args.old_state_id, args.block);
+    if properties.shape().is_ascending() {
+        args.world
+            .update_neighbors_at(&args.position.up(), args.block, None);
+    }
+    if !properties.can_curve() {
+        args.world
+            .update_neighbors_at(args.position, args.block, None);
+        args.world
+            .update_neighbors_at(&args.position.down(), args.block, None);
+    }
+}
 
 struct Rail {
     block: &'static Block,

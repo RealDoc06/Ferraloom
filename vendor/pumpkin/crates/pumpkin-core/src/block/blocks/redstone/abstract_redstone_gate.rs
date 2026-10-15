@@ -163,7 +163,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         }
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>)
+    fn affect_neighbors_after_removal(&self, args: OnStateReplacedArgs<'_>)
     where
         Self: Send + Sync,
     {
