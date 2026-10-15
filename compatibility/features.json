@@ -3086,7 +3086,8 @@
         "execute score store preserves prior scores when a conditional branch is empty",
         "execute as runs once for each selected entity",
         "wire command tree decodes completely",
-        "score selectors use entity UUIDs and require existing scores"
+        "score selectors use entity UUIDs and require existing scores",
+        "fill destroy completes and counts block replacements"
       ],
       "rust_status": "partial",
       "evidence": [

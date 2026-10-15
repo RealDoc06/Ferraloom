@@ -263,6 +263,10 @@
     "blocks.furnace_lava_remainder": {
       "feature_id": "blocks.processing",
       "scenario": "lava fuel leaves a bucket and wet sponge fills it with water"
+    },
+    "block.fill_destroy": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy completes and counts block replacements"
     }
   }
 }
