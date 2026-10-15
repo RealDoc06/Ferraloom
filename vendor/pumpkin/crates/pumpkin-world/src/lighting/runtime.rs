@@ -683,6 +683,6 @@ mod tests {
             );
         }
 
-        level.shutdown().await;
+        level.shutdown().await.unwrap();
     }
 }

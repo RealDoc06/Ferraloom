@@ -178,6 +178,12 @@ impl Compression {
                 Ok(chunk_data)
             }
             Self::LZ4 => {
+                if compression_level > 15 {
+                    return Err(CompressionError::LZ4Error(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "LZ4 block compression level must be between 0 and 15",
+                    )));
+                }
                 let mut compressed_data = Vec::new();
                 let block_size = 1 << (Self::LZ4_COMPRESSION_LEVEL_BASE + compression_level);
                 let mut encoder = lz4_java_wrc::Lz4BlockOutput::with_context(
@@ -455,7 +461,8 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             chunk.serialized_data.write(&mut write).await?;
         }
 
-        write.flush().await
+        write.flush().await?;
+        write.get_ref().sync_all().await
     }
 
     /// Write entire file, disregarding saved offsets
@@ -499,6 +506,8 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         }
 
         write.flush().await?;
+        write.get_ref().sync_all().await?;
+        drop(write);
         tokio::fs::rename(temp_path, path).await?;
         Ok(())
     }
@@ -1428,6 +1437,25 @@ mod tests {
             Compression::Custom.compress_data(b"chunk data", 6),
             Err(CompressionError::UnknownCompression)
         ));
+    }
+
+    #[test]
+    fn lz4_levels_fit_the_four_bit_block_size_token() {
+        for level in [16, 60, u32::MAX] {
+            match Compression::LZ4.compress_data(b"chunk data", level) {
+                Err(CompressionError::LZ4Error(error)) => {
+                    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+                }
+                result => panic!("level {level} should be rejected before shifting: {result:?}"),
+            }
+        }
+        let encoded = Compression::LZ4.compress_data(b"chunk data", 15).unwrap();
+        assert_eq!(encoded[8] & 0x0f, 15);
+        assert_eq!(encoded[encoded.len() - 13], 0x1f);
+        assert_eq!(
+            Compression::LZ4.decompress_data(&encoded).unwrap().as_ref(),
+            b"chunk data"
+        );
     }
 
     #[test]

@@ -25,6 +25,7 @@ pub enum RecvChunk {
 
 pub enum WriteRequest {
     Chunks(Vec<(ChunkPos, Chunk)>),
+    Entities,
     Flush(Vec<tokio::sync::oneshot::Sender<Result<(), String>>>),
 }
 
@@ -195,6 +196,13 @@ pub async fn io_write_work(
         };
         let data = match request {
             WriteRequest::Chunks(data) => data,
+            WriteRequest::Entities => {
+                if let Err(error) = level.save_pending_entity_chunks().await {
+                    error!("Failed to save entity chunks: {error}");
+                    pending_error.get_or_insert(error);
+                }
+                continue;
+            }
             WriteRequest::Flush(waiters) => {
                 // This barrier follows all chunks already enqueued by the
                 // scheduler. Cached watched regions also need a physical write.

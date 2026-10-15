@@ -173,6 +173,24 @@
     "command.store_condition": {
       "feature_id": "players.commands",
       "scenario": "execute score store preserves prior scores when a conditional branch is empty"
+    },
+    "persistence.entity_write": {
+      "skip_reason": "Pre-save summon establishes the UUID and health marker; persistence is checked after restart."
+    },
+    "persistence.entity_restart": {
+      "feature_id": "persistence.entity_data",
+      "scenario": "entity reload"
+    },
+    "persistence.entity_signal_write": {
+      "skip_reason": "Pre-signal health change establishes a live marker; persistence is checked after restart."
+    },
+    "persistence.entity_signal_restart": {
+      "feature_id": "persistence.entity_data",
+      "scenario": "entity reload"
+    },
+    "persistence.metadata_restart": {
+      "feature_id": "persistence.level_data",
+      "scenario": "restart"
     }
   }
 }

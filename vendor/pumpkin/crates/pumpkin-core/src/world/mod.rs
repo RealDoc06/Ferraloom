@@ -16,6 +16,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
+    path::Path,
     sync::atomic::Ordering,
 };
 use tracing::{debug, error, info, trace, warn};
@@ -239,6 +240,79 @@ impl PumpkinError for GetBlockError {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum WorldSaveError {
+    #[error("Failed to save chunk and entity data: {0}")]
+    Level(String),
+    #[error("Failed to save portal POI: {0}")]
+    PortalPoi(#[source] std::io::Error),
+    #[error("Failed to save custom world data: {0}")]
+    CustomData(#[source] std::io::Error),
+}
+
+/// Custom data is written as named NBT; accept older unnamed files as well.
+fn decode_custom_world_data(bytes: &[u8]) -> Result<NbtCompound, String> {
+    for named in [true, false] {
+        let mut cursor = std::io::Cursor::new(bytes);
+        let decoded = {
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            if named {
+                pumpkin_nbt::Nbt::read(&mut reader)
+            } else {
+                pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+            }
+        };
+        if let Ok(nbt) = decoded
+            && cursor.position() == bytes.len() as u64
+        {
+            return Ok(nbt.root_tag);
+        }
+    }
+    Err("Invalid or trailing custom world NBT data".into())
+}
+
+fn load_custom_world_data(canonical: &Path, legacy: &Path) -> Result<NbtCompound, String> {
+    for path in [canonical, legacy] {
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                return decode_custom_world_data(&bytes)
+                    .map_err(|error| format!("{}: {error}", path.display()));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("{}: {error}", path.display())),
+        }
+    }
+    Ok(NbtCompound::new())
+}
+
+/// Wait for auxiliary state locks and report IO failures before save success.
+/// Both std mutex guards are released before the caller performs any await.
+fn save_auxiliary_data(
+    portal_poi: &std::sync::Mutex<portal::PortalPoiStorage>,
+    custom_data: &std::sync::Mutex<NbtCompound>,
+    custom_folder: &Path,
+    load_error: Option<&str>,
+) -> Result<(), WorldSaveError> {
+    let portal_result = portal_poi
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .save_all()
+        .map_err(WorldSaveError::PortalPoi);
+    if let Some(error) = load_error {
+        return Err(WorldSaveError::CustomData(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            error.to_owned(),
+        )));
+    }
+    let custom_data = custom_data
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let path = custom_folder.join("pumpkin_custom_data.nbt");
+    let encoded = pumpkin_nbt::Nbt::from(custom_data.clone()).write();
+    std::fs::write(path, encoded).map_err(WorldSaveError::CustomData)?;
+    portal_result
+}
+
 /// Represents a Minecraft world, containing entities, players, and the underlying level data.
 ///
 /// Each dimension (Overworld, Nether, End) typically has its own `World`.
@@ -297,6 +371,8 @@ pub struct World {
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
+    /// Prevent a failed load from being saved back as an empty replacement.
+    custom_data_load_error: Option<String>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
@@ -383,19 +459,27 @@ impl World {
 
         let custom_data_path = level
             .level_folder
+            .dim_folder
+            .join("pumpkin_custom_data.nbt");
+        let legacy_custom_data_path = level
+            .level_folder
             .root_folder
             .join("pumpkin_custom_data.nbt");
-        let custom_data = if custom_data_path.exists()
-            && let Ok(bytes) = std::fs::read(&custom_data_path)
-            && let Ok(nbt) = pumpkin_nbt::Nbt::read_unnamed(
-                &mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut std::io::Cursor::new(
-                    bytes,
-                )),
-            ) {
-            nbt.root_tag
-        } else {
-            NbtCompound::new()
-        };
+        let (custom_data, custom_data_load_error) =
+            match load_custom_world_data(&custom_data_path, &legacy_custom_data_path) {
+                Ok(data) => (data, None),
+                Err(error) => {
+                    warn!("Failed to load custom world data: {error}");
+                    (NbtCompound::new(), Some(error))
+                }
+            };
+
+        // The overworld clock was loaded from world_clocks.dat into LevelData.
+        // Restore it before ticking or saving so restarts cannot replace it with 0.
+        let mut level_time = LevelTime::new();
+        if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
+            level_time.set_time(level_info.load().day_time);
+        }
 
         Self {
             uuid: Uuid::new_v4(),
@@ -412,7 +496,7 @@ impl World {
                 5,
                 300,
             )),
-            level_time: std::sync::Mutex::new(LevelTime::new()),
+            level_time: std::sync::Mutex::new(level_time),
             dimension,
             weather: std::sync::Mutex::new(Weather::new()),
             block_registry,
@@ -433,6 +517,7 @@ impl World {
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
+            custom_data_load_error,
             custom_block_entity_data: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
         }
@@ -657,7 +742,7 @@ impl World {
         dx <= radius && dz <= radius
     }
 
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&self) -> Result<(), WorldSaveError> {
         let entities = self.entities.load_full();
         self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
             .await;
@@ -671,17 +756,15 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        // Save portal POI to disk
-        let save_result = self
-            .portal_poi
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .save_all();
-        if let Err(e) = save_result {
-            error!("Failed to save portal POI: {e}");
-        }
+        let auxiliary_result = save_auxiliary_data(
+            &self.portal_poi,
+            &self.custom_data,
+            &self.level.level_folder.dim_folder,
+            self.custom_data_load_error.as_deref(),
+        );
 
-        self.level.shutdown().await;
+        let level_result = self.level.shutdown().await.map_err(WorldSaveError::Level);
+        auxiliary_result.and(level_result)
     }
 
     /// Writes `entities` into the saved data of the chunks they are in. A live chunk is
@@ -6930,7 +7013,7 @@ impl World {
         }
     }
 
-    pub async fn save(&self) {
+    pub async fn save(&self) -> Result<(), WorldSaveError> {
         let entities = self.entities.load_full();
         self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
             .await;
@@ -6944,25 +7027,12 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        if let Ok(mut portal_poi) = self.portal_poi.try_lock() {
-            let _ = portal_poi.save_all();
-        }
-
-        {
-            let custom_data = self
-                .custom_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !custom_data.is_empty() {
-                let custom_data_path = self
-                    .level
-                    .level_folder
-                    .root_folder
-                    .join("pumpkin_custom_data.nbt");
-                let nbt = pumpkin_nbt::Nbt::from(custom_data.clone());
-                let _ = std::fs::write(custom_data_path, nbt.write());
-            }
-        }
+        save_auxiliary_data(
+            &self.portal_poi,
+            &self.custom_data,
+            &self.level.level_folder.dim_folder,
+            self.custom_data_load_error.as_deref(),
+        )?;
 
         self.level
             .should_save
@@ -6975,6 +7045,7 @@ impl World {
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire(&server, &mut save_event).await;
         }
+        Ok(())
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
@@ -7451,8 +7522,164 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        World, WorldSaveError, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        decode_custom_world_data, load_custom_world_data, merge_entity_records,
+        save_auxiliary_data,
     };
+
+    #[test]
+    fn world_save_auxiliary_save_waits_for_portal_lock_and_persists_real_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = directory.path().join("poi");
+        let portals = std::sync::Mutex::new(super::portal::PortalPoiStorage::new(folder.clone()));
+        let mut data = NbtCompound::new();
+        data.put_int("marker", 42);
+        let custom = std::sync::Mutex::new(data.clone());
+        let position = BlockPos::new(0, 64, 0);
+        let mut held = portals.lock().unwrap();
+        held.add_portal(position);
+        let (started, ready) = std::sync::mpsc::channel();
+        let (finished, completed) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                started.send(()).unwrap();
+                finished
+                    .send(save_auxiliary_data(
+                        &portals,
+                        &custom,
+                        directory.path(),
+                        None,
+                    ))
+                    .unwrap();
+            });
+            ready.recv().unwrap();
+            assert!(matches!(
+                completed.recv_timeout(std::time::Duration::from_millis(100)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ));
+            drop(held);
+            completed
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+        });
+        let mut reloaded = super::portal::PortalPoiStorage::new(folder);
+        assert_eq!(reloaded.get_in_square(position, 1, None), vec![position]);
+        let bytes = std::fs::read(directory.path().join("pumpkin_custom_data.nbt")).unwrap();
+        assert_eq!(decode_custom_world_data(&bytes).unwrap(), data);
+    }
+
+    #[test]
+    fn world_save_auxiliary_save_propagates_portal_and_custom_write_failures() {
+        let directory = tempfile::tempdir().unwrap();
+        let blocked = directory.path().join("not_a_directory");
+        std::fs::write(&blocked, b"file").unwrap();
+        let portals = std::sync::Mutex::new(super::portal::PortalPoiStorage::new(blocked));
+        let custom = std::sync::Mutex::new(NbtCompound::new());
+        assert!(matches!(
+            save_auxiliary_data(&portals, &custom, directory.path(), None),
+            Err(WorldSaveError::PortalPoi(_))
+        ));
+
+        let portals = std::sync::Mutex::new(super::portal::PortalPoiStorage::new(
+            directory.path().join("poi"),
+        ));
+        custom.lock().unwrap().put_int("marker", 42);
+        std::fs::create_dir(directory.path().join("pumpkin_custom_data.nbt")).unwrap();
+        assert!(matches!(
+            save_auxiliary_data(&portals, &custom, directory.path(), None),
+            Err(WorldSaveError::CustomData(_))
+        ));
+    }
+
+    #[test]
+    fn world_save_custom_data_accepts_named_and_legacy_unnamed_nbt() {
+        let mut data = NbtCompound::new();
+        data.put_int("marker", 42);
+        let named = pumpkin_nbt::Nbt::from(data.clone()).write();
+        let unnamed = pumpkin_nbt::Nbt::from(data.clone()).write_unnamed();
+        assert_eq!(decode_custom_world_data(&named).unwrap(), data);
+        assert_eq!(decode_custom_world_data(&unnamed).unwrap(), data);
+        let mut trailing = named.to_vec();
+        trailing.push(1);
+        assert!(decode_custom_world_data(&trailing).is_err());
+    }
+
+    #[test]
+    fn world_save_auxiliary_save_persists_clearing_custom_data_without_destroying_invalid_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let portals = std::sync::Mutex::new(super::portal::PortalPoiStorage::new(
+            directory.path().join("poi"),
+        ));
+        let mut data = NbtCompound::new();
+        data.put_int("marker", 42);
+        let custom = std::sync::Mutex::new(data);
+        save_auxiliary_data(&portals, &custom, directory.path(), None).unwrap();
+        *custom.lock().unwrap() = NbtCompound::new();
+        save_auxiliary_data(&portals, &custom, directory.path(), None).unwrap();
+        let path = directory.path().join("pumpkin_custom_data.nbt");
+        assert!(
+            decode_custom_world_data(&std::fs::read(&path).unwrap())
+                .unwrap()
+                .is_empty()
+        );
+        std::fs::write(&path, b"invalid existing data").unwrap();
+        let load_error = load_custom_world_data(&path, &path).unwrap_err();
+        assert!(matches!(
+            save_auxiliary_data(&portals, &custom, directory.path(), Some(&load_error)),
+            Err(WorldSaveError::CustomData(_))
+        ));
+        assert_eq!(std::fs::read(path).unwrap(), b"invalid existing data");
+    }
+
+    #[test]
+    fn world_save_custom_data_is_dimension_scoped_and_legacy_fallback_does_not_resurrect_cleared_values()
+     {
+        let directory = tempfile::tempdir().unwrap();
+        let legacy = directory.path().join("pumpkin_custom_data.nbt");
+        let mut old_data = NbtCompound::new();
+        old_data.put_int("marker", 42);
+        std::fs::write(&legacy, pumpkin_nbt::Nbt::from(old_data.clone()).write()).unwrap();
+        let first = directory.path().join("dimensions/minecraft/overworld");
+        let second = directory.path().join("dimensions/minecraft/the_nether");
+        let first_path = first.join("pumpkin_custom_data.nbt");
+        let second_path = second.join("pumpkin_custom_data.nbt");
+        let mut first_data = load_custom_world_data(&first_path, &legacy).unwrap();
+        let second_data = load_custom_world_data(&second_path, &legacy).unwrap();
+        assert_eq!(first_data, old_data);
+        first_data.put_int("marker", 77);
+        let first_portals =
+            std::sync::Mutex::new(super::portal::PortalPoiStorage::new(first.join("poi")));
+        let second_portals =
+            std::sync::Mutex::new(super::portal::PortalPoiStorage::new(second.join("poi")));
+        let first_data = std::sync::Mutex::new(first_data);
+        let second_data = std::sync::Mutex::new(second_data);
+        save_auxiliary_data(&first_portals, &first_data, &first, None).unwrap();
+        save_auxiliary_data(&second_portals, &second_data, &second, None).unwrap();
+        assert_eq!(
+            load_custom_world_data(&first_path, &legacy)
+                .unwrap()
+                .get_int("marker"),
+            Some(77)
+        );
+        assert_eq!(
+            load_custom_world_data(&second_path, &legacy)
+                .unwrap()
+                .get_int("marker"),
+            Some(42)
+        );
+        *first_data.lock().unwrap() = NbtCompound::new();
+        save_auxiliary_data(&first_portals, &first_data, &first, None).unwrap();
+        assert!(
+            load_custom_world_data(&first_path, &legacy)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            decode_custom_world_data(&std::fs::read(legacy).unwrap()).unwrap(),
+            old_data
+        );
+    }
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
         let mut nbt = NbtCompound::new();

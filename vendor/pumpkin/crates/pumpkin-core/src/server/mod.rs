@@ -520,7 +520,7 @@ impl Server {
             ));
         }
 
-        world_to_unload.shutdown().await;
+        let save_result = world_to_unload.shutdown().await;
         world_to_unload.unload().await;
 
         self.worlds.rcu(|w_list| {
@@ -529,7 +529,7 @@ impl Server {
             new_list
         });
 
-        Ok(())
+        save_result.map_err(|error| format!("Failed to save unloaded world {name}: {error}"))
     }
 
     pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
@@ -595,7 +595,7 @@ impl Server {
         self.datapack_manager.is_feature_enabled(self, feature)
     }
 
-    pub async fn save_all(&self) -> Result<(), String> {
+    pub async fn save_all(&self, flush: bool) -> Result<(), String> {
         self.management_hub.broadcast_server_saving();
 
         if let Err(err) = self.save_world_info() {
@@ -618,7 +618,17 @@ impl Server {
         }
 
         for world in self.worlds.load().iter() {
-            world.save().await;
+            if let Err(error) = world.save().await {
+                let message = format!("Failed to save {}: {error}", world.dimension.minecraft_name);
+                error!("{message}");
+                return Err(message);
+            }
+        }
+
+        if flush {
+            for world in self.worlds.load_full().iter() {
+                world.level.save_and_flush().await?;
+            }
         }
 
         self.management_hub.broadcast_server_saved();
@@ -783,10 +793,17 @@ impl Server {
 
         info!("Starting worlds");
         for world in self.worlds.load().iter() {
-            world.shutdown().await;
+            if let Err(error) = world.shutdown().await {
+                error!(
+                    "Failed to save {} during shutdown: {error}",
+                    world.dimension.minecraft_name
+                );
+                crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
+            }
         }
         if let Err(err) = self.save_world_info() {
             error!("Failed to save level.dat: {err}");
+            crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
         info!("Completed worlds");
     }

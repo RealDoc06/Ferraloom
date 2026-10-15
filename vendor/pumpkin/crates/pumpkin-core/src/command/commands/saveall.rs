@@ -33,16 +33,7 @@ impl CommandExecutor for SaveAllExecutor {
         let source = context.source.clone();
         let flush = self.flush;
         server_arc.spawn_task(async move {
-            let saved = async {
-                server_clone.save_all().await?;
-                if flush {
-                    for world in server_clone.worlds.load_full().iter() {
-                        world.level.save_and_flush().await?;
-                    }
-                }
-                Ok::<(), String>(())
-            }
-            .await;
+            let saved = server_clone.save_all(flush).await;
             if let Err(err) = saved {
                 error!("Failed to save server data: {err}");
                 source.send_error(TextComponent::translate_cross(

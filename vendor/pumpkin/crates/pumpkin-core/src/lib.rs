@@ -512,6 +512,7 @@ impl PumpkinServer {
             .save_all_players(&self.server)
         {
             error!("Error saving all players during shutdown: {e}");
+            SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
         if let Err(e) = self
@@ -521,6 +522,7 @@ impl PumpkinServer {
             .await
         {
             error!("Error saving all players advancements during shutdown: {e}");
+            SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
         let kick_message = TextComponent::text("Server stopped");

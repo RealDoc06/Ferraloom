@@ -1,5 +1,6 @@
 use super::{ChunkLevel, ChunkPos, HashMapType};
 use crate::chunk_system::chunk_state::StagedChunkEnum;
+use crate::chunk_system::worker_logic::WriteRequest;
 use crate::level::Level;
 use crossbeam::queue::SegQueue;
 use std::collections::hash_map::Entry;
@@ -15,7 +16,7 @@ pub type LevelChange = (
 pub struct LevelChannel {
     pub value: Mutex<(Option<LevelChange>, Option<Vec<ChunkPos>>)>,
     pub notify: Condvar,
-    flush_requests: SegQueue<tokio::sync::oneshot::Sender<Result<(), String>>>,
+    write_requests: SegQueue<WriteRequest>,
 }
 
 impl Default for LevelChannel {
@@ -30,7 +31,7 @@ impl LevelChannel {
         Self {
             value: Mutex::new((None, None)),
             notify: Condvar::new(),
-            flush_requests: SegQueue::new(),
+            write_requests: SegQueue::new(),
         }
     }
 
@@ -42,16 +43,23 @@ impl LevelChannel {
             .value
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.flush_requests.push(send);
+        self.write_requests.push(WriteRequest::Flush(vec![send]));
         self.notify.notify_one();
         receive
     }
 
-    pub(crate) fn take_flush_requests(
-        &self,
-    ) -> Vec<tokio::sync::oneshot::Sender<Result<(), String>>> {
+    pub(crate) fn request_entity_save(&self) {
+        let _guard = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.write_requests.push(WriteRequest::Entities);
+        self.notify.notify_one();
+    }
+
+    pub(crate) fn take_write_requests(&self) -> Vec<WriteRequest> {
         let mut requests = Vec::new();
-        while let Some(request) = self.flush_requests.pop() {
+        while let Some(request) = self.write_requests.pop() {
             requests.push(request);
         }
         requests
@@ -156,7 +164,7 @@ impl LevelChannel {
             && lock.1.is_none()
             && !level.should_unload.load(SeqCst)
             && !level.should_save.load(SeqCst)
-            && self.flush_requests.is_empty()
+            && self.write_requests.is_empty()
             && !level.shut_down_chunk_system.load(SeqCst)
         {
             let (new_lock, timeout_res) = self

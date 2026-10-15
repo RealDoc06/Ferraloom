@@ -88,6 +88,7 @@ SCENARIOS = [
     Scenario("datapack.function", ("world.functions",), ("function ferraloom:probe",), "if score Datapack parity matches 37"),
     Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5, force_dimension="minecraft:the_nether"),
     Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5, force_dimension="minecraft:the_end"),
+    Scenario("persistence.entity_write", ("persistence.entity_data",), ('summon pig 8 200 12 {Tags:["ferraloom_saved"],UUID:[I;111,222,333,444],NoAI:1b,PersistenceRequired:1b}', "damage @e[type=pig,tag=ferraloom_saved,limit=1] 3 generic"), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]'),
     Scenario("persistence.write", ("persistence.chunk_data",), ("setblock 14 200 14 diamond_block", "save-all flush"), "if block 14 200 14 diamond_block", 0.5),
 ]
 
@@ -353,6 +354,11 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.append(recorded(persisted.id, persisted.features, lambda: run_scenario(server, persisted)))
             unflushed_read = Scenario("persistence.shutdown_restart", ("persistence.chunk_data",), (), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed_read.id, unflushed_read.features, lambda: run_scenario(server, unflushed_read)))
+            results.append(recorded("persistence.metadata_restart", ("persistence.level_data",), lambda: check_metadata(server)))
+            entity_read = Scenario("persistence.entity_restart", ("persistence.entity_data",), (), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]')
+            results.append(recorded(entity_read.id, entity_read.features, lambda: run_scenario(server, entity_read)))
+            entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
+            results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
             results.append(recorded(signal_write.id, signal_write.features, lambda: run_scenario(server, signal_write)))
             signal_result = stop_by_signal(server)
@@ -363,9 +369,13 @@ def run(server: Server, quick: bool) -> list[dict]:
                 server.command("forceload add 0 0")
                 wait_loaded(server)
                 results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
+                entity_signal_read = Scenario("persistence.entity_signal_restart", ("persistence.entity_data",), (), entity_signal_write.predicate)
+                results.append(recorded(entity_signal_read.id, entity_signal_read.features, lambda: run_scenario(server, entity_signal_read)))
             else:
                 results.append({"id": signal_read.id, "features": list(signal_read.features), "result": "skipped",
                                 "reason": "SIGTERM did not complete cleanly; no shutdown durability claim"})
+                results.append({"id": "persistence.entity_signal_restart", "features": ["persistence.entity_data"], "result": "skipped",
+                                "reason": "SIGTERM did not complete cleanly; no entity durability claim"})
     except Exception as error:
         results.append({"id": "harness.startup_or_setup", "features": [], "result": "failed", "error": f"{type(error).__name__}: {error}"})
     finally:
@@ -405,6 +415,16 @@ def check_signal_exit(kind: str, code: int | None, forced: bool) -> dict:
     return {"exit_code": code, "signal": "SIGTERM", "durability": "checked separately by persistence.signal_restart"}
 
 
+def check_metadata(server: Server) -> dict:
+    rule = server.command("gamerule keep_inventory")
+    protocol.require(any(re.search(r"Game rule keep_inventory is currently set to true$", line) for line in rule),
+                     f"Non-default game rule was lost: {rule[-6:]}")
+    clock = server.command("time query time")
+    protocol.require(any(re.search(r"Clock minecraft:overworld is at 4321 tick\(s\)$", line) for line in clock),
+                     f"Non-default clock was lost: {clock[-6:]}")
+    return {"keep_inventory": True, "daytime": 4321}
+
+
 def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Namespace, source_cases: list[dict]) -> dict:
     """Load the other implementation's saved overworld without format conversion."""
     test_id = f"persistence.{source}_to_{destination}"
@@ -426,12 +446,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             wait_loaded(server)
             predicate = "if block 14 200 14 diamond_block"
             check_predicate(server, predicate)
-            rule = server.command("gamerule keep_inventory")
-            protocol.require(any(re.search(r"Game rule keep_inventory is currently set to true$", line) for line in rule),
-                             f"Non-default game rule was lost: {rule[-6:]}")
-            clock = server.command("time query time")
-            protocol.require(any(re.search(r"Clock minecraft:overworld is at 4321 tick\(s\)$", line) for line in clock),
-                             f"Non-default clock was lost: {clock[-6:]}")
+            check_metadata(server)
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()

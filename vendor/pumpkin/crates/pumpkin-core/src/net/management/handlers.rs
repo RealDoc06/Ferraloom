@@ -801,20 +801,17 @@ async fn execute_method(
             Ok(serde_json::to_value(state).unwrap_or(Value::Null))
         }
         "minecraft:server/save" => {
-            let _flush: bool = parse_param(params, "flush")?;
-            server.management_hub.broadcast_server_saving();
-            let _ = server.save_all().await;
-            server.management_hub.broadcast_server_saved();
+            let flush: bool = parse_param(params, "flush")?;
+            server
+                .save_all(flush)
+                .await
+                .map_err(|error| RpcError::internal_error(Some(error)))?;
             Ok(json!(true))
         }
         "minecraft:server/stop" => {
             check_no_params(params)?;
             server.management_hub.broadcast_server_stopping();
-            let s = server.clone();
-            tokio::spawn(async move {
-                s.shutdown().await;
-                std::process::exit(0);
-            });
+            crate::stop_server();
             Ok(json!(true))
         }
         "minecraft:server/system_message" => {

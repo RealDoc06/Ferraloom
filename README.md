@@ -32,7 +32,7 @@ python3 tools/parity/suite.py --accept-eula --java /path/to/java25/bin/java
 python3 tools/check_default_storage.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
 ```
 
-The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. `--record` preserves those failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
+The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. The restart checks include unflushed blocks, a mob's UUID and health, and a frozen clock and game rule. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
 
 ```sh
 python3 tools/oracle.py inventory --java /path/to/java25/bin/java
@@ -53,6 +53,8 @@ cargo fmt --manifest-path vendor/pumpkin/Cargo.toml --all -- --check
 cargo test --locked
 cargo test --locked -p pumpkin-command --lib argument_types::block
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib stores_redirect_to_execute_then_the_nested_command --target-dir target
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib world_save_ --target-dir target
 cargo clippy --locked --all-targets -- -D warnings
 npm ci
 npm run test:protocol

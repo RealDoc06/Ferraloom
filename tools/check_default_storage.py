@@ -20,7 +20,7 @@ import time
 import zipfile
 
 from oracle import ROOT, TARGET, acquire, java_command
-from parity.suite import Server, check_exit, check_predicate, data_version, pin_binary, wait_loaded
+from parity.suite import Server, check_exit, check_predicate, data_version, git_state, harness_manifest, pin_binary, wait_loaded
 from parity.worlds import MAX_NBT_BYTES, SECTOR_BYTES, decode_nbt
 
 
@@ -160,6 +160,7 @@ def main() -> int:
         "scope": "One default-LZ4 Rust overworld chunk and marker loaded by vanilla, without conversion. No other storage, entities, dimensions, crash durability or full parity claim.",
         "fixture": str(run_dir), "transport": "isolated offline 127.0.0.1", "workers": args.workers,
         "tool_sha256": digest(Path(__file__)), "observations": {},
+        "source_state": git_state(), "harness_manifest": harness_manifest(),
     }
     servers: list[Server] = []
     began = time.monotonic()
@@ -225,6 +226,8 @@ def main() -> int:
             raise AssertionError("Vanilla migration changed the target world DataVersion")
         if digest(args.rust_binary) != report["rust_binary_sha256"] or digest(acquire()) != report["server_sha256"]:
             raise ValueError("A pinned executable changed during the check")
+        if harness_manifest() != report["harness_manifest"] or digest(Path(__file__)) != report["tool_sha256"]:
+            raise ValueError("The diagnostic or its shared harness changed during the check")
         report["result"] = "passed"
     except Exception as error:
         report["error"] = f"{type(error).__name__}: {error}"

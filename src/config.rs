@@ -153,6 +153,17 @@ pub fn configure_runtime(config: &mut PumpkinConfig, args: &Args) -> Result<()> 
         config.basic.tps.is_finite() && config.basic.tps > 0.0,
         "tps must be a finite positive number"
     );
+    if let pumpkin_config::chunk::ChunkConfig::Anvil(anvil) = &config.advanced.world.chunk
+        && matches!(
+            anvil.compression.algorithm,
+            pumpkin_config::chunk::Compression::LZ4
+        )
+    {
+        ensure!(
+            anvil.compression.level <= 15,
+            "LZ4 chunk compression level must be between 0 and 15"
+        );
+    }
     Ok(())
 }
 
@@ -302,5 +313,26 @@ mod tests {
         config.basic.tps = 20.0;
         config.advanced.networking.java.encryption = false;
         assert!(configure_runtime(&mut config, &args).is_err());
+    }
+
+    #[test]
+    fn rejects_lz4_levels_that_cannot_fit_the_java_block_header() {
+        let args = Args::try_parse_from(["ferraloom", "--offline"]).unwrap();
+        for (level, valid) in [
+            (0, true),
+            (15, true),
+            (16, false),
+            (60, false),
+            (u32::MAX, false),
+        ] {
+            let mut config = parse(&format!(
+                "[world.chunk]\ntype = 'anvil'\n[world.chunk.compression]\nalgorithm = 'LZ4'\nlevel = {level}\n"
+            )).unwrap();
+            assert_eq!(
+                configure_runtime(&mut config, &args).is_ok(),
+                valid,
+                "level {level}"
+            );
+        }
     }
 }

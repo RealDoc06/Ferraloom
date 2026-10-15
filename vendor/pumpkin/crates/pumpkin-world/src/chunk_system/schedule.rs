@@ -1265,18 +1265,26 @@ impl GenerationSchedule {
             if level.should_save.swap(false, Relaxed) {
                 let _ = self.save_all_chunk(false);
             }
-            let flushes = self.send_level.take_flush_requests();
-            if !flushes.is_empty() {
-                if let Err(error) = self.save_all_chunk(false) {
-                    for completed in flushes {
-                        let _ = completed.send(Err(error.clone()));
+            for request in self.send_level.take_write_requests() {
+                match request {
+                    WriteRequest::Flush(completed) => {
+                        if let Err(error) = self.save_all_chunk(false) {
+                            for waiter in completed {
+                                let _ = waiter.send(Err(error.clone()));
+                            }
+                        } else if self
+                            .io_write
+                            .blocking_send(WriteRequest::Flush(completed))
+                            .is_err()
+                        {
+                            error!("Chunk writer stopped before accepting the flush");
+                        }
                     }
-                } else if self
-                    .io_write
-                    .blocking_send(WriteRequest::Flush(flushes))
-                    .is_err()
-                {
-                    error!("Chunk writer stopped before accepting the flush");
+                    request => {
+                        if self.io_write.blocking_send(request).is_err() {
+                            error!("Chunk writer stopped before accepting an entity save");
+                        }
+                    }
                 }
             }
             if level.shut_down_chunk_system.load(Relaxed) {

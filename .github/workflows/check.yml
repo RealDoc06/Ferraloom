@@ -28,6 +28,12 @@ jobs:
       - run: cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
         env:
           PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar
+      - run: cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib stores_redirect_to_execute_then_the_nested_command --target-dir target
+        env:
+          PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar
+      - run: cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib world_save_ --target-dir target
+        env:
+          PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar
       - run: cargo clippy --locked --all-targets -- -D warnings
         env:
           PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar
