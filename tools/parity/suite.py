@@ -111,6 +111,36 @@ SCENARIOS = [
     Scenario("command.store_chain", ("players.commands",), ("execute store result score Stored parity store success score Succeeded parity run gamerule keep_inventory",), "if score Stored parity matches 0 if score Succeeded parity matches 1"),
     Scenario("command.store_condition", ("players.commands",), ("scoreboard players set Stored parity 17", "execute store result score Stored parity if score A parity matches 999 run gamerule keep_inventory"), "if score Stored parity matches 17"),
     Scenario("data.storage", ("players.commands",), ('data modify storage ferraloom:probe answer set value 42',), "if data storage ferraloom:probe {answer:42}"),
+    Scenario("data.modify_merge_recursive", ("players.commands",),
+             ('data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}',
+              'data merge storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,replace:0},list:[1],scalar:0,object:{old:1}}}',
+              'execute store result score MergeRecursive parity run data modify storage ferraloom:merge_recursive object merge from storage ferraloom:merge_source parts[]'),
+             'if score MergeRecursive parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}'),
+    Scenario("data.modify_merge_counts", ("players.commands",),
+             ('data merge storage ferraloom:merge_counts_source {parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}',
+              'data merge storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},{kind:hit,payload:{keep:2,nested:{value:0}}},{kind:skip,payload:{keep:3,nested:{value:0}}}]}',
+              'execute store result score MergeChanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]',
+              'execute store result score MergeMatched parity run data modify storage ferraloom:merge_counts rows[{kind:hit}].payload merge value {added:8}',
+              'execute store success score MergeUnchanged parity run data modify storage ferraloom:merge_counts rows[].payload merge from storage ferraloom:merge_counts_source parts[]'),
+             'if score MergeChanged parity matches 2 if score MergeMatched parity matches 2 if score MergeUnchanged parity matches 0 if data storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5},added:8}},{kind:hit,payload:{keep:2,nested:{value:2,extra:5},added:8}},{kind:skip,payload:{keep:3,nested:{value:2,extra:5}}}]}',
+             expected_last_feedback="Nothing changed. The specified properties already have these values"),
+    Scenario("data.modify_merge_invalid_source", ("players.commands",),
+             ('data merge storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}',
+              'data merge storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]}',
+              'execute store success score MergeBadSource parity run data modify storage ferraloom:merge_bad_target missing.path merge from storage ferraloom:merge_bad_source mixed[].value'),
+             'if score MergeBadSource parity matches 0 unless data storage ferraloom:merge_bad_target missing if data storage ferraloom:merge_bad_target {object:{keep:1},scalar:7,numbers:[I;3,4]} if data storage ferraloom:merge_bad_source {mixed:[{value:{added:2}},{value:7}]}',
+             expected_last_feedback="Expected an object: got 7"),
+    Scenario("data.modify_merge_partial_failure", ("players.commands",),
+             ('data merge storage ferraloom:merge_partial {rows:[{value:{keep:1}},{value:7},{}],keep:9}',
+              'execute store success score MergePartial parity run data modify storage ferraloom:merge_partial rows[].value merge value {added:2}'),
+             'if score MergePartial parity matches 0 if data storage ferraloom:merge_partial {rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}',
+             expected_last_feedback="Expected an object: got 7"),
+    Scenario("data.storage_namespaces", ("players.commands",),
+             ('data merge storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1}',
+              'data merge storage ferraloom_other:path/probe {text:"other namespace",phase:1}',
+              'data modify storage ferraloom:removed value set value 9',
+              'execute store result score StorageRemoved parity run data remove storage ferraloom:removed value'),
+             'if score StorageRemoved parity matches 1 if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1} if data storage ferraloom_other:path/probe {text:"other namespace",phase:1} unless data storage ferraloom:removed value'),
     Scenario("data.modify_providers", ("players.commands",),
              ("setblock 4 230 4 chest", "setblock 6 229 6 stone",
               'summon pig 6 230 6 {Tags:["ferraloom_data_source"],NoAI:1b,NoGravity:1b,Health:7.0f}',
@@ -414,6 +444,14 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.extend(run_client_scenarios(server))
             for scenario in SCENARIOS:
                 results.append(recorded(scenario.id, scenario.features, lambda scenario=scenario: run_scenario(server, scenario)))
+            for block, destroy in (("repeater", False), ("repeater", True), ("comparator", False)):
+                mode = "fill_destroy" if destroy else "setblock"
+                results.append(recorded(f"redstone.{block}_remove_{mode}", ("blocks.redstone_logic",),
+                                        lambda block=block, destroy=destroy: gate_removal(server, block, destroy)))
+            for remove_hook in (False, True):
+                component = "hook" if remove_hook else "string"
+                results.append(recorded(f"redstone.tripwire_remove_{component}", ("blocks.redstone_logic",),
+                                        lambda remove_hook=remove_hook: tripwire_removal(server, remove_hook)))
             results.append(recorded("blocks.fluid_tick_ring", ("blocks.fluids", "world.chunk_tickets"), lambda: fluid_tick_ring(server)))
             results.append(recorded("world.chunk_frozen_load", ("world.chunk_tickets",), lambda: frozen_chunk_load(server)))
             server.command("gamerule keep_inventory true")
@@ -422,6 +460,9 @@ def run(server: Server, quick: bool) -> list[dict]:
             server.command("save-off")
             unflushed = Scenario("persistence.unflushed_write", ("persistence.chunk_data",), ("setblock 13 200 14 emerald_block",), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed.id, unflushed.features, lambda: run_scenario(server, unflushed)))
+            results.append(recorded("persistence.command_storage_manual", ("persistence.map_data",), lambda: command_storage_state(server, 1)))
+            server.command("data modify storage ferraloom:persist phase set value 2")
+            server.command("data modify storage ferraloom_other:path/probe phase set value 2")
             exit_code = server.stop()
             results.append(recorded("lifecycle.clean_shutdown", ("lifecycle.shutdown",), lambda: check_exit(exit_code, server.forced_stop)))
             server.start()
@@ -436,6 +477,9 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.append(recorded("persistence.entity_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 7)))
             results.append(recorded("persistence.scoreboard_team_restart", ("persistence.scoreboard_data",), lambda: check_team_state(server)))
             results.append(recorded("persistence.scoreboard_display_restart", ("persistence.scoreboard_data",), lambda: check_display_state(server)))
+            results.append(recorded("persistence.command_storage_restart", ("persistence.map_data",), lambda: command_storage_state(server, 2)))
+            server.command("data modify storage ferraloom:persist phase set value 3")
+            server.command("data modify storage ferraloom_other:path/probe phase set value 3")
             entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
             results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
@@ -449,11 +493,14 @@ def run(server: Server, quick: bool) -> list[dict]:
                 wait_loaded(server)
                 results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
                 results.append(recorded("persistence.entity_signal_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 5)))
+                results.append(recorded("persistence.command_storage_signal_restart", ("persistence.map_data",), lambda: command_storage_state(server, 3)))
             else:
                 results.append({"id": signal_read.id, "features": list(signal_read.features), "result": "skipped",
                                 "reason": "SIGTERM did not complete cleanly; no shutdown durability claim"})
                 results.append({"id": "persistence.entity_signal_restart", "features": ["persistence.entity_data"], "result": "skipped",
                                 "reason": "SIGTERM did not complete cleanly; no entity durability claim"})
+                results.append({"id": "persistence.command_storage_signal_restart", "features": ["persistence.map_data"], "result": "skipped",
+                                "reason": "SIGTERM did not complete cleanly; no command storage durability claim"})
     except Exception as error:
         results.append({"id": "harness.startup_or_setup", "features": [], "result": "failed", "error": f"{type(error).__name__}: {error}"})
     finally:
@@ -499,6 +546,98 @@ def game_time(server: Server) -> int:
               if (match := re.search(r"The game time is (-?\d+) tick\(s\)$", line))]
     protocol.require(len(values) == 1, f"Missing or ambiguous game time: {lines[-6:]}")
     return int(values[0])
+
+
+def step_ticks(server: Server, count: int) -> None:
+    """Advance an already frozen reference by exactly the requested game ticks."""
+    before = game_time(server)
+    feedback = server.command(f"tick step {count}")
+    protocol.require(any(line.endswith(f"Stepping {count} tick(s)") for line in feedback), "Tick step was not acknowledged")
+    deadline = time.monotonic() + 15
+    after = game_time(server)
+    while after < before + count and time.monotonic() < deadline:
+        time.sleep(0.1)
+        after = game_time(server)
+    protocol.require(after == before + count, f"Expected exactly {count} stepped ticks, got {after - before}")
+    query = server.command("tick query")
+    protocol.require(any(line.endswith("The game is frozen") for line in query), "Tick stepping did not remain frozen")
+
+
+def gate_removal(server: Server, block: str, destroy: bool) -> dict:
+    """Observe loss of indirect power beyond the gate's immediate neighbors."""
+    frozen = server.command("tick freeze")
+    try:
+        protocol.require(any(line.endswith("The game is frozen") for line in frozen), "Freeze was not acknowledged")
+        setup = ("fill -1 240 7 4 242 9 air", "fill -1 239 7 4 239 9 stone",
+                 "setblock 3 240 8 redstone_lamp", "setblock 2 240 8 stone",
+                 f"setblock 1 240 8 {block}[facing=west]", "setblock 0 240 8 redstone_block")
+        for command in setup:
+            server.command(command)
+        step_ticks(server, 10)
+        precondition = f"if block 1 240 8 {block}[facing=west,powered=true] if block 3 240 8 redstone_lamp[lit=true]"
+        check_predicate(server, precondition)
+        replacement = "gold_block" if destroy else "air"
+        command = "fill 1 240 8 1 240 8 gold_block destroy" if destroy else "setblock 1 240 8 air"
+        server.command(f"execute store result score GateRemoved parity run {command}")
+        step_ticks(server, 10)
+        predicate = f"if score GateRemoved parity matches 1 if block 1 240 8 {replacement} if block 3 240 8 redstone_lamp[lit=false]"
+        check_predicate(server, predicate)
+        return {"setup": list(setup), "precondition": precondition, "command": command, "predicate": predicate,
+                "setup_ticks": 10, "after_removal_ticks": 10}
+    finally:
+        server.command("tick unfreeze")
+
+
+def tripwire_removal(server: Server, remove_hook: bool) -> dict:
+    """Require a connected line before removing string or one of its hooks."""
+    frozen = server.command("tick freeze")
+    try:
+        protocol.require(any(line.endswith("The game is frozen") for line in frozen), "Freeze was not acknowledged")
+        setup = ("fill -1 240 7 5 242 9 air", "fill -1 239 7 5 239 9 stone",
+                 "setblock 0 240 8 stone", "setblock 4 240 8 stone",
+                 "setblock 1 240 8 tripwire_hook[facing=east]", "setblock 3 240 8 tripwire_hook[facing=west]",
+                 "setblock 2 240 8 tripwire")
+        for command in setup:
+            server.command(command)
+        step_ticks(server, 20)
+        precondition = "if block 1 240 8 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 8 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 8 tripwire[attached=true]"
+        check_predicate(server, precondition)
+        removed_x = 1 if remove_hook else 2
+        command = f"setblock {removed_x} 240 8 air"
+        server.command(f"execute store result score TripwireRemoved parity run {command}")
+        removal_predicate = None
+        if not remove_hook:
+            removal_predicate = "if block 1 240 8 tripwire_hook[attached=true,powered=true] if block 3 240 8 tripwire_hook[attached=true,powered=true]"
+            check_predicate(server, removal_predicate)
+        step_ticks(server, 20)
+        predicate = f"if score TripwireRemoved parity matches 1 if block {removed_x} 240 8 air if block 3 240 8 tripwire_hook[attached=false,powered=false]"
+        if not remove_hook:
+            predicate += " if block 1 240 8 tripwire_hook[attached=false,powered=false]"
+        check_predicate(server, predicate)
+        return {"setup": list(setup), "precondition": precondition, "command": command, "predicate": predicate,
+                "removal_predicate": removal_predicate, "setup_ticks": 20, "after_removal_ticks": 20}
+    finally:
+        server.command("tick unfreeze")
+
+
+def command_storage_state(server: Server, phase: int) -> dict:
+    """Check live namespaced contents and vanilla-format files after an explicit save."""
+    predicate = (f'if data storage ferraloom:persist {{nested:{{answer:42}},values:[I;3,4],phase:{phase}}} '
+                 f'if data storage ferraloom_other:path/probe {{text:"other namespace",phase:{phase}}} '
+                 'unless data storage ferraloom:removed value')
+    check_predicate(server, predicate)
+    server.save_flush()
+    namespaces = {}
+    for namespace, key, expected in (("ferraloom", "persist", {"nested": {"answer": 42}, "values": (3, 4), "phase": phase}),
+                                     ("ferraloom_other", "path/probe", {"text": "other namespace", "phase": phase})):
+        path = server.directory / "world/data" / namespace / "command_storage.dat"
+        saved = decode_nbt(gzip.decompress(path.read_bytes()))
+        protocol.require(saved.get("DataVersion") == 5023, f"Wrong command storage data version: {saved}")
+        contents = saved["data"]["contents"]
+        protocol.require(contents.get(key) == expected, f"Saved command storage differs for {namespace}:{key}: {contents.get(key)}")
+        protocol.require("removed" not in contents, "Empty command storage key was retained")
+        namespaces[namespace] = {"key": key, "contents": expected, "empty_key_absent": True}
+    return {"phase": phase, "predicate": predicate, "namespaces": namespaces, "data_version": 5023}
 
 
 def fluid_tick_ring(server: Server) -> dict:
@@ -645,6 +784,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             wait_saved_entity(server, 5)
             check_team_state(server)
             check_display_state(server)
+            command_storage_state(server, 3)
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()
@@ -656,7 +796,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
                     "destination_data_version": destination_version, "external_conversion": False, "dimension": "overworld",
                     "keep_inventory": True, "daytime": 4321, "load_save_errors": 0,
                     "entity_uuid": [111, 222, 333, 444], "entity_health": 5,
-                    "scoreboard_scores_teams_and_display": True}
+                    "scoreboard_scores_teams_and_display": True, "command_storage_namespaces": True}
         finally:
             server.stop()
 

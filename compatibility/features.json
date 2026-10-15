@@ -1539,7 +1539,10 @@
       "required_scenarios": [
         "map exploration",
         "map copy",
-        "restart"
+        "restart",
+        "explicit save with save-off writes namespaced command storage",
+        "console shutdown saves and reloads namespaced command storage",
+        "SIGTERM saves and reloads namespaced command storage"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -1822,7 +1825,12 @@
       "required_scenarios": [
         "repeater delay",
         "comparator mode",
-        "torch burnout"
+        "torch burnout",
+        "repeater removal notifies indirectly powered blocks",
+        "fill destroy of a repeater notifies indirectly powered blocks",
+        "comparator removal notifies indirectly powered blocks",
+        "removing attached string pulses hooks then detaches the line",
+        "removing one attached hook detaches the opposite hook"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -3217,7 +3225,11 @@
         "data modify indexes insertion and extracts strings from all providers",
         "fill destroy preserves a replacement container block entity",
         "fill destroy preserves a replacement sign block entity",
-        "entity selectors exclude dying living entities before removal"
+        "entity selectors exclude dying living entities before removal",
+        "data modify merge recursively retains siblings and source order",
+        "data modify merge counts changed compounds and rejects unchanged results",
+        "data modify merge validates every source before creating targets",
+        "data modify merge preserves vanilla partial storage changes on failure"
       ],
       "rust_status": "partial",
       "evidence": [

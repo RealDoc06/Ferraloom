@@ -303,6 +303,57 @@
     "entity.dying_selector": {
       "feature_id": "players.commands",
       "scenario": "entity selectors exclude dying living entities before removal"
+    },
+    "data.modify_merge_recursive": {
+      "feature_id": "players.commands",
+      "scenario": "data modify merge recursively retains siblings and source order"
+    },
+    "data.modify_merge_counts": {
+      "feature_id": "players.commands",
+      "scenario": "data modify merge counts changed compounds and rejects unchanged results"
+    },
+    "data.modify_merge_invalid_source": {
+      "feature_id": "players.commands",
+      "scenario": "data modify merge validates every source before creating targets"
+    },
+    "data.modify_merge_partial_failure": {
+      "feature_id": "players.commands",
+      "scenario": "data modify merge preserves vanilla partial storage changes on failure"
+    },
+    "redstone.repeater_remove_setblock": {
+      "feature_id": "blocks.redstone_logic",
+      "scenario": "repeater removal notifies indirectly powered blocks"
+    },
+    "redstone.repeater_remove_fill_destroy": {
+      "feature_id": "blocks.redstone_logic",
+      "scenario": "fill destroy of a repeater notifies indirectly powered blocks"
+    },
+    "redstone.comparator_remove_setblock": {
+      "feature_id": "blocks.redstone_logic",
+      "scenario": "comparator removal notifies indirectly powered blocks"
+    },
+    "redstone.tripwire_remove_string": {
+      "feature_id": "blocks.redstone_logic",
+      "scenario": "removing attached string pulses hooks then detaches the line"
+    },
+    "redstone.tripwire_remove_hook": {
+      "feature_id": "blocks.redstone_logic",
+      "scenario": "removing one attached hook detaches the opposite hook"
+    },
+    "persistence.command_storage_manual": {
+      "feature_id": "persistence.map_data",
+      "scenario": "explicit save with save-off writes namespaced command storage"
+    },
+    "persistence.command_storage_restart": {
+      "feature_id": "persistence.map_data",
+      "scenario": "console shutdown saves and reloads namespaced command storage"
+    },
+    "persistence.command_storage_signal_restart": {
+      "feature_id": "persistence.map_data",
+      "scenario": "SIGTERM saves and reloads namespaced command storage"
+    },
+    "data.storage_namespaces": {
+      "skip_reason": "Live namespace and deletion markers are setup; saved contents and reload are checked by persistence.command_storage_*."
     }
   }
 }
