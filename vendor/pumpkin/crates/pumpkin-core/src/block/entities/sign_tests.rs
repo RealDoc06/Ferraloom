@@ -63,7 +63,9 @@ async fn sign_structured_lines_preserve_styles_positions_flags_and_real_chunk_re
             .unwrap()
             .get_list("messages")
             .unwrap();
-        assert!(lines.iter().all(|line| matches!(line, NbtTag::Compound(_))));
+        assert_eq!(lines[1].extract_string(), Some("B"));
+        assert_eq!(lines[2].extract_string(), Some("C"));
+        assert_eq!(lines[3].extract_string(), Some("D"));
         let first = lines[0].extract_compound().unwrap();
         assert_eq!(first.get_string("color"), Some("red"));
         assert_eq!(first.get_bool("bold"), Some(true));
@@ -595,8 +597,7 @@ fn sign_binary_mixed_list_wrappers_keep_all_four_line_positions() {
             sign.front_text().get_messages(false)
         );
         assert!(live.load_nbt(&nbt).is_ok());
-        // Canonical known lists deliberately use explicit text compounds when
-        // mixed with styled text. This is valid NBT, not exact Java scalar shape.
+        // The 26.3 codec keeps plain lines as strings beside styled components.
         let roundtrip = SignData::from_nbt(&saved(live.as_ref()));
         assert!(roundtrip.validate().is_ok());
         assert_eq!(roundtrip.front.messages[1].text().as_ref(), "");

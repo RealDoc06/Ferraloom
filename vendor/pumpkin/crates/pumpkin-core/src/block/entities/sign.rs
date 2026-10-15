@@ -8,6 +8,7 @@ use crate::world::World;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::{TextComponent, click::ClickEvent};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 pub use pumpkin_data::dye_color::DyeColor;
 
@@ -31,10 +32,7 @@ pub struct SignText {
 /// interpreted as commands, and live NBT edits refuse them before committing.
 #[derive(Clone, Debug, PartialEq)]
 enum SignLine {
-    Known {
-        nbt: NbtTag,
-        component: TextComponent,
-    },
+    Known { component: TextComponent },
     Unsupported(NbtTag),
 }
 
@@ -42,7 +40,6 @@ impl SignLine {
     fn literal(text: Box<str>) -> Self {
         Self::Known {
             component: TextComponent::text(text.to_string()),
-            nbt: NbtTag::String(text),
         }
     }
 
@@ -54,35 +51,35 @@ impl SignLine {
             .and_then(|json| serde_json::from_value(json).ok())
             .map_or_else(
                 || Self::Unsupported(nbt.clone()),
-                |component| Self::Known {
-                    nbt: nbt.clone(),
-                    component,
-                },
+                |component| Self::Known { component },
             )
     }
 
     fn text(&self) -> Box<str> {
         match self {
-            Self::Known { component, .. } => component.clone().get_text().into(),
+            Self::Known { component } => component.clone().get_text().into(),
             Self::Unsupported(_) => "[Unsupported sign text]".into(),
         }
     }
 
     fn raw_nbt(&self) -> NbtTag {
         match self {
-            Self::Known { nbt, .. } | Self::Unsupported(nbt) => nbt.clone(),
+            Self::Known { component } => component
+                .0
+                .to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
+            Self::Unsupported(nbt) => nbt.clone(),
         }
     }
 
     fn client_nbt(&self) -> NbtTag {
         match self {
-            Self::Known { nbt, .. } => nbt.clone(),
+            Self::Known { .. } => self.raw_nbt(),
             Self::Unsupported(_) => NbtTag::String(self.text()),
         }
     }
 
     fn run_command(&self) -> Option<String> {
-        if let Self::Known { component, .. } = self
+        if let Self::Known { component } = self
             && let Some(ClickEvent::RunCommand { command }) = &component.0.style.click_event
         {
             Some(command.to_string())
@@ -93,7 +90,7 @@ impl SignLine {
 
     /// Packet strings are literal contents; only an already trusted style survives.
     fn with_literal_text(&self, text: Box<str>) -> Self {
-        let Self::Known { component, .. } = self else {
+        let Self::Known { component } = self else {
             return self.clone();
         };
         if component.0.style.is_empty() {
@@ -102,7 +99,6 @@ impl SignLine {
         let mut replacement = TextComponent::text(text.to_string());
         replacement.0.style = component.0.style.clone();
         Self::Known {
-            nbt: NbtTag::Compound(replacement.0.to_nbt_compound()),
             component: replacement,
         }
     }
@@ -204,26 +200,10 @@ fn component_json(tag: &NbtTag, depth: usize) -> Option<serde_json::Value> {
     Some(serde_json::Value::Object(json))
 }
 
-/// NBT list entries must share a type. Mixed plain/styled component lists use
-/// explicit text compounds, including nested extras, without parsing strings.
-fn canonical_component(tag: NbtTag) -> NbtTag {
-    match tag {
-        NbtTag::String(text) => {
-            NbtTag::Compound(TextComponent::text(text.to_string()).0.to_nbt_compound())
-        }
-        NbtTag::Compound(mut compound) => {
-            if let Some(NbtTag::List(extra)) = compound.get("extra") {
-                let extra = extra.iter().cloned().map(canonical_component).collect();
-                compound.put_list("extra", extra);
-            }
-            NbtTag::Compound(compound)
-        }
-        other => other,
-    }
-}
-
+/// Known components use the 26.3 codec's compact strings. The binary NBT writer
+/// supplies physical wrappers for heterogeneous lists; semantic tags stay mixed.
 fn encode_lines(lines: &[SignLine; 4], for_client: bool) -> Vec<NbtTag> {
-    let tags: Vec<_> = lines
+    lines
         .iter()
         .map(|line| {
             if for_client {
@@ -232,21 +212,7 @@ fn encode_lines(lines: &[SignLine; 4], for_client: bool) -> Vec<NbtTag> {
                 line.raw_nbt()
             }
         })
-        .collect();
-    if tags.iter().all(|tag| matches!(tag, NbtTag::String(_))) {
-        tags
-    } else {
-        tags.into_iter()
-            .zip(lines)
-            .map(|(tag, line)| {
-                if !for_client && matches!(line, SignLine::Unsupported(_)) {
-                    tag
-                } else {
-                    canonical_component(tag)
-                }
-            })
-            .collect()
-    }
+        .collect()
 }
 
 struct FaceData {
