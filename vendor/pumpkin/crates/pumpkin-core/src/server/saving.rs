@@ -120,6 +120,19 @@ impl Server {
             self.save_scoreboard()
                 .map_err(|error| format!("Failed to save scoreboard: {error}")),
         );
+        // Java keeps command storage in the overworld's SavedDataStorage, so
+        // save-off skips its autosave along with the overworld's other data.
+        if !automatic
+            || worlds.iter().any(|world| {
+                world.dimension.minecraft_name
+                    == pumpkin_data::dimension::Dimension::OVERWORLD.minecraft_name
+            })
+        {
+            record_error(
+                self.save_command_storage()
+                    .map_err(|error| format!("Failed to save command storage: {error}")),
+            );
+        }
         for world in &worlds {
             record_error(world.save().await.map_err(|error| {
                 format!("Failed to save {}: {error}", world.dimension.minecraft_name)

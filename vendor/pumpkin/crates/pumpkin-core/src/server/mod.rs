@@ -55,6 +55,7 @@ use tokio_util::task::TaskTracker;
 #[cfg(test)]
 mod scoreboard_tests;
 
+mod command_storage;
 mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
@@ -127,6 +128,7 @@ pub struct Server {
     /// Command storage for `/data` command
     pub command_storage:
         std::sync::Mutex<std::collections::HashMap<String, pumpkin_nbt::compound::NbtCompound>>,
+    command_storage_files: std::sync::Mutex<command_storage::NamespaceFiles>,
     /// Global server stopwatches
     pub stopwatches: std::sync::Mutex<crate::world::stopwatches::Stopwatches>,
     /// Global server random sequences
@@ -183,9 +185,11 @@ impl Server {
         );
 
         let world_path = basic_config.get_world_path();
-        // Load before creating worlds or writing new-world metadata. A broken existing
-        // scoreboard is a startup error, never a reason to save an empty replacement.
+        // Load before creating worlds or writing new-world metadata. Broken existing
+        // server data is a startup error, never a reason to save an empty replacement.
         let scoreboard = Arc::new(std::sync::Mutex::new(Scoreboard::load(&world_path)?));
+        let (command_storage, command_storage_files) =
+            command_storage::NamespaceFiles::load(&world_path)?;
 
         let block_registry = super::block::registry::default_registry();
 
@@ -313,7 +317,8 @@ impl Server {
             map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
-            command_storage: std::sync::Mutex::new(std::collections::HashMap::new()),
+            command_storage: std::sync::Mutex::new(command_storage),
+            command_storage_files: std::sync::Mutex::new(command_storage_files),
             stopwatches: std::sync::Mutex::new(crate::world::stopwatches::Stopwatches::new()),
             random_sequences: std::sync::Mutex::new(
                 crate::world::random_sequences::RandomSequences::new(),
@@ -860,6 +865,10 @@ impl Server {
         }
         if let Err(error) = self.save_scoreboard() {
             error!("Failed to save scoreboard during shutdown: {error}");
+            crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
+        }
+        if let Err(error) = self.save_command_storage() {
+            error!("Failed to save command storage during shutdown: {error}");
             crate::SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
         info!("Completed worlds");

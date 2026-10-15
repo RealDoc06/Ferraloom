@@ -361,12 +361,17 @@ impl StorageDataAccessor {
 
 impl DataAccessor for StorageDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
+        self.server.remember_command_storage_namespace(&self.id);
         let mut storage = self
             .server
             .command_storage
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        storage.insert(self.id.clone(), tag.clone());
+        if tag.is_empty() {
+            storage.remove(&self.id);
+        } else {
+            storage.insert(self.id.clone(), tag.clone());
+        }
         Ok(())
     }
 

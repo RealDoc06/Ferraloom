@@ -621,3 +621,27 @@ async fn modify_merge_preserves_vanilla_storage_side_effects_on_failure() {
     assert_eq!(fixture.storage("repair:absent"), NbtCompound::new());
     assert_eq!(fixture.sources(), sources);
 }
+
+#[tokio::test]
+async fn removing_last_storage_tag_removes_the_live_key() {
+    let fixture = Fixture::new().await;
+    fixture
+        .execute("data modify storage repair:removed value set value 9")
+        .unwrap();
+    assert_eq!(
+        fixture
+            .execute("data remove storage repair:removed value")
+            .unwrap(),
+        1
+    );
+    assert!(fixture.storage("repair:removed").is_empty());
+    assert!(
+        !fixture
+            .source
+            .server()
+            .command_storage
+            .lock()
+            .unwrap()
+            .contains_key("repair:removed")
+    );
+}
