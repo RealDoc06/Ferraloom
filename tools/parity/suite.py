@@ -149,9 +149,10 @@ SCENARIOS = [
              ('data merge storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1}',
               'data merge storage ferraloom_other:path/probe {text:"other namespace",phase:1}',
               'data merge storage .:dot {answer:73}',
+              'data modify storage command_storage_minecraft.dat:probe value set value 47',
               'data modify storage ferraloom:removed value set value 9',
               'execute store result score StorageRemoved parity run data remove storage ferraloom:removed value'),
-             'if score StorageRemoved parity matches 1 if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1} if data storage ferraloom_other:path/probe {text:"other namespace",phase:1} if data storage .:dot {answer:73} unless data storage ferraloom:removed value'),
+             'if score StorageRemoved parity matches 1 if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1} if data storage ferraloom_other:path/probe {text:"other namespace",phase:1} if data storage .:dot {answer:73} if data storage command_storage_minecraft.dat:probe {value:47} unless data storage ferraloom:removed value'),
     Scenario("data.storage_namespace_rejection", ("players.commands",),
              ('scoreboard players set NamespaceEscape parity 99',
               'execute store success score NamespaceEscape parity run data modify storage ..:unsafe value set value 1'),
@@ -652,13 +653,15 @@ def command_storage_state(server: Server, phase: int) -> dict:
     predicate = (f'if data storage ferraloom:persist {{nested:{{answer:42}},values:[I;3,4],phase:{phase}}} '
                  f'if data storage ferraloom_other:path/probe {{text:"other namespace",phase:{phase}}} '
                  'if data storage .:dot {answer:73} '
+                 'if data storage command_storage_minecraft.dat:probe {value:47} '
                  'unless data storage ferraloom:removed value')
     check_predicate(server, predicate)
     server.save_flush()
     namespaces = {}
     for namespace, key, expected in (("ferraloom", "persist", {"nested": {"answer": 42}, "values": (3, 4), "phase": phase}),
                                      ("ferraloom_other", "path/probe", {"text": "other namespace", "phase": phase}),
-                                     (".", "dot", {"answer": 73})):
+                                     (".", "dot", {"answer": 73}),
+                                     ("command_storage_minecraft.dat", "probe", {"value": 47})):
         path = server.directory / "world/data" / namespace / "command_storage.dat"
         saved = decode_nbt(gzip.decompress(path.read_bytes()))
         protocol.require(saved.get("DataVersion") == 5023, f"Wrong command storage data version: {saved}")
@@ -666,6 +669,7 @@ def command_storage_state(server: Server, phase: int) -> dict:
         protocol.require(contents.get(key) == expected, f"Saved command storage differs for {namespace}:{key}: {contents.get(key)}")
         protocol.require("removed" not in contents, "Empty command storage key was retained")
         namespaces[namespace] = {"key": key, "contents": expected, "empty_key_absent": True}
+    protocol.require((server.directory / "world/data/minecraft").is_dir(), "Missing vanilla namespace directory for the legacy filename collision check")
     return {"phase": phase, "predicate": predicate, "namespaces": namespaces, "data_version": 5023}
 
 
