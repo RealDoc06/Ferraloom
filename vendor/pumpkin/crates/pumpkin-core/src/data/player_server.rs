@@ -5,7 +5,7 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
+use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage, PlayerSnapshot};
 use std::sync::Arc;
 use std::{
     path::PathBuf,
@@ -52,11 +52,7 @@ impl ServerPlayerData {
             .on_closed(player.as_ref());
         player.on_handled_screen_closed();
 
-        let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt);
-
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
-        Ok(())
+        self.extract_data_and_save_player(player)
     }
 
     /// Performs periodic maintenance tasks.
@@ -73,14 +69,7 @@ impl ServerPlayerData {
         if should_save && self.storage.is_save_enabled() {
             self.last_save.store(now);
             // Snapshot all online players periodically across all worlds
-            let mut snapshots = Vec::new();
-            for world in server.worlds.load().iter() {
-                for player in world.players.load().iter() {
-                    let mut nbt = NbtCompound::new();
-                    player.write_nbt(&mut nbt);
-                    snapshots.push((player.gameprofile.id, nbt));
-                }
-            }
+            let snapshots = self.snapshot_players(server);
 
             if snapshots.is_empty() {
                 return;
@@ -88,14 +77,31 @@ impl ServerPlayerData {
 
             let storage = self.storage.clone();
             rayon::spawn(move || {
-                for (uuid, nbt) in snapshots {
-                    if let Err(e) = storage.save_player_data(&uuid, nbt) {
+                for snapshot in snapshots {
+                    let uuid = snapshot.uuid();
+                    if let Err(e) = storage.save_player_data(snapshot) {
                         error!("Failed to save player data for {uuid}: {e}");
                     }
                 }
                 debug!("Periodic player data save completed");
             });
         }
+    }
+
+    /// Capture before queueing disk IO, keeping the original version with the NBT.
+    fn snapshot_players(&self, server: &Server) -> Vec<PlayerSnapshot> {
+        let mut snapshots = Vec::new();
+        for world in server.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                snapshots.push(
+                    self.storage
+                        .snapshot_player_data(player.gameprofile.id, |nbt| {
+                            player.write_nbt(nbt);
+                        }),
+                );
+            }
+        }
+        snapshots
     }
 
     /// Saves all players' data immediately.
@@ -140,11 +146,12 @@ impl ServerPlayerData {
             return Ok(());
         }
 
-        let uuid = player.gameprofile.id;
-        let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt);
-
-        self.storage.save_player_data(&uuid, nbt)?;
+        let snapshot = self
+            .storage
+            .snapshot_player_data(player.gameprofile.id, |nbt| {
+                player.write_nbt(nbt);
+            });
+        self.storage.save_player_data(snapshot)?;
         Ok(())
     }
 }
@@ -158,6 +165,121 @@ mod test {
     use std::time::Instant;
     use tempfile::tempdir;
     use uuid::Uuid;
+
+    fn save(
+        storage: &PlayerDataStorage,
+        uuid: Uuid,
+        data: NbtCompound,
+    ) -> Result<(), PlayerDataError> {
+        let snapshot = storage.snapshot_player_data(uuid, |nbt| *nbt = data);
+        storage.save_player_data(snapshot)
+    }
+
+    #[tokio::test]
+    async fn server_queued_periodic_snapshot_cannot_roll_back_disconnect_or_save_all() {
+        use crate::data::VanillaData;
+        use crate::net::java::{JavaClient, pending::PendingConnection};
+        use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
+        use crate::server::Server;
+        use arc_swap::ArcSwap;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_protocol::ConnectionState;
+        use pumpkin_util::world_seed::Seed;
+        use std::sync::Arc;
+        use std::sync::atomic::Ordering;
+
+        let directory = tempdir().unwrap();
+        let basic = BasicConfiguration {
+            default_level_name: directory.path().to_string_lossy().into_owned(),
+            seed: Seed(0),
+            allow_nether: false,
+            allow_end: false,
+            allow_chat_reports: false,
+            use_favicon: false,
+            ..BasicConfiguration::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.java.online_mode = false;
+        advanced.networking.bedrock.online_mode = false;
+        let vanilla_data = VanillaData {
+            banned_ip_list: Default::default(),
+            banned_player_list: Default::default(),
+            operator_config: Default::default(),
+            user_cache: Default::default(),
+            whitelist_config: Default::default(),
+        };
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            vanilla_data,
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        let uuid = Uuid::from_u128(102);
+        let profile = GameProfile {
+            id: uuid,
+            name: "QueuedPlayer".into(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (remote, accepted) =
+            tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
+        let _remote = remote.unwrap();
+        let (stream, address) = accepted.unwrap();
+        drop(listener);
+        let pending = PendingConnection::new(
+            stream,
+            address,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        pending.connection_state.store(ConnectionState::Play);
+        let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        java.start_outgoing_packet_task();
+        let client = Arc::new(ClientPlatform::Java(java));
+        let (player, _) = server.add_player(client.clone(), profile, None).unwrap();
+        let data = &server.player_data_storage;
+        player.experience_level.store(1, Ordering::Relaxed);
+        data.extract_data_and_save_player(&player).unwrap();
+        let path = data.storage.get_player_data_path(&uuid);
+        let backup = path.with_extension("dat_old");
+
+        for (new_level, disconnect) in [(2, true), (4, false)] {
+            // Hold exactly the payload captured by tick(), without scheduling or
+            // blocking any Rayon worker, then drain it after the newer save.
+            let queued = data.snapshot_players(&server);
+            assert_eq!(queued.len(), 1);
+            player.experience_level.store(new_level, Ordering::Relaxed);
+            if disconnect {
+                data.handle_player_leave(&player).unwrap();
+            } else {
+                data.save_all_players(&server).unwrap();
+            }
+            let primary_bytes = std::fs::read(&path).unwrap();
+            let backup_bytes = std::fs::read(&backup).unwrap();
+            for snapshot in queued {
+                data.storage.save_player_data(snapshot).unwrap();
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), primary_bytes);
+            assert_eq!(std::fs::read(&backup).unwrap(), backup_bytes);
+            assert_eq!(
+                data.load_data(&uuid).unwrap().unwrap().get_int("XpLevel"),
+                Some(new_level)
+            );
+        }
+
+        let java = client.java().unwrap();
+        java.close();
+        tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
+            .await
+            .unwrap();
+        server.shutdown().await;
+    }
 
     #[test]
     fn server_player_load_propagates_corruption_and_io_errors_without_defaulting() {
@@ -188,14 +310,8 @@ mod test {
         let uuid = Uuid::from_u128(100);
         let mut previous = NbtCompound::new();
         previous.put_int("InventoryMarker", 42);
-        player_data
-            .storage
-            .save_player_data(&uuid, previous.clone())
-            .unwrap();
-        player_data
-            .storage
-            .save_player_data(&uuid, NbtCompound::new())
-            .unwrap();
+        save(&player_data.storage, uuid, previous.clone()).unwrap();
+        save(&player_data.storage, uuid, NbtCompound::new()).unwrap();
         let path = player_data.storage.get_player_data_path(&uuid);
         std::fs::write(&path, b"corrupt player").unwrap();
         assert_eq!(player_data.load_data(&uuid).unwrap(), Some(previous));
@@ -249,7 +365,7 @@ mod test {
         nbt.put_int("TestInt", 42);
 
         // Save the data
-        storage.save_player_data(&uuid, nbt).unwrap();
+        save(&storage, uuid, nbt).unwrap();
 
         // Load the data
         let (load_success, loaded_nbt) = storage.load_player_data(&uuid).unwrap();
@@ -287,7 +403,7 @@ mod test {
         nbt.put_string("TestKey", "TestValue".to_string());
 
         // Save should succeed but do nothing
-        let save_result = storage.save_player_data(&uuid, nbt);
+        let save_result = save(&storage, uuid, nbt);
         assert!(save_result.is_ok());
 
         // Load should return empty data
@@ -322,7 +438,7 @@ mod test {
         let mut nbt = NbtCompound::new();
         nbt.put_string("name", "TestPlayer".to_string());
         nbt.put_int("level", 42);
-        storage.save_player_data(&uuid, nbt).unwrap();
+        save(&storage, uuid, nbt).unwrap();
 
         // Verify the file exists
         let player_data_path = storage.get_player_data_path(&uuid);

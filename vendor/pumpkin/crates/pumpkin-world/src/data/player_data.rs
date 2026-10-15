@@ -1,8 +1,10 @@
 use pumpkin_nbt::compound::NbtCompound;
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions, create_dir_all};
 use std::io::{self, Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
@@ -12,8 +14,25 @@ pub struct PlayerDataStorage {
     data_path: PathBuf,
     /// Whether player data saving is enabled
     save_enabled: bool,
-    /// Orders recovery, autosaves and disconnect saves so their replacements cannot overlap.
-    io_lock: Mutex<()>,
+    /// Reserved before capture, so queued snapshots retain their original order.
+    next_snapshot: AtomicU64,
+    /// Orders recovery and replacements, and records successful writes per player.
+    committed: Mutex<HashMap<Uuid, u64>>,
+}
+
+/// Captured player NBT and its original ordering token. Create and save it using
+/// the same storage instance; private fields prevent unversioned save payloads.
+pub struct PlayerSnapshot {
+    uuid: Uuid,
+    sequence: u64,
+    data: NbtCompound,
+}
+
+impl PlayerSnapshot {
+    #[must_use]
+    pub const fn uuid(&self) -> Uuid {
+        self.uuid
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +64,8 @@ impl PlayerDataStorage {
         Self {
             data_path: path,
             save_enabled: enabled,
-            io_lock: Mutex::new(()),
+            next_snapshot: AtomicU64::new(1),
+            committed: Mutex::new(HashMap::new()),
         }
     }
 
@@ -69,22 +89,24 @@ impl PlayerDataStorage {
         self.get_data_path().join(format!("{uuid}.dat"))
     }
 
-    /// Loads `.dat`, falling back to `.dat_old`. Recovery archives the failed
-    /// primary and restores the valid backup before allowing any player saves.
+    /// Loads `.dat`, falling back to `.dat_old` only on decode failure or absence.
+    /// Recovery archives the failed primary and restores the valid backup before
+    /// allowing player saves. IO errors refuse login without touching either file.
     pub fn load_player_data(&self, uuid: &Uuid) -> Result<(bool, NbtCompound), PlayerDataError> {
         if !self.is_save_enabled() {
             return Ok((false, NbtCompound::new()));
         }
 
         let _guard = self
-            .io_lock
+            .committed
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = self.get_player_data_path(uuid);
         let primary_error = match read_player_file(&path) {
             Ok(Some((data, _))) => return Ok((true, data)),
             Ok(None) => None,
-            Err(error) => Some(error),
+            Err(error @ PlayerDataError::Nbt(_)) => Some(error),
+            Err(error) => return Err(error),
         };
         let backup_path = path.with_extension("dat_old");
         let backup = match read_player_file(&backup_path) {
@@ -158,18 +180,48 @@ impl PlayerDataStorage {
         }
     }
 
-    /// Atomically saves player data, retaining the previous `.dat` as `.dat_old`.
-    pub fn save_player_data(&self, uuid: &Uuid, data: NbtCompound) -> Result<(), PlayerDataError> {
+    /// Reserve the snapshot's order before reading any player fields. Carry the
+    /// returned value through background queues instead of reserving at write time.
+    pub fn snapshot_player_data(
+        &self,
+        uuid: Uuid,
+        capture: impl FnOnce(&mut NbtCompound),
+    ) -> PlayerSnapshot {
+        let sequence = self.next_snapshot.fetch_add(1, Ordering::Relaxed);
+        let mut data = NbtCompound::new();
+        capture(&mut data);
+        PlayerSnapshot {
+            uuid,
+            sequence,
+            data,
+        }
+    }
+
+    /// Atomically saves a captured snapshot unless a newer one already succeeded,
+    /// retaining the previous `.dat` as `.dat_old` only when writing a replacement.
+    pub fn save_player_data(&self, snapshot: PlayerSnapshot) -> Result<(), PlayerDataError> {
         // Skip saving if disabled in config
         if !self.is_save_enabled() {
             return Ok(());
         }
 
-        let _guard = self
-            .io_lock
+        let PlayerSnapshot {
+            uuid,
+            sequence,
+            data,
+        } = snapshot;
+        let mut committed = self
+            .committed
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let path = self.get_player_data_path(uuid);
+        if committed
+            .get(&uuid)
+            .is_some_and(|latest| *latest >= sequence)
+        {
+            debug!("Skipping superseded player snapshot for {uuid}");
+            return Ok(());
+        }
+        let path = self.get_player_data_path(&uuid);
 
         // Ensure parent directory exists
         if let Some(parent) = path.parent()
@@ -191,6 +243,7 @@ impl PlayerDataStorage {
                 crate::nbt_io::NbtFileError::Io(error) => PlayerDataError::Io(error),
             }
         })?;
+        committed.insert(uuid, sequence);
         debug!("Saved player data for {uuid} to disk");
         Ok(())
     }
@@ -236,6 +289,15 @@ fn read_player_file(path: &Path) -> Result<Option<(NbtCompound, Vec<u8>)>, Playe
 mod tests {
     use super::*;
 
+    fn save(
+        storage: &PlayerDataStorage,
+        uuid: Uuid,
+        data: NbtCompound,
+    ) -> Result<(), PlayerDataError> {
+        let snapshot = storage.snapshot_player_data(uuid, |nbt| *nbt = data);
+        storage.save_player_data(snapshot)
+    }
+
     fn player_data(marker: i32) -> NbtCompound {
         let mut data = NbtCompound::new();
         data.put_int("marker", marker);
@@ -261,15 +323,96 @@ mod tests {
     }
 
     #[test]
+    fn player_delayed_snapshot_cannot_replace_newer_primary_or_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = PlayerDataStorage::new(directory.path(), true);
+        let uuid = Uuid::from_u128(20);
+        let other_uuid = Uuid::from_u128(21);
+        save(&storage, uuid, player_data(0)).unwrap();
+        let older = storage.snapshot_player_data(uuid, |nbt| *nbt = player_data(1));
+        let other_player = storage.snapshot_player_data(other_uuid, |nbt| *nbt = player_data(7));
+        save(&storage, uuid, player_data(2)).unwrap();
+        let path = storage.get_player_data_path(&uuid);
+        let backup = path.with_extension("dat_old");
+        let primary_bytes = fs::read(&path).unwrap();
+        let backup_bytes = fs::read(&backup).unwrap();
+        assert_eq!(read_saved(&path), player_data(2));
+        assert_eq!(read_saved(&backup), player_data(0));
+
+        storage.save_player_data(older).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), primary_bytes);
+        assert_eq!(fs::read(&backup).unwrap(), backup_bytes);
+        // A later commit for one UUID must not suppress another player's capture.
+        storage.save_player_data(other_player).unwrap();
+        assert_eq!(
+            storage.load_player_data(&other_uuid).unwrap(),
+            (true, player_data(7))
+        );
+    }
+
+    #[test]
+    fn player_version_is_reserved_before_capture_and_stale_nbt_is_not_encoded() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = PlayerDataStorage::new(directory.path(), true);
+        let uuid = Uuid::from_u128(22);
+        save(&storage, uuid, player_data(0)).unwrap();
+        let older = storage.snapshot_player_data(uuid, |nbt| {
+            // Complete another capture while this one is still reading fields.
+            save(&storage, uuid, player_data(2)).unwrap();
+            *nbt = player_data(1);
+            nbt.put_string("oversized", "😀".repeat(10_923));
+        });
+        let path = storage.get_player_data_path(&uuid);
+        let backup = path.with_extension("dat_old");
+        let primary_bytes = fs::read(&path).unwrap();
+        let backup_bytes = fs::read(&backup).unwrap();
+        storage.save_player_data(older).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), primary_bytes);
+        assert_eq!(fs::read(&backup).unwrap(), backup_bytes);
+        assert_eq!(read_saved(&path), player_data(2));
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn player_failed_newer_write_does_not_suppress_an_older_valid_capture() {
+        for encoding_failure in [true, false] {
+            let directory = tempfile::tempdir().unwrap();
+            let storage = PlayerDataStorage::new(directory.path(), true);
+            let uuid = Uuid::from_u128(23);
+            save(&storage, uuid, player_data(0)).unwrap();
+            let older = storage.snapshot_player_data(uuid, |nbt| *nbt = player_data(1));
+            let newer = storage.snapshot_player_data(uuid, |nbt| {
+                *nbt = player_data(2);
+                if encoding_failure {
+                    nbt.put_string("oversized", "😀".repeat(10_923));
+                }
+            });
+            let path = storage.get_player_data_path(&uuid);
+            let backup = path.with_extension("dat_old");
+            if !encoding_failure {
+                fs::create_dir(&backup).unwrap();
+            }
+            assert!(storage.save_player_data(newer).is_err());
+            assert_eq!(read_saved(&path), player_data(0));
+            if !encoding_failure {
+                fs::remove_dir(&backup).unwrap();
+            }
+            storage.save_player_data(older).unwrap();
+            assert_eq!(read_saved(&path), player_data(1));
+            assert_eq!(read_saved(&backup), player_data(0));
+        }
+    }
+
+    #[test]
     fn player_saves_keep_previous_backup_and_prefer_valid_primary() {
         let directory = tempfile::tempdir().unwrap();
         let storage = PlayerDataStorage::new(directory.path(), true);
         let uuid = Uuid::from_u128(7);
         let path = storage.get_player_data_path(&uuid);
         let backup = path.with_extension("dat_old");
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
         let previous = fs::read(&path).unwrap();
-        storage.save_player_data(&uuid, player_data(2)).unwrap();
+        save(&storage, uuid, player_data(2)).unwrap();
         assert_eq!(fs::read(&backup).unwrap(), previous);
         assert_eq!(read_saved(&backup), player_data(1));
         assert_eq!(
@@ -295,8 +438,8 @@ mod tests {
         let storage = PlayerDataStorage::new(directory.path(), true);
         let path = storage.get_player_data_path(&uuid);
         let backup = path.with_extension("dat_old");
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
-        storage.save_player_data(&uuid, player_data(2)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(2)).unwrap();
         let valid_backup = fs::read(&backup).unwrap();
         fs::write(&path, b"broken primary").unwrap();
 
@@ -315,12 +458,12 @@ mod tests {
         let mut invalid = player_data(3);
         invalid.put_string("oversized", "😀".repeat(10_923));
         assert!(matches!(
-            storage.save_player_data(&uuid, invalid),
+            save(&storage, uuid, invalid),
             Err(PlayerDataError::Nbt(_))
         ));
         assert_eq!(fs::read(&path).unwrap(), valid_backup);
         assert_eq!(fs::read(&backup).unwrap(), valid_backup);
-        storage.save_player_data(&uuid, player_data(3)).unwrap();
+        save(&storage, uuid, player_data(3)).unwrap();
         assert_eq!(read_saved(&path), player_data(3));
         assert_eq!(fs::read(&backup).unwrap(), valid_backup);
         assert_eq!(fs::read(&first_archive).unwrap(), b"broken primary");
@@ -353,7 +496,7 @@ mod tests {
             storage.load_player_data(&uuid).unwrap(),
             (false, NbtCompound::new())
         );
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
         let path = storage.get_player_data_path(&uuid);
         let backup = path.with_extension("dat_old");
         fs::rename(&path, &backup).unwrap();
@@ -399,6 +542,21 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), b"invalid primary");
         assert_eq!(fs::read(&backup).unwrap(), b"invalid backup");
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+
+        fs::remove_file(&backup).unwrap();
+        fs::create_dir(&backup).unwrap();
+        let Err(PlayerDataError::Load {
+            primary,
+            backup: error,
+        }) = storage.load_player_data(&uuid)
+        else {
+            panic!("decode failure and backup IO failure must both be reported");
+        };
+        assert!(matches!(*primary, PlayerDataError::Nbt(_)));
+        assert!(matches!(*error, PlayerDataError::Io(_)));
+        assert_eq!(fs::read(&path).unwrap(), b"invalid primary");
+        assert!(backup.is_dir());
+        assert!(archives(&storage, &uuid).is_empty());
     }
 
     #[test]
@@ -408,7 +566,7 @@ mod tests {
         let uuid = Uuid::from_u128(11);
         let path = storage.get_player_data_path(&uuid);
         let backup = path.with_extension("dat_old");
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
         fs::rename(&path, &backup).unwrap();
         let previous = fs::read(&backup).unwrap();
         fs::create_dir(&path).unwrap();
@@ -429,6 +587,10 @@ mod tests {
         let storage = PlayerDataStorage::new(directory.path(), true);
         let uuid = Uuid::from_u128(12);
         let path = storage.get_player_data_path(&uuid);
+        let backup = path.with_extension("dat_old");
+        save(&storage, uuid, player_data(1)).unwrap();
+        fs::rename(&path, &backup).unwrap();
+        let valid_backup = fs::read(&backup).unwrap();
         let target = directory.path().join("missing.dat");
         std::os::unix::fs::symlink(&target, &path).unwrap();
         assert!(matches!(
@@ -436,18 +598,16 @@ mod tests {
             Err(PlayerDataError::Io(_))
         ));
         assert_eq!(fs::read_link(&path).unwrap(), target);
-        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+        assert_eq!(fs::read(&backup).unwrap(), valid_backup);
+        assert!(archives(&storage, &uuid).is_empty());
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
         fs::remove_file(&path).unwrap();
+        fs::remove_file(&backup).unwrap();
         fs::remove_dir(directory.path()).unwrap();
-        let Err(PlayerDataError::Load { primary, backup }) = storage.load_player_data(&uuid) else {
-            panic!("missing player directory must fail both file reads");
+        let Err(PlayerDataError::Io(error)) = storage.load_player_data(&uuid) else {
+            panic!("missing player directory must refuse load before trying the backup");
         };
-        for error in [primary, backup] {
-            let PlayerDataError::Io(error) = *error else {
-                panic!("missing directory must report an IO error");
-            };
-            assert_eq!(error.kind(), io::ErrorKind::NotFound);
-        }
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 
     #[test]
@@ -455,14 +615,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let storage = PlayerDataStorage::new(directory.path(), true);
         let uuid = Uuid::from_u128(13);
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
         let path = storage.get_player_data_path(&uuid);
         let previous = fs::read(&path).unwrap();
         let backup = path.with_extension("dat_old");
         fs::create_dir(&backup).unwrap();
         fs::write(backup.join("sentinel"), b"preserve").unwrap();
         assert!(matches!(
-            storage.save_player_data(&uuid, player_data(2)),
+            save(&storage, uuid, player_data(2)),
             Err(PlayerDataError::Io(_))
         ));
         assert_eq!(fs::read(&path).unwrap(), previous);
@@ -481,7 +641,7 @@ mod tests {
             storage.load_player_data(&uuid).unwrap(),
             (false, NbtCompound::new())
         );
-        storage.save_player_data(&uuid, player_data(1)).unwrap();
+        save(&storage, uuid, player_data(1)).unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"preserve");
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
     }
@@ -493,7 +653,7 @@ mod tests {
         let uuid = Uuid::from_u128(42);
         let mut data = NbtCompound::new();
         data.put_string("unknown:tag", "keep\0😀".into());
-        storage.save_player_data(&uuid, data.clone()).unwrap();
+        save(&storage, uuid, data.clone()).unwrap();
         let path = storage.get_player_data_path(&uuid);
         let previous = std::fs::read(&path).unwrap();
 
@@ -502,7 +662,7 @@ mod tests {
         let mut invalid = data.clone();
         invalid.put_list("Inventory", vec![pumpkin_nbt::tag::NbtTag::Compound(item)]);
         assert!(matches!(
-            storage.save_player_data(&uuid, invalid),
+            save(&storage, uuid, invalid),
             Err(PlayerDataError::Nbt(_))
         ));
         assert_eq!(std::fs::read(&path).unwrap(), previous);
@@ -513,7 +673,7 @@ mod tests {
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
 
         data.put_int("updated", 42);
-        storage.save_player_data(&uuid, data.clone()).unwrap();
+        save(&storage, uuid, data.clone()).unwrap();
         assert_eq!(storage.load_player_data(&uuid).unwrap(), (true, data));
     }
 }
