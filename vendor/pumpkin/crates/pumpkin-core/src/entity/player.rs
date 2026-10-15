@@ -49,7 +49,7 @@ use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -1221,7 +1221,7 @@ impl Player {
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
-        let radial_chunks = cylindrical.all_chunks_within();
+        let radial_chunks: Vec<_> = cylindrical.all_chunks_within().collect();
 
         debug!(
             "Removing player {}, unwatching {} chunks",
@@ -3987,7 +3987,7 @@ impl Player {
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
         let chunks_to_clean = world.update_chunk_watches(&[], &radial_chunks).await;
         for chunk in &chunks_to_clean {
             self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
