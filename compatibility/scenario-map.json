@@ -354,6 +354,10 @@
     },
     "data.storage_namespaces": {
       "skip_reason": "Live namespace and deletion markers are setup; saved contents and reload are checked by persistence.command_storage_*."
+    },
+    "command.data_conditions": {
+      "feature_id": "players.commands",
+      "scenario": "execute data conditions distinguish present and absent paths for all providers"
     }
   }
 }

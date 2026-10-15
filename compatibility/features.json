@@ -3229,7 +3229,8 @@
         "data modify merge recursively retains siblings and source order",
         "data modify merge counts changed compounds and rejects unchanged results",
         "data modify merge validates every source before creating targets",
-        "data modify merge preserves vanilla partial storage changes on failure"
+        "data modify merge preserves vanilla partial storage changes on failure",
+        "execute data conditions distinguish present and absent paths for all providers"
       ],
       "rust_status": "partial",
       "evidence": [

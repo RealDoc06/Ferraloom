@@ -851,25 +851,25 @@ fn check_data_matches(
     is_entity: bool,
 ) -> Result<bool, CommandSyntaxError> {
     let path = context.get_argument::<NbtPath>("path")?;
-    let tags = if is_block {
+    let count = if is_block {
         let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
         let world = context.source.world().clone();
         let accessor = BlockDataAccessor::new(pos, world)?;
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     } else if is_entity {
         let entity = EntityArgumentType::get_entity(context, "target")?;
         let accessor = EntityDataAccessor::new(entity);
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     } else {
         let id = context.get_argument::<Identifier>("id")?;
         let server = context.server().clone();
         let accessor = StorageDataAccessor::new(id.to_string(), server);
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     };
-    Ok(!tags.is_empty())
+    Ok(count != 0)
 }
 
 fn execute_if_data_block_modifier(

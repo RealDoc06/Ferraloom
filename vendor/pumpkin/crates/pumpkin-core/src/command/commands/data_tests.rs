@@ -100,6 +100,10 @@ impl Fixture {
         };
         let mut dispatcher = CommandDispatcher::new();
         register(&mut dispatcher, &PermissionRegistry::default());
+        crate::command::commands::execute::register(
+            &mut dispatcher,
+            &PermissionRegistry::default(),
+        );
         let fixture = Self {
             source,
             dispatcher,
@@ -644,4 +648,24 @@ async fn removing_last_storage_tag_removes_the_live_key() {
             .unwrap()
             .contains_key("repair:removed")
     );
+}
+
+#[tokio::test]
+async fn execute_data_conditions_treat_absent_paths_as_zero_matches_for_every_provider() {
+    let fixture = Fixture::new().await;
+    let before = fixture.sources();
+    for provider in SOURCES {
+        for (condition, path, expected) in [
+            ("if", "id", 42),
+            ("unless", "id", 0),
+            ("if", "missing.nested", 0),
+            ("unless", "missing.nested", 42),
+        ] {
+            let command = format!(
+                "execute {condition} data {provider} {path} run data get storage repair:source number"
+            );
+            assert_eq!(fixture.execute(&command).unwrap(), expected, "{command}");
+        }
+    }
+    assert_eq!(fixture.sources(), before);
 }

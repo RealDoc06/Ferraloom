@@ -64,6 +64,10 @@ class Scenario:
     expected_last_feedback: str | None = None
 
 
+DATA_CONDITION_PROVIDERS = (("Block", "block 4 230 4", "id"),
+                            ("Entity", "entity @e[type=pig,tag=ferraloom_data_source,limit=1]", "Health"),
+                            ("Storage", "storage ferraloom:modify_source", "answer"))
+
 SCENARIOS = [
     Scenario("block.setblock", ("blocks.placement",), ("setblock 0 200 0 stone",), "if block 0 200 0 stone"),
     Scenario("block.state", ("blocks.registry",), ("setblock 0 200 0 oak_stairs[facing=east,half=top]",), "if block 0 200 0 oak_stairs[facing=east,half=top]"),
@@ -150,6 +154,15 @@ SCENARIOS = [
               "data modify storage ferraloom:modify_destination entity_health set from entity @e[type=pig,tag=ferraloom_data_source,limit=1] Health",
               "data modify storage ferraloom:modify_destination answer set from storage ferraloom:modify_source answer"),
              'if data storage ferraloom:modify_destination {block_x:4,entity_health:7.0f,answer:42} if data storage ferraloom:modify_source {answer:42,text:"abcdef"} if block 4 230 4 chest if entity @e[type=pig,tag=ferraloom_data_source,nbt={Health:7.0f},limit=1]'),
+    Scenario("command.data_conditions", ("players.commands",),
+             tuple(command for label, provider, path in DATA_CONDITION_PROVIDERS for command in (
+                 f"scoreboard players set Missing{label} parity 0",
+                 f"execute unless data {provider} missing.nested run scoreboard players set Missing{label} parity 1",
+                 f"execute if data {provider} missing.nested run scoreboard players set Missing{label} parity 99",
+                 f"scoreboard players set Present{label} parity 0",
+                 f"execute if data {provider} {path} run scoreboard players set Present{label} parity 1",
+                 f"execute unless data {provider} {path} run scoreboard players set Present{label} parity 99")),
+             " ".join(f"if score {kind}{label} parity matches 1" for label, _, _ in DATA_CONDITION_PROVIDERS for kind in ("Missing", "Present"))),
     Scenario("data.modify_insert_string", ("players.commands",),
              ("data modify storage ferraloom:modify_destination values set value [10,20]",
               "data modify storage ferraloom:modify_destination values insert 1 value 15",
