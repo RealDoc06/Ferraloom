@@ -1,4 +1,5 @@
 pub mod advancement;
+pub(crate) mod chunk_watches;
 pub mod statistics;
 
 use core::f32;
@@ -15,6 +16,7 @@ use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEncha
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
+use chunk_watches::{HeldChunkTickets, PlayerChunkWatches};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
@@ -502,7 +504,8 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_sender: Mutex<crate::net::ChunkSender>,
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
-    pub held_chunk_tickets: Mutex<Option<(Option<i8>, Option<i8>)>>,
+    pub(crate) held_chunk_tickets: Mutex<Option<HeldChunkTickets>>,
+    pub(crate) chunk_watches: PlayerChunkWatches,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
@@ -763,9 +766,7 @@ impl Player {
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
-            // We want this to be an impossible watched section so that `chunker::update_position`
-            // will mark chunks as watched for a new join rather than a respawn.
-            // (We left shift by one so we can search around that chunk)
+            // Client-facing placeholder; actual watcher ownership starts empty.
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(0, 0),
                 // Since 1 is not possible in vanilla it is used as uninit
@@ -803,6 +804,7 @@ impl Player {
             chunk_sender: Mutex::new(crate::net::ChunkSender::new()),
             chunk_listener: Mutex::new(world.level.chunk_listener.add_global_chunk_listener()),
             held_chunk_tickets: Mutex::new(None),
+            chunk_watches: PlayerChunkWatches::default(),
             chunk_send_epoch: AtomicU32::new(0),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
@@ -1214,14 +1216,10 @@ impl Player {
         let world = self.world();
         world.remove_player(self, true).await;
 
-        let cylindrical = self.watched_section.load();
+        let radial_chunks = self.chunk_watches.clear(world.uuid, true).await;
         if let Ok(mut sender) = self.chunk_sender.lock() {
             sender.reset();
         }
-
-        // Radial chunks are all of the chunks the player is theoretically viewing.
-        // Given enough time, all of these chunks will be in memory.
-        let radial_chunks: Vec<_> = cylindrical.all_chunks_within().collect();
 
         debug!(
             "Removing player {}, unwatching {} chunks",
@@ -1231,8 +1229,6 @@ impl Player {
 
         let level = &world.level;
 
-        // Decrement the value of watched chunks
-        world.update_chunk_watches(&[], &radial_chunks).await;
         // Remove left over entries from all possiblily loaded chunks
         let cleaned_chunks = level.clean_memory();
         if !cleaned_chunks.is_empty() {
@@ -1268,28 +1264,18 @@ impl Player {
             .add_passenger(vehicle.clone(), self.clone());
     }
 
-    pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {
-        let mut lock = level
-            .chunk_loading
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let held = self
+    pub fn clean_up_chunk_tickets(&self, _level: &Arc<pumpkin_world::level::Level>) {
+        // Use the same held-ticket -> Level lock order as registration.
+        let mut held = self
             .held_chunk_tickets
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some((view_level, sim_level)) = held {
-            let center = self.get_entity().chunk_pos.load();
-            if let Some(view) = view_level {
-                lock.remove_ticket(center, view);
-            }
-            if let Some(sim) = sim_level {
-                lock.remove_ticket(center, sim);
-            }
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(tickets) = held.take()
+            && let Some(level) = tickets.release()
+        {
+            level.should_unload.store(true, Ordering::Relaxed);
+            level.level_channel.notify();
         }
-        lock.send_change();
-        level.should_unload.store(true, Ordering::Relaxed);
-        level.level_channel.notify();
     }
 
     pub fn update_chunk_tickets_for_gamemode(self: &Arc<Self>) {
@@ -3987,9 +3973,8 @@ impl Player {
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
-        let chunks_to_clean = world.update_chunk_watches(&[], &radial_chunks).await;
-        for chunk in &chunks_to_clean {
+        let removed = self.chunk_watches.clear(world.uuid, false).await;
+        for chunk in &removed {
             self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }

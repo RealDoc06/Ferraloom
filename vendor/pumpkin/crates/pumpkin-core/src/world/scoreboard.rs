@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 mod storage;
+pub(crate) use storage::SLOTS as DISPLAY_SLOTS;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{

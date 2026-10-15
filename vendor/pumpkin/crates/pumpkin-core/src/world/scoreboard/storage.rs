@@ -8,9 +8,9 @@ use std::{
     path::Path,
 };
 
+use flate2::{Compression, write::GzEncoder};
 use pumpkin_nbt::{
-    NbtCompound,
-    nbt_compress::{read_gzip_compound_tag, write_gzip_compound_tag},
+    COMPOUND_ID, NbtCompound, nbt_compress::read_gzip_compound_tag, serializer::NbtWriteHelperJava,
     tag::NbtTag,
 };
 use pumpkin_util::{
@@ -99,10 +99,17 @@ impl Scoreboard {
     pub(crate) fn save(&self, world_path: &Path) -> io::Result<()> {
         let root = self.to_saved_data()?;
         atomic_write(&world_path.join("data/minecraft/scoreboard.dat"), |file| {
-            write_gzip_compound_tag(root, file).map_err(|error| match error {
-                pumpkin_nbt::Error::Incomplete(error) => error,
-                error => invalid(error.to_string()),
-            })
+            let mut encoder = GzEncoder::new(file, Compression::default());
+            // Nbt::write_to_writer silently discards serialization errors.
+            // Use the fallible encoder so invalid data cannot replace a good save.
+            encoder.write_all(&[COMPOUND_ID, 0, 0])?; // Named root, empty name.
+            root.serialize_content(&mut NbtWriteHelperJava::new(&mut encoder))
+                .map_err(|error| match error {
+                    pumpkin_nbt::Error::Incomplete(error) => error,
+                    error => invalid(error.to_string()),
+                })?;
+            encoder.finish()?;
+            Ok(())
         })
     }
 
@@ -677,7 +684,7 @@ fn atomic_write(path: &Path, write: impl FnOnce(&mut File) -> io::Result<()>) ->
     result
 }
 
-const SLOTS: [(ScoreboardDisplaySlot, &str); 19] = {
+pub(crate) const SLOTS: [(ScoreboardDisplaySlot, &str); 19] = {
     use ScoreboardDisplaySlot::*;
     [
         (List, "list"),

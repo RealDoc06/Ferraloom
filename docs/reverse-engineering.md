@@ -100,6 +100,55 @@ ping before status, negative and boundary ping values, invalid host lengths,
 and status-field comparison. Static control flow does not establish observed
 network scheduling; the differential harness must check the executable.
 
+## Gameplay and persistence investigations
+
+Additional Java 25 `javap -p -c` inspections use the same verified inner JAR.
+They guide implementation; the paired executable tests remain the acceptance
+evidence.
+
+- `ScoreboardSaveData.Packed` and its objective, score and team codecs use a
+  `data` envelope with root `DataVersion: 5023`. Missing objective criteria and
+  render types mean `dummy` and `integer`; missing score `Locked` means false.
+  A real reference save confirms signed scores, team membership and settings,
+  the sidebar objective, and an unlocked trigger score. The current below-name
+  slot identifier is `below_name`.
+- `ForceLoadCommand.changeForceLoad` visits X in ascending order, then Z.
+  `ServerLevel.setChunkForced` waits for each newly forced chunk before the
+  command admits the next. Add/remove results count actual changes; repeating
+  an unchanged range fails. Removing all forced chunks returns zero.
+- `ChunkGenerationTask` schedules status layers and waits for a layer before
+  advancing. Java's world-generation dispatcher uses a consecutive executor;
+  neighboring decoration work can observe earlier decoration writes. Rust's
+  independently ready generation tasks therefore need ordering analysis as
+  well as cache exclusion. Sorting whichever tasks happen to be ready does
+  not establish equivalent scheduling.
+- Generation postprocessing performs the captured fluid tick first, then the
+  liquid-block tick or neighbor-shape fold in west, east, north, south, down,
+  up order. Pending positions belong to dimension-relative sections and must
+  survive saving until processed.
+- `execute if loaded` requires entity-ticking accessibility and loaded
+  entities, independently of the queried Y coordinate. Scheduled block/fluid
+  ticking extends one chunk beyond that entity-ticking range. A generated
+  neighbor can consequently tick blocks while failing `if loaded`.
+- Vanilla's autosave countdown continues while simulation is frozen. Global
+  player and saved data are still saved with `save-off`; per-world saving and
+  ordinary terrain chunk-unload processing honor that setting. Entity storage
+  independently processes hidden-section unloads even with `noSave` enabled.
+  Ferraloom now schedules server-wide autosaves outside the frozen simulation
+  branch; its ordinary terrain unload path still needs the save-off gate.
+- The foundation's `Nbt::write_to_writer` drops serialization failures before
+  writing its byte buffer. The scoreboard writer instead uses the fallible
+  Java NBT serializer directly, so an oversized modified-UTF string cannot
+  replace an existing valid save with a truncated document.
+
+The original underground sample differed in three unsupported glow-lichen
+states and four gold-ore cells. Deferred postprocessing removed the lichen
+differences in the latest recorded run. A diagnostic build of the earlier
+Rust revision matched vanilla in all sampled cells, so its trace failed the
+required original-output baseline. Its observed gold placement cannot explain
+the uninstrumented failure conclusively. No general generation-order or
+world-generation parity claim follows from that diagnostic run.
+
 ## Boundaries and remaining work
 
 REA 6.5.0 does **not** expose a JVM JAR decompilation workflow. Its JADX provider

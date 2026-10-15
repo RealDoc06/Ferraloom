@@ -60,6 +60,7 @@ pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
 pub mod recipe;
+mod saving;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod server_test_manager;
@@ -152,6 +153,7 @@ pub struct Server {
     /// Manages scheduled datapack functions (`/schedule`)
     pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
+    saving: saving::SaveCoordinator,
     pub runtime: tokio::runtime::Handle,
     pub management_hub: Arc<crate::net::management::hub::ManagementHub>,
 
@@ -324,6 +326,7 @@ impl Server {
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
+            saving: saving::SaveCoordinator::default(),
             runtime: tokio::runtime::Handle::current(),
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
@@ -622,59 +625,6 @@ impl Server {
             .save(&self.basic_config.get_world_path())
     }
 
-    pub async fn save_all(&self, flush: bool) -> Result<(), String> {
-        self.management_hub.broadcast_server_saving();
-        let mut first_error = None;
-        let mut record_error = |result: Result<(), String>| {
-            if let Err(error) = result {
-                error!("{error}");
-                first_error.get_or_insert(error);
-            }
-        };
-
-        record_error(
-            self.save_world_info()
-                .map_err(|error| format!("Failed to save world info: {error}")),
-        );
-        record_error(
-            self.player_data_storage
-                .save_all_players(self)
-                .map_err(|error| format!("Failed to save player data: {error}")),
-        );
-        record_error(
-            self.advancement_manager
-                .save_all_players(&self.get_all_players())
-                .await
-                .map_err(|error| format!("Failed to save player advancements: {error}")),
-        );
-
-        record_error(
-            self.save_scoreboard()
-                .map_err(|error| format!("Failed to save scoreboard: {error}")),
-        );
-        let worlds = self.worlds.load_full();
-        for world in worlds.iter() {
-            record_error(world.save().await.map_err(|error| {
-                format!("Failed to save {}: {error}", world.dimension.minecraft_name)
-            }));
-        }
-        if flush {
-            for world in worlds.iter() {
-                record_error(world.level.save_and_flush().await.map_err(|error| {
-                    format!(
-                        "Failed to flush {}: {error}",
-                        world.dimension.minecraft_name
-                    )
-                }));
-            }
-        }
-        if let Some(error) = first_error {
-            return Err(error);
-        }
-        self.management_hub.broadcast_server_saved();
-        Ok(())
-    }
-
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -829,6 +779,9 @@ impl Server {
         debug!("Awaiting tasks for server");
         self.tasks.wait().await;
         debug!("Done awaiting tasks for server");
+
+        let _save_guard = self.saving.lock().await;
+        self.report_autosave_failure();
 
         info!("Starting worlds");
         for world in self.worlds.load().iter() {
@@ -1216,6 +1169,7 @@ impl Server {
             self.sync_game_time();
             self.tick_players_and_network();
         }
+        self.schedule_autosave();
         self.flush_pending_block_updates();
         Self::resume_player_flushes(&suspended);
     }

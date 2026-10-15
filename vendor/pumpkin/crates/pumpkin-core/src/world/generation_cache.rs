@@ -81,7 +81,6 @@ impl WorldGenerationCache {
             if let Some(chunk) = self.world.level.loaded_chunks.get(&owner) {
                 chunk.mark_pos_for_postprocessing(&pos);
             }
-            self.world.level.request_chunk_activation(owner);
         }
         for nbt in self.block_entities {
             if let Some(block_entity) = block_entity_from_nbt(&nbt) {

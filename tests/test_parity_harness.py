@@ -11,10 +11,27 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import protocol
-from parity.suite import Server, check_signal_exit, is_server_say, pin_binary, recorded, stop_by_signal
+from parity.suite import Server, check_signal_exit, compare_command_trees, is_server_say, pin_binary, recorded, stop_by_signal
 
 
 class HarnessTests(unittest.TestCase):
+    def test_command_syntax_comparison_normalizes_arguments_but_retains_missing_branches(self):
+        def tree(roots, paths):
+            return [{"id": "network.command_tree", "result": "passed", "detail": {"roots": roots, "literal_paths": paths}}]
+
+        vanilla = tree(["execute", "scoreboard"], ["execute as <targets> run", "scoreboard objectives setdisplay"])
+        rust = tree(["execute", "scoreboard", "pumpkin"], ["execute as <entities> run", "scoreboard objectives setdisplay"])
+        result = compare_command_trees({"vanilla": vanilla, "rust": rust})
+        self.assertEqual(result["result"], "passed")
+        self.assertEqual(result["extra_roots"], ["pumpkin"])
+        rust[0]["detail"]["literal_paths"].pop()
+        result = recorded("commands.advertised_syntax", (), lambda: compare_command_trees({"vanilla": vanilla, "rust": rust}))
+        self.assertEqual(result["result"], "failed")
+        self.assertEqual(result["detail"]["missing_literal_paths"], ["scoreboard objectives setdisplay"])
+        rust[0]["result"] = "failed"
+        with self.assertRaises(AssertionError):
+            compare_command_trees({"vanilla": vanilla, "rust": rust})
+
     def test_command_echo_is_never_success(self):
         token = "FERRALOOM_PASS_deadbeef"
         self.assertFalse(is_server_say(f"Unknown command execute if block 0 0 0 air run say {token}", token))

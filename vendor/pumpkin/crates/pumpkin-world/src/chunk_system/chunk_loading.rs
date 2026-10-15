@@ -111,7 +111,9 @@ impl ChunkLoading {
     #[inline]
     #[must_use]
     pub const fn get_level_from_simulation_distance(simulation_distance: u8) -> i8 {
-        Self::FULL_CHUNK_LEVEL - (simulation_distance as i8)
+        // Entity ticking ends at simulation_distance, block ticking one ring
+        // later, and each ticking chunk needs a FULL postprocessing halo.
+        Self::FULL_CHUNK_LEVEL - (simulation_distance as i8) - 2
     }
 
     pub fn new(sender: Arc<LevelChannel>) -> Self {
@@ -178,7 +180,7 @@ impl ChunkLoading {
         // debug!("add force ticket at {pos:?}");
         self.high_priority.push(pos);
         self.is_priority_dirty = true;
-        self.add_ticket(pos, Self::FULL_CHUNK_LEVEL);
+        self.add_ticket(pos, Self::FULL_CHUNK_LEVEL - 2);
     }
 
     pub fn remove_force_ticket(&mut self, pos: ChunkPos) {
@@ -187,7 +189,7 @@ impl ChunkLoading {
             self.high_priority.remove(index);
         }
         self.is_priority_dirty = true;
-        self.remove_ticket(pos, Self::FULL_CHUNK_LEVEL);
+        self.remove_ticket(pos, Self::FULL_CHUNK_LEVEL - 2);
     }
 
     pub fn add_ticket(&mut self, pos: ChunkPos, level: i8) {
@@ -294,6 +296,34 @@ impl ChunkLoading {
         }
         debug_assert!(self.debug_check_error());
     }
+}
+
+#[test]
+fn simulation_and_force_tickets_keep_the_block_tick_halo_full() {
+    let center = ChunkPos::new(0, 0);
+    let mut loading = ChunkLoading::new(Arc::new(LevelChannel::new()));
+    loading.add_force_ticket(center);
+    assert_eq!(
+        loading.pos_level[&center],
+        ChunkLoading::FULL_CHUNK_LEVEL - 2
+    );
+    assert_eq!(
+        loading.pos_level[&ChunkPos::new(2, 2)],
+        ChunkLoading::FULL_CHUNK_LEVEL
+    );
+    assert!(loading.pos_level[&ChunkPos::new(3, 0)] > ChunkLoading::FULL_CHUNK_LEVEL);
+    loading.remove_force_ticket(center);
+    assert!(loading.pos_level.is_empty());
+
+    let level = ChunkLoading::get_level_from_simulation_distance(2);
+    loading.add_ticket(center, level);
+    assert_eq!(
+        loading.pos_level[&ChunkPos::new(4, 4)],
+        ChunkLoading::FULL_CHUNK_LEVEL
+    );
+    assert!(loading.pos_level[&ChunkPos::new(5, 0)] > ChunkLoading::FULL_CHUNK_LEVEL);
+    loading.remove_ticket(center, level);
+    assert!(loading.pos_level.is_empty());
 }
 
 #[test]

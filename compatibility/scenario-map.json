@@ -207,6 +207,42 @@
     "world.chunk_frozen_load": {
       "feature_id": "world.chunk_tickets",
       "scenario": "forced chunks activate while simulation is frozen"
+    },
+    "scoreboard.display_set": {
+      "feature_id": "players.scoreboards",
+      "scenario": "display update"
+    },
+    "scoreboard.trigger_enable": {
+      "feature_id": "players.scoreboards",
+      "scenario": "trigger"
+    },
+    "scoreboard.team": {
+      "feature_id": "players.teams",
+      "scenario": "team membership"
+    },
+    "persistence.scoreboard_team_restart": {
+      "feature_id": "persistence.scoreboard_data",
+      "scenario": "restart with teams"
+    },
+    "persistence.scoreboard_display_restart": {
+      "feature_id": "persistence.scoreboard_data",
+      "scenario": "display slot"
+    },
+    "world.forceload_counts": {
+      "feature_id": "world.chunk_tickets",
+      "scenario": "force-load commands count only changed chunks"
+    },
+    "scoreboard.objective_count": {
+      "feature_id": "players.scoreboards",
+      "scenario": "objective add and remove return the current total"
+    },
+    "blocks.fluid_tick_ring": {
+      "feature_id": "blocks.fluids",
+      "scenario": "scheduled flow crosses the block-ticking ring"
+    },
+    "network.command_tree": {
+      "feature_id": "players.commands",
+      "scenario": "wire command tree decodes completely"
     }
   }
 }

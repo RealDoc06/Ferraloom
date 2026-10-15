@@ -1,4 +1,5 @@
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_world::level::ChunkActivationDemand;
 use rustc_hash::{FxHashMap, FxHashSet};
 use uuid::Uuid;
 
@@ -10,6 +11,7 @@ pub(super) struct ActivePlayerArea {
 
 #[derive(Default)]
 pub(super) struct ActiveChunkTracker {
+    pub activation_demand: Option<ChunkActivationDemand>,
     pub players: FxHashMap<Uuid, ActivePlayerArea>,
     pub requested_chunks: FxHashSet<Vector2<i32>>,
     pub loaded_active_chunks: FxHashSet<Vector2<i32>>,
@@ -18,6 +20,20 @@ pub(super) struct ActiveChunkTracker {
 }
 
 impl ActiveChunkTracker {
+    /// Block ticks extend one ring beyond entity ticking. Derive this only from
+    /// simulation requests; FULL neighbors loaded for postprocessing add no rings.
+    pub fn requested_block_ticking_chunks(&self) -> FxHashSet<Vector2<i32>> {
+        let mut chunks = FxHashSet::default();
+        for pos in &self.requested_chunks {
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    chunks.insert(pos.add_raw(dx, dz));
+                }
+            }
+        }
+        chunks
+    }
+
     fn add_chunk(
         &mut self,
         pos: Vector2<i32>,

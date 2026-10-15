@@ -48,6 +48,8 @@ use tokio::{
 };
 use tokio_util::task::TaskTracker;
 
+pub use crate::chunk_system::activation::ChunkActivationDemand;
+
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
@@ -596,6 +598,7 @@ impl Level {
     pub fn get_tick_data(
         &self,
         active_chunks: &FxHashSet<Vector2<i32>>,
+        block_ticking_chunks: &FxHashSet<Vector2<i32>>,
         random_tick_speed: i64,
     ) -> TickData {
         let samples_per_section = random_tick_speed.max(0);
@@ -666,7 +669,7 @@ impl Level {
             .map(|p| *p)
             .collect();
         for pos in scheduled_chunk_pos {
-            if !active_chunks.contains(&pos) {
+            if !block_ticking_chunks.contains(&pos) {
                 continue;
             }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {

@@ -1,4 +1,5 @@
 use super::*;
+use pumpkin_nbt::nbt_compress::write_gzip_compound_tag;
 use pumpkin_util::text::{TextComponentBase, TextContent, color::Color};
 
 fn text(value: &str) -> NbtTag {

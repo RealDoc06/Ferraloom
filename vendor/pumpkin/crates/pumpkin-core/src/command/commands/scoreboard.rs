@@ -4,6 +4,7 @@ use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::objective::ObjectiveArgumentType;
 use crate::command::argument_types::operation::{OperationArgumentType, ScoreboardOperation};
 use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
+use crate::command::argument_types::scoreboard_slot::ScoreboardSlotArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -12,7 +13,7 @@ use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::world::scoreboard::{
     Scoreboard, ScoreboardObjective, ScoreboardScore, ScoreboardTarget,
 };
-use pumpkin_data::translation;
+use pumpkin_data::{scoreboard::ScoreboardDisplaySlot, translation};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::RenderType;
 use pumpkin_util::PermissionLvl;
@@ -30,6 +31,16 @@ const ARG_SCORE: &str = "score";
 const ARG_OPERATION: &str = "operation";
 const ARG_SOURCE_TARGETS: &str = "source_targets";
 const ARG_SOURCE_OBJECTIVE: &str = "source_objective";
+const ARG_SLOT: &str = "slot";
+
+const DISPLAY_ALREADY_EMPTY: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYEMPTY,
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYEMPTY,
+);
+const DISPLAY_ALREADY_SET: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYSET,
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYSET,
+);
 
 const NO_SCORE_ERROR: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
@@ -53,6 +64,68 @@ const FAILED_ENABLE_ERROR: CommandErrorType<0> = CommandErrorType::new(
 
 struct ObjectivesAddExecutor {
     has_display_name: bool,
+}
+
+struct ObjectivesSetDisplayExecutor {
+    has_objective: bool,
+}
+
+impl CommandExecutor for ObjectivesSetDisplayExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let slot = ScoreboardSlotArgumentType::get(context, ARG_SLOT)?;
+        let objective = self
+            .has_objective
+            .then(|| ObjectiveArgumentType::get(context, ARG_OBJECTIVE))
+            .transpose()?;
+        let world = context.world();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let feedback = Self::set(&mut scoreboard, world, slot, objective)?;
+        drop(scoreboard);
+        context.source.send_feedback(feedback, true);
+        // Both setDisplaySlot and clearDisplaySlot return zero in vanilla.
+        Ok(0)
+    }
+}
+
+impl ObjectivesSetDisplayExecutor {
+    fn set(
+        scoreboard: &mut Scoreboard,
+        target: &impl ScoreboardTarget,
+        slot: ScoreboardDisplaySlot,
+        objective: Option<&str>,
+    ) -> Result<TextComponent, CommandSyntaxError> {
+        let display_name = objective
+            .map(|name| {
+                ObjectiveArgumentType::objective_or_error(scoreboard, name)
+                    .map(|objective| objective.display_name.clone())
+            })
+            .transpose()?;
+        if scoreboard.get_display_objective(slot) == objective {
+            return Err(if objective.is_some() {
+                DISPLAY_ALREADY_SET.create_without_context()
+            } else {
+                DISPLAY_ALREADY_EMPTY.create_without_context()
+            });
+        }
+        scoreboard.set_display_objective(target, slot, objective);
+        let slot_name = TextComponent::text(ScoreboardSlotArgumentType::name(slot));
+        Ok(if let Some(display_name) = display_name {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_SET,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_SET,
+                [slot_name, display_name],
+            )
+        } else {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_CLEARED,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_CLEARED,
+                [slot_name],
+            )
+        })
+    }
 }
 
 impl CommandExecutor for ObjectivesAddExecutor {
@@ -102,7 +175,7 @@ impl CommandExecutor for ObjectivesAddExecutor {
             true,
         );
 
-        Ok(1)
+        Ok(scoreboard.get_objectives().len() as i32)
     }
 }
 
@@ -226,7 +299,7 @@ impl CommandExecutor for ObjectivesRemoveExecutor {
             true,
         );
 
-        Ok(1)
+        Ok(scoreboard.get_objectives().len() as i32)
     }
 }
 
@@ -644,6 +717,19 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         ),
                     )
                     .then(
+                        literal("setdisplay").then(
+                            argument(ARG_SLOT, ScoreboardSlotArgumentType)
+                                .executes(ObjectivesSetDisplayExecutor {
+                                    has_objective: false,
+                                })
+                                .then(argument(ARG_OBJECTIVE, ObjectiveArgumentType).executes(
+                                    ObjectivesSetDisplayExecutor {
+                                        has_objective: true,
+                                    },
+                                )),
+                        ),
+                    )
+                    .then(
                         literal("remove").then(
                             argument(ARG_OBJECTIVE, ObjectiveArgumentType)
                                 .executes(ObjectivesRemoveExecutor),
@@ -779,6 +865,34 @@ mod tests {
             ),
         );
         scoreboard
+    }
+
+    #[test]
+    fn display_changes_validate_objectives_and_reject_unchanged_slots() {
+        let mut scoreboard = scoreboard_with_objective("dummy");
+        let slot = ScoreboardDisplaySlot::TeamRed;
+        let error =
+            ObjectivesSetDisplayExecutor::set(&mut scoreboard, &NoTarget, slot, None).unwrap_err();
+        assert!(error.is(&DISPLAY_ALREADY_EMPTY));
+        let error =
+            ObjectivesSetDisplayExecutor::set(&mut scoreboard, &NoTarget, slot, Some("missing"))
+                .unwrap_err();
+        assert!(error.is(&OBJECTIVE_NOT_FOUND_ERROR));
+        assert_eq!(scoreboard.get_display_objective(slot), None);
+        let feedback =
+            ObjectivesSetDisplayExecutor::set(&mut scoreboard, &NoTarget, slot, Some("test"))
+                .unwrap();
+        assert_eq!(scoreboard.get_display_objective(slot), Some("test"));
+        assert_eq!(
+            serde_json::to_value(feedback).unwrap()["with"],
+            serde_json::json!([{"text":"sidebar.team.red"}, {"text":"Test"}])
+        );
+        let error =
+            ObjectivesSetDisplayExecutor::set(&mut scoreboard, &NoTarget, slot, Some("test"))
+                .unwrap_err();
+        assert!(error.is(&DISPLAY_ALREADY_SET));
+        ObjectivesSetDisplayExecutor::set(&mut scoreboard, &NoTarget, slot, None).unwrap();
+        assert_eq!(scoreboard.get_display_objective(slot), None);
     }
 
     #[test]

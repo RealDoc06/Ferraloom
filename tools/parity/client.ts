@@ -12,7 +12,7 @@ export const PROTOCOL = 777;
 const MAX_PACKET = 8 * 1024 * 1024;
 const ids = {
   config: { finish: 3, keepAlive: 4, ping: 5, registry: 7, knownPacks: 15, conduct: 20 },
-  play: { chunk: 46, login: 50, position: 73, health: 106, chat: 124, disguisedChat: 33, playerChat: 66, keepAlive: 45, ping: 62,
+  play: { commands: 16, chunk: 46, login: 50, position: 73, health: 106, chat: 124, disguisedChat: 33, playerChat: 66, keepAlive: 45, ping: 62,
     inventory: 18, slot: 20, block: 8, chunkBatch: 11, disconnect: 32 },
 } as const;
 
@@ -60,6 +60,227 @@ class Reader {
     return result.value;
   }
   string() { return this.take(this.varInt()).toString('utf8'); }
+}
+
+// Exact 26.3 generated/reports/registries.json minecraft:command_argument_type protocol IDs.
+// Layouts: ClientboundCommandsPacket.{readNode,read,Entry.write}, ArgumentTypeInfos.bootstrap,
+// the 13 non-singleton ArgumentTypeInfo serializers, and FriendlyByteBuf registry/identifier codecs.
+// 26.3 inner server SHA256: a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6.
+export const COMMAND_ARGUMENT_TYPES = [
+  'brigadier:bool', 'brigadier:float', 'brigadier:double', 'brigadier:integer', 'brigadier:long', 'brigadier:string',
+  'minecraft:entity', 'minecraft:game_profile', 'minecraft:block_pos', 'minecraft:column_pos', 'minecraft:vec3',
+  'minecraft:vec2', 'minecraft:block_state', 'minecraft:block_predicate', 'minecraft:item_stack', 'minecraft:item_predicate',
+  'minecraft:team_color', 'minecraft:hex_color', 'minecraft:component', 'minecraft:style', 'minecraft:message',
+  'minecraft:nbt_compound_tag', 'minecraft:nbt_tag', 'minecraft:nbt_path', 'minecraft:objective',
+  'minecraft:objective_criteria', 'minecraft:operation', 'minecraft:particle', 'minecraft:angle', 'minecraft:rotation',
+  'minecraft:scoreboard_slot', 'minecraft:score_holder', 'minecraft:swizzle', 'minecraft:team', 'minecraft:item_slot',
+  'minecraft:item_slots', 'minecraft:resource_location', 'minecraft:function', 'minecraft:entity_anchor',
+  'minecraft:int_range', 'minecraft:float_range', 'minecraft:dimension', 'minecraft:gamemode', 'minecraft:time',
+  'minecraft:resource_or_tag', 'minecraft:resource_or_tag_key', 'minecraft:resource', 'minecraft:resource_key',
+  'minecraft:resource_selector', 'minecraft:template_mirror', 'minecraft:template_rotation', 'minecraft:heightmap',
+  'minecraft:loot_table', 'minecraft:loot_predicate', 'minecraft:loot_modifier', 'minecraft:context_float_provider',
+  'minecraft:context_int_provider', 'minecraft:slot_source', 'minecraft:dialog', 'minecraft:feature',
+  'minecraft:swing_animation', 'minecraft:uuid',
+] as const;
+
+type ArgumentProperties =
+  | { kind: 'none' }
+  | { kind: 'number'; flags: number; min: number | string | null; max: number | string | null }
+  | { kind: 'string'; mode: 'word' | 'phrase' | 'greedy' }
+  | { kind: 'entity'; single: boolean; players_only: boolean }
+  | { kind: 'score_holder'; multiple: boolean }
+  | { kind: 'time'; minimum: number }
+  | { kind: 'registry'; registry: string };
+
+type CommandNode = {
+  type: 'root' | 'literal' | 'argument'; flags: number; executable: boolean; restricted: boolean;
+  children: number[]; redirect: number | null; name: string | null;
+  parser_id: number | null; parser: typeof COMMAND_ARGUMENT_TYPES[number] | null;
+  properties: ArgumentProperties | null; suggestion_provider: string | null;
+};
+
+const COMMAND_LIMITS = { nodes: 16384, edges: 131072, paths: 65536, path_characters: 2 * 1024 * 1024, depth: 128 } as const;
+
+function commandCount(reader: Reader, maximum: number, label: string): number {
+  const count = reader.varInt();
+  if (count < 0 || count > maximum) throw new Error(`Invalid command ${label}: ${count}`);
+  return count;
+}
+
+function commandString(reader: Reader): string {
+  // FriendlyByteBuf.readUtf(): at most 32767 UTF-16 code units and 3*32767 UTF-8 bytes.
+  const bytes = reader.take(commandCount(reader, 32767 * 3, 'string byte length'));
+  // Java's UTF_8 decoder consumes a surrogate's ED A0..BF prefix as one malformed
+  // sequence, including a missing/non-continuation third byte. Node replaces its
+  // individual bytes instead, so normalize that case before using Node's decoder.
+  const parts: string[] = [];
+  let start = 0;
+  for (let index = 0; index + 1 < bytes.length; index++) {
+    if (bytes[index] === 0xed && bytes[index + 1]! >= 0xa0 && bytes[index + 1]! <= 0xbf) {
+      parts.push(bytes.subarray(start, index).toString('utf8'), '\uFFFD');
+      index += index + 2 < bytes.length && (bytes[index + 2]! & 0xc0) === 0x80 ? 2 : 1;
+      start = index + 1;
+    }
+  }
+  parts.push(bytes.subarray(start).toString('utf8'));
+  const value = parts.join('');
+  if (value.length > 32767) throw new Error('Command string exceeds UTF-16 length limit');
+  return value;
+}
+
+function commandIdentifier(reader: Reader): string {
+  const value = commandString(reader);
+  // Identifier.parse permits the omitted/empty namespace and supplies minecraft.
+  const separator = value.indexOf(':');
+  const namespace = separator < 0 ? 'minecraft' : value.slice(0, separator) || 'minecraft';
+  const path = separator < 0 ? value : value.slice(separator + 1);
+  if (!/^[a-z0-9_.-]+$/u.test(namespace) || !/^[a-z0-9/._-]*$/u.test(path)) throw new Error('Invalid command resource identifier');
+  return `${namespace}:${path}`;
+}
+
+function argumentProperties(reader: Reader, id: number): ArgumentProperties {
+  if (id >= 1 && id <= 4) {
+    const flags = reader.byte();
+    const number = () => {
+      if (id === 4) return reader.take(8).readBigInt64BE();
+      return id === 1 ? reader.float() : id === 2 ? reader.double() : reader.int();
+    };
+    const min = flags & 1 ? number() : null;
+    const max = flags & 2 ? number() : null;
+    // Preserve signed-i64 limits and Java-accepted non-finite bounds across JSON IPC.
+    return { kind: 'number', flags,
+      min: typeof min === 'bigint' || (typeof min === 'number' && !Number.isFinite(min)) ? String(min) : min,
+      max: typeof max === 'bigint' || (typeof max === 'number' && !Number.isFinite(max)) ? String(max) : max };
+  }
+  if (id === 5) {
+    const mode = ['word', 'phrase', 'greedy'] as const;
+    return { kind: 'string', mode: mode[commandCount(reader, 2, 'string mode')]! };
+  }
+  if (id === 6 || id === 31) {
+    const flags = reader.byte();
+    return id === 6 ? { kind: 'entity', single: Boolean(flags & 1), players_only: Boolean(flags & 2) }
+      : { kind: 'score_holder', multiple: Boolean(flags & 1) };
+  }
+  if (id === 43) return { kind: 'time', minimum: reader.int() };
+  if (id >= 44 && id <= 48) return { kind: 'registry', registry: commandIdentifier(reader) };
+  // All remaining registered IDs use SingletonArgumentInfo, whose network serializer writes zero bytes.
+  return { kind: 'none' };
+}
+
+/** Decode a complete commands packet body (without packet ID), with no parser or byte skipping.
+ * Child and redirect graphs are validated separately, matching vanilla's validateEntries checks;
+ * a combined cycle such as execute -> run -> root is valid and never expanded into paths. */
+export function decodeCommandTree(payload: Buffer) {
+  if (payload.length > MAX_PACKET) throw new Error('Command packet exceeds probe support budget');
+  const reader = new Reader(payload);
+  const count = commandCount(reader, COMMAND_LIMITS.nodes, 'node count (probe support budget)');
+  if (!count) throw new Error('Empty command tree');
+  const nodes: CommandNode[] = [];
+  let edges = 0;
+  for (let index = 0; index < count; index++) {
+    const flags = reader.byte();
+    const typeId = flags & 3;
+    // Java ignores unused flag bits. read() returns a null stub for both type0 and type3,
+    // and NodeResolver represents that stub as a root node.
+    const childCount = commandCount(reader, COMMAND_LIMITS.edges - edges, 'child count (probe edge budget)');
+    edges += childCount;
+    const children = Array.from({ length: childCount }, () => commandCount(reader, count - 1, 'child index'));
+    const redirect = flags & 8 ? commandCount(reader, count - 1, 'redirect index') : null;
+    const type = (['root', 'literal', 'argument', 'root'] as const)[typeId]!;
+    const name = type === 'root' ? null : commandString(reader);
+    const parser_id = type === 'argument' ? reader.varInt() : null;
+    const parser = parser_id === null ? null : COMMAND_ARGUMENT_TYPES[parser_id];
+    if (parser_id !== null && parser === undefined) throw new Error(`Unsupported 26.3 command argument parser ID ${parser_id} at node ${index}; probe cannot infer its property layout`);
+    const properties = parser_id === null ? null : argumentProperties(reader, parser_id);
+    const suggestion_provider = type === 'argument' && flags & 16 ? commandIdentifier(reader) : null;
+    nodes.push({ type, flags, executable: Boolean(flags & 4), restricted: Boolean(flags & 32),
+      children, redirect, name, parser_id, parser: parser ?? null, properties, suggestion_provider });
+  }
+  const root_index = commandCount(reader, count - 1, 'root index');
+  if (nodes[root_index]!.type !== 'root') throw new Error('Command root index does not name a root node');
+  if (reader.offset !== payload.length) throw new Error(`Trailing command packet bytes: ${payload.length - reader.offset}`);
+
+  let duplicate_child_indices = 0, duplicate_child_names = 0, root_child_edges = 0;
+  for (const node of nodes) {
+    duplicate_child_indices += node.children.length - new Set(node.children).size;
+    const names = new Set<string | null>();
+    for (const child of node.children) {
+      const target = nodes[child]!;
+      if (target.type === 'root') { root_child_edges++; continue; }
+      if (names.has(target.name)) duplicate_child_names++;
+      names.add(target.name);
+    }
+  }
+  // Kahn's algorithm avoids recursion and quadratic rescans on hostile deep/large graphs.
+  for (const kind of ['children', 'redirect'] as const) {
+    const pending = new Uint32Array(count);
+    const dependents = Array.from({ length: count }, () => [] as number[]);
+    for (const [index, node] of nodes.entries()) {
+      const dependencies = kind === 'children' ? node.children : node.redirect === null ? [] : [node.redirect];
+      pending[index] = dependencies.length;
+      for (const dependency of dependencies) dependents[dependency]!.push(index);
+    }
+    const ready: number[] = [];
+    for (let index = 0; index < count; index++) if (!pending[index]) ready.push(index);
+    for (let next = 0; next < ready.length; next++) {
+      for (const dependent of dependents[ready[next]!]!) {
+        pending[dependent] = pending[dependent]! - 1;
+        if (!pending[dependent]) ready.push(dependent);
+      }
+    }
+    if (ready.length !== count) throw new Error(`Cyclic command ${kind} graph`);
+  }
+  const reachable = new Set([root_index]);
+  const visit = [root_index];
+  for (let index = 0; index < visit.length; index++) {
+    const node = nodes[visit[index]!]!;
+    for (const target of [...node.children, ...(node.redirect === null ? [] : [node.redirect])]) {
+      if (!reachable.has(target)) { reachable.add(target); visit.push(target); }
+    }
+  }
+
+  const literalPaths = new Set<string>();
+  const paths = [{ index: root_index, tokens: [] as string[] }];
+  let pathCharacters = 0;
+  for (let index = 0; index < paths.length; index++) {
+    const { index: nodeIndex, tokens } = paths[index]!;
+    for (const child of nodes[nodeIndex]!.children) {
+      const node = nodes[child]!;
+      if (node.type === 'root') continue; // NodeResolver resolves root children but never adds them.
+      const next = [...tokens, node.type === 'argument' ? `<${node.name}>` : node.name!];
+      const path = next.join(' ');
+      pathCharacters += path.length;
+      if (next.length > COMMAND_LIMITS.depth || paths.length >= COMMAND_LIMITS.paths || pathCharacters > COMMAND_LIMITS.path_characters) {
+        throw new Error('Command path expansion exceeds probe support budget');
+      }
+      if (node.type === 'literal') literalPaths.add(path);
+      paths.push({ index: child, tokens: next });
+    }
+  }
+  const parser_counts: Record<string, number> = {};
+  for (const node of nodes) if (node.parser) parser_counts[node.parser] = (parser_counts[node.parser] ?? 0) + 1;
+  return {
+    nodes,
+    root_index, node_count: count, child_edge_count: edges,
+    root_nodes: nodes.filter(node => node.type === 'root').length,
+    literal_nodes: nodes.filter(node => node.type === 'literal').length,
+    argument_nodes: nodes.filter(node => node.type === 'argument').length,
+    executable_nodes: nodes.filter(node => node.executable).length,
+    restricted_nodes: nodes.filter(node => node.restricted).length,
+    redirect_nodes: nodes.filter(node => node.redirect !== null).length,
+    suggestion_nodes: nodes.filter(node => node.suggestion_provider !== null).length,
+    roots: [...new Set(nodes[root_index]!.children.filter(index => nodes[index]!.type !== 'root')
+      .map(index => nodes[index]!.name!))].sort(),
+    literal_paths: [...literalPaths].sort(),
+    literal_path_scope: 'declared_child_edges_arguments_as_placeholders_root_children_ignored_no_redirect_or_brigadier_merge' as const,
+    argument_parsers: Object.keys(parser_counts).sort(), parser_counts,
+    unreachable_nodes: count - reachable.size,
+    duplicate_child_indices, duplicate_child_names, root_child_edges,
+    unused_flag_nodes: nodes.filter(node => Boolean(node.flags & ~63)).length,
+    reserved_type_nodes: nodes.filter(node => (node.flags & 3) === 3).length,
+    payload_bytes: payload.length, payload_sha256: createHash('sha256').update(payload).digest('hex'),
+    decoded_bytes: reader.offset, probe_support_limits: COMMAND_LIMITS,
+  };
 }
 
 function string(value: string): Buffer {
@@ -194,6 +415,9 @@ function main() {
     position: null as Position | null, server_position: null as Position | null,
     teleport_confirmations: 0, keepalives: 0, packets: 0, block_updates: 0,
     last_block: null as { x: number; y: number; z: number; state_id: number } | null,
+    commands_packets: 0,
+    command_tree: null as Omit<ReturnType<typeof decodeCommandTree>, 'nodes'> | null,
+    command_tree_error: null as { packet_id: number; payload_bytes: number; payload_sha256: string; message: string } | null,
     chats: [] as string[],
     chat_messages: [] as ChatObservation[],
   };
@@ -259,6 +483,22 @@ function main() {
     if (id === ids.play.keepAlive) { send(28, reader.take(8)); state.keepalives++; }
     if (id === ids.play.ping) send(45, reader.take(4));
     if (id === ids.play.login) state.login = true;
+    if (id === ids.play.commands) {
+      state.commands_packets++;
+      const body = reader.take(payload.length - reader.offset);
+      try {
+        const { nodes: _nodes, ...observation } = decodeCommandTree(body);
+        state.command_tree = observation;
+        state.command_tree_error = null;
+        emit({ event: 'commands', commands_packets: state.commands_packets, command_tree: observation });
+      } catch (error) {
+        state.command_tree_error = { packet_id: id, payload_bytes: body.length,
+          payload_sha256: createHash('sha256').update(body).digest('hex'),
+          message: error instanceof Error ? error.message : String(error) };
+        emit({ event: 'commands_error', ...state.command_tree_error });
+        throw error;
+      }
+    }
     if (id === ids.play.chunk) {
       const key = `${reader.int()},${reader.int()}`;
       chunks.add(key); state.chunks = chunks.size;

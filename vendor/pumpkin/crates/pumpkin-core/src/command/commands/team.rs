@@ -113,7 +113,7 @@ impl CommandExecutor for TeamAddExecutor {
         let new_team = Team {
             name: team_name_owned,
             display_name: display_name_clone.clone(),
-            options: 0,
+            options: 3,
             nametag_visibility: NameTagVisibility::Always,
             collision_rule: CollisionRule::Always,
             color: NamedColor::White,

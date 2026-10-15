@@ -14,7 +14,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::level::{Level, SyncChunk};
+use pumpkin_world::level::{ChunkActivationDemand, Level, SyncChunk};
 
 use crate::net::ClientPlatform;
 
@@ -62,6 +62,7 @@ impl EncodedChunk {
 
 #[derive(Debug)]
 pub struct ChunkSender {
+    activation_demand: Option<ChunkActivationDemand>,
     pub pending_chunks: FxHashSet<Vector2<i32>>,
     sent_chunks: FxHashSet<Vector2<i32>>,
     /// Committed Bedrock chunks packets are still being encoded, by dispatch token.
@@ -78,6 +79,7 @@ impl ChunkSender {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            activation_demand: None,
             pending_chunks: FxHashSet::default(),
             sent_chunks: FxHashSet::default(),
             awaiting_delivery: FxHashMap::default(),
@@ -90,6 +92,7 @@ impl ChunkSender {
     }
 
     pub fn reset(&mut self) {
+        self.activation_demand = None;
         self.pending_chunks.clear();
         self.sent_chunks.clear();
         self.awaiting_delivery.clear();
@@ -130,6 +133,9 @@ impl ChunkSender {
     /// Records a chunk sent outside the batch path as held.
     pub fn mark_sent_out_of_band(&mut self, pos: Vector2<i32>) {
         self.pending_chunks.remove(&pos);
+        if let Some(demand) = &mut self.activation_demand {
+            demand.remove([pos]);
+        }
         self.awaiting_delivery.remove(&pos);
         self.sent_chunks.insert(pos);
     }
@@ -160,15 +166,42 @@ impl ChunkSender {
         self.pending_chunks.insert(pos);
     }
 
-    pub fn unload_chunk(&mut self, client: &ClientPlatform, pos: Vector2<i32>) {
-        self.pending_chunks.remove(&pos);
-        self.awaiting_delivery.remove(&pos);
-        if self.sent_chunks.remove(&pos)
-            && let ClientPlatform::Java(java_client) = client
-            && !java_client.is_closed()
-        {
-            java_client.try_send_packet(&CUnloadChunk::new(pos.x, pos.y));
+    pub fn unload_chunks(&mut self, client: &ClientPlatform, chunks: &[Vector2<i32>]) {
+        for &pos in chunks {
+            self.pending_chunks.remove(&pos);
+            self.awaiting_delivery.remove(&pos);
+            if self.sent_chunks.remove(&pos)
+                && let ClientPlatform::Java(java_client) = client
+                && !java_client.is_closed()
+            {
+                java_client.try_send_packet(&CUnloadChunk::new(pos.x, pos.y));
+            }
         }
+        if let Some(demand) = &mut self.activation_demand {
+            demand.remove(chunks.iter().copied());
+        }
+    }
+
+    fn sync_activation_demand(
+        &mut self,
+        level: &Arc<Level>,
+        center: Vector2<i32>,
+        view_distance: NonZero<u8>,
+    ) {
+        if self
+            .activation_demand
+            .as_ref()
+            .is_none_or(|demand| !demand.belongs_to(level))
+        {
+            self.activation_demand = Some(level.activation_demand());
+        }
+        let view = Cylindrical::new(center, view_distance);
+        self.activation_demand.as_mut().unwrap().replace(
+            self.pending_chunks
+                .iter()
+                .copied()
+                .filter(|pos| view.is_within_distance(pos.x, pos.y)),
+        );
     }
 
     fn collect_sorted_candidates(
@@ -178,6 +211,7 @@ impl ChunkSender {
         view_distance: NonZero<u8>,
     ) -> Vec<PreparedChunk> {
         let quota_limit = self.send_quota.floor() as usize;
+        let view = Cylindrical::new(center, view_distance);
         let mut ready = Vec::with_capacity(quota_limit);
 
         // If pending_chunks is small, sorting it directly avoids scanning offsets.
@@ -190,11 +224,13 @@ impl ChunkSender {
             });
 
             for pos in sorted {
+                if !view.is_within_distance(pos.x, pos.y) {
+                    continue;
+                }
                 if ready.len() >= quota_limit {
                     break;
                 }
 
-                level.request_chunk_activation(pos);
                 if let Some(chunk) = level.ready_chunk(pos) {
                     ready.push(PreparedChunk {
                         position: pos,
@@ -214,7 +250,6 @@ impl ChunkSender {
                 if !self.pending_chunks.contains(&pos) {
                     continue;
                 }
-                level.request_chunk_activation(pos);
                 if let Some(chunk) = level.ready_chunk(pos) {
                     ready.push(PreparedChunk {
                         position: pos,
@@ -226,10 +261,12 @@ impl ChunkSender {
             // Fallback for any pending chunks outside the precomputed table
             if ready.is_empty() {
                 for &pos in &self.pending_chunks {
+                    if !view.is_within_distance(pos.x, pos.y) {
+                        continue;
+                    }
                     if ready.len() >= quota_limit {
                         break;
                     }
-                    level.request_chunk_activation(pos);
                     if let Some(chunk) = level.ready_chunk(pos) {
                         ready.push(PreparedChunk {
                             position: pos,
@@ -245,12 +282,13 @@ impl ChunkSender {
 
     pub fn prepare_batch(
         &mut self,
-        level: &Level,
+        level: &Arc<Level>,
         player_chunk: Vector2<i32>,
         view_distance: NonZero<u8>,
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
+        self.sync_activation_demand(level, player_chunk, view_distance);
         if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
         {
             return None;
@@ -368,6 +406,9 @@ impl ChunkSender {
             self.send_quota -= sent_count as f32;
         }
 
+        if let Some(demand) = &mut self.activation_demand {
+            demand.remove(dispatched_positions.iter().copied());
+        }
         dispatched_positions
     }
 
@@ -405,6 +446,9 @@ impl ChunkSender {
         }
 
         self.send_quota -= dispatched_chunks.len() as f32;
+        if let Some(demand) = &mut self.activation_demand {
+            demand.remove(dispatched_chunks.iter().map(|chunk| chunk.position));
+        }
         dispatched_chunks
     }
 }
@@ -446,15 +490,79 @@ mod tests {
         let view = NonZero::new(2).unwrap();
         assert!(
             sender
-                .collect_sorted_candidates(&level, center, view)
-                .is_empty()
+                .prepare_batch(&level, center, view, 0, CURRENT_MC_VERSION)
+                .is_none()
         );
         assert_eq!(level.chunk_loading.lock().unwrap().ticket.len(), 1);
         level.process_chunk_activations(|chunk| chunk.process_post_processing(|_| true));
-        let ready = sender.collect_sorted_candidates(&level, center, view);
-        assert_eq!(ready.len(), 1);
-        assert_eq!(ready[0].position, center);
+        let ready = sender
+            .prepare_batch(&level, center, view, 0, CURRENT_MC_VERSION)
+            .unwrap();
+        assert_eq!(ready.chunks.len(), 1);
+        assert_eq!(ready.chunks[0].position, center);
         assert!(!level.is_chunk_ready(&Vector2::new(1, 0)));
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+    }
+
+    #[tokio::test]
+    async fn activation_demand_sender_reset_view_change_and_delivery_release_old_requests() {
+        use pumpkin_config::world::LevelConfig;
+        use pumpkin_data::dimension::Dimension;
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        let old = Vector2::new(0, 0);
+        let next = Vector2::new(32, 0);
+        let view = NonZero::new(2).unwrap();
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(old);
+        sender.sync_activation_demand(&level, old, view);
+        assert!(
+            level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&old)
+        );
+        // Queued positions outside the new view never keep its old halo pinned.
+        sender.enqueue_chunk(next);
+        sender.sync_activation_demand(&level, next, view);
+        assert!(
+            !level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&old)
+        );
+        assert!(
+            level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&next)
+        );
+        sender.mark_sent_out_of_band(next);
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+        sender.sync_activation_demand(&level, next, view);
+        assert!(
+            level.chunk_loading.lock().unwrap().ticket.is_empty(),
+            "delivered chunks create no demand"
+        );
+        sender.enqueue_chunk(next);
+        sender.sync_activation_demand(&level, next, view);
+        sender.reset();
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+        sender.enqueue_chunk(next);
+        sender.sync_activation_demand(&level, next, view);
+        drop(sender);
         assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
     }
 

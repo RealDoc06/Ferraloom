@@ -20,11 +20,12 @@ impl World {
         pos: Vector2<i32>,
         player: &Player,
     ) -> Option<SyncChunk> {
+        let mut demand = self.level.activation_demand();
         loop {
             let changed = self.level.chunk_activation_changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
-            self.level.request_chunk_activation(pos);
+            demand.replace([pos]);
             self.process_chunk_postprocessing();
             if let Some(chunk) = self.level.ready_chunk(pos) {
                 return Some(chunk);
@@ -117,8 +118,8 @@ mod tests {
                 super::super::scoreboard::Scoreboard::new(),
             )),
         ));
-        for x in -2..=0 {
-            for z in -1..=1 {
+        for x in -3..=1 {
+            for z in -2..=2 {
                 let chunk = ChunkData::empty_sync(x, z);
                 *chunk.light_engine.lock().unwrap() = ChunkLight {
                     sky_light: vec![LightContainer::new_empty(0); chunk.section.count]
@@ -144,7 +145,8 @@ mod tests {
         assert!(!world.is_entity_ticking_loaded(&position));
         assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
 
-        world.level.request_chunk_activation(center);
+        let mut demand = world.level.activation_demand();
+        demand.replace([center]);
         world.process_chunk_postprocessing();
         assert!(world.level.is_chunk_ready(&center));
         assert!(!world.is_entity_ticking_loaded(&position));
@@ -242,7 +244,7 @@ mod tests {
         assert!(
             world
                 .level
-                .get_tick_data(&requested, 0)
+                .get_tick_data(&requested, &requested, 0)
                 .block_ticks
                 .is_empty()
         );
@@ -253,14 +255,13 @@ mod tests {
                 loading.ticket.get(&center),
                 Some(&vec![ChunkLoading::FULL_CHUNK_LEVEL - 1])
             );
-            assert_eq!(
-                loading.pos_level.get(&west),
-                Some(&ChunkLoading::FULL_CHUNK_LEVEL)
-            );
-            assert_eq!(
-                loading.ticket.len(),
-                1,
-                "halo-only neighbors must not activate"
+            assert!(loading.pos_level[&west] <= ChunkLoading::FULL_CHUNK_LEVEL);
+            assert!(
+                loading
+                    .ticket
+                    .keys()
+                    .all(|pos| { (pos.x - center.x).abs() <= 1 && (pos.y - center.y).abs() <= 1 }),
+                "halo-only neighbors must not request another halo"
             );
         }
 
@@ -303,15 +304,87 @@ mod tests {
         );
         assert!(center_chunk.dirty.load(Ordering::Relaxed));
         assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
-        assert!(
-            !world.level.is_chunk_ready(&west),
-            "FULL halo was not activated"
-        );
+        assert!(world.level.is_chunk_ready(&west));
+        assert!(!world.active_chunks.read().unwrap().contains(&west));
 
         // A later ordinary palette change is not replayed as a generation mark.
         center_chunk.set_block_absolute_y(0, invalid.0.y, invalid.0.z as usize, west_only);
         world.update_active_chunks();
         assert_eq!(world.get_block_state_id(&invalid), west_only);
+    }
+
+    #[tokio::test]
+    async fn forced_neighbor_runs_scheduled_ticks_without_entity_or_random_eligibility() {
+        use pumpkin_world::tick::TickPriority;
+
+        let (_folder, world) = test_world().await;
+        let center = Vector2::new(-1, 0);
+        let neighbor = BlockPos::new(0, 100, 0);
+        let outside = BlockPos::new(16, 100, 0);
+        let neighbor_chunk = world
+            .level
+            .loaded_chunks
+            .get(&neighbor.chunk_position())
+            .unwrap();
+        // Every sample in this section is random-tickable, so eligibility can
+        // be checked without relying on a lucky random coordinate.
+        for x in 0..16 {
+            for y in 96..112 {
+                for z in 0..16 {
+                    neighbor_chunk.set_block_absolute_y(x, y, z, Block::WHEAT.default_state.id);
+                }
+            }
+        }
+        drop(neighbor_chunk);
+        world.forced_chunks.lock().unwrap().insert(center);
+        for pos in [neighbor, outside] {
+            world
+                .level
+                .schedule_block_tick(&Block::STONE, pos, 0, TickPriority::Normal);
+            world
+                .level
+                .schedule_fluid_tick(&Fluid::WATER, pos, 0, TickPriority::Normal);
+        }
+        world.update_active_chunks();
+        let entity_chunks = world.active_chunks.read().unwrap();
+        let block_chunks = world.block_ticking_chunks.read().unwrap();
+        assert_eq!(*entity_chunks, rustc_hash::FxHashSet::from_iter([center]));
+        assert_eq!(block_chunks.len(), 9);
+        assert!(block_chunks.contains(&neighbor.chunk_position()));
+        assert!(!block_chunks.contains(&outside.chunk_position()));
+        let ticks = world.level.get_tick_data(&entity_chunks, &block_chunks, 1);
+        assert_eq!(ticks.block_ticks.len(), 1);
+        assert_eq!(ticks.block_ticks[0].position, neighbor);
+        assert_eq!(ticks.fluid_ticks.len(), 1);
+        assert_eq!(ticks.fluid_ticks[0].position, neighbor);
+        assert!(ticks.random_ticks.is_empty());
+        assert!(
+            !world
+                .level
+                .get_tick_data(&block_chunks, &block_chunks, 1)
+                .random_ticks
+                .is_empty()
+        );
+        assert!(world.level.is_block_tick_scheduled(&outside, &Block::STONE));
+        assert!(world.level.is_fluid_tick_scheduled(&outside, &Fluid::WATER));
+        drop(block_chunks);
+        drop(entity_chunks);
+        for pos in [center, neighbor.chunk_position()] {
+            world
+                .level
+                .get_entity_chunk(pos)
+                .await
+                .unwrap()
+                .live
+                .store(true, Ordering::Relaxed);
+        }
+        assert!(world.is_entity_ticking_loaded(&BlockPos::new(-16, 100, 0)));
+        assert!(!world.is_entity_ticking_loaded(&neighbor));
+        assert!(
+            !world.level.is_chunk_ready(&outside.chunk_position()),
+            "postprocessing-only FULL halo must not request another halo"
+        );
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
     }
 
     #[tokio::test]
@@ -372,7 +445,8 @@ mod tests {
             .clone();
         chunk.set_block_absolute_y(8, pos.0.y, 8, Block::WATER.default_state.id);
         chunk.mark_pos_for_postprocessing(&pos);
-        world.level.request_chunk_activation(center);
+        let mut demand = world.level.activation_demand();
+        demand.replace([center]);
         world.process_chunk_postprocessing();
         assert_eq!(
             *calls.lock().unwrap(),

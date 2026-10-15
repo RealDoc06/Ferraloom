@@ -75,6 +75,9 @@ SCENARIOS = [
     Scenario("redstone.piston_push", ("blocks.pistons",), ("fill 0 200 8 4 202 10 air", "setblock 1 200 9 stone", "setblock 0 200 9 piston[facing=east]", "setblock -1 200 9 redstone_block"), "if block 2 200 9 stone", 1.0),
     Scenario("redstone.daylight", ("blocks.redstone_power",), ("time set 6000", "weather clear", "setblock 12 200 0 daylight_detector"), "if block 12 200 0 daylight_detector[power=15]", 1.5),
     Scenario("scoreboard.arithmetic", ("players.scoreboards",), ("scoreboard objectives add parity dummy", "scoreboard players set A parity 7", "scoreboard players set B parity 5", "scoreboard players operation A parity += B parity"), "if score A parity matches 12"),
+    Scenario("scoreboard.objective_count", ("players.scoreboards",), ("execute store result score ObjectiveFirst parity run scoreboard objectives add counted_a dummy", "execute store result score ObjectiveSecond parity run scoreboard objectives add counted_b dummy", "execute store result score ObjectiveRemovedA parity run scoreboard objectives remove counted_a", "execute store result score ObjectiveRemovedB parity run scoreboard objectives remove counted_b", "scoreboard players remove ObjectiveSecond parity 1", "scoreboard players add ObjectiveRemovedB parity 1"), "if score ObjectiveSecond parity = ObjectiveFirst parity if score ObjectiveRemovedA parity = ObjectiveFirst parity if score ObjectiveRemovedB parity = ObjectiveFirst parity"),
+    Scenario("scoreboard.display_set", ("players.scoreboards",), ("scoreboard players set DisplayResult parity 17", "scoreboard players set DisplaySuccess parity 17", "execute store result score DisplayResult parity store success score DisplaySuccess parity run scoreboard objectives setdisplay sidebar parity"), "if score DisplayResult parity matches 0 if score DisplaySuccess parity matches 1"),
+    Scenario("scoreboard.trigger_enable", ("players.scoreboards",), ("scoreboard objectives add unlock trigger", "scoreboard players set Candidate unlock 13", "scoreboard players enable Candidate unlock", "execute store success score EnableAgain parity run scoreboard players enable Candidate unlock"), "if score Candidate unlock matches 13 if score EnableAgain parity matches 0"),
     Scenario("command.store_result_false", ("players.commands",), ("gamerule keep_inventory false", "scoreboard players set Stored parity 17", "execute store result score Stored parity run gamerule keep_inventory"), "if score Stored parity matches 0"),
     Scenario("command.store_result_signed", ("players.commands",), ("scoreboard players set Query parity -7", "execute store result score Stored parity run scoreboard players get Query parity"), "if score Stored parity matches -7"),
     Scenario("command.store_success", ("players.commands",), ("execute store success score Stored parity run gamerule keep_inventory",), "if score Stored parity matches 1"),
@@ -86,11 +89,13 @@ SCENARIOS = [
     Scenario("entity.damage", ("entities.combat",), ("damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic",), "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]"),
     Scenario("entity.kill", ("entities.lifecycle",), ("kill @e[tag=ferraloom_probe]",), "unless entity @e[tag=ferraloom_probe]", 1.5, "if entity @e[tag=ferraloom_probe]"),
     Scenario("command.entity_count", ("players.commands",), ('summon pig 14 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', 'summon pig 15 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', "scoreboard players set EntityCopies parity 0", "execute as @e[type=pig,tag=ferraloom_count_probe] run scoreboard players add EntityCopies parity 1", "kill @e[tag=ferraloom_count_probe]"), "if score EntityCopies parity matches 2"),
+    Scenario("world.forceload_counts", ("world.chunk_tickets",), ("execute store result score ForceFirst parity store success score ForceFirstOk parity run forceload add 96 0", "execute store result score ForceMore parity run forceload add 96 0 112 0", "execute store success score ForceDuplicate parity run forceload add 96 0 112 0", "execute store result score ForceRemoved parity run forceload remove 96 0 112 0", "execute store success score ForceMissing parity run forceload remove 96 0 112 0"), "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0"),
     Scenario("datapack.function", ("world.functions",), ("function ferraloom:probe",), "if score Datapack parity matches 37"),
     Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5, force_dimension="minecraft:the_nether"),
     Scenario("scoreboard.global_dimension", ("players.scoreboards",), ("execute in minecraft:the_nether run scoreboard players set DimensionScore parity 41",), "if score DimensionScore parity matches 41"),
     Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5, force_dimension="minecraft:the_end"),
     Scenario("persistence.entity_write", ("persistence.entity_data",), ('summon pig 8 200 12 {Tags:["ferraloom_saved"],UUID:[I;111,222,333,444],NoAI:1b,PersistenceRequired:1b}', "damage @e[type=pig,tag=ferraloom_saved,limit=1] 3 generic"), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]'),
+    Scenario("scoreboard.team", ("players.teams",), ("team add ferraloom", "team join ferraloom @e[type=pig,tag=ferraloom_saved,limit=1]", "team modify ferraloom color gold", "team modify ferraloom friendlyFire false", "team modify ferraloom nametagVisibility never", "team modify ferraloom collisionRule pushOtherTeams"), "if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]", precondition="unless entity @e[type=pig,tag=ferraloom_saved,team=ferraloom]"),
     Scenario("persistence.write", ("persistence.chunk_data",), ("setblock 14 200 14 diamond_block", "save-all flush"), "if block 14 200 14 diamond_block", 0.5),
 ]
 
@@ -326,7 +331,7 @@ def run(server: Server, quick: bool) -> list[dict]:
         ]:
             results.append(recorded(name, (feature,), lambda action=action: action(server.port)))
         if not quick:
-            server.command("forceload add -16 -16 31 31")
+            server.command("forceload add -16 -16 31 31", timeout=60)
             wait_loaded(server)
             wait_loaded(server, x=-1, z=9)
             server.save_flush()
@@ -341,6 +346,7 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.extend(run_client_scenarios(server))
             for scenario in SCENARIOS:
                 results.append(recorded(scenario.id, scenario.features, lambda scenario=scenario: run_scenario(server, scenario)))
+            results.append(recorded("blocks.fluid_tick_ring", ("blocks.fluids", "world.chunk_tickets"), lambda: fluid_tick_ring(server)))
             results.append(recorded("world.chunk_frozen_load", ("world.chunk_tickets",), lambda: frozen_chunk_load(server)))
             server.command("gamerule keep_inventory true")
             server.command("gamerule advance_time false")
@@ -360,6 +366,8 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.append(recorded("persistence.metadata_restart", ("persistence.level_data",), lambda: check_metadata(server)))
             results.append(recorded("persistence.scoreboard_restart", ("persistence.scoreboard_data",), lambda: check_predicate(server, "if score A parity matches 12 if score B parity matches 5 if score Query parity matches -7")))
             results.append(recorded("persistence.entity_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 7)))
+            results.append(recorded("persistence.scoreboard_team_restart", ("persistence.scoreboard_data",), lambda: check_team_state(server)))
+            results.append(recorded("persistence.scoreboard_display_restart", ("persistence.scoreboard_data",), lambda: check_display_state(server)))
             entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
             results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
@@ -417,13 +425,54 @@ def check_signal_exit(kind: str, code: int | None, forced: bool) -> dict:
     return {"exit_code": code, "signal": "SIGTERM", "durability": "checked separately by persistence.signal_restart"}
 
 
+def game_time(server: Server) -> int:
+    lines = server.command("time query gametime")
+    values = [match.group(1) for line in lines
+              if (match := re.search(r"The game time is (-?\d+) tick\(s\)$", line))]
+    protocol.require(len(values) == 1, f"Missing or ambiguous game time: {lines[-6:]}")
+    return int(values[0])
+
+
+def fluid_tick_ring(server: Server) -> dict:
+    """A forced chunk's neighbor block-ticks without becoming entity-ticking."""
+    server.command("forceload add 96 0", timeout=60)
+    wait_loaded(server, x=96, z=0)
+    frozen = server.command("tick freeze")
+    try:
+        protocol.require(any(line.endswith("The game is frozen") for line in frozen), "Freeze was not acknowledged")
+        check_predicate(server, "unless loaded 114 200 8")
+        for command in ("fill 110 200 7 119 201 9 air", "fill 110 199 7 119 199 9 stone",
+                        "fill 110 200 7 119 200 7 stone", "fill 110 200 9 119 200 9 stone",
+                        "setblock 110 200 8 stone", "setblock 119 200 8 stone", "setblock 111 200 8 water"):
+            server.command(command)
+        check_predicate(server, "if block 111 200 8 water[level=0] if block 112 200 8 air if block 114 200 8 air")
+        before = game_time(server)
+        feedback = server.command("tick step 40")
+        protocol.require(any(line.endswith("Stepping 40 tick(s)") for line in feedback), "Tick step was not acknowledged")
+        deadline = time.monotonic() + 15
+        after = game_time(server)
+        while after < before + 40 and time.monotonic() < deadline:
+            time.sleep(0.1)
+            after = game_time(server)
+        protocol.require(after == before + 40, f"Expected exactly 40 stepped ticks, got {after - before}")
+        query = server.command("tick query")
+        protocol.require(any(line.endswith("The game is frozen") for line in query), "Tick stepping did not remain frozen")
+        check_predicate(server, "if block 111 200 8 water[level=0] if block 114 200 8 water[level=3] unless loaded 114 200 8")
+        return {"forced_chunk": {"x": 6, "z": 0}, "target_chunk": {"x": 7, "z": 0},
+                "stepped_ticks": after - before, "source": [111, 200, 8], "target": [114, 200, 8],
+                "target_water_level": 3, "target_entity_ticking": False}
+    finally:
+        server.command("forceload remove 96 0")
+        server.command("tick unfreeze")
+
+
 def frozen_chunk_load(server: Server) -> dict:
     """Generation and chunk activation continue while simulation is paused."""
     frozen = server.command("tick freeze")
     try:
         protocol.require(any(line.endswith("The game is frozen") for line in frozen),
                          f"Server did not acknowledge the freeze: {frozen[-6:]}")
-        server.command("forceload add 64 64")
+        server.command("forceload add 64 64", timeout=60)
         wait_loaded(server, x=64, z=64)
         server.command("setblock 64 200 64 gold_block")
         check_predicate(server, "if loaded 64 200 64 if block 64 200 64 gold_block")
@@ -434,6 +483,42 @@ def frozen_chunk_load(server: Server) -> dict:
     finally:
         server.command("forceload remove 64 64")
         server.command("tick unfreeze")
+
+
+def saved_scoreboard(server: Server) -> dict:
+    server.save_flush()
+    path = server.directory / "world/data/minecraft/scoreboard.dat"
+    root = decode_nbt(gzip.decompress(path.read_bytes()))
+    protocol.require(root.get("DataVersion") == 5023, "Scoreboard was not saved in the target format")
+    return root["data"]
+
+
+def check_team_state(server: Server) -> dict:
+    check_predicate(server, "if entity @e[type=pig,tag=ferraloom_saved,team=ferraloom,limit=1]")
+    teams = saved_scoreboard(server).get("Teams", [])
+    team = next((team for team in teams if team.get("Name") == "ferraloom"), None)
+    protocol.require(team is not None, f"Saved team missing: {teams}")
+    expected = {"TeamColor": "gold", "AllowFriendlyFire": 0, "NameTagVisibility": "never",
+                "CollisionRule": "pushOtherTeams", "Players": ["0000006f-0000-00de-0000-014d000001bc"]}
+    protocol.require(all(team.get(key) == value for key, value in expected.items()),
+                     f"Saved team properties differ: {team}")
+    return {"team": "ferraloom", "saved_properties": expected,
+            "scope": "live membership and saved settings; combat, rendering and collision behavior excluded"}
+
+
+def check_display_state(server: Server) -> dict:
+    feedback = server.command("scoreboard objectives setdisplay sidebar parity")
+    protocol.require(any(line.endswith("Nothing changed. That display slot is already showing that objective") for line in feedback),
+                     f"Display slot was not restored: {feedback[-6:]}")
+    saved = saved_scoreboard(server)
+    protocol.require(saved.get("DisplaySlots", {}).get("sidebar") == "parity", "Saved sidebar objective was lost")
+    objective = next((objective for objective in saved.get("Objectives", []) if objective.get("Name") == "unlock"), {})
+    score = next((score for score in saved.get("PlayerScores", [])
+                  if score.get("Name") == "Candidate" and score.get("Objective") == "unlock"), {})
+    protocol.require(objective.get("CriteriaName") == "trigger" and score.get("Score") == 13 and not score.get("Locked", False),
+                     f"Trigger criterion or unlocked score was lost: {objective}; {score}")
+    return {"slot": "sidebar", "objective": "parity", "trigger": "unlock", "score": 13, "locked": False,
+            "scope": "restored server display state and saved trigger settings; client rendering excluded"}
 
 
 def check_metadata(server: Server) -> dict:
@@ -489,6 +574,9 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             check_predicate(server, predicate)
             check_metadata(server)
             check_predicate(server, "if score A parity matches 12 if score B parity matches 5 if score Query parity matches -7")
+            wait_saved_entity(server, 5)
+            check_team_state(server)
+            check_display_state(server)
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()
@@ -498,11 +586,33 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             protocol.require(destination_version == source_version, "Loading rewrote the data version")
             return {"source": source, "destination": destination, "predicate": predicate, "source_data_version": source_version,
                     "destination_data_version": destination_version, "external_conversion": False, "dimension": "overworld",
-                    "keep_inventory": True, "daytime": 4321, "load_save_errors": 0}
+                    "keep_inventory": True, "daytime": 4321, "load_save_errors": 0,
+                    "entity_uuid": [111, 222, 333, 444], "entity_health": 5,
+                    "scoreboard_scores_teams_and_display": True}
         finally:
             server.stop()
 
     return recorded(test_id, ("persistence.chunk_data", "persistence.level_data"), check)
+
+
+def compare_command_trees(servers: dict) -> dict:
+    """Compare advertised syntax, without treating advertisement as implementation."""
+    trees = {}
+    for kind in ("vanilla", "rust"):
+        case = next((case for case in servers.get(kind, []) if case["id"] == "network.command_tree"), None)
+        protocol.require(case is not None and case["result"] == "passed", f"Missing valid {kind} command tree")
+        trees[kind] = case["detail"]
+    roots = {kind: set(tree["roots"]) for kind, tree in trees.items()}
+    paths = {kind: {re.sub(r"<[^>]+>", "<argument>", path) for path in tree["literal_paths"]}
+             for kind, tree in trees.items()}
+    missing_roots = sorted(roots["vanilla"] - roots["rust"])
+    missing_paths = sorted(paths["vanilla"] - paths["rust"])
+    return {"result": "failed" if missing_roots or missing_paths else "passed",
+            "scope": "root and literal paths with argument names normalized; redirects not expanded; execution excluded",
+            "missing_roots": missing_roots, "extra_roots": sorted(roots["rust"] - roots["vanilla"]),
+            "missing_literal_paths": missing_paths,
+            "vanilla_roots": len(roots["vanilla"]), "rust_roots": len(roots["rust"]),
+            "vanilla_literal_paths": len(paths["vanilla"]), "rust_literal_paths": len(paths["rust"])}
 
 
 def main() -> int:
@@ -547,6 +657,8 @@ def main() -> int:
                                  for source, destination in [("vanilla", "rust"), ("rust", "vanilla")]]
         report["terrain"] = recorded("worldgen.underground_chunk", ("world.terrain",),
                                      lambda: compare_terrain(run_dir / "terrain/vanilla", run_dir / "terrain/rust"))
+        report["command_tree"] = recorded("commands.advertised_syntax", ("players.commands",),
+                                          lambda: compare_command_trees(report["servers"]))
     vanilla = {case["id"]: case for case in report["servers"].get("vanilla", [])}
     rust = {case["id"]: case for case in report["servers"].get("rust", [])}
     report["comparison"] = [{"id": key,
@@ -558,6 +670,8 @@ def main() -> int:
     failed.extend(case["id"] for case in report.get("cross_world", []) if case["result"] != "passed")
     if report.get("terrain", {}).get("result") == "failed":
         failed.append("worldgen.underground_chunk")
+    if report.get("command_tree", {}).get("result") == "failed":
+        failed.append("commands.advertised_syntax")
     if report["harness_manifest"] != harness_manifest():
         failed.append("harness.changed_during_run")
     if args.rust_binary.is_file() and report["rust_binary_sha256"] != hashlib.file_digest(args.rust_binary.open("rb"), "sha256").hexdigest():

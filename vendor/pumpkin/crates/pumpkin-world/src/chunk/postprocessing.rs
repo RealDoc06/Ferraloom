@@ -51,22 +51,38 @@ impl ChunkData {
     /// Keep each mark persisted until its update succeeds. New marks append after the
     /// snapshot and are left for the next pass; callbacks run without the queue lock.
     pub fn process_post_processing(&self, mut process: impl FnMut(BlockPos) -> bool) -> bool {
-        let snapshot = self
-            .post_processing
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let snapshot = {
+            let mut pending = self
+                .post_processing
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if pending.len() > self.section.count {
+                let invalid = pending[self.section.count..]
+                    .iter()
+                    .map(Vec::len)
+                    .sum::<usize>();
+                pending.truncate(self.section.count);
+                self.dirty.store(true, Ordering::Relaxed);
+                if invalid != 0 {
+                    tracing::warn!(
+                        chunk_x = self.x,
+                        chunk_z = self.z,
+                        invalid,
+                        "Discarded postprocessing marks outside the dimension height"
+                    );
+                }
+            }
+            pending.clone()
+        };
         let mut succeeded = true;
         for (section, positions) in snapshot.iter().enumerate() {
             let mut consumed = 0;
             for &packed in positions {
-                if section >= self.section.count
-                    || !process(unpack_position(
-                        packed,
-                        (self.section.min_y >> 4) + section as i32,
-                        Vector2::new(self.x, self.z),
-                    ))
-                {
+                if !process(unpack_position(
+                    packed,
+                    (self.section.min_y >> 4) + section as i32,
+                    Vector2::new(self.x, self.z),
+                )) {
                     succeeded = false;
                     break;
                 }
@@ -144,5 +160,35 @@ mod tests {
         assert!(chunk.process_post_processing(|_| panic!("consumed mark replayed")));
         chunk.mark_pos_for_postprocessing(&first);
         assert!(!chunk.is_post_processing_ready());
+    }
+
+    #[test]
+    fn invalid_sections_are_pruned_without_consuming_failed_valid_marks() {
+        let chunk = ChunkData::empty(0, 0);
+        let valid = BlockPos::new(1, -64, 2);
+        chunk.mark_pos_for_postprocessing(&valid);
+        {
+            let mut pending = chunk.post_processing.lock().unwrap();
+            pending.resize_with(chunk.section.count + 2, Vec::new);
+            pending[chunk.section.count + 1].push(pack_position(&valid));
+        }
+        chunk.dirty.store(false, Ordering::Relaxed);
+        assert!(!chunk.process_post_processing(|pos| {
+            assert_eq!(pos, valid);
+            false
+        }));
+        assert!(chunk.dirty.load(Ordering::Relaxed));
+        let pending = chunk.post_processing.lock().unwrap();
+        assert_eq!(pending.len(), chunk.section.count);
+        assert_eq!(pending[0], vec![pack_position(&valid)]);
+        drop(pending);
+        let mut processed = Vec::new();
+        assert!(chunk.process_post_processing(|pos| {
+            processed.push(pos);
+            true
+        }));
+        assert_eq!(processed, vec![valid]);
+        assert!(chunk.is_post_processing_ready());
+        assert!(chunk.process_post_processing(|_| panic!("invalid mark replayed")));
     }
 }

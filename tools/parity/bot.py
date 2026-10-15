@@ -252,6 +252,16 @@ def run_client_scenarios(server: TestServer) -> list[dict]:
         wait_server_predicate(predicate)
         return {"command": "scoreboard players set Wire wireprobe 777", "server_predicate": predicate}
 
+    def command_tree() -> dict:
+        active = connected()
+        observed = active.wait_state(lambda state: isinstance(state.get("command_tree"), dict)
+                                     and "scoreboard" in state["command_tree"].get("roots", []))
+        protocol.require(observed.get("command_tree_error") is None, observed.get("command_tree_error"))
+        tree = observed["command_tree"]
+        protocol.require(tree["decoded_bytes"] == tree["payload_bytes"], "Command tree was not consumed completely")
+        return {**tree, "commands_packets": observed["commands_packets"],
+                "scope": "advertised syntax after operator setup; execution and permission behavior excluded"}
+
     def chat() -> dict:
         active = connected()
         token = "FERRALOOM_CHAT_" + uuid.uuid4().hex
@@ -271,6 +281,7 @@ def run_client_scenarios(server: TestServer) -> list[dict]:
         ("network.teleport", ("players.teleport",), teleport),
         ("network.movement", ("network.movement",), movement),
         ("network.client_command", ("network.login",), command),
+        ("network.command_tree", ("players.commands",), command_tree),
         ("network.chat_delivery", ("network.chat_delivery",), chat),
     ]
     try:

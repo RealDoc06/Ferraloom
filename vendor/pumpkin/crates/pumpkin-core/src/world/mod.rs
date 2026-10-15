@@ -364,6 +364,7 @@ pub struct World {
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: RwLock<FxHashSet<Vector2<i32>>>,
+    block_ticking_chunks: RwLock<FxHashSet<Vector2<i32>>>,
     active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Watcher references and generation tickets held independently of players.
@@ -516,6 +517,7 @@ impl World {
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: RwLock::new(FxHashSet::default()),
+            block_ticking_chunks: RwLock::new(FxHashSet::default()),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             forced_chunk_tickets: tokio::sync::Mutex::new(FxHashSet::default()),
@@ -644,13 +646,14 @@ impl World {
             tracker.remove_player(id, &mut requested);
         }
         tracker.sync_forced_chunks(&forced_chunks, &mut requested, &mut newly_active);
+        tracker.requested_chunks = requested;
+        let block_requested = tracker.requested_block_ticking_chunks();
         for change in self.level.loaded_chunk_changes() {
             match change {
                 pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
                     // Halo-only loads never request another halo.
-                    if requested.contains(&pos) {
+                    if block_requested.contains(&pos) {
                         tracker.loaded_active_chunks.remove(&pos);
-                        self.level.request_chunk_activation(pos);
                     }
                 }
                 pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
@@ -658,10 +661,10 @@ impl World {
                 }
             }
         }
-        for &pos in &requested {
-            self.level.request_chunk_activation(pos);
-        }
-        tracker.requested_chunks = requested;
+        tracker
+            .activation_demand
+            .get_or_insert_with(|| self.level.activation_demand())
+            .replace(block_requested.iter().copied());
         drop(tracker);
 
         self.process_chunk_postprocessing();
@@ -670,11 +673,16 @@ impl World {
             .active_chunk_tracker
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let block_ready: FxHashSet<_> = block_requested
+            .iter()
+            .copied()
+            .filter(|pos| self.level.is_chunk_ready(pos))
+            .collect();
         let ready: FxHashSet<_> = tracker
             .requested_chunks
             .iter()
             .copied()
-            .filter(|pos| self.level.is_chunk_ready(pos))
+            .filter(|pos| block_ready.contains(pos))
             .collect();
         let mut migrations: FxHashSet<_> = ready
             .difference(&tracker.loaded_active_chunks)
@@ -687,6 +695,10 @@ impl World {
         }
         tracker.loaded_active_chunks.clone_from(&ready);
         let spawnable_chunks = ready.len() as i32;
+        *self
+            .block_ticking_chunks
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = block_ready;
         *self
             .active_chunks
             .write()
@@ -2072,7 +2084,7 @@ impl World {
             // this increment.
             level_time.tick(advance_time);
 
-            // Auto-save logic
+            // Snapshot entities before periodically unloading unused terrain.
             if level_time.world_age % 100 == 0 {
                 let cleaned_chunks = self.level.clean_memory();
                 let world_clone = self.clone();
@@ -2086,13 +2098,6 @@ impl World {
                             world_clone.level.level_channel.notify();
                         }
                     });
-                }
-            }
-            if self.level.autosave_ticks > 0 && self.level.save_enabled.load(Relaxed) {
-                let autosave = self.level.autosave_ticks as i64;
-                if autosave > 0 && level_time.world_age % autosave == 0 {
-                    self.level.should_save.store(true, Relaxed);
-                    self.level.level_channel.notify();
                 }
             }
             (level_time.is_night(), level_time.time_of_day)
@@ -2146,7 +2151,14 @@ impl World {
             .active_chunks
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
+        let block_ticking_chunks = self
+            .block_ticking_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let tick_data =
+            self.level
+                .get_tick_data(&active_chunks, &block_ticking_chunks, random_tick_speed);
+        drop(block_ticking_chunks);
         let handle = server.runtime.clone();
 
         // 1. Parallel Block Ticks via Rayon

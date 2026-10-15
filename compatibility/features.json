@@ -907,7 +907,8 @@
         "player leaves",
         "forced chunk",
         "portal ticket expiry",
-        "forced chunks activate while simulation is frozen"
+        "forced chunks activate while simulation is frozen",
+        "force-load commands count only changed chunks"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -1620,7 +1621,8 @@
       "required_scenarios": [
         "source conversion",
         "flow level",
-        "water lava interaction"
+        "water lava interaction",
+        "scheduled flow crosses the block-ticking ring"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2783,7 +2785,8 @@
         "execute score store records nested command failure",
         "chained execute score stores preserve both callbacks",
         "execute score store preserves prior scores when a conditional branch is empty",
-        "execute as runs once for each selected entity"
+        "execute as runs once for each selected entity",
+        "wire command tree decodes completely"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -3073,7 +3076,8 @@
         "objective operation",
         "trigger",
         "display update",
-        "scores are shared across dimensions"
+        "scores are shared across dimensions",
+        "objective add and remove return the current total"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -3125,7 +3129,8 @@
       "required_scenarios": [
         "friendly fire",
         "name visibility",
-        "collision rule"
+        "collision rule",
+        "team membership"
       ],
       "rust_status": "unverified",
       "evidence": []
