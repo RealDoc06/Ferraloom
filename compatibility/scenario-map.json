@@ -366,6 +366,50 @@
     "data.storage_namespace_rejection": {
       "feature_id": "players.commands",
       "scenario": "invalid storage namespace fails parsing without changing a stored score"
+    },
+    "block_data.barrel_menu": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "barrel open menu receives live data and item command changes"
+    },
+    "block_data.barrel_swap": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "barrel plain hotbar swaps deposit and extract actual items"
+    },
+    "block_data.barrel_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "barrel real client deposit survives clean restart"
+    },
+    "block_data.chest_menu": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "chest open menu receives live data and item command changes"
+    },
+    "block_data.chest_swap": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "chest plain hotbar swaps deposit and extract actual items"
+    },
+    "block_data.chest_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "chest real client deposit survives clean restart"
+    },
+    "block_data.trapped_chest_menu": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "trapped chest open menu receives live data and item command changes"
+    },
+    "block_data.trapped_chest_swap": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "trapped chest plain hotbar swaps deposit and extract actual items"
+    },
+    "block_data.trapped_chest_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "trapped chest real client deposit survives clean restart"
+    },
+    "block_data.chest_cleared_loot_menu": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest first open preserves items after pending loot removal"
+    },
+    "block_data.trapped_chest_cleared_loot_menu": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest first open preserves items after pending loot removal"
     }
   }
 }

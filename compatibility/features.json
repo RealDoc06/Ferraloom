@@ -696,7 +696,13 @@
       "required_scenarios": [
         "valid click",
         "stale state ID",
-        "resynchronize after mismatch"
+        "resynchronize after mismatch",
+        "barrel open menu receives live data and item command changes",
+        "barrel plain hotbar swaps deposit and extract actual items",
+        "chest open menu receives live data and item command changes",
+        "chest plain hotbar swaps deposit and extract actual items",
+        "trapped chest open menu receives live data and item command changes",
+        "trapped chest plain hotbar swaps deposit and extract actual items"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -1308,7 +1314,10 @@
       "required_scenarios": [
         "container reload",
         "sign text",
-        "block entity replacement"
+        "block entity replacement",
+        "barrel real client deposit survives clean restart",
+        "chest real client deposit survives clean restart",
+        "trapped chest real client deposit survives clean restart"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2638,7 +2647,9 @@
       "required_scenarios": [
         "hopper cooldown",
         "locked container",
-        "double chest"
+        "double chest",
+        "chest first open preserves items after pending loot removal",
+        "trapped chest first open preserves items after pending loot removal"
       ],
       "rust_status": "unverified",
       "evidence": []

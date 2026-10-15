@@ -62,6 +62,84 @@ class Reader {
   string() { return this.take(this.varInt()).toString('utf8'); }
 }
 
+export type PlainStack = { item_id: number; count: number } | null;
+export type ContainerPacket =
+  | { kind: 'open'; packet_id: 60; container_id: number; menu_type: number; title: string }
+  | { kind: 'content'; packet_id: 18; container_id: number; state_id: number; slots: PlainStack[]; carried: PlainStack }
+  | { kind: 'slot'; packet_id: 20; container_id: number; state_id: number; slot: number; stack: PlainStack };
+
+function plainStack(reader: Reader): PlainStack {
+  const count = reader.varInt();
+  if (count === 0) return null;
+  if (count < 0) throw new Error('Negative item count');
+  const item_id = reader.varInt(), added = reader.varInt(), removed = reader.varInt();
+  if (item_id <= 0) throw new Error('Invalid nonempty item ID');
+  // The acceptance fixtures deliberately use plain stacks. Component payloads
+  // are not length-prefixed in this trusted codec; guessing their size is unsafe.
+  if (added !== 0 || removed !== 0) throw new Error(`Unsupported item component patch: ${added}/${removed}`);
+  return { item_id, count };
+}
+
+/** Exact 26.3 menu codecs; unsupported item components fail the focused probe. */
+export function decodeContainerPacket(payload: Buffer): ContainerPacket {
+  const reader = new Reader(payload);
+  const packet_id = reader.varInt(), container_id = reader.varInt();
+  if (container_id < 0 || container_id > 255) throw new Error('Invalid container ID');
+  let result: ContainerPacket;
+  if (packet_id === 60) {
+    const menu_type = reader.varInt();
+    if (menu_type < 0) throw new Error('Invalid menu type');
+    result = { kind: 'open', packet_id, container_id, menu_type, title: text(nbt(reader)) };
+  } else if (packet_id === 18) {
+    const state_id = reader.varInt(), count = reader.varInt();
+    if (state_id < 0 || count < 0 || count > 4096) throw new Error('Invalid content state or slot count');
+    const slots = Array.from({ length: count }, () => plainStack(reader));
+    result = { kind: 'content', packet_id, container_id, state_id, slots, carried: plainStack(reader) };
+  } else if (packet_id === 20) {
+    const state_id = reader.varInt(), slot = reader.take(2).readInt16BE();
+    if (state_id < 0 || slot < 0 || slot >= 4096) throw new Error('Invalid slot state or index');
+    result = { kind: 'slot', packet_id, container_id, state_id, slot, stack: plainStack(reader) };
+  } else throw new Error(`Unsupported container packet ${packet_id}`);
+  if (reader.offset !== payload.length) throw new Error('Trailing container packet bytes');
+  return result;
+}
+
+function packedBlockPos(x: number, y: number, z: number): Buffer {
+  if (![x, y, z].every(Number.isSafeInteger) || Math.abs(x) >= 33554432 || Math.abs(z) >= 33554432 || y < -2048 || y > 2047) {
+    throw new Error('Block position outside packed coordinate bounds');
+  }
+  const packed = (BigInt.asUintN(26, BigInt(x)) << 38n) | (BigInt.asUintN(26, BigInt(z)) << 12n) | BigInt.asUintN(12, BigInt(y));
+  const buffer = Buffer.alloc(8);
+  buffer.writeBigUInt64BE(packed);
+  return buffer;
+}
+
+export function encodeUseItemOn(x: number, y: number, z: number, sequence: number): Buffer {
+  if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > 2147483647) throw new Error('Invalid interaction sequence');
+  return Buffer.concat([varInt(0), packedBlockPos(x, y, z), varInt(1), floats(0.5, 1, 0.5), Buffer.from([0, 0]), varInt(sequence)]);
+}
+
+function plainStackHash(stack: PlainStack): Buffer {
+  if (stack === null) return Buffer.from([0]);
+  if (!Number.isSafeInteger(stack.item_id) || stack.item_id <= 0 || stack.item_id > 2147483647 ||
+      !Number.isSafeInteger(stack.count) || stack.count <= 0 || stack.count > 2147483647) throw new Error('Invalid plain stack hash');
+  // HashedStack optional presence, registry item, count, added hash map, removed set.
+  return Buffer.concat([Buffer.from([1]), varInt(stack.item_id), varInt(stack.count), varInt(0), varInt(0)]);
+}
+
+/** Predict a vanilla hotbar SWAP without treating that prediction as a received update. */
+export function encodeContainerSwap(container_id: number, state_id: number, slot: number, hotbar: number,
+  slots: PlainStack[]): Buffer {
+  if (!Number.isInteger(container_id) || container_id < 1 || container_id > 255 ||
+      !Number.isInteger(state_id) || state_id < 0 || state_id > 32767 ||
+      slots.length !== 63 || !Number.isInteger(slot) || slot < 0 || slot >= 27 ||
+      !Number.isInteger(hotbar) || hotbar < 0 || hotbar > 8) throw new Error('SWAP requires a synchronized single-container menu');
+  const hotbarSlot = 54 + hotbar;
+  const short = (value: number) => { const bytes = Buffer.alloc(2); bytes.writeInt16BE(value); return bytes; };
+  return Buffer.concat([varInt(container_id), varInt(state_id), short(slot), Buffer.from([hotbar]), varInt(2), varInt(2),
+    short(slot), plainStackHash(slots[hotbarSlot]!), short(hotbarSlot), plainStackHash(slots[slot]!), plainStackHash(null)]);
+}
+
 // Exact 26.3 generated/reports/registries.json minecraft:command_argument_type protocol IDs.
 // Layouts: ClientboundCommandsPacket.{readNode,read,Entry.write}, ArgumentTypeInfos.bootstrap,
 // the 13 non-singleton ArgumentTypeInfo serializers, and FriendlyByteBuf registry/identifier codecs.
@@ -360,12 +438,28 @@ type Command = { id: string | number } & (
   | { action: 'quit' }
   | { action: 'chat' | 'command'; text: string }
   | { action: 'move'; x: number; y: number; z: number; yaw?: number; pitch?: number }
+  | { action: 'use_item_on'; x: number; y: number; z: number }
+  | { action: 'close_menu' }
+  | { action: 'swap'; slot: number; hotbar: number }
 );
 
 export function parseCommand(value: unknown): Command {
   if (!record(value) || (typeof value.id !== 'string' && !Number.isSafeInteger(value.id))) throw new Error('id must be a string or safe integer');
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
   if (value.action === 'state' || value.action === 'quit') return { id, action: value.action };
+  if (value.action === 'close_menu') return { id, action: value.action };
+  if (value.action === 'use_item_on') {
+    const { x, y, z } = value;
+    if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') throw new Error('Interaction requires block coordinates');
+    packedBlockPos(x, y, z);
+    return { id, action: value.action, x, y, z };
+  }
+  if (value.action === 'swap') {
+    const { slot, hotbar } = value;
+    if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot > 26 ||
+        typeof hotbar !== 'number' || !Number.isInteger(hotbar) || hotbar < 0 || hotbar > 8) throw new Error('Invalid container SWAP slots');
+    return { id, action: value.action, slot, hotbar };
+  }
   if (value.action === 'chat' || value.action === 'command') {
     if (typeof value.text !== 'string' || !value.text || value.text.length > 256 || /[\r\n\u0000]/u.test(value.text)) throw new Error('text must contain 1 to 256 characters on one line');
     return { id, action: value.action, text: value.text };
@@ -398,7 +492,7 @@ function emit(value: unknown) {
 }
 
 function main() {
-  const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' } } });
+  const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   const socket = createConnection({ host: values.host, port });
@@ -409,6 +503,7 @@ function main() {
   let quitting = false;
   let firstPosition = true;
   const chunks = new Set<string>();
+  let interactionSequence = 0;
   const state = {
     version: VERSION, protocol: PROTOCOL, phase: 'login', login: false, chunks: 0, registry_packets: 0,
     inventory_packets: 0, slot_packets: 0, health: null as number | null, food: null as number | null,
@@ -420,6 +515,9 @@ function main() {
     command_tree_error: null as { packet_id: number; payload_bytes: number; payload_sha256: string; message: string } | null,
     chats: [] as string[],
     chat_messages: [] as ChatObservation[],
+    menu: null as { container_id: number; menu_type: number; opened_sequence: number; state_id: number;
+      slots: PlainStack[]; carried: PlainStack } | null,
+    menu_packets: [] as (ContainerPacket & { sequence: number })[],
   };
 
   function send(id: number, ...parts: Buffer[]) {
@@ -506,6 +604,25 @@ function main() {
     if (id === ids.play.chunkBatch) send(11, floats(64));
     if (id === ids.play.inventory) state.inventory_packets++;
     if (id === ids.play.slot) state.slot_packets++;
+    if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
+      const observation = { ...decodeContainerPacket(payload), sequence: state.packets };
+      state.menu_packets.push(observation);
+      if (state.menu_packets.length > 64) state.menu_packets.shift();
+      if (observation.kind === 'open') {
+        state.menu = { container_id: observation.container_id, menu_type: observation.menu_type,
+          opened_sequence: observation.sequence, state_id: 0, slots: [], carried: null };
+      } else if (state.menu?.container_id === observation.container_id) {
+        state.menu.state_id = observation.state_id;
+        if (observation.kind === 'content') {
+          state.menu.slots = observation.slots.slice();
+          state.menu.carried = observation.carried;
+        } else if (state.menu.slots.length) {
+          if (observation.slot >= state.menu.slots.length) throw new Error('Update outside the open menu');
+          state.menu.slots[observation.slot] = observation.stack;
+        }
+      }
+      emit({ event: 'menu_packet', ...observation });
+    }
     if (id === ids.play.health) { state.health = reader.float(); state.food = reader.varInt(); }
     if (id === ids.play.position) {
       const teleportId = reader.varInt();
@@ -599,6 +716,22 @@ function main() {
           const previous = state.position!;
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
+        } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap') {
+          if (!values['block-data']) throw new Error('Menu actions require --block-data');
+          if (command.action === 'use_item_on') {
+            send(66, encodeUseItemOn(command.x, command.y, command.z, ++interactionSequence));
+          } else {
+            const menu = state.menu;
+            if (!menu || menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container menu');
+            if (command.action === 'close_menu') {
+              send(19, varInt(menu.container_id));
+              state.menu = null;
+            } else {
+              if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');
+              send(18, encodeContainerSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots));
+            }
+          }
+          emit({ id: command.id, ok: true, result: { sent_action: command.action } });
         } else {
           const message = command.text.replace(/^\//u, '');
           if (command.action === 'chat' && !command.text.startsWith('/')) {

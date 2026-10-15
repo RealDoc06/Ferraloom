@@ -43,17 +43,19 @@ class TestServer(Protocol):
 class Client:
     """One owned Node process; all stdout is JSON and stderr stays in the fixture."""
 
-    def __init__(self, server: TestServer):
+    def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client"):
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", log_name):
+            raise ValueError("Invalid client log name")
         self.sequence = 0
         self.messages: queue.Queue[dict] = queue.Queue()
         self.pending: dict[int, dict] = {}
         self.events: list[dict] = []
         self.failure: str | None = None
-        self.stderr = (server.directory / "wire-client.stderr.log").open("w")
+        self.stderr = (server.directory / f"{log_name}.stderr.log").open("w")
         try:
             self.process = subprocess.Popen(
                 ["node", str(ROOT / "tools/parity/client.ts"), "--host", "127.0.0.1",
-                 "--port", str(server.port), "--name", NAME],
+                 "--port", str(server.port), "--name", NAME, *(["--block-data"] if block_data else [])],
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
                 text=True, bufsize=1, start_new_session=True,
             )
@@ -65,7 +67,7 @@ class Client:
             if self.process.stdout is None:
                 self.messages.put({"event": "error", "message": "Client stdout unavailable"})
                 return
-            with (server.directory / "wire-client.jsonl").open("w") as log:
+            with (server.directory / f"{log_name}.jsonl").open("w") as log:
                 for line in self.process.stdout:
                     log.write(line)
                     log.flush()
