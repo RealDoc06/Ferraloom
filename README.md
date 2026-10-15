@@ -41,7 +41,7 @@ python3 tools/validate_features.py --check-artifacts
 python3 tools/validate_features.py --strict --check-artifacts
 ```
 
-The inventory contains 200 feature families plus the official registry identifiers, block-state count, command roots, and datapack resource paths. Registry presence and successful startup do not prove game behavior. Read [the compatibility contract](docs/compatibility.md) and [REA investigation](docs/reverse-engineering.md).
+The [feature checklist](docs/features.md) contains all 200 feature families with separate vanilla and Rust observations. The machine-readable inventory also includes official registry identifiers, block-state counts, command roots, and datapack resource paths. Registry presence and successful startup do not prove game behavior. Read [the compatibility contract](docs/compatibility.md) and [REA investigation](docs/reverse-engineering.md).
 
 ## Development
 
