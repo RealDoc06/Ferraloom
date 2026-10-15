@@ -11,6 +11,7 @@ pub(super) struct ActivePlayerArea {
 #[derive(Default)]
 pub(super) struct ActiveChunkTracker {
     pub players: FxHashMap<Uuid, ActivePlayerArea>,
+    pub requested_chunks: FxHashSet<Vector2<i32>>,
     pub loaded_active_chunks: FxHashSet<Vector2<i32>>,
     watcher_counts: FxHashMap<Vector2<i32>, u32>,
     forced_chunks: FxHashSet<Vector2<i32>>,

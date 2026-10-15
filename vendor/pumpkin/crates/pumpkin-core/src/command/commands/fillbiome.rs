@@ -119,7 +119,20 @@ impl CommandExecutor for FillBiomeExecutor {
 
             if let Some((count, Some(chunk))) = result {
                 changed_count += count;
-                world.broadcast_to_chunk_except(chunk_pos, &[], &CChunkData(&chunk));
+                if chunk.is_post_processing_ready() {
+                    world.broadcast_to_chunk_except(chunk_pos, &[], &CChunkData(&chunk));
+                } else {
+                    // Resends must pass the same activation gate as initial sends.
+                    for player in world.players.load().iter() {
+                        let mut sender = player
+                            .chunk_sender
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if sender.is_chunk_sent(&chunk_pos) {
+                            sender.enqueue_chunk(chunk_pos);
+                        }
+                    }
+                }
             }
         }
 

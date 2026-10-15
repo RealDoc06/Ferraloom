@@ -57,6 +57,9 @@ pub struct GenerationSchedule {
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
+    chunk_lifecycle: Arc<std::sync::RwLock<()>>,
+    chunk_activation_changed: Arc<tokio::sync::Notify>,
+    chunk_activation_revision: Arc<std::sync::atomic::AtomicU64>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
@@ -126,8 +129,18 @@ impl GenerationSchedule {
     }
 
     fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
-        let previous = self.public_chunk_map.insert(pos, chunk);
-        if previous.is_none() {
+        let _lifecycle = self
+            .chunk_lifecycle
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let previous = self.public_chunk_map.insert(pos, chunk.clone());
+        self.chunk_activation_revision
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.chunk_activation_changed.notify_waiters();
+        if previous
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &chunk))
+        {
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Loaded(pos));
         }
@@ -135,7 +148,18 @@ impl GenerationSchedule {
     }
 
     fn unpublish_chunk(&self, pos: ChunkPos) -> Option<SyncChunk> {
+        let _lifecycle = self
+            .chunk_lifecycle
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.unpublish_chunk_locked(pos)
+    }
+
+    fn unpublish_chunk_locked(&self, pos: ChunkPos) -> Option<SyncChunk> {
         let removed = self.public_chunk_map.remove(&pos).map(|(_, chunk)| chunk);
+        self.chunk_activation_revision
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.chunk_activation_changed.notify_waiters();
         if removed.is_some() {
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Unloaded(pos));
@@ -201,6 +225,9 @@ impl GenerationSchedule {
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
                     loaded_chunk_changes: level_sched.loaded_chunk_changes.clone(),
+                    chunk_lifecycle: level_sched.chunk_lifecycle.clone(),
+                    chunk_activation_changed: level_sched.chunk_activation_changed.clone(),
+                    chunk_activation_revision: level_sched.chunk_activation_revision.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
@@ -885,7 +912,7 @@ impl GenerationSchedule {
         }
     }
 
-    fn process_unload_queue(&mut self) {
+    fn process_unload_queue(&mut self, level: &Level) {
         if self.unload_chunks.is_empty() {
             return;
         }
@@ -894,6 +921,24 @@ impl GenerationSchedule {
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
         for pos in unload_chunks {
+            let lifecycle = level
+                .chunk_lifecycle
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A newly acquired activation ticket may not yet be in last_level.
+            // Serialize its live check with ticket insertion until unpublication.
+            let loading = level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if loading
+                .pos_level
+                .get(&pos)
+                .is_some_and(|level| *level <= ChunkLoading::FULL_CHUNK_LEVEL)
+            {
+                self.unload_chunks.insert(pos);
+                continue;
+            }
             let Some(mut holder) = self.chunk_map.remove(&pos) else {
                 continue;
             };
@@ -923,10 +968,12 @@ impl GenerationSchedule {
             holder.occupied_by = EdgeKey::null();
 
             if holder.public {
-                self.unpublish_chunk(pos);
+                self.unpublish_chunk_locked(pos);
                 holder.public = false;
             }
 
+            drop(loading);
+            drop(lifecycle);
             if let Some(tmp) = holder.chunk {
                 match tmp {
                     Chunk::Level(chunk) => {
@@ -1284,7 +1331,7 @@ impl GenerationSchedule {
         loop {
             if level.should_unload.swap(false, Relaxed) {
                 self.garbage_collect_dependencies();
-                self.process_unload_queue();
+                self.process_unload_queue(level);
             }
             if level.should_save.swap(false, Relaxed) {
                 let _ = self.save_all_chunk(false);
@@ -1320,7 +1367,7 @@ impl GenerationSchedule {
             if level.shut_down_chunk_system.load(Relaxed) {
                 info!("Saving chunks before shutdown...");
                 self.garbage_collect_dependencies();
-                self.process_unload_queue();
+                self.process_unload_queue(level);
                 let _ = self.save_all_chunk(true);
                 break;
             }
@@ -1336,7 +1383,7 @@ impl GenerationSchedule {
             // is what puts stale dependency holders into the queue in the first place.
             if self.last_unload.elapsed() >= std::time::Duration::from_secs(1) {
                 self.garbage_collect_dependencies();
-                self.process_unload_queue();
+                self.process_unload_queue(level);
                 self.last_unload = std::time::Instant::now();
             }
 

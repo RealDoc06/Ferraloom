@@ -194,10 +194,11 @@ impl ChunkSender {
                     break;
                 }
 
-                if let Some(chunk) = level.loaded_chunks.get(&pos) {
+                level.request_chunk_activation(pos);
+                if let Some(chunk) = level.ready_chunk(pos) {
                     ready.push(PreparedChunk {
                         position: pos,
-                        chunk: chunk.value().clone(),
+                        chunk,
                     });
                 }
             }
@@ -210,12 +211,14 @@ impl ChunkSender {
                 }
 
                 let pos = Vector2::new(center.x + i32::from(dx), center.y + i32::from(dy));
-                if self.pending_chunks.contains(&pos)
-                    && let Some(chunk) = level.loaded_chunks.get(&pos)
-                {
+                if !self.pending_chunks.contains(&pos) {
+                    continue;
+                }
+                level.request_chunk_activation(pos);
+                if let Some(chunk) = level.ready_chunk(pos) {
                     ready.push(PreparedChunk {
                         position: pos,
-                        chunk: chunk.value().clone(),
+                        chunk,
                     });
                 }
             }
@@ -226,10 +229,11 @@ impl ChunkSender {
                     if ready.len() >= quota_limit {
                         break;
                     }
-                    if let Some(chunk) = level.loaded_chunks.get(&pos) {
+                    level.request_chunk_activation(pos);
+                    if let Some(chunk) = level.ready_chunk(pos) {
                         ready.push(PreparedChunk {
                             position: pos,
-                            chunk: chunk.value().clone(),
+                            chunk,
                         });
                     }
                 }
@@ -414,6 +418,45 @@ impl Default for ChunkSender {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn candidates_wait_for_activation_without_activating_their_halo() {
+        use pumpkin_config::world::LevelConfig;
+        use pumpkin_data::dimension::Dimension;
+
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        let center = Vector2::new(0, 0);
+        for x in -1..=1 {
+            for z in -1..=1 {
+                level
+                    .loaded_chunks
+                    .insert(Vector2::new(x, z), ChunkData::empty_sync(x, z));
+            }
+        }
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(center);
+        sender.send_quota = 1.0;
+        let view = NonZero::new(2).unwrap();
+        assert!(
+            sender
+                .collect_sorted_candidates(&level, center, view)
+                .is_empty()
+        );
+        assert_eq!(level.chunk_loading.lock().unwrap().ticket.len(), 1);
+        level.process_chunk_activations(|chunk| chunk.process_post_processing(|_| true));
+        let ready = sender.collect_sorted_candidates(&level, center, view);
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].position, center);
+        assert!(!level.is_chunk_ready(&Vector2::new(1, 0)));
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+    }
 
     #[test]
     fn bedrock_batch_moves_pending_chunks_to_sent() {

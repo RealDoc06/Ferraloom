@@ -79,6 +79,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
+    fn mark_pos_for_postprocessing(&mut self, pos: &BlockPos);
     fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound);
     fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32;
@@ -159,6 +160,7 @@ pub struct ProtoChunk {
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
+    pub post_processing: Vec<Vec<i16>>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
@@ -276,6 +278,7 @@ impl ProtoChunk {
                     .collect(),
             },
             blending_data: None,
+            post_processing: vec![Vec::new(); (height as usize).div_ceil(16)],
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
@@ -289,6 +292,12 @@ impl ProtoChunk {
         generator: &super::generator::WorldGenerator,
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
+
+        proto_chunk.post_processing = chunk_data
+            .post_processing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         proto_chunk.light = chunk_data
             .light_engine
@@ -1803,6 +1812,18 @@ impl BlockPlacer for ProtoChunk {
 }
 
 impl GenerationCache for ProtoChunk {
+    fn mark_pos_for_postprocessing(&mut self, pos: &BlockPos) {
+        if pos.0.x >> 4 != self.x || pos.0.z >> 4 != self.z {
+            return;
+        }
+        let section = (pos.0.y >> 4) - (i32::from(self.bottom_y()) >> 4);
+        if let Ok(section) = usize::try_from(section)
+            && let Some(pending) = self.post_processing.get_mut(section)
+        {
+            pending.push(crate::chunk::postprocessing::pack_position(pos));
+        }
+    }
+
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         self
     }

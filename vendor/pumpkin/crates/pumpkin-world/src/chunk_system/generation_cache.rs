@@ -177,6 +177,18 @@ impl BlockAccessor for Cache {
 }
 
 impl GenerationCache for Cache {
+    fn mark_pos_for_postprocessing(&mut self, pos: &BlockPos) {
+        let dx = (pos.0.x >> 4) - self.x;
+        let dz = (pos.0.z >> 4) - self.z;
+        if !(0..self.size).contains(&dx) || !(0..self.size).contains(&dz) {
+            return;
+        }
+        match &mut self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => chunk.mark_pos_for_postprocessing(pos),
+            Chunk::Level(chunk) => chunk.mark_pos_for_postprocessing(pos),
+        }
+    }
+
     fn get_chunk_mut(&mut self, chunk_x: i32, chunk_z: i32) -> Option<&mut ProtoChunk> {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;

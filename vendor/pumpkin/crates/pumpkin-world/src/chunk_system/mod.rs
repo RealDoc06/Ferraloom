@@ -17,6 +17,7 @@ pub type IOLock = std::sync::Arc<(
     tokio::sync::Notify,
 )>;
 
+pub(crate) mod activation;
 pub mod channel;
 pub mod chunk_holder;
 pub mod chunk_listener;

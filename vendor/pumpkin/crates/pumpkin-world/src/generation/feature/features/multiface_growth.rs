@@ -202,6 +202,7 @@ impl MultifaceGrowthFeature {
 
         let state_id = props.to_state_id(block);
         chunk.set_block_state(&pos.0, BlockState::from_id(state_id));
+        chunk.mark_pos_for_postprocessing(&pos);
     }
 
     fn get_valid_directions(&self) -> Vec<BlockDirection> {

@@ -18,6 +18,7 @@ use thiserror::Error;
 pub mod format;
 pub mod io;
 pub mod palette;
+pub mod postprocessing;
 
 // TODO
 pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
@@ -74,6 +75,10 @@ pub struct ChunkData {
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
+    /// Vanilla section-relative deferred generation updates.
+    pub post_processing: std::sync::Mutex<Vec<Vec<i16>>>,
+    /// FULL generation alone does not make a chunk safe to tick or send.
+    pub post_processing_ready: AtomicBool,
     pub pending_block_entities: std::sync::Mutex<FxHashMap<BlockPos, NbtCompound>>,
     pub light_engine: std::sync::Mutex<ChunkLight>,
     pub light_populated: AtomicBool,
@@ -637,6 +642,8 @@ impl ChunkData {
             z,
             block_ticks: ChunkTickScheduler::default(),
             fluid_ticks: ChunkTickScheduler::default(),
+            post_processing: std::sync::Mutex::new(vec![Vec::new(); 24]),
+            post_processing_ready: AtomicBool::new(false),
             pending_block_entities: std::sync::Mutex::new(FxHashMap::default()),
             light_engine: std::sync::Mutex::new(ChunkLight::default()),
             light_populated: std::sync::atomic::AtomicBool::new(false),

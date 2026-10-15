@@ -429,6 +429,28 @@ impl ChunkData {
             }
         }
 
+        let mut post_processing = vec![Vec::new(); section.count];
+        if let Some(lists) = root_tag.get_list("PostProcessing") {
+            for (section, list) in lists.iter().enumerate() {
+                let pumpkin_nbt::tag::NbtTag::List(positions) = list else {
+                    return Err(ChunkParsingError::ErrorDeserializingChunk(
+                        "PostProcessing must contain lists of shorts".into(),
+                    ));
+                };
+                // Preserve even trailing lists from a differently sized dimension.
+                if section >= post_processing.len() {
+                    post_processing.resize_with(section + 1, Vec::new);
+                }
+                for tag in positions {
+                    let pumpkin_nbt::tag::NbtTag::Short(packed) = tag else {
+                        return Err(ChunkParsingError::ErrorDeserializingChunk(
+                            "PostProcessing position must be a short".into(),
+                        ));
+                    };
+                    post_processing[section].push(*packed);
+                }
+            }
+        }
         let light_correct = root_tag.get_bool("isLightOn").unwrap_or(false);
 
         let status_str = root_tag.get_string("Status").unwrap_or("minecraft:empty");
@@ -462,6 +484,8 @@ impl ChunkData {
             dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
+            post_processing: std::sync::Mutex::new(post_processing),
+            post_processing_ready: AtomicBool::new(false),
             pending_block_entities: std::sync::Mutex::new(block_entities),
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(light_correct),
@@ -487,6 +511,13 @@ impl ChunkData {
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
 
+        let post_processing = self
+            .post_processing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|positions| NbtTag::List(positions.iter().copied().map(NbtTag::Short).collect()))
+            .collect();
         let block_entities_nbt = {
             let entities_guard = self
                 .pending_block_entities
@@ -517,6 +548,7 @@ impl ChunkData {
         let min_section_y = (self.section.min_y >> 4) as i8;
 
         let mut root_compound = NbtCompound::new();
+        root_compound.put("PostProcessing", NbtTag::List(post_processing));
         root_compound.put_int("DataVersion", WORLD_DATA_VERSION);
         root_compound.put_int("xPos", self.x);
         root_compound.put_int("zPos", self.z);
@@ -995,6 +1027,50 @@ mod tests {
     use pumpkin_data::Block;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn post_processing_uses_vanilla_short_lists_and_legacy_chunks_default_to_empty() {
+        let mut nbt = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
+        nbt.root_tag.put(
+            "PostProcessing",
+            NbtTag::List(vec![
+                NbtTag::List(vec![NbtTag::Short(0xf0f), NbtTag::Short(0x321)]),
+                NbtTag::List(Vec::new()),
+                NbtTag::List(vec![NbtTag::Short(0xfff)]),
+            ]),
+        );
+        let chunk = ChunkData::from_bytes(&nbt.write(), Vector2::new(0, 0)).unwrap();
+        assert_eq!(chunk.post_processing.lock().unwrap()[0], vec![0xf0f, 0x321]);
+        assert_eq!(chunk.post_processing.lock().unwrap()[2], vec![0xfff]);
+        assert!(!chunk.is_post_processing_ready());
+
+        let encoded = chunk.internal_to_bytes();
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let saved = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+        let lists = saved.root_tag.get_list("PostProcessing").unwrap();
+        assert_eq!(
+            lists[0],
+            NbtTag::List(vec![NbtTag::Short(0xf0f), NbtTag::Short(0x321)])
+        );
+        assert_eq!(lists[1], NbtTag::List(Vec::new()));
+        let reloaded = ChunkData::from_bytes(&encoded, Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            *chunk.post_processing.lock().unwrap(),
+            *reloaded.post_processing.lock().unwrap()
+        );
+
+        let legacy = test_chunk(vec![test_section(-4, "minecraft:stone", true)]).write();
+        let legacy = ChunkData::from_bytes(&legacy, Vector2::new(0, 0)).unwrap();
+        assert!(
+            legacy
+                .post_processing
+                .lock()
+                .unwrap()
+                .iter()
+                .all(Vec::is_empty)
+        );
+    }
 
     fn test_section(y: i32, block: &str, with_biomes: bool) -> NbtCompound {
         let mut block_states = NbtCompound::new();

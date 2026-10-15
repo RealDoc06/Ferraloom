@@ -88,6 +88,10 @@ pub struct Level {
     // from the loaded chunks map and sent to the underlying ChunkIO
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
+    pub(crate) chunk_activation: crate::chunk_system::activation::ChunkActivation,
+    pub(crate) chunk_lifecycle: Arc<std::sync::RwLock<()>>,
+    pub chunk_activation_changed: Arc<tokio::sync::Notify>,
+    pub(crate) chunk_activation_revision: Arc<AtomicU64>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
     pending_entity_saves: DashMap<Vector2<i32>, SyncEntityChunk>,
     entity_save_scheduled: AtomicBool,
@@ -285,6 +289,10 @@ impl Level {
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_chunk_changes: Arc::new(SegQueue::new()),
+            chunk_activation: crate::chunk_system::activation::ChunkActivation::default(),
+            chunk_lifecycle: Arc::new(std::sync::RwLock::new(())),
+            chunk_activation_changed: Arc::new(tokio::sync::Notify::new()),
+            chunk_activation_revision: Arc::new(AtomicU64::new(0)),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             pending_entity_saves: DashMap::new(),
             entity_save_scheduled: AtomicBool::new(false),
@@ -602,6 +610,9 @@ impl Level {
         for pos in active_chunks {
             if let Some(chunk) = self.loaded_chunks.get(pos) {
                 let chunk = chunk.value();
+                if !chunk.is_post_processing_ready() {
+                    continue;
+                }
                 let chunk_x_base = chunk.x * 16;
                 let chunk_z_base = chunk.z * 16;
                 let section_count = chunk.section.count;
@@ -655,8 +666,14 @@ impl Level {
             .map(|p| *p)
             .collect();
         for pos in scheduled_chunk_pos {
+            if !active_chunks.contains(&pos) {
+                continue;
+            }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let chunk = chunk.value();
+                if !chunk.is_post_processing_ready() {
+                    continue;
+                }
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
                 ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
 
@@ -721,10 +738,6 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
-        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
-            self.loaded_chunk_changes
-                .push(LoadedChunkChange::Loaded(pos));
-        }
         f(&chunk)
     }
 

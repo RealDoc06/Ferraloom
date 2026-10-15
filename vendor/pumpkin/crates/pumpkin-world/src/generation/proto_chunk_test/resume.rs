@@ -13,6 +13,71 @@ use pumpkin_util::world_seed::Seed;
 use super::surface_biomes;
 
 #[test]
+fn post_processing_routes_to_proto_and_level_owners_and_survives_resume() {
+    use crate::chunk::ChunkData;
+    use crate::chunk_system::generation_cache::Cache;
+    use crate::generation::proto_chunk::GenerationCache;
+    use pumpkin_config::lighting::LightingEngineConfig;
+    use pumpkin_util::math::position::BlockPos;
+
+    let generator = get_world_gen(
+        Seed(12345678),
+        Dimension::OVERWORLD,
+        false,
+        Vec::new(),
+        String::new(),
+    );
+    let mut cache = Cache::new(-1, -1, 3);
+    let level = ChunkData::empty_sync(-1, 0);
+    for x in -1..=1 {
+        for z in -1..=1 {
+            if (x, z) == (-1, 0) {
+                cache.chunks.push(Chunk::Level(level.clone()));
+            } else {
+                cache
+                    .chunks
+                    .push(Chunk::Proto(Box::new(ProtoChunk::new(x, z, &generator))));
+            }
+        }
+    }
+    let proto_pos = BlockPos::new(16, -47, -1);
+    let level_pos = BlockPos::new(-1, -64, 0);
+    cache.mark_pos_for_postprocessing(&proto_pos);
+    cache.mark_pos_for_postprocessing(&level_pos);
+    assert_eq!(level.post_processing.lock().unwrap()[0], vec![0x00f]);
+    assert!(
+        cache
+            .get_center_chunk()
+            .post_processing
+            .iter()
+            .all(Vec::is_empty)
+    );
+    assert_eq!(
+        cache.get_chunk(1, -1).unwrap().post_processing[1],
+        vec![0xf10]
+    );
+    assert!(level.dirty.load(std::sync::atomic::Ordering::Relaxed));
+
+    let mut staged = cache.chunks.remove(6);
+    staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+    let Chunk::Level(stored) = staged else {
+        panic!("expected level chunk")
+    };
+    assert_eq!(stored.post_processing.lock().unwrap()[1], vec![0xf10]);
+    let resumed = ProtoChunk::from_chunk_data(&stored, &generator);
+    assert_eq!(resumed.post_processing[1], vec![0xf10]);
+    let mut relit = Chunk::Proto(Box::new(resumed));
+    relit.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+    let Chunk::Level(relit) = relit else {
+        panic!("expected relit level chunk")
+    };
+    assert_eq!(
+        *stored.post_processing.lock().unwrap(),
+        *relit.post_processing.lock().unwrap()
+    );
+}
+
+#[test]
 fn terrain_biome_lookup_crosses_chunk_boundary() {
     use pumpkin_data::chunk::Biome;
 

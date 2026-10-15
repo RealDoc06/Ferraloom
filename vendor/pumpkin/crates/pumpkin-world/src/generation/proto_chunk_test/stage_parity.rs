@@ -169,6 +169,12 @@ impl crate::world::BlockAccessor for TestGridCache {
 }
 
 impl crate::generation::proto_chunk::GenerationCache for TestGridCache {
+    fn mark_pos_for_postprocessing(&mut self, pos: &pumpkin_util::math::position::BlockPos) {
+        if let Some(chunk) = self.chunks.get_mut(&(pos.0.x >> 4, pos.0.z >> 4)) {
+            chunk.mark_pos_for_postprocessing(pos);
+        }
+    }
+
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         self.chunks.get_mut(&self.center_pos).unwrap()
     }

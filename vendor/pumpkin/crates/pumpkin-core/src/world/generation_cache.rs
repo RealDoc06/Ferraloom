@@ -30,6 +30,7 @@ pub struct WorldGenerationCache {
     pending: Vec<(BlockPos, BlockStateId)>,
     overlay: FxHashMap<BlockPos, BlockStateId>,
     block_entities: Vec<NbtCompound>,
+    post_processing: Vec<BlockPos>,
 }
 
 impl WorldGenerationCache {
@@ -43,6 +44,7 @@ impl WorldGenerationCache {
             pending: Vec::new(),
             overlay: FxHashMap::default(),
             block_entities: Vec::new(),
+            post_processing: Vec::new(),
         }
     }
 
@@ -73,6 +75,13 @@ impl WorldGenerationCache {
         for (pos, state_id) in self.pending {
             self.world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
+        }
+        for pos in self.post_processing {
+            let owner = Vector2::new(pos.0.x >> 4, pos.0.z >> 4);
+            if let Some(chunk) = self.world.level.loaded_chunks.get(&owner) {
+                chunk.mark_pos_for_postprocessing(&pos);
+            }
+            self.world.level.request_chunk_activation(owner);
         }
         for nbt in self.block_entities {
             if let Some(block_entity) = block_entity_from_nbt(&nbt) {
@@ -111,6 +120,10 @@ impl BlockAccessor for WorldGenerationCache {
 }
 
 impl GenerationCache for WorldGenerationCache {
+    fn mark_pos_for_postprocessing(&mut self, pos: &BlockPos) {
+        self.post_processing.push(*pos);
+    }
+
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         &mut self.center
     }
