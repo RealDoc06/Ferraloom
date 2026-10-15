@@ -12,6 +12,7 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_command::source::{ReturnValue, ReturnValueCallable};
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -125,6 +126,21 @@ pub enum CommandSender {
     /// Nothingness. Anything sent to this sender is void.
     /// Has the same permissions as that of `CommandBlock`.
     Dummy,
+}
+
+struct CommandBlockResultCounter(Arc<CommandBlockEntity>);
+
+impl ReturnValueCallable for CommandBlockResultCounter {
+    fn call(&self, result: ReturnValue) {
+        if result.success_value() {
+            self.0
+                .success_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.0
+                .dirty
+                .store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
 }
 
 impl fmt::Display for CommandSender {
@@ -374,8 +390,8 @@ impl CommandSender {
 
                 // TODO: when command blocks get custom names, add a check for it
                 let name = TextComponent::text("@");
-
-                CommandSource::new(
+                let counter = Arc::new(CommandBlockResultCounter(command_entity.clone()));
+                let mut source = CommandSource::new(
                     Self::CommandBlock(command_entity, world.clone()),
                     world,
                     None,
@@ -384,7 +400,9 @@ impl CommandSender {
                     name.clone().get_text(),
                     name,
                     server.clone(),
-                )
+                );
+                source.command_result_taker.0.push(counter);
+                source
             }
             Self::Dummy => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);

@@ -129,6 +129,7 @@ impl CommandBlock {
         // BaseCommandBlock resets the result before every execution, including
         // commands that fail before producing a result callback.
         command_entity.success_count.store(0, Ordering::Release);
+        command_entity.dirty.store(true, Ordering::Release);
         if !command.is_empty() {
             let source = CommandSender::CommandBlock(command_entity, world).into_source(server);
 
