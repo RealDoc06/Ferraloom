@@ -571,8 +571,8 @@ fn read_raw_message_compounds(entries: [NbtCompound; 4]) -> NbtCompound {
 fn sign_binary_mixed_list_wrappers_keep_all_four_line_positions() {
     let nbt = read_raw_message_compounds([
         compound("{text:'A',color:red}"),
-        compound("{'':''}"),
-        compound("{'':'B'}"),
+        list_wrapper(NbtTag::String("".into())),
+        list_wrapper(NbtTag::String("B".into())),
         compound("{text:'D'}"),
     ]);
     let lines = nbt
@@ -605,12 +605,13 @@ fn sign_binary_mixed_list_wrappers_keep_all_four_line_positions() {
 }
 
 #[test]
-fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_at_snbt_boundary() {
-    let inner = compound("{'':'inner'}");
-    let multiple_fields = compound("{'':'literal',other:1}");
+fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_for_semantic_compounds() {
+    let inner = list_wrapper(NbtTag::String("inner".into()));
+    let mut multiple_fields = list_wrapper(NbtTag::String("literal".into()));
+    multiple_fields.put_int("other", 1);
     let nbt = read_raw_message_compounds([
         compound("{text:'A',color:red}"),
-        compound("{'':{'':'inner'}}"),
+        list_wrapper(NbtTag::Compound(inner.clone())),
         multiple_fields.clone(),
         compound("{text:'D'}"),
     ]);
@@ -636,9 +637,20 @@ fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_at_snbt_bound
         Ok(())
     );
 
-    // Explicit SNBT compounds are semantic values, not physical list wrappers.
-    // Java NbtOps.createList/getStream do not call ListTag.addAndUnwrap on them.
-    let authored = compound("{front_text:{messages:['A',{'':'inner'},'C','D']}}");
+    // Already decoded compounds are semantic values, not physical list wrappers.
+    // Java's binary format permits empty keys; its SNBT parser rejects them.
+    let mut face = NbtCompound::new();
+    face.put_list(
+        "messages",
+        vec![
+            NbtTag::String("A".into()),
+            NbtTag::Compound(inner.clone()),
+            NbtTag::String("C".into()),
+            NbtTag::String("D".into()),
+        ],
+    );
+    let mut authored = NbtCompound::new();
+    authored.put_compound("front_text", face);
     assert_eq!(
         authored
             .get_compound("front_text")
@@ -658,4 +670,11 @@ fn sign_wrapper_decoding_is_one_level_at_binary_boundary_and_never_at_snbt_bound
             .as_ref(),
         "C"
     );
+}
+
+/// Build a physical list wrapper without routing an empty key through SNBT.
+fn list_wrapper(value: NbtTag) -> NbtCompound {
+    let mut compound = NbtCompound::new();
+    compound.put("", value);
+    compound
 }
