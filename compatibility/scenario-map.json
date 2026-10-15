@@ -195,6 +195,18 @@
     "command.entity_count": {
       "feature_id": "players.commands",
       "scenario": "execute as runs once for each selected entity"
+    },
+    "scoreboard.global_dimension": {
+      "feature_id": "players.scoreboards",
+      "scenario": "scores are shared across dimensions"
+    },
+    "persistence.scoreboard_restart": {
+      "feature_id": "persistence.scoreboard_data",
+      "scenario": "objective values"
+    },
+    "world.chunk_frozen_load": {
+      "feature_id": "world.chunk_tickets",
+      "scenario": "forced chunks activate while simulation is frozen"
     }
   }
 }

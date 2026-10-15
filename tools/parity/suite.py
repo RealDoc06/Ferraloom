@@ -88,6 +88,7 @@ SCENARIOS = [
     Scenario("command.entity_count", ("players.commands",), ('summon pig 14 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', 'summon pig 15 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', "scoreboard players set EntityCopies parity 0", "execute as @e[type=pig,tag=ferraloom_count_probe] run scoreboard players add EntityCopies parity 1", "kill @e[tag=ferraloom_count_probe]"), "if score EntityCopies parity matches 2"),
     Scenario("datapack.function", ("world.functions",), ("function ferraloom:probe",), "if score Datapack parity matches 37"),
     Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5, force_dimension="minecraft:the_nether"),
+    Scenario("scoreboard.global_dimension", ("players.scoreboards",), ("execute in minecraft:the_nether run scoreboard players set DimensionScore parity 41",), "if score DimensionScore parity matches 41"),
     Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5, force_dimension="minecraft:the_end"),
     Scenario("persistence.entity_write", ("persistence.entity_data",), ('summon pig 8 200 12 {Tags:["ferraloom_saved"],UUID:[I;111,222,333,444],NoAI:1b,PersistenceRequired:1b}', "damage @e[type=pig,tag=ferraloom_saved,limit=1] 3 generic"), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]'),
     Scenario("persistence.write", ("persistence.chunk_data",), ("setblock 14 200 14 diamond_block", "save-all flush"), "if block 14 200 14 diamond_block", 0.5),
@@ -340,6 +341,7 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.extend(run_client_scenarios(server))
             for scenario in SCENARIOS:
                 results.append(recorded(scenario.id, scenario.features, lambda scenario=scenario: run_scenario(server, scenario)))
+            results.append(recorded("world.chunk_frozen_load", ("world.chunk_tickets",), lambda: frozen_chunk_load(server)))
             server.command("gamerule keep_inventory true")
             server.command("gamerule advance_time false")
             server.command("time set 4321")
@@ -356,6 +358,7 @@ def run(server: Server, quick: bool) -> list[dict]:
             unflushed_read = Scenario("persistence.shutdown_restart", ("persistence.chunk_data",), (), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed_read.id, unflushed_read.features, lambda: run_scenario(server, unflushed_read)))
             results.append(recorded("persistence.metadata_restart", ("persistence.level_data",), lambda: check_metadata(server)))
+            results.append(recorded("persistence.scoreboard_restart", ("persistence.scoreboard_data",), lambda: check_predicate(server, "if score A parity matches 12 if score B parity matches 5 if score Query parity matches -7")))
             results.append(recorded("persistence.entity_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 7)))
             entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
             results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
@@ -414,6 +417,25 @@ def check_signal_exit(kind: str, code: int | None, forced: bool) -> dict:
     return {"exit_code": code, "signal": "SIGTERM", "durability": "checked separately by persistence.signal_restart"}
 
 
+def frozen_chunk_load(server: Server) -> dict:
+    """Generation and chunk activation continue while simulation is paused."""
+    frozen = server.command("tick freeze")
+    try:
+        protocol.require(any(line.endswith("The game is frozen") for line in frozen),
+                         f"Server did not acknowledge the freeze: {frozen[-6:]}")
+        server.command("forceload add 64 64")
+        wait_loaded(server, x=64, z=64)
+        server.command("setblock 64 200 64 gold_block")
+        check_predicate(server, "if loaded 64 200 64 if block 64 200 64 gold_block")
+        query = server.command("tick query")
+        protocol.require(any(line.endswith("The game is frozen") for line in query),
+                         f"Simulation resumed during chunk activation: {query[-6:]}")
+        return {"chunk": {"x": 4, "z": 4}, "frozen_during_activation": True, "block": "minecraft:gold_block"}
+    finally:
+        server.command("forceload remove 64 64")
+        server.command("tick unfreeze")
+
+
 def check_metadata(server: Server) -> dict:
     rule = server.command("gamerule keep_inventory")
     protocol.require(any(re.search(r"Game rule keep_inventory is currently set to true$", line) for line in rule),
@@ -426,12 +448,15 @@ def check_metadata(server: Server) -> dict:
 
 def wait_saved_entity(server: Server, health: int, *, timeout: float = 10) -> dict:
     """Wait for asynchronous entity loading, checking uniqueness as well as NBT."""
+    # The counter is test infrastructure, independent of scoreboard persistence.
+    objective = "fe" + uuid.uuid4().hex[:12]
+    server.command(f"scoreboard objectives add {objective} dummy")
     deadline = time.monotonic() + timeout
-    predicate = ("if score EntityCopies parity matches 1 "
+    predicate = (f"if score EntityCopies {objective} matches 1 "
                  f"if entity @e[type=pig,tag=ferraloom_saved,nbt={{UUID:[I;111,222,333,444],Health:{health}.0f}}]")
     while True:
-        server.command("scoreboard players set EntityCopies parity 0")
-        server.command("execute as @e[type=pig,tag=ferraloom_saved] run scoreboard players add EntityCopies parity 1")
+        server.command(f"scoreboard players set EntityCopies {objective} 0")
+        server.command(f"execute as @e[type=pig,tag=ferraloom_saved] run scoreboard players add EntityCopies {objective} 1")
         try:
             check_predicate(server, predicate)
             return {"count": 1, "uuid": [111, 222, 333, 444], "health": health, "predicate": predicate}
@@ -463,6 +488,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             predicate = "if block 14 200 14 diamond_block"
             check_predicate(server, predicate)
             check_metadata(server)
+            check_predicate(server, "if score A parity matches 12 if score B parity matches 5 if score Query parity matches -7")
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()

@@ -69,7 +69,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.nbt` | Read and write target binary NBT types and limits | 0/0/0 | 0/0/0 | unverified |
 | `persistence.region` | Read and write target region storage and compression formats | 0/0/0 | 0/0/0 | unverified |
 | `persistence.chunk_data` | Persist section palettes, biomes, heightmaps and block states | 1/0/0 | 1/0/0 | partial |
-| `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 2/0/0 | 2/0/0 | partial |
+| `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 2/0/0 | 0/2/0 | partial |
 | `persistence.block_entities` | Persist container, command and other block entity state | 0/0/0 | 0/0/0 | unverified |
 | `persistence.player_data` | Persist inventory, position, abilities and dimension | 0/0/0 | 0/0/0 | unverified |
 | `persistence.level_data` | Maintain level.dat settings, seed and world metadata | 1/0/0 | 1/0/0 | partial |
@@ -185,7 +185,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.swimming` | Match movement modes, collision size and stamina interactions | 0/0/0 | 0/0/0 | unverified |
 | `players.oxygen` | Match air supply, powder snow and environmental damage | 0/0/0 | 0/0/0 | unverified |
 | `players.interaction` | Match spawn protection, adventure restrictions and operator bypass | 0/0/0 | 0/0/0 | unverified |
-| `players.commands` | Match complete target command tree and execution semantics | 6/0/0 | 6/0/0 | partial |
+| `players.commands` | Match complete target command tree and execution semantics | 7/0/0 | 7/0/0 | partial |
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |
