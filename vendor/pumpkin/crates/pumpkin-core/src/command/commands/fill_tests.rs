@@ -16,8 +16,12 @@ async fn world() -> (tempfile::TempDir, Arc<World>) {
 
 async fn world_in_dimension(dimension: Dimension) -> (tempfile::TempDir, Arc<World>) {
     let folder = tempfile::tempdir().unwrap();
-    let level =
-        Level::from_root_folder(&LevelConfig::default(), folder.path().into(), 0, dimension);
+    let level = Level::from_root_folder(
+        &LevelConfig::default(),
+        folder.path().into(),
+        0,
+        dimension.clone(),
+    );
     level.shutdown().await.unwrap();
     for x in 0..=1 {
         level
@@ -27,7 +31,7 @@ async fn world_in_dimension(dimension: Dimension) -> (tempfile::TempDir, Arc<Wor
     let world = Arc::new(World::load(
         level,
         Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
-        dimension.clone(),
+        dimension,
         crate::block::registry::default_registry(),
         Weak::new(),
         Arc::default(),
