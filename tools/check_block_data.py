@@ -2,14 +2,17 @@
 """Observe selected live container and sign changes through protocol-777 clients.
 
 Runs fresh, sequential Java/Rust loopback fixtures and a clean restart of each.
-Only plain stacks, single barrel/chest/trapped-chest menus and plain standing /
-ceiling hanging signs are covered. No rich components, filtering, click commands,
-editor expiry, general click correctness, automation or full parity claim.
+Selected plain stacks, single container menus and standing/ceiling hanging signs.
+Includes bounded literal/style/run_command fixtures, nonop permission controls,
+pending empty loot, one frozen-tick editor expiry boundary and restart readback.
+No general component rendering, content moderation, random loot distribution,
+broad editor lifecycle or full parity claim.
 """
 from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -17,10 +20,12 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 
@@ -32,9 +37,17 @@ from parity.furnaces import digest, require_frozen, step_exact
 from parity.protocol import require
 
 CONTAINERS = {"barrel": (4097, 200, 1), "chest": (4101, 200, 1), "trapped_chest": (4105, 200, 1)}
-LOOT_POSITIONS = {"chest": (4109, 200, 1), "trapped_chest": (4109, 200, 5)}
+LOOT_POSITIONS = {"chest": (4109, 200, 1), "trapped_chest": (4109, 200, 5), "barrel": (4109, 200, 3)}
+PENDING_BARREL = (4111, 200, 3)
 SIGNS = {"sign": ((4098, 200, 11), "oak_sign[rotation=0,waterlogged=false]", 7),
          "hanging_sign": ((4106, 201, 11), "oak_hanging_sign[rotation=0,attached=false,waterlogged=false]", 8)}
+# Separate supported fixtures in the same forced chunk. Never overwrite SIGNS,
+# whose waxed plain state is a prerequisite for the original restart scenarios.
+COMMAND_SIGNS = {name: ((pos[0], pos[1], 7), block, be_type) for name, (pos, block, be_type) in SIGNS.items()}
+RICH_SIGNS = {name: ((pos[0], pos[1], 4), block, be_type) for name, (pos, block, be_type) in SIGNS.items()}
+EDITOR_SIGN = ((4098, 200, 14), SIGNS["sign"][1], 7)
+SIGN_COMMAND = "scoreboard players add @s signcmd 1"
+LITERAL_COMMAND = json.dumps({"text": "RUN", "click_event": {"action": "run_command", "command": SIGN_COMMAND}}, separators=(",", ":"))
 ITEMS = {"diamond": 1012, "emerald": 1013, "gold_ingot": 1022}
 CASES = {
     **{f"block_data.{name}_menu": "network.inventory_stream" for name in CONTAINERS},
@@ -44,6 +57,11 @@ CASES = {
     **{f"block_data.{name}_{case}": "blocks.interactives" for name in SIGNS
        for case in ("live", "editor_none", "wax")},
     **{f"block_data.{name}_restart": "persistence.block_entities" for name in SIGNS},
+    "block_data.barrel_pending_empty_loot": "blocks.containers",
+    "block_data.sign_editor_tick": "blocks.interactives",
+    **{f"block_data.{name}_{case}": "blocks.interactives" for name in SIGNS
+       for case in ("literal_command", "structured_command", "command_reentry", "rich_text")},
+    **{f"block_data.{name}_command_restart": "persistence.block_entities" for name in SIGNS},
 }
 WORLD_ERRORS = re.compile(r"\bERROR\b|Failed to parse saved data|Couldn't load chunk|Failed to (?:load|read|write|save|parse).*?(?:chunk|region|world|data)", re.IGNORECASE)
 
@@ -59,7 +77,42 @@ def manifest() -> dict:
 
 
 class LoggedServer(suite.Server):
+    def __init__(self, kind: str, directory: Path, args: argparse.Namespace):
+        super().__init__(kind, directory, args)
+        self.broken: str | None = None
+        self.owned_clients: list[Client] = []
+        self.abort_events: list[dict] = []
+
+    def abort(self, reason: str) -> None:
+        """Watchdog thread kills only this side's owned process groups, even if
+        synchronous sign reentry has stopped both tick and console processing.
+        """
+        if self.broken:
+            return
+        self.broken = reason
+        self.forced_stop = True
+        processes = [process for process in [self.process, *(client.process for client in self.owned_clients)] if process is not None]
+        event = {"reason": reason, "at": now(), "pids": [process.pid for process in processes], "term": [], "kill": []}
+        self.abort_events.append(event)
+
+        def send(signum: int, field: str) -> None:
+            for process in processes:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signum)
+                        event[field].append(process.pid)
+                    except ProcessLookupError:
+                        pass
+            (self.directory / "watchdog.json").write_text(json.dumps(self.abort_events, indent=2) + "\n")
+
+        send(signal.SIGTERM, "term")
+        killer = threading.Timer(5, lambda: send(signal.SIGKILL, "kill"))
+        killer.daemon = True
+        killer.start()
+
     def command(self, command: str, timeout: float = 15) -> list[str]:
+        if self.broken:
+            raise RuntimeError(self.broken)
         entry = {"command": command, "started": now()}
         try:
             output = super().command(command, timeout)
@@ -67,10 +120,25 @@ class LoggedServer(suite.Server):
             return output
         except Exception as error:
             entry["error"] = f"{type(error).__name__}: {error}"
+            if isinstance(error, (TimeoutError, RuntimeError, BrokenPipeError)):
+                self.abort(entry["error"])
             raise
         finally:
             with (self.directory / "commands.jsonl").open("a") as log:
                 log.write(json.dumps(entry) + "\n")
+                log.flush()
+
+
+@contextmanager
+def interaction_deadline(server: LoggedServer, label: str):
+    timer = threading.Timer(20, lambda: server.abort(f"20s interaction watchdog: {label}"))
+    timer.daemon = True
+    timer.start()
+    try:
+        yield
+    finally:
+        timer.cancel()
+    require(not server.broken, server.broken)
 
 
 def stack(item: str, count: int) -> dict:
@@ -215,6 +283,27 @@ def loot_case(server: LoggedServer, client: Client, name: str) -> dict:
     close_menu(client)
     return {"position": list(pos), "setup_output": outputs, "first_open": observed,
             "scope": "Pending empty loot removed before the first open; inserted items must survive."}
+
+
+def pending_barrel_case(server: LoggedServer, client: Client) -> dict:
+    pos = PENDING_BARREL
+    fresh_container(server, client, "barrel", pos)
+    command = (f'data merge block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L,'
+               'Items:[{Slot:0b,id:"minecraft:diamond",count:7}]}')
+    output = server.command(command)
+    # /data reads themselves must not consume pending loot, nor expose stored
+    # Items that the pending table replaces. Check twice before actual menu use.
+    predicate = f'if data block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}} unless data block {pos_text(pos)} Items[0]'
+    reads = []
+    for _ in range(2):
+        reads.append(server.command(f"data get block {pos_text(pos)}"))
+        suite.check_predicate(server, predicate)
+    observed = open_menu(client, pos, contents())
+    suite.check_predicate(server, f"unless data block {pos_text(pos)} LootTable unless data block {pos_text(pos)} Items[0]")
+    close_menu(client)
+    return {"position": list(pos), "command": command, "output": output, "pre_open_reads": reads,
+            "pre_open_predicate": predicate, "first_open": observed,
+            "scope": "Pending minecraft:empty replaces stored diamond 7 on actual first menu; no RNG claim."}
 
 
 def sign_state(name: str, stage: str, waxed: bool = False) -> dict:
@@ -447,20 +536,434 @@ def sign_restart_case(server: LoggedServer, client: Client, name: str, expected:
     return {"after_clean_restart_chunk": chunk, "waxed_interaction": blocked, "unwax": unwax, "edits": edits}
 
 
+def fixture_packets(state: dict, fixture: tuple, after: int, kind: str | None = None) -> list[dict]:
+    return [packet for packet in state["sign_packets"] if packet["sequence"] > after
+            and tuple(packet[axis] for axis in ("x", "y", "z")) == fixture[0]
+            and (kind is None or packet["kind"] == kind)]
+
+
+def received_rich(client: Client, fixture: tuple, expected: dict, after: int, kind: str = "block_entity") -> dict:
+    def matches(state: dict) -> bool:
+        packets = fixture_packets(state, fixture, after, kind)
+        return bool(packets and packets[-1]["block_entity_type"] == fixture[2]
+                    and packets[-1].get("rich_data") == expected and "component_nbt" in packets[-1])
+    state = client.wait_state(matches)
+    return fixture_packets(state, fixture, after, kind)[-1]
+
+
+def component_state(name: str, stage: str) -> dict:
+    data = sign_state(name, stage)
+    data["allow_op_features"] = False
+    for key in ("front_text", "back_text"):
+        data[key]["filtered_messages"] = deepcopy(data[key]["messages"])
+    return data
+
+
+def component_snbt(data: dict) -> str:
+    def encode(value) -> str:
+        if isinstance(value, bool):
+            return f"{int(value)}b"
+        if isinstance(value, dict):
+            return "{" + ",".join(json.dumps(key) + ":" + encode(item) for key, item in value.items()) + "}"
+        if isinstance(value, list):
+            return "[" + ",".join(encode(item) for item in value) + "]"
+        return json.dumps(value)
+    # Use homogeneous compound input. Vanilla may collapse plain literal
+    # components to scalars and envelope those in the actual outgoing NBT list.
+    authored = deepcopy(data)
+    for key in ("front_text", "back_text"):
+        for field in ("messages", "filtered_messages"):
+            authored[key][field] = [{"text": line} if isinstance(line, str) else line for line in authored[key][field]]
+    return encode(authored)
+
+
+def fixture_teleport(server: LoggedServer, client: Client, fixture: tuple, slot: int = 1) -> None:
+    x, _, z = fixture[0]
+    target = {"x": x + 0.5, "y": 200, "z": z + (2.5 if slot == 1 else -1.5)}
+    before = client.state()["teleport_confirmations"]
+    server.command(f"tp {NAME} {target['x']} 200 {target['z']} {180 if slot == 1 else 0} 0")
+    client.wait_state(lambda state: state["teleport_confirmations"] > before
+                      and all(abs((state.get("server_position") or {}).get(axis, float("inf")) - value) < 0.01
+                              for axis, value in target.items()))
+
+
+def edit_rich(server: LoggedServer, client: Client, fixture: tuple, expected: dict, command: str | None = None) -> dict:
+    before = client.state()["packets"]
+    command = command or f"data merge block {pos_text(fixture[0])} {component_snbt(expected)}"
+    output = server.command(command)
+    ticks = step_exact(server, 1)
+    observed = received_rich(client, fixture, expected, before)
+    return {"command": command, "output": output, "ticks": ticks, "before_sequence": before, "received": observed}
+
+
+def fresh_rich(server: LoggedServer, client: Client, fixture: tuple, expected: dict) -> dict:
+    close_menu(client)
+    server.command(f"clear {NAME}")
+    fixture_teleport(server, client, fixture)
+    pos, block, _ = fixture
+    server.command(f"setblock {pos_text(pos)} air")
+    support = (pos[0], pos[1] + (1 if fixture[2] == 8 else -1), pos[2])
+    server.command(f"setblock {pos_text(support)} stone")
+    server.command(f"setblock {pos_text(pos)} {block}")
+    suite.check_predicate(server, f"if block {pos_text(pos)} {block} if block {pos_text(support)} stone")
+    return edit_rich(server, client, fixture, expected)
+
+
+def prepare_nonop_boundary(server: LoggedServer, client: Client) -> dict:
+    """Arm the one-shot trigger BEFORE sending the action under observation."""
+    fence = int(uuid.uuid4().hex[:7], 16)
+    outputs = [server.command(f"scoreboard players set {NAME} signfence -1"),
+               server.command(f"scoreboard players enable {NAME} signfence")]
+    return {"nonce": fence, "before_sequence": client.state()["packets"], "setup_output": outputs}
+
+
+def marker_boundary(server: LoggedServer, client: Client, before: int) -> dict:
+    ticks = step_exact(server, 1)
+    marker = "SIGN_NONOP_" + uuid.uuid4().hex
+    output = server.command("say " + marker)
+    state = client.wait_state(lambda state: any(message["sequence"] > before and marker in message["text"]
+                                               for message in state["chat_messages"]))
+    received = next(message for message in state["chat_messages"] if message["sequence"] > before and marker in message["text"])
+    return {"ticks": ticks, "server_output": output, "received_marker": received}
+
+
+def finish_nonop_boundary(server: LoggedServer, client: Client, prepared: dict) -> dict:
+    sent = client.request("trigger", objective="signfence", value=prepared["nonce"])
+    predicate = f"if score {NAME} signfence matches {prepared['nonce']}"
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            suite.check_predicate(server, predicate)
+            break
+        except AssertionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+    return {**prepared, "client_command": sent, "server_predicate": predicate,
+            **marker_boundary(server, client, prepared["before_sequence"])}
+
+
+def require_sign_score(server: LoggedServer, value: int) -> str:
+    predicate = f"if score {NAME} signcmd matches {value}"
+    suite.check_predicate(server, predicate)
+    return predicate
+
+
+def nonop_control(server: LoggedServer, client: Client) -> dict:
+    """A forbidden client command must produce a real denial without changing
+    score 17. A working nonop trigger then orders that command on this socket.
+    """
+    output = server.command(f"deop {NAME}")
+    server.command(f"scoreboard players set {NAME} signcmd 17")
+    prepared = prepare_nonop_boundary(server, client)
+    with interaction_deadline(server, "nonop permission/trigger control"):
+        forbidden = client.request("command", text="scoreboard players add @s signcmd 1000")
+        boundary = finish_nonop_boundary(server, client, prepared)
+        predicate = require_sign_score(server, 17)
+        messages = [message for message in client.state()["chat_messages"] if message["sequence"] > prepared["before_sequence"]]
+        denials = [message for message in messages if any(token in message["text"].lower() for token in
+                   ("command.unknown.command", "unknown or incomplete command", "commands.generic.permission", "permission"))]
+        require(denials, f"Missing actual forbidden-command response: {messages}")
+        # TriggerCommand locks after successful use. A second command must fail,
+        # keep the first nonce and still allow a later received marker.
+        before = client.state()["packets"]
+        second = client.request("trigger", objective="signfence", value=prepared["nonce"] + 1)
+        def locked_messages(state: dict) -> list[dict]:
+            return [message for message in state["chat_messages"] if message["sequence"] > before
+                    and any(token in message["text"].lower() for token in
+                            ("commands.trigger.failed.unprimed", "cannot trigger this objective yet", "not enabled"))]
+        state = client.wait_state(lambda state: bool(locked_messages(state)), timeout=5)
+        locked = locked_messages(state)
+        locked_boundary = marker_boundary(server, client, before)
+        suite.check_predicate(server, boundary["server_predicate"])
+        require(locked, "No one-shot trigger failure response")
+    return {"deop_output": output, "forbidden_client_command": forbidden, "denials": denials,
+            "unchanged_score_predicate": predicate, "boundary": boundary,
+            "one_shot": {"sent": second, "boundary": locked_boundary, "denial": locked,
+                         "retained_score_predicate": boundary["server_predicate"]}}
+
+
+def fixture_interaction(client: Client, fixture: tuple, slot: int = 1) -> dict:
+    return client.request("use_item_on", **dict(zip(("x", "y", "z"), fixture[0])), face=3 if slot == 1 else 2)
+
+
+def fixture_editor(server: LoggedServer, client: Client, fixture: tuple, slot: int) -> dict:
+    fixture_teleport(server, client, fixture, slot)
+    before = client.state()["packets"]
+    fixture_interaction(client, fixture, slot)
+    state = client.wait_state(lambda state: bool(fixture_packets(state, fixture, before, "editor")))
+    editor = fixture_packets(state, fixture, before, "editor")[-1]
+    require(editor["slot"] == slot, editor)
+    return editor
+
+
+def submit_rich(server: LoggedServer, client: Client, fixture: tuple, messages: list[str], expected: dict, slot: int) -> dict:
+    prepared = prepare_nonop_boundary(server, client)
+    with interaction_deadline(server, "legitimate literal sign submission"):
+        sent = client.request("sign_update", **dict(zip(("x", "y", "z"), fixture[0])), slot=slot, messages=messages)
+        boundary = finish_nonop_boundary(server, client, prepared)
+        observed = received_rich(client, fixture, expected, prepared["before_sequence"])
+    return {"sent": sent, "boundary": boundary, "received": observed}
+
+
+def click_rich(server: LoggedServer, client: Client, fixture: tuple, expected_score: int,
+               disabled: bool = False, changed: dict | None = None) -> dict:
+    fixture_teleport(server, client, fixture)
+    prepared = prepare_nonop_boundary(server, client)
+    with interaction_deadline(server, "sign click including command reentry"):
+        sent = fixture_interaction(client, fixture)
+        boundary = finish_nonop_boundary(server, client, prepared)
+        predicate = require_sign_score(server, expected_score)
+        observed = received_rich(client, fixture, changed, prepared["before_sequence"]) if changed is not None else None
+        overlays = [message for message in client.state()["chat_messages"] if message["sequence"] > prepared["before_sequence"]
+                    and message.get("overlay") is True and "sign.click_actions_disabled" in message["text"]]
+        if disabled:
+            require(overlays, "Missing fresh disabled-click overlay after processed interaction")
+    return {"sent": sent, "boundary": boundary, "score_predicate": predicate, "changed_wire": observed, "disabled_overlays": overlays}
+
+
+def fresh_rich_chunk(server: LoggedServer, client: Client, fixture: tuple, expected: dict) -> dict:
+    prepared = prepare_nonop_boundary(server, client)
+    teleport(server, client, (0, 200, 0))
+    client.wait_state(lambda state: any(chunk["sequence"] > prepared["before_sequence"] and chunk["x"] == 0 and chunk["z"] == 0
+                                        for chunk in state["chunk_packets"]))
+    boundary = finish_nonop_boundary(server, client, prepared)
+    before = client.state()["packets"]
+    fixture_teleport(server, client, fixture)
+    return {"away_boundary": boundary, "before_return_sequence": before,
+            "received": received_rich(client, fixture, expected, before, "chunk")}
+
+
+def command_component(command: str = SIGN_COMMAND) -> dict:
+    return {"text": "RUN", "click_event": {"action": "run_command", "command": command}}
+
+
+def literal_identity(server: LoggedServer, fixture: tuple, line: str) -> str:
+    # NBT string equality cannot match a compound component with identical text.
+    predicate = f'if data block {pos_text(fixture[0])} {{front_text:{{messages:[{json.dumps(line)}]}}}}'
+    suite.check_predicate(server, predicate)
+    return predicate
+
+
+def literal_command_case(server: LoggedServer, client: Client, name: str) -> dict:
+    fixture = COMMAND_SIGNS[name]
+    control = nonop_control(server, client)
+    expected = component_state(name, "literal-base")
+    initial = fresh_rich(server, client, fixture, expected)
+    editor = fixture_editor(server, client, fixture, 1)
+    messages = [LITERAL_COMMAND, "literal second", "literal third", "literal fourth"]
+    expected["front_text"].update(messages=messages, filtered_messages=messages.copy())
+    submitted = submit_rich(server, client, fixture, messages, expected, 1)
+    typed = literal_identity(server, fixture, LITERAL_COMMAND)
+    expected.update(is_waxed=True, allow_op_features=True)
+    worst_case = edit_rich(server, client, fixture, expected)
+    blocked = click_rich(server, client, fixture, 17)
+    chunk = fresh_rich_chunk(server, client, fixture, expected)
+    chunk_blocked = click_rich(server, client, fixture, 17)
+    # Same command, same flags and same player, with actual administrator-authored
+    # structure. This positive control must execute before restoring the literal.
+    structured = deepcopy(expected)
+    structured["front_text"]["messages"][0] = command_component()
+    structured["front_text"]["filtered_messages"] = deepcopy(structured["front_text"]["messages"])
+    positive_fixture = edit_rich(server, client, fixture, structured)
+    positive = click_rich(server, client, fixture, 18)
+    restored = edit_rich(server, client, fixture, expected)
+    literal_identity(server, fixture, LITERAL_COMMAND)
+    return {"nonop_control": control, "initial": initial, "editor": editor, "literal_submission": submitted,
+            "literal_nbt_predicate": typed, "worst_case_flags": worst_case, "no_execution": blocked,
+            "fresh_chunk": chunk, "fresh_chunk_no_execution": chunk_blocked,
+            "structured_positive_fixture": positive_fixture, "structured_positive": positive,
+            "restored_literal": restored, "persisted_state": deepcopy(expected)}
+
+
+def structured_command_case(server: LoggedServer, client: Client, name: str) -> dict:
+    fixture = RICH_SIGNS[name]
+    control = nonop_control(server, client)
+    expected = component_state(name, "structured")
+    expected.update(is_waxed=True, allow_op_features=True)
+    expected["front_text"]["messages"] = [command_component(), "", "", ""]
+    expected["front_text"]["filtered_messages"] = deepcopy(expected["front_text"]["messages"])
+    initial = fresh_rich(server, client, fixture, expected)
+    positive = click_rich(server, client, fixture, 18)
+    expected["allow_op_features"] = False
+    explicit_false = edit_rich(server, client, fixture, expected)
+    blocked = click_rich(server, client, fixture, 18, disabled=True)
+    expected["allow_op_features"] = True
+    established_true = edit_rich(server, client, fixture, expected)
+    suite.check_predicate(server, f"if data block {pos_text(fixture[0])} {{allow_op_features:1b}}")
+    expected["allow_op_features"] = False
+    absent = edit_rich(server, client, fixture, expected, f"data remove block {pos_text(fixture[0])} allow_op_features")
+    suite.check_predicate(server, f"unless data block {pos_text(fixture[0])} allow_op_features")
+    default_blocked = click_rich(server, client, fixture, 18, disabled=True)
+    expected["allow_op_features"] = True
+    reenabled = edit_rich(server, client, fixture, expected)
+    end_control = click_rich(server, client, fixture, 19)
+    return {"nonop_control": control, "initial": initial, "true_positive": positive, "explicit_false": explicit_false,
+            "false_blocked": blocked, "established_true_before_removal": established_true, "removed_key": absent,
+            "default_blocked": default_blocked, "reenabled": reenabled, "end_positive": end_control}
+
+
+def command_reentry_case(server: LoggedServer, client: Client, name: str) -> dict:
+    fixture = RICH_SIGNS[name]
+    control = nonop_control(server, client)
+    expected = component_state(name, "self-unwax")
+    expected.update(is_waxed=True, allow_op_features=True)
+    command = f"data merge block {pos_text(fixture[0])} {{is_waxed:0b}}"
+    expected["front_text"]["messages"] = [command_component(command), "", "", ""]
+    expected["front_text"]["filtered_messages"] = deepcopy(expected["front_text"]["messages"])
+    initial = fresh_rich(server, client, fixture, expected)
+    expected["is_waxed"] = False
+    unwaxed = click_rich(server, client, fixture, 17, changed=expected)
+    suite.check_predicate(server, f"if data block {pos_text(fixture[0])} {{is_waxed:0b}}")
+    editor = fixture_editor(server, client, fixture, 0)
+    messages = [name + "/reentry/back", "live", "after self-unwax", "four"]
+    expected["back_text"].update(messages=messages, filtered_messages=messages.copy())
+    edited = submit_rich(server, client, fixture, messages, expected, 0)
+    return {"nonop_control": control, "initial": initial, "self_unwax": unwaxed,
+            "back_editor": editor, "back_submission": edited, "interaction_deadline_seconds": 20}
+
+
+def rich_text_case(server: LoggedServer, client: Client, name: str) -> dict:
+    fixture = RICH_SIGNS[name]
+    control = nonop_control(server, client)
+    expected = component_state(name, "styled")
+    expected["front_text"]["messages"] = [{"text": "raw zero", "bold": True, "color": "red"}, "raw one",
+                                          {"text": "raw two", "bold": True, "color": "blue"}, ""]
+    expected["front_text"]["filtered_messages"] = [{"text": "filtered zero", "bold": True, "color": "red"}, "filtered one",
+                                                   {"text": "filtered two", "bold": True, "color": "blue"}, "filtered three"]
+    expected["back_text"]["filtered_messages"] = ["back filtered zero", {"text": "back filtered one", "bold": True}, "back filtered two", ""]
+    initial = fresh_rich(server, client, fixture, expected)
+    chunk = fresh_rich_chunk(server, client, fixture, expected)
+    editor = fixture_editor(server, client, fixture, 1)
+    messages = ["edited zero", "edited one", "edited two", "edited three"]
+    expected["front_text"]["messages"] = [{**line, "text": messages[index]} if isinstance(line, dict) else messages[index]
+                                          for index, line in enumerate(expected["front_text"]["messages"])]
+    expected["front_text"]["filtered_messages"] = deepcopy(expected["front_text"]["messages"])
+    edited = submit_rich(server, client, fixture, messages, expected, 1)
+    expected.update(is_waxed=True, allow_op_features=True)
+    expected["front_text"]["messages"][0]["click_event"] = command_component()["click_event"]
+    expected["front_text"]["filtered_messages"] = deepcopy(expected["front_text"]["messages"])
+    persisted = edit_rich(server, client, fixture, expected)
+    positive = click_rich(server, client, fixture, 18)
+    return {"nonop_control": control, "initial_raw_and_filtered": initial, "fresh_chunk": chunk, "editor": editor,
+            "styled_literal_edit": edited, "persisted_styled_click": persisted, "positive_click": positive,
+            "persisted_state": deepcopy(expected), "scope": "Selected literal/style/click NBT, not full component rendering or content moderation."}
+
+
+def command_restart_case(server: LoggedServer, client: Client, name: str, literal: dict, rich: dict) -> dict:
+    control = nonop_control(server, client)
+    literal_chunk = fresh_rich_chunk(server, client, COMMAND_SIGNS[name], literal)
+    typed = literal_identity(server, COMMAND_SIGNS[name], LITERAL_COMMAND)
+    blocked = click_rich(server, client, COMMAND_SIGNS[name], 17)
+    rich_chunk = fresh_rich_chunk(server, client, RICH_SIGNS[name], rich)
+    positive = click_rich(server, client, RICH_SIGNS[name], 18)
+    return {"nonop_control": control, "literal_chunk_after_restart": literal_chunk, "literal_nbt_predicate": typed,
+            "literal_no_execution": blocked, "styled_click_chunk_after_restart": rich_chunk, "post_restart_positive_click": positive}
+
+
+def far_editor_submission(server: LoggedServer, client: Client, messages: list[str]) -> dict:
+    """Establish socket ordering without advancing a tick. Distance expiry must
+    not run between the submitted sign packet and this successful op command.
+    """
+    fence = int(uuid.uuid4().hex[:7], 16)
+    output = server.command("scoreboard players set SignFence blockdata -1")
+    sent = client.request("sign_update", **dict(zip(("x", "y", "z"), EDITOR_SIGN[0])), slot=1, messages=messages)
+    command = client.request("command", text=f"scoreboard players set SignFence blockdata {fence}")
+    predicate = f"if score SignFence blockdata matches {fence}"
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            suite.check_predicate(server, predicate)
+            break
+        except AssertionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+    require_frozen(server)
+    return {"sent": sent, "setup_output": output, "ordered_client_command": command,
+            "processing_predicate": predicate, "tick_steps_before_predicate": 0}
+
+
+def sign_editor_tick_case(server: LoggedServer, client: Client) -> dict:
+    server.command(f"op {NAME}")
+    expected = component_state("sign", "tick-base")
+    initial = fresh_rich(server, client, EDITOR_SIGN, expected)
+    editor = fixture_editor(server, client, EDITOR_SIGN, 1)
+    require_frozen(server)
+    before_away = client.state()["packets"]
+    teleport(server, client, (0, 200, 0))
+    client.wait_state(lambda state: any(chunk["sequence"] > before_away and chunk["x"] == 0 and chunk["z"] == 0
+                                        for chunk in state["chunk_packets"]))
+    messages = ["retained before tick", "far editor", "UUID remains", "four"]
+    with interaction_deadline(server, "retained editor before any tick"):
+        accepted = far_editor_submission(server, client, messages)
+        # Typed server state is mandatory while the client cannot see the sign.
+        typed = literal_identity(server, EDITOR_SIGN, messages[0])
+        boundary = processing_boundary(server, client)
+    expected["front_text"].update(messages=messages, filtered_messages=messages.copy())
+    before_return = client.state()["packets"]
+    fixture_teleport(server, client, EDITOR_SIGN)
+    retained_chunk = received_rich(client, EDITOR_SIGN, expected, before_return, "chunk")
+    reopened = fixture_editor(server, client, EDITOR_SIGN, 1)
+    teleport(server, client, (0, 200, 0))
+    suite.check_predicate(server, f"if loaded {pos_text(EDITOR_SIGN[0])}")
+    expired_tick = step_exact(server, 1)
+    with interaction_deadline(server, "editor expired by exactly one far tick"):
+        ignored = far_editor_submission(server, client, ["must be ignored", "expired", "one tick", "four"])
+        unchanged = literal_identity(server, EDITOR_SIGN, messages[0])
+        expired_boundary = processing_boundary(server, client)
+    before_return = client.state()["packets"]
+    fixture_teleport(server, client, EDITOR_SIGN)
+    unchanged_chunk = received_rich(client, EDITOR_SIGN, expected, before_return, "chunk")
+    positive_editor = fixture_editor(server, client, EDITOR_SIGN, 1)
+    messages = ["legitimate after expiry", "near again", "positive", "four"]
+    expected["front_text"].update(messages=messages, filtered_messages=messages.copy())
+    before = client.state()["packets"]
+    positive_sent = client.request("sign_update", **dict(zip(("x", "y", "z"), EDITOR_SIGN[0])), slot=1, messages=messages)
+    positive_boundary = processing_boundary(server, client)
+    positive = received_rich(client, EDITOR_SIGN, expected, before)
+    return {"initial": initial, "near_editor": editor, "far_before_tick_submission": accepted,
+            "accepted_typed_predicate_before_tick": typed, "boundary_after_acceptance": boundary,
+            "accepted_fresh_chunk": retained_chunk, "reopened_editor": reopened, "far_expiry_tick": expired_tick,
+            "expired_submission": ignored, "unchanged_typed_predicate": unchanged,
+            "expired_boundary": expired_boundary, "unchanged_fresh_chunk": unchanged_chunk,
+            "positive_editor": positive_editor, "positive_sent": positive_sent,
+            "positive_boundary": positive_boundary, "positive_received": positive,
+            "scope": "Standing sign editor retention before tick and far expiry after one tick; no threshold inference."}
+
+
 def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict) -> list[dict]:
     server = LoggedServer(kind, directory, args)
     results: dict[str, dict] = {}
     processes = report["processes"][kind] = []
     clients: list[Client] = []
+    server.owned_clients = clients
+    server.abort_events = []
+    report.setdefault("watchdogs", {})[kind] = server.abort_events
     failures: list[str] = []
 
     def record(test_id: str, action) -> dict:
         entry = suite.recorded(test_id, (CASES[test_id],), action)
         results[test_id] = entry
+        if clients and (clients[-1].failure or clients[-1].process.poll() is not None):
+            server.abort(f"Protocol client broken during {test_id}: {clients[-1].failure or clients[-1].process.returncode}")
+        if server.broken:
+            raise RuntimeError(server.broken)
         return entry
 
     def stop() -> None:
-        code = server.stop()
+        if server.broken and server.process is not None:
+            # abort() already sent TERM and scheduled KILL. Do not enter the
+            # ordinary stop path's 45+15 second wait after a reentry deadlock.
+            try:
+                code = server.process.wait(timeout=6)
+            except subprocess.TimeoutExpired:
+                server.signal(signal.SIGKILL)
+                code = server.process.wait(timeout=2)
+            if server.reader is not None:
+                server.reader.join(timeout=2)
+        else:
+            code = server.stop()
         processes[-1].update(exit_code=code, forced_stop=server.forced_stop, stopped=now())
         suite.check_exit(code, server.forced_stop)
         errors = [line for line in server.log_path.read_text().splitlines() if WORLD_ERRORS.search(line)]
@@ -495,6 +998,8 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                 server.command("fill 4096 199 0 4111 199 7 stone")
                 server.command("difficulty peaceful")
                 server.command("scoreboard objectives add blockdata dummy")
+                server.command("scoreboard objectives add signcmd dummy")
+                server.command("scoreboard objectives add signfence trigger")
             client = connect("wire-" + boot)
             server.command(f"gamemode survival {NAME}")
             if boot == "initial":
@@ -503,11 +1008,17 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                     record(f"block_data.{name}_swap", lambda name=name: swap_case(server, client, name))
                 for name in LOOT_POSITIONS:
                     record(f"block_data.{name}_cleared_loot_menu", lambda name=name: loot_case(server, client, name))
+                record("block_data.barrel_pending_empty_loot", lambda: pending_barrel_case(server, client))
                 server.command("fill 4096 199 8 4111 199 15 stone")
                 server.command(f"op {NAME}")
                 for name in SIGNS:
                     for case, action in (("live", sign_live_case), ("editor_none", sign_editor_none_case), ("wax", sign_wax_case)):
                         record(f"block_data.{name}_{case}", lambda name=name, action=action: action(server, client, name))
+                for name in SIGNS:
+                    for case, action in (("literal_command", literal_command_case), ("structured_command", structured_command_case),
+                                         ("command_reentry", command_reentry_case), ("rich_text", rich_text_case)):
+                        record(f"block_data.{name}_{case}", lambda name=name, action=action: action(server, client, name))
+                record("block_data.sign_editor_tick", lambda: sign_editor_tick_case(server, client))
             else:
                 for name, pos in CONTAINERS.items():
                     test_id = f"block_data.{name}_restart"
@@ -533,6 +1044,15 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                         continue
                     expected = prerequisite["detail"]["persisted_state"]
                     record(test_id, lambda name=name, expected=expected: sign_restart_case(server, client, name, expected))
+                for name in SIGNS:
+                    test_id = f"block_data.{name}_command_restart"
+                    prerequisites = [results[f"block_data.{name}_{case}"] for case in ("literal_command", "rich_text")]
+                    if any(entry["result"] != "passed" for entry in prerequisites):
+                        results[test_id] = {"id": test_id, "features": [CASES[test_id]], "result": "skipped",
+                                            "detail": {"reason": "Literal non-execution and persisted styled click prerequisites must pass."}}
+                        continue
+                    literal, rich = [entry["detail"]["persisted_state"] for entry in prerequisites]
+                    record(test_id, lambda name=name, literal=literal, rich=rich: command_restart_case(server, client, name, literal, rich))
             close_client(client)
             server.save_flush()
             require_frozen(server)

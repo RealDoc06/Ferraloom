@@ -446,6 +446,58 @@
     "data.merge_recursive": {
       "feature_id": "players.commands",
       "scenario": "data merge recursively preserves compound siblings and replaces noncompound values"
+    },
+    "block_data.barrel_cleared_loot_menu": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel first open preserves items after pending loot removal"
+    },
+    "block_data.barrel_pending_empty_loot": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel pending empty loot survives provider reads and replaces stored items on actual first open"
+    },
+    "block_data.sign_editor_tick": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign retains a far editor before any tick and expires it after one forced-chunk tick with a legitimate edit control"
+    },
+    "block_data.sign_literal_command": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign nonop legitimate JSON-looking literal edit never dispatches with wax and op features enabled while structured positive control executes"
+    },
+    "block_data.sign_structured_command": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign administrator run_command executes as the nonop clicker only with explicit op features enabled and disabled overlays witness false and absent flags"
+    },
+    "block_data.sign_command_reentry": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign administrator self-unwax click returns within the watchdog and permits a legitimate back edit without losing front command data"
+    },
+    "block_data.sign_rich_text": {
+      "feature_id": "blocks.interactives",
+      "scenario": "standing sign selected styled mixed four-line and filtered components retain position and style through a legitimate edit and fresh chunk delivery"
+    },
+    "block_data.sign_command_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "standing sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes"
+    },
+    "block_data.hanging_sign_literal_command": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign nonop legitimate JSON-looking literal edit never dispatches with wax and op features enabled while structured positive control executes"
+    },
+    "block_data.hanging_sign_structured_command": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign administrator run_command executes as the nonop clicker only with explicit op features enabled and disabled overlays witness false and absent flags"
+    },
+    "block_data.hanging_sign_command_reentry": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign administrator self-unwax click returns within the watchdog and permits a legitimate back edit without losing front command data"
+    },
+    "block_data.hanging_sign_rich_text": {
+      "feature_id": "blocks.interactives",
+      "scenario": "ceiling hanging sign selected styled mixed four-line and filtered components retain position and style through a legitimate edit and fresh chunk delivery"
+    },
+    "block_data.hanging_sign_command_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "ceiling hanging sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes"
     }
   }
 }

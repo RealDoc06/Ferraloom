@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decodeChunkBlockEntities, decodeContainerPacket, decodeSignData, decodeSignPacket,
-  encodeContainerSwap, encodeSignUpdate, encodeUseItemOn, parseCommand, varInt,
+import { decodeChunkBlockEntities, decodeContainerPacket, decodeSignData, decodeSignPacket, decodeRichSignData, decodeSystemChat,
+  encodeContainerSwap, encodeSignUpdate, encodeUseItemOn, encodeTrigger, parseCommand, varInt,
   type PlainStack } from '../tools/parity/client.ts';
 
 const plain = (item: number, count: number) => Buffer.concat([varInt(count), varInt(item), Buffer.from([0, 0])]);
@@ -190,4 +190,109 @@ test('sign interactions use physical SOUTH/NORTH hit faces while retaining the c
   }
   assert.throws(() => encodeUseItemOn(1, 200, 1, 7, 6));
   assert.throws(() => parseCommand({ id: 1, action: 'use_item_on', x: 1, y: 200, z: 1, face: 0 }));
+});
+
+const runCommand = 'scoreboard players add @s signcmd 1';
+const literalJSON = JSON.stringify({ text: 'RUN', click_event: { action: 'run_command', command: runCommand } });
+const commandNBT = Buffer.concat([field(8, 'text', utf('RUN')), field(1, 'bold', Buffer.from([1])),
+  field(8, 'color', utf('red')), field(10, 'click_event', Buffer.concat([
+    field(8, 'action', utf('run_command')), field(8, 'command', utf(runCommand)), Buffer.from([0]),
+  ])), Buffer.from([0])]);
+const mixedNBT = Buffer.concat([Buffer.from([10]), i32(4), commandNBT,
+  // Official ListTag.write emits TAG_Compound list entries and EXACT one-key
+  // empty-name compounds for scalars. There is no per-entry tag byte here.
+  field(8, '', utf('')), Buffer.from([0]),
+  field(8, 'text', utf('third')), field(1, 'bold', Buffer.from([0])), Buffer.from([0]),
+  field(8, '', utf(literalJSON)), Buffer.from([0]),
+]);
+const richNBT = () => Buffer.concat([Buffer.from([10]), field(10, 'front_text', Buffer.concat([
+  field(9, 'messages', mixedNBT), field(9, 'filtered_messages', Buffer.concat([
+    Buffer.from([8]), i32(4), ...['filtered zero', 'filtered one', 'filtered two', 'filtered three'].map(utf),
+  ])), field(8, 'color', utf('red')), field(1, 'has_glowing_text', Buffer.from([1])), Buffer.from([0]),
+])), field(10, 'back_text', faceNBT(['back', 'north', 'other', 'face'], 'blue', 0)),
+field(1, 'is_waxed', Buffer.from([1])), field(1, 'allow_op_features', Buffer.from([1])), Buffer.from([0])]);
+
+test('rich observation decodes actual heterogeneous ListTag envelopes without parsing literal JSON', () => {
+  const payload = Buffer.concat([varInt(6), blockPos, varInt(7), richNBT()]);
+  assert.throws(() => decodeSignPacket(payload)); // The strict plain mode stays strict.
+  const decoded = decodeSignPacket(payload, 'rich');
+  assert.ok(decoded && decoded.kind === 'block_entity');
+  assert.equal(decoded.data, null);
+  assert.deepEqual(decoded.rich_data?.front_text.messages, [
+    { text: 'RUN', bold: true, color: 'red', click_event: { action: 'run_command', command: runCommand } },
+    '', { text: 'third', bold: false }, literalJSON,
+  ]);
+  assert.deepEqual(decoded.rich_data?.front_text.filtered_messages, ['filtered zero', 'filtered one', 'filtered two', 'filtered three']);
+  assert.equal(decoded.rich_data?.allow_op_features, true);
+  assert.deepEqual(decoded.component_nbt, {
+    front_text: { messages: [
+      { text: 'RUN', bold: 1, color: 'red', click_event: { action: 'run_command', command: runCommand } },
+      { '': '' }, { text: 'third', bold: 0 }, { '': literalJSON },
+    ], filtered_messages: ['filtered zero', 'filtered one', 'filtered two', 'filtered three'], color: 'red', has_glowing_text: 1 },
+    back_text: { messages: ['back', 'north', 'other', 'face'], color: 'blue', has_glowing_text: 0 }, is_waxed: 1, allow_op_features: 1,
+  });
+  const chunk = decodeChunkBlockEntities(chunkWith([chunkRecord(7, richNBT())]), 'rich');
+  assert.deepEqual(chunk.signs[0]?.kind === 'chunk' && chunk.signs[0].rich_data, decoded.rich_data);
+});
+
+test('rich mode retains the original strict plain projection and byte boolean defaults', () => {
+  const decoded = decodeSignPacket(Buffer.concat([varInt(6), blockPos, varInt(8), signNBT()]), 'rich');
+  assert.ok(decoded && decoded.kind === 'block_entity');
+  assert.deepEqual(decoded.data, expectedSign);
+  assert.equal(decoded.rich_data?.allow_op_features, false);
+  assert.deepEqual(decoded.rich_data?.front_text.filtered_messages, messages);
+  assert.deepEqual(encodeSignUpdate(-22, -64, 53, [literalJSON, '', '', ''], 1),
+    Buffer.concat([blockPos, ...[literalJSON, '', '', ''].map(wireString), varInt(1)]));
+});
+
+test('rich list unwrapping is one level at the entry boundary and never inside components', () => {
+  const face = { messages: [{ '': { text: 'zero', type: 'text', bold: 1 } }, '', '', ''] };
+  assert.deepEqual(decodeRichSignData({ front_text: face, back_text: face }).front_text.messages[0],
+    { text: 'zero', type: 'text', bold: true });
+  for (const line of [{ '': { '': 'recursive' } }, { '': '', text: 'sibling' },
+    { text: { '': 'wrapped text' } }, { text: 'x', click_event: { '': { action: 'run_command', command: runCommand } } },
+    { translate: 'unknown' }, { text: 'x', extra: ['unknown'] }, { text: 'x', clickEvent: { action: 'run_command', value: runCommand } },
+    { text: 'x', click_event: { action: 'run_command', value: runCommand } }, { text: 'x', click_event: { action: 'open_url', command: runCommand } },
+    { text: 'x', bold: 2 }, { text: 'x', color: 'invalid' }, { text: 'x', type: 'selector' }]) {
+    assert.throws(() => decodeRichSignData({ front_text: { messages: [line, '', '', ''] }, back_text: face }), /front_text.messages\[0\]/);
+  }
+  assert.throws(() => decodeRichSignData({ front_text: { '': face }, back_text: face }));
+});
+
+test('rich sign mode rejects truncated and trailing wire data, malformed lists and flags', () => {
+  const valid = Buffer.concat([varInt(6), blockPos, varInt(7), richNBT()]);
+  for (const length of [valid.length - 1, valid.length - 8, 26, 40]) assert.throws(() => decodeSignPacket(valid.subarray(0, length), 'rich'));
+  assert.throws(() => decodeSignPacket(Buffer.concat([valid, Buffer.from([0])]), 'rich'));
+  const face = { messages: ['', '', '', ''] };
+  for (const invalid of [{ ...face, filtered_messages: ['three', '', ''] }, { ...face, messages: [1, '', '', ''] },
+    { ...face, has_glowing_text: true }]) assert.throws(() => decodeRichSignData({ front_text: invalid, back_text: face }));
+  assert.throws(() => decodeRichSignData({ front_text: face, back_text: face, allow_op_features: 2 }));
+  const threeLines = Buffer.concat([Buffer.from([10]), field(10, 'front_text', Buffer.concat([
+    field(9, 'messages', Buffer.concat([Buffer.from([8]), i32(3), ...['one', 'two', 'three'].map(utf)])), Buffer.from([0]),
+  ])), field(10, 'back_text', faceNBT(messages, 'blue', 0)), Buffer.from([0])]);
+  assert.throws(() => decodeSignPacket(Buffer.concat([varInt(6), blockPos, varInt(7), threeLines]), 'rich'),
+    /Sign \(-22,-64,53\): front_text.messages/);
+});
+
+test('nonop trigger IPC encodes the existing command packet payload and rejects injection/overflow', () => {
+  const command = { id: 'fence', action: 'trigger', objective: 'signfence', value: 17 };
+  assert.deepEqual(parseCommand(command), command);
+  assert.deepEqual(encodeTrigger('signfence', 17), wireString('trigger signfence set 17'));
+  for (const objective of ['', 'x\ny', 'x set 1', 'x'.repeat(17), '@s']) assert.throws(() => parseCommand({ ...command, objective }));
+  for (const value of [2147483648, -2147483649, 1.2, '17', null]) assert.throws(() => parseCommand({ ...command, value }));
+  assert.deepEqual(encodeTrigger('signfence', -2147483648), wireString('trigger signfence set -2147483648'));
+});
+
+test('system chat preserves fresh disabled-action overlay and permission-denial component identity', () => {
+  const packet = (key: string, overlay: number) => Buffer.concat([varInt(124), Buffer.from([10]),
+    field(8, 'translate', utf(key)), Buffer.from([0, overlay])]);
+  const disabled = decodeSystemChat(packet('sign.click_actions_disabled', 1));
+  assert.equal(disabled.overlay, true);
+  assert.equal(disabled.text, 'sign.click_actions_disabled');
+  assert.deepEqual(disabled.component_nbt, { translate: 'sign.click_actions_disabled' });
+  const denied = packet('command.unknown.command', 0);
+  assert.equal(decodeSystemChat(denied).overlay, false);
+  for (const invalid of [denied.subarray(0, -1), Buffer.concat([denied, Buffer.from([0])]), packet('x', 2)]) {
+    assert.throws(() => decodeSystemChat(invalid));
+  }
 });

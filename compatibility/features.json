@@ -1319,7 +1319,9 @@
         "chest real client deposit survives clean restart",
         "trapped chest real client deposit survives clean restart",
         "standing sign both faces and wax survive clean restart in received chunk data with editing controls",
-        "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls"
+        "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls",
+        "standing sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes",
+        "ceiling hanging sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2651,7 +2653,9 @@
         "locked container",
         "double chest",
         "chest first open preserves items after pending loot removal",
-        "trapped chest first open preserves items after pending loot removal"
+        "trapped chest first open preserves items after pending loot removal",
+        "barrel first open preserves items after pending loot removal",
+        "barrel pending empty loot survives provider reads and replaces stored items on actual first open"
       ],
       "rust_status": "unverified",
       "evidence": []
@@ -2826,7 +2830,16 @@
         "standing sign wax blocks editor interaction until unwaxed with positive controls",
         "ceiling hanging sign live data updates both faces and wax while retaining the active editor",
         "ceiling hanging sign rejects unsolicited text and accepts the legitimate editor face",
-        "ceiling hanging sign wax blocks editor interaction until unwaxed with positive controls"
+        "ceiling hanging sign wax blocks editor interaction until unwaxed with positive controls",
+        "standing sign retains a far editor before any tick and expires it after one forced-chunk tick with a legitimate edit control",
+        "standing sign nonop legitimate JSON-looking literal edit never dispatches with wax and op features enabled while structured positive control executes",
+        "standing sign administrator run_command executes as the nonop clicker only with explicit op features enabled and disabled overlays witness false and absent flags",
+        "standing sign administrator self-unwax click returns within the watchdog and permits a legitimate back edit without losing front command data",
+        "standing sign selected styled mixed four-line and filtered components retain position and style through a legitimate edit and fresh chunk delivery",
+        "ceiling hanging sign nonop legitimate JSON-looking literal edit never dispatches with wax and op features enabled while structured positive control executes",
+        "ceiling hanging sign administrator run_command executes as the nonop clicker only with explicit op features enabled and disabled overlays witness false and absent flags",
+        "ceiling hanging sign administrator self-unwax click returns within the watchdog and permits a legitimate back edit without losing front command data",
+        "ceiling hanging sign selected styled mixed four-line and filtered components retain position and style through a legitimate edit and fresh chunk delivery"
       ],
       "rust_status": "unverified",
       "evidence": []
