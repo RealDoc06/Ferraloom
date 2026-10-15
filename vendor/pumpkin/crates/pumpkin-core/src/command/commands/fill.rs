@@ -87,6 +87,7 @@ fn fill_blocks(
 
     let target_state_id = target_state.id;
     let mut changed_positions = Vec::new();
+    let mut destroy_positions = Vec::new();
 
     let min_chunk_x = min_x >> 4;
     let max_chunk_x = max_x >> 4;
@@ -104,6 +105,7 @@ fn fill_blocks(
             let result = world.level.read_chunk_sync(&chunk_pos, |chunk| {
                 let mut updates_for_chunk = Vec::new();
                 let mut block_entities_to_remove = Vec::new();
+                let mut chunk_destroy_positions = Vec::new();
                 let min_y_chunk = chunk.section.min_y;
 
                 {
@@ -142,7 +144,8 @@ fn fill_blocks(
                                         }
                                     }
                                     _ => {
-                                        if let Some(f) = filter
+                                        if mode != FillMode::Destroy
+                                            && let Some(f) = filter
                                             && !f.test_state(current_state_id.to_state())
                                         {
                                             continue;
@@ -167,16 +170,8 @@ fn fill_blocks(
                                         }
                                     }
                                     FillMode::Destroy => {
-                                        if current_state_id != target_state_id {
-                                            world.break_block(
-                                                &pos,
-                                                None,
-                                                BlockFlags::SKIP_DROPS
-                                                    | BlockFlags::NOTIFY_ALL
-                                                    | BlockFlags::FORCE_STATE,
-                                            );
-                                        }
-                                        Some(target_state_id)
+                                        chunk_destroy_positions.push(pos);
+                                        None
                                     }
                                     FillMode::Replace | FillMode::Keep => Some(target_state_id),
                                 };
@@ -193,7 +188,11 @@ fn fill_blocks(
                 }
 
                 if updates_for_chunk.is_empty() {
-                    return (Vec::new(), block_entities_to_remove);
+                    return (
+                        Vec::new(),
+                        block_entities_to_remove,
+                        chunk_destroy_positions,
+                    );
                 }
 
                 let batch_inputs = updates_for_chunk
@@ -206,15 +205,56 @@ fn fill_blocks(
                     .map(|(_, _, _, new_id, pos)| (pos, new_id))
                     .collect::<Vec<_>>();
 
-                (chunk_changed, block_entities_to_remove)
+                (
+                    chunk_changed,
+                    block_entities_to_remove,
+                    chunk_destroy_positions,
+                )
             });
 
-            if let Some((chunk_changed, be_to_remove)) = result {
+            if let Some((chunk_changed, be_to_remove, chunk_to_destroy)) = result {
                 for pos in be_to_remove {
                     world.remove_block_entity(&pos);
                 }
                 changed_positions.extend(chunk_changed);
+                destroy_positions.extend(chunk_to_destroy);
             }
+        }
+    }
+
+    // `BlockPos.betweenClosed` visits X first, then Y, then Z. Destruction can
+    // invoke container/loot callbacks, so it must run after every chunk guard.
+    destroy_positions.sort_unstable_by_key(|pos| (pos.0.z, pos.0.y, pos.0.x));
+    let mut placed_positions = Vec::new();
+    for pos in destroy_positions {
+        if let Some(filter) = filter
+            && !filter.test_state(world.get_block_state(&pos))
+        {
+            continue;
+        }
+        let destroyed = world
+            .break_block(&pos, None, BlockFlags::NOTIFY_ALL)
+            .is_some();
+        let previous = world.set_block_state(
+            &pos,
+            target_state_id,
+            BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        let placed = previous != target_state_id;
+        if placed {
+            placed_positions.push(pos);
+        }
+        if destroyed || placed {
+            changed_positions.push((pos, target_state_id));
+        }
+    }
+    // Vanilla defers the placement's neighbour notifications until the entire
+    // fill is present; destruction's own callbacks still run at each position.
+    for pos in placed_positions {
+        let block = world.get_block(&pos);
+        world.update_neighbors_at(&pos, block, None);
+        if world.get_block_state_id(&pos).has_analog_output_signal() {
+            world.update_neighbour_for_output_signal(&pos, block);
         }
     }
 
@@ -340,3 +380,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         ),
     );
 }
+
+#[cfg(test)]
+#[path = "fill_tests.rs"]
+mod tests;
