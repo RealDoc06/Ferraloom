@@ -135,7 +135,7 @@ evidence.
   ordinary terrain chunk-unload processing honor that setting. Entity storage
   independently processes hidden-section unloads even with `noSave` enabled.
   Ferraloom now schedules server-wide autosaves outside the frozen simulation
-  branch; its ordinary terrain unload path still needs the save-off gate.
+  branch, and ordinary terrain unloading now honors save-off.
 - The foundation's `Nbt::write_to_writer` drops serialization failures before
   writing its byte buffer. Durable writers now use a shared fallible Java NBT
   serializer and synchronized atomic replacement. Oversized modified-UTF keys
@@ -146,6 +146,13 @@ evidence.
   Last-execution tracking and the complete command-block lifecycle remain
   separate compatibility work; the scheduled-callback test advances game time
   between executions.
+- Fill-destroy placement adjusts neighbor shapes and reapplies explicit block
+  properties. Its deferred `affectNeighborsAfterRemoval` callback is separate
+  from block-entity and POI cleanup. Combining those hooks erased newly placed
+  containers; separate callbacks now retain those entities and their POIs.
+- `LivingEntity.isAlive` requires positive health and no removal flag. Dying
+  entities can remain in the world for animation while `@e` excludes them.
+  Both runtimes now pass the immediate selector case.
 
 The original underground sample differed in three unsupported glow-lichen
 states and four gold-ore cells. Deferred postprocessing removed the lichen
@@ -164,13 +171,14 @@ Modern saves use signed integer cooking and fuel timers and a floating-point
 as burn duration. Copies of that Java save retain their timers and continue
 cooking correctly in Java. The `571b6ca` Rust executable loses those timers on
 load. Independent lava-bucket copies also expose the missing bucket crafting
-remainder and wet-sponge conversion. After the repair, executable `633b1d56…`
-from clean source `50adf82` passes the reproducible fresh-fixture check in
+remainder and wet-sponge conversion. The current executable `08af1478…`
+from clean source `3157c3d` passes the reproducible fresh-fixture check in
 `tools/check_furnaces.py`: both runtimes preserve saved values and match the
 63/100-tick cooking continuations and independent 1/199-tick bucket sequence.
 All five processes exit cleanly and all 14 source-integrity checks pass.
-An unchanged zero-step chunk is a preservation observation; the stepped
-phases establish continued cooking. The original source fixture remains
+The zero-step phase is a preservation observation, and its imported codec
+acceptance result is skipped even when chunk bytes change. The stepped phases
+establish continued cooking. The original source fixture remains
 immutable under the ignored reference cache; its canonical file
 manifest SHA-256 is
 `de91961415ddb941e59f4741b005b1d768a5beabb1461e2b8ccbf3952ecf3603`.

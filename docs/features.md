@@ -106,7 +106,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `blocks.portals` | Match portal shape validation and block-side interactions | 0/0/0 | 0/0/0 | unverified |
 | `blocks.rails` | Match rail placement, slopes, power and detector behavior | 0/0/0 | 0/0/0 | unverified |
 | `blocks.containers` | Match hopper transfer, sided access, locks and container rules | 0/0/0 | 0/0/0 | unverified |
-| `blocks.processing` | Match furnaces, brewing, campfires and other timed processors | 0/0/0 | 0/0/0 | unverified |
+| `blocks.processing` | Match furnaces, brewing, campfires and other timed processors | 2/0/1 | 2/0/1 | partial |
 | `blocks.signals` | Match buttons, plates, levers, tripwire and sensors | 0/0/0 | 0/0/0 | unverified |
 | `blocks.interactives` | Match doors, beds, respawn anchors, bells and utility interactions | 0/0/0 | 0/0/0 | unverified |
 | `blocks.weathering` | Match oxidation, waxing, melting, freezing and snow accumulation | 0/0/0 | 0/0/0 | unverified |
@@ -185,7 +185,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.swimming` | Match movement modes, collision size and stamina interactions | 0/0/0 | 0/0/0 | unverified |
 | `players.oxygen` | Match air supply, powder snow and environmental damage | 0/0/0 | 0/0/0 | unverified |
 | `players.interaction` | Match spawn protection, adventure restrictions and operator bypass | 0/0/0 | 0/0/0 | unverified |
-| `players.commands` | Match complete target command tree and execution semantics | 9/0/0 | 9/0/0 | partial |
+| `players.commands` | Match complete target command tree and execution semantics | 19/0/0 | 19/0/0 | partial |
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |

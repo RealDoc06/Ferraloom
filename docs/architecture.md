@@ -17,13 +17,25 @@ matters for spectators receiving existing chunks without generation tickets.
 Ordinary terrain eviction pauses during save-off; explicit saves and shutdown
 still persist world state. Entity storage processes its unloads independently.
 
-Player saves retain a previous `.dat_old`. A failed primary load can recover
-from that backup only after preserving the failed bytes and durably restoring
-the valid copy without rotating it into the backup. If recovery fails, login
-ends before a Player is constructed or published, preventing a default player
-from overwriting unreadable data. The player storage lock orders file
-replacements; ordering previously captured asynchronous player snapshots is
-separate work.
+Player saves retain a previous `.dat_old`. Corrupt primary data is preserved
+before a valid backup is durably restored without rotating it into the backup.
+Primary IO errors reject admission rather than roll back to an older file.
+Failed recovery ends login before a Player is constructed or published.
+Snapshots reserve their sequence before capture; the storage lock rejects a
+snapshot older than the last successful write before encoding or backup rotation.
+
+An owned lease reserves each UUID before loading player data and advancements.
+Replacement admission waits for the previous session's callbacks and both final
+saves, with a bounded wait and client-close cancellation. Cleanup removes the
+exact Player instance. Advancement snapshots and atomic JSON writes currently
+share a server-wide gate; a blocking writer retains that gate after cancellation,
+and admission waits for pending writes before reading. Per-player parallel saves
+and the existing chunk-coordinator lock latency remain performance work.
+
+Fill-destroy commands release chunk guards before invoking gameplay callbacks.
+Deferred neighbor notifications have their own hook, separate from immediate
+block-entity, POI and multiblock cleanup. Final client updates use the resulting
+world state after placement and neighbor callbacks.
 
 The official artifact is pinned by metadata URL, SHA-1, size, release, Java major, and protocol. The test tool verifies the download before launching it. Registry identifiers and datapack paths come from the exact official artifact and its built-in data generator. REA artifact/process evidence and supplementary JVM codec inspection are documented separately.
 
@@ -35,5 +47,7 @@ timers before stepping, subsequent cooking progress, and an independent lava
 bucket/wet sponge sequence. It records semantic differences separately from
 canonical NBT tag widths, since Java accepts numeric tags of different widths.
 Fixture hashes protect the original Java save from changes by either runtime.
+The zero-step phase records saved-value preservation; its codec acceptance entry
+is skipped because chunk-byte changes alone cannot prove re-encoding.
 
 Plugin implementation starts after vanilla compatibility. Java plugin compatibility must be specified against concrete APIs and versions, such as Bukkit or Paper; `.jar` is a file format rather than a complete plugin contract. A future JVM bridge must preserve synchronous event ordering and world ownership while accommodating Java plugin threading assumptions. No plugin bridge, API compatibility claim, or experimental loader is included now.

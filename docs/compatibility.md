@@ -4,22 +4,32 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest selected run tested source `50adf820ac2e2fa2bd65ee11dffe662a90a3e48d`
+The latest selected run tested source `3157c3d75f7ce9e7d9a99b4911206985bf955799`
 with Rust executable SHA-256
-`633b1d56a6be0c3e6d34750b4c618ba81260adf12e382f28d4a3a7211c97a874`.
-Both servers passed 69 of 69 selected scenarios. Team selection now passes
-before and after restart; score selectors also distinguish absent scores from
-zero. World interchange passes in both directions.
-The decoded command trees differ by two missing roots (`jfr`, `perf`) and 543
+`08af1478c57dfe170b29706bba382ab5717ed0b8550efa9e0451b26c34fb33e7`.
+Both servers passed 79 of 79 selected scenarios, including data-modification
+sources, indexed insertion, dying-entity selectors, and fill-destroy callbacks
+and replacement block entities. World interchange passes in both directions.
+The decoded command trees differ by two missing roots (`jfr`, `perf`) and 468
 missing advertised literal paths with argument names normalized. This checks
-advertised syntax, independently of command execution. All 16,384 block states
+advertised syntax, independently of command execution; some differences are
+argument representation, while others are missing behavior. All 16,384 block states
 in the selected underground chunk sample matched; that single sample does not
 establish general generation parity. The immutable
-[paired report](../compatibility/results/evidence/315fa4902c0ae05a4f1f141c8499fddc53bd9130cfc9a5df5750618584ba31b1.json)
-retains the command-tree failure. The ledger has 20 partial and 180 unverified
+[paired report](../compatibility/results/evidence/16cd2e50541f80f5a3d8d628cae3b9e2dcb1ea1f408bf948853f78fdce1e40e9.json)
+retains the command-tree failure. The ledger has 21 partial and 179 unverified
 families. A separate fresh Java fixture and both runtimes' cooking continuations
-pass the selected furnace timer, speed and lava bucket checks; the fixture
-runner records zero-step preservation separately from actual stepped cooking.
+pass the selected furnace timer, speed and lava bucket checks in the
+[furnace report](../compatibility/results/evidence/233fdc03d45647d38060a7e5ed6816170662323b2f7baaaced6e7a7905792af1.json).
+Zero-step preservation remains visible, with codec acceptance marked skipped;
+changed chunk bytes alone cannot prove furnace decoding or encoding.
+
+Rust tests also cover ordered player snapshots, admission through final player
+and advancement saves, atomic advancement-write failures, and renewed chunk
+tickets protecting live inventories. Remaining work includes command branches,
+redstone removal behavior, full multiplayer and gameplay coverage, generation
+ordering, and measured multicore performance. Duplicate-login replacement
+currently starts after configuration; vanilla begins it before configuration.
 
 ## Inventory scope
 
