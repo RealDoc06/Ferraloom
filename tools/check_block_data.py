@@ -58,6 +58,7 @@ CASES = {
        for case in ("live", "editor_none", "wax")},
     **{f"block_data.{name}_restart": "persistence.block_entities" for name in SIGNS},
     "block_data.barrel_pending_empty_loot": "blocks.containers",
+    "block_data.barrel_spectator_pending_loot": "blocks.containers",
     "block_data.sign_editor_tick": "blocks.interactives",
     **{f"block_data.{name}_{case}": "blocks.interactives" for name in SIGNS
        for case in ("literal_command", "structured_command", "command_reentry", "rich_text")},
@@ -304,6 +305,29 @@ def pending_barrel_case(server: LoggedServer, client: Client) -> dict:
     return {"position": list(pos), "command": command, "output": output, "pre_open_reads": reads,
             "pre_open_predicate": predicate, "first_open": observed,
             "scope": "Pending minecraft:empty replaces stored diamond 7 on actual first menu; no RNG claim."}
+
+
+def spectator_barrel_case(server: LoggedServer, client: Client) -> dict:
+    pos = PENDING_BARREL
+    fresh_container(server, client, "barrel", pos)
+    setup = server.command(f'data merge block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}')
+    server.command(f"op {NAME}")
+    server.command(f"gamemode spectator {NAME}")
+    before = client.state()["packets"]
+    sent = client.request("use_item_on", **dict(zip(("x", "y", "z"), pos)))
+    boundary = processing_boundary(server, client)
+    state = client.state()
+    require(state.get("menu") is None and not any(packet["kind"] == "open" and packet["sequence"] > before
+                                                 for packet in state["menu_packets"]),
+            "Spectator opened a barrel whose loot was still pending")
+    predicate = f'if data block {pos_text(pos)} {{LootTable:"minecraft:empty",LootTableSeed:19L}}'
+    suite.check_predicate(server, predicate)
+    server.command(f"gamemode survival {NAME}")
+    positive = open_menu(client, pos, contents())
+    suite.check_predicate(server, f"unless data block {pos_text(pos)} LootTable")
+    close_menu(client)
+    return {"setup": setup, "spectator_action": sent, "processing_boundary": boundary,
+            "pending_after_spectator_predicate": predicate, "survival_positive": positive}
 
 
 def sign_state(name: str, stage: str, waxed: bool = False) -> dict:
@@ -1009,6 +1033,7 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                 for name in LOOT_POSITIONS:
                     record(f"block_data.{name}_cleared_loot_menu", lambda name=name: loot_case(server, client, name))
                 record("block_data.barrel_pending_empty_loot", lambda: pending_barrel_case(server, client))
+                record("block_data.barrel_spectator_pending_loot", lambda: spectator_barrel_case(server, client))
                 server.command("fill 4096 199 8 4111 199 15 stone")
                 server.command(f"op {NAME}")
                 for name in SIGNS:

@@ -498,6 +498,10 @@
     "block_data.hanging_sign_command_restart": {
       "feature_id": "persistence.block_entities",
       "scenario": "ceiling hanging sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes"
+    },
+    "block_data.barrel_spectator_pending_loot": {
+      "feature_id": "blocks.containers",
+      "scenario": "spectator barrel access preserves pending loot until a survival menu opens"
     }
   }
 }

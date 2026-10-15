@@ -7,6 +7,7 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
+use crate::block::entities::BlockEntity;
 use crate::block::entities::barrel::BarrelBlockEntity;
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
@@ -21,7 +22,10 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 
-struct BarrelScreenFactory(Arc<dyn Inventory>);
+struct BarrelScreenFactory {
+    inventory: Arc<dyn Inventory>,
+    block_entity: Arc<dyn BlockEntity>,
+}
 
 impl ScreenHandlerFactory for BarrelScreenFactory {
     fn create_screen_handler(
@@ -30,7 +34,10 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_generic_9x3(sync_id, player_inventory, self.0.clone(), player);
+        if player.is_spectator() && self.block_entity.has_loot_table() {
+            return None;
+        }
+        let handler = create_generic_9x3(sync_id, player_inventory, self.inventory.clone(), player);
         let concrete_arc = Arc::new(Mutex::new(handler));
 
         Some(concrete_arc as SharedScreenHandler)
@@ -79,8 +86,11 @@ impl BlockBehaviour for BarrelBlock {
         args: GetScreenHandlerFactoryArgs<'_>,
     ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
-        Some(Box::new(BarrelScreenFactory(inventory)))
+        let inventory = block_entity.clone().get_inventory()?;
+        Some(Box::new(BarrelScreenFactory {
+            inventory,
+            block_entity,
+        }))
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

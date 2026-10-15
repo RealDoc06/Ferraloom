@@ -2655,7 +2655,8 @@
         "chest first open preserves items after pending loot removal",
         "trapped chest first open preserves items after pending loot removal",
         "barrel first open preserves items after pending loot removal",
-        "barrel pending empty loot survives provider reads and replaces stored items on actual first open"
+        "barrel pending empty loot survives provider reads and replaces stored items on actual first open",
+        "spectator barrel access preserves pending loot until a survival menu opens"
       ],
       "rust_status": "unverified",
       "evidence": []
