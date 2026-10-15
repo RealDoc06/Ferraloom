@@ -3813,7 +3813,8 @@
         "data modify merge preserves vanilla partial storage changes on failure",
         "execute data conditions distinguish present and absent paths for all providers",
         "data modify merge through a primitive array parent reports unchanged",
-        "invalid storage namespace fails parsing without changing a stored score"
+        "invalid storage namespace fails parsing without changing a stored score",
+        "data merge recursively preserves compound siblings and replaces noncompound values"
       ],
       "rust_status": "partial",
       "evidence": [

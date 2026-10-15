@@ -6,8 +6,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "test:protocol": "node --test tests/protocol_client.test.ts",
-    "check:protocol": "tsc --noEmit --strict --skipLibCheck --module nodenext --target es2023 --allowImportingTsExtensions tools/parity/client.ts tests/protocol_client.test.ts"
+    "test:protocol": "node --test tests/protocol_client.test.ts tests/block_data_protocol.test.ts",
+    "check:protocol": "tsc --noEmit --strict --skipLibCheck --module nodenext --target es2023 --allowImportingTsExtensions tools/parity/client.ts tests/protocol_client.test.ts tests/block_data_protocol.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

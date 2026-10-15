@@ -442,6 +442,10 @@
     "block_data.hanging_sign_restart": {
       "feature_id": "persistence.block_entities",
       "scenario": "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls"
+    },
+    "data.merge_recursive": {
+      "feature_id": "players.commands",
+      "scenario": "data merge recursively preserves compound siblings and replaces noncompound values"
     }
   }
 }
