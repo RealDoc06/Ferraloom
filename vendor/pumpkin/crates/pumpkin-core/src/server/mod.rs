@@ -1198,6 +1198,8 @@ impl Server {
         let handle = self.runtime.clone();
 
         for world in worlds.iter() {
+            // Generation completion remains active while simulation time is frozen.
+            world.update_active_chunks();
             world.flush_block_updates();
             world.flush_synced_block_events();
 

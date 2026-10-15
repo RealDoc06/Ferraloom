@@ -1,5 +1,5 @@
 use super::World;
-use crate::block::OnScheduledTickArgs;
+use crate::{block::OnScheduledTickArgs, entity::player::Player};
 use pumpkin_data::{Block, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{level::SyncChunk, world::BlockFlags};
@@ -15,7 +15,11 @@ impl World {
     /// Direct spawn/teleport sends use the same ticketed activation as batch sends.
     /// Publication and completion wake the waiter, including while normal ticking
     /// is frozen. Neither a blocking fetch nor a polling loop drives generation.
-    pub(super) async fn get_ready_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> Option<SyncChunk> {
+    pub(super) async fn get_ready_chunk(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+        player: &Player,
+    ) -> Option<SyncChunk> {
         loop {
             let changed = self.level.chunk_activation_changed.notified();
             tokio::pin!(changed);
@@ -26,6 +30,8 @@ impl World {
                 return Some(chunk);
             }
             tokio::select! {
+                () = crate::STOP_INTERRUPT.cancelled() => return None,
+                () = player.client.await_close_interrupt() => return None,
                 () = self.level.cancel_token.cancelled() => return None,
                 () = &mut changed => {},
             }
@@ -121,6 +127,36 @@ mod tests {
             }
         }
         (folder, world)
+    }
+
+    #[tokio::test]
+    async fn command_loaded_requires_ready_active_entities_without_creating_tickets() {
+        let (_folder, world) = test_world().await;
+        let center = Vector2::new(-1, 0);
+        let position = BlockPos::new(-16, 100, 0);
+        assert!(
+            world.is_loaded(&position),
+            "physical FULL halo reads remain usable"
+        );
+        assert!(!world.is_entity_ticking_loaded(&position));
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+
+        world.level.request_chunk_activation(center);
+        world.process_chunk_postprocessing();
+        assert!(world.level.is_chunk_ready(&center));
+        assert!(!world.is_entity_ticking_loaded(&position));
+        world.active_chunks.write().unwrap().insert(center);
+        let entities = world.level.get_entity_chunk(center).await.unwrap();
+        assert!(!world.is_entity_ticking_loaded(&position));
+        entities.live.store(true, Ordering::Relaxed);
+        assert!(world.is_entity_ticking_loaded(&position));
+        // Vanilla checks chunk accessibility, independently of the queried height.
+        assert!(world.is_entity_ticking_loaded(&BlockPos::new(-16, 5000, 0)));
+        let chunk = world.level.ready_chunk(center).unwrap();
+        chunk.mark_pos_for_postprocessing(&position);
+        assert!(!world.is_entity_ticking_loaded(&position));
+        assert!(!world.is_entity_ticking_loaded(&BlockPos::new(32000, 100, 32000)));
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
     }
 
     #[tokio::test]

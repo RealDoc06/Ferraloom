@@ -55,6 +55,8 @@ cargo test --locked -p pumpkin-command --lib argument_types::block
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib stores_redirect_to_execute_then_the_nested_command --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib world_save_ --target-dir target
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib world::postprocessing::tests --target-dir target
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib candidates_wait_for_activation_without_activating_their_halo --target-dir target
 cargo clippy --locked --all-targets -- -D warnings
 npm ci
 npm run test:protocol

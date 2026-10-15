@@ -373,7 +373,7 @@ fn execute_if_loaded_modifier(
     let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
 
     if let Some(ref world) = context.source.world
-        && world.is_loaded(&pos)
+        && world.is_entity_ticking_loaded(&pos)
     {
         return Ok(vec![context.source.clone()]);
     }
@@ -386,7 +386,7 @@ fn execute_unless_loaded_modifier(
     let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
 
     if let Some(ref world) = context.source.world {
-        if !world.is_loaded(&pos) {
+        if !world.is_entity_ticking_loaded(&pos) {
             return Ok(vec![context.source.clone()]);
         }
     } else {

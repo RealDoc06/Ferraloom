@@ -3467,7 +3467,7 @@ impl World {
         chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();
-        let Some(chunk) = self.get_ready_chunk(center_chunk).await else {
+        let Some(chunk) = self.get_ready_chunk(center_chunk, player).await else {
             return;
         };
         if let Some(server) = self.server.upgrade() {
@@ -4895,7 +4895,7 @@ impl World {
             return;
         };
         let center_chunk = player.get_entity().chunk_pos.load();
-        let Some(chunk) = self.get_ready_chunk(center_chunk).await else {
+        let Some(chunk) = self.get_ready_chunk(center_chunk, player).await else {
             return;
         };
         java_client.send_chunks(&[chunk]).await;
@@ -6062,6 +6062,22 @@ impl World {
     #[must_use]
     pub fn is_loaded(&self, position: &BlockPos) -> bool {
         self.get_block_state_id_if_loaded(position).is_some()
+    }
+
+    /// `/execute if loaded` requires entity-ticking accessibility, unlike the
+    /// physical block lookup used while postprocessing an unready FULL halo.
+    #[must_use]
+    pub fn is_entity_ticking_loaded(&self, position: &BlockPos) -> bool {
+        let chunk = Vector2::new(position.0.x >> 4, position.0.z >> 4);
+        self.active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&chunk)
+            && self.level.is_chunk_ready(&chunk)
+            && self
+                .level
+                .get_entity_chunk_sync(&chunk)
+                .is_some_and(|entities| entities.live.load(Relaxed))
     }
 
     fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
