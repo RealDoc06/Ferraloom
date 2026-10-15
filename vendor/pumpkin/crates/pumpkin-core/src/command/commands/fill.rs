@@ -1,5 +1,5 @@
 use pumpkin_data::translation;
-use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -11,7 +11,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::command::argument_builder::{
     ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block::{BlockArgumentType, BlockInput, UNSUPPORTED_BLOCK_NBT};
 use crate::command::argument_types::block_predicate::{BlockPredicate, BlockPredicateArgumentType};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -55,7 +55,7 @@ fn fill_blocks(
     source: &CommandSource,
     from: BlockPos,
     to: BlockPos,
-    target_state: &'static BlockState,
+    target: &BlockInput,
     mode: FillMode,
     filter: Option<&BlockPredicate>,
     _strict: bool,
@@ -85,7 +85,7 @@ fn fill_blocks(
         ));
     }
 
-    let target_state_id = target_state.id;
+    let target_state_id = target.state.id;
     let mut changed_positions = Vec::new();
     let mut destroy_positions = Vec::new();
 
@@ -232,17 +232,19 @@ fn fill_blocks(
         {
             continue;
         }
-        let destroyed = world
-            .break_block(&pos, None, BlockFlags::NOTIFY_ALL)
-            .is_some();
+        let old_state = world.get_block_state_id(&pos);
+        let destroyed = world.destroy_block_for_command(&pos);
+        let placement_state = destroy_placement_state(&world, &pos, target);
         let previous = world.set_block_state(
             &pos,
-            target_state_id,
-            BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
+            placement_state,
+            // Java 2|256: client updates and skipped block entity side effects.
+            // Neighbour shape updates and on-place callbacks still run.
+            BlockFlags::NOTIFY_LISTENERS | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
         );
-        let placed = previous != target_state_id;
+        let placed = previous != placement_state;
         if placed {
-            placed_positions.push(pos);
+            placed_positions.push((pos, old_state));
         }
         if destroyed || placed {
             changed_positions.push((pos, target_state_id));
@@ -250,10 +252,20 @@ fn fill_blocks(
     }
     // Vanilla defers the placement's neighbour notifications until the entire
     // fill is present; destruction's own callbacks still run at each position.
-    for pos in placed_positions {
-        let block = world.get_block(&pos);
+    for (pos, old_state) in placed_positions {
+        let current_state = world.get_block_state_id(&pos);
+        let block = current_state.to_block();
+        if old_state.to_block() != block {
+            world.block_registry.on_state_replaced(
+                &world,
+                old_state.to_block(),
+                &pos,
+                old_state,
+                false,
+            );
+        }
         world.update_neighbors_at(&pos, block, None);
-        if world.get_block_state_id(&pos).has_analog_output_signal() {
+        if current_state.has_analog_output_signal() {
             world.update_neighbour_for_output_signal(&pos, block);
         }
     }
@@ -263,6 +275,13 @@ fn fill_blocks(
         return Err(ERROR_FAILED.create_without_context());
     }
 
+    if mode == FillMode::Destroy {
+        // Placement and deferred callbacks can transform the requested block.
+        // Do not overwrite their client updates with the command's input state.
+        for (pos, state) in &mut changed_positions {
+            *state = world.get_block_state_id(pos);
+        }
+    }
     world.queue_block_updates(&changed_positions);
     world.flush_block_updates();
 
@@ -278,6 +297,44 @@ fn fill_blocks(
     Ok(count)
 }
 
+/// BlockInput.place folds neighbour shapes, falls back if that produces air,
+/// and finally reapplies properties explicitly supplied by the command.
+fn destroy_placement_state(
+    world: &std::sync::Arc<crate::world::World>,
+    pos: &BlockPos,
+    target: &BlockInput,
+) -> BlockStateId {
+    let shaped = world.update_from_neighbor_shapes(target.state.id, pos);
+    let shaped = if shaped.to_state().is_air() {
+        target.state.id
+    } else {
+        shaped
+    };
+    if target.properties.is_empty() {
+        return shaped;
+    }
+    let mut properties: std::collections::HashMap<String, String> = target
+        .block
+        .properties(shaped)
+        .map(|properties| {
+            properties
+                .to_props()
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    properties.extend(target.properties.clone());
+    let properties: Vec<_> = properties
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    target
+        .block
+        .state_from_properties(&properties)
+        .map_or(shaped, |state| state.id)
+}
+
 struct FillExecutor {
     mode: FillMode,
     filter_mode: FilterMode,
@@ -288,7 +345,10 @@ impl CommandExecutor for FillExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let from = BlockPosArgumentType::get_loaded_block_pos(context, "from")?;
         let to = BlockPosArgumentType::get_loaded_block_pos(context, "to")?;
-        let state = BlockArgumentType::get_state(context, "block")?;
+        let target = BlockArgumentType::get_input(context, "block")?;
+        if target.nbt.is_some() {
+            return Err(UNSUPPORTED_BLOCK_NBT.create_without_context());
+        }
 
         let filter = if matches!(self.filter_mode, FilterMode::WithFilter) {
             Some(BlockPredicateArgumentType::get(context, "filter")?)
@@ -303,7 +363,7 @@ impl CommandExecutor for FillExecutor {
             &context.source,
             from,
             to,
-            state,
+            target,
             self.mode,
             filter.as_ref(),
             self.strict,

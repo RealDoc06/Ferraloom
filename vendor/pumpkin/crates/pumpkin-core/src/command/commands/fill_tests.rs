@@ -11,13 +11,13 @@ use std::sync::{Arc, Weak};
 /// A manually loaded Full chunk fixture tests command functionality, not the
 /// scheduler or its readiness guarantees. No listeners or server ticks run here.
 async fn world() -> (tempfile::TempDir, Arc<World>) {
+    world_in_dimension(Dimension::OVERWORLD).await
+}
+
+async fn world_in_dimension(dimension: Dimension) -> (tempfile::TempDir, Arc<World>) {
     let folder = tempfile::tempdir().unwrap();
-    let level = Level::from_root_folder(
-        &LevelConfig::default(),
-        folder.path().into(),
-        0,
-        Dimension::OVERWORLD,
-    );
+    let level =
+        Level::from_root_folder(&LevelConfig::default(), folder.path().into(), 0, dimension);
     level.shutdown().await.unwrap();
     for x in 0..=1 {
         level
@@ -27,7 +27,7 @@ async fn world() -> (tempfile::TempDir, Arc<World>) {
     let world = Arc::new(World::load(
         level,
         Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
-        Dimension::OVERWORLD,
+        dimension.clone(),
         crate::block::registry::default_registry(),
         Weak::new(),
         Arc::default(),
@@ -200,6 +200,162 @@ async fn destroy_commands() {
     assert_eq!(dropped_count(&world, &Item::DIAMOND), 8);
 }
 
+async fn destroy_callbacks_shapes_and_fluids() {
+    use pumpkin_data::block_properties::{Facing, OakFenceLikeProperties, ObserverLikeProperties};
+
+    let (_folder, world) = world().await;
+    let dispatcher = dispatcher();
+    let source = CommandSource::dummy().with_world(world.clone());
+
+    let sponge = BlockPos::new(4, 100, 4);
+    let water = BlockPos::new(5, 100, 4);
+    put(&world, sponge, Block::STONE.default_state.id);
+    put(&world, water, Block::WATER.default_state.id);
+    assert_eq!(
+        dispatcher
+            .execute_input("fill 4 100 4 4 100 4 sponge destroy", &source)
+            .unwrap(),
+        1
+    );
+    assert_eq!(world.get_block(&sponge), &Block::WET_SPONGE);
+    assert!(world.get_block_state(&water).is_air());
+    let client_changes: std::collections::HashMap<_, _> =
+        world.take_flushed_block_changes().into_iter().collect();
+    assert_eq!(client_changes[&sponge], Block::WET_SPONGE.default_state.id);
+    assert_eq!(client_changes[&water], BlockStateId::AIR);
+
+    let fence = BlockPos::new(8, 100, 4);
+    let neighbor_fence = BlockPos::new(9, 100, 4);
+    put(&world, fence, Block::STONE.default_state.id);
+    put(&world, neighbor_fence, Block::OAK_FENCE.default_state.id);
+    assert_eq!(
+        dispatcher
+            .execute_input("fill 8 100 4 8 100 4 oak_fence destroy", &source)
+            .unwrap(),
+        1
+    );
+    let placed = OakFenceLikeProperties::from_state_id(world.get_block_state_id(&fence));
+    let neighbor = OakFenceLikeProperties::from_state_id(world.get_block_state_id(&neighbor_fence));
+    assert!(placed.east, "the new fence must fold its neighbour shapes");
+    assert!(
+        neighbor.west,
+        "placement must update the existing fence shape"
+    );
+    let client_changes: std::collections::HashMap<_, _> =
+        world.take_flushed_block_changes().into_iter().collect();
+    assert_eq!(client_changes[&fence], world.get_block_state_id(&fence));
+    assert_eq!(
+        client_changes[&neighbor_fence],
+        world.get_block_state_id(&neighbor_fence)
+    );
+
+    // An explicit property wins after the initial shape fold. This isolated
+    // fence has no neighbours whose subsequent shape change could alter it.
+    let explicit_fence = BlockPos::new(12, 100, 4);
+    put(&world, explicit_fence, Block::STONE.default_state.id);
+    assert_eq!(
+        dispatcher
+            .execute_input(
+                "fill 12 100 4 12 100 4 oak_fence[east=true] destroy",
+                &source
+            )
+            .unwrap(),
+        1
+    );
+    let placed = OakFenceLikeProperties::from_state_id(world.get_block_state_id(&explicit_fence));
+    assert!(placed.east);
+    world.take_flushed_block_changes();
+
+    let source_water = BlockPos::new(6, 100, 8);
+    let observer = BlockPos::new(5, 100, 8);
+    let mut observer_props = ObserverLikeProperties::default(&Block::OBSERVER);
+    observer_props.facing = Facing::East;
+    put(
+        &world,
+        observer,
+        observer_props.to_state_id(&Block::OBSERVER),
+    );
+    put(&world, source_water, Block::WATER.default_state.id);
+    assert!(!world.is_block_tick_scheduled(&observer, &Block::OBSERVER));
+    assert!(
+        dispatcher
+            .execute_input("fill 6 100 8 6 100 8 water destroy", &source)
+            .is_err(),
+        "preserving the same source fluid changes no blocks"
+    );
+    assert_eq!(
+        world.get_block_state_id(&source_water),
+        Block::WATER.default_state.id
+    );
+    assert!(!world.is_block_tick_scheduled(&observer, &Block::OBSERVER));
+    // Failed fills do not flush, so explicitly inspect any mistakenly queued
+    // transition as well as the observer's scheduled pulse.
+    world.flush_block_updates();
+    assert!(world.take_flushed_block_changes().is_empty());
+
+    let (_nether_folder, nether) = world_in_dimension(Dimension::THE_NETHER).await;
+    let nether_source = CommandSource::dummy().with_world(nether.clone());
+    let sponge = BlockPos::new(4, 100, 4);
+    put(&nether, sponge, Block::STONE.default_state.id);
+    assert_eq!(
+        dispatcher
+            .execute_input("fill 4 100 4 4 100 4 wet_sponge destroy", &nether_source)
+            .unwrap(),
+        1
+    );
+    assert_eq!(nether.get_block(&sponge), &Block::SPONGE);
+    let client_changes: std::collections::HashMap<_, _> =
+        nether.take_flushed_block_changes().into_iter().collect();
+    assert_eq!(client_changes[&sponge], Block::SPONGE.default_state.id);
+}
+
+async fn destroy_deferred_removal_uses_original_state() {
+    use crate::block::{BlockBehaviour, BlockMetadata, OnStateReplacedArgs};
+    use pumpkin_data::BlockId;
+    use std::sync::Mutex;
+
+    struct ObserveRemoval(Arc<Mutex<Vec<(BlockStateId, BlockStateId)>>>);
+    impl BlockMetadata for ObserveRemoval {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::STONE].into()
+        }
+    }
+    impl BlockBehaviour for ObserveRemoval {
+        fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+            self.0.lock().unwrap().push((
+                args.old_state_id,
+                args.world.get_block_state_id(args.position),
+            ));
+        }
+    }
+
+    let (_folder, mut world) = world().await;
+    let observations = Arc::new(Mutex::new(Vec::new()));
+    Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry)
+        .unwrap()
+        .register(ObserveRemoval(observations.clone()));
+    let pos = BlockPos::new(4, 100, 4);
+    put(&world, pos, Block::STONE.default_state.id);
+    let source = CommandSource::dummy().with_world(world);
+    assert_eq!(
+        dispatcher()
+            .execute_input("fill 4 100 4 4 100 4 gold_block destroy", &source)
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        *observations.lock().unwrap(),
+        [
+            (Block::STONE.default_state.id, BlockStateId::AIR),
+            (
+                Block::STONE.default_state.id,
+                Block::GOLD_BLOCK.default_state.id
+            ),
+        ],
+        "Java runs removal during destruction and again after placement using the pre-destroy state"
+    );
+}
+
 /// A regressed synchronous lock acquisition cannot be cancelled by a Tokio
 /// timeout. Bound the actual dispatcher test in a child process instead.
 #[test]
@@ -211,27 +367,54 @@ fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(destroy_commands());
+            .block_on(async {
+                destroy_commands().await;
+                destroy_callbacks_shapes_and_fluids().await;
+                destroy_deferred_removal_uses_original_state().await;
+            });
         return;
     }
+    // A file captures both streams without a pipe that can fill while the
+    // parent waits for a stuck child. Only bounded excerpts appear on failure.
+    let mut output = tempfile::tempfile().unwrap();
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "command::commands::fill::tests::fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops", "--nocapture"])
         .env(CHILD, "1")
+        .stdout(output.try_clone().unwrap())
+        .stderr(output.try_clone().unwrap())
         .spawn()
         .unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(25);
-    loop {
+    let status = loop {
         if let Some(status) = child.try_wait().unwrap() {
-            assert!(status.success(), "fill destroy child failed: {status}");
-            return;
+            break Some(status);
         }
         if std::time::Instant::now() >= deadline {
             child.kill().unwrap();
             let _ = child.wait();
-            panic!("fill destroy command did not complete within 25 seconds");
+            break None;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+    };
+    use std::io::{Read, Seek, SeekFrom};
+    output.seek(SeekFrom::Start(0)).unwrap();
+    let mut start = Vec::new();
+    (&mut output).take(4096).read_to_end(&mut start).unwrap();
+    let start = String::from_utf8_lossy(&start);
+    let tail_offset = output.metadata().unwrap().len().saturating_sub(65536);
+    output.seek(SeekFrom::Start(tail_offset)).unwrap();
+    let mut tail = Vec::new();
+    output.read_to_end(&mut tail).unwrap();
+    let tail = String::from_utf8_lossy(&tail);
+    assert!(
+        status.is_some_and(|status| status.success()),
+        "fill destroy child failed or exceeded 25 seconds: {status:?}\n{start}\n{tail}"
+    );
+    assert!(
+        start.lines().any(|line| line == "running 1 test")
+            && tail.contains("test result: ok. 1 passed; 0 failed;"),
+        "the child must execute exactly one test, not merely exit successfully\n{start}\n{tail}"
+    );
 }
 
 #[tokio::test]

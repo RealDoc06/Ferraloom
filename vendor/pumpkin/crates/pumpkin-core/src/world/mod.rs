@@ -357,6 +357,8 @@ pub struct World {
     synced_block_event_queue: std::sync::Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
+    #[cfg(test)]
+    flushed_block_changes: std::sync::Mutex<Vec<(BlockPos, BlockStateId)>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
@@ -551,6 +553,8 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: std::sync::Mutex::new(Vec::new()),
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            flushed_block_changes: std::sync::Mutex::new(Vec::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
@@ -2325,6 +2329,12 @@ impl World {
         }
     }
 
+    /// Observes the actual client queue drained by the production flush path.
+    #[cfg(test)]
+    pub(crate) fn take_flushed_block_changes(&self) -> Vec<(BlockPos, BlockStateId)> {
+        std::mem::take(&mut *self.flushed_block_changes.lock().unwrap())
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section: HashMap<
@@ -2338,6 +2348,11 @@ impl World {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             std::mem::take(&mut *guard)
         };
+        #[cfg(test)]
+        self.flushed_block_changes
+            .lock()
+            .unwrap()
+            .extend(changes.iter().map(|(pos, state)| (*pos, *state)));
         for (position, block_state_id) in changes {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
@@ -5885,6 +5900,24 @@ impl World {
         cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
+        self.break_block_with_replacement(position, cause, flags, None)
+    }
+
+    /// Level.destroyBlock preserves the position's own fluid legacy block and
+    /// reports success only when that replacement changes the state.
+    pub(crate) fn destroy_block_for_command(self: &Arc<Self>, position: &BlockPos) -> bool {
+        let replacement = self.get_fluid_and_fluid_state(position).1.block_state_id;
+        self.break_block_with_replacement(position, None, BlockFlags::NOTIFY_ALL, Some(replacement))
+            .is_some_and(|previous| previous != replacement)
+    }
+
+    fn break_block_with_replacement(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        cause: Option<&Arc<Player>>,
+        flags: BlockFlags,
+        replacement: Option<BlockStateId>,
+    ) -> Option<BlockStateId> {
         if let Some(player) = cause
             && self.is_in_spawn_protection(player, position)
         {
@@ -5946,11 +5979,13 @@ impl World {
             crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
-            Block::WATER.default_state.id
-        } else {
-            Block::AIR.default_state.id
-        };
+        let new_state_id = replacement.unwrap_or_else(|| {
+            if broken_block.is_waterlogged(broken_block_state.id) {
+                Block::WATER.default_state.id
+            } else {
+                Block::AIR.default_state.id
+            }
+        });
 
         let broken_state_id = self.set_block_state(position, new_state_id, flags);
         let broken_block = Block::from_state_id(broken_state_id);
