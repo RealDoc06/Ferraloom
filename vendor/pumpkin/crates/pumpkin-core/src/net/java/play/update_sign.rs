@@ -12,16 +12,6 @@ impl JavaClient {
         else {
             return;
         };
-        if !player.can_interact_with_block_at(&sign_data.location, 4.0) {
-            let mut editor = sign_entity
-                .currently_editing_player()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if *editor == Some(player.gameprofile.id) {
-                *editor = None;
-            }
-            return;
-        }
         if sign_entity.is_waxed() {
             return;
         }
@@ -62,16 +52,14 @@ impl JavaClient {
             Box::<str>::from(sign_data.line_4),
         ];
 
-        // Plugin callbacks above hold no sign locks. Revalidate the live editor,
-        // wax and reach after the event before the one raw/filtered batch update.
-        if !player.can_interact_with_block_at(&sign_data.location, 4.0)
-            || !sign_entity.update_player_text(
-                player.gameprofile.id,
-                sign_data.is_front_text,
-                player.is_text_filtering_enabled(),
-                new_messages,
-            )
-        {
+        // Callbacks hold no sign locks. Revalidate editor and wax atomically;
+        // Java expires distant editors during the sign tick, not this packet.
+        if !sign_entity.update_player_text(
+            player.gameprofile.id,
+            sign_data.is_front_text,
+            player.is_text_filtering_enabled(),
+            new_messages,
+        ) {
             return;
         }
         world.update_block_entity(&block_entity);
