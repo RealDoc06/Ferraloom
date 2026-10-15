@@ -251,6 +251,18 @@
     "command.selector_scores": {
       "feature_id": "players.commands",
       "scenario": "score selectors use entity UUIDs and require existing scores"
+    },
+    "blocks.furnace_saved_state": {
+      "feature_id": "blocks.processing",
+      "scenario": "saved cooking timers and fuel speed survive a zero-step reload"
+    },
+    "blocks.furnace_cook_progress": {
+      "feature_id": "blocks.processing",
+      "scenario": "furnace blast furnace and smoker continue saved progress at exact ticks"
+    },
+    "blocks.furnace_lava_remainder": {
+      "feature_id": "blocks.processing",
+      "scenario": "lava fuel leaves a bucket and wet sponge fills it with water"
     }
   }
 }

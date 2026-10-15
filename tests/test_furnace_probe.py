@@ -9,6 +9,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import furnaces, worlds
+from check_furnaces import paired_results
 
 
 def text(value: str) -> bytes:
@@ -55,6 +56,30 @@ def snapshot(timer_kind: int = 3) -> dict:
 
 
 class FurnaceProbeTests(unittest.TestCase):
+    def test_paired_observations_require_clean_processes_and_fixture_integrity(self):
+        report = {"source_fixture": {"result": "passed"}, "source_integrity_checks": [{"passed": True}], "cases": []}
+        for kind in ("vanilla", "rust"):
+            for mode, names in (("main", ("zero-step", "after-63", "after-163")),
+                                ("lava", ("lava-after-1", "lava-after-200"))):
+                report["cases"].append({"runtime": kind, "mode": mode, "exit": {"passed": True},
+                                        "phases": [{"name": name, "result": "passed"} for name in names]})
+        self.assertTrue(all(case["result"] == "passed" for entries in paired_results(report).values() for case in entries))
+        report["cases"][2]["exit"]["passed"] = False
+        results = paired_results(report)
+        self.assertEqual([case["result"] for case in results["rust"]], ["failed", "failed", "passed"])
+        self.assertTrue(all(case["result"] == "passed" for case in results["vanilla"]))
+        report["source_integrity_checks"][0]["passed"] = False
+        self.assertTrue(all(case["result"] == "failed" for entries in paired_results(report).values() for case in entries))
+
+    def test_missing_continuation_phase_cannot_be_reported_as_a_pass(self):
+        report = {"source_fixture": {"result": "passed"}, "source_integrity_checks": [{"passed": True}],
+                  "cases": [{"runtime": "rust", "mode": "main", "exit": {"passed": True},
+                             "phases": [{"name": "zero-step", "result": "passed"},
+                                        {"name": "after-63", "result": "passed"}]}]}
+        results = paired_results(report)
+        self.assertEqual([case["result"] for case in results["rust"]], ["passed", "failed", "failed"])
+        self.assertTrue(all(case["result"] == "failed" for case in results["vanilla"]))
+
     def test_numeric_short_is_a_canonical_difference_without_semantic_failure(self):
         self.assertEqual(furnaces.compare_snapshot(snapshot(), EXPECTED)["result"], "passed")
         result = furnaces.compare_snapshot(snapshot(timer_kind=2), EXPECTED)

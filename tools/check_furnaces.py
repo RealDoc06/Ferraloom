@@ -3,7 +3,7 @@
 
 Creates a fresh 237-tick Java oracle, then fresh Java/Rust main and lava copies.
 Reports timer/speed/fuel remainder fixtures, not full furnace, inventory, XP,
-name, lock or Minecraft parity. Does not publish compatibility ledger results.
+name, lock or Minecraft parity. Does not modify the compatibility ledger.
 """
 from __future__ import annotations
 
@@ -43,6 +43,34 @@ def canonical_hash(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def paired_results(report: dict) -> dict:
+    """Expose scoped observations for the ledger, retaining raw checks in cases."""
+    groups = (
+        ("blocks.furnace_saved_state", "main", ("zero-step",)),
+        ("blocks.furnace_cook_progress", "main", ("after-63", "after-163")),
+        ("blocks.furnace_lava_remainder", "lava", ("lava-after-1", "lava-after-200")),
+    )
+    servers = {kind: [] for kind in ("vanilla", "rust")}
+    for kind, entries in servers.items():
+        for test_id, mode, names in groups:
+            cases = [case for case in report["cases"] if case["runtime"] == kind and case["mode"] == mode]
+            case = cases[0] if len(cases) == 1 else {}
+            phases = [phase for phase in case.get("phases", []) if phase["name"] in names]
+            healthy = (not report.get("error") and report.get("source_integrity_checks")
+                       and all(check["passed"] for check in report["source_integrity_checks"])
+                       and report.get("source_fixture", {}).get("result") == "passed"
+                       and case.get("exit", {}).get("passed") is True
+                       and not any(case.get(key) for key in ("error", "load_save_errors", "source_integrity_error")))
+            passed = (healthy and len(phases) == len(names)
+                      and {phase["name"] for phase in phases} == set(names)
+                      and all(phase["result"] == "passed" for phase in phases))
+            entries.append({"id": test_id, "features": ["blocks.processing"],
+                            "result": "passed" if passed else "failed",
+                            "detail": {"mode": mode, "phases": list(names), "healthy_process": bool(healthy),
+                                       "scope": "Selected saved-state, cooking and remainder fixtures; raw phase checks are in cases."}})
+    return servers
+
+
 def world_manifest(world: Path) -> dict:
     manifest = {}
     for path in sorted(world.rglob("*")):
@@ -65,6 +93,7 @@ def verify_source(report: dict, source: dict, stage: str) -> dict:
     record["passed"] = record["manifest_sha256"] == source["world_manifest_sha256"]
     report["source_integrity_checks"].append(record)
     if not record["passed"]:
+        report.setdefault("failed", []).append("source_fixture.changed_during_run")
         raise SourceMutationError(f"Java source world changed at {stage}")
     return manifest
 
@@ -105,7 +134,7 @@ class LoggedServer(suite.Server):
 
     def checked(self, command: str, timeout: float = 15) -> list[str]:
         output = self.command(command, timeout)
-        if any(re.search(r"Unknown|Incorrect argument|Cannot|No (?:block|entity)|Failed to", line) for line in output):
+        if any(re.search(r"Unknown|Incorrect argument|Cannot|No (?:block|entity)|Failed to|Could not set the block|is not a container", line) for line in output):
             raise RuntimeError(f"Fixture command failed: {command}: {output}")
         return output
 
@@ -237,6 +266,11 @@ def run_case(kind: str, mode: str, run: Path, args: argparse.Namespace, source: 
                 phase["expected"] = furnaces.expected_continuation(source["saved"], mode, elapsed)
                 phase["save_game_time"] = furnaces.save_frozen(server)
                 saved = furnaces.read_saved(server.directory / "world")
+                if advance == 0:
+                    phase["storage_observation"] = {
+                        "raw_chunk_unchanged": saved["raw_chunk_nbt_sha256"] == source["saved"]["raw_chunk_nbt_sha256"],
+                        "scope": "Zero-step preservation only; unchanged bytes do not establish a codec round-trip. Later stepped phases exercise continuation.",
+                    }
                 snapshot = server.directory / f"{name}-snapshot.json"
                 write_json(snapshot, saved)
                 phase.update(snapshot_path=str(snapshot), snapshot_sha256=furnaces.digest(snapshot))
@@ -297,16 +331,21 @@ def main() -> int:
               "run_directory": str(run), "transport": "fresh sequential offline 127.0.0.1 processes", "target": TARGET,
               "scope": "Timer/speed/fuel remainder fixtures only, not full furnace/inventory/XP/name/lock/Minecraft parity.",
               "comparison": "Semantic values and canonical numeric NBT types are separate. Java accepts NumericTag widths such as Short; a different canonical type alone is not a semantic failure.",
-              "publishes_compatibility_results": False, "source_integrity_checks": [], "cases": [], "result": "failed"}
+              "publishes_compatibility_results": False, "source_integrity_checks": [], "cases": [], "failed": [], "result": "failed",
+              "target_version": TARGET["version"], "protocol": TARGET["protocol"], "server_sha1": TARGET["server_sha1"],
+              "environment": {"host": socket.gethostname(), "platform": sys.platform, "auth": "isolated offline loopback", "seed": "12345678", "workers": args.workers}}
     print(f"Furnace report: {args.output}; isolated fixtures: {run}", flush=True)
     try:
         report.update(source_code=source_state(), harness_manifest=harness_manifest())
+        report["source_state"] = report["source_code"]
+        report["test_suite_sha256"] = canonical_hash(report["harness_manifest"])
         original = args.rust_binary
         before = furnaces.digest(original)
         args.rust_binary = suite.pin_binary(original, run)
         pinned, after = furnaces.digest(args.rust_binary), furnaces.digest(original)
         report["rust_binary"] = {"source_path": str(original), "source_sha256_before": before, "source_sha256_after": after,
                                  "pinned_path": str(args.rust_binary), "pinned_sha256": pinned, "bytes": args.rust_binary.stat().st_size}
+        report["rust_binary_sha256"] = pinned
         if before != pinned or after != pinned:
             raise ValueError("Rust binary changed while pinning; no server was started")
         official = acquire()
@@ -326,14 +365,19 @@ def main() -> int:
                 raise ValueError("Refusing further servers after fixture mutation or an unreaped process")
         verify_source(report, source, "final verified source")
         if furnaces.digest(args.rust_binary) != pinned or furnaces.digest(acquire()) != report["official_jar"]["sha256"]:
+            report["failed"].append("reference_or_binary.changed_during_run")
             raise ValueError("Pinned binary or official reference changed during the run")
         if harness_manifest() != report["harness_manifest"]:
+            report["failed"].append("harness.changed_during_run")
             raise ValueError("Harness changed during the run")
         if all(case["result"] == "passed" for case in report["cases"]) and len(report["cases"]) == 4:
             report["result"] = "passed"
     except Exception as error:
         report.update(error=f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
     finally:
+        report["servers"] = paired_results(report)
+        report["failed"].extend(f"{kind}:{case['id']}" for kind, entries in report["servers"].items()
+                                for case in entries if case["result"] != "passed")
         report.update(finished=now(), duration_seconds=round(time.monotonic() - began, 3))
         write_json(run / "report.json", report)
         write_json(args.output, report)
