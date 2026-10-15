@@ -229,8 +229,9 @@ export function decodeChunkBlockEntities(payload: Buffer) {
     if (block_entity_type === 7 || block_entity_type === 8) signs.push({ kind: 'chunk', packet_id: 46,
       x: x * 16 + (local >> 4), y, z: z * 16 + (local & 15), block_entity_type, data: decodeSignData(data) });
   }
-  // ClientboundLightUpdatePacketData: four bitsets and two lists of byte arrays.
-  for (let index = 0; index < 4; index++) reader.take(boundedCount(reader, 64, 'light bitset longs') * 8);
+  // 26.3 ByteBufCodecs$15 encodes BIT_SET using BitSet.toByteArray(), not LONG_ARRAY.
+  // ClientboundLightUpdatePacketData contains four such masks, then two byte-array lists.
+  for (let index = 0; index < 4; index++) reader.take(boundedCount(reader, 512, 'light bitset bytes'));
   for (let kind = 0; kind < 2; kind++) {
     const count = boundedCount(reader, 256, 'light array count');
     for (let index = 0; index < count; index++) reader.take(boundedCount(reader, 2048, 'light array bytes'));

@@ -139,7 +139,7 @@ test('sign codecs fail closed on truncated, trailing, malformed NBT and unsuppor
     largeList('a'), largeList('b'), largeList('c'), Buffer.from([0])])), /NBT node budget/);
 });
 
-function chunkWith(records: Buffer[], tail = Buffer.alloc(6)): Buffer {
+function chunkWith(records: Buffer[], tail: Buffer = Buffer.alloc(6)): Buffer {
   // Opaque sections need not contain a terrain palette: this decoder only skips
   // the length. Heightmap map and lighting are still consumed to their boundary.
   return Buffer.concat([varInt(46), i32(-2), i32(3), varInt(1), varInt(1), varInt(2), Buffer.alloc(16),
@@ -157,7 +157,10 @@ test('chunk BE metadata decodes packed local XZ, signed Y and optional compound 
   assert.equal(decoded.decoded_bytes, packet.length);
   assert.deepEqual(decoded.signs, [7, 8].map(block_entity_type => ({ kind: 'chunk', packet_id: 46,
     x: -22, y: -64, z: 53, block_entity_type, data: expectedSign })));
-  const light = Buffer.concat([Buffer.from([1]), Buffer.alloc(8), Buffer.alloc(3), varInt(1), varInt(2048), Buffer.alloc(2048), Buffer.from([0])]);
+  // Nonempty masks exercise the official byte-array BIT_SET codec. Empty masks
+  // alone also fit the older long-array schema and cannot distinguish the two.
+  const light = Buffer.concat([Buffer.from([2, 0, 1, 0, 1, 4, 2, 0, 2]),
+    varInt(1), varInt(2048), Buffer.alloc(2048), Buffer.from([0])]);
   assert.equal(decodeChunkBlockEntities(chunkWith([], light)).signs.length, 0);
 });
 
@@ -169,7 +172,9 @@ test('chunk probe rejects unsupported metadata, missing sign compounds, truncati
     Buffer.concat([prefix, varInt(7)]), Buffer.concat([prefix, varInt(-1)]),
     Buffer.concat([prefix, varInt(0), varInt(2097153)]),
     Buffer.concat([prefix, varInt(0), varInt(0), varInt(4097)]),
-    chunkWith([], Buffer.concat([Buffer.alloc(4), varInt(1), varInt(2049)]))]) {
+    chunkWith([], Buffer.concat([Buffer.alloc(4), varInt(1), varInt(2049)])),
+    chunkWith([], varInt(513)),
+    chunkWith([], Buffer.from([2, 1]))]) {
     assert.throws(() => decodeChunkBlockEntities(packet));
   }
 });
