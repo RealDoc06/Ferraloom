@@ -222,13 +222,13 @@ impl FromStringReader for Identifier {
         let raw_identifier = &reader.string()[start..reader.cursor()];
         let identifier_result = Self::parse(raw_identifier);
 
-        identifier_result.map_or_else(
-            |_| {
+        match identifier_result {
+            Ok(id) if id.namespace() != ".." => Ok(id),
+            _ => {
                 reader.set_cursor(start);
                 Err(INVALID_IDENTIFIER_ERROR_TYPE.create(reader))
-            },
-            Ok,
-        )
+            }
+        }
     }
 }
 

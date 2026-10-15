@@ -513,7 +513,9 @@ async fn modify_merge_type_errors_validate_sources_before_changing_targets() {
         compound("{mixed:[{value:{added:2}},{value:7}],number:42}"),
     );
     let sources = fixture.sources();
-    let target = compound("{object:{keep:1},scalar:7,numbers:[I;3,4]}");
+    let target = compound(
+        "{object:{keep:1},scalar:7,numbers:[I;3,4],bytes:[B;3b,4b],longs:[L;3L,4L],empty:[I;]}",
+    );
     fixture.put_storage("repair:target", target.clone());
 
     for (suffix, offending_tag) in [
@@ -539,8 +541,23 @@ async fn modify_merge_type_errors_validate_sources_before_changing_targets() {
         assert_eq!(fixture.storage("repair:target"), target);
         assert_eq!(fixture.sources(), sources);
     }
+    for path in [
+        "numbers[].child",
+        "numbers[-1].child",
+        "bytes[].child",
+        "bytes[-1].child",
+        "longs[].child",
+        "longs[-1].child",
+    ] {
+        let error = fixture
+            .execute(&format!(
+                "data modify storage repair:target {path} merge value {{added:2}}"
+            ))
+            .unwrap_err();
+        assert!(error.is(&ERROR_MERGE_UNCHANGED), "{path}: {error:?}");
+    }
     let error = fixture
-        .execute("data modify storage repair:target numbers[].child merge value {added:2}")
+        .execute("data modify storage repair:target numbers[].child.deeper merge value {added:2}")
         .unwrap_err();
     assert_eq!(
         error,
@@ -668,4 +685,40 @@ async fn execute_data_conditions_treat_absent_paths_as_zero_matches_for_every_pr
         }
     }
     assert_eq!(fixture.sources(), before);
+}
+
+#[tokio::test]
+async fn storage_namespace_rejection_precedes_any_mutation() {
+    let fixture = Fixture::new().await;
+    let before = fixture
+        .source
+        .server()
+        .command_storage
+        .lock()
+        .unwrap()
+        .clone();
+    for input in [
+        "data get storage ..:unsafe",
+        "data modify storage ..:unsafe value set value 1",
+    ] {
+        let error = fixture.execute(input).unwrap_err();
+        assert!(error.context.is_some(), "{input}: {error:?}");
+    }
+    let accessor = StorageDataAccessor::new("..:unsafe".into(), fixture.source.server().clone());
+    assert!(
+        accessor
+            .get_data()
+            .unwrap_err()
+            .is(&ERROR_STORAGE_NAMESPACE)
+    );
+    assert!(
+        accessor
+            .set_data(&compound("{value:1}"))
+            .unwrap_err()
+            .is(&ERROR_STORAGE_NAMESPACE)
+    );
+    assert_eq!(
+        *fixture.source.server().command_storage.lock().unwrap(),
+        before
+    );
 }

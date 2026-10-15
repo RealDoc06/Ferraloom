@@ -36,3 +36,41 @@ impl IdentifierArgumentType {
         Ok(context.get_argument::<Identifier>(name)?.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source::DummySource;
+
+    #[test]
+    fn namespace_parent_component_is_rejected_without_rejecting_dot_or_dotted_names() {
+        for input in ["..:probe", "..:folder/probe"] {
+            let mut reader = StringReader::new(input);
+            assert!(
+                <IdentifierArgumentType as ArgumentType<DummySource>>::parse(
+                    &IdentifierArgumentType,
+                    &mut reader
+                )
+                .is_err()
+            );
+            assert_eq!(reader.cursor(), 0);
+        }
+        for input in [
+            ".:probe",
+            "dots..inside:probe",
+            "minecraft:..",
+            "valid:folder/probe",
+        ] {
+            let mut reader = StringReader::new(input);
+            assert!(
+                <IdentifierArgumentType as ArgumentType<DummySource>>::parse(
+                    &IdentifierArgumentType,
+                    &mut reader
+                )
+                .is_ok(),
+                "{input}"
+            );
+            assert_eq!(reader.remaining_length(), 0);
+        }
+    }
+}

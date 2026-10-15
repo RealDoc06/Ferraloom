@@ -5,7 +5,7 @@ use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag
 use pumpkin_util::identifier::Identifier;
 use pumpkin_world::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::{self, File},
     io,
     path::{Component, Path},
@@ -20,11 +20,28 @@ pub(super) struct NamespaceFiles {
     roots: BTreeMap<String, NbtCompound>,
 }
 
+#[derive(Default)]
+struct Snapshot {
+    namespaces: BTreeMap<String, NbtCompound>,
+    first_error: Option<io::Error>,
+}
+
+impl Snapshot {
+    fn record_error(&mut self, error: io::Error) {
+        tracing::error!("Failed to snapshot command storage: {error}");
+        self.first_error.get_or_insert(error);
+    }
+}
+
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
 
 fn validate_namespace(namespace: &str) -> io::Result<()> {
+    // Java normalizes namespace "." to the data directory itself.
+    if namespace == "." {
+        return Ok(());
+    }
     let mut components = Path::new(namespace).components();
     if !Identifier::is_valid_namespace(namespace)
         || !matches!(components.next(), Some(Component::Normal(_)))
@@ -35,6 +52,15 @@ fn validate_namespace(namespace: &str) -> io::Result<()> {
         )));
     }
     Ok(())
+}
+
+fn namespace_directory(world_path: &Path, namespace: &str) -> std::path::PathBuf {
+    let data = world_path.join("data");
+    if namespace == "." {
+        data
+    } else {
+        data.join(namespace)
+    }
 }
 
 fn open_existing(path: &Path) -> io::Result<Option<File>> {
@@ -56,8 +82,8 @@ impl NamespaceFiles {
         let mut entries = Entries::new();
         let mut files = Self::default();
         let directory = world_path.join("data");
-        let namespaces = match fs::read_dir(&directory) {
-            Ok(namespaces) => namespaces,
+        let directory_entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 if fs::symlink_metadata(&directory)
                     .is_err_and(|missing| missing.kind() == io::ErrorKind::NotFound)
@@ -68,26 +94,58 @@ impl NamespaceFiles {
             }
             Err(error) => return Err(error),
         };
-        for namespace in namespaces {
-            let namespace = namespace?;
-            let kind = namespace.file_type()?;
-            if !kind.is_dir() && (!kind.is_symlink() || !fs::metadata(namespace.path())?.is_dir()) {
-                continue;
-            }
-            let path = namespace.path().join("command_storage.dat");
-            let Some(file) = open_existing(&path)? else {
+        let mut namespaces = BTreeSet::new();
+        for entry in directory_entries {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
                 continue;
             };
-            let name = namespace
-                .file_name()
-                .into_string()
-                .map_err(|_| invalid(format!("Invalid command-storage path {}", path.display())))?;
-            validate_namespace(&name)?;
+            let legacy_namespace = name
+                .strip_prefix("command_storage_")
+                .and_then(|name| name.strip_suffix(".dat"))
+                .filter(|namespace| validate_namespace(namespace).is_ok());
+            // Unrelated directories and dangling links are not saved namespaces.
+            if validate_namespace(name).is_err() && legacy_namespace.is_none() {
+                continue;
+            }
+            let kind = entry.file_type()?;
+            let is_directory = if kind.is_symlink() {
+                match fs::metadata(entry.path()) {
+                    Ok(metadata) => metadata.is_dir(),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                    Err(error) => return Err(error),
+                }
+            } else {
+                kind.is_dir()
+            };
+            if is_directory {
+                namespaces.insert(name.to_owned());
+            } else if name == "command_storage.dat" {
+                namespaces.insert(".".to_owned());
+            } else if let Some(namespace) = legacy_namespace {
+                // DimensionStorageFileFix (4772) moved these names into namespace
+                // directories. Keep the old file and prefer any modern file.
+                namespaces.insert(namespace.to_owned());
+            }
+        }
+        for namespace in namespaces {
+            let modern = namespace_directory(world_path, &namespace).join("command_storage.dat");
+            let (path, file) = match open_existing(&modern)? {
+                Some(file) => (modern, file),
+                None => {
+                    let legacy = directory.join(format!("command_storage_{namespace}.dat"));
+                    let Some(file) = open_existing(&legacy)? else {
+                        continue;
+                    };
+                    (legacy, file)
+                }
+            };
             let root = read_gzip_compound_tag(file)
                 .map_err(|error| invalid(format!("{}: {error}", path.display())))?;
-            let root = Self::decode(&name, root, &mut entries)
+            let root = Self::decode(&namespace, root, &mut entries)
                 .map_err(|error| invalid(format!("{}: {error}", path.display())))?;
-            files.roots.insert(name, root);
+            files.roots.insert(namespace, root);
         }
         Ok((entries, files))
     }
@@ -127,11 +185,24 @@ impl NamespaceFiles {
         Ok(root)
     }
 
-    fn snapshot(&mut self, entries: &Entries) -> io::Result<BTreeMap<String, NbtCompound>> {
+    fn snapshot(&mut self, entries: &Entries) -> Snapshot {
+        let mut snapshot = Snapshot::default();
+        let mut failed_namespaces = BTreeSet::new();
         let mut contents = BTreeMap::<String, NbtCompound>::new();
-        for (id, value) in entries {
-            let id = Identifier::parse(id).map_err(|error| invalid(error.to_string()))?;
-            validate_namespace(id.namespace())?;
+        for (raw_id, value) in entries {
+            let id = match Identifier::parse(raw_id) {
+                Ok(id) => id,
+                Err(error) => {
+                    failed_namespaces.insert(namespace_from_id(raw_id).to_owned());
+                    snapshot.record_error(invalid(error.to_string()));
+                    continue;
+                }
+            };
+            if let Err(error) = validate_namespace(id.namespace()) {
+                failed_namespaces.insert(id.namespace().to_owned());
+                snapshot.record_error(error);
+                continue;
+            }
             let contents = contents.entry(id.namespace().to_owned()).or_default();
             if !value.is_empty() {
                 contents.put_compound(id.path(), value.clone());
@@ -140,24 +211,30 @@ impl NamespaceFiles {
         for namespace in contents.keys() {
             self.roots.entry(namespace.clone()).or_default();
         }
-        self.roots
-            .iter()
-            .map(|(namespace, preserved)| {
-                validate_namespace(namespace)?;
-                let mut root = preserved.clone();
-                root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
-                let mut data = root.get_compound("data").cloned().unwrap_or_default();
-                data.put_compound("contents", contents.remove(namespace).unwrap_or_default());
-                root.put_compound("data", data);
-                Ok((namespace.clone(), root))
-            })
-            .collect()
+        for (namespace, preserved) in &self.roots {
+            if let Err(error) = validate_namespace(namespace) {
+                snapshot.record_error(error);
+                continue;
+            }
+            // A malformed externally inserted ID must not erase other entries
+            // from its namespace, or prevent healthy namespaces being saved.
+            if failed_namespaces.contains(namespace) {
+                continue;
+            }
+            let mut root = preserved.clone();
+            root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
+            let mut data = root.get_compound("data").cloned().unwrap_or_default();
+            data.put_compound("contents", contents.remove(namespace).unwrap_or_default());
+            root.put_compound("data", data);
+            snapshot.namespaces.insert(namespace.clone(), root);
+        }
+        snapshot
     }
 
-    fn write(world_path: &Path, snapshots: BTreeMap<String, NbtCompound>) -> io::Result<()> {
-        let mut first_error = None;
-        for (namespace, root) in snapshots {
-            let directory = world_path.join("data").join(namespace);
+    fn write(world_path: &Path, snapshot: Snapshot) -> io::Result<()> {
+        let mut first_error = snapshot.first_error;
+        for (namespace, root) in snapshot.namespaces {
+            let directory = namespace_directory(world_path, &namespace);
             let path = directory.join("command_storage.dat");
             let result = fs::create_dir_all(&directory).and_then(|()| {
                 pumpkin_world::nbt_io::write_gzip_compound_atomic(&path, root).map_err(Into::into)
@@ -172,18 +249,24 @@ impl NamespaceFiles {
     }
 }
 
+fn namespace_from_id(id: &str) -> &str {
+    match id.split_once(':') {
+        Some((namespace, _)) if !namespace.is_empty() => namespace,
+        _ => "minecraft",
+    }
+}
+
 impl Server {
+    /// Check Java's saved-data namespace boundary before command access/mutation.
+    pub(crate) fn validate_command_storage_id(id: &str) -> io::Result<()> {
+        let id = Identifier::parse(id).map_err(|error| invalid(error.to_string()))?;
+        validate_namespace(id.namespace())
+    }
+
     /// Remember even an empty first write: Java retains that namespace's file.
     /// Call before taking the command_storage mutex.
     pub(crate) fn remember_command_storage_namespace(&self, id: &str) {
-        let namespace = id
-            .split_once(':')
-            .map_or("minecraft", |(namespace, _)| namespace);
-        let namespace = if namespace.is_empty() {
-            "minecraft"
-        } else {
-            namespace
-        };
+        let namespace = namespace_from_id(id);
         self.command_storage_files
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -203,7 +286,7 @@ impl Server {
             .command_storage_files
             .lock()
             .map_err(|_| io::Error::other("Command-storage namespace lock poisoned"))?
-            .snapshot(&entries)?;
+            .snapshot(&entries);
         NamespaceFiles::write(&self.basic_config.get_world_path(), snapshots)
     }
 }

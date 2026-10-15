@@ -34,7 +34,7 @@ use crate::command::argument_types::nbt_path::{
 };
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
@@ -87,6 +87,10 @@ pub const ERROR_BLOCK_INVALID: CommandErrorType<0> = CommandErrorType::new(
 pub const ERROR_ENTITY_INVALID: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_DATA_ENTITY_INVALID,
     translation::java::COMMANDS_DATA_ENTITY_INVALID,
+);
+
+const ERROR_STORAGE_NAMESPACE: LiteralCommandErrorType = LiteralCommandErrorType::new(
+    "Command storage namespace resolves outside the world data directory",
 );
 
 #[must_use]
@@ -361,6 +365,8 @@ impl StorageDataAccessor {
 
 impl DataAccessor for StorageDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
+        Server::validate_command_storage_id(&self.id)
+            .map_err(|_| ERROR_STORAGE_NAMESPACE.create_without_context())?;
         self.server.remember_command_storage_namespace(&self.id);
         let mut storage = self
             .server
@@ -376,6 +382,8 @@ impl DataAccessor for StorageDataAccessor {
     }
 
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError> {
+        Server::validate_command_storage_id(&self.id)
+            .map_err(|_| ERROR_STORAGE_NAMESPACE.create_without_context())?;
         let storage = self
             .server
             .command_storage
@@ -796,6 +804,16 @@ fn modify_merge(root: &mut NbtTag, path: &NbtPath, sources: &[NbtTag]) -> Comman
         return Ok(0);
     };
     let Some(parents) = merge_path_parents(root, path) else {
+        // Array elements can resolve as scalar parents, even though they cannot
+        // supply mutable compound targets for the final node.
+        let prefix = NbtPath::new(
+            path.as_str().to_owned(),
+            path.nodes()[..path.nodes().len() - 1].to_vec(),
+            Vec::new(),
+        );
+        if prefix.count_matching(root) != 0 {
+            return Ok(0);
+        }
         // Reuse the path API's exact not-found prefix after parent creation.
         path.get(root)?;
         return Ok(0);

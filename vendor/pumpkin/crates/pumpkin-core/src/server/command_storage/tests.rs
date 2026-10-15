@@ -229,7 +229,7 @@ async fn vanilla_storage_roundtrips_namespaces_deleted_entries_and_unknown_field
 }
 
 #[tokio::test]
-async fn save_off_skips_storage_autosave_but_manual_save_and_shutdown_persist_it() {
+async fn save_off_keeps_server_storage_autosave_manual_save_and_shutdown_enabled() {
     let folder = tempfile::tempdir().unwrap();
     metadata(folder.path());
     let server = server_at(folder.path()).await.unwrap();
@@ -237,27 +237,23 @@ async fn save_off_skips_storage_autosave_but_manual_save_and_shutdown_persist_it
     overworld.level.save_enabled.store(false, Ordering::Relaxed);
     set(&server, "example:probe", &value(2));
     autosave(&server).await;
-    let path = storage_path(folder.path(), "example");
-    assert!(!path.exists());
-    server.save_all(true).await.unwrap();
     assert_eq!(entry(&saved(folder.path(), "example"), "probe"), value(2));
-    let previous = fs::read(&path).unwrap();
     set(&server, "example:probe", &value(3));
-    autosave(&server).await;
-    assert_eq!(fs::read(&path).unwrap(), previous);
-    overworld.level.save_enabled.store(true, Ordering::Relaxed);
-    autosave(&server).await;
+    server.save_all(true).await.unwrap();
     assert_eq!(entry(&saved(folder.path(), "example"), "probe"), value(3));
-    overworld.level.save_enabled.store(false, Ordering::Relaxed);
     set(&server, "example:probe", &value(4));
-    server.shutdown().await;
+    autosave(&server).await;
     assert_eq!(entry(&saved(folder.path(), "example"), "probe"), value(4));
+    assert!(!overworld.level.save_enabled.load(Ordering::Relaxed));
+    set(&server, "example:probe", &value(5));
+    server.shutdown().await;
+    assert_eq!(entry(&saved(folder.path(), "example"), "probe"), value(5));
     drop(overworld);
     drop(server);
     let restarted = server_at(folder.path()).await.unwrap();
     assert_eq!(
         restarted.command_storage.lock().unwrap()["example:probe"],
-        value(4)
+        value(5)
     );
     restarted.shutdown().await;
 }
@@ -353,12 +349,150 @@ async fn storage_save_failures_preserve_previous_file_and_attempt_other_namespac
 
 #[test]
 fn namespace_cannot_escape_data_directory_but_entry_paths_can_contain_slashes() {
-    for namespace in ["", ".", "..", "../outside", "/absolute", "bad:name"] {
+    for namespace in ["", "..", "../outside", "/absolute", "bad:name"] {
         assert!(validate_namespace(namespace).is_err(), "{namespace:?}");
     }
+    assert!(Server::validate_command_storage_id(".:folder/probe").is_ok());
+    assert!(Server::validate_command_storage_id("..:probe").is_err());
     let mut files = NamespaceFiles::default();
     let mut entries = Entries::new();
     entries.insert("valid:folder/probe".into(), value(1));
-    let snapshots = files.snapshot(&entries).unwrap();
-    assert_eq!(entry(&snapshots["valid"], "folder/probe"), value(1));
+    let snapshot = files.snapshot(&entries);
+    assert!(snapshot.first_error.is_none());
+    assert_eq!(
+        entry(&snapshot.namespaces["valid"], "folder/probe"),
+        value(1)
+    );
+}
+
+#[tokio::test]
+async fn dot_namespace_persists_in_data_root_and_parent_namespace_fails_before_mutation() {
+    let folder = tempfile::tempdir().unwrap();
+    metadata(folder.path());
+    let server = server_at(folder.path()).await.unwrap();
+    let source = CommandSource {
+        server: Some(server.clone()),
+        ..CommandSource::dummy().with_world(server.worlds.load()[0].clone())
+    };
+    {
+        let dispatcher = server.command_dispatcher.load();
+        for command in [
+            "data modify storage ..:probe answer set value 1",
+            "data get storage ..:probe",
+        ] {
+            assert!(
+                dispatcher.execute_input(command, &source).is_err(),
+                "{command}"
+            );
+        }
+    }
+    assert!(server.command_storage.lock().unwrap().is_empty());
+    assert!(
+        server
+            .command_storage_files
+            .lock()
+            .unwrap()
+            .roots
+            .is_empty()
+    );
+    set(&server, ".:folder/probe", &value(17));
+    set(&server, "healthy:probe", &value(23));
+    server.save_all(true).await.unwrap();
+    assert!(folder.path().join("data/command_storage.dat").is_file());
+    assert!(!folder.path().join("command_storage.dat").exists());
+    assert_eq!(entry(&saved(folder.path(), "."), "folder/probe"), value(17));
+    server.shutdown().await;
+    drop(source);
+    drop(server);
+
+    let restarted = server_at(folder.path()).await.unwrap();
+    let entries = restarted.command_storage.lock().unwrap().clone();
+    assert_eq!(entries[".:folder/probe"], value(17));
+    assert_eq!(entries["healthy:probe"], value(23));
+    assert!(!entries.contains_key("..:probe"));
+    restarted.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_java_storage_is_loaded_without_deleting_or_overriding_its_modern_replacement() {
+    let folder = tempfile::tempdir().unwrap();
+    metadata(folder.path());
+    let data = folder.path().join("data");
+    fs::create_dir_all(data.join("Foo")).unwrap();
+    fs::write(data.join("Foo/command_storage.dat"), b"unrelated").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("missing", data.join("unrelated_link")).unwrap();
+    let legacy = data.join("command_storage_ferraloom.dat");
+    // Reuse actual Java entry NBT to exercise the pre-4772 filename layout.
+    // This tests the filename migration, without claiming semantic data fixes.
+    fs::write(&legacy, VANILLA_STORAGE).unwrap();
+    let modern = storage_path(folder.path(), "ferraloom");
+    let server = server_at(folder.path()).await.unwrap();
+    assert_eq!(
+        server.command_storage.lock().unwrap()["ferraloom:probe"],
+        value(42)
+    );
+    assert!(!modern.exists());
+    set(&server, "ferraloom:probe", &value(91));
+    server.save_all(true).await.unwrap();
+    assert_eq!(
+        entry(&saved(folder.path(), "ferraloom"), "probe"),
+        value(91)
+    );
+    assert_eq!(fs::read(&legacy).unwrap(), VANILLA_STORAGE);
+    server.shutdown().await;
+    drop(server);
+
+    let restarted = server_at(folder.path()).await.unwrap();
+    assert_eq!(
+        restarted.command_storage.lock().unwrap()["ferraloom:probe"],
+        value(91)
+    );
+    restarted.shutdown().await;
+    drop(restarted);
+
+    // A present corrupt modern file is authoritative; valid legacy data must
+    // not mask it and allow a later save to replace the user's damaged file.
+    fs::write(&modern, b"broken modern").unwrap();
+    assert!(server_at(folder.path()).await.is_err());
+    assert_eq!(fs::read(&modern).unwrap(), b"broken modern");
+    assert_eq!(fs::read(&legacy).unwrap(), VANILLA_STORAGE);
+    fs::remove_file(&modern).unwrap();
+    fs::write(&legacy, b"broken legacy").unwrap();
+    assert!(server_at(folder.path()).await.is_err());
+    assert_eq!(fs::read(&legacy).unwrap(), b"broken legacy");
+    assert!(!modern.exists());
+}
+
+#[tokio::test]
+async fn malformed_public_map_entries_do_not_erase_their_namespace_or_block_healthy_saves() {
+    let folder = tempfile::tempdir().unwrap();
+    metadata(folder.path());
+    let server = server_at(folder.path()).await.unwrap();
+    set(&server, "alpha:probe", &value(2));
+    set(&server, "zeta:probe", &value(3));
+    server.save_all(false).await.unwrap();
+    let alpha = storage_path(folder.path(), "alpha");
+    let previous = fs::read(&alpha).unwrap();
+    set(&server, "alpha:probe", &value(4));
+    set(&server, "zeta:probe", &value(5));
+    {
+        // External callers can mutate the retained public map directly. One
+        // malformed key must neither clobber alpha nor starve valid zeta data.
+        let mut entries = server.command_storage.lock().unwrap();
+        entries.insert("alpha:bad path".into(), value(99));
+        entries.insert("..:escape".into(), value(99));
+    }
+    let error = server.save_all(true).await.unwrap_err();
+    assert!(error.contains("command storage"), "{error}");
+    assert_eq!(fs::read(&alpha).unwrap(), previous);
+    assert_eq!(entry(&saved(folder.path(), "zeta"), "probe"), value(5));
+    assert!(!folder.path().join("command_storage.dat").exists());
+    {
+        let mut entries = server.command_storage.lock().unwrap();
+        entries.remove("alpha:bad path");
+        entries.remove("..:escape");
+    }
+    server.shutdown().await;
+    assert_eq!(entry(&saved(folder.path(), "alpha"), "probe"), value(4));
 }
