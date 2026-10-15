@@ -8,6 +8,8 @@ Only `pumpkin-core`, `pumpkin-world`, and `pumpkin-command` are vendored. Cargo 
 
 The world's two generated feature-definition includes are copied from the same base revision's `pumpkin-data` sources so the world crate can compile independently. Referenced upstream test fixtures, the status icon, and management schema are retained with the asset notices.
 
-The world crate extracts its embedded world-preset JSON into Cargo's build output from the checksum-verified official 26.3 server, using `PUMPKIN_MINECRAFT_SERVER_JAR` or the repository's ignored reference cache. This replaces source-tree includes that depended on the upstream data crate's extraction location. Official executables and extracted datapacks are not committed.
+The world crate extracts its embedded world-preset JSON and an igloo template test fixture into Cargo's build output from the checksum-verified official 26.3 server, using `PUMPKIN_MINECRAFT_SERVER_JAR` or the repository's ignored reference cache. This replaces source-tree includes that depended on the upstream data crate's extraction location. Official executables and extracted datapacks are not committed.
+
+Local patches cover status connection handling, command block states and predicates, forced chunk loading, datapack discovery, 26.3 world storage, and ore-generation arithmetic. Stronghold cache initialization runs its small one-time calculation sequentially to avoid Rayon workers re-entering the same `OnceLock`; chunk generation remains parallel. The nested lockfile pins the additional development dependencies needed to run world-crate tests independently.
 
 Upstream license and asset notices are retained. Ferraloom's differential suite records behavior changes against the official server. See the Git history for local patches.

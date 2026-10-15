@@ -138,6 +138,7 @@ strip = false
 
 [profile.dev]
 debug = false
+opt-level = 1
 
 [workspace.dependencies]
 tokio = { version = "1.53", default-features = false }

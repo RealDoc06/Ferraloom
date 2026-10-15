@@ -1225,7 +1225,7 @@ mod tests {
         let bytes = test_chunk(vec![test_section(-4, "minecraft:stone", true)]).write();
         let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
         let encoded = chunk.internal_to_bytes();
-        let mut cursor = std::io::Cursor::new(encoded);
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
         let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
         let nbt = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
         let sections = nbt.root_tag.get_list("sections").unwrap();

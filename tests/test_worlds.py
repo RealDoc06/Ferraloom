@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 from pathlib import Path
 import struct
 import sys
@@ -146,6 +147,29 @@ class NBTTests(unittest.TestCase):
 
 
 class RegionComparisonTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        report = Path(directory.name) / 'blocks.json'
+        definitions = {name: {'states': [{'default': True, 'id': index}]} for index, name in enumerate((
+            'minecraft:air', 'minecraft:stone', 'minecraft:granite', 'minecraft:glass',
+        ))}
+        definitions['minecraft:deepslate'] = {
+            'properties': {'axis': ['x', 'y', 'z']},
+            'states': [{'id': 10 + index, 'properties': {'axis': axis}, 'default': axis == 'y'}
+                       for index, axis in enumerate(('x', 'y', 'z'))],
+        }
+        definitions['minecraft:oak_stairs'] = {
+            'properties': {'facing': ['north', 'east'], 'half': ['bottom', 'top']},
+            'states': [{'id': 20 + index, 'properties': {'facing': facing, 'half': half},
+                        'default': facing == 'north' and half == 'bottom'}
+                       for index, (facing, half) in enumerate((('north', 'bottom'), ('north', 'top'), ('east', 'bottom'), ('east', 'top')))],
+        }
+        report.write_text(json.dumps(definitions))
+        mocked = patch.object(worlds, 'default_blocks_report', return_value=report)
+        mocked.start()
+        self.addCleanup(mocked.stop)
+
     def test_modern_dimension_directory_and_ambiguous_layout(self):
         with tempfile.TemporaryDirectory() as directory:
             world = Path(directory)
@@ -159,8 +183,8 @@ class RegionComparisonTests(unittest.TestCase):
     def test_hashes_ignore_property_order_and_surface_fixture_edits(self):
         with tempfile.TemporaryDirectory() as directory:
             vanilla, rust = Path(directory) / 'vanilla', Path(directory) / 'rust'
-            first = state('minecraft:oak_log', (('axis', 'y'), ('test', 'value')))
-            second = state('minecraft:oak_log', (('test', 'value'), ('axis', 'y')))
+            first = state('minecraft:oak_stairs', (('facing', 'east'), ('half', 'top')))
+            second = state('minecraft:oak_stairs', (('half', 'top'), ('facing', 'east')))
             write_region(vanilla, chunk(tuple(section(y, (first,)) for y in range(-4, 0)) + (section(6, (state('minecraft:stone'),)),)))
             write_region(rust, chunk(tuple(section(y, (second,)) for y in range(-4, 0)) + (section(6, (state('minecraft:glass'),)),)), compression=1)
             result = worlds.compare_terrain(vanilla, rust)
@@ -169,6 +193,31 @@ class RegionComparisonTests(unittest.TestCase):
             self.assertEqual(result['mismatched_blocks'], 0)
             self.assertEqual(result['vanilla_sha256'], result['rust_sha256'])
             self.assertEqual((result['y_min'], result['y_max']), (-64, -1))
+
+    def test_official_defaults_normalize_shorthand_without_hiding_nondefault_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vanilla, rust = Path(directory) / 'vanilla', Path(directory) / 'rust'
+            shorthand = compound(named(1, 'Y', b'\xfc'), named(10, 'block_states', compound(
+                named(9, 'palette', b'\x08\x00\x00\x00\x01' + text('minecraft:deepslate')))))
+            write_region(vanilla, chunk((shorthand,)))
+            write_region(rust, chunk((section(-4, (state('minecraft:deepslate', (('axis', 'y'),)),)),)))
+            result = worlds.compare_terrain(vanilla, rust)
+            self.assertEqual(result['mismatched_blocks'], 0)
+            self.assertEqual(result['vanilla_sha256'], result['rust_sha256'])
+            write_region(rust, chunk((section(-4, (state('minecraft:deepslate', (('axis', 'x'),)),)),)))
+            result = worlds.compare_terrain(vanilla, rust)
+            self.assertEqual(result['mismatched_blocks'], 4096)
+            self.assertNotEqual(result['vanilla_sha256'], result['rust_sha256'])
+
+    def test_unknown_properties_and_values_fail_instead_of_normalizing_away(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vanilla, rust = Path(directory) / 'vanilla', Path(directory) / 'rust'
+            write_region(vanilla, chunk((section(-4, (state('minecraft:deepslate'),)),)))
+            for properties in ((('axis', 'invalid'),), (('unknown', 'y'),)):
+                with self.subTest(properties=properties):
+                    write_region(rust, chunk((section(-4, (state('minecraft:deepslate', properties),)),)))
+                    with self.assertRaisesRegex(ValueError, 'Unknown block property'):
+                        worlds.compare_terrain(vanilla, rust)
 
     def test_one_mismatching_block_reports_exact_negative_world_coordinate(self):
         with tempfile.TemporaryDirectory() as directory:

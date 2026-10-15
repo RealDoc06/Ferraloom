@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import protocol
-from parity.suite import is_server_say
+from parity.suite import check_signal_exit, is_server_say, recorded
 
 
 class HarnessTests(unittest.TestCase):
@@ -40,6 +40,18 @@ class HarnessTests(unittest.TestCase):
     def test_failed_requirement_always_raises(self):
         with self.assertRaises(AssertionError):
             protocol.require(False, "expected failure even with Python -O")
+
+    def test_reported_comparison_failure_is_retained(self):
+        result = recorded("worldgen.sample", (), lambda: {"result": "failed", "mismatched_blocks": 7})
+        self.assertEqual(result["result"], "failed")
+        self.assertEqual(result["detail"]["mismatched_blocks"], 7)
+
+    def test_signal_exit_matches_native_process_conventions(self):
+        self.assertEqual(check_signal_exit("vanilla", 143, False)["exit_code"], 143)
+        self.assertEqual(check_signal_exit("rust", 0, False)["exit_code"], 0)
+        for kind, code, forced in [("rust", 143, False), ("vanilla", 137, False), ("vanilla", 143, True)]:
+            with self.subTest(kind=kind, code=code, forced=forced), self.assertRaises(AssertionError):
+                check_signal_exit(kind, code, forced)
 
 
 if __name__ == "__main__":

@@ -25,24 +25,28 @@ Evidence has this shape:
 
 ```json
 {
-  "test_id": "protocol.handshake.supported_version",
-  "scenario": "valid target handshake",
+  "test_id": "network.status_fields",
+  "scenario": "status fields",
   "target_version": "26.3",
+  "report_sha256": "<SHA-256 of the paired report snapshot>",
+  "test_suite_sha256": "<SHA-256 recorded by the test suite>",
   "environment": "isolated reference and Rust processes; configuration and tool versions in artifacts",
   "vanilla": {
     "result": "passed",
-    "build_id": "sha256:<official-server-digest>",
-    "artifact": "artifacts/run-id/vanilla-handshake.json"
+    "build_id": "sha1:<pinned-official-server-digest>",
+    "artifact": "compatibility/results/evidence/<report-sha256>.json"
   },
   "rust": {
     "result": "passed",
-    "build_id": "git:<commit-and-build-configuration>",
-    "artifact": "artifacts/run-id/rust-handshake.json"
+    "build_id": "sha256:<tested-Rust-binary-digest>",
+    "artifact": "compatibility/results/evidence/<report-sha256>.json"
   }
 }
 ```
 
 `scenario` must exactly match one entry in the family's `required_scenarios`. Results can be `passed`, `failed` or `skipped`; only paired passes satisfy verification. Artifacts use repository-relative paths, including materialized CI artifacts. Store executable hashes, build configuration, JVM and Rust toolchain versions, seed, relevant settings, input trace, expected observations, actual observations and comparison rules with the run. For tests that do not involve world randomness, record the seed as inapplicable. Keep successful evidence only while it applies to the current Rust build; a code change that invalidates a scenario requires rerunning it or returning the affected family to `unverified` or `partial`.
+
+Evidence counted toward `verified` requires report and suite SHA-256 hashes, the pinned official server SHA-1, and the tested Rust binary SHA-256. Strict modes always inspect materialized artifacts. They check report bytes against the recorded hash and bind each observation to its actual test ID, result, target version, suite hash and build IDs. The scenario map must link that test to the claimed feature and scenario. All required scenarios must pass on one Rust build, and a failing or skipped observation on that build cannot be hidden by another passing test for the same scenario. Hash checks detect changed evidence; they do not execute tests or authenticate who produced a report. The importer retains selected observations as `partial` and never promotes a whole family to `verified`.
 
 ## Runnable checks and completion gates
 

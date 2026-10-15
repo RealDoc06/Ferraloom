@@ -6,7 +6,7 @@ use std::{
 
 use sha1::{Digest, Sha1};
 
-/// Embed only the presets this crate uses; keep official downloads outside Git.
+/// Embed the presets and template test fixture; keep official downloads outside Git.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=PUMPKIN_MINECRAFT_SERVER_JAR");
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
@@ -37,7 +37,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .by_name("META-INF/versions/26.3/server-26.3.jar")?
         .read_to_end(&mut inner_bytes)?;
     let mut inner = zip::ZipArchive::new(Cursor::new(inner_bytes))?;
-    let output = PathBuf::from(env::var("OUT_DIR")?).join("vanilla-worldgen");
+    let build_output = PathBuf::from(env::var("OUT_DIR")?);
+    let mut template = inner.by_name("data/minecraft/structure/igloo/top.nbt")?;
+    let mut fixture = fs::File::create(build_output.join("igloo-top.nbt"))?;
+    std::io::copy(&mut template, &mut fixture)?;
+    drop(template);
+    let output = build_output.join("vanilla-worldgen");
     let prefix = "data/minecraft/worldgen/";
     for index in 0..inner.len() {
         let mut entry = inner.by_index(index)?;

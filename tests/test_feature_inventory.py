@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('validate_features', ROOT / 'tools/validate_features.py')
@@ -35,6 +37,38 @@ class FeatureInventoryTests(unittest.TestCase):
             }
             for index, scenario in enumerate(self.feature['required_scenarios'])
         ]
+        if self.feature['rust_status'] == 'verified':
+            for record in self.feature['evidence']:
+                record.update(report_sha256='e' * 64, test_suite_sha256='d' * 64)
+                record['vanilla']['build_id'] = 'sha1:' + 'c' * 40
+                record['rust']['build_id'] = 'sha256:' + 'a' * 64
+
+    def write_verified_snapshot(self, root: Path, *, report_changes=None):
+        self.feature['rust_status'] = 'verified'
+        self.add_passing_evidence()
+        report = {
+            'schema_version': 1, 'target_version': self.document['target']['version'],
+            'server_sha1': 'c' * 40, 'rust_binary_sha256': 'a' * 64,
+            'test_suite_sha256': 'd' * 64,
+            'servers': {implementation: [{'id': record['test_id'], 'result': 'passed'}
+                                        for record in self.feature['evidence']]
+                        for implementation in ('vanilla', 'rust')},
+        }
+        if report_changes:
+            report_changes(report)
+        raw = json.dumps(report).encode()
+        (root / 'artifacts').mkdir()
+        (root / 'artifacts/report.json').write_bytes(raw)
+        for record in self.feature['evidence']:
+            record['report_sha256'] = hashlib.sha256(raw).hexdigest()
+            for implementation in ('vanilla', 'rust'):
+                record[implementation]['artifact'] = 'artifacts/report.json'
+        (root / 'compatibility').mkdir()
+        (root / 'compatibility/scenario-map.json').write_text(json.dumps({
+            'target_version': self.document['target']['version'],
+            'cases': {record['test_id']: {'feature_id': self.feature['id'], 'scenario': record['scenario']}
+                      for record in self.feature['evidence']},
+        }))
 
     def test_checked_in_inventory_is_valid(self):
         document = json.loads((ROOT / 'compatibility/features.json').read_text())
@@ -69,8 +103,18 @@ class FeatureInventoryTests(unittest.TestCase):
     def test_verified_cannot_combine_scenarios_from_different_rust_builds(self):
         self.feature['rust_status'] = 'verified'
         self.add_passing_evidence()
-        self.feature['evidence'][1]['rust']['build_id'] = 'another-build'
+        self.feature['evidence'][1]['rust']['build_id'] = 'sha256:' + 'b' * 64
         self.assertTrue(any('same Rust build' in error for error in validator.validate_inventory(self.document)))
+
+    def test_failure_on_same_build_cannot_be_masked_by_another_passing_test(self):
+        self.feature['rust_status'] = 'verified'
+        self.add_passing_evidence()
+        failed = copy.deepcopy(self.feature['evidence'][0])
+        failed['test_id'] = 'another.required.check'
+        failed['rust']['result'] = 'failed'
+        self.feature['evidence'].append(failed)
+        self.assertTrue(validator.validate_inventory(self.document))
+        self.assertTrue(validator.completion_errors(self.document))
 
     def test_target_pin_drift_is_rejected(self):
         pin = json.loads((ROOT / 'compatibility/target.json').read_text())
@@ -86,7 +130,7 @@ class FeatureInventoryTests(unittest.TestCase):
         second = copy.deepcopy(self.feature)
         second['id'] = 'network.other'
         for record in second['evidence']:
-            record['rust']['build_id'] = 'another-build'
+            record['rust']['build_id'] = 'sha256:' + 'b' * 64
         self.document['features'].append(second)
         self.assertEqual(validator.validate_inventory(self.document), [])
         self.assertTrue(any('single verified Rust build' in error for error in validator.completion_errors(self.document)))
@@ -133,6 +177,57 @@ class FeatureInventoryTests(unittest.TestCase):
                 (root / 'artifacts' / filename).write_text('{}')
             self.feature['evidence'][0]['report_sha256'] = '0' * 64
             self.assertTrue(any('SHA-256 mismatch' in error for error in validator.validate_inventory(self.document, artifact_root=root)))
+
+    def test_verified_cannot_use_unrelated_existing_json_without_report_hash(self):
+        self.feature['rust_status'] = 'verified'
+        self.add_passing_evidence()
+        for record in self.feature['evidence']:
+            record.pop('report_sha256')
+            record['vanilla']['artifact'] = record['rust']['artifact'] = 'compatibility/target.json'
+        self.assertTrue(any('requires report_sha256' in error for error in validator.validate_inventory(self.document, artifact_root=ROOT)))
+
+    def test_verified_snapshot_is_bound_to_actual_test_results_target_and_builds(self):
+        for mutation in ('none', 'unrelated', 'missing_test', 'failed_result', 'wrong_version', 'wrong_build', 'wrong_suite'):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+
+                def mutate(report):
+                    if mutation == 'unrelated':
+                        report.clear()
+                    elif mutation == 'missing_test':
+                        report['servers']['rust'][0]['id'] = 'another.test'
+                    elif mutation == 'failed_result':
+                        report['servers']['rust'][0]['result'] = 'failed'
+                    elif mutation == 'wrong_version':
+                        report['target_version'] = 'wrong'
+                    elif mutation == 'wrong_build':
+                        report['rust_binary_sha256'] = 'f' * 64
+                    elif mutation == 'wrong_suite':
+                        report['test_suite_sha256'] = 'f' * 64
+
+                self.write_verified_snapshot(root, report_changes=mutate)
+                errors = validator.validate_inventory(self.document, artifact_root=root)
+                self.assertEqual(bool(errors), mutation != 'none', errors)
+
+    def test_verified_snapshot_cannot_claim_a_different_scenario(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_verified_snapshot(root)
+            self.feature['evidence'][0]['scenario'] = 'failure path'
+            errors = validator.validate_inventory(self.document, artifact_root=root)
+            self.assertTrue(any('does not map' in error for error in errors))
+
+    def test_strict_cli_checks_artifacts_without_optional_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_verified_snapshot(root)
+            self.feature['evidence'][0]['rust']['artifact'] = 'missing.json'
+            (root / 'inventory.json').write_text(json.dumps(self.document))
+            target = {'edition': 'java', 'version': self.document['target']['version'],
+                      'metadata_sha1': self.document['target']['version_metadata_sha1'], 'server_sha1': 'c' * 40}
+            (root / 'target.json').write_text(json.dumps(target))
+            with patch.object(validator, 'ROOT', root):
+                self.assertEqual(validator.main([str(root / 'inventory.json'), '--target', str(root / 'target.json'), '--strict']), 2)
 
     def test_malformed_shapes_return_errors_instead_of_crashing(self):
         for value in (None, [], {}, {'schema_version': True, 'features': [None]},

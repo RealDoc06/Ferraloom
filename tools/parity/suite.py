@@ -60,6 +60,7 @@ class Scenario:
     predicate: str
     settle: float = 0.15
     precondition: str | None = None
+    force_dimension: str | None = None
 
 
 SCENARIOS = [
@@ -79,8 +80,8 @@ SCENARIOS = [
     Scenario("entity.damage", ("entities.combat",), ("damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic",), "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]"),
     Scenario("entity.kill", ("entities.lifecycle",), ("kill @e[tag=ferraloom_probe]",), "unless entity @e[tag=ferraloom_probe]", 1.5, "if entity @e[tag=ferraloom_probe]"),
     Scenario("datapack.function", ("world.functions",), ("function ferraloom:probe",), "if score Datapack parity matches 37"),
-    Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5),
-    Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5),
+    Scenario("dimension.nether", ("world.nether",), ("execute in minecraft:the_nether run setblock 0 100 0 gold_block",), "in minecraft:the_nether if block 0 100 0 gold_block", 0.5, force_dimension="minecraft:the_nether"),
+    Scenario("dimension.end", ("world.end",), ("execute in minecraft:the_end run setblock 0 100 0 emerald_block",), "in minecraft:the_end if block 0 100 0 emerald_block", 0.5, force_dimension="minecraft:the_end"),
     Scenario("persistence.write", ("persistence.chunk_data",), ("setblock 14 200 14 diamond_block", "save-all flush"), "if block 14 200 14 diamond_block", 0.5),
 ]
 
@@ -220,7 +221,7 @@ def recorded(test_id: str, features: tuple[str, ...], action) -> dict:
     started = time.monotonic()
     try:
         detail = action()
-        result = {"result": "passed", "detail": detail}
+        result = {"result": "failed" if isinstance(detail, dict) and detail.get("result") == "failed" else "passed", "detail": detail}
     except Exception as error:
         result = {"result": "failed", "error": f"{type(error).__name__}: {error}"}
     result.update({"id": test_id, "features": list(features), "duration_seconds": round(time.monotonic() - started, 3)})
@@ -229,6 +230,9 @@ def recorded(test_id: str, features: tuple[str, ...], action) -> dict:
 
 
 def run_scenario(server: Server, scenario: Scenario) -> dict:
+    if scenario.force_dimension is not None:
+        server.command(f"execute in {scenario.force_dimension} run forceload add 0 0")
+        wait_loaded(server, scenario.force_dimension)
     if scenario.precondition is not None:
         check_predicate(server, scenario.precondition)
     for command in scenario.commands:
@@ -281,9 +285,6 @@ def run(server: Server, quick: bool) -> list[dict]:
             server.command("forceload add -16 -16 31 31")
             wait_loaded(server)
             wait_loaded(server, x=-1, z=9)
-            for dimension in ("minecraft:the_nether", "minecraft:the_end"):
-                server.command(f"execute in {dimension} run forceload add 0 0")
-                wait_loaded(server, dimension)
             server.command("fill -2 199 -2 15 199 15 stone")
             results.extend(run_client_scenarios(server))
             for scenario in SCENARIOS:
@@ -305,7 +306,7 @@ def run(server: Server, quick: bool) -> list[dict]:
             server.signal(signal.SIGTERM)
             protocol.require(server.process is not None, "Missing server process")
             signal_code = server.process.wait(timeout=45)
-            results.append(recorded("lifecycle.sigterm_exit", ("lifecycle.shutdown",), lambda: check_exit(signal_code, server.forced_stop)))
+            results.append(recorded("lifecycle.sigterm_exit", ("lifecycle.shutdown",), lambda: check_signal_exit(server.kind, signal_code, server.forced_stop)))
             server.stop()
             server.start()
             server.command("forceload add 0 0")
@@ -344,8 +345,19 @@ def check_exit(code: int | None, forced: bool) -> dict:
     return {"exit_code": code}
 
 
-def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Namespace) -> dict:
+def check_signal_exit(kind: str, code: int | None, forced: bool) -> dict:
+    # HotSpot completes its shutdown hooks and reports 128 + SIGTERM on Unix.
+    accepted = (0, 128 + signal.SIGTERM) if kind == "vanilla" else (0,)
+    protocol.require(code in accepted and not forced, f"Unclean SIGTERM shutdown: exit={code}, forced={forced}")
+    return {"exit_code": code, "signal": "SIGTERM", "durability": "checked separately by persistence.signal_restart"}
+
+
+def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Namespace, source_cases: list[dict]) -> dict:
     """Load the other implementation's saved overworld without format conversion."""
+    test_id = f"persistence.{source}_to_{destination}"
+    if not any(case["id"] == "persistence.write" and case["result"] == "passed" for case in source_cases):
+        return {"id": test_id, "features": ["persistence.chunk_data", "persistence.level_data"],
+                "result": "skipped", "reason": "Source persistence.write did not establish the saved marker"}
     server = Server(destination, run_dir / f"migration-{source}-to-{destination}", args)
 
     def check() -> dict:
@@ -370,7 +382,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
         finally:
             server.stop()
 
-    return recorded(f"persistence.{source}_to_{destination}", ("persistence.chunk_data", "persistence.level_data"), check)
+    return recorded(test_id, ("persistence.chunk_data", "persistence.level_data"), check)
 
 
 def main() -> int:
@@ -409,7 +421,7 @@ def main() -> int:
         print(f"Running {kind} on this host's loopback; logs: {run_dir / kind / 'console.log'}", flush=True)
         report["servers"][kind] = run(Server(kind, run_dir / kind, args), args.quick)
     if args.server == "both" and not args.quick:
-        report["cross_world"] = [cross_world(source, destination, run_dir, args)
+        report["cross_world"] = [cross_world(source, destination, run_dir, args, report["servers"][source])
                                  for source, destination in [("vanilla", "rust"), ("rust", "vanilla")]]
         report["terrain"] = recorded("worldgen.underground_chunk", ("world.terrain",),
                                      lambda: compare_terrain(run_dir / "vanilla/world", run_dir / "rust/world"))
@@ -422,8 +434,6 @@ def main() -> int:
                             for key in sorted(vanilla.keys() | rust.keys())]
     failed = [f"{kind}:{case['id']}" for kind, cases in report["servers"].items() for case in cases if case["result"] != "passed"]
     failed.extend(case["id"] for case in report.get("cross_world", []) if case["result"] != "passed")
-    if report.get("terrain", {}).get("detail", {}).get("result") == "failed":
-        report["terrain"]["result"] = "failed"
     if report.get("terrain", {}).get("result") == "failed":
         failed.append("worldgen.underground_chunk")
     if report["harness_manifest"] != harness_manifest():

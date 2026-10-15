@@ -1445,9 +1445,7 @@ mod tests {
     /// properties instead of Name and Properties.
     #[test]
     fn load_26_3_template() {
-        let bytes = include_bytes!(
-            "../../../../../../assets/datapack/data/minecraft/structure/igloo/top.nbt"
-        );
+        let bytes = include_bytes!(concat!(env!("OUT_DIR"), "/igloo-top.nbt"));
         let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
 
         let palette = &template.palette;

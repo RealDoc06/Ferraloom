@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import re
 import struct
@@ -19,6 +20,80 @@ SECTOR_BYTES = 4096
 State = tuple[str, tuple[tuple[str, str], ...]]
 AIR: State = ('minecraft:air', ())
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+')
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class BlockDefinition:
+    defaults: dict[str, str]
+    values: dict[str, frozenset[str]]
+    states: frozenset[tuple[tuple[str, str], ...]]
+
+
+def default_blocks_report() -> Path:
+    target = json.loads((ROOT / 'compatibility/target.json').read_text())
+    return ROOT / '.cache/vanilla' / target['version'] / 'generated/reports/blocks.json'
+
+
+def load_block_catalog(path: Path) -> tuple[dict[str, BlockDefinition], str]:
+    """Index exact official defaults and legal states rather than guessing omissions."""
+    try:
+        raw = path.read_bytes()
+        report = json.loads(raw)
+    except (OSError, ValueError) as error:
+        raise ValueError(f'Cannot read official block report {path}: {error}') from error
+    if not isinstance(report, dict) or not report:
+        raise ValueError('Official block report must be a nonempty object')
+    catalog = {}
+    for name, entry in report.items():
+        if not IDENTIFIER.fullmatch(name) or not isinstance(entry, dict):
+            raise ValueError('Invalid official block definition')
+        values = entry.get('properties', {})
+        if not isinstance(values, dict) or any(
+            not isinstance(key, str) or not isinstance(options, list) or not options or
+            any(not isinstance(option, str) for option in options) for key, options in values.items()
+        ):
+            raise ValueError(f'Invalid property domains for {name}')
+        states = entry.get('states')
+        if not isinstance(states, list) or not states:
+            raise ValueError(f'Missing official states for {name}')
+        canonical = set()
+        defaults = []
+        for state in states:
+            if not isinstance(state, dict):
+                raise ValueError(f'Invalid official state for {name}')
+            properties = state.get('properties', {})
+            if not isinstance(properties, dict) or properties.keys() != values.keys() or any(
+                not isinstance(value, str) or value not in values[key] for key, value in properties.items()
+            ):
+                raise ValueError(f'Invalid official state properties for {name}')
+            canonical.add(tuple(sorted(properties.items())))
+            if state.get('default') is True:
+                defaults.append(properties)
+        if len(defaults) != 1:
+            raise ValueError(f'Expected exactly one official default state for {name}')
+        catalog[name] = BlockDefinition(dict(defaults[0]), {key: frozenset(options) for key, options in values.items()}, frozenset(canonical))
+    return catalog, hashlib.sha256(raw).hexdigest()
+
+
+def normalize_states(states: list[State], catalog: dict[str, BlockDefinition]) -> list[State]:
+    """Resolve omitted properties; reject unknown blocks and unsupported explicit states."""
+    normalized = {}
+    for state in set(states):
+        name, explicit = state
+        definition = catalog.get(name)
+        if definition is None:
+            raise ValueError(f'Unknown block in terrain sample: {name}')
+        properties = definition.defaults.copy()
+        for key, value in explicit:
+            if key not in definition.values or value not in definition.values[key]:
+                raise ValueError(f'Unknown block property or value: {name}[{key}={value}]')
+            properties[key] = value
+        canonical = tuple(sorted(properties.items()))
+        if canonical not in definition.states:
+            raise ValueError(f'Unsupported block state combination: {name}{properties}')
+        normalized[state] = name, canonical
+    return [normalized[state] for state in states]
 
 
 class NBTReader:
@@ -176,7 +251,8 @@ def read_chunk(world: Path, chunk_x: int = 0, chunk_z: int = 0) -> dict:
 
 
 def _palette_state(entry: object) -> State:
-    # 26.3 codecs encode property-free states as strings. Mixed NBT lists wrap
+    # 26.3 codecs encode default states as strings, including defaults with
+    # properties. Mixed NBT lists wrap
     # those strings in {"": value}; property states use lowercase id/properties.
     # Older Anvil writers use Name/Properties, which has the same state meaning.
     if isinstance(entry, str):
@@ -253,15 +329,17 @@ def _canonical_hash(states: list[State]) -> str:
 
 
 def compare_terrain(vanilla_world: Path, rust_world: Path, *, chunk_x: int = 0, chunk_z: int = 0,
-                    section_ys: tuple[int, ...] = (-4, -3, -2, -1), sample_limit: int = 12) -> dict:
+                    section_ys: tuple[int, ...] = (-4, -3, -2, -1), sample_limit: int = 12,
+                    blocks_report: Path | None = None) -> dict:
     """Compare a fixed underground sample; malformed or absent data raises ValueError."""
     if not section_ys or any(type(y) is not int or not -4 <= y <= -1 for y in section_ys) or len(set(section_ys)) != len(section_ys):
         raise ValueError('Select unique underground sections Y=-4..-1 only')
     if type(sample_limit) is not int or not 0 <= sample_limit <= 100:
         raise ValueError('Mismatch sample limit must be between 0 and 100')
     section_ys = tuple(sorted(section_ys))
+    catalog, report_sha256 = load_block_catalog(blocks_report or default_blocks_report())
     chunks = {name: read_chunk(world, chunk_x, chunk_z) for name, world in (('vanilla', vanilla_world), ('rust', rust_world))}
-    states = {name: sample_states(chunk, section_ys) for name, chunk in chunks.items()}
+    states = {name: normalize_states(sample_states(chunk, section_ys), catalog) for name, chunk in chunks.items()}
     mismatches = 0
     examples = []
     for index, (vanilla, rust) in enumerate(zip(states['vanilla'], states['rust'], strict=True)):
@@ -283,5 +361,6 @@ def compare_terrain(vanilla_world: Path, rust_world: Path, *, chunk_x: int = 0, 
         'blocks_compared': len(states['vanilla']), 'matching_blocks': len(states['vanilla']) - mismatches,
         'mismatched_blocks': mismatches, 'mismatch_sample': examples,
         'vanilla_sha256': _canonical_hash(states['vanilla']), 'rust_sha256': _canonical_hash(states['rust']),
+        'blocks_report_sha256': report_sha256,
         'data_versions': {name: chunk['DataVersion'] for name, chunk in chunks.items()},
     }

@@ -10,7 +10,6 @@ use pumpkin_util::{
         get_region_seed, legacy_rand::LegacyRand,
     },
 };
-use rayon::prelude::*;
 use std::f64::consts::PI;
 use std::sync::OnceLock;
 
@@ -144,8 +143,12 @@ impl GlobalStructureCache {
             }
         }
 
+        // This calculation also runs inside a OnceLock initializer. A Rayon
+        // join may steal another chunk job that re-enters that same lock and
+        // deadlocks its initializer. Keep this one-time calculation local;
+        // independent chunks continue to generate in parallel.
         tasks
-            .into_par_iter()
+            .into_iter()
             .map(|mut task| {
                 let mut sampler = MultiNoiseSampler::generate(multi_noise);
                 let noise_center_x = (task.initial_x << 2) + 2;
@@ -408,7 +411,8 @@ fn is_start_chunk_random_spread(
 #[cfg(test)]
 mod tests {
     use pumpkin_data::structures::{
-        RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet,
+        RandomSpreadStructurePlacement, StructurePlacementCalculator, StructurePlacementType,
+        StructureSet,
     };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
@@ -418,6 +422,44 @@ mod tests {
         GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
         is_start_chunk, should_generate_structure,
     };
+
+    #[test]
+    fn concurrent_chunk_jobs_can_initialize_the_stronghold_cache() {
+        use rayon::prelude::*;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .expect("generation pool");
+            let cache = GlobalStructureCache::new();
+            let StructurePlacementType::ConcentricRings(placement) =
+                &StructureSet::STRONGHOLDS.placement.placement_type
+            else {
+                panic!("strongholds must use concentric rings");
+            };
+            let results: Vec<_> = pool.install(|| {
+                (0..8)
+                    .into_par_iter()
+                    .map(|_| {
+                        cache
+                            .get_or_calculate_strongholds(12_345_678, placement, None)
+                            .to_vec()
+                    })
+                    .collect()
+            });
+            let _ = sender.send(results);
+        });
+        let results = receiver
+            .recv_timeout(Duration::from_secs(20))
+            .expect("chunk workers must not deadlock during stronghold initialization");
+        assert_eq!(results.len(), 8);
+        assert_eq!(results[0].len(), 128);
+        assert!(results.iter().all(|positions| positions == &results[0]));
+    }
 
     #[test]
     fn get_start_chunk_random() {

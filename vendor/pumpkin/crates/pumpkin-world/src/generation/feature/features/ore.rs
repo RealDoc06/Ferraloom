@@ -2,7 +2,7 @@ use core::f32;
 
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::{
-    math::{lerp, position::BlockPos, vector3::Vector3},
+    math::{lerp, position::BlockPos, sin, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -36,10 +36,12 @@ impl OreFeature {
         let g = self.size as f32 / 8.0f32;
         let i = f32::midpoint(self.size as f32 / 16.0f32 * 2.0, 1.0).ceil() as i32;
 
-        let d = pos.0.x as f64 + f.sin() as f64 * g as f64;
-        let e = pos.0.x as f64 - f.sin() as f64 * g as f64;
-        let h = pos.0.z as f64 + f.cos() as f64 * g as f64; // Use f.cos() for Math.cos(f)
-        let j = pos.0.z as f64 - f.cos() as f64 * g as f64;
+        // Vanilla widens the angle before Math.sin/cos; f32 trigonometry changes vein bounds.
+        let angle = f64::from(f);
+        let d = pos.0.x as f64 + angle.sin() * f64::from(g);
+        let e = pos.0.x as f64 - angle.sin() * f64::from(g);
+        let h = pos.0.z as f64 + angle.cos() * f64::from(g);
+        let j = pos.0.z as f64 - angle.cos() * f64::from(g);
 
         let l = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
         let m = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
@@ -90,12 +92,13 @@ impl OreFeature {
             let e = lerp(f as f64, start_y, end_y);
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
-            let l = f32::midpoint(((f32::consts::PI * f).sin() + 1.0) * h as f32, 1.0);
+            // Mth.sin returns f32; vanilla then keeps the random scale and radius in f64.
+            let l = (f64::from(sin(f32::consts::PI * f) + 1.0) * h + 1.0) / 2.0;
 
             ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
             ds[k as usize * 4 + 2] = g;
-            ds[k as usize * 4 + 3] = l as f64;
+            ds[k as usize * 4 + 3] = l;
         }
 
         for k in 0..(j - 1) {
