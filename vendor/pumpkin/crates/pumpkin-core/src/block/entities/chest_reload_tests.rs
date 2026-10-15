@@ -10,9 +10,10 @@ use arc_swap::ArcSwap;
 use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
 use pumpkin_config::{CommandsConfig, world::LevelConfig};
 use pumpkin_data::{
-    Block, BlockStateId,
+    Block, BlockDirection, BlockStateId,
     block_properties::{
-        ChestLikeProperties, ChestType, ComparatorLikeProperties, HorizontalFacing,
+        BarrelLikeProperties, ChestLikeProperties, ChestType, ComparatorLikeProperties,
+        HorizontalFacing,
     },
     dimension::Dimension,
     item::Item,
@@ -41,7 +42,11 @@ use pumpkin_world::{
 use super::ChestBlockEntity;
 use crate::{
     block::{
-        blocks::{barrel::barrel_screen_handler_factory, chests::chest_screen_handler_factory},
+        BlockBehaviour, GetRedstonePowerArgs,
+        blocks::{
+            barrel::barrel_screen_handler_factory,
+            chests::{TrappedChestBlock, chest_screen_handler_factory},
+        },
         entities::{
             BlockEntity, barrel::BarrelBlockEntity, comparator::ComparatorBlockEntity,
             trapped_chest::TrappedChestBlockEntity,
@@ -1983,5 +1988,173 @@ fn container_load_replaces_metadata_without_replacing_retained_inventory_or_menu
         assert!(!live.can_open_container(&key, false));
         key.set_custom_name("new key".into());
         assert!(live.can_open_container(&key, false));
+    }
+}
+
+/// Exercise real viewer transitions and block behavior, not a second counter model.
+fn assert_viewer_effects(kind: ChestKind, world: &Arc<World>, live: &dyn BlockEntity, count: u8) {
+    assert_eq!(kind.viewers(live), u16::from(count));
+    live.tick(world);
+    assert_eq!(kind.viewers(live), u16::from(count));
+    let position = live.get_position();
+    let state = world.get_block_state(&position);
+    match kind {
+        ChestKind::Barrel => {
+            assert_eq!(
+                BarrelLikeProperties::from_state_id(state.id).open,
+                count > 0
+            );
+        }
+        ChestKind::Trapped => {
+            assert_eq!(
+                TrappedChestBlock.get_weak_redstone_power(GetRedstonePowerArgs {
+                    world,
+                    block: kind.block(),
+                    state,
+                    position: &position,
+                    direction: BlockDirection::North,
+                }),
+                count
+            );
+            assert_eq!(
+                TrappedChestBlock.get_strong_redstone_power(GetRedstonePowerArgs {
+                    world,
+                    block: kind.block(),
+                    state,
+                    position: &position,
+                    direction: BlockDirection::Up,
+                }),
+                count
+            );
+        }
+        ChestKind::Normal => {}
+    }
+}
+
+#[tokio::test]
+async fn materialized_container_factory_excludes_spectators_from_viewer_effects() {
+    // Official 26.3 Chest/Barrel startOpen and stopOpen skip spectators;
+    // TrappedChest inherits Chest. The pinned pumpkin-inventory 5b53f064
+    // constructor (lines 166–168) and on_closed (207–211) already guard both.
+    // Test the core factory path as well as the effects published by BE ticks.
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let inventory = live.clone().get_inventory().unwrap();
+        let factory = kind.factory(&world, &BLOCK_POS);
+        let mut spectator = MenuPlayer::new();
+        spectator.1 = true;
+        let spectator_menu = factory
+            .create_screen_handler(1, &spectator.0, &spectator)
+            .unwrap();
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert!(Arc::ptr_eq(
+            &inventory,
+            &spectator_menu.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        ));
+        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:3}]"), 1);
+        assert_eq!(
+            spectator_menu.lock().unwrap().get_behaviour().slots[0]
+                .get_stack()
+                .item_count,
+            3
+        );
+        assert!(Arc::ptr_eq(
+            &live,
+            &world.get_block_entity(&BLOCK_POS).unwrap()
+        ));
+        spectator_menu.lock().unwrap().on_closed(&spectator);
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+
+        let normal = MenuPlayer::new();
+        for spectator_closes_first in [true, false] {
+            let normal_menu = factory
+                .create_screen_handler(2, &normal.0, &normal)
+                .unwrap();
+            assert_viewer_effects(kind, &world, live.as_ref(), 1);
+            let spectator_menu = factory
+                .create_screen_handler(3, &spectator.0, &spectator)
+                .unwrap();
+            assert_viewer_effects(kind, &world, live.as_ref(), 1);
+            if spectator_closes_first {
+                // A spectator menu must not steal another viewer's count, even
+                // if its owner changes mode before the menu is closed.
+                spectator.1 = false;
+                spectator_menu.lock().unwrap().on_closed(&spectator);
+                spectator.1 = true;
+                assert_viewer_effects(kind, &world, live.as_ref(), 1);
+                normal_menu.lock().unwrap().on_closed(&normal);
+            } else {
+                normal_menu.lock().unwrap().on_closed(&normal);
+                assert_viewer_effects(kind, &world, live.as_ref(), 0);
+                spectator_menu.lock().unwrap().on_closed(&spectator);
+            }
+            assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        }
+    }
+}
+
+#[tokio::test]
+async fn double_chest_factory_excludes_spectators_on_both_halves() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let first = kind.new(BLOCK_POS);
+        let second = kind.new(OTHER_POS);
+        fixture.install(kind.block(), first.clone());
+        fixture.install(kind.block(), second.clone());
+        let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
+        properties.facing = HorizontalFacing::South;
+        properties.r#type = ChestType::Right;
+        fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
+        properties.r#type = ChestType::Left;
+        fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
+        let mut spectator = MenuPlayer::new();
+        spectator.1 = true;
+        let normal = MenuPlayer::new();
+        for clicked in [BLOCK_POS, OTHER_POS] {
+            let factory = kind.factory(&world, &clicked);
+            let spectator_menu = factory
+                .create_screen_handler(1, &spectator.0, &spectator)
+                .unwrap();
+            for entity in [&first, &second] {
+                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+            }
+            first
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .set_stack(0, ItemStack::new(2, &Item::APPLE));
+            second
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .set_stack(0, ItemStack::new(5, &Item::DIAMOND));
+            {
+                let menu = spectator_menu.lock().unwrap();
+                assert_eq!(menu.get_behaviour().slots[0].get_stack().item_count, 2);
+                assert_eq!(menu.get_behaviour().slots[27].get_stack().item_count, 5);
+            }
+            let normal_menu = factory
+                .create_screen_handler(2, &normal.0, &normal)
+                .unwrap();
+            for entity in [&first, &second] {
+                assert_viewer_effects(kind, &world, entity.as_ref(), 1);
+            }
+            normal_menu.lock().unwrap().on_closed(&normal);
+            for entity in [&first, &second] {
+                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+            }
+            spectator_menu.lock().unwrap().on_closed(&spectator);
+            for entity in [&first, &second] {
+                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+                assert!(Arc::ptr_eq(
+                    entity,
+                    &world.get_block_entity(&entity.get_position()).unwrap()
+                ));
+            }
+        }
     }
 }
