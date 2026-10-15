@@ -755,9 +755,15 @@ fn setup_stdin_console(server: &Arc<Server>) {
     });
     let server_clone = server.clone();
     server.spawn_task(async move {
-        while !SHOULD_STOP.load(Ordering::Relaxed)
-            && let Some(command) = rx.recv().await
-        {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
+            // Signals must release this tracked task even when stdin is idle;
+            // shutdown waits for it before saving the worlds.
+            let command = select! {
+                biased;
+                () = STOP_INTERRUPT.cancelled() => None,
+                command = rx.recv() => command,
+            };
+            let Some(command) = command else { break };
             let mut event = ServerCommandEvent::new(command.clone());
             server_clone
                 .plugin_manager

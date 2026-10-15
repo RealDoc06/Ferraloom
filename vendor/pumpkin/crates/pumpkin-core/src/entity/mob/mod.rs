@@ -752,7 +752,7 @@ impl MobEntity {
         let pos = entity.pos.load();
         let players = world.players.load();
 
-        let nearest_dist_sq = players
+        let Some(nearest_dist_sq) = players
             .iter()
             .filter(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator)
             .map(|p| {
@@ -762,15 +762,14 @@ impl MobEntity {
                 let dz = pp.z - pos.z;
                 dx * dx + dy * dy + dz * dz
             })
-            .fold(f64::MAX, f64::min);
+            .reduce(f64::min)
+        else {
+            // Vanilla does not run distance-based despawning without a nearby player.
+            return;
+        };
 
         // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
         if !mob.remove_when_far_away(nearest_dist_sq) {
-            return;
-        }
-
-        if nearest_dist_sq == f64::MAX {
-            mob.get_entity().remove();
             return;
         }
 
@@ -838,7 +837,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
-        true
+        // Vanilla Animal overrides this policy; the Rust hierarchy uses this trait view.
+        self.as_animal().is_none()
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {

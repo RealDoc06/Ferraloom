@@ -50,6 +50,7 @@ class FeatureInventoryTests(unittest.TestCase):
             'schema_version': 1, 'target_version': self.document['target']['version'],
             'server_sha1': 'c' * 40, 'rust_binary_sha256': 'a' * 64,
             'test_suite_sha256': 'd' * 64,
+            'source_state': {'commit': 'f' * 40, 'dirty': False},
             'servers': {implementation: [{'id': record['test_id'], 'result': 'passed'}
                                         for record in self.feature['evidence']]
                         for implementation in ('vanilla', 'rust')},
@@ -216,6 +217,28 @@ class FeatureInventoryTests(unittest.TestCase):
             self.feature['evidence'][0]['scenario'] = 'failure path'
             errors = validator.validate_inventory(self.document, artifact_root=root)
             self.assertTrue(any('does not map' in error for error in errors))
+
+    def test_verified_snapshot_rejects_changed_inputs_or_unreproducible_source(self):
+        for mutation in ('changed_harness', 'changed_binary', 'dirty_source', 'missing_source', 'bad_commit', 'nonboolean_dirty'):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+
+                def mutate(report):
+                    if mutation == 'changed_harness':
+                        report['failed'] = ['harness.changed_during_run']
+                    elif mutation == 'changed_binary':
+                        report['failed'] = ['rust_binary.changed_during_run']
+                    elif mutation == 'dirty_source':
+                        report['source_state']['dirty'] = True
+                    elif mutation == 'missing_source':
+                        report.pop('source_state')
+                    elif mutation == 'bad_commit':
+                        report['source_state']['commit'] = 'unknown'
+                    else:
+                        report['source_state']['dirty'] = 0
+
+                self.write_verified_snapshot(root, report_changes=mutate)
+                self.assertTrue(validator.validate_inventory(self.document, artifact_root=root))
 
     def test_strict_cli_checks_artifacts_without_optional_flag(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import re
 import sys
 
-from validate_features import ROOT, RESULTS, validate_inventory, validate_target
+from validate_features import ROOT, RESULTS, report_integrity_errors, validate_inventory, validate_target
 
 
 def _require(condition: object, message: str) -> None:
@@ -53,6 +53,8 @@ def ingest_report(inventory: dict, report: object, mapping: object, target: dict
     _require(not errors, '; '.join(errors))
     cases = validate_mapping(mapping, inventory, target)
     _require(isinstance(report, dict) and report.get('schema_version') == 1, 'report schema_version must be 1')
+    integrity_errors = report_integrity_errors(report)
+    _require(not integrity_errors, '; '.join(integrity_errors))
     _require(report.get('target_version') == target['version'], 'report target_version differs from target')
     _require(report.get('protocol') == target['protocol'], 'report protocol differs from target')
     _require(_digest(report.get('server_sha1'), 40) and report['server_sha1'] == target['server_sha1'], 'report official server SHA-1 differs from target')

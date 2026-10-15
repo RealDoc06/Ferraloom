@@ -92,6 +92,14 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
+def pin_binary(source: Path, run_dir: Path) -> Path:
+    """All subprocesses use this copy even if Cargo replaces the source binary."""
+    pinned = run_dir / "bin/ferraloom"
+    pinned.parent.mkdir()
+    shutil.copy2(source.resolve(), pinned)
+    return pinned
+
+
 def datapack(directory: Path) -> None:
     pack = directory / "world/datapacks/ferraloom-parity"
     functions = pack / "data/ferraloom/function"
@@ -133,6 +141,7 @@ class Server:
                 config.write('[world.chunk]\ntype = "anvil"\n[world.chunk.compression]\nalgorithm = "ZLib"\nlevel = 6\n')
 
     def start(self) -> None:
+        self.forced_stop = False
         if self.kind == "vanilla":
             command = java_command(self.args.java) + ["-jar", str(acquire()), "nogui"]
         else:
@@ -216,6 +225,18 @@ class Server:
             except ProcessLookupError:
                 pass
 
+    def save_flush(self) -> None:
+        """Wait for completion feedback; Rust's command schedules an async save."""
+        lines = self.command("save-all flush")
+        deadline = time.monotonic() + 30
+        while not any(re.search(r"\bSaved the game$", line) for line in lines):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("save-all flush did not report completion")
+            try:
+                lines.append(self.lines.get(timeout=0.2))
+            except queue.Empty:
+                continue
+
 
 def recorded(test_id: str, features: tuple[str, ...], action) -> dict:
     started = time.monotonic()
@@ -240,6 +261,20 @@ def run_scenario(server: Server, scenario: Scenario) -> dict:
     time.sleep(scenario.settle)
     check_predicate(server, scenario.predicate)
     return {"predicate": scenario.predicate, "commands": list(scenario.commands)}
+
+
+def stop_by_signal(server: Server, timeout: float = 45) -> dict:
+    protocol.require(server.process is not None, "Missing server process")
+    server.signal(signal.SIGTERM)
+    result = recorded("lifecycle.sigterm_exit", ("lifecycle.shutdown",),
+                      lambda: check_signal_exit(server.kind, server.process.wait(timeout=timeout), server.forced_stop))
+    if result["result"] != "passed":
+        # A console stop would save the marker and falsely credit SIGTERM.
+        server.forced_stop = True
+        server.signal(signal.SIGKILL)
+        server.process.wait(timeout=5)
+    server.stop()
+    return result
 
 
 def check_predicate(server: Server, predicate: str) -> None:
@@ -285,10 +320,21 @@ def run(server: Server, quick: bool) -> list[dict]:
             server.command("forceload add -16 -16 31 31")
             wait_loaded(server)
             wait_loaded(server, x=-1, z=9)
+            server.save_flush()
+            terrain = server.directory.parent / "terrain" / server.kind
+            terrain.mkdir(parents=True)
+            shutil.copy2(server.directory / "world/level.dat", terrain / "level.dat")
+            for relative in ("region", "dimensions/minecraft/overworld/region"):
+                source = server.directory / "world" / relative
+                if source.is_dir():
+                    shutil.copytree(source, terrain / relative)
             server.command("fill -2 199 -2 15 199 15 stone")
             results.extend(run_client_scenarios(server))
             for scenario in SCENARIOS:
                 results.append(recorded(scenario.id, scenario.features, lambda scenario=scenario: run_scenario(server, scenario)))
+            server.command("gamerule keep_inventory true")
+            server.command("gamerule advance_time false")
+            server.command("time set 4321")
             server.command("save-off")
             unflushed = Scenario("persistence.unflushed_write", ("persistence.chunk_data",), ("setblock 13 200 14 emerald_block",), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed.id, unflushed.features, lambda: run_scenario(server, unflushed)))
@@ -303,16 +349,17 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.append(recorded(unflushed_read.id, unflushed_read.features, lambda: run_scenario(server, unflushed_read)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
             results.append(recorded(signal_write.id, signal_write.features, lambda: run_scenario(server, signal_write)))
-            server.signal(signal.SIGTERM)
-            protocol.require(server.process is not None, "Missing server process")
-            signal_code = server.process.wait(timeout=45)
-            results.append(recorded("lifecycle.sigterm_exit", ("lifecycle.shutdown",), lambda: check_signal_exit(server.kind, signal_code, server.forced_stop)))
-            server.stop()
-            server.start()
-            server.command("forceload add 0 0")
-            wait_loaded(server)
+            signal_result = stop_by_signal(server)
+            results.append(signal_result)
             signal_read = Scenario("persistence.signal_restart", ("persistence.chunk_data",), (), "if block 12 200 14 lapis_block")
-            results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
+            if signal_result["result"] == "passed":
+                server.start()
+                server.command("forceload add 0 0")
+                wait_loaded(server)
+                results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
+            else:
+                results.append({"id": signal_read.id, "features": list(signal_read.features), "result": "skipped",
+                                "reason": "SIGTERM did not complete cleanly; no shutdown durability claim"})
     except Exception as error:
         results.append({"id": "harness.startup_or_setup", "features": [], "result": "failed", "error": f"{type(error).__name__}: {error}"})
     finally:
@@ -373,12 +420,21 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             wait_loaded(server)
             predicate = "if block 14 200 14 diamond_block"
             check_predicate(server, predicate)
+            server.command("scoreboard objectives add migration_probe dummy")
+            server.command("execute store result score Rule migration_probe run gamerule keep_inventory")
+            check_predicate(server, "if score Rule migration_probe matches 1")
+            server.command("execute store result score Clock migration_probe run time query daytime")
+            check_predicate(server, "if score Clock migration_probe matches 4321")
             code = server.stop()
             check_exit(code, server.forced_stop)
+            errors = [line for line in server.log_path.read_text().splitlines()
+                      if re.search(r"\bERROR\b|Failed to parse saved data|Couldn't load chunk", line)]
+            protocol.require(not errors, f"Destination reported world load/save errors: {errors[:5]}")
             destination_version = data_version(server.directory / "world")
             protocol.require(destination_version == source_version, "Loading rewrote the data version")
             return {"source": source, "destination": destination, "predicate": predicate, "source_data_version": source_version,
-                    "destination_data_version": destination_version, "external_conversion": False, "dimension": "overworld"}
+                    "destination_data_version": destination_version, "external_conversion": False, "dimension": "overworld",
+                    "keep_inventory": True, "daytime": 4321, "load_save_errors": 0}
         finally:
             server.stop()
 
@@ -407,6 +463,8 @@ def main() -> int:
     if not args.quick:
         inventory(args.java, ROOT / "compatibility/vanilla-inventory.json")
     run_dir = Path(tempfile.mkdtemp(prefix="parity-", dir=ROOT / ".cache/runs"))
+    if args.rust_binary.is_file():
+        args.rust_binary = pin_binary(args.rust_binary, run_dir)
     report = {"schema_version": 1, "target_version": TARGET["version"], "protocol": TARGET["protocol"],
               "server_sha1": TARGET["server_sha1"], "rust_upstream": TARGET["rust_upstream"],
               "created_at": datetime.now(timezone.utc).isoformat(),
@@ -424,7 +482,7 @@ def main() -> int:
         report["cross_world"] = [cross_world(source, destination, run_dir, args, report["servers"][source])
                                  for source, destination in [("vanilla", "rust"), ("rust", "vanilla")]]
         report["terrain"] = recorded("worldgen.underground_chunk", ("world.terrain",),
-                                     lambda: compare_terrain(run_dir / "vanilla/world", run_dir / "rust/world"))
+                                     lambda: compare_terrain(run_dir / "terrain/vanilla", run_dir / "terrain/rust"))
     vanilla = {case["id"]: case for case in report["servers"].get("vanilla", [])}
     rust = {case["id"]: case for case in report["servers"].get("rust", [])}
     report["comparison"] = [{"id": key,
@@ -438,6 +496,8 @@ def main() -> int:
         failed.append("worldgen.underground_chunk")
     if report["harness_manifest"] != harness_manifest():
         failed.append("harness.changed_during_run")
+    if args.rust_binary.is_file() and report["rust_binary_sha256"] != hashlib.file_digest(args.rust_binary.open("rb"), "sha256").hexdigest():
+        failed.append("rust_binary.changed_during_run")
     report["failed"] = failed
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2).replace(str(ROOT), "$REPO") + "\n")

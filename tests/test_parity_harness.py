@@ -1,12 +1,17 @@
 """Guard against a broken test harness claiming successful compatibility."""
 from pathlib import Path
+import argparse
+import os
+import signal
 import socket
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import protocol
-from parity.suite import check_signal_exit, is_server_say, recorded
+from parity.suite import Server, check_signal_exit, is_server_say, pin_binary, recorded, stop_by_signal
 
 
 class HarnessTests(unittest.TestCase):
@@ -52,6 +57,50 @@ class HarnessTests(unittest.TestCase):
         for kind, code, forced in [("rust", 143, False), ("vanilla", 137, False), ("vanilla", 143, True)]:
             with self.subTest(kind=kind, code=code, forced=forced), self.assertRaises(AssertionError):
                 check_signal_exit(kind, code, forced)
+
+    @unittest.skipUnless(os.name == 'posix', 'Unix executable replacement and process signals')
+    def test_cargo_replacement_cannot_change_the_pinned_executable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'server'
+            source.write_text('#!/bin/sh\necho original\n')
+            source.chmod(0o700)
+            pinned = pin_binary(source, root)
+            replacement = root / 'replacement'
+            replacement.write_text('#!/bin/sh\necho replacement\n')
+            replacement.chmod(0o700)
+            replacement.replace(source)
+            self.assertEqual(subprocess.check_output([pinned], text=True).strip(), 'original')
+            self.assertEqual(subprocess.check_output([source], text=True).strip(), 'replacement')
+
+    @unittest.skipUnless(os.name == 'posix', 'Unix process groups and SIGKILL')
+    def test_ignored_sigterm_cannot_receive_a_console_cleanup_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / 'console-save'
+            script = ('import pathlib,signal,sys\n'
+                      'signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
+                      'print("ready",flush=True)\n'
+                      'for line in sys.stdin:\n'
+                      ' if line.strip()=="stop":\n'
+                      '  pathlib.Path(sys.argv[1]).touch();break\n')
+            server = Server('rust', root, argparse.Namespace())
+            process = subprocess.Popen([sys.executable, '-c', script, str(marker)],
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, start_new_session=True)
+            server.process = process
+            try:
+                self.assertEqual(process.stdout.readline().strip(), 'ready')
+                result = stop_by_signal(server, timeout=0.05)
+                self.assertEqual(result['result'], 'failed')
+                self.assertEqual(process.returncode, -signal.SIGKILL)
+                self.assertFalse(marker.exists())
+                self.assertTrue(server.forced_stop)
+            finally:
+                if process.poll() is None:
+                    server.signal(signal.SIGKILL)
+                    process.wait(timeout=5)
+                process.stdin.close()
+                process.stdout.close()
 
 
 if __name__ == "__main__":

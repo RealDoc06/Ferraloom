@@ -4,7 +4,7 @@ Ferraloom builds on a pinned Pumpkin core, with independent tests against the of
 
 The runtime initializes named Tokio network workers and Rayon CPU workers. The engine parallelizes world, player, entity, and chunk work, with a ticker coordinating simulation phases. Chunk generation has additional engine-owned pools. `--workers` describes the two configurable pools, not a process-wide thread limit. Correctness under different schedules and measured throughput remain separate acceptance gates.
 
-Each process owns its data directory. The wrapper reads configuration strictly, keeps online authentication enabled by default, disables telemetry, and supplies no plugin loaders. It handles SIGINT/SIGTERM through the engine's graceful shutdown, and propagates engine panics as failed process exits. It does not translate vanilla `server.properties`; operational configuration uses `pumpkin.toml`.
+Each process owns its data directory and holds the world's `session.lock`; Unix record locks interoperate with Java's world lock. The wrapper reads configuration strictly, keeps online authentication enabled by default, disables telemetry, and supplies no plugin loaders. It handles SIGINT/SIGTERM/SIGHUP through the engine's graceful shutdown, and propagates engine panics as failed process exits. It does not translate vanilla `server.properties`; operational configuration uses `pumpkin.toml`.
 
 The official artifact is pinned by metadata URL, SHA-1, size, release, Java major, and protocol. The test tool verifies the download before launching it. Registry identifiers and datapack paths come from the exact official artifact and its built-in data generator. REA artifact/process evidence and supplementary JVM codec inspection are documented separately.
 

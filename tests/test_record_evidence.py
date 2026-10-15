@@ -70,6 +70,21 @@ class RecordEvidenceTests(unittest.TestCase):
         feature = next(feature for feature in updated['features'] if feature['id'] == 'network.status')
         self.assertEqual(feature['evidence'][-1]['vanilla']['result'], 'failed')
 
+    def test_changed_inputs_reject_report_but_ordinary_failures_and_dirty_source_remain_partial(self):
+        for failure in ('harness.changed_during_run', 'rust_binary.changed_during_run'):
+            with self.subTest(failure=failure):
+                report = {**self.report, 'failed': [failure]}
+                with self.assertRaisesRegex(ValueError, 'integrity failure'):
+                    self.ingest(report=report)
+        self.report['failed'] = ['rust:network.status_fields']
+        self.report['source_state'] = {'commit': 'd' * 40, 'dirty': True}
+        self.report['servers']['rust'][0].update(result='failed', error='behavior mismatch')
+        updated, counts = self.ingest()
+        self.assertEqual(counts['failed_or_skipped'], 1)
+        self.assertFalse(any(feature['rust_status'] == 'verified' for feature in updated['features']))
+        framing = next(feature for feature in updated['features'] if feature['id'] == 'network.framing')
+        self.assertEqual(framing['rust_status'], 'partial')
+
     def test_rejects_wrong_target_or_missing_provenance(self):
         for key, value in (
             ('target_version', 'wrong'), ('protocol', -1), ('server_sha1', '0' * 40),

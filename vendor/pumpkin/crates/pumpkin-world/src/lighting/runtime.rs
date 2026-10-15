@@ -401,11 +401,10 @@ impl DynamicLightEngine {
 
         let current_light = self.get_sky_light_level(level, &pos);
         let block_state = level.get_block_state(&pos).to_state();
-        let opacity = if block_state.can_occlude() {
-            block_state.opacity.max(1)
-        } else {
-            block_state.opacity
-        };
+        // Direct sky uses the block's actual dampening. Partial occlusion alone
+        // does not consume a light level (e.g. the top of a daylight detector).
+        // The minimum attenuation for diffuse light is handled below.
+        let opacity = block_state.opacity;
 
         // Calculate expected sky light
         let expected_light = if opacity == 15 || block_state.is_solid_render() {
@@ -633,5 +632,57 @@ impl DynamicLightEngine {
             Ok(())
         });
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunk::{ChunkData, format::LightContainer};
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::{Block, dimension::Dimension};
+    use pumpkin_util::math::vector2::Vector2;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn exposed_blocks_use_raw_sky_dampening() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let chunk = ChunkData::empty_sync(0, 0);
+        chunk.light_engine.lock().unwrap().sky_light =
+            vec![LightContainer::new_empty(15); 24].into_boxed_slice();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let position = BlockPos::new(12, 200, 0);
+
+        // Exercise stored chunk lighting, including an occluding partial block,
+        // transparent glass, a dampening leaf block, and a fully opaque block.
+        for (block, expected) in [
+            (&Block::DAYLIGHT_DETECTOR, 15),
+            (&Block::GLASS, 15),
+            (&Block::OAK_LEAVES, 14),
+            (&Block::STONE, 0),
+        ] {
+            chunk.set_block_absolute_y(12, 200, 0, block.default_state.id);
+            level
+                .light_engine
+                .set_sky_light_level(&level, &position, 15)
+                .unwrap();
+            level.light_engine.check_sky_light_updates(&level, position);
+            assert_eq!(
+                level.light_engine.get_sky_light_level(&level, &position),
+                expected,
+                "{} under open sky",
+                block.name
+            );
+        }
+
+        level.shutdown().await;
     }
 }

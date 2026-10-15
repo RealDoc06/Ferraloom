@@ -21,6 +21,15 @@ def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def report_integrity_errors(report: dict) -> list[str]:
+    """Ordinary failed scenarios remain evidence; a changing test input does not."""
+    failures = report.get('failed', [])
+    if not isinstance(failures, list) or any(not isinstance(item, str) for item in failures):
+        return ['report.failed must be an array of failure identifiers']
+    return [f'report integrity failure: {failure}' for failure in failures
+            if failure.endswith('.changed_during_run')]
+
+
 def validate_target(document: dict, pinned: object) -> list[str]:
     """Keep the behavioral ledger on the same edition and artifact metadata pin."""
     if not isinstance(pinned, dict):
@@ -55,7 +64,12 @@ def _snapshot_errors(report: object, record: dict, feature_id: str, mapping: obj
     """Bind a verified claim to its actual paired observation, rather than a filename."""
     if not isinstance(report, dict) or type(report.get('schema_version')) is not int or report['schema_version'] != 1:
         return ['verified artifact must be a paired report with schema_version 1']
-    errors = []
+    errors = report_integrity_errors(report)
+    source = report.get('source_state')
+    if not isinstance(source, dict) or source.get('dirty') is not False or (
+        not isinstance(source.get('commit'), str) or not re.fullmatch(r'(?:[a-f0-9]{40}|[a-f0-9]{64})', source['commit'])
+    ):
+        errors.append('verified artifact requires a clean source_state with a full commit hash')
     if report.get('target_version') != record['target_version']:
         errors.append('artifact target version differs from evidence')
     if report.get('test_suite_sha256') != record.get('test_suite_sha256'):

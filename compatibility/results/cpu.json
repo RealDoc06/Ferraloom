@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-15T14:30:53.604249+00:00",
+  "platform": "linux",
+  "host": "devbox",
+  "logical_cpus": 8,
+  "rust_binary_sha256": "34ffd114bddb6c5f45f64871264f49ba8a6fbea63d9f1e8888782d1385184f3a",
+  "workload": "Fresh fixed-seed 12345678 overworld; forceload add -32 -32 31 31; four wrapper workers per pool; optimized development build; no players",
+  "scope": "Observed process CPU use only; no vanilla speedup, tick latency or determinism claim.",
+  "duration_seconds": 15.002,
+  "cpu_seconds": 7.3,
+  "average_cores_consumed": 0.487,
+  "peak_interval_cores_consumed": 4.04,
+  "process_exited": false,
+  "samples": [
+    {
+      "elapsed_seconds": 1.0,
+      "cores_consumed": 4.04
+    },
+    {
+      "elapsed_seconds": 2.003,
+      "cores_consumed": 2.952
+    },
+    {
+      "elapsed_seconds": 3.005,
+      "cores_consumed": 0.05
+    },
+    {
+      "elapsed_seconds": 4.007,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 5.009,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 6.011,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 7.013,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 8.016,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 9.019,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 10.027,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 11.035,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 12.037,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 13.039,
+      "cores_consumed": 0.03
+    },
+    {
+      "elapsed_seconds": 14.041,
+      "cores_consumed": 0.02
+    },
+    {
+      "elapsed_seconds": 15.002,
+      "cores_consumed": 0.021
+    }
+  ],
+  "threads": [
+    {
+      "name": "ChunkGen-1",
+      "cpu_seconds": 1.72
+    },
+    {
+      "name": "ChunkGen-0",
+      "cpu_seconds": 1.71
+    },
+    {
+      "name": "ChunkGen-2",
+      "cpu_seconds": 1.7
+    },
+    {
+      "name": "ChunkGen-3",
+      "cpu_seconds": 1.69
+    },
+    {
+      "name": "Ferraloom-CPU-0",
+      "cpu_seconds": 0.12999999999999998
+    },
+    {
+      "name": "Ferraloom-CPU-1",
+      "cpu_seconds": 0.060000000000000005
+    },
+    {
+      "name": "Ferraloom-CPU-2",
+      "cpu_seconds": 0.05
+    },
+    {
+      "name": "Schedule",
+      "cpu_seconds": 0.04
+    },
+    {
+      "name": "Ferraloom-CPU-3",
+      "cpu_seconds": 0.03
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.02
+    },
+    {
+      "name": "Server-Ticker",
+      "cpu_seconds": 0.02
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.01
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.01
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.01
+    },
+    {
+      "name": "ferraloom-gener",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-0",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-1",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-2",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-3",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Schedule",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-0",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-1",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-2",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ChunkGen-3",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Schedule",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "ferraloom-gener",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    },
+    {
+      "name": "Ferraloom-IO",
+      "cpu_seconds": 0.0
+    }
+  ]
+}
