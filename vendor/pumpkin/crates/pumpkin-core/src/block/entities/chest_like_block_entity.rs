@@ -1,7 +1,47 @@
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::identifier::Identifier;
+
+/// The key and seed must be reloaded, saved and consumed as one state.
+#[derive(Default)]
+pub(super) struct ChestLootState {
+    pub key: Option<String>,
+    pub seed: i64,
+}
+
+/// Decode before taking live locks. The inventory reader only fills listed slots.
+/// Java 26.3 ChestBlockEntity.loadAdditional starts empty and skips Items for loot.
+pub(super) fn read_chest_nbt<const N: usize>(
+    nbt: &NbtCompound,
+) -> ([ItemStack; N], ChestLootState) {
+    let loot = ChestLootState {
+        key: nbt
+            .get_string("LootTable")
+            .and_then(|key| Identifier::parse(key).ok())
+            .map(|key| key.to_string()),
+        // ValueInput.getLongOr accepts every numeric tag. In 26.3 FloatTag
+        // truncates toward zero, while DoubleTag floors before converting.
+        seed: match nbt.get("LootTableSeed") {
+            Some(NbtTag::Byte(seed)) => i64::from(*seed),
+            Some(NbtTag::Short(seed)) => i64::from(*seed),
+            Some(NbtTag::Int(seed)) => i64::from(*seed),
+            Some(NbtTag::Long(seed)) => *seed,
+            Some(NbtTag::Float(seed)) => *seed as i64,
+            Some(NbtTag::Double(seed)) => seed.floor() as i64,
+            _ => 0,
+        },
+    };
+    let mut items = std::array::from_fn(|_| ItemStack::EMPTY.clone());
+    if loot.key.is_none() {
+        pumpkin_inventory::sync_read_items_from_nbt(nbt, &mut items);
+    }
+    (items, loot)
+}
+
 /// Implements the `BlockEntity` trait for chest-like block entities.
 /// Parameters:
 /// - $`struct_name`: The type of the chest struct (e.g., `ChestBlockEntity`)
-/// - $`resource_id`: The resource location string (e.g., "minecraft:chest")
 #[macro_export]
 macro_rules! impl_block_entity_for_chest {
     ($struct_name:ty) => {
@@ -18,61 +58,61 @@ macro_rules! impl_block_entity_for_chest {
             where
                 Self: Sized,
             {
-                // Read deferred loot-table fields first.
-                let loot_table_key = nbt.get_string("LootTable").map(|s| s.to_string());
-                let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
-
-                let mut chest = Self {
+                let (items, loot) =
+                    $crate::block::entities::chest_like_block_entity::read_chest_nbt(nbt);
+                Self {
                     position,
-                    items: std::sync::RwLock::new(std::array::from_fn(|_| {
-                        ItemStack::EMPTY.clone()
-                    })),
+                    items: std::sync::RwLock::new(items),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     comparator_dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot_table: StdMutex::new(loot_table_key),
-                    loot_table_seed,
-                };
-
-                // Only read saved items when there is no pending loot table.
-                let has_loot_table = chest
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some();
-                if !has_loot_table {
-                    pumpkin_inventory::sync_read_items_from_nbt(
-                        nbt,
-                        chest
-                            .items
-                            .get_mut()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
+                    loot: StdMutex::new(loot),
                 }
+            }
 
-                chest
+            fn load_nbt(
+                &self,
+                nbt: &pumpkin_nbt::compound::NbtCompound,
+            ) -> Result<(), $crate::block::entities::BlockEntityLoadError> {
+                let (items, loot) =
+                    $crate::block::entities::chest_like_block_entity::read_chest_nbt(nbt);
+                {
+                    // All two-lock operations take items before loot. No world or
+                    // inventory callbacks run under either lock.
+                    let mut live_items = self
+                        .items
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let mut live_loot = self
+                        .loot
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    *live_items = items;
+                    *live_loot = loot;
+                }
+                <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
+                Ok(())
             }
 
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-                use pumpkin_inventory::Inventory;
-
-                let loot_table_key = {
-                    let guard = self
-                        .loot_table
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    guard.clone()
-                };
-
-                if let Some(key) = loot_table_key {
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let loot = self
+                    .loot
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(key) = &loot.key {
                     // Persist deferred loot: write the key and seed; skip items.
-                    nbt.put_string("LootTable", key);
-                    if self.loot_table_seed != 0 {
-                        nbt.put_long("LootTableSeed", self.loot_table_seed);
+                    nbt.put_string("LootTable", key.clone());
+                    if loot.seed != 0 {
+                        nbt.put_long("LootTableSeed", loot.seed);
                     }
                 } else {
                     // Loot has already been generated, so persist the actual items.
-                    self.write_inventory_nbt(nbt, true);
+                    nbt.put_list("Items", Vec::new());
+                    pumpkin_inventory::sync_write_items_to_nbt(&*items, nbt);
                 }
             }
 
@@ -110,13 +150,12 @@ macro_rules! impl_block_entity_for_chest {
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                let has_loot_table = self
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some();
-                if !has_loot_table {
-                    if let Ok(items) = self.items.try_read() {
+                if let Ok(items) = self.items.try_read() {
+                    let loot = self
+                        .loot
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if loot.key.is_none() {
                         pumpkin_inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                     }
                 }
@@ -129,16 +168,17 @@ macro_rules! impl_block_entity_for_chest {
 
             fn take_loot_table(&self) -> Option<(String, i64)> {
                 let mut guard = self
-                    .loot_table
+                    .loot
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.take().map(|key| (key, self.loot_table_seed))
+                guard.key.take().map(|key| (key, guard.seed))
             }
 
             fn has_loot_table(&self) -> bool {
-                self.loot_table
+                self.loot
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .key
                     .is_some()
             }
         }
@@ -317,8 +357,7 @@ macro_rules! impl_chest_helper_methods {
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot_table: StdMutex::new(None),
-                    loot_table_seed: 0,
+                    loot: StdMutex::default(),
                 }
             }
 

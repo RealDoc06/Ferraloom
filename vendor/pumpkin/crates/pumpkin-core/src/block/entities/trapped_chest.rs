@@ -8,6 +8,8 @@ use crate::{
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
 };
 
+use super::chest_like_block_entity::ChestLootState;
+
 pub struct TrappedChestBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
@@ -17,10 +19,8 @@ pub struct TrappedChestBlockEntity {
     // Viewer
     viewers: ViewerCountTracker,
 
-    /// Pending loot-table key. Set during generation; cleared on first open.
-    pub loot_table: StdMutex<Option<String>>,
-    /// Seed used for deterministic loot generation.
-    pub loot_table_seed: i64,
+    /// Pending loot key and seed, reloaded atomically and consumed on first open.
+    loot: StdMutex<ChestLootState>,
 }
 
 impl TrappedChestBlockEntity {

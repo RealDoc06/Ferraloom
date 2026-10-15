@@ -1,0 +1,697 @@
+//! Focused Rust dispatcher/persistence coverage, not official paired acceptance.
+//! CustomName, lock behavior and block-entity components remain unmodeled.
+
+use std::sync::{Arc, Barrier, Mutex, Weak};
+
+use arc_swap::ArcSwap;
+use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
+use pumpkin_config::{CommandsConfig, world::LevelConfig};
+use pumpkin_data::{
+    Block, BlockStateId,
+    block_properties::{
+        ChestLikeProperties, ChestType, ComparatorLikeProperties, HorizontalFacing,
+    },
+    dimension::Dimension,
+    item::Item,
+    item_stack::ItemStack,
+};
+use pumpkin_inventory::{
+    Inventory,
+    double::DoubleInventory,
+    entity_equipment::EntityEquipment,
+    generic_container_screen_handler::{create_generic_9x3, create_generic_9x6},
+    player::player_inventory::PlayerInventory,
+    screen_handler::{InventoryPlayer, ScreenHandler},
+};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_util::{
+    math::{position::BlockPos, vector2::Vector2},
+    permission::PermissionManager,
+    world_seed::Seed,
+};
+use pumpkin_world::{
+    chunk::{ChunkData, format::anvil::SingleChunkDataSerializer, io::Dirtiable},
+    level::Level,
+    world_info::LevelData,
+};
+
+use super::ChestBlockEntity;
+use crate::{
+    block::{
+        entities::{
+            BlockEntity, comparator::ComparatorBlockEntity, trapped_chest::TrappedChestBlockEntity,
+        },
+        registry::default_registry,
+    },
+    command::{CommandSource, commands::default_dispatcher, node::dispatcher::CommandDispatcher},
+    world::World,
+};
+
+const BLOCK_POS: BlockPos = BlockPos::new(0, 64, 0);
+const OTHER_POS: BlockPos = BlockPos::new(1, 64, 0);
+
+#[derive(Clone, Copy)]
+enum ChestKind {
+    Normal,
+    Trapped,
+}
+
+const CHESTS: [ChestKind; 2] = [ChestKind::Normal, ChestKind::Trapped];
+
+impl ChestKind {
+    fn block(self) -> &'static Block {
+        match self {
+            Self::Normal => &Block::CHEST,
+            Self::Trapped => &Block::TRAPPED_CHEST,
+        }
+    }
+
+    fn new(self, position: BlockPos) -> Arc<dyn BlockEntity> {
+        match self {
+            Self::Normal => Arc::new(ChestBlockEntity::new(position)),
+            Self::Trapped => Arc::new(TrappedChestBlockEntity::new(position)),
+        }
+    }
+
+    fn from_nbt(self, nbt: &NbtCompound, position: BlockPos) -> Arc<dyn BlockEntity> {
+        match self {
+            Self::Normal => Arc::new(ChestBlockEntity::from_nbt(nbt, position)),
+            Self::Trapped => Arc::new(TrappedChestBlockEntity::from_nbt(nbt, position)),
+        }
+    }
+
+    fn viewers(self, entity: &dyn BlockEntity) -> u16 {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .get_viewer_count(),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .get_viewer_count(),
+        }
+    }
+}
+
+fn compound(snbt: &str) -> NbtCompound {
+    let NbtTag::Compound(value) =
+        SnbtParser::parse_for_commands(&mut StringReader::new(snbt)).unwrap()
+    else {
+        panic!("expected a compound fixture");
+    };
+    value
+}
+
+fn saved(entity: &dyn BlockEntity) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    entity.write_internal(&mut nbt);
+    nbt
+}
+
+fn assert_marker(stack: &ItemStack) {
+    let mut nbt = NbtCompound::new();
+    stack.write_item_stack(&mut nbt);
+    assert_eq!(
+        nbt.get_compound("components")
+            .unwrap()
+            .get_compound("minecraft:custom_data"),
+        Some(&compound("{marker:17}"))
+    );
+}
+
+struct Fixture {
+    source: CommandSource,
+    dispatcher: CommandDispatcher,
+    _folder: tempfile::TempDir,
+}
+
+impl Fixture {
+    /// Same manually loaded Full-chunk pattern as fill_tests. No listener,
+    /// server tick or authentication is started; stop workers before installing it.
+    async fn new() -> Self {
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            default_registry(),
+            Weak::new(),
+            Arc::default(),
+        ));
+        Self {
+            source: CommandSource::dummy().with_world(world).with_silent(),
+            dispatcher: default_dispatcher(&PermissionManager::new(), &CommandsConfig::default()),
+            _folder: folder,
+        }
+    }
+
+    fn execute(&self, input: &str) -> i32 {
+        self.dispatcher
+            .execute_input(input, &self.source)
+            .unwrap_or_else(|error| panic!("{input}: {error:?}"))
+    }
+
+    fn set_state(&self, position: BlockPos, state: BlockStateId) {
+        let relative = position.chunk_relative_position();
+        self.source
+            .world()
+            .level
+            .read_chunk_sync(&position.chunk_position(), |chunk| {
+                chunk.set_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                    state,
+                );
+            })
+            .unwrap();
+    }
+
+    fn install(&self, block: &Block, entity: Arc<dyn BlockEntity>) {
+        self.set_state(entity.get_position(), block.default_state.id);
+        self.source.world().add_block_entity(entity);
+    }
+
+    fn pending(&self, position: BlockPos) -> NbtCompound {
+        self.source
+            .world()
+            .level
+            .read_chunk_sync(&position.chunk_position(), |chunk| {
+                chunk.pending_block_entities.lock().unwrap()[&position].clone()
+            })
+            .unwrap()
+    }
+
+    /// Exercise actual terrain serialization and normal lazy entity construction.
+    /// Test-only retirement deliberately keeps old menu Arcs alive.
+    fn reload_saved_chunk(&self, position: BlockPos) -> Arc<dyn BlockEntity> {
+        let world = self.source.world();
+        let chunk_pos = position.chunk_position();
+        let bytes = world
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| chunk.to_bytes().unwrap())
+            .unwrap();
+        let chunk = ChunkData::from_bytes(&bytes, chunk_pos).unwrap();
+        world.block_entities.remove(&chunk_pos);
+        world.level.loaded_chunks.insert(chunk_pos, Arc::new(chunk));
+        world.get_block_entity(&position).unwrap()
+    }
+}
+
+// A real menu needs a player inventory, but these tests need no network client.
+struct MenuPlayer(Arc<PlayerInventory>);
+
+impl MenuPlayer {
+    fn new() -> Self {
+        Self(Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::default(),
+        )))
+    }
+}
+
+impl InventoryPlayer for MenuPlayer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) {}
+    fn get_inventory(&self) -> Arc<PlayerInventory> {
+        self.0.clone()
+    }
+    fn has_infinite_materials(&self) -> bool {
+        false
+    }
+    fn is_creative(&self) -> bool {
+        false
+    }
+    fn experience_level(&self) -> i32 {
+        0
+    }
+    fn add_experience_levels(&self, _levels: i32) {}
+    fn enchantment_seed(&self) -> i32 {
+        0
+    }
+    fn set_enchantment_seed(&self, _seed: i32) {}
+    fn enqueue_inventory_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerContent,
+        _window_type: Option<pumpkin_data::screen::WindowType>,
+    ) {
+    }
+    fn enqueue_slot_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerSlot,
+        _window_type: Option<pumpkin_data::screen::WindowType>,
+        _total_slots: usize,
+    ) {
+    }
+    fn enqueue_cursor_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetCursorItem,
+    ) {
+    }
+    fn enqueue_property_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetContainerProperty,
+    ) {
+    }
+    fn enqueue_slot_set_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetPlayerInventory,
+    ) {
+    }
+    fn enqueue_set_held_item_packet(
+        &self,
+        _packet: &pumpkin_protocol::java::client::play::CSetSelectedSlot,
+    ) {
+    }
+    fn enqueue_equipment_change(
+        &self,
+        _slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+        _stack: &ItemStack,
+    ) {
+    }
+    fn award_experience(&self, _amount: i32) {}
+    fn increment_stat(
+        &self,
+        _category: pumpkin_data::statistic::StatisticCategory,
+        _stat_id: i32,
+        _amount: i32,
+    ) {
+    }
+    fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+}
+
+#[tokio::test]
+async fn chest_data_updates_retained_single_menus_and_full_saved_state() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let chest = kind.new(BLOCK_POS);
+        let inventory = chest.clone().get_inventory().unwrap();
+        inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        inventory.set_stack(26, ItemStack::new(1, &Item::APPLE));
+        fixture.install(kind.block(), chest.clone());
+        let player = MenuPlayer::new();
+        let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+        assert_eq!(handler.get_behaviour().slots[0].get_stack().item_count, 3);
+        assert_eq!(kind.viewers(chest.as_ref()), 1);
+
+        // A real neighboring comparator must be scheduled by command completion,
+        // after load_nbt has released its inventory and loot locks.
+        let comparator_pos = BlockPos::new(1, 64, 0);
+        fixture.set_state(comparator_pos.down(), Block::STONE.default_state.id);
+        let mut properties =
+            ComparatorLikeProperties::from_state_id(Block::COMPARATOR.default_state.id);
+        properties.facing = HorizontalFacing::West;
+        fixture.install(
+            &Block::COMPARATOR,
+            Arc::new(ComparatorBlockEntity::new(comparator_pos)),
+        );
+        fixture.set_state(comparator_pos, properties.to_state_id(&Block::COMPARATOR));
+        assert!(!world.is_block_tick_scheduled(&comparator_pos, &Block::COMPARATOR));
+        chest.clear_dirty();
+        chest.clear_comparator_dirty();
+        world
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.mark_dirty(false))
+            .unwrap();
+        world
+            .custom_block_entity_data
+            .insert(BLOCK_POS, compound("{retained:9}"));
+
+        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:1b,id:'minecraft:emerald',count:32,components:{'minecraft:custom_data':{marker:17}}}]"), 1);
+        assert!(Arc::ptr_eq(
+            &chest,
+            &world.get_block_entity(&BLOCK_POS).unwrap()
+        ));
+        assert!(Arc::ptr_eq(
+            &inventory,
+            &world
+                .get_block_entity(&BLOCK_POS)
+                .unwrap()
+                .get_inventory()
+                .unwrap()
+        ));
+        assert!(Arc::ptr_eq(&inventory, &handler.inventory));
+        assert!(handler.get_behaviour().slots[0].get_stack().is_empty());
+        assert!(handler.get_behaviour().slots[26].get_stack().is_empty());
+        let changed = handler.get_behaviour().slots[1].get_stack();
+        assert_eq!(changed.item.id, Item::EMERALD.id);
+        assert_eq!(changed.item_count, 32);
+        assert_marker(&changed);
+        assert_eq!(kind.viewers(chest.as_ref()), 1);
+        assert!(chest.is_dirty());
+        assert!(!chest.is_comparator_dirty()); // World consumed the notification.
+        assert!(world.is_block_tick_scheduled(&comparator_pos, &Block::COMPARATOR));
+        assert!(
+            world
+                .level
+                .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.is_dirty())
+                .unwrap()
+        );
+        assert_eq!(
+            crate::block::calculate_comparator_output(inventory.as_ref()),
+            1
+        );
+        assert_eq!(fixture.execute("data get block 0 64 0 Items[0].count"), 32);
+        let pending = fixture.pending(BLOCK_POS);
+        assert_eq!(
+            pending.get_list("Items"),
+            saved(chest.as_ref()).get_list("Items")
+        );
+        assert_eq!(
+            pending.get_compound("PumpkinCustomData"),
+            Some(&compound("{retained:9}"))
+        );
+
+        world.flush_block_updates();
+        assert!(
+            world
+                .take_flushed_block_changes()
+                .contains(&(BLOCK_POS, kind.block().default_state.id))
+        );
+        assert_eq!(
+            chest.chunk_data_nbt().unwrap().get_list("Items"),
+            pending.get_list("Items")
+        );
+
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert!(!Arc::ptr_eq(&chest, &reloaded));
+        let reloaded_inventory = reloaded.get_inventory().unwrap();
+        assert!(reloaded_inventory.get_stack(0).is_empty());
+        assert!(reloaded_inventory.get_stack(26).is_empty());
+        assert!(reloaded_inventory.get_stack(1).are_equal(&changed));
+        assert_marker(&reloaded_inventory.get_stack(1));
+        assert!(
+            handler.get_behaviour().slots[1]
+                .get_stack()
+                .are_equal(&changed)
+        );
+    }
+}
+
+#[tokio::test]
+async fn chest_data_updates_both_retained_double_halves_and_clears_empty_or_removed_items() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        let first = kind.new(BLOCK_POS);
+        let second = kind.new(OTHER_POS);
+        let first_inventory = first.clone().get_inventory().unwrap();
+        let second_inventory = second.clone().get_inventory().unwrap();
+        first_inventory.set_stack(0, ItemStack::new(2, &Item::DIAMOND));
+        first_inventory.set_stack(26, ItemStack::new(1, &Item::APPLE));
+        second_inventory.set_stack(0, ItemStack::new(4, &Item::GOLD_INGOT));
+        fixture.install(kind.block(), first.clone());
+        fixture.install(kind.block(), second.clone());
+        // Right facing south connects east to Left, both inside the Full chunk.
+        let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
+        properties.facing = HorizontalFacing::South;
+        properties.r#type = ChestType::Right;
+        let first_state = properties.to_state_id(kind.block());
+        fixture.set_state(BLOCK_POS, first_state);
+        properties.r#type = ChestType::Left;
+        let second_state = properties.to_state_id(kind.block());
+        fixture.set_state(OTHER_POS, second_state);
+        let inventory: Arc<dyn Inventory> =
+            DoubleInventory::new(first_inventory.clone(), second_inventory.clone());
+        let player = MenuPlayer::new();
+        let handler = create_generic_9x6(1, &player.0, inventory.clone(), &player);
+        assert_eq!(handler.get_behaviour().slots[27].get_stack().item_count, 4);
+
+        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:1b,id:'minecraft:emerald',count:8,components:{'minecraft:custom_data':{marker:17}}}]"), 1);
+        assert!(handler.get_behaviour().slots[0].get_stack().is_empty());
+        assert!(handler.get_behaviour().slots[26].get_stack().is_empty());
+        assert_marker(&handler.get_behaviour().slots[1].get_stack());
+        assert_eq!(inventory.get_stack(1).item_count, 8);
+        assert_eq!(handler.get_behaviour().slots[27].get_stack().item_count, 4);
+        assert_eq!(fixture.execute("data modify block 1 64 0 Items set value [{Slot:26b,id:'minecraft:iron_ingot',count:9}]"), 1);
+        assert!(handler.get_behaviour().slots[27].get_stack().is_empty());
+        assert_eq!(handler.get_behaviour().slots[53].get_stack().item_count, 9);
+        assert_eq!(inventory.get_stack(53).item.id, Item::IRON_INGOT.id);
+        assert_marker(&handler.get_behaviour().slots[1].get_stack());
+
+        // Input identity cannot change either the live type or the block's half.
+        assert_eq!(
+            fixture.execute("data merge block 0 64 0 {id:'minecraft:barrel',x:99,y:1,z:-8}"),
+            1
+        );
+        let actual = saved(first.as_ref());
+        assert_eq!(actual.get_string("id"), Some(first.resource_location()));
+        assert_eq!(actual.get_int("x"), Some(0));
+        assert_eq!(actual.get_int("y"), Some(64));
+        assert_eq!(actual.get_int("z"), Some(0));
+        assert_eq!(world.get_block_state_id(&BLOCK_POS), first_state);
+        assert_eq!(world.get_block_state_id(&OTHER_POS), second_state);
+
+        assert_eq!(
+            fixture.execute("data modify block 0 64 0 Items set value []"),
+            1
+        );
+        assert!((0..27).all(|slot| handler.get_behaviour().slots[slot].get_stack().is_empty()));
+        assert_eq!(handler.get_behaviour().slots[53].get_stack().item_count, 9);
+        assert_eq!(fixture.execute("data remove block 1 64 0 Items"), 1);
+        assert!(inventory.is_empty());
+        assert!((0..54).all(|slot| handler.get_behaviour().slots[slot].get_stack().is_empty()));
+        assert_eq!(
+            crate::block::calculate_comparator_output(inventory.as_ref()),
+            0
+        );
+        assert!(Arc::ptr_eq(&inventory, &handler.inventory));
+        for (position, entity, half) in [
+            (BLOCK_POS, &first, &first_inventory),
+            (OTHER_POS, &second, &second_inventory),
+        ] {
+            let published = world.get_block_entity(&position).unwrap();
+            assert!(Arc::ptr_eq(entity, &published));
+            assert!(Arc::ptr_eq(half, &published.get_inventory().unwrap()));
+            assert_eq!(kind.viewers(entity.as_ref()), 1);
+            assert!(
+                fixture
+                    .pending(position)
+                    .get_list("Items")
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        let first_reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert!(first_reloaded.get_inventory().unwrap().is_empty());
+        assert!(
+            world
+                .get_block_entity(&OTHER_POS)
+                .unwrap()
+                .get_inventory()
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[tokio::test]
+async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items() {
+    for kind in CHESTS {
+        let fixture = Fixture::new().await;
+        let chest = kind.new(BLOCK_POS);
+        let inventory = chest.clone().get_inventory().unwrap();
+        inventory.set_stack(0, ItemStack::new(2, &Item::DIAMOND));
+        fixture.install(kind.block(), chest.clone());
+        assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L,Items:[{Slot:5b,id:'minecraft:apple',count:4}]}"), 1);
+        assert!(chest.has_loot_table());
+        assert!(inventory.is_empty()); // Pending loot suppresses the supplied Items.
+        assert_eq!(fixture.execute("data modify block 0 64 0 LootTable set value 'minecraft:chests/abandoned_mineshaft'"), 1);
+        assert_eq!(
+            fixture.execute("data modify block 0 64 0 LootTableSeed set value -44L"),
+            1
+        );
+        let pending = fixture.pending(BLOCK_POS);
+        assert_eq!(
+            pending.get_string("LootTable"),
+            Some("minecraft:chests/abandoned_mineshaft")
+        );
+        assert_eq!(pending.get_long("LootTableSeed"), Some(-44));
+        assert!(pending.get("Items").is_none());
+        assert!(chest.chunk_data_nbt().unwrap().get("LootTable").is_none());
+        assert!(chest.chunk_data_nbt().unwrap().get("Items").is_none());
+        assert!(Arc::ptr_eq(
+            &chest,
+            &fixture.source.world().get_block_entity(&BLOCK_POS).unwrap()
+        ));
+
+        // The terrain save must contain the loot fields absent from the client tag.
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert!(!Arc::ptr_eq(&chest, &reloaded));
+        let reloaded_data = saved(reloaded.as_ref());
+        assert_eq!(
+            reloaded_data.get_string("LootTable"),
+            pending.get_string("LootTable")
+        );
+        assert_eq!(reloaded_data.get_long("LootTableSeed"), Some(-44));
+        assert!(reloaded.clone().get_inventory().unwrap().is_empty());
+        assert_eq!(fixture.execute("data remove block 0 64 0 LootTableSeed"), 1);
+        assert!(saved(reloaded.as_ref()).get("LootTableSeed").is_none());
+        assert!(reloaded.has_loot_table());
+        assert_eq!(fixture.execute("data remove block 0 64 0 LootTable"), 1);
+        assert!(!reloaded.has_loot_table());
+        assert!(reloaded.take_loot_table().is_none());
+        assert!(
+            saved(reloaded.as_ref())
+                .get_list("Items")
+                .unwrap()
+                .is_empty()
+        );
+
+        assert_eq!(
+            fixture.execute("data merge block 0 64 0 {LootTable:'chests/simple_dungeon'}"),
+            1
+        );
+        assert_eq!(
+            reloaded.take_loot_table(),
+            Some(("minecraft:chests/simple_dungeon".into(), 0))
+        );
+        assert!(!reloaded.has_loot_table());
+        assert!(reloaded.take_loot_table().is_none());
+        let generated_inventory = reloaded.clone().get_inventory().unwrap();
+        // Stand in for the loot fill after take_loot_table. This tests persistence,
+        // not loot generation, randomness, or the first-open spectator rules.
+        generated_inventory.set_stack(0, ItemStack::new(5, &Item::DIAMOND));
+        assert_eq!(
+            fixture.execute("data modify block 0 64 0 Items[0].count set value 6"),
+            1
+        );
+        assert!(fixture.pending(BLOCK_POS).get("LootTable").is_none());
+        assert!(fixture.pending(BLOCK_POS).get("LootTableSeed").is_none());
+        let generated_reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        assert!(!generated_reloaded.has_loot_table());
+        assert_eq!(
+            generated_reloaded
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .item_count,
+            6
+        );
+    }
+}
+
+#[test]
+fn chest_reload_matches_constructor_defaults_and_preserves_runtime_state() {
+    // Supplementary javap inspection of the pinned 26.3 JAR: ChestBlockEntity
+    // loadAdditional, RandomizableContainer.tryLoadLootTable and TagValueInput
+    // getLongOr. REA's unsupported JVM workflow was not used as a decompiler.
+    for kind in CHESTS {
+        let live = kind.new(BLOCK_POS);
+        let inventory = live.clone().get_inventory().unwrap();
+        inventory.on_open();
+        for (snbt, expected_loot) in [
+            ("{Items:[{Slot:0b,id:'minecraft:diamond',count:3}]}", None),
+            (
+                "{LootTable:'chests/simple_dungeon',LootTableSeed:91L}",
+                Some(("minecraft:chests/simple_dungeon", 91)),
+            ),
+            (
+                "{LootTable:'minecraft:chests/simple_dungeon'}",
+                Some(("minecraft:chests/simple_dungeon", 0)),
+            ),
+            ("{}", None),
+            ("{LootTableSeed:88L}", None),
+            (
+                "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:-7}",
+                Some(("minecraft:chests/simple_dungeon", -7)),
+            ),
+            (
+                "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:-1.5f}",
+                Some(("minecraft:chests/simple_dungeon", -1)),
+            ),
+            (
+                "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:-1.5d}",
+                Some(("minecraft:chests/simple_dungeon", -2)),
+            ),
+            (
+                "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:'invalid'}",
+                Some(("minecraft:chests/simple_dungeon", 0)),
+            ),
+            (
+                "{LootTable:'INVALID KEY',Items:[{Slot:26b,id:'minecraft:apple',count:2}]}",
+                None,
+            ),
+        ] {
+            let mut input = compound(snbt);
+            input.put_string("id", "minecraft:barrel".into());
+            input.put_int("x", 99);
+            input.put_int("y", -1);
+            input.put_int("z", 88);
+            let constructed = kind.from_nbt(&input, BLOCK_POS);
+            live.clear_dirty();
+            live.clear_comparator_dirty();
+            live.load_nbt(&input).unwrap();
+            assert_eq!(saved(live.as_ref()), saved(constructed.as_ref()), "{snbt}");
+            assert_eq!(live.get_position(), BLOCK_POS);
+            assert!(Arc::ptr_eq(
+                &inventory,
+                &live.clone().get_inventory().unwrap()
+            ));
+            assert_eq!(kind.viewers(live.as_ref()), 1);
+            assert!(live.is_dirty());
+            assert!(live.is_comparator_dirty());
+            assert!(!constructed.is_dirty());
+            assert!(!constructed.is_comparator_dirty());
+            if snbt.contains("INVALID KEY") {
+                assert_eq!(inventory.get_stack(26).item_count, 2);
+            }
+            let expected_loot = expected_loot.map(|(key, seed)| (key.to_string(), seed));
+            assert_eq!(live.take_loot_table(), expected_loot);
+            assert_eq!(constructed.take_loot_table(), expected_loot);
+        }
+        inventory.on_close();
+        assert_eq!(kind.viewers(live.as_ref()), 0);
+    }
+}
+
+#[test]
+fn chest_loot_reload_save_and_take_never_mix_key_and_seed() {
+    for kind in CHESTS {
+        let chest = kind.new(BLOCK_POS);
+        let first = compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:111L}");
+        let second =
+            compound("{LootTable:'minecraft:chests/abandoned_mineshaft',LootTableSeed:222L}");
+        let barrier = Barrier::new(2);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                barrier.wait();
+                for iteration in 0..256 {
+                    chest
+                        .load_nbt(if iteration % 2 == 0 { &first } else { &second })
+                        .unwrap();
+                }
+            });
+            barrier.wait();
+            for _ in 0..256 {
+                let nbt = saved(chest.as_ref());
+                let persisted = nbt
+                    .get_string("LootTable")
+                    .map(|key| (key.to_string(), nbt.get_long("LootTableSeed").unwrap()));
+                for pair in [persisted, chest.take_loot_table()].into_iter().flatten() {
+                    assert!(
+                        pair == ("minecraft:chests/simple_dungeon".into(), 111)
+                            || pair == ("minecraft:chests/abandoned_mineshaft".into(), 222),
+                        "mixed loot state: {pair:?}"
+                    );
+                }
+            }
+        });
+    }
+}

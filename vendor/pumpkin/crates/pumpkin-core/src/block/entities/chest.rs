@@ -8,6 +8,8 @@ use crate::{
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
 };
 
+use super::chest_like_block_entity::ChestLootState;
+
 pub struct ChestBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
@@ -17,11 +19,8 @@ pub struct ChestBlockEntity {
     // Viewer
     viewers: ViewerCountTracker,
 
-    /// Pending loot-table key (e.g. `"minecraft:chests/simple_dungeon"`).
-    /// Set during world generation; cleared when items are generated on first open.
-    pub loot_table: StdMutex<Option<String>>,
-    /// Seed used for deterministic loot generation, paired with `loot_table`.
-    pub loot_table_seed: i64,
+    /// Pending loot key and seed, reloaded atomically and consumed on first open.
+    loot: StdMutex<ChestLootState>,
 }
 
 impl ChestBlockEntity {
@@ -37,3 +36,7 @@ impl_inventory_for_chest!(ChestBlockEntity);
 impl_clearable_for_chest!(ChestBlockEntity);
 impl_viewer_count_listener_for_chest!(ChestBlockEntity);
 impl_chest_helper_methods!(ChestBlockEntity);
+
+#[cfg(test)]
+#[path = "chest_reload_tests.rs"]
+mod reload_tests;
