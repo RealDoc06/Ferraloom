@@ -1,7 +1,7 @@
 pub mod trigger;
 mod visibility_evaluator;
 
-use crate::data::advancement_data::AdvancementManager;
+use crate::data::advancement_data::{AdvancementManager, write_advancement_snapshots};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
@@ -23,7 +23,7 @@ use std::fs::read;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, warn};
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -290,22 +290,17 @@ impl PlayerAdvancement {
     }
 
     /// Saves the player's advancement progress to disk as JSON.
+    /// Callers coordinate standalone saves; the manager orders live-player saves.
     pub async fn save(&self) -> Result<(), AdvancementDataError> {
         if !self.is_save_enabled() {
             return Ok(());
         }
         let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
-        let Some(parent) = self.path.parent() else {
-            return Ok(());
-        };
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            error!("Failed to create player advancement directory : {e}");
-            return Err(AdvancementDataError::Io(e));
-        }
-        tokio::fs::write(&self.path, json)
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || write_advancement_snapshots(vec![(path, json)]))
             .await
-            .map_err(AdvancementDataError::Io)?;
-        Ok(())
+            .map_err(|error| AdvancementDataError::Io(std::io::Error::other(error)))?
+            .map_err(AdvancementDataError::Io)
     }
 
     /// Loads the player's advancement progress from disk.
