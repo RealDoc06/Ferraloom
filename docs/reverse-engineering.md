@@ -149,11 +149,26 @@ evidence.
 
 The original underground sample differed in three unsupported glow-lichen
 states and four gold-ore cells. Deferred postprocessing removed the lichen
-differences in the latest recorded run. A diagnostic build of the earlier
-Rust revision matched vanilla in all sampled cells, so its trace failed the
-required original-output baseline. Its observed gold placement cannot explain
-the uninstrumented failure conclusively. No general generation-order or
-world-generation parity claim follows from that diagnostic run.
+differences. The clean `571b6ca` executable's 67-scenario paired run now matches
+all 16,384 sampled block states, including the gold cells. That build includes
+sequential forced-chunk admission and chunk lifecycle changes. This observation
+does not isolate the earlier gold mismatch's cause or establish general
+generation ordering. A diagnostic build of an earlier Rust revision had also
+matched vanilla, so its trace failed the required original-output baseline and
+could not explain the uninstrumented failure conclusively.
+
+A separate official-server fixture captures a furnace, blast furnace and smoker
+after exactly 237 stepped ticks, with coal consumed and cooking in progress.
+Modern saves use signed integer cooking and fuel timers and a floating-point
+`speed_multiplier`; contextual fuel resolution supplies cooking speed as well
+as burn duration. Copies of that Java save retain their timers and continue
+cooking correctly in Java. The `571b6ca` Rust executable loses those timers on
+load. Independent lava-bucket copies also expose the missing bucket crafting
+remainder and wet-sponge conversion. These are diagnostic failures pending a
+repair and a fresh comparison, not passing feature evidence. The source fixture
+is kept immutable under the ignored reference cache; its canonical file
+manifest SHA-256 is
+`de91961415ddb941e59f4741b005b1d768a5beabb1461e2b8ccbf3952ecf3603`.
 
 ## Boundaries and remaining work
 

@@ -4,6 +4,20 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
+The latest selected run tested source `571b6ca8ee705ff09a170d0c494972361e940bfe`
+with Rust executable SHA-256
+`1628b037014ed5a52c2c930bc677af8e82f6df90bbcbf3cef1dd730bf05edae0`.
+Vanilla passed 67 of 67 scenarios; Ferraloom passed 65 of 67. Mob team
+selection failed both before and after restart, and the vanilla-to-Rust world
+check failed on that same team predicate. Rust-to-vanilla interchange passed.
+The decoded command trees differ by two missing roots (`jfr`, `perf`) and 543
+missing advertised literal paths with argument names normalized. This checks
+advertised syntax, independently of command execution. All 16,384 block states
+in the selected underground chunk sample matched; that single sample does not
+establish general generation parity. The immutable
+[paired report](../compatibility/results/evidence/b2f55868c867c1be9c297f2ad9faa2b63d9b1210b332eb22113660032dc20cf3.json)
+retains every failure. The ledger has 19 partial and 181 unverified families.
+
 ## Inventory scope
 
 Each family records its expected behavior, required reference scenarios, Rust status and evidence. Families cover protocol, authentication, world generation, dimensions, data packs, storage, block simulation, redstone, entities, AI, combat, inventories, recipes, player systems, commands and administration. Concurrency, determinism and multicore performance are tracked separately because they are Ferraloom requirements rather than vanilla features.
