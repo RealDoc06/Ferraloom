@@ -1,0 +1,17 @@
+Ferraloom is a Minecraft Java server built on Pumpkin's Rust server engine.
+It is not an independent from-scratch implementation of all Minecraft mechanics.
+
+Pumpkin source: https://github.com/Pumpkin-MC/Pumpkin
+Pinned revision: 5b53f064af8708ba33fcaa533b81ca29a53a3310
+Copyright Pumpkin contributors, including Aleksander Medvedev.
+Pumpkin server code is licensed under GPL-3.0.
+Ferraloom source is distributed under GPL-3.0-only; see LICENSE.
+
+Pumpkin third-party asset/data notices:
+https://github.com/Pumpkin-MC/Pumpkin/blob/5b53f064af8708ba33fcaa533b81ca29a53a3310/assets/NOTICE.md
+Minecraft assets and data remain the property of Mojang Studios/Microsoft.
+The build downloads Minecraft's official server to extract interoperability data.
+The Minecraft server executable is not redistributed by this repository.
+
+Minecraft is a trademark of Mojang Studios. Ferraloom is not affiliated with,
+endorsed by, or an official product of Mojang Studios or Microsoft.

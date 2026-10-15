@@ -1,0 +1,3016 @@
+{
+  "schema_version": 1,
+  "target": {
+    "edition": "java",
+    "version": "26.3",
+    "release_type": "release",
+    "manifest_url": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+    "version_metadata_url": "https://piston-meta.mojang.com/v1/packages/11f1aefe473eefba0af62e3286c33b692807b2eb/26.3.json",
+    "version_metadata_sha1": "11f1aefe473eefba0af62e3286c33b692807b2eb",
+    "release_time": "2026-09-15T11:23:02+00:00",
+    "checked_on": "2026-10-15"
+  },
+  "scope_note": "Feature families, not an exhaustive list of every registry entry or behavior. Extracted official registries and reference scenarios must close per-entry coverage gaps. All rows start unverified.",
+  "features": [
+    {
+      "id": "network.handshake",
+      "category": "network",
+      "name": "Handshake and server address",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Decode exact target protocol handshake and route status or login",
+      "required_scenarios": [
+        "valid target handshake",
+        "unsupported protocol",
+        "malformed handshake"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.status",
+      "category": "network",
+      "name": "Server list status and ping",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Return vanilla-compatible status JSON and ping payload",
+      "required_scenarios": [
+        "status fields",
+        "favicon and player sample",
+        "ping echo"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.framing",
+      "category": "network",
+      "name": "Packet framing",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Decode length-prefixed packets across arbitrary stream boundaries",
+      "required_scenarios": [
+        "split frame",
+        "coalesced frames",
+        "oversized frame"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.serialization",
+      "category": "network",
+      "name": "Protocol value encodings",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match VarInt, strings, identifiers, positions and registry codecs",
+      "required_scenarios": [
+        "boundary values",
+        "invalid encodings",
+        "round-trip reference packets"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.login",
+      "category": "network",
+      "name": "Login state machine",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Follow target-version login sequence and disconnect reasons",
+      "required_scenarios": [
+        "successful login",
+        "invalid state transition",
+        "duplicate login"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.online_auth",
+      "category": "network",
+      "name": "Online account authentication",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Perform the reference server's session-service authentication",
+      "required_scenarios": [
+        "valid account",
+        "invalid session",
+        "service unavailable"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.encryption",
+      "category": "network",
+      "name": "Encrypted connection",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Negotiate and apply vanilla encryption to the complete stream",
+      "required_scenarios": [
+        "encrypted login",
+        "wrong verify token",
+        "fragmented encrypted traffic"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.compression",
+      "category": "network",
+      "name": "Compression negotiation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Apply target compression threshold and validate compressed frames",
+      "required_scenarios": [
+        "below threshold",
+        "at threshold",
+        "invalid compressed length"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.configuration",
+      "category": "network",
+      "name": "Configuration protocol",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Complete registry, tags and feature negotiation before play",
+      "required_scenarios": [
+        "fresh client",
+        "configuration acknowledgment",
+        "reconfiguration"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.registries",
+      "category": "network",
+      "name": "Registry synchronization",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Send the target version's synchronized registries and identifiers",
+      "required_scenarios": [
+        "all required registries",
+        "dimension codec",
+        "unknown identifier handling"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.keepalive",
+      "category": "network",
+      "name": "Keepalives and timeout",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match keepalive timing, IDs and timeout behavior",
+      "required_scenarios": [
+        "valid reply",
+        "wrong ID",
+        "silent client"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.signed_chat",
+      "category": "network",
+      "name": "Signed player chat",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Enforce target chat signing and acknowledgement rules",
+      "required_scenarios": [
+        "valid signature",
+        "invalid signature",
+        "chat acknowledgment chain"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.chat_delivery",
+      "category": "network",
+      "name": "Chat filtering and delivery",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match chat visibility, message decoration and system messages",
+      "required_scenarios": [
+        "chat visibility settings",
+        "system message",
+        "filtered recipient"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.secure_profile",
+      "category": "network",
+      "name": "Secure profile enforcement",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Honor secure-profile settings and certificate validation",
+      "required_scenarios": [
+        "required valid profile",
+        "missing key",
+        "expired or invalid certificate"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.transfer",
+      "category": "network",
+      "name": "Server transfers",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match target transfer packets and accepted-transfer policy",
+      "required_scenarios": [
+        "allowed transfer",
+        "rejected transfer",
+        "transfer handshake"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.movement",
+      "category": "network",
+      "name": "Movement packet validation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Apply vanilla movement limits and correction packets",
+      "required_scenarios": [
+        "legal movement",
+        "invalid coordinates",
+        "teleport acknowledgment"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.interaction",
+      "category": "network",
+      "name": "Interaction packet validation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Validate reach, sequence and interaction target",
+      "required_scenarios": [
+        "legal interaction",
+        "out-of-range target",
+        "replayed sequence"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.custom_payload",
+      "category": "network",
+      "name": "Vanilla custom payloads",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Handle built-in plugin-channel messages without loading plugins",
+      "required_scenarios": [
+        "client brand",
+        "unknown channel",
+        "oversized payload"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.resource_pack",
+      "category": "network",
+      "name": "Resource pack protocol",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Send packs and process target-version acceptance and rejection states",
+      "required_scenarios": [
+        "accepted pack",
+        "declined required pack",
+        "failed download"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.cookies",
+      "category": "network",
+      "name": "Client cookie protocol",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match target cookie request, storage and transfer use where present",
+      "required_scenarios": [
+        "empty response",
+        "stored cookie",
+        "oversized cookie"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.chunk_stream",
+      "category": "network",
+      "name": "Chunk delivery and unload",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Send vanilla chunk, light, batch and unload messages",
+      "required_scenarios": [
+        "join initial chunks",
+        "cross view boundary",
+        "chunk batch acknowledgment"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.entity_stream",
+      "category": "network",
+      "name": "Entity tracking packets",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Synchronize spawn, metadata, movement and removal per viewer",
+      "required_scenarios": [
+        "enter tracking range",
+        "metadata change",
+        "entity removal"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.inventory_stream",
+      "category": "network",
+      "name": "Container synchronization",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match slot, cursor, state ID and transaction recovery messages",
+      "required_scenarios": [
+        "valid click",
+        "stale state ID",
+        "resynchronize after mismatch"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "network.disconnect",
+      "category": "network",
+      "name": "Disconnect and cleanup",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Deliver appropriate reasons and release connection-owned state",
+      "required_scenarios": [
+        "login kick",
+        "play kick",
+        "abrupt socket close"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.seed",
+      "category": "world",
+      "name": "Seed and world settings",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Use target seed interpretation and world-generation settings",
+      "required_scenarios": [
+        "string seed",
+        "numeric seed",
+        "same seed regeneration"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.biomes",
+      "category": "world",
+      "name": "Biome generation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match reference biome placement and climate selection",
+      "required_scenarios": [
+        "multiple seeds",
+        "dimension sample",
+        "biome boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.terrain",
+      "category": "world",
+      "name": "Terrain generation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match density functions, noise and surface shaping",
+      "required_scenarios": [
+        "reference chunk hashes",
+        "negative coordinates",
+        "large coordinates"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.surface",
+      "category": "world",
+      "name": "Surface rules and carvers",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match surface materials, caves and aquifers",
+      "required_scenarios": [
+        "surface biomes",
+        "cave carve",
+        "aquifer boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.features",
+      "category": "world",
+      "name": "Placed and configured features",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match ores, vegetation and feature placement",
+      "required_scenarios": [
+        "ore distribution",
+        "tree placement",
+        "feature crossing chunk boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.structures",
+      "category": "world",
+      "name": "Structure generation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match structure positions, pieces and placement rules",
+      "required_scenarios": [
+        "locate result",
+        "structure chunk boundary",
+        "structure loot seed"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.world_presets",
+      "category": "world",
+      "name": "World types and presets",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Support vanilla world presets and custom generator settings",
+      "required_scenarios": [
+        "default",
+        "flat",
+        "large biomes or target preset"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.height",
+      "category": "world",
+      "name": "Vertical world limits",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Respect per-dimension height and coordinate bounds",
+      "required_scenarios": [
+        "minimum height",
+        "maximum height",
+        "out-of-world access"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.overworld",
+      "category": "world",
+      "name": "Overworld dimension",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match overworld-specific environment and generation",
+      "required_scenarios": [
+        "sky and daylight",
+        "spawn",
+        "weather effects"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.nether",
+      "category": "world",
+      "name": "Nether dimension",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match Nether generation, travel scale and environment",
+      "required_scenarios": [
+        "terrain sample",
+        "coordinate scaling",
+        "dimension hazards"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.end",
+      "category": "world",
+      "name": "End dimension",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match End islands, entry platform and gateway generation",
+      "required_scenarios": [
+        "main island",
+        "outer islands",
+        "entry platform"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.portals",
+      "category": "world",
+      "name": "Portals and dimension travel",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match portal creation, search, placement and entity transfer",
+      "required_scenarios": [
+        "Nether portal",
+        "End portal",
+        "return portal"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.chunk_tickets",
+      "category": "world",
+      "name": "Chunk tickets and loading",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Honor player, spawn, portal and forced chunk ticket lifetimes",
+      "required_scenarios": [
+        "player leaves",
+        "forced chunk",
+        "portal ticket expiry"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.simulation_distance",
+      "category": "world",
+      "name": "Simulation and view distance",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Apply separate loading, tracking and ticking distances",
+      "required_scenarios": [
+        "distance boundary",
+        "runtime setting change",
+        "multiple players"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.spawn_location",
+      "category": "world",
+      "name": "Spawn location search",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match initial spawn search and world spawn constraints",
+      "required_scenarios": [
+        "new world",
+        "obstructed spawn",
+        "spawn radius"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.world_border_gen",
+      "category": "world",
+      "name": "Generation at world boundaries",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Handle world borders and global coordinate limits consistently",
+      "required_scenarios": [
+        "border chunk",
+        "global limit",
+        "teleport beyond limit"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.data_packs",
+      "category": "world",
+      "name": "Data pack loading",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Load vanilla and custom pack resources in correct precedence",
+      "required_scenarios": [
+        "pack enable",
+        "overridden resource",
+        "invalid resource"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.data_reload",
+      "category": "world",
+      "name": "Data pack reload",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Apply supported runtime data reload atomically",
+      "required_scenarios": [
+        "valid reload",
+        "invalid reload rollback",
+        "active recipes update"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.feature_flags",
+      "category": "world",
+      "name": "Feature flags and experimental settings",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Honor saved feature configuration and reference compatibility behavior",
+      "required_scenarios": [
+        "default flags",
+        "enabled experimental flag",
+        "incompatible save"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "world.functions",
+      "category": "world",
+      "name": "Data pack functions and macros",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Execute functions, tags, scheduling and target macro semantics",
+      "required_scenarios": [
+        "load and tick tags",
+        "scheduled function",
+        "macro expansion"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.nbt",
+      "category": "persistence",
+      "name": "NBT serialization",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Read and write target binary NBT types and limits",
+      "required_scenarios": [
+        "all tag types",
+        "compressed NBT",
+        "malformed input"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.region",
+      "category": "persistence",
+      "name": "Anvil region files",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Read and write target region storage and compression formats",
+      "required_scenarios": [
+        "fresh region",
+        "existing region",
+        "negative chunk coordinates"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.chunk_data",
+      "category": "persistence",
+      "name": "Chunk state persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Persist section palettes, biomes, heightmaps and block states",
+      "required_scenarios": [
+        "save reload",
+        "palette expansion",
+        "empty sections"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.entity_data",
+      "category": "persistence",
+      "name": "Entity persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Persist entity types, UUIDs, components and relationships",
+      "required_scenarios": [
+        "entity reload",
+        "passenger hierarchy",
+        "entity crosses chunk"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.block_entities",
+      "category": "persistence",
+      "name": "Block entity persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Persist container, command and other block entity state",
+      "required_scenarios": [
+        "container reload",
+        "sign text",
+        "block entity replacement"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.player_data",
+      "category": "persistence",
+      "name": "Player data persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Persist inventory, position, abilities and dimension",
+      "required_scenarios": [
+        "logout login",
+        "dimension change",
+        "death reload"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.level_data",
+      "category": "persistence",
+      "name": "World metadata",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Maintain level.dat settings, seed and world metadata",
+      "required_scenarios": [
+        "new world",
+        "restart",
+        "metadata backup"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.poi",
+      "category": "persistence",
+      "name": "Points of interest",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Persist and reload village and portal points of interest",
+      "required_scenarios": [
+        "villager workstation",
+        "portal POI",
+        "removed POI"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.scheduled_ticks",
+      "category": "persistence",
+      "name": "Scheduled tick persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Preserve block and fluid scheduled ticks across unloads",
+      "required_scenarios": [
+        "save before due tick",
+        "chunk unload",
+        "restart"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.scoreboard_data",
+      "category": "persistence",
+      "name": "Scoreboard persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Preserve objectives, scores, teams and display slots",
+      "required_scenarios": [
+        "restart with teams",
+        "objective values",
+        "display slot"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.advancement_stats",
+      "category": "persistence",
+      "name": "Advancement and statistics persistence",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Save player progression and target file formats",
+      "required_scenarios": [
+        "advancement grant",
+        "stat increment",
+        "restart"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.map_data",
+      "category": "persistence",
+      "name": "Map and saved data",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Preserve maps, markers and other vanilla saved data",
+      "required_scenarios": [
+        "map exploration",
+        "map copy",
+        "restart"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.upgrade",
+      "category": "persistence",
+      "name": "World upgrades and data fixing",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Handle supported older data versions as the reference does",
+      "required_scenarios": [
+        "supported older world",
+        "unknown data version",
+        "upgrade backup"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.locking",
+      "category": "persistence",
+      "name": "World session lock",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Prevent conflicting writers and release locks on shutdown",
+      "required_scenarios": [
+        "second server",
+        "stale session",
+        "clean shutdown"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.atomic_save",
+      "category": "persistence",
+      "name": "Save durability and recovery",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match reference recovery behavior and avoid partial committed saves",
+      "required_scenarios": [
+        "interrupted write",
+        "backup recovery",
+        "disk full"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "persistence.imports",
+      "category": "persistence",
+      "name": "Vanilla save interchange",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Open a vanilla-created world and reopen Rust saves in vanilla",
+      "required_scenarios": [
+        "vanilla to Rust",
+        "Rust to vanilla",
+        "round-trip world data"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.registry",
+      "category": "blocks",
+      "name": "Block registry and properties",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Implement every target block state and valid property combination",
+      "required_scenarios": [
+        "registry coverage",
+        "placement state",
+        "invalid state"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.placement",
+      "category": "blocks",
+      "name": "Placement and breaking",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match placement restrictions, hardness and breaking results",
+      "required_scenarios": [
+        "survival break",
+        "creative break",
+        "placement obstruction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.neighbors",
+      "category": "blocks",
+      "name": "Neighbor updates",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match update propagation, ordering and recursion limits",
+      "required_scenarios": [
+        "neighbor chain",
+        "update order",
+        "recursive updates"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.scheduled",
+      "category": "blocks",
+      "name": "Scheduled block ticks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match priority, timing and duplicate scheduling behavior",
+      "required_scenarios": [
+        "equal-time priority",
+        "rescheduling",
+        "unload boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.random_ticks",
+      "category": "blocks",
+      "name": "Random block ticks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match eligible blocks and randomTickSpeed behavior",
+      "required_scenarios": [
+        "zero speed",
+        "crop sample",
+        "chunk eligibility"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.redstone_power",
+      "category": "blocks",
+      "name": "Redstone power propagation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match weak and strong power, wire levels and update order",
+      "required_scenarios": [
+        "wire decay",
+        "power through blocks",
+        "directional output"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.redstone_logic",
+      "category": "blocks",
+      "name": "Redstone logic components",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match repeaters, comparators, observers and torches",
+      "required_scenarios": [
+        "repeater delay",
+        "comparator mode",
+        "torch burnout"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.pistons",
+      "category": "blocks",
+      "name": "Pistons and movable blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match push limits, adhesion, block entities and update timing",
+      "required_scenarios": [
+        "push limit",
+        "sticky retraction",
+        "slime and honey"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.fluids",
+      "category": "blocks",
+      "name": "Fluid simulation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match water, lava, source formation and scheduled flow",
+      "required_scenarios": [
+        "source conversion",
+        "flow level",
+        "water lava interaction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.waterlogging",
+      "category": "blocks",
+      "name": "Waterlogging and fluid contact",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match contained fluid state and interacting block behavior",
+      "required_scenarios": [
+        "waterlogged placement",
+        "bucket extraction",
+        "fluid tick after break"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.explosions",
+      "category": "blocks",
+      "name": "Explosions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match block destruction, exposure, knockback and source rules",
+      "required_scenarios": [
+        "TNT chain",
+        "protected block",
+        "entity exposure"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.lighting",
+      "category": "blocks",
+      "name": "Sky and block lighting",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match light propagation and updates across chunks",
+      "required_scenarios": [
+        "opaque placement",
+        "light removal",
+        "chunk boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.fire",
+      "category": "blocks",
+      "name": "Fire and burning",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match ignition, spread, extinguishing and fire gamerules",
+      "required_scenarios": [
+        "spread disabled",
+        "rain extinguish",
+        "flammable neighbor"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.falling",
+      "category": "blocks",
+      "name": "Falling blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match gravity activation, landing, damage and drops",
+      "required_scenarios": [
+        "sand stack",
+        "anvil fall",
+        "landing obstruction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.plants",
+      "category": "blocks",
+      "name": "Growth and agriculture",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match crop, sapling, stem and vegetation growth",
+      "required_scenarios": [
+        "hydration",
+        "bone meal",
+        "growth obstruction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.sculk",
+      "category": "blocks",
+      "name": "Sculk and vibrations",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match sculk growth, vibration propagation and shrieker behavior",
+      "required_scenarios": [
+        "occluded vibration",
+        "cooldown",
+        "warden trigger"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.portals",
+      "category": "blocks",
+      "name": "Portal blocks and activation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match portal shape validation and block-side interactions",
+      "required_scenarios": [
+        "valid frame",
+        "broken frame",
+        "ignition"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.rails",
+      "category": "blocks",
+      "name": "Rails and minecart control",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match rail placement, slopes, power and detector behavior",
+      "required_scenarios": [
+        "rail junction",
+        "slope",
+        "detector output"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.containers",
+      "category": "blocks",
+      "name": "Container blocks and automation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match hopper transfer, sided access, locks and container rules",
+      "required_scenarios": [
+        "hopper cooldown",
+        "locked container",
+        "double chest"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.processing",
+      "category": "blocks",
+      "name": "Processing blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match furnaces, brewing, campfires and other timed processors",
+      "required_scenarios": [
+        "fuel use",
+        "recipe completion",
+        "blocked output"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.signals",
+      "category": "blocks",
+      "name": "Input and signal blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match buttons, plates, levers, tripwire and sensors",
+      "required_scenarios": [
+        "pulse duration",
+        "entity detection",
+        "signal reset"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.interactives",
+      "category": "blocks",
+      "name": "Interactive and stateful blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match doors, beds, respawn anchors, bells and utility interactions",
+      "required_scenarios": [
+        "door interaction",
+        "bed safety",
+        "anchor charges"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.weathering",
+      "category": "blocks",
+      "name": "State transitions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match oxidation, waxing, melting, freezing and snow accumulation",
+      "required_scenarios": [
+        "wax and scrape",
+        "ice melt",
+        "snow layer"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.block_events",
+      "category": "blocks",
+      "name": "Block events",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match queued block events, sound and client notification",
+      "required_scenarios": [
+        "note block",
+        "chest open",
+        "event ordering"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.commands",
+      "category": "blocks",
+      "name": "Command blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match modes, conditional execution, chains and permissions",
+      "required_scenarios": [
+        "impulse",
+        "repeating",
+        "conditional chain"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.structure_tools",
+      "category": "blocks",
+      "name": "Structure and jigsaw blocks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match save, load, integrity and generation tooling",
+      "required_scenarios": [
+        "structure save load",
+        "rotation",
+        "jigsaw placement"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "blocks.new_version",
+      "category": "blocks",
+      "name": "Target release block behaviors",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Cover all additional block families discovered in target registries",
+      "required_scenarios": [
+        "new registry entries",
+        "reference interaction traces",
+        "data-driven behavior"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.registry",
+      "category": "entities",
+      "name": "Entity registry",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Implement all target entity types and metadata defaults",
+      "required_scenarios": [
+        "registry coverage",
+        "spawn defaults",
+        "unknown type"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.lifecycle",
+      "category": "entities",
+      "name": "Entity lifecycle",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match creation, removal, despawn and tick eligibility",
+      "required_scenarios": [
+        "spawn",
+        "unload reload",
+        "despawn boundary"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.physics",
+      "category": "entities",
+      "name": "Entity movement and collision",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match movement, bounding boxes, stepping and collision shapes",
+      "required_scenarios": [
+        "wall collision",
+        "step height",
+        "fluid movement"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.gravity",
+      "category": "entities",
+      "name": "Gravity and fall damage",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match acceleration, terminal behavior and landing damage",
+      "required_scenarios": [
+        "free fall",
+        "safe landing",
+        "fall damage threshold"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.attributes",
+      "category": "entities",
+      "name": "Attributes and effects",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match base values, modifiers and synchronized attributes",
+      "required_scenarios": [
+        "stacked modifiers",
+        "modifier removal",
+        "attribute cap"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.ai_goals",
+      "category": "entities",
+      "name": "Mob goals and targeting",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match target acquisition, priorities and behavior transitions",
+      "required_scenarios": [
+        "hostile target",
+        "goal conflict",
+        "target lost"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.navigation",
+      "category": "entities",
+      "name": "Pathfinding and navigation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match traversability and movement for ground, flying and aquatic mobs",
+      "required_scenarios": [
+        "door path",
+        "water path",
+        "blocked route"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.spawning",
+      "category": "entities",
+      "name": "Natural mob spawning",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match category caps, distances, biome conditions and spawn checks",
+      "required_scenarios": [
+        "cap saturation",
+        "spawn distance",
+        "biome restriction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.spawners",
+      "category": "entities",
+      "name": "Spawners and trial spawners",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match activation, delays, spawn potentials and target trial behavior",
+      "required_scenarios": [
+        "player activation",
+        "spawn obstruction",
+        "trial cooldown"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.breeding",
+      "category": "entities",
+      "name": "Breeding, growth and taming",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match food, cooldowns, inheritance and ownership",
+      "required_scenarios": [
+        "breeding cooldown",
+        "baby growth",
+        "taming owner"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.villagers",
+      "category": "entities",
+      "name": "Villager AI and professions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match schedules, workstations, professions and restocking",
+      "required_scenarios": [
+        "claim workstation",
+        "restock",
+        "job change"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.raids",
+      "category": "entities",
+      "name": "Raids and patrols",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match raid triggers, waves, difficulty and victory effects",
+      "required_scenarios": [
+        "raid start",
+        "wave progression",
+        "raid loss"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.combat",
+      "category": "entities",
+      "name": "Melee combat",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match damage calculation, cooldowns, armor and attack effects",
+      "required_scenarios": [
+        "armor reduction",
+        "critical hit",
+        "attack cooldown"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.projectiles",
+      "category": "entities",
+      "name": "Projectiles and ranged combat",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match projectile motion, collision, damage and ownership",
+      "required_scenarios": [
+        "arrow hit",
+        "deflection",
+        "projectile chunk crossing"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.status_effects",
+      "category": "entities",
+      "name": "Status effects",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match effect duration, amplifiers, stacking and immunity",
+      "required_scenarios": [
+        "effect refresh",
+        "instant effect",
+        "immune target"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.potions",
+      "category": "entities",
+      "name": "Potion delivery",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match drinkable, splash and lingering potion application",
+      "required_scenarios": [
+        "splash distance",
+        "cloud reapplication",
+        "water interaction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.death_loot",
+      "category": "entities",
+      "name": "Death and loot",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match death events, loot context, equipment drops and experience",
+      "required_scenarios": [
+        "player kill",
+        "environment kill",
+        "looting modifier"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.item_entities",
+      "category": "entities",
+      "name": "Dropped items",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match merging, pickup, despawn and environmental damage",
+      "required_scenarios": [
+        "merge stack",
+        "pickup delay",
+        "despawn timer"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.experience",
+      "category": "entities",
+      "name": "Experience orbs",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match orb values, merging, pickup and mending",
+      "required_scenarios": [
+        "orb split",
+        "XP pickup",
+        "mending repair"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.vehicles",
+      "category": "entities",
+      "name": "Mounts and vehicles",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match boats, minecarts, horses and passenger synchronization",
+      "required_scenarios": [
+        "mount dismount",
+        "rail movement",
+        "multiple passengers"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.boss_dragon",
+      "category": "entities",
+      "name": "Ender dragon",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match dragon phases, crystals, death, respawn and gateways",
+      "required_scenarios": [
+        "phase transition",
+        "dragon kill",
+        "respawn ritual"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.boss_wither",
+      "category": "entities",
+      "name": "Wither",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match construction, spawn charge, targeting and destruction",
+      "required_scenarios": [
+        "construction",
+        "spawn explosion",
+        "armored phase"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.warden",
+      "category": "entities",
+      "name": "Warden",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match vibration targeting, anger, sonic attacks and emergence",
+      "required_scenarios": [
+        "emerge",
+        "anger targeting",
+        "sonic boom"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.utility_mobs",
+      "category": "entities",
+      "name": "Utility mobs and interactions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match golems, allays and other specialized mob systems",
+      "required_scenarios": [
+        "golem construction",
+        "item collection",
+        "specialized interaction"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.displays",
+      "category": "entities",
+      "name": "Display, interaction and marker entities",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match transformations, interpolation, hit handling and persistence",
+      "required_scenarios": [
+        "display transform",
+        "interaction entity",
+        "marker command"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.leashes",
+      "category": "entities",
+      "name": "Leashes, passengers and ownership",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match links, riding graphs, ownership and disconnect rules",
+      "required_scenarios": [
+        "leash break",
+        "passenger transfer",
+        "owner offline"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "entities.new_version",
+      "category": "entities",
+      "name": "Target release entity behaviors",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Cover additional entity families discovered in target registries",
+      "required_scenarios": [
+        "new entity registry entries",
+        "reference AI traces",
+        "interaction parity"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.registry",
+      "category": "items",
+      "name": "Item registry and components",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Implement target items, defaults and data components",
+      "required_scenarios": [
+        "registry coverage",
+        "component round trip",
+        "invalid component"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.stacking",
+      "category": "items",
+      "name": "Stack rules",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match maximum counts, component equality and stack merging",
+      "required_scenarios": [
+        "matching stack",
+        "different component",
+        "stack limit"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.containers",
+      "category": "items",
+      "name": "Inventory and containers",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match player, block and entity inventories and slot rules",
+      "required_scenarios": [
+        "hotbar",
+        "equipment slot",
+        "container close"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.clicks",
+      "category": "items",
+      "name": "Inventory actions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match click modes, dragging, swaps and transactional validation",
+      "required_scenarios": [
+        "shift click",
+        "drag split",
+        "number key swap"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.crafting",
+      "category": "items",
+      "name": "Crafting",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match shaped, shapeless and special crafting recipes",
+      "required_scenarios": [
+        "shaped recipe",
+        "shapeless recipe",
+        "special recipe"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.recipe_book",
+      "category": "items",
+      "name": "Recipe book",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match recipe discovery, placement and unlock persistence",
+      "required_scenarios": [
+        "unlock",
+        "auto-fill",
+        "insufficient ingredient"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.processing",
+      "category": "items",
+      "name": "Processing recipes",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match cooking, stonecutting, smithing and target processors",
+      "required_scenarios": [
+        "cook recipe",
+        "smithing component",
+        "stonecut result"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.brewing",
+      "category": "items",
+      "name": "Brewing recipes",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match ingredient transforms, fuel and potion components",
+      "required_scenarios": [
+        "valid recipe",
+        "invalid ingredient",
+        "fuel exhaustion"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.anvil",
+      "category": "items",
+      "name": "Anvils and repairs",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match repair cost, rename, combination and limits",
+      "required_scenarios": [
+        "rename",
+        "enchantment combination",
+        "too expensive"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.enchanting",
+      "category": "items",
+      "name": "Enchanting",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match enchanting offers, costs, applicability and data definitions",
+      "required_scenarios": [
+        "seeded offer",
+        "lapis cost",
+        "incompatible enchantment"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.grindstone",
+      "category": "items",
+      "name": "Grindstone",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match enchantment removal, repair and experience",
+      "required_scenarios": [
+        "remove enchantment",
+        "curse preservation",
+        "repair merge"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.loot",
+      "category": "items",
+      "name": "Loot tables and predicates",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match loot context, functions, conditions and random sequences",
+      "required_scenarios": [
+        "seeded loot",
+        "predicate condition",
+        "custom table"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.trades",
+      "category": "items",
+      "name": "Villager trading",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match offers, demand, reputation, discounts and exhaustion",
+      "required_scenarios": [
+        "trade stock",
+        "demand price",
+        "reputation discount"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.books",
+      "category": "items",
+      "name": "Books and written content",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match book editing, signing, filtering and text components",
+      "required_scenarios": [
+        "write sign",
+        "copy book",
+        "invalid content"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.maps",
+      "category": "items",
+      "name": "Maps and exploration items",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match map sampling, scaling, locking and explorer data",
+      "required_scenarios": [
+        "map update",
+        "scale",
+        "locked map"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.buckets",
+      "category": "items",
+      "name": "Buckets and captured entities",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match fluid pickup, placement and entity data capture",
+      "required_scenarios": [
+        "source pickup",
+        "fluid placement",
+        "fish capture"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.food",
+      "category": "items",
+      "name": "Food and consumables",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match consumption, nutrition, effects and cooldowns",
+      "required_scenarios": [
+        "full hunger restriction",
+        "nutrition",
+        "consumption remainder"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.equipment",
+      "category": "items",
+      "name": "Equipment and durability",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match damage, repair, breakage and equipment effects",
+      "required_scenarios": [
+        "durability loss",
+        "unbreaking",
+        "equipment break"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.special",
+      "category": "items",
+      "name": "Special item interactions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match tools, ignition, pearls, rockets, bundles and target items",
+      "required_scenarios": [
+        "tool use",
+        "projectile item",
+        "bundle contents"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "items.new_version",
+      "category": "items",
+      "name": "Target release recipes and item behavior",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Cover target-specific item families and data-driven recipes",
+      "required_scenarios": [
+        "new registry entries",
+        "recipe corpus",
+        "reference use traces"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.gamemodes",
+      "category": "players",
+      "name": "Game modes",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match survival, creative, adventure and spectator restrictions",
+      "required_scenarios": [
+        "mode transition",
+        "adventure tool rule",
+        "spectator movement"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.abilities",
+      "category": "players",
+      "name": "Player abilities",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match flight, invulnerability, movement speeds and synchronization",
+      "required_scenarios": [
+        "flight toggle",
+        "mode change",
+        "ability update"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.hunger",
+      "category": "players",
+      "name": "Hunger, saturation and exhaustion",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match activity costs, starvation and regeneration",
+      "required_scenarios": [
+        "sprint exhaustion",
+        "starvation difficulty",
+        "natural regeneration"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.health",
+      "category": "players",
+      "name": "Health and damage",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match health, absorption, damage sources and invulnerability frames",
+      "required_scenarios": [
+        "damage cooldown",
+        "absorption",
+        "void damage"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.respawn",
+      "category": "players",
+      "name": "Death and respawn",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match death screen, spawn selection, items and dimension state",
+      "required_scenarios": [
+        "bed respawn",
+        "invalid spawn",
+        "keepInventory"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.sleep",
+      "category": "players",
+      "name": "Sleeping",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match bed rules, sleep percentage and night skipping",
+      "required_scenarios": [
+        "enough sleepers",
+        "hostile nearby",
+        "dimension explosion"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.swimming",
+      "category": "players",
+      "name": "Swimming, crawling and elytra",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match movement modes, collision size and stamina interactions",
+      "required_scenarios": [
+        "crawl space",
+        "swim transition",
+        "elytra glide"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.oxygen",
+      "category": "players",
+      "name": "Drowning, freezing and environment",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match air supply, powder snow and environmental damage",
+      "required_scenarios": [
+        "drowning",
+        "freezing",
+        "fire immunity"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.interaction",
+      "category": "players",
+      "name": "Player interaction permissions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match spawn protection, adventure restrictions and operator bypass",
+      "required_scenarios": [
+        "spawn protection",
+        "adventure interaction",
+        "operator bypass"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.commands",
+      "category": "players",
+      "name": "Command grammar and execution",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match complete target command tree and execution semantics",
+      "required_scenarios": [
+        "command registry coverage",
+        "argument validation",
+        "permission failure"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.command_context",
+      "category": "players",
+      "name": "Execute command contexts",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match selectors, positions, rotations, dimensions and result storage",
+      "required_scenarios": [
+        "execute as at",
+        "selector filter",
+        "store result"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.permissions",
+      "category": "players",
+      "name": "Operator permissions",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match permission levels and operator configuration",
+      "required_scenarios": [
+        "op level",
+        "deop",
+        "command visibility"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.gamerules",
+      "category": "players",
+      "name": "Game rules",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match all target gamerules, types, defaults and effects",
+      "required_scenarios": [
+        "registry coverage",
+        "change rule",
+        "persist rule"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.scoreboards",
+      "category": "players",
+      "name": "Scoreboards",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match criteria, operations, display slots and triggers",
+      "required_scenarios": [
+        "objective operation",
+        "trigger",
+        "display update"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.teams",
+      "category": "players",
+      "name": "Teams",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match team membership, visibility, collision and friendly fire",
+      "required_scenarios": [
+        "friendly fire",
+        "name visibility",
+        "collision rule"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.advancements",
+      "category": "players",
+      "name": "Advancements and criteria",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match trigger conditions, rewards, progress and revocation",
+      "required_scenarios": [
+        "criterion trigger",
+        "reward function",
+        "revoke"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.statistics",
+      "category": "players",
+      "name": "Statistics",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match per-player stat increments and queries",
+      "required_scenarios": [
+        "block mined",
+        "item used",
+        "custom stat"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.recipes",
+      "category": "players",
+      "name": "Recipe discovery",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match criteria-driven unlocks and recipe commands",
+      "required_scenarios": [
+        "advancement unlock",
+        "recipe grant",
+        "recipe revoke"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.bossbars",
+      "category": "players",
+      "name": "Boss bars",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match custom boss bars, visibility, value and persistence",
+      "required_scenarios": [
+        "create",
+        "player visibility",
+        "restart"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.titles",
+      "category": "players",
+      "name": "Titles and action bars",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match text components, timing and target player delivery",
+      "required_scenarios": [
+        "title timing",
+        "action bar",
+        "clear"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.sounds_particles",
+      "category": "players",
+      "name": "Sounds and particles",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match commands, event packets and targeting",
+      "required_scenarios": [
+        "distance attenuation",
+        "particle parameters",
+        "recipient selector"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.teleport",
+      "category": "players",
+      "name": "Teleportation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match command teleport, rotation, safety and acknowledgments",
+      "required_scenarios": [
+        "cross dimension",
+        "relative rotation",
+        "pending acknowledgment"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.spectator",
+      "category": "players",
+      "name": "Spectator camera",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match entity spectating, controls and target removal",
+      "required_scenarios": [
+        "spectate entity",
+        "dismount",
+        "target disappears"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.social",
+      "category": "players",
+      "name": "Player listing and social state",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match tab-list, latency, game mode and display-name state",
+      "required_scenarios": [
+        "join leave",
+        "display name",
+        "listed state"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.attributes",
+      "category": "players",
+      "name": "Player effects and attributes",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match player-specific effects, modifiers and attribute commands",
+      "required_scenarios": [
+        "effect command",
+        "attribute command",
+        "modifier persistence"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.progression",
+      "category": "players",
+      "name": "Experience progression",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match levels, point costs, drops and XP commands",
+      "required_scenarios": [
+        "level boundary",
+        "XP add set",
+        "death XP"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "players.new_version",
+      "category": "players",
+      "name": "Target release player systems",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Cover additional player and command systems in the pinned release",
+      "required_scenarios": [
+        "new commands",
+        "new gamerules",
+        "reference behavior traces"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.properties",
+      "category": "admin",
+      "name": "Server properties",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Honor all vanilla server.properties settings and defaults",
+      "required_scenarios": [
+        "property coverage",
+        "invalid value",
+        "restart-required setting"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.difficulty",
+      "category": "admin",
+      "name": "Difficulty",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match difficulty setting, locking and gameplay effects",
+      "required_scenarios": [
+        "difficulty transition",
+        "locked difficulty",
+        "damage scaling"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.whitelist",
+      "category": "admin",
+      "name": "Allowlist",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match allowlist persistence, enforcement and commands",
+      "required_scenarios": [
+        "allowed player",
+        "denied login",
+        "reload allowlist"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.bans",
+      "category": "admin",
+      "name": "Bans and IP bans",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match player and address bans, expiry and reasons",
+      "required_scenarios": [
+        "expired ban",
+        "IP ban",
+        "pardon"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.operators",
+      "category": "admin",
+      "name": "Operator management",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match ops.json identity, level and bypass behavior",
+      "required_scenarios": [
+        "op persistence",
+        "UUID identity",
+        "player limit bypass"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.max_players",
+      "category": "admin",
+      "name": "Player limits",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match player capacity, reserved operators and status counts",
+      "required_scenarios": [
+        "full server",
+        "operator bypass",
+        "disconnect frees slot"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.rcon",
+      "category": "admin",
+      "name": "RCON",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match authentication, framing, command execution and limits",
+      "required_scenarios": [
+        "valid login",
+        "bad password",
+        "long response"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.query",
+      "category": "admin",
+      "name": "GameSpy query",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match challenge, basic and full status responses",
+      "required_scenarios": [
+        "challenge",
+        "basic query",
+        "full query"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.console",
+      "category": "admin",
+      "name": "Console commands",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match console command context, feedback and shutdown input",
+      "required_scenarios": [
+        "console command",
+        "invalid input",
+        "stop"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.logging",
+      "category": "admin",
+      "name": "Logs and reports",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Provide equivalent operational events and crash diagnostics",
+      "required_scenarios": [
+        "startup log",
+        "player event",
+        "crash report"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.resourcepacks",
+      "category": "admin",
+      "name": "Resource pack administration",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Honor pack URLs, hashes, prompts and required-pack configuration",
+      "required_scenarios": [
+        "multiple packs",
+        "required prompt",
+        "hash setting"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.world_border",
+      "category": "admin",
+      "name": "World border",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match center, size interpolation, damage and warnings",
+      "required_scenarios": [
+        "border lerp",
+        "damage buffer",
+        "warning distance"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.time",
+      "category": "admin",
+      "name": "Time",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match day time, game time, daylight rule and time commands",
+      "required_scenarios": [
+        "time set add",
+        "day rollover",
+        "daylight disabled"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.weather",
+      "category": "admin",
+      "name": "Weather",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match weather duration, clear weather and dimension rules",
+      "required_scenarios": [
+        "rain duration",
+        "thunder",
+        "clear weather"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.spawn",
+      "category": "admin",
+      "name": "Spawn administration",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match world spawn, spawn radius and spawn protection settings",
+      "required_scenarios": [
+        "setworldspawn",
+        "radius",
+        "protection size"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.forced_chunks",
+      "category": "admin",
+      "name": "Forced chunks",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match forceload command, limits and restart behavior",
+      "required_scenarios": [
+        "add remove",
+        "limit",
+        "restart"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.save_commands",
+      "category": "admin",
+      "name": "Save controls",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match save-all, save-off and save-on behavior",
+      "required_scenarios": [
+        "flush save",
+        "disabled autosave",
+        "reenable"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.idle",
+      "category": "admin",
+      "name": "Idle and connection policy",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match idle timeout, rate limits and reference proxy settings",
+      "required_scenarios": [
+        "idle kick",
+        "packet rate",
+        "proxy policy"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.motd",
+      "category": "admin",
+      "name": "Server identity",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match MOTD, icon, hide-player settings and player samples",
+      "required_scenarios": [
+        "formatted MOTD",
+        "hidden sample",
+        "icon load"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.management",
+      "category": "admin",
+      "name": "Target administration interfaces",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match any management protocol and monitoring interfaces shipped in target",
+      "required_scenarios": [
+        "target interface discovery",
+        "authentication",
+        "reference request corpus"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.debug",
+      "category": "admin",
+      "name": "Debug and profiling commands",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match supported vanilla debug output and diagnostics",
+      "required_scenarios": [
+        "debug start stop",
+        "report output",
+        "permission check"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "admin.new_version",
+      "category": "admin",
+      "name": "Target release administration settings",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Cover additional properties and administrative interfaces in target",
+      "required_scenarios": [
+        "new properties",
+        "new commands",
+        "official server report"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.startup",
+      "category": "lifecycle",
+      "name": "Startup and EULA handling",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Match first-run configuration, EULA enforcement and startup failures",
+      "required_scenarios": [
+        "first run",
+        "EULA declined",
+        "invalid world"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.shutdown",
+      "category": "lifecycle",
+      "name": "Graceful shutdown",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Finish player saves, chunk saves and resource closure",
+      "required_scenarios": [
+        "stop command",
+        "process signal",
+        "active players"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.restart",
+      "category": "lifecycle",
+      "name": "Restart continuity",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Continue saved world state without unintended reset or duplication",
+      "required_scenarios": [
+        "restart during activity",
+        "scheduled events",
+        "player state"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.crash_recovery",
+      "category": "lifecycle",
+      "name": "Crash recovery",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Recover supported saves after abrupt interruption",
+      "required_scenarios": [
+        "kill during save",
+        "recover backup",
+        "restart consistency"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.errors",
+      "category": "lifecycle",
+      "name": "Malformed input isolation",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Handle malformed network, pack and save input without corrupting unrelated state",
+      "required_scenarios": [
+        "bad packet",
+        "bad pack",
+        "bad chunk"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.resource_limits",
+      "category": "lifecycle",
+      "name": "Resource exhaustion handling",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Bound input allocations and handle disk or memory failures safely",
+      "required_scenarios": [
+        "oversized input",
+        "disk full",
+        "connection flood"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.world_unload",
+      "category": "lifecycle",
+      "name": "Dimension and chunk unload lifecycle",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Save and detach world state while preserving logical ownership",
+      "required_scenarios": [
+        "unload with entities",
+        "pending ticks",
+        "reload"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "lifecycle.reference_corpus",
+      "category": "lifecycle",
+      "name": "Complete target data coverage",
+      "scope": "vanilla",
+      "required": true,
+      "vanilla_expectation": "Account for every extracted registry entry, recipe, command and vanilla pack resource",
+      "required_scenarios": [
+        "registry manifest diff",
+        "resource inventory diff",
+        "unimplemented IDs rejected by gate"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.ownership",
+      "category": "concurrency",
+      "name": "Parallel state ownership",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Prevent concurrent mutation of world and player state without defined ownership",
+      "required_scenarios": [
+        "two-region interaction",
+        "entity transfer",
+        "container contention"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.determinism",
+      "category": "concurrency",
+      "name": "Reference ordering under parallel work",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Preserve observed vanilla ordering where gameplay depends on it",
+      "required_scenarios": [
+        "redstone boundary",
+        "simultaneous damage",
+        "scheduled tick ordering"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.cross_region",
+      "category": "concurrency",
+      "name": "Cross-region coordination",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Resolve multi-region operations without duplication or deadlock",
+      "required_scenarios": [
+        "explosion boundary",
+        "piston boundary",
+        "portal transfer"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.thread_safety",
+      "category": "concurrency",
+      "name": "Data race and deadlock safety",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Demonstrate safety under thread and scheduler stress",
+      "required_scenarios": [
+        "stress scheduling",
+        "concurrent shutdown",
+        "shared cache access"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.scaling",
+      "category": "concurrency",
+      "name": "Multicore scaling",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Measure throughput across CPU counts under an identical reproducible workload",
+      "required_scenarios": [
+        "one core baseline",
+        "multiple cores",
+        "tick latency distribution"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.budget",
+      "category": "concurrency",
+      "name": "Performance regression budgets",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Record CPU, memory, latency and throughput against pinned vanilla and Rust builds",
+      "required_scenarios": [
+        "idle",
+        "world generation",
+        "many active players"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "concurrency.replay",
+      "category": "concurrency",
+      "name": "Reproducible load and replay",
+      "scope": "implementation",
+      "required": true,
+      "vanilla_expectation": "Keep seeds, inputs, environment and traces for independent reproduction",
+      "required_scenarios": [
+        "recorded input",
+        "replay",
+        "artifact provenance"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "plugins.java_compatibility",
+      "category": "plugins",
+      "name": "Java JAR plugin compatibility",
+      "scope": "deferred_plugin",
+      "required": false,
+      "vanilla_expectation": "Defer plugin API, JVM bridge and compatibility work until vanilla server gates pass",
+      "required_scenarios": [
+        "vanilla gate passed",
+        "plugin API decision",
+        "JAR compatibility suite"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "plugins.isolation",
+      "category": "plugins",
+      "name": "Plugin lifecycle and isolation",
+      "scope": "deferred_plugin",
+      "required": false,
+      "vanilla_expectation": "Defer plugin loading, scheduling and lifecycle until vanilla server integration is complete",
+      "required_scenarios": [
+        "vanilla gate passed",
+        "plugin load unload",
+        "failure isolation"
+      ],
+      "rust_status": "unverified",
+      "evidence": []
+    }
+  ]
+}

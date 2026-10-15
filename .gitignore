@@ -1,0 +1,10 @@
+/target/
+/.cache/
+/run/
+/node_modules/
+/vendor/pumpkin/target/
+/vendor/pumpkin/Cargo.lock
+/vendor/pumpkin/assets/datapack/
+__pycache__/
+*.pyc
+.DS_Store

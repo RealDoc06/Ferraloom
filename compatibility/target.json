@@ -1,0 +1,22 @@
+{
+  "edition": "java",
+  "version": "26.3",
+  "protocol": 777,
+  "java_major": 25,
+  "release_time": "2026-09-15T11:23:02+00:00",
+  "manifest_url": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+  "metadata_url": "https://piston-meta.mojang.com/v1/packages/11f1aefe473eefba0af62e3286c33b692807b2eb/26.3.json",
+  "metadata_sha1": "11f1aefe473eefba0af62e3286c33b692807b2eb",
+  "server_url": "https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar",
+  "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+  "server_size": 62294556,
+  "rust_upstream": {
+    "repository": "https://github.com/Pumpkin-MC/Pumpkin.git",
+    "revision": "5b53f064af8708ba33fcaa533b81ca29a53a3310",
+    "local_modules": [
+      "pumpkin-core",
+      "pumpkin-world",
+      "pumpkin-command"
+    ]
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "target_version": "26.3",
+  "scope": "Selected test-to-scenario links only. An imported passing selection marks its feature partial, never verified. Explicit skip reasons prevent weaker tests from claiming unrelated coverage.",
+  "cases": {
+    "network.status_fields": {
+      "feature_id": "network.status",
+      "scenario": "status fields"
+    },
+    "network.ping_before_status": {
+      "feature_id": "network.status",
+      "scenario": "ping echo"
+    },
+    "network.duplicate_status": {
+      "skip_reason": "Duplicate status disconnect is useful protocol coverage but has no matching required scenario in this ledger."
+    },
+    "network.fragmented": {
+      "feature_id": "network.framing",
+      "scenario": "split frame"
+    },
+    "network.concurrent_status": {
+      "skip_reason": "Concurrent status requests do not establish packet framing boundaries or multicore gameplay scaling."
+    },
+    "network.malformed_length": {
+      "feature_id": "network.serialization",
+      "scenario": "invalid encodings"
+    },
+    "block.setblock": {
+      "feature_id": "blocks.registry",
+      "scenario": "placement state"
+    },
+    "block.state": {
+      "feature_id": "blocks.registry",
+      "scenario": "placement state"
+    },
+    "block.fill": {
+      "skip_reason": "Successful fill does not establish command-tree coverage, invalid argument handling or permission failures."
+    },
+    "block.clone": {
+      "skip_reason": "Successful clone does not establish command-tree coverage, invalid argument handling or permission failures."
+    },
+    "block.water_flow": {
+      "skip_reason": "Presence of a water block does not assert its flow level or source conversion."
+    },
+    "block.gravity": {
+      "skip_reason": "A single falling sand block does not exercise sand stacks, anvils or obstructed landing."
+    },
+    "redstone.lamp": {
+      "skip_reason": "Adjacent lamp activation does not establish indirect power, wire decay or directional output."
+    },
+    "redstone.wire": {
+      "skip_reason": "One powered wire does not establish wire decay or directional output."
+    },
+    "redstone.piston_push": {
+      "skip_reason": "One-block piston push does not test push limits, sticky retraction or adhesion."
+    },
+    "redstone.daylight": {
+      "skip_reason": "Daylight detector activation has no matching required scenario in the current ledger."
+    },
+    "scoreboard.arithmetic": {
+      "feature_id": "players.scoreboards",
+      "scenario": "objective operation"
+    },
+    "data.storage": {
+      "skip_reason": "One storage command does not establish complete command grammar, argument rejection or permissions."
+    },
+    "entity.summon": {
+      "feature_id": "entities.lifecycle",
+      "scenario": "spawn"
+    },
+    "entity.damage": {
+      "skip_reason": "Unarmored generic damage does not test armor, critical hits or attack cooldown."
+    },
+    "entity.kill": {
+      "skip_reason": "Command removal is distinct from spawn, unload/reload and natural despawn boundaries."
+    },
+    "datapack.function": {
+      "skip_reason": "Explicit function invocation does not establish load/tick tags, scheduled functions or macros."
+    },
+    "dimension.nether": {
+      "skip_reason": "Setting a block in the Nether does not establish terrain, travel scaling or hazards."
+    },
+    "dimension.end": {
+      "skip_reason": "Setting a block in the End does not establish island or entry-platform generation."
+    },
+    "persistence.write": {
+      "skip_reason": "Writing and observing a live block alone does not prove save/reload, palette expansion or empty sections."
+    },
+    "lifecycle.clean_shutdown": {
+      "skip_reason": "Exit status alone does not prove player and chunk saving; inspect separate restart observations."
+    },
+    "persistence.restart": {
+      "feature_id": "persistence.chunk_data",
+      "scenario": "save reload"
+    },
+    "network.play_login": {
+      "feature_id": "network.login",
+      "scenario": "successful login"
+    },
+    "network.chunk_stream": {
+      "feature_id": "network.chunk_stream",
+      "scenario": "join initial chunks"
+    },
+    "network.inventory_stream": {
+      "skip_reason": "Receiving inventory packets alone does not establish valid clicks or transaction recovery."
+    },
+    "network.teleport": {
+      "feature_id": "network.movement",
+      "scenario": "teleport acknowledgment"
+    },
+    "network.client_command": {
+      "skip_reason": "A successful client command does not establish command-tree coverage, argument rejection or permission failure."
+    },
+    "network.movement": {
+      "feature_id": "network.movement",
+      "scenario": "legal movement"
+    },
+    "network.chat_delivery": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "system message"
+    },
+    "blocks.registry_tables": {
+      "feature_id": "blocks.registry",
+      "scenario": "registry coverage"
+    },
+    "persistence.unflushed_write": {
+      "skip_reason": "Pre-stop marker placement only; saving is checked after restart."
+    },
+    "persistence.shutdown_restart": {
+      "skip_reason": "An unflushed chunk marker persists after stop with autosave disabled; player saves are not covered."
+    },
+    "persistence.signal_write": {
+      "skip_reason": "Pre-signal marker placement only; saving is checked after restart."
+    },
+    "lifecycle.sigterm_exit": {
+      "skip_reason": "Signal exits cleanly; separate restart check verifies chunk save, player save remains untested."
+    },
+    "persistence.signal_restart": {
+      "skip_reason": "SIGTERM retains the unflushed chunk marker; player save remains untested."
+    },
+    "network.status_other_version": {
+      "feature_id": "network.status",
+      "scenario": "status fields"
+    },
+    "network.incompatible_login": {
+      "feature_id": "network.handshake",
+      "scenario": "unsupported protocol"
+    },
+    "lifecycle.world_lock": {
+      "feature_id": "persistence.locking",
+      "scenario": "second server"
+    }
+  }
+}
