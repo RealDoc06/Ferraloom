@@ -63,13 +63,14 @@ class Reader {
   string() { return this.take(this.varInt()).toString('utf8'); }
 }
 
-export type PlainStack = { item_id: number; count: number } | null;
+export type PlainStack = { item_id: number; count: number; components?: Record<string, unknown> } | null;
 export type ContainerPacket =
-  | { kind: 'open'; packet_id: 60; container_id: number; menu_type: number; title: string }
+  | { kind: 'open'; packet_id: 60; container_id: number; menu_type: number; title: string;
+      title_component?: unknown; title_nbt?: unknown }
   | { kind: 'content'; packet_id: 18; container_id: number; state_id: number; slots: PlainStack[]; carried: PlainStack }
   | { kind: 'slot'; packet_id: 20; container_id: number; state_id: number; slot: number; stack: PlainStack };
 
-function plainStack(reader: Reader): PlainStack {
+function plainStack(reader: Reader, metadata = false): PlainStack {
   const count = reader.varInt();
   if (count === 0) return null;
   if (count < 0) throw new Error('Negative item count');
@@ -77,12 +78,21 @@ function plainStack(reader: Reader): PlainStack {
   if (item_id <= 0) throw new Error('Invalid nonempty item ID');
   // The acceptance fixtures deliberately use plain stacks. Component payloads
   // are not length-prefixed in this trusted codec; guessing their size is unsafe.
-  if (added !== 0 || removed !== 0) throw new Error(`Unsupported item component patch: ${added}/${removed}`);
-  return { item_id, count };
+  if (removed !== 0 || added < 0 || added > 2 || (!metadata && added !== 0)) throw new Error(`Unsupported item component patch: ${added}/${removed}`);
+  const components: Record<string, unknown> = {};
+  for (let index = 0; index < added; index++) {
+    // Official 26.3 registries + DataComponents lambda$static${6,9}:
+    // both names use ComponentSerialization.STREAM_CODEC (network NBT).
+    const id = reader.varInt();
+    const name = id === 6 ? 'minecraft:custom_name' : id === 9 ? 'minecraft:item_name' : null;
+    if (!name || Object.hasOwn(components, name)) throw new Error(`Unsupported/duplicate item component ${id}; raw packet retained by caller`);
+    components[name] = nbt(reader);
+  }
+  return { item_id, count, ...(added ? { components } : {}) };
 }
 
 /** Exact 26.3 menu codecs; unsupported item components fail the focused probe. */
-export function decodeContainerPacket(payload: Buffer): ContainerPacket {
+export function decodeContainerPacket(payload: Buffer, metadata = false): ContainerPacket {
   const reader = new Reader(payload);
   const packet_id = reader.varInt(), container_id = reader.varInt();
   if (container_id < 0 || container_id > 255) throw new Error('Invalid container ID');
@@ -90,16 +100,18 @@ export function decodeContainerPacket(payload: Buffer): ContainerPacket {
   if (packet_id === 60) {
     const menu_type = reader.varInt();
     if (menu_type < 0) throw new Error('Invalid menu type');
-    result = { kind: 'open', packet_id, container_id, menu_type, title: text(nbt(reader)) };
+    const title_nbt = nbt(reader);
+    result = { kind: 'open', packet_id, container_id, menu_type, title: text(title_nbt),
+      ...(metadata ? { title_component: decodeContainerTitle(title_nbt), title_nbt } : {}) };
   } else if (packet_id === 18) {
     const state_id = reader.varInt(), count = reader.varInt();
     if (state_id < 0 || count < 0 || count > 4096) throw new Error('Invalid content state or slot count');
-    const slots = Array.from({ length: count }, () => plainStack(reader));
-    result = { kind: 'content', packet_id, container_id, state_id, slots, carried: plainStack(reader) };
+    const slots = Array.from({ length: count }, () => plainStack(reader, metadata));
+    result = { kind: 'content', packet_id, container_id, state_id, slots, carried: plainStack(reader, metadata) };
   } else if (packet_id === 20) {
     const state_id = reader.varInt(), slot = reader.take(2).readInt16BE();
     if (state_id < 0 || slot < 0 || slot >= 4096) throw new Error('Invalid slot state or index');
-    result = { kind: 'slot', packet_id, container_id, state_id, slot, stack: plainStack(reader) };
+    result = { kind: 'slot', packet_id, container_id, state_id, slot, stack: plainStack(reader, metadata) };
   } else throw new Error(`Unsupported container packet ${packet_id}`);
   if (reader.offset !== payload.length) throw new Error('Trailing container packet bytes');
   return result;
@@ -120,6 +132,12 @@ export function encodeUseItemOn(x: number, y: number, z: number, sequence: numbe
   if (![1, 2, 3].includes(face)) throw new Error('Probe supports UP/NORTH/SOUTH hit faces');
   return Buffer.concat([varInt(0), packedBlockPos(x, y, z), varInt(face),
     floats(0.5, face === 1 ? 1 : 0.5, face === 2 ? 0 : face === 3 ? 1 : 0.5), Buffer.from([0, 0]), varInt(sequence)]);
+}
+
+/** 26.3 PlayerAction SWAP_ITEM_WITH_OFFHAND is ordinal 7 (STAB is 8). */
+export function encodeSwapHands(sequence: number): Buffer {
+  if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > 2147483647) throw new Error('Invalid swap-hands sequence');
+  return Buffer.concat([varInt(7), packedBlockPos(0, 0, 0), Buffer.from([0]), varInt(sequence)]);
 }
 
 export type SignSlot = 0 | 1; // 26.3 SignTextSlot: BACK, FRONT.
@@ -319,6 +337,7 @@ export function decodeChunkBlockEntities(payload: Buffer, mode: 'plain' | 'rich'
 
 function plainStackHash(stack: PlainStack): Buffer {
   if (stack === null) return Buffer.from([0]);
+  if (stack.components) throw new Error('SWAP hashed components are outside this plain-stack fixture');
   if (!Number.isSafeInteger(stack.item_id) || stack.item_id <= 0 || stack.item_id > 2147483647 ||
       !Number.isSafeInteger(stack.count) || stack.count <= 0 || stack.count > 2147483647) throw new Error('Invalid plain stack hash');
   // HashedStack optional presence, registry item, count, added hash map, removed set.
@@ -646,6 +665,102 @@ export function decodeSystemChat(payload: Buffer): ChatObservation {
     overlay: overlay === 1, component_nbt };
 }
 
+/** Selected literal container titles. Only list entries unwrap the NBT envelope. */
+export function decodeContainerTitle(value: unknown, depth = 0): unknown {
+  if (depth > 8) throw new Error('Container title nesting exceeds fixture scope');
+  if (typeof value === 'string') return { text: value };
+  if (!record(value)) throw new Error('Expected literal container title');
+  knownFields(value, ['text', 'type', 'bold', 'italic', 'color', 'extra'], 'title');
+  if (typeof value.text !== 'string' || (value.type !== undefined && value.type !== 'text')) throw new Error('Unsupported title component');
+  const result: Record<string, unknown> = { text: value.text };
+  for (const style of ['bold', 'italic']) if (value[style] !== undefined) result[style] = signBoolean(value[style], `title.${style}`);
+  if (value.color !== undefined) {
+    if (typeof value.color !== 'string' || !/^(?:black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|#[0-9a-fA-F]{6})$/u.test(value.color)) throw new Error('Unsupported title color');
+    result.color = value.color;
+  }
+  if (value.extra !== undefined) {
+    if (!Array.isArray(value.extra) || value.extra.length > 16) throw new Error('Unsupported title extras');
+    result.extra = value.extra.map((entry: unknown) => decodeContainerTitle(
+      record(entry) && Object.keys(entry).length === 1 && Object.hasOwn(entry, '') ? entry[''] : entry, depth + 1));
+  }
+  return result;
+}
+
+/** Official holder registry value is ID+1; zero carries SoundEvent's direct codec. */
+export function decodeSoundPacket(payload: Buffer) {
+  const reader = new Reader(payload);
+  if (reader.varInt() !== 119) throw new Error('Expected Sound packet');
+  const holder = reader.varInt();
+  if (holder < 0) throw new Error('Invalid sound holder');
+  let sound_id: string | null = null;
+  let fixed_range: number | null = null;
+  if (holder === 0) {
+    sound_id = reader.string();
+    const present = reader.byte();
+    if (present > 1) throw new Error('Invalid sound range optional');
+    if (present) fixed_range = reader.float();
+  }
+  const source = reader.varInt(), x = reader.int() / 8, y = reader.int() / 8, z = reader.int() / 8;
+  const volume = reader.float(), pitch = reader.float(), seed = reader.take(8).toString('hex');
+  if (source < 0 || source > 9 || ![x, y, z, volume, pitch, ...(fixed_range === null ? [] : [fixed_range])].every(Number.isFinite)
+      || reader.offset !== payload.length) throw new Error('Invalid Sound packet boundary');
+  return { packet_id: 119, registry_id: holder ? holder - 1 : null, sound_id, fixed_range, source, x, y, z, volume, pitch, seed };
+}
+
+export function decodeDisconnect(payload: Buffer) {
+  const reader = new Reader(payload);
+  if (reader.varInt() !== 32) throw new Error('Expected PLAY Disconnect');
+  const component_nbt = nbt(reader);
+  if (reader.offset !== payload.length) throw new Error('Trailing Disconnect bytes');
+  return { packet_id: 32, component_nbt, text: text(component_nbt),
+    translation: record(component_nbt) && typeof component_nbt.translate === 'string' ? component_nbt.translate : null,
+    payload_base64: payload.toString('base64') };
+}
+
+/** Fresh unsigned offline sender only: no previous signed-message acknowledgments.
+ * ServerboundChatPacket + LastSeenMessages.Update: string, instant(ms), salt,
+ * absent signature, offset=0, fixed 20-bit set (3 bytes), IGNORE_CHECKSUM=0.
+ */
+export function encodeUnsignedChat(message: string, timestamp = Date.now()): Buffer {
+  if (!message || message.length > 256 || /[\u0000\r\n]/u.test(message) || !Number.isSafeInteger(timestamp) || timestamp < 0) throw new Error('Invalid unsigned chat fixture');
+  const instant = Buffer.alloc(8); instant.writeBigInt64BE(BigInt(timestamp));
+  return Buffer.concat([string(message), instant, Buffer.alloc(8), Buffer.from([0]), varInt(0), Buffer.alloc(4)]);
+}
+
+/** Fully consume just the unsigned offline fixtures. Other signature/filter
+ * branches fail closed; this is not secure-chat validation or a general codec.
+ * Primary: Clientbound{Player,Disguised}ChatPacket, SignedMessageBody.Packed,
+ * LastSeenMessages.Packed, FilterMask.Type, ChatType.Bound in pinned 26.3.
+ */
+export function decodeOfflineChatPacket(payload: Buffer): ChatObservation {
+  const reader = new Reader(payload), packet_id = reader.varInt();
+  const optionalComponent = () => {
+    const present = reader.byte();
+    if (present > 1) throw new Error('Invalid optional chat component');
+    return present ? nbt(reader) : null;
+  };
+  let observation: ChatObservation;
+  if (packet_id === 66) {
+    reader.varInt(); reader.take(16); reader.varInt();
+    if (reader.byte() !== 0) throw new Error('Signed chat outside fresh unsigned fixture scope');
+    const message = reader.string();
+    if (message.length > 256) throw new Error('Oversized player chat body');
+    reader.take(16); // Body instant and salt.
+    if (reader.varInt() !== 0) throw new Error('Signed last-seen list outside unsigned fixture scope');
+    optionalComponent(); // Preserve the body observation, not a renderer claim.
+    if (reader.varInt() !== 0) throw new Error('Filtered chat outside pass-through fixture scope');
+    observation = { text: message, packet_id, packet_type: 'player_chat', text_scope: 'message_body', signature: 'absent', signature_verified: false };
+  } else if (packet_id === 33) {
+    const component_nbt = nbt(reader);
+    observation = { text: text(component_nbt), component_nbt, packet_id, packet_type: 'disguised_chat', text_scope: 'component_text', signature: 'not_applicable', signature_verified: false };
+  } else throw new Error('Expected offline PlayerChat or DisguisedChat');
+  if (reader.varInt() <= 0) throw new Error('Inline/unregistered chat type outside fixture scope');
+  nbt(reader); // ChatType.Bound sender display name.
+  optionalComponent(); // Optional target name.
+  if (reader.offset !== payload.length) throw new Error('Trailing offline chat bytes');
+  return observation;
+}
+
 export function encodeTrigger(objective: string, value: number): Buffer {
   if (!/^[A-Za-z0-9_.+-]{1,16}$/u.test(objective) || !Number.isSafeInteger(value) || value < -2147483648 || value > 2147483647) throw new Error('Invalid trigger objective/value');
   return string(`trigger ${objective} set ${value}`);
@@ -654,12 +769,14 @@ export function encodeTrigger(objective: string, value: number): Buffer {
 type Command = { id: string | number } & (
   | { action: 'state' }
   | { action: 'quit' }
+  | { action: 'expect_disconnect'; translation: 'disconnect.spam' }
   | { action: 'chat' | 'command'; text: string }
   | { action: 'trigger'; objective: string; value: number }
   | { action: 'move'; x: number; y: number; z: number; yaw?: number; pitch?: number }
   | { action: 'use_item_on'; x: number; y: number; z: number; face?: number }
   | { action: 'sign_update'; x: number; y: number; z: number; messages: string[]; slot: SignSlot }
   | { action: 'close_menu' }
+  | { action: 'swap_hands' }
   | { action: 'swap'; slot: number; hotbar: number }
 );
 
@@ -667,7 +784,12 @@ export function parseCommand(value: unknown): Command {
   if (!record(value) || (typeof value.id !== 'string' && !Number.isSafeInteger(value.id))) throw new Error('id must be a string or safe integer');
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
   if (value.action === 'state' || value.action === 'quit') return { id, action: value.action };
+  if (value.action === 'expect_disconnect') {
+    if (value.translation !== 'disconnect.spam') throw new Error('Only the explicit spam negative fixture may expect a disconnect');
+    return { id, action: value.action, translation: value.translation };
+  }
   if (value.action === 'close_menu') return { id, action: value.action };
+  if (value.action === 'swap_hands') return { id, action: value.action };
   if (value.action === 'trigger') {
     if (typeof value.objective !== 'string' || typeof value.value !== 'number') throw new Error('Trigger requires objective/value');
     encodeTrigger(value.objective, value.value);
@@ -723,7 +845,9 @@ function emit(value: unknown) {
 }
 
 function main() {
-  const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false } } });
+  const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false },
+    'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
+    'strict-offline-chat': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   const socket = createConnection({ host: values.host, port });
@@ -732,6 +856,7 @@ function main() {
   let compression = -1;
   let ready = false;
   let quitting = false;
+  let expectedDisconnect: 'disconnect.spam' | null = null;
   let firstPosition = true;
   const chunks = new Set<string>();
   let interactionSequence = 0;
@@ -751,10 +876,16 @@ function main() {
     menu_packets: [] as (ContainerPacket & { sequence: number })[],
     sign_packets: [] as (SignObservation & { sequence: number })[],
     chunk_packets: [] as { x: number; z: number; sequence: number; block_entity_count: number; section_bytes: number }[],
+    sounds: [] as (ReturnType<typeof decodeSoundPacket> & { sequence: number; payload_base64: string })[],
+    disconnect: null as ReturnType<typeof decodeDisconnect> | null,
+    block_ack: -1,
   };
 
   function send(id: number, ...parts: Buffer[]) {
     let packet = Buffer.concat([varInt(id), ...parts]);
+    if (values['raw-packets'] && phase === 'play' && [7, 9, 18, 19, 41, 66].includes(id)) {
+      emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: packet.toString('base64') });
+    }
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
@@ -792,6 +923,9 @@ function main() {
     const reader = new Reader(payload);
     const id = reader.varInt();
     state.packets++;
+    if (values['raw-packets'] && phase === 'play' && [4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id)) {
+      emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64') });
+    }
     if (phase === 'login') {
       if (id === 0) throw new Error(`Login disconnected: ${reader.string()}`);
       if (id === 1) throw new Error('Online-mode encryption requested; this probe requires an offline test server');
@@ -817,7 +951,20 @@ function main() {
       if (id === ids.config.finish) { send(3); phase = 'play'; state.phase = phase; }
       return;
     }
-    if (id === ids.play.disconnect) throw new Error(`Play disconnected: ${text(nbt(reader))}`);
+    if (id === ids.play.disconnect) {
+      const observation = decodeDisconnect(payload);
+      state.disconnect = observation;
+      const expected = expectedDisconnect !== null && observation.translation === expectedDisconnect;
+      emit({ event: 'disconnect', expected, ...observation, sequence: state.packets });
+      if (!expected) throw new Error(`Unexpected PLAY disconnect: ${JSON.stringify(observation)}`);
+      quitting = true;
+      socket.end();
+      return;
+    }
+    if (id === 4) {
+      state.block_ack = reader.varInt();
+      if (state.block_ack < 0 || reader.offset !== payload.length) throw new Error('Invalid block acknowledgement');
+    }
     if (id === ids.play.keepAlive) { send(28, reader.take(8)); state.keepalives++; }
     if (id === ids.play.ping) send(45, reader.take(4));
     if (id === ids.play.login) state.login = true;
@@ -855,7 +1002,7 @@ function main() {
     if (id === ids.play.inventory) state.inventory_packets++;
     if (id === ids.play.slot) state.slot_packets++;
     if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
-      const observation = { ...decodeContainerPacket(payload), sequence: state.packets };
+      const observation = { ...decodeContainerPacket(payload, values['container-metadata']), sequence: state.packets };
       state.menu_packets.push(observation);
       if (state.menu_packets.length > 64) state.menu_packets.shift();
       if (observation.kind === 'open') {
@@ -872,6 +1019,12 @@ function main() {
         }
       }
       emit({ event: 'menu_packet', ...observation });
+    }
+    if (values['container-metadata'] && id === 119) {
+      const observation = { ...decodeSoundPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
+      state.sounds.push(observation);
+      if (state.sounds.length > 64) state.sounds.shift();
+      emit({ event: 'sound', ...observation });
     }
     if (id === ids.play.health) { state.health = reader.float(); state.food = reader.varInt(); }
     if (id === ids.play.position) {
@@ -896,12 +1049,15 @@ function main() {
       state.block_updates++;
     }
     if (id === ids.play.chat) receiveChat(decodeSystemChat(payload));
-    if (id === ids.play.disguisedChat) {
+    if (values['strict-offline-chat'] && (id === ids.play.playerChat || id === ids.play.disguisedChat)) {
+      receiveChat(decodeOfflineChatPacket(payload));
+    }
+    if (!values['strict-offline-chat'] && id === ids.play.disguisedChat) {
       receiveChat({ text: text(nbt(reader)), packet_id: id,
         packet_type: 'disguised_chat',
         text_scope: 'component_text', signature: 'not_applicable', signature_verified: false });
     }
-    if (id === ids.play.playerChat) {
+    if (!values['strict-offline-chat'] && id === ids.play.playerChat) {
       reader.varInt(); // Global message index.
       reader.take(16); // Sender UUID.
       reader.varInt(); // Sender-local index.
@@ -961,12 +1117,20 @@ function main() {
       if (command.action === 'state') emit({ id: command.id, ok: true, result: state });
       else if (command.action === 'quit') {
         quitting = true; emit({ id: command.id, ok: true, result: null }); socket.end();
+      } else if (command.action === 'expect_disconnect') {
+        if (expectedDisconnect !== null || state.disconnect) throw new Error('Disconnect expectation already armed/consumed');
+        expectedDisconnect = command.translation;
+        emit({ id: command.id, ok: true, result: { expected_translation: expectedDisconnect } });
       } else {
         if (!ready) throw new Error('Client is not ready');
         if (command.action === 'move') {
           const previous = state.position!;
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
+        } else if (command.action === 'swap_hands') {
+          if (!values['container-metadata']) throw new Error('Swap-hands fixture requires --container-metadata');
+          send(41, encodeSwapHands(++interactionSequence));
+          emit({ id: command.id, ok: true, result: { sent_action: command.action, interaction_sequence: interactionSequence } });
         } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap' || command.action === 'sign_update') {
           if (!values['block-data']) throw new Error('Block interaction actions require --block-data');
           if (command.action === 'use_item_on') {
@@ -977,26 +1141,25 @@ function main() {
             send(62, encodeSignUpdate(command.x, command.y, command.z, command.messages, command.slot));
           } else {
             const menu = state.menu;
-            if (!menu || menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container menu');
+            if (!menu) throw new Error('No open menu');
             if (command.action === 'close_menu') {
               send(19, varInt(menu.container_id));
               state.menu = null;
             } else {
+              if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
               if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');
               send(18, encodeContainerSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots));
             }
           }
-          emit({ id: command.id, ok: true, result: { sent_action: command.action } });
+          emit({ id: command.id, ok: true, result: { sent_action: command.action,
+            ...(command.action === 'use_item_on' ? { interaction_sequence: interactionSequence } : {}) } });
         } else if (command.action === 'trigger') {
           send(7, encodeTrigger(command.objective, command.value));
           emit({ id: command.id, ok: true, result: { sent_command: `trigger ${command.objective} set ${command.value}` } });
         } else {
           const message = command.text.replace(/^\//u, '');
           if (command.action === 'chat' && !command.text.startsWith('/')) {
-            const timestamp = Buffer.alloc(8); timestamp.writeBigInt64BE(BigInt(Date.now()));
-            // Exact 26.3 unsigned Chat codec: timestamp, salt, optional signature,
-            // and LastSeenMessages.Update(offset, fixed 20-bit set, checksum).
-            send(9, string(command.text), timestamp, Buffer.alloc(8), Buffer.from([0]), varInt(0), Buffer.alloc(4));
+            send(9, encodeUnsignedChat(command.text));
             emit({ id: command.id, ok: true, result: { sent_chat: command.text } });
           } else {
             send(7, string(message));

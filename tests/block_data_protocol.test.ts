@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { decodeChunkBlockEntities, decodeContainerPacket, decodeSignData, decodeSignPacket, decodeRichSignData, decodeSystemChat,
   encodeContainerSwap, encodeSignUpdate, encodeUseItemOn, encodeTrigger, parseCommand, varInt,
   type PlainStack } from '../tools/parity/client.ts';
+import { decodeContainerTitle, decodeDisconnect, decodeOfflineChatPacket, decodeSoundPacket, encodeSwapHands, encodeUnsignedChat } from '../tools/parity/client.ts';
 
 const plain = (item: number, count: number) => Buffer.concat([varInt(count), varInt(item), Buffer.from([0, 0])]);
 
@@ -87,6 +88,95 @@ const expectedSign = {
   is_waxed: true,
 };
 const blockPos = encodeUseItemOn(-22, -64, 53, 1).subarray(1, 9);
+
+test('metadata menu mode retains selected styled title, native extras and untouched NBT', () => {
+  const raw = Buffer.concat([Buffer.from([10]), field(8, 'text', utf('Box')), field(1, 'bold', Buffer.from([1])),
+    field(1, 'italic', Buffer.from([0])), field(8, 'color', utf('gold')),
+    field(9, 'extra', Buffer.concat([Buffer.from([10]), i32(2), field(8, 'text', utf(' red')), field(8, 'color', utf('red')),
+      Buffer.from([0]), field(8, '', utf(' literal')), Buffer.from([0])])), Buffer.from([0])]);
+  const packet = Buffer.concat([Buffer.from([60, 4, 2]), raw]);
+  const observed = decodeContainerPacket(packet, true);
+  assert.equal(observed.kind, 'open');
+  if (observed.kind !== 'open') return;
+  assert.deepEqual(observed.title_component, { text: 'Box', bold: true, italic: false, color: 'gold',
+    extra: [{ text: ' red', color: 'red' }, { text: ' literal' }] });
+  assert.deepEqual(observed.title_nbt, { text: 'Box', bold: 1, italic: 0, color: 'gold',
+    extra: [{ text: ' red', color: 'red' }, { '': ' literal' }] });
+  assert.deepEqual(decodeContainerTitle('{"text":"literal"}'), { text: '{"text":"literal"}' });
+  for (const value of [{ '': 'root envelope' }, { text: 'bad', italic: 2 }, { translate: 'container.chest' },
+    { text: 'bad', extra: [{ '': { '': 'double envelope' } }] }]) assert.throws(() => decodeContainerTitle(value));
+  assert.throws(() => decodeContainerPacket(Buffer.concat([packet, Buffer.from([0])]), true));
+});
+
+test('metadata item patch decodes only pinned custom_name=6/item_name=9 NBT and refuses guessed codecs', () => {
+  for (const [id, name] of [[6, 'minecraft:custom_name'], [9, 'minecraft:item_name']] as const) {
+    const packet = Buffer.concat([Buffer.from([20, 3, 1, 0, 54, 1]), varInt(123), Buffer.from([1, 0]), varInt(id), Buffer.from([8]), utf('key')]);
+    const decoded = decodeContainerPacket(packet, true);
+    assert.deepEqual(decoded, { kind: 'slot', packet_id: 20, container_id: 3, state_id: 1, slot: 54,
+      stack: { item_id: 123, count: 1, components: { [name]: 'key' } } });
+    assert.throws(() => decodeContainerPacket(packet)); // Original plain fixture stays strict.
+    assert.throws(() => decodeContainerPacket(packet.subarray(0, -1), true));
+  }
+  for (const id of [0, 7, 1000]) assert.throws(() => decodeContainerPacket(Buffer.concat([
+    Buffer.from([20, 3, 1, 0, 54, 1, 123, 1, 0]), varInt(id), Buffer.from([8]), utf('unmodeled'),
+  ]), true), /Unsupported\/duplicate item component/);
+  const slots: PlainStack[] = Array.from({ length: 63 }, () => null);
+  slots[54] = { item_id: 123, count: 1, components: { 'minecraft:custom_name': 'key' } };
+  assert.throws(() => encodeContainerSwap(3, 1, 2, 0, slots), /hashed components/);
+});
+
+test('26.3 locked sound observes ID+1 holder, fixed positions, source, volume/pitch and exact boundary', () => {
+  const float = (value: number) => { const bytes = Buffer.alloc(4); bytes.writeFloatBE(value); return bytes; };
+  const tail = Buffer.concat([varInt(4), i32(4097 * 8 + 4), i32(200 * 8 + 4), i32(12), float(1), float(1), Buffer.alloc(8)]);
+  const packet = Buffer.concat([varInt(119), varInt(349), tail]);
+  assert.deepEqual(decodeSoundPacket(packet), { packet_id: 119, registry_id: 348, sound_id: null, fixed_range: null,
+    source: 4, x: 4097.5, y: 200.5, z: 1.5, volume: 1, pitch: 1, seed: '0000000000000000' });
+  const direct = decodeSoundPacket(Buffer.concat([varInt(119), varInt(0), wireString('minecraft:block.chest.locked'), Buffer.from([0]), tail]));
+  assert.equal(direct.sound_id, 'minecraft:block.chest.locked');
+  for (const bad of [packet.subarray(0, -1), Buffer.concat([packet, Buffer.from([0])]),
+    Buffer.concat([varInt(119), varInt(0), wireString('sound'), Buffer.from([2]), tail])]) assert.throws(() => decodeSoundPacket(bad));
+});
+
+test('first unsigned offline chat uses Instant, absent signature and exact 20-bit update plus checksum', () => {
+  // Official ServerboundChatPacket.STREAM_CODEC + LastSeenMessages.Update.
+  const instant = Buffer.alloc(8); instant.writeBigInt64BE(123456789n);
+  assert.deepEqual(encodeUnsignedChat('hello', 123456789), Buffer.concat([
+    wireString('hello'), instant, Buffer.alloc(8), Buffer.from([0, 0, 0, 0, 0, 0]),
+  ]));
+  for (const message of ['', 'x'.repeat(257), 'bad\nchat']) assert.throws(() => encodeUnsignedChat(message, 0));
+});
+
+test('strict offline delivery consumes the whole unsigned body, pass-through filter and registered chat decoration', () => {
+  const bound = Buffer.concat([varInt(1), Buffer.from([8]), utf('Sender'), Buffer.from([0])]);
+  const packet = Buffer.concat([varInt(66), varInt(0), Buffer.alloc(16), varInt(0), Buffer.from([0]), wireString('delivered'),
+    Buffer.alloc(16), varInt(0), Buffer.from([0]), varInt(0), bound]);
+  assert.deepEqual(decodeOfflineChatPacket(packet), { text: 'delivered', packet_id: 66, packet_type: 'player_chat',
+    text_scope: 'message_body', signature: 'absent', signature_verified: false });
+  const disguised = Buffer.concat([varInt(33), Buffer.from([8]), utf('system body'), bound]);
+  assert.equal(decodeOfflineChatPacket(disguised).text, 'system body');
+  for (let end = 0; end < packet.length; end++) assert.throws(() => decodeOfflineChatPacket(packet.subarray(0, end)));
+  assert.throws(() => decodeOfflineChatPacket(Buffer.concat([packet, Buffer.from([0])])));
+  const signed = Buffer.from(packet); signed[19] = 1;
+  assert.throws(() => decodeOfflineChatPacket(signed), /Signed chat outside/);
+});
+
+test('only an explicit typed spam negative case can arm expected-disconnect IPC', () => {
+  const payload = Buffer.concat([varInt(32), Buffer.from([10]), field(8, 'translate', utf('disconnect.spam')), Buffer.from([0])]);
+  const observation = decodeDisconnect(payload);
+  assert.equal(observation.translation, 'disconnect.spam');
+  assert.equal(observation.payload_base64, payload.toString('base64'));
+  assert.deepEqual(parseCommand({ id: 1, action: 'expect_disconnect', translation: 'disconnect.spam' }),
+    { id: 1, action: 'expect_disconnect', translation: 'disconnect.spam' });
+  for (const translation of ['disconnect.timeout', '', true]) assert.throws(() => parseCommand({ id: 1, action: 'expect_disconnect', translation }));
+  assert.throws(() => decodeDisconnect(payload.subarray(0, -1)));
+  assert.throws(() => decodeDisconnect(Buffer.concat([payload, Buffer.from([0])])));
+});
+
+test('26.3 actual hand swap sends PlayerAction ordinal 7 with packed origin, byte face and sequence', () => {
+  assert.deepEqual(encodeSwapHands(19), Buffer.from([7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19]));
+  assert.deepEqual(parseCommand({ id: 2, action: 'swap_hands' }), { id: 2, action: 'swap_hands' });
+  assert.throws(() => encodeSwapHands(-1));
+});
 
 test('26.3 sign update is position, four bounded UTF strings, then BACK0/FRONT1 VarInt', () => {
   for (const slot of [0, 1] as const) {

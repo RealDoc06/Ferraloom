@@ -43,9 +43,16 @@ class TestServer(Protocol):
 class Client:
     """One owned Node process; all stdout is JSON and stderr stays in the fixture."""
 
-    def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client"):
+    def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client",
+                 name: str = NAME, container_metadata: bool = False, raw_packets: bool = False,
+                 strict_offline_chat: bool = False):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", log_name):
             raise ValueError("Invalid client log name")
+        if not re.fullmatch(r"[A-Za-z0-9_]{1,16}", name, flags=re.ASCII):
+            raise ValueError("Client name must be 1..16 ASCII username characters")
+        self.name = name
+        self.expected_disconnect: dict | None = None
+        self.forced_close = False
         self.sequence = 0
         self.messages: queue.Queue[dict] = queue.Queue()
         self.pending: dict[int, dict] = {}
@@ -55,7 +62,11 @@ class Client:
         try:
             self.process = subprocess.Popen(
                 ["node", str(ROOT / "tools/parity/client.ts"), "--host", "127.0.0.1",
-                 "--port", str(server.port), "--name", NAME, *(["--block-data"] if block_data else [])],
+                 "--port", str(server.port), "--name", name,
+                 *(["--block-data"] if block_data or container_metadata else []),
+                 *(["--container-metadata"] if container_metadata else []),
+                 *(["--strict-offline-chat"] if strict_offline_chat else []),
+                 *(["--raw-packets"] if raw_packets else [])],
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
                 text=True, bufsize=1, start_new_session=True,
             )
@@ -144,6 +155,29 @@ class Client:
             time.sleep(0.1)
         raise AssertionError(f"Client state predicate failed: {state}")
 
+    def expect_spam_disconnect(self) -> None:
+        """Arm only the named negative fixture; every other protocol error stays fatal."""
+        self.request("expect_disconnect", translation="disconnect.spam")
+
+    def wait_spam_disconnect(self, timeout: float = 10) -> dict:
+        deadline = time.monotonic() + timeout
+        observed = next((event for event in self.events if event.get("event") == "disconnect"), None)
+        ended = next((event for event in self.events if event.get("event") == "end"), None)
+        while observed is None or ended is None:
+            message = self.receive(deadline - time.monotonic())
+            if message.get("event") == "disconnect":
+                observed = message
+            if message.get("event") == "end":
+                ended = message
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Expected typed spam disconnect and owned client exit")
+        protocol.require(observed.get("expected") is True and observed.get("translation") == "disconnect.spam", observed)
+        protocol.require(ended.get("expected") is True, ended)
+        self.process.wait(timeout=max(0.001, deadline - time.monotonic()))
+        protocol.require(self.process.returncode == 0, f"Expected-disconnect client exited {self.process.returncode}")
+        self.expected_disconnect = observed
+        return {"disconnect": observed, "final_state": ended.get("state"), "client_exit_code": self.process.returncode}
+
     def close(self) -> None:
         try:
             if self.process.poll() is None:
@@ -151,6 +185,7 @@ class Client:
                     self.request("quit", timeout=3)
                     self.process.wait(timeout=5)
                 except (OSError, RuntimeError, TimeoutError, AssertionError, subprocess.TimeoutExpired):
+                    self.forced_close = True
                     try:
                         os.killpg(self.process.pid, signal.SIGTERM)
                     except ProcessLookupError:
