@@ -12,6 +12,34 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 pub use pumpkin_data::dye_color::DyeColor;
 
+/// ValueInput's direct booleans use NumericTag.byteValue, including low-byte
+/// truncation and the FloatTag/DoubleTag floor-to-int conversion.
+fn value_input_bool(tag: Option<&NbtTag>) -> bool {
+    match tag {
+        Some(NbtTag::Byte(value)) => *value != 0,
+        Some(NbtTag::Short(value)) => value.to_le_bytes()[0] != 0,
+        Some(NbtTag::Int(value)) => value.to_le_bytes()[0] != 0,
+        Some(NbtTag::Long(value)) => value.to_le_bytes()[0] != 0,
+        Some(NbtTag::Float(value)) => (f64::from(*value).floor() as i32).to_le_bytes()[0] != 0,
+        Some(NbtTag::Double(value)) => (value.floor() as i32).to_le_bytes()[0] != 0,
+        _ => false,
+    }
+}
+
+/// Codec.BOOL instead uses NbtOps' nonzero-number rule. In particular, 256,
+/// fractional nonzero values and NaN are true here, unlike direct flags.
+fn codec_bool(tag: Option<&NbtTag>) -> Option<bool> {
+    match tag? {
+        NbtTag::Byte(value) => Some(*value != 0),
+        NbtTag::Short(value) => Some(*value != 0),
+        NbtTag::Int(value) => Some(*value != 0),
+        NbtTag::Long(value) => Some(*value != 0),
+        NbtTag::Float(value) => Some(*value != 0.0),
+        NbtTag::Double(value) => Some(*value != 0.0),
+        _ => None,
+    }
+}
+
 pub struct SignBlockEntity {
     state: SignState,
     position: BlockPos,
@@ -151,10 +179,7 @@ fn component_json(tag: &NbtTag, depth: usize) -> Option<serde_json::Value> {
                 serde_json::Value::String(color.into())
             }
             "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" => {
-                let NbtTag::Byte(value) = value else {
-                    return None;
-                };
-                serde_json::Value::Bool(*value != 0)
+                serde_json::Value::Bool(codec_bool(Some(value))?)
             }
             "extra" => {
                 let NbtTag::List(children) = value else {
@@ -235,40 +260,47 @@ impl Default for FaceData {
 }
 
 impl FaceData {
-    fn decode_lines(tag: Option<&NbtTag>) -> Option<[SignLine; 4]> {
+    fn decode_lines(tag: Option<&NbtTag>, filtered: bool) -> Option<[SignLine; 4]> {
         let NbtTag::List(lines) = tag? else {
             return None;
         };
-        if lines.len() != 4 {
+        // These scalar/array forms have no Component codec partial value. Valid
+        // unmodeled compound/list components stay preserved as Unsupported.
+        let usable = |line: &NbtTag| {
+            matches!(
+                line,
+                NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_)
+            )
+        };
+        if filtered && (lines.len() != 4 || lines.iter().any(|line| !usable(line))) {
             return None;
         }
+        let mut lines = lines.iter().filter(|line| usable(line));
+        let lines = [lines.next()?, lines.next()?, lines.next()?, lines.next()?];
         // The binary NBT reader already unwraps exactly one empty-key transport
         // wrapper at each list-element boundary. Remaining compounds are authored
         // values (including protected nested wrappers), never another wrapper to
-        // peel here. The SNBT parser, like Java NbtOps.createList, keeps them intact.
-        Some(std::array::from_fn(|index| {
-            SignLine::from_nbt(&lines[index])
-        }))
+        // peel here. Already decoded semantic compounds remain intact.
+        Some(lines.map(SignLine::from_nbt))
     }
 
     fn from_nbt(tag: Option<&NbtTag>) -> Self {
         let Some(NbtTag::Compound(nbt)) = tag else {
             return Self::default();
         };
-        // 26.3 requires exactly four raw lines. Its filtered field is lenient:
-        // a missing or invalid list uses the raw messages, never shifts lines.
-        let Some(messages) = Self::decode_lines(nbt.get("messages")) else {
+        // ValueInput accepts the raw codec's first-four partial for overlong
+        // lists. The lenient filtered field discards errors and uses raw text.
+        let Some(messages) = Self::decode_lines(nbt.get("messages"), false) else {
             return Self::default();
         };
-        let Some(color) = DyeColor::by_name(nbt.get_string("color").unwrap_or("black")) else {
-            return Self::default();
-        };
+        let color = DyeColor::by_name(nbt.get_string("color").unwrap_or("black"))
+            .unwrap_or(DyeColor::Black);
         Self {
-            filtered_messages: Self::decode_lines(nbt.get("filtered_messages"))
+            filtered_messages: Self::decode_lines(nbt.get("filtered_messages"), true)
                 .unwrap_or_else(|| messages.clone()),
             messages,
             color,
-            has_glowing_text: nbt.get_bool("has_glowing_text").unwrap_or(false),
+            has_glowing_text: codec_bool(nbt.get("has_glowing_text")).unwrap_or(false),
         }
     }
 
@@ -428,8 +460,8 @@ impl SignData {
         Self {
             front: FaceData::from_nbt(nbt.get("front_text")),
             back: FaceData::from_nbt(nbt.get("back_text")),
-            waxed: nbt.get_bool("is_waxed").unwrap_or(false),
-            allow_op_features: nbt.get_bool("allow_op_features").unwrap_or(false),
+            waxed: value_input_bool(nbt.get("is_waxed")),
+            allow_op_features: value_input_bool(nbt.get("allow_op_features")),
         }
     }
 

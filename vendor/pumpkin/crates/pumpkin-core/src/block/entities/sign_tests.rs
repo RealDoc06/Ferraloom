@@ -679,3 +679,64 @@ fn list_wrapper(value: NbtTag) -> NbtCompound {
     compound.put("", value);
     compound
 }
+
+#[test]
+fn sign_direct_flags_and_codec_booleans_match_java_numeric_conversions() {
+    for (tag, direct, codec) in [
+        (NbtTag::Byte(-128), true, true),
+        (NbtTag::Short(256), false, true),
+        (NbtTag::Int(257), true, true),
+        (NbtTag::Long(i64::MIN), false, true),
+        (NbtTag::Long(i64::MAX), true, true),
+        (NbtTag::Float(0.5), false, true),
+        (NbtTag::Double(-0.5), true, true),
+        (NbtTag::Double(-0.0), false, false),
+        (NbtTag::Float(f32::INFINITY), true, true),
+        (NbtTag::Double(f64::NEG_INFINITY), false, true),
+        (NbtTag::Double(f64::NAN), false, true),
+    ] {
+        let mut nbt = compound("{front_text:{messages:['A','B','C','D']}}");
+        nbt.put("is_waxed", tag.clone());
+        nbt.put("allow_op_features", tag.clone());
+        let mut front = nbt.get_compound("front_text").unwrap().clone();
+        front.put("has_glowing_text", tag);
+        nbt.put_compound("front_text", front);
+        let data = SignData::from_nbt(&nbt);
+        assert_eq!(data.waxed, direct);
+        assert_eq!(data.allow_op_features, direct);
+        assert_eq!(data.front.has_glowing_text, codec);
+        assert!(data.validate().is_ok());
+    }
+}
+
+#[test]
+fn sign_face_optional_errors_and_overlong_raw_lists_keep_java_partial_values() {
+    for snbt in [
+        "{messages:['A','B','C','D'],color:99,has_glowing_text:'bad'}",
+        "{messages:['A','B','C','D'],color:invalid}",
+        "{messages:['A','B','C','D','discarded']}",
+        "{messages:['A',7,'B','C','D']}",
+        "{messages:['A','B','C','D'],filtered_messages:['one','two','three','four','five']}",
+        "{messages:['A','B','C','D'],filtered_messages:['one',7,'three','four']}",
+    ] {
+        let face = FaceData::from_nbt(Some(&NbtTag::Compound(compound(snbt))));
+        assert_eq!(
+            face.messages.map(|line| line.text().to_string()),
+            ["A", "B", "C", "D"]
+        );
+        assert_eq!(
+            face.filtered_messages.map(|line| line.text().to_string()),
+            ["A", "B", "C", "D"]
+        );
+        assert_eq!(face.color, DyeColor::Black);
+        assert!(!face.has_glowing_text);
+    }
+    let invalid = compound("{messages:['A',7,'C','D'],color:red,has_glowing_text:1b}");
+    let face = FaceData::from_nbt(Some(&NbtTag::Compound(invalid)));
+    assert_eq!(
+        face.messages.map(|line| line.text().to_string()),
+        ["", "", "", ""]
+    );
+    assert_eq!(face.color, DyeColor::Black);
+    assert!(!face.has_glowing_text);
+}

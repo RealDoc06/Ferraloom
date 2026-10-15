@@ -502,6 +502,10 @@
     "block_data.barrel_spectator_pending_loot": {
       "feature_id": "blocks.containers",
       "scenario": "spectator barrel access preserves pending loot until a survival menu opens"
+    },
+    "block_data.sign_numeric_flags": {
+      "feature_id": "blocks.interactives",
+      "scenario": "sign numeric flags distinguish direct low-byte conversion from codec nonzero glow"
     }
   }
 }

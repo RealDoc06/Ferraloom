@@ -60,6 +60,7 @@ CASES = {
     "block_data.barrel_pending_empty_loot": "blocks.containers",
     "block_data.barrel_spectator_pending_loot": "blocks.containers",
     "block_data.sign_editor_tick": "blocks.interactives",
+    "block_data.sign_numeric_flags": "blocks.interactives",
     **{f"block_data.{name}_{case}": "blocks.interactives" for name in SIGNS
        for case in ("literal_command", "structured_command", "command_reentry", "rich_text")},
     **{f"block_data.{name}_command_restart": "persistence.block_entities" for name in SIGNS},
@@ -886,6 +887,22 @@ def command_restart_case(server: LoggedServer, client: Client, name: str, litera
             "literal_no_execution": blocked, "styled_click_chunk_after_restart": rich_chunk, "post_restart_positive_click": positive}
 
 
+def sign_numeric_flags_case(server: LoggedServer, client: Client) -> dict:
+    expected = component_state("sign", "numeric")
+    initial = fresh_rich(server, client, EDITOR_SIGN, expected)
+    phases = []
+    for number, direct, glow in [("1", True, True), ("256", False, True), ("257s", True, True),
+                                 ("256L", False, True), ("0.5f", False, True),
+                                 ("-0.5d", True, True), ("0d", False, False)]:
+        expected.update(is_waxed=direct, allow_op_features=direct)
+        expected["front_text"]["has_glowing_text"] = glow
+        command = (f"data merge block {pos_text(EDITOR_SIGN[0])} "
+                   f"{{is_waxed:{number},allow_op_features:{number},front_text:{{has_glowing_text:{number}}}}}")
+        phases.append(edit_rich(server, client, EDITOR_SIGN, expected, command))
+    return {"initial": initial, "phases": phases,
+            "scope": "Direct low-byte flags versus codec nonzero glow; nested merge retains both faces and all lines."}
+
+
 def far_editor_submission(server: LoggedServer, client: Client, messages: list[str]) -> dict:
     """Establish socket ordering without advancing a tick. Distance expiry must
     not run between the submitted sign packet and this successful op command.
@@ -1045,6 +1062,7 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                                          ("command_reentry", command_reentry_case), ("rich_text", rich_text_case)):
                         record(f"block_data.{name}_{case}", lambda name=name, action=action: action(server, client, name))
                 record("block_data.sign_editor_tick", lambda: sign_editor_tick_case(server, client))
+                record("block_data.sign_numeric_flags", lambda: sign_numeric_flags_case(server, client))
             else:
                 for name, pos in CONTAINERS.items():
                     test_id = f"block_data.{name}_restart"
