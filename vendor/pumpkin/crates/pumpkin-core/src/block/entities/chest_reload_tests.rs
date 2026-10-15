@@ -43,7 +43,8 @@ use crate::{
     block::{
         blocks::chests::chest_screen_handler_factory,
         entities::{
-            BlockEntity, comparator::ComparatorBlockEntity, trapped_chest::TrappedChestBlockEntity,
+            BlockEntity, barrel::BarrelBlockEntity, comparator::ComparatorBlockEntity,
+            trapped_chest::TrappedChestBlockEntity,
         },
         registry::default_registry,
     },
@@ -58,15 +59,18 @@ const OTHER_POS: BlockPos = BlockPos::new(1, 64, 0);
 enum ChestKind {
     Normal,
     Trapped,
+    Barrel,
 }
 
 const CHESTS: [ChestKind; 2] = [ChestKind::Normal, ChestKind::Trapped];
+const CONTAINERS: [ChestKind; 3] = [ChestKind::Normal, ChestKind::Trapped, ChestKind::Barrel];
 
 impl ChestKind {
     fn block(self) -> &'static Block {
         match self {
             Self::Normal => &Block::CHEST,
             Self::Trapped => &Block::TRAPPED_CHEST,
+            Self::Barrel => &Block::BARREL,
         }
     }
 
@@ -74,6 +78,7 @@ impl ChestKind {
         match self {
             Self::Normal => Arc::new(ChestBlockEntity::new(position)),
             Self::Trapped => Arc::new(TrappedChestBlockEntity::new(position)),
+            Self::Barrel => Arc::new(BarrelBlockEntity::new(position)),
         }
     }
 
@@ -81,6 +86,7 @@ impl ChestKind {
         match self {
             Self::Normal => Arc::new(ChestBlockEntity::from_nbt(nbt, position)),
             Self::Trapped => Arc::new(TrappedChestBlockEntity::from_nbt(nbt, position)),
+            Self::Barrel => Arc::new(BarrelBlockEntity::from_nbt(nbt, position)),
         }
     }
 
@@ -94,6 +100,11 @@ impl ChestKind {
             Self::Trapped => entity
                 .as_any()
                 .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .set_loot_generated_hook(hook),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
                 .unwrap()
                 .set_loot_generated_hook(hook),
         }
@@ -111,6 +122,91 @@ impl ChestKind {
                 .downcast_ref::<TrappedChestBlockEntity>()
                 .unwrap()
                 .set_before_access_hook(hook),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
+                .unwrap()
+                .set_before_access_hook(hook),
+        }
+    }
+
+    fn on_edit(self, entity: &dyn BlockEntity, hook: impl FnOnce() + Send + Sync + 'static) {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .set_edit_hook(hook),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .set_edit_hook(hook),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
+                .unwrap()
+                .set_edit_hook(hook),
+        }
+    }
+
+    fn on_snapshot(self, entity: &dyn BlockEntity, hook: impl FnOnce() + Send + Sync + 'static) {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .set_snapshot_hook(hook),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .set_snapshot_hook(hook),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
+                .unwrap()
+                .set_snapshot_hook(hook),
+        }
+    }
+
+    fn state_is_locked(self, entity: &dyn BlockEntity) -> bool {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .state_is_locked(),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .state_is_locked(),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
+                .unwrap()
+                .state_is_locked(),
+        }
+    }
+
+    fn token(self, entity: &dyn BlockEntity) -> Arc<()> {
+        match self {
+            Self::Normal => entity
+                .as_any()
+                .downcast_ref::<ChestBlockEntity>()
+                .unwrap()
+                .load_token(),
+            Self::Trapped => entity
+                .as_any()
+                .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .load_token(),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
+                .unwrap()
+                .load_token(),
         }
     }
 
@@ -124,6 +220,11 @@ impl ChestKind {
             Self::Trapped => entity
                 .as_any()
                 .downcast_ref::<TrappedChestBlockEntity>()
+                .unwrap()
+                .get_viewer_count(),
+            Self::Barrel => entity
+                .as_any()
+                .downcast_ref::<BarrelBlockEntity>()
                 .unwrap()
                 .get_viewer_count(),
         }
@@ -166,6 +267,10 @@ impl Fixture {
     /// Same manually loaded Full-chunk pattern as fill_tests. No listener,
     /// server tick or authentication is started; stop workers before installing it.
     async fn new() -> Self {
+        Self::with_registry(default_registry()).await
+    }
+
+    async fn with_registry(registry: Arc<crate::block::registry::BlockRegistry>) -> Self {
         let folder = tempfile::tempdir().unwrap();
         let level = Level::from_root_folder(
             &LevelConfig::default(),
@@ -181,7 +286,7 @@ impl Fixture {
             level,
             Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
             Dimension::OVERWORLD,
-            default_registry(),
+            registry,
             Weak::new(),
             Arc::default(),
         ));
@@ -543,7 +648,7 @@ async fn chest_data_updates_both_retained_double_halves_and_clears_empty_or_remo
 
 #[tokio::test]
 async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let chest = kind.new(BLOCK_POS);
         let inventory = chest.clone().get_inventory().unwrap();
@@ -721,7 +826,7 @@ fn assert_stacks(inventory: &dyn Inventory, expected: &[ItemStack; 27]) {
 
 #[tokio::test]
 async fn pending_chest_loaded_by_world_unpacks_on_first_inventory_access() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
         fixture.set_state(BLOCK_POS, kind.block().default_state.id);
@@ -756,7 +861,7 @@ async fn pending_chest_loaded_by_world_unpacks_on_first_inventory_access() {
 
 #[tokio::test]
 async fn published_pending_chest_unpacks_before_first_inventory_deposit() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
         let live = kind.from_nbt(
@@ -764,6 +869,14 @@ async fn published_pending_chest_unpacks_before_first_inventory_deposit() {
             BLOCK_POS,
         );
         fixture.install(kind.block(), live.clone());
+        assert_eq!(
+            fixture.pending(BLOCK_POS).get_string("LootTable"),
+            Some("minecraft:chests/simple_dungeon")
+        );
+        assert_eq!(
+            fixture.pending(BLOCK_POS).get_long("LootTableSeed"),
+            Some(73)
+        );
         let inventory = live.clone().get_inventory().unwrap();
         let deposit = ItemStack::new(11, &Item::EMERALD);
 
@@ -789,7 +902,7 @@ async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
         Remove,
         RemoveSpecific,
     }
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         for access in [
             Access::Get,
             Access::IsEmpty,
@@ -874,7 +987,7 @@ async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
 
 #[tokio::test]
 async fn chest_stale_real_generation_cannot_fill_a_data_replacement() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         // Cover explicit Items, a different pending key, and an identical
         // key/seed reload. The last case requires identity rather than equality.
         for replacement in [
@@ -951,7 +1064,7 @@ async fn chest_stale_real_generation_cannot_fill_a_data_replacement() {
 
 #[tokio::test]
 async fn chest_menu_insertion_rechecks_loot_loaded_after_ensure_unpacked() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
         let chest = kind.new(BLOCK_POS);
@@ -1068,7 +1181,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
 
 #[test]
 fn chest_unbound_pending_inventory_refuses_deposits_without_consuming_loot() {
-    for kind in CHESTS {
+    for kind in CONTAINERS {
         let chest = kind.from_nbt(
             &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
             BLOCK_POS,
@@ -1083,5 +1196,379 @@ fn chest_unbound_pending_inventory_refuses_deposits_without_consuming_loot() {
         );
         assert_eq!(saved(chest.as_ref()), pending);
         assert!(chest.has_loot_table());
+    }
+}
+
+const DEADLOCK_GUARD: Duration = Duration::from_secs(10);
+
+/// Spawn unscoped workers so a failed timeout cannot itself block on scope exit.
+/// Channels determine the order; timeouts only bound deadlock failures.
+fn command_worker(
+    fixture: &Fixture,
+    command: &str,
+) -> (
+    std::thread::JoinHandle<()>,
+    mpsc::Receiver<Result<i32, String>>,
+) {
+    let source = fixture.source.clone();
+    let command = command.to_owned();
+    let (tx, rx) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let dispatcher = default_dispatcher(&PermissionManager::new(), &CommandsConfig::default());
+        let result = dispatcher
+            .execute_input(&command, &source)
+            .map_err(|error| format!("{error:?}"));
+        tx.send(result).unwrap();
+    });
+    (worker, rx)
+}
+
+fn pause_hook() -> (
+    impl FnOnce() + Send + Sync,
+    mpsc::Receiver<()>,
+    mpsc::Sender<()>,
+) {
+    let (paused_tx, paused_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    let resume_rx = Mutex::new(resume_rx);
+    (
+        move || {
+            paused_tx.send(()).unwrap();
+            resume_rx
+                .lock()
+                .unwrap()
+                .recv_timeout(DEADLOCK_GUARD)
+                .unwrap();
+        },
+        paused_rx,
+        resume_tx,
+    )
+}
+
+fn marker_stack() -> ItemStack {
+    ItemStack::read_item_stack(&compound(
+        "{id:'minecraft:emerald',count:11,components:{'minecraft:custom_data':{marker:17}}}",
+    ))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn live_container_command_holds_state_through_edit_and_retained_menu_deposit() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let inventory = live.clone().get_inventory().unwrap();
+        inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        let player = MenuPlayer::new();
+        let handler = create_generic_9x3(1, &player.0, inventory.clone(), &player);
+        let (hook, paused, resume) = pause_hook();
+        kind.on_edit(live.as_ref(), hook);
+        let (command, result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set value 5",
+        );
+        paused.recv_timeout(DEADLOCK_GUARD).unwrap();
+        let (enter_tx, enter_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let retained = live.clone();
+        let deposit = std::thread::spawn(move || {
+            // The real state lock used by this retained menu is contended while
+            // the dispatcher is paused after its current-state snapshot.
+            enter_tx
+                .send(kind.state_is_locked(retained.as_ref()))
+                .unwrap();
+            handler.get_behaviour().slots[7].set_stack(marker_stack());
+            assert!(done_tx.send(handler).is_ok());
+        });
+        assert!(enter_rx.recv_timeout(DEADLOCK_GUARD).unwrap());
+        assert!(matches!(done_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        resume.send(()).unwrap();
+        assert_eq!(result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(), 1);
+        let handler = done_rx.recv_timeout(DEADLOCK_GUARD).unwrap();
+        command.join().unwrap();
+        deposit.join().unwrap();
+        assert_eq!(handler.get_behaviour().slots[0].get_stack().item_count, 5);
+        assert_marker(&handler.get_behaviour().slots[7].get_stack());
+        assert!(Arc::ptr_eq(&handler.inventory, &inventory));
+        assert!(Arc::ptr_eq(
+            &fixture.source.world().get_block_entity(&BLOCK_POS).unwrap(),
+            &live
+        ));
+        fixture.source.world().update_block_entity(&live);
+        let reloaded = fixture
+            .reload_saved_chunk(BLOCK_POS)
+            .get_inventory()
+            .unwrap();
+        assert_eq!(reloaded.get_stack(0).item_count, 5);
+        assert_marker(&reloaded.get_stack(7));
+    }
+}
+
+#[tokio::test]
+async fn live_container_source_is_resolved_before_target_snapshot_and_independent_edits_progress() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let target = kind.new(BLOCK_POS);
+        let source = kind.new(OTHER_POS);
+        fixture.install(kind.block(), target.clone());
+        fixture.install(kind.block(), source.clone());
+        target
+            .clone()
+            .get_inventory()
+            .unwrap()
+            .set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        source
+            .clone()
+            .get_inventory()
+            .unwrap()
+            .set_stack(0, ItemStack::new(5, &Item::APPLE));
+        let (hook, paused, resume) = pause_hook();
+        kind.on_snapshot(source.as_ref(), hook);
+        let (command, result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set from block 1 64 0 Items[0].count",
+        );
+        paused.recv_timeout(DEADLOCK_GUARD).unwrap();
+        assert!(!kind.state_is_locked(target.as_ref()));
+        let player = MenuPlayer::new();
+        let inventory = target.clone().get_inventory().unwrap();
+        let handler = create_generic_9x3(1, &player.0, inventory, &player);
+        handler.get_behaviour().slots[7].set_stack(marker_stack());
+        resume.send(()).unwrap();
+        assert_eq!(result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(), 1);
+        command.join().unwrap();
+        assert_eq!(handler.get_behaviour().slots[0].get_stack().item_count, 5);
+        assert_marker(&handler.get_behaviour().slots[7].get_stack());
+        fixture.source.world().update_block_entity(&target);
+        let reloaded = fixture
+            .reload_saved_chunk(BLOCK_POS)
+            .get_inventory()
+            .unwrap();
+        assert_eq!(reloaded.get_stack(0).item_count, 5);
+        assert_marker(&reloaded.get_stack(7));
+    }
+}
+
+#[tokio::test]
+async fn live_container_older_autosave_snapshot_cannot_publish_after_newer_command() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        live.clone()
+            .get_inventory()
+            .unwrap()
+            .set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        let other = kind.new(OTHER_POS);
+        fixture.install(kind.block(), other.clone());
+        other
+            .get_inventory()
+            .unwrap()
+            .set_stack(0, ItemStack::new(2, &Item::APPLE));
+        let (hook, paused, resume) = pause_hook();
+        kind.on_snapshot(live.as_ref(), hook);
+        let world = fixture.source.world().clone();
+        let (save_tx, save_rx) = mpsc::channel();
+        let save = std::thread::spawn(move || {
+            world.save_block_entities(BLOCK_POS.chunk_position());
+            save_tx.send(()).unwrap();
+        });
+        paused.recv_timeout(DEADLOCK_GUARD).unwrap();
+        assert!(kind.state_is_locked(live.as_ref()));
+        // A second entity progresses while A's snapshot holds its own lock.
+        let (independent, independent_result) = command_worker(
+            &fixture,
+            "data modify block 1 64 0 Items[0].count set value 9",
+        );
+        assert_eq!(
+            independent_result
+                .recv_timeout(DEADLOCK_GUARD)
+                .unwrap()
+                .unwrap(),
+            1
+        );
+        independent.join().unwrap();
+        let (command, result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set value 5",
+        );
+        resume.send(()).unwrap();
+        save_rx.recv_timeout(DEADLOCK_GUARD).unwrap();
+        assert_eq!(result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(), 1);
+        save.join().unwrap();
+        command.join().unwrap();
+        assert_eq!(fixture.pending(BLOCK_POS), saved(live.as_ref()));
+        let reloaded = fixture
+            .reload_saved_chunk(BLOCK_POS)
+            .get_inventory()
+            .unwrap();
+        assert_eq!(reloaded.get_stack(0).item_count, 5);
+    }
+}
+
+#[tokio::test]
+async fn live_container_failed_and_unchanged_edits_preserve_state_token_pending_and_dirty_flags() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let live = kind.from_nbt(
+            &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
+            BLOCK_POS,
+        );
+        fixture.install(kind.block(), live.clone());
+        let token = kind.token(live.as_ref());
+        let before = saved(live.as_ref());
+        let pending = fixture.pending(BLOCK_POS);
+        live.clear_dirty();
+        fixture
+            .source
+            .world()
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.mark_dirty(false))
+            .unwrap();
+        for command in [
+            "data merge block 0 64 0 {LootTableSeed:73L}",
+            "data modify block 0 64 0 created.child merge value 1",
+            "data modify block 0 64 0 created.nested merge value {}",
+            "data modify block 0 64 0 created.list[0].nested merge value {a:1}",
+            "data remove block 0 64 0 absent",
+        ] {
+            assert!(
+                fixture
+                    .dispatcher
+                    .execute_input(command, &fixture.source)
+                    .is_err()
+            );
+            assert_eq!(saved(live.as_ref()), before);
+            assert_eq!(fixture.pending(BLOCK_POS), pending);
+            assert!(Arc::ptr_eq(&token, &kind.token(live.as_ref())));
+            assert!(!live.is_dirty());
+            assert!(
+                !fixture
+                    .source
+                    .world()
+                    .level
+                    .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| chunk.is_dirty())
+                    .unwrap()
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn live_container_self_and_opposing_source_commands_complete_without_nested_state_locks() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        for position in [BLOCK_POS, OTHER_POS] {
+            let live = kind.new(position);
+            fixture.install(kind.block(), live.clone());
+            let inventory = live.get_inventory().unwrap();
+            inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+            inventory.set_stack(1, ItemStack::new(5, &Item::APPLE));
+        }
+        let (worker, result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set from block 0 64 0 Items[1].count",
+        );
+        assert_eq!(result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(), 1);
+        worker.join().unwrap();
+        let first = fixture.source.world().get_block_entity(&BLOCK_POS).unwrap();
+        let second = fixture.source.world().get_block_entity(&OTHER_POS).unwrap();
+        let (first_hook, first_paused, first_resume) = pause_hook();
+        let (second_hook, second_paused, second_resume) = pause_hook();
+        kind.on_snapshot(first.as_ref(), first_hook);
+        kind.on_snapshot(second.as_ref(), second_hook);
+        let (left, left_result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set from block 1 64 0 Items[0].count",
+        );
+        let (right, right_result) = command_worker(
+            &fixture,
+            "data modify block 1 64 0 Items[1].count set from block 0 64 0 Items[1].count",
+        );
+        // Both real source snapshots exist simultaneously, before either target
+        // transaction. No command may hold a target lock while reading its source.
+        first_paused.recv_timeout(DEADLOCK_GUARD).unwrap();
+        second_paused.recv_timeout(DEADLOCK_GUARD).unwrap();
+        first_resume.send(()).unwrap();
+        second_resume.send(()).unwrap();
+        assert_eq!(
+            left_result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(),
+            1
+        );
+        // An unchanged result is allowed for the independent opposite command.
+        right_result
+            .recv_timeout(DEADLOCK_GUARD)
+            .unwrap()
+            .unwrap_err();
+        left.join().unwrap();
+        right.join().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn live_container_comparator_callback_can_reenter_inventory_publication_and_save() {
+    use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs};
+    use pumpkin_data::BlockId;
+
+    struct ReentrantComparator(mpsc::Sender<u8>);
+    impl BlockMetadata for ReentrantComparator {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::COMPARATOR].into()
+        }
+    }
+    impl BlockBehaviour for ReentrantComparator {
+        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+            // Exercise map mutation access too: a forgotten publication guard
+            // deadlocks here before the state-lock check below could complete.
+            let live = args
+                .world
+                .block_entities
+                .get_mut(&BLOCK_POS.chunk_position())
+                .unwrap()
+                .get(&BLOCK_POS)
+                .unwrap()
+                .clone();
+            let count = live
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .item_count;
+            args.world.update_block_entity(&live);
+            self.0.send(count).unwrap();
+        }
+    }
+
+    for kind in CONTAINERS {
+        let (callback_tx, callback_rx) = mpsc::channel();
+        let mut registry = default_registry();
+        Arc::get_mut(&mut registry)
+            .unwrap()
+            .register(ReentrantComparator(callback_tx));
+        let fixture = Fixture::with_registry(registry).await;
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        live.clone()
+            .get_inventory()
+            .unwrap()
+            .set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        fixture.set_state(OTHER_POS, Block::COMPARATOR.default_state.id);
+        let (worker, result) = command_worker(
+            &fixture,
+            "data modify block 0 64 0 Items[0].count set value 5",
+        );
+        assert_eq!(callback_rx.recv_timeout(DEADLOCK_GUARD).unwrap(), 5);
+        assert_eq!(result.recv_timeout(DEADLOCK_GUARD).unwrap().unwrap(), 1);
+        worker.join().unwrap();
+        assert_eq!(fixture.pending(BLOCK_POS), saved(live.as_ref()));
+        fixture.source.world().flush_block_updates();
+        assert!(
+            fixture
+                .source
+                .world()
+                .take_flushed_block_changes()
+                .contains(&(BLOCK_POS, kind.block().default_state.id))
+        );
     }
 }

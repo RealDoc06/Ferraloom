@@ -22,7 +22,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
-use crate::block::entities::{BlockEntity, BlockEntityLoadError};
+use crate::block::entities::{BlockEntity, BlockEntityLoadError, NbtEditDecision};
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
@@ -86,7 +86,7 @@ pub const ERROR_BLOCK_INVALID: CommandErrorType<0> = CommandErrorType::new(
 );
 
 pub const ERROR_BLOCK_DATA_UNSUPPORTED: LiteralCommandErrorType = LiteralCommandErrorType::new(
-    "In-place block data loading is unsupported for this block entity (supported: barrel items, sign and hanging sign text/wax).",
+    "In-place block data loading is unsupported for this block entity or NBT form.",
 );
 
 pub const ERROR_ENTITY_INVALID: CommandErrorType<0> = CommandErrorType::new(
@@ -217,6 +217,20 @@ pub fn snbt_colorful_display(tag: &NbtTag, _depth: usize) -> TextComponent {
 pub trait DataAccessor: Send + Sync {
     fn set_data(&self, data: &NbtCompound) -> Result<(), CommandSyntaxError>;
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError>;
+    /// Block accessors override this with a state-locked edit. Entity and storage
+    /// retain their existing detached get/set behavior and storage failure rules.
+    fn edit_data(
+        &self,
+        edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
+    ) -> Result<bool, CommandSyntaxError> {
+        let mut data = self.get_data()?;
+        if edit(&mut data) == NbtEditDecision::Abort {
+            return Ok(false);
+        }
+        self.set_data(&data)?;
+        Ok(true)
+    }
+
     fn get_modified_success(&self) -> TextComponent;
     fn get_print_success(&self, data: &NbtTag) -> TextComponent;
     fn get_print_scaled_success(&self, path: &NbtPath, scale: f64, value: i32) -> TextComponent;
@@ -301,6 +315,20 @@ impl BlockDataAccessor {
 }
 
 impl DataAccessor for BlockDataAccessor {
+    fn edit_data(
+        &self,
+        edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
+    ) -> Result<bool, CommandSyntaxError> {
+        self.world
+            .edit_block_entity_nbt(&self.block_entity, edit)
+            .map_err(|error| match error {
+                BlockEntityLoadError::Unsupported(_) => {
+                    ERROR_BLOCK_DATA_UNSUPPORTED.create_without_context()
+                }
+                BlockEntityLoadError::NotPublished => ERROR_BLOCK_INVALID.create_without_context(),
+            })
+    }
+
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
         self.world
             .apply_block_entity_nbt(&self.block_entity, tag)
@@ -319,7 +347,8 @@ impl DataAccessor for BlockDataAccessor {
             .is_some_and(|entity| Arc::ptr_eq(&entity, &self.block_entity))
         {
             let mut nbt = NbtCompound::new();
-            self.block_entity.write_internal(&mut nbt);
+            self.block_entity
+                .snapshot_nbt(&mut |snapshot| nbt = snapshot);
             Ok(nbt)
         } else {
             Err(ERROR_BLOCK_INVALID.create_without_context())
@@ -601,40 +630,66 @@ fn execute_get(
     Ok(result)
 }
 
+/// Keep command errors outside the object-safe BE callback. Only existing
+/// storage's modify-merge exposes partial failed mutations, matching Java's
+/// live compound; block/entity candidates are discarded on failure or no-op.
+fn edit_command(
+    accessor: &dyn DataAccessor,
+    preserve_storage_partial: bool,
+    mut edit: impl FnMut(&mut NbtCompound) -> CommandExecutorResult,
+) -> CommandExecutorResult {
+    let mut result = None;
+    accessor.edit_data(&mut |candidate| {
+        let before = preserve_storage_partial.then(|| candidate.clone());
+        let outcome = edit(candidate).and_then(|count| {
+            if count == 0 {
+                Err(ERROR_MERGE_UNCHANGED.create_without_context())
+            } else {
+                Ok(count)
+            }
+        });
+        let commit = outcome.is_ok()
+            || before
+                .as_ref()
+                .is_some_and(|before| !before.is_empty() && before != candidate);
+        result = Some(outcome);
+        if commit {
+            NbtEditDecision::Commit
+        } else {
+            NbtEditDecision::Abort
+        }
+    })?;
+    result.ok_or_else(|| ERROR_BLOCK_DATA_UNSUPPORTED.create_without_context())?
+}
+
 fn execute_merge(context: &CommandContext, target_kind: TargetKind) -> CommandExecutorResult {
     let accessor = target_kind.access(context, "target")?;
     let nbt = NbtCompoundArgumentType::get(context, "nbt")?.clone();
-    if is_too_deep(&NbtTag::Compound(nbt.clone()), 0) {
-        return Err(ERROR_DATA_TOO_DEEP.create_without_context());
-    }
-    let old = accessor.get_data()?;
-    let mut updated = old.clone();
-    for (k, v) in nbt.child_tags {
-        updated.child_tags.insert(k, v);
-    }
-    if old == updated {
-        return Err(ERROR_MERGE_UNCHANGED.create_without_context());
-    }
-    accessor.set_data(&updated)?;
+    let result = edit_command(accessor.as_ref(), false, |candidate| {
+        if is_too_deep(&NbtTag::Compound(nbt.clone()), 0) {
+            return Err(ERROR_DATA_TOO_DEEP.create_without_context());
+        }
+        let old = candidate.clone();
+        candidate.merge(&nbt);
+        Ok(i32::from(old != *candidate))
+    })?;
     context
         .source
         .send_feedback(accessor.get_modified_success(), true);
-    Ok(1)
+    Ok(result)
 }
 
 fn execute_remove(context: &CommandContext, target_kind: TargetKind) -> CommandExecutorResult {
     let accessor = target_kind.access(context, "target")?;
     let path = context.get_argument::<NbtPath>("path")?;
-    let mut data = accessor.get_data()?;
-    let mut root = NbtTag::Compound(data.clone());
-    let count = path.remove(&mut root);
-    if count == 0 {
-        return Err(ERROR_MERGE_UNCHANGED.create_without_context());
-    }
-    if let NbtTag::Compound(new_compound) = root {
-        data = new_compound;
-    }
-    accessor.set_data(&data)?;
+    let count = edit_command(accessor.as_ref(), false, |candidate| {
+        let mut root = NbtTag::Compound(candidate.clone());
+        let count = path.remove(&mut root);
+        if let NbtTag::Compound(updated) = root {
+            *candidate = updated;
+        }
+        Ok(count)
+    })?;
     context
         .source
         .send_feedback(accessor.get_modified_success(), true);
@@ -877,47 +932,30 @@ fn execute_modify(
     source_kind: Option<TargetKind>,
     source_mode: SourceMode,
 ) -> CommandExecutorResult {
+    // Official decorateModification resolves sources, paths and string bounds
+    // before manipulateData touches the target. No source locks nest in a target.
+    let source_tags = resolve_source_tags(context, source_kind, source_mode)?;
     let target_accessor = target_kind.access(context, "target")?;
     let target_path = context.get_argument::<NbtPath>("targetPath")?;
-    let mut target_data = target_accessor.get_data()?;
-    let mut root = NbtTag::Compound(target_data.clone());
-    let source_tags = resolve_source_tags(context, source_kind, source_mode)?;
-
-    let result = match modify_mode {
-        ModifyMode::Insert(idx) => target_path.insert(idx, &mut root, &source_tags)?,
-        ModifyMode::Prepend => target_path.insert(0, &mut root, &source_tags)?,
-        ModifyMode::Append => target_path.insert(-1, &mut root, &source_tags)?,
-        ModifyMode::Set => {
-            let last_tag = source_tags.last().cloned().unwrap_or(NbtTag::End);
-            target_path.set(&mut root, last_tag)?
+    let preserve_partial =
+        target_kind == TargetKind::Storage && matches!(modify_mode, ModifyMode::Merge);
+    let result = edit_command(target_accessor.as_ref(), preserve_partial, |candidate| {
+        let mut root = NbtTag::Compound(candidate.clone());
+        let result = match modify_mode {
+            ModifyMode::Insert(idx) => target_path.insert(idx, &mut root, &source_tags),
+            ModifyMode::Prepend => target_path.insert(0, &mut root, &source_tags),
+            ModifyMode::Append => target_path.insert(-1, &mut root, &source_tags),
+            ModifyMode::Set => target_path.set(
+                &mut root,
+                source_tags.last().cloned().unwrap_or(NbtTag::End),
+            ),
+            ModifyMode::Merge => modify_merge(&mut root, target_path, &source_tags),
+        };
+        if let NbtTag::Compound(updated) = root {
+            *candidate = updated;
         }
-        ModifyMode::Merge => {
-            let result = modify_merge(&mut root, target_path, &source_tags);
-            if !matches!(&result, Ok(count) if *count > 0)
-                && target_kind == TargetKind::Storage
-                && !target_data.is_empty()
-            {
-                // Java exposes existing storage compounds by reference, so
-                // path creation and earlier merges survive a later failure.
-                // A missing storage instead supplies an unattached empty tag.
-                if let NbtTag::Compound(updated) = &root
-                    && updated != &target_data
-                {
-                    target_accessor.set_data(updated)?;
-                }
-            }
-            result?
-        }
-    };
-
-    if result == 0 {
-        return Err(ERROR_MERGE_UNCHANGED.create_without_context());
-    }
-
-    if let NbtTag::Compound(new_compound) = root {
-        target_data = new_compound;
-    }
-    target_accessor.set_data(&target_data)?;
+        result
+    })?;
     context
         .source
         .send_feedback(target_accessor.get_modified_success(), true);
@@ -1200,4 +1238,4 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
 #[cfg(test)]
 #[path = "data_tests.rs"]
-mod tests;
+pub(crate) mod tests;

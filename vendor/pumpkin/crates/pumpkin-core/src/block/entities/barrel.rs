@@ -1,30 +1,19 @@
 use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt, item_stack::ItemStack};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
-use std::any::Any;
 use std::sync::RwLock;
-use std::{
-    array::from_fn,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt};
+use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
 use crate::world::{BlockFlags, World};
-use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
-
-use super::{BlockEntity, BlockEntityLoadError};
 
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
-    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    state: RwLock<super::chest_like_block_entity::ChestState<{ Self::INVENTORY_SIZE }>>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 
@@ -32,84 +21,10 @@ pub struct BarrelBlockEntity {
     viewers: ViewerCountTracker,
 }
 
-impl BlockEntity for BarrelBlockEntity {
-    fn resource_location(&self) -> &'static str {
-        Self::ID
-    }
-
-    fn get_position(&self) -> BlockPos {
-        self.position
-    }
-
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
-    where
-        Self: Sized,
-    {
-        Self {
-            position,
-            items: RwLock::new(Self::read_items(nbt)),
-            dirty: AtomicBool::new(false),
-            comparator_dirty: AtomicBool::new(false),
-            viewers: ViewerCountTracker::new(),
-        }
-    }
-
-    fn load_nbt(&self, nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
-        let items = Self::read_items(nbt);
-        let mut live_items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *live_items = items;
-        self.mark_dirty();
-        Ok(())
-    }
-
-    fn write_nbt(&self, nbt: &mut NbtCompound) {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Persist an empty list too, matching write_inventory_nbt(include_empty).
-        nbt.put_list("Items", Vec::new());
-        sync_write_items_to_nbt(&*items, nbt);
-    }
-
-    fn tick(&self, world: &Arc<World>) {
-        self.viewers
-            .update_viewer_count::<Self>(self, world, &self.position);
-    }
-
-    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
-        Some(self)
-    }
-
-    fn is_comparator_dirty(&self) -> bool {
-        self.comparator_dirty.load(Ordering::Relaxed)
-    }
-
-    fn clear_comparator_dirty(&self) {
-        self.comparator_dirty.store(false, Ordering::Relaxed);
-    }
-
-    fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
-    }
-
-    fn clear_dirty(&self) {
-        self.dirty.store(false, Ordering::Relaxed);
-    }
-
-    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
-        let mut nbt = NbtCompound::new();
-        self.write_nbt(&mut nbt);
-        Some(nbt)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+crate::impl_block_entity_for_chest!(BarrelBlockEntity);
+crate::impl_inventory_for_chest!(BarrelBlockEntity);
+crate::impl_clearable_for_chest!(BarrelBlockEntity);
+crate::impl_container_helper_methods!(BarrelBlockEntity);
 
 impl ViewerCountListener for BarrelBlockEntity {
     fn on_container_open(&self, world: &Arc<World>, _position: &BlockPos) {
@@ -126,24 +41,6 @@ impl ViewerCountListener for BarrelBlockEntity {
 impl BarrelBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const ID: &'static str = "minecraft:barrel";
-
-    /// Inventory decoding only writes listed slots, so every reload starts empty.
-    fn read_items(nbt: &NbtCompound) -> [ItemStack; Self::INVENTORY_SIZE] {
-        let mut items = from_fn(|_| ItemStack::EMPTY.clone());
-        pumpkin_inventory::sync_read_items_from_nbt(nbt, &mut items);
-        items
-    }
-
-    #[must_use]
-    pub fn new(position: BlockPos) -> Self {
-        Self {
-            position,
-            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
-            dirty: AtomicBool::new(false),
-            comparator_dirty: AtomicBool::new(false),
-            viewers: ViewerCountTracker::new(),
-        }
-    }
 
     fn set_open(&self, world: &Arc<World>, open: bool) {
         let state = world.get_block_state(&self.position);
@@ -176,88 +73,5 @@ impl BarrelBlockEntity {
             0.5,
             rng.next_f32() * 0.1 + 0.9,
         );
-    }
-}
-
-impl Inventory for BarrelBlockEntity {
-    fn size(&self) -> usize {
-        Self::INVENTORY_SIZE
-    }
-
-    fn is_empty(&self) -> bool {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items.iter().all(ItemStack::is_empty)
-    }
-
-    fn get_stack(&self, slot: usize) -> ItemStack {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items[slot].clone()
-    }
-
-    fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
-        self.mark_dirty();
-        removed
-    }
-
-    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let res = if !items[slot].is_empty() && amount > 0 {
-            items[slot].split(amount)
-        } else {
-            ItemStack::EMPTY.clone()
-        };
-        self.mark_dirty();
-        res
-    }
-
-    fn set_stack(&self, slot: usize, stack: ItemStack) {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items[slot] = stack;
-        self.mark_dirty();
-    }
-
-    fn on_open(&self) {
-        self.viewers.open_container();
-    }
-
-    fn on_close(&self) {
-        self.viewers.close_container();
-    }
-
-    fn mark_dirty(&self) {
-        self.dirty.store(true, Ordering::Relaxed);
-        self.comparator_dirty.store(true, Ordering::Relaxed);
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl Clearable for BarrelBlockEntity {
-    fn clear(&self) {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items.fill_with(|| ItemStack::EMPTY.clone());
-        self.mark_dirty();
     }
 }

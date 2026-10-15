@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::block::entities::{
     BlockEntity,
-    sign::{DyeColor, Text},
+    sign::{DyeColor, SignEntityRef},
 };
 use pumpkin_data::tag;
 use pumpkin_util::GameMode;
@@ -76,15 +76,14 @@ impl DyeItem {
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
-        text: &Text,
+        sign: &SignEntityRef<'_>,
+        is_front: bool,
         color_name: &str,
     ) -> BlockActionResult {
         let dye_color = DyeColor::by_name(color_name).unwrap_or_default();
-        if text.get_color() == dye_color {
+        if !sign.apply_color(args.player.gameprofile.id, is_front, dye_color) {
             return BlockActionResult::PassToDefaultBlockAction;
         }
-
-        text.set_color(dye_color);
 
         args.world.update_block_entity(block_entity);
         args.world.play_block_sound(

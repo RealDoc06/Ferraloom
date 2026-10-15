@@ -75,6 +75,13 @@ pub enum BlockEntityLoadError {
     NotPublished,
 }
 
+/// A detached edit either commits completely or leaves live state untouched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NbtEditDecision {
+    Abort,
+    Commit,
+}
+
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Any + Send + Sync {
     fn write_nbt(&self, nbt: &mut NbtCompound);
@@ -87,6 +94,25 @@ pub trait BlockEntity: Any + Send + Sync {
     fn load_nbt(&self, _nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
         Err(BlockEntityLoadError::Unsupported(self.resource_location()))
     }
+    /// Edits and publishes canonical NBT under the entity's persisted-state lock.
+    /// The editor is pure NBT work; the sink only updates an already-resolved
+    /// pending cache. Neither callback may access world, inventory or gameplay.
+    fn edit_nbt(
+        &self,
+        _edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
+        _publish: &mut dyn FnMut(NbtCompound),
+    ) -> Result<bool, BlockEntityLoadError> {
+        Err(BlockEntityLoadError::Unsupported(self.resource_location()))
+    }
+
+    /// Supported live-edit types hold their mutation lock through publication.
+    /// Other types retain ordinary snapshot behavior.
+    fn snapshot_nbt(&self, publish: &mut dyn FnMut(NbtCompound)) {
+        let mut nbt = NbtCompound::new();
+        self.write_internal(&mut nbt);
+        publish(nbt);
+    }
+
     fn tick(&self, _world: &Arc<World>) {}
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;

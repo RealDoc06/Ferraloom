@@ -49,16 +49,16 @@ fn compound(snbt: &str) -> NbtCompound {
     value
 }
 
-struct Fixture {
-    source: CommandSource,
-    dispatcher: CommandDispatcher,
+pub(crate) struct Fixture {
+    pub(crate) source: CommandSource,
+    pub(crate) dispatcher: CommandDispatcher,
     _folder: tempfile::TempDir,
 }
 
 impl Fixture {
     /// No listeners, ticks, external authentication, or cwd configuration loads.
     /// Stop chunk workers before manually loading the command's Full chunk.
-    async fn new() -> Self {
+    pub(crate) async fn new() -> Self {
         let folder = tempfile::tempdir().unwrap();
         AnvilLevelInfo
             .write_world_info(&LevelData::default(Seed(0)), folder.path())
@@ -136,7 +136,7 @@ impl Fixture {
         fixture
     }
 
-    fn execute(&self, input: &str) -> CommandExecutorResult {
+    pub(crate) fn execute(&self, input: &str) -> CommandExecutorResult {
         self.dispatcher.execute_input(input, &self.source)
     }
 
@@ -165,7 +165,7 @@ impl Fixture {
         ]
     }
 
-    fn set_state(&self, position: BlockPos, state: BlockStateId) {
+    pub(crate) fn set_state(&self, position: BlockPos, state: BlockStateId) {
         let relative = position.chunk_relative_position();
         self.source
             .world()
@@ -181,19 +181,19 @@ impl Fixture {
             .unwrap();
     }
 
-    fn install(&self, block: &Block, entity: Arc<dyn BlockEntity>) {
+    pub(crate) fn install(&self, block: &Block, entity: Arc<dyn BlockEntity>) {
         self.set_state(entity.get_position(), block.default_state.id);
         self.source.world().add_block_entity(entity);
     }
 
-    fn block_data(&self) -> NbtCompound {
+    pub(crate) fn block_data(&self) -> NbtCompound {
         BlockDataAccessor::new(BLOCK_POS, self.source.world().clone())
             .unwrap()
             .get_data()
             .unwrap()
     }
 
-    fn pending_data(&self) -> NbtCompound {
+    pub(crate) fn pending_data(&self) -> NbtCompound {
         self.source
             .world()
             .level
@@ -211,7 +211,7 @@ impl Fixture {
 
     /// Round trip the actual terrain serializer, then use normal lazy BE loading.
     /// Caller retains the old Arc deliberately: the reloaded instance must be new.
-    fn reload_saved_chunk(&self) -> Arc<dyn BlockEntity> {
+    pub(crate) fn reload_saved_chunk(&self) -> Arc<dyn BlockEntity> {
         let world = self.source.world();
         let chunk_pos = BLOCK_POS.chunk_position();
         let bytes = world
@@ -468,22 +468,19 @@ async fn sign_data_reloads_both_faces_wax_and_client_data_without_replacing_edit
         let sign = SignEntityRef::from_block_entity(entity.as_ref()).unwrap();
         let editor_handle = sign.currently_editing_player().clone();
         *editor_handle.lock().unwrap() = Some(editor);
-        let front_handle = sign.front_text().messages.clone();
-        let back_handle = sign.back_text().filtered_messages.clone();
+        let front_handle = sign.front_text().clone();
+        let back_handle = sign.back_text().clone();
         assert_eq!(fixture.execute("data merge block 0 64 0 {front_text:{messages:['front','two','three','four'],filtered_messages:['filtered','','',''],color:red,has_glowing_text:1b},back_text:{messages:['back','','',''],color:blue,has_glowing_text:0b},is_waxed:1b,id:'minecraft:furnace',x:8,y:9,z:10}").unwrap(), 1);
         assert!(Arc::ptr_eq(
             &entity,
             &fixture.source.world().get_block_entity(&BLOCK_POS).unwrap()
         ));
         assert!(Arc::ptr_eq(&editor_handle, sign.currently_editing_player()));
-        assert!(Arc::ptr_eq(&front_handle, &sign.front_text().messages));
-        assert!(Arc::ptr_eq(
-            &back_handle,
-            &sign.back_text().filtered_messages
-        ));
+        assert!(front_handle.shares_message_storage(sign.front_text(), false));
+        assert!(back_handle.shares_message_storage(sign.back_text(), true));
         assert_eq!(*editor_handle.lock().unwrap(), Some(editor));
-        assert_eq!(&*front_handle.lock().unwrap()[0], "front");
-        assert_eq!(&*back_handle.lock().unwrap()[0], "back");
+        assert_eq!(front_handle.get_message(0, false).as_ref(), "front");
+        assert_eq!(back_handle.get_message(0, true).as_ref(), "back");
         assert_eq!(sign.front_text().get_message(0, true).as_ref(), "filtered");
         assert_eq!(sign.front_text().get_color(), DyeColor::Red);
         assert!(sign.front_text().has_glowing_text());
@@ -1192,4 +1189,183 @@ async fn storage_namespace_rejection_precedes_any_mutation() {
         *fixture.source.server().command_storage.lock().unwrap(),
         before
     );
+}
+
+#[tokio::test]
+async fn ordinary_data_merge_recursively_preserves_nested_siblings_and_detects_no_change() {
+    let fixture = Fixture::new().await;
+    fixture.put_storage("repair:nested", compound("{nested:{a:1,b:2}}"));
+    assert_eq!(
+        fixture
+            .execute("data merge storage repair:nested {nested:{a:3}}")
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        fixture.storage("repair:nested"),
+        compound("{nested:{a:3,b:2}}")
+    );
+    let error = fixture
+        .execute("data merge storage repair:nested {nested:{a:3}}")
+        .unwrap_err();
+    assert!(error.is(&ERROR_MERGE_UNCHANGED));
+
+    let sign = Arc::new(SignBlockEntity::empty(BLOCK_POS));
+    fixture.install(&Block::OAK_SIGN, sign);
+    fixture
+        .execute("data merge block 0 64 0 {front_text:{messages:['A','B','C','D'],color:red}} ")
+        .unwrap();
+    assert_eq!(
+        fixture
+            .execute("data merge block 0 64 0 {front_text:{has_glowing_text:1b}}")
+            .unwrap(),
+        1
+    );
+    let side = fixture
+        .block_data()
+        .get_compound("front_text")
+        .unwrap()
+        .clone();
+    assert_eq!(side.get_string("color"), Some("red"));
+    assert_eq!(
+        side.get_list("messages").unwrap(),
+        compound("{messages:['A','B','C','D']}")
+            .get_list("messages")
+            .unwrap()
+    );
+    assert!(
+        fixture
+            .execute("data merge block 0 64 0 {front_text:{has_glowing_text:1b}}")
+            .unwrap_err()
+            .is(&ERROR_MERGE_UNCHANGED)
+    );
+}
+
+#[tokio::test]
+async fn data_modify_reports_source_path_and_substring_errors_before_invalid_target() {
+    let fixture = Fixture::new().await;
+    let missing = fixture
+        .execute("data modify block 9 64 9 Items set from storage repair:source absent")
+        .unwrap_err();
+    assert!(missing.is(&ERROR_NOTHING_FOUND));
+    let substring = fixture
+        .execute("data modify block 9 64 9 Items set string storage repair:source text 9 1")
+        .unwrap_err();
+    assert!(substring.is(&ERROR_INVALID_SUBSTRING));
+    let target = fixture
+        .execute("data modify block 9 64 9 Items set from storage repair:source number")
+        .unwrap_err();
+    assert!(target.is(&ERROR_BLOCK_INVALID));
+}
+
+#[tokio::test]
+async fn pending_barrel_uses_live_datapack_source_on_first_access_and_after_data_reload() {
+    use crate::data::datapack::loot_table_loader::parse_loot_table;
+    use crate::world::loot::LootTableHandle;
+
+    let fixture = Fixture::new().await;
+    let server = fixture.source.server();
+    let key = "repair:barrel_live";
+    let table = parse_loot_table(r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:emerald"}]}]}"#).unwrap();
+    server
+        .datapack_manager
+        .insert_loot_table(key.into(), Arc::new(table));
+    assert!(matches!(
+        server.datapack_manager.get_loot_table(key),
+        Some(LootTableHandle::Dynamic(_))
+    ));
+    // A nonexistent static key proves the weak server upgrade matters.
+    assert!(crate::world::loot::get_loot_table(key).is_none());
+    fixture.set_state(BLOCK_POS, Block::BARREL.default_state.id);
+    fixture
+        .source
+        .world()
+        .block_entities
+        .remove(&BLOCK_POS.chunk_position());
+    fixture.source.world().add_block_entity_nbt(
+        BLOCK_POS,
+        &compound(
+            "{id:'minecraft:barrel',x:0,y:64,z:0,LootTable:'repair:barrel_live',LootTableSeed:73L}",
+        ),
+    );
+    let live = fixture.source.world().get_block_entity(&BLOCK_POS).unwrap();
+    assert!(live.has_loot_table());
+    let inventory = live.clone().get_inventory().unwrap();
+    // This actual inventory read is the first unpack, before open/tick/data.
+    let items: Vec<_> = (0..inventory.size())
+        .map(|slot| inventory.get_stack(slot))
+        .filter(|stack| !stack.is_empty())
+        .collect();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].item.id, Item::EMERALD.id);
+    assert_eq!(items[0].item_count, 1);
+    assert!(!live.has_loot_table());
+    assert_eq!(
+        fixture
+            .execute("data merge block 0 64 0 {LootTable:'repair:barrel_live',LootTableSeed:74L}")
+            .unwrap(),
+        1
+    );
+    assert!(fixture.block_data().get("Items").is_none());
+    assert_eq!(fixture.pending_data().get_string("LootTable"), Some(key));
+    assert_eq!(fixture.pending_data().get_long("LootTableSeed"), Some(74));
+    let reloaded = fixture.reload_saved_chunk();
+    assert!(reloaded.has_loot_table());
+    // Replace the live datapack table after reload; deferred access must look it
+    // up then, rather than retaining the earlier generated result/table.
+    let replacement = parse_loot_table(r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond"}]}]}"#).unwrap();
+    server
+        .datapack_manager
+        .insert_loot_table(key.into(), Arc::new(replacement));
+    let reloaded_inventory = reloaded.clone().get_inventory().unwrap();
+    let items: Vec<_> = (0..reloaded_inventory.size())
+        .map(|slot| reloaded_inventory.get_stack(slot))
+        .filter(|stack| !stack.is_empty())
+        .collect();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].item.id, Item::DIAMOND.id);
+    fixture.source.world().update_block_entity(&reloaded);
+    assert!(fixture.pending_data().get("LootTable").is_none());
+    let roundtrip = fixture.reload_saved_chunk().get_inventory().unwrap();
+    assert_eq!(
+        (0..roundtrip.size())
+            .map(|slot| u32::from(roundtrip.get_stack(slot).item_count))
+            .sum::<u32>(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn invalid_and_unsupported_block_targets_refuse_before_invoking_editor() {
+    let fixture = Fixture::new().await;
+    fixture.install(
+        &Block::HOPPER,
+        Arc::new(HopperBlockEntity::from_nbt(&NbtCompound::new(), BLOCK_POS)),
+    );
+    let unsupported = BlockDataAccessor::new(BLOCK_POS, fixture.source.world().clone()).unwrap();
+    let pending = fixture.pending_data();
+    let mut invoked = false;
+    let error = unsupported
+        .edit_data(&mut |_| {
+            invoked = true;
+            NbtEditDecision::Commit
+        })
+        .unwrap_err();
+    assert!(error.is(&ERROR_BLOCK_DATA_UNSUPPORTED));
+    assert!(!invoked);
+    assert_eq!(fixture.pending_data(), pending);
+
+    fixture.install(&Block::BARREL, Arc::new(BarrelBlockEntity::new(BLOCK_POS)));
+    let stale = BlockDataAccessor::new(BLOCK_POS, fixture.source.world().clone()).unwrap();
+    fixture.install(&Block::BARREL, Arc::new(BarrelBlockEntity::new(BLOCK_POS)));
+    let pending = fixture.pending_data();
+    let error = stale
+        .edit_data(&mut |_| {
+            invoked = true;
+            NbtEditDecision::Commit
+        })
+        .unwrap_err();
+    assert!(error.is(&ERROR_BLOCK_INVALID));
+    assert!(!invoked);
+    assert_eq!(fixture.pending_data(), pending);
 }

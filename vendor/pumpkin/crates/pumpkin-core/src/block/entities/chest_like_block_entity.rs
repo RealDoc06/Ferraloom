@@ -19,9 +19,40 @@ pub(super) struct ChestState<const N: usize> {
     pub generated_hook: Option<Box<dyn FnOnce() + Send + Sync>>,
     #[cfg(test)]
     pub before_access_hook: Option<Box<dyn FnOnce() + Send + Sync>>,
+    #[cfg(test)]
+    pub edit_hook: Option<Box<dyn FnOnce() + Send + Sync>>,
+    #[cfg(test)]
+    pub snapshot_hook: std::sync::Mutex<Option<Box<dyn FnOnce() + Send + Sync>>>,
 }
 
 impl<const N: usize> ChestState<N> {
+    /// Pure serializer: never accesses Inventory or unpacks deferred loot.
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(key) = &self.loot.key {
+            nbt.put_string("LootTable", key.clone());
+            if self.loot.seed != 0 {
+                nbt.put_long("LootTableSeed", self.loot.seed);
+            }
+        } else {
+            nbt.put_list("Items", Vec::new());
+            pumpkin_inventory::sync_write_items_to_nbt(&self.items, nbt);
+        }
+    }
+
+    pub fn snapshot(
+        &self,
+        id: &str,
+        position: pumpkin_util::math::position::BlockPos,
+    ) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_owned());
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        self.write_nbt(&mut nbt);
+        nbt
+    }
+
     pub fn from_nbt(nbt: &NbtCompound) -> Self {
         let (items, loot) = read_chest_nbt(nbt);
         Self {
@@ -33,6 +64,10 @@ impl<const N: usize> ChestState<N> {
             generated_hook: None,
             #[cfg(test)]
             before_access_hook: None,
+            #[cfg(test)]
+            edit_hook: None,
+            #[cfg(test)]
+            snapshot_hook: std::sync::Mutex::new(None),
         }
     }
 }
@@ -43,7 +78,7 @@ pub(super) struct ChestLootState {
     pub seed: i64,
 }
 
-/// Decode before taking live locks. The inventory reader only fills listed slots.
+/// Decode into detached values before committing. The inventory reader only fills listed slots.
 /// Java 26.3 ChestBlockEntity.loadAdditional starts empty and skips Items for loot.
 pub(super) fn read_chest_nbt<const N: usize>(
     nbt: &NbtCompound,
@@ -123,21 +158,55 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+                self.state
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .write_nbt(nbt);
+            }
+
+            fn snapshot_nbt(&self, publish: &mut dyn FnMut(pumpkin_nbt::compound::NbtCompound)) {
                 let state = self
                     .state
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(key) = &state.loot.key {
-                    // Persist deferred loot: write the key and seed; skip items.
-                    nbt.put_string("LootTable", key.clone());
-                    if state.loot.seed != 0 {
-                        nbt.put_long("LootTableSeed", state.loot.seed);
+                let nbt = state.snapshot(Self::ID, self.position);
+                #[cfg(test)]
+                {
+                    let hook = state.snapshot_hook.lock().unwrap().take();
+                    if let Some(hook) = hook {
+                        hook();
                     }
-                } else {
-                    // Loot has already been generated, so persist the actual items.
-                    nbt.put_list("Items", Vec::new());
-                    pumpkin_inventory::sync_write_items_to_nbt(&state.items, nbt);
                 }
+                publish(nbt);
+            }
+
+            fn edit_nbt(
+                &self,
+                edit: &mut dyn FnMut(
+                    &mut pumpkin_nbt::compound::NbtCompound,
+                ) -> $crate::block::entities::NbtEditDecision,
+                publish: &mut dyn FnMut(pumpkin_nbt::compound::NbtCompound),
+            ) -> Result<bool, $crate::block::entities::BlockEntityLoadError> {
+                let mut state = self
+                    .state
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut candidate = state.snapshot(Self::ID, self.position);
+                #[cfg(test)]
+                if let Some(hook) = state.edit_hook.take() {
+                    hook();
+                }
+                if edit(&mut candidate) == $crate::block::entities::NbtEditDecision::Abort {
+                    return Ok(false);
+                }
+                let (items, loot) =
+                    $crate::block::entities::chest_like_block_entity::read_chest_nbt(&candidate);
+                state.items = items;
+                state.loot = loot;
+                state.load_token = std::sync::Arc::new(());
+                <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
+                publish(state.snapshot(Self::ID, self.position));
+                Ok(true)
             }
 
             fn bind_world(&self, world: &$crate::world::World) {
@@ -342,12 +411,10 @@ macro_rules! impl_viewer_count_listener_for_chest {
     };
 }
 
-/// Implements helper methods for chest-like block entities.
-///
-/// Includes the `play_sound` method which handles sound positioning for single and double chests,
-/// as well as `new()` and `get_viewer_count()` methods.
+/// Shared construction, runtime viewer access and deferred loot for containers.
+/// Chest-specific sound positioning remains in `impl_chest_helper_methods`.
 #[macro_export]
-macro_rules! impl_chest_helper_methods {
+macro_rules! impl_container_helper_methods {
     ($struct_name:ty) => {
         impl $struct_name {
             /// Returns the number of players currently viewing this chest
@@ -488,6 +555,37 @@ macro_rules! impl_chest_helper_methods {
                 self.state.write().unwrap().before_access_hook = Some(Box::new(hook));
             }
 
+            #[cfg(test)]
+            pub(crate) fn set_edit_hook(&self, hook: impl FnOnce() + Send + Sync + 'static) {
+                self.state.write().unwrap().edit_hook = Some(Box::new(hook));
+            }
+
+            #[cfg(test)]
+            pub(crate) fn set_snapshot_hook(&self, hook: impl FnOnce() + Send + Sync + 'static) {
+                *self.state.read().unwrap().snapshot_hook.lock().unwrap() = Some(Box::new(hook));
+            }
+
+            #[cfg(test)]
+            pub(crate) fn load_token(&self) -> std::sync::Arc<()> {
+                self.state.read().unwrap().load_token.clone()
+            }
+
+            #[cfg(test)]
+            pub(crate) fn state_is_locked(&self) -> bool {
+                matches!(
+                    self.state.try_write(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                )
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_chest_helper_methods {
+    ($struct_name:ty) => {
+        $crate::impl_container_helper_methods!($struct_name);
+        impl $struct_name {
             fn play_sound(
                 &self,
                 world: &Arc<$crate::world::World>,

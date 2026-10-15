@@ -87,10 +87,9 @@ impl HoneyCombItem {
         block_entity: &Arc<dyn BlockEntity>,
         sign_entity: &crate::block::entities::sign::SignEntityRef<'_>,
     ) -> BlockActionResult {
-        if sign_entity.is_waxed() {
+        if !sign_entity.apply_wax(args.player.gameprofile.id) {
             return BlockActionResult::PassToDefaultBlockAction;
         }
-        sign_entity.set_waxed(true);
 
         args.world.update_block_entity(block_entity);
         args.world

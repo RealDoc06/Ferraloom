@@ -12,6 +12,16 @@ impl JavaClient {
         else {
             return;
         };
+        if !player.can_interact_with_block_at(&sign_data.location, 4.0) {
+            let mut editor = sign_entity
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if *editor == Some(player.gameprofile.id) {
+                *editor = None;
+            }
+            return;
+        }
         if sign_entity.is_waxed() {
             return;
         }
@@ -45,8 +55,6 @@ impl JavaClient {
             }
         }
 
-        let text = sign_entity.get_text(sign_data.is_front_text);
-
         let new_messages = [
             Box::<str>::from(sign_data.line_1),
             Box::<str>::from(sign_data.line_2),
@@ -54,21 +62,18 @@ impl JavaClient {
             Box::<str>::from(sign_data.line_4),
         ];
 
-        text.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone_from(&new_messages);
-        // We do not filter anything, so the filtered copy has to track the raw one. Leaving it
-        // empty makes it differ, which puts an empty `filtered_messages` on the wire and blanks
-        // the sign for clients that render with text filtering enabled.
-        *text
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_messages;
-        *sign_entity
-            .currently_editing_player()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        // Plugin callbacks above hold no sign locks. Revalidate the live editor,
+        // wax and reach after the event before the one raw/filtered batch update.
+        if !player.can_interact_with_block_at(&sign_data.location, 4.0)
+            || !sign_entity.update_player_text(
+                player.gameprofile.id,
+                sign_data.is_front_text,
+                player.is_text_filtering_enabled(),
+                new_messages,
+            )
+        {
+            return;
+        }
         world.update_block_entity(&block_entity);
     }
 }

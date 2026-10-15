@@ -200,7 +200,14 @@ pub fn write_chunk_data(
         });
         write.write_var_int(&VarInt(id as i32))?;
 
-        let mut client_nbt = nbt.clone();
+        let mut client_nbt = if matches!(
+            nbt.get_string("id"),
+            Some("minecraft:sign" | "minecraft:hanging_sign")
+        ) {
+            crate::block::entities::sign::client_nbt_from_persisted(nbt)
+        } else {
+            nbt.clone()
+        };
         client_nbt.child_tags.remove("id");
         client_nbt.child_tags.remove("x");
         client_nbt.child_tags.remove("y");

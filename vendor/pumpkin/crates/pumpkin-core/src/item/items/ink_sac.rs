@@ -1,6 +1,6 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::Arc;
 
-use crate::block::entities::{BlockEntity, sign::Text};
+use crate::block::entities::{BlockEntity, sign::SignEntityRef};
 use pumpkin_data::item::Item;
 
 use crate::{
@@ -27,9 +27,10 @@ impl InkSacItem {
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
-        text: &Text,
+        sign: &SignEntityRef<'_>,
+        is_front: bool,
     ) -> BlockActionResult {
-        let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
+        let changed = sign.apply_glowing(args.player.gameprofile.id, is_front, false);
 
         if !changed {
             return BlockActionResult::PassToDefaultBlockAction;

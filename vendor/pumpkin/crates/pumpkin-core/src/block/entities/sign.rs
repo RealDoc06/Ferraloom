@@ -3,169 +3,395 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI8, Ordering},
 };
 
-use super::{BlockEntity, BlockEntityLoadError};
+use super::{BlockEntity, BlockEntityLoadError, NbtEditDecision};
+use crate::world::World;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::{TextComponent, click::ClickEvent};
 
 pub use pumpkin_data::dye_color::DyeColor;
 
 pub struct SignBlockEntity {
-    pub front_text: SignText,
-    pub back_text: SignText,
-    pub is_waxed: AtomicBool,
+    state: SignState,
     position: BlockPos,
-    pub currently_editing_player: Arc<Mutex<Option<uuid::Uuid>>>,
 }
 
 pub type Text = SignText;
 
+/// A retained, read-only face handle. Persisted writes go through its owning sign.
+#[derive(Clone)]
 pub struct SignText {
-    pub has_glowing_text: AtomicBool,
-    color: AtomicI8,
-    pub messages: Arc<Mutex<[Box<str>; 4]>>,
-    pub filtered_messages: Arc<Mutex<[Box<str>; 4]>>,
+    has_glowing_text: Arc<AtomicBool>,
+    color: Arc<AtomicI8>,
+    messages: Arc<Mutex<[SignLine; 4]>>,
+    filtered_messages: Arc<Mutex<[SignLine; 4]>>,
 }
 
-impl Clone for SignText {
-    fn clone(&self) -> Self {
-        Self {
-            has_glowing_text: AtomicBool::new(self.has_glowing_text.load(Ordering::Relaxed)),
-            color: AtomicI8::new(self.color.load(Ordering::Relaxed)),
-            messages: self.messages.clone(),
-            filtered_messages: self.filtered_messages.clone(),
+/// Unknown loaded forms stay in their original line and on disk. They are never
+/// interpreted as commands, and live NBT edits refuse them before committing.
+#[derive(Clone, Debug, PartialEq)]
+enum SignLine {
+    Known {
+        nbt: NbtTag,
+        component: TextComponent,
+    },
+    Unsupported(NbtTag),
+}
+
+impl SignLine {
+    fn literal(text: Box<str>) -> Self {
+        Self::Known {
+            component: TextComponent::text(text.to_string()),
+            nbt: NbtTag::String(text),
         }
+    }
+
+    fn from_nbt(nbt: &NbtTag) -> Self {
+        // The upstream infallible from_nbt silently defaults on decode failure
+        // and treats byte booleans as JSON numbers. Validate a bounded subset
+        // and use its fallible TextComponent decoder with typed booleans instead.
+        component_json(nbt, 0)
+            .and_then(|json| serde_json::from_value(json).ok())
+            .map_or_else(
+                || Self::Unsupported(nbt.clone()),
+                |component| Self::Known {
+                    nbt: nbt.clone(),
+                    component,
+                },
+            )
+    }
+
+    fn text(&self) -> Box<str> {
+        match self {
+            Self::Known { component, .. } => component.clone().get_text().into(),
+            Self::Unsupported(_) => "[Unsupported sign text]".into(),
+        }
+    }
+
+    fn raw_nbt(&self) -> NbtTag {
+        match self {
+            Self::Known { nbt, .. } | Self::Unsupported(nbt) => nbt.clone(),
+        }
+    }
+
+    fn client_nbt(&self) -> NbtTag {
+        match self {
+            Self::Known { nbt, .. } => nbt.clone(),
+            Self::Unsupported(_) => NbtTag::String(self.text()),
+        }
+    }
+
+    fn run_command(&self) -> Option<String> {
+        if let Self::Known { component, .. } = self
+            && let Some(ClickEvent::RunCommand { command }) = &component.0.style.click_event
+        {
+            Some(command.to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Packet strings are literal contents; only an already trusted style survives.
+    fn with_literal_text(&self, text: Box<str>) -> Self {
+        let Self::Known { component, .. } = self else {
+            return self.clone();
+        };
+        if component.0.style.is_empty() {
+            return Self::literal(text);
+        }
+        let mut replacement = TextComponent::text(text.to_string());
+        replacement.0.style = component.0.style.clone();
+        Self::Known {
+            nbt: NbtTag::Compound(replacement.0.to_nbt_compound()),
+            component: replacement,
+        }
+    }
+}
+
+/// Ordinary text, styling, extras and run-command events are understood here.
+/// Other content/action forms are preserved on load and refused by live edits.
+fn component_json(tag: &NbtTag, depth: usize) -> Option<serde_json::Value> {
+    if depth > 64 {
+        return None;
+    }
+    if let NbtTag::String(text) = tag {
+        return Some(serde_json::Value::String(text.to_string()));
+    }
+    let NbtTag::Compound(nbt) = tag else {
+        return None;
+    };
+    nbt.get_string("text")?;
+    let mut json = serde_json::Map::new();
+    for (key, value) in &nbt.child_tags {
+        let value = match key.as_ref() {
+            "text" | "insertion" => serde_json::Value::String(value.extract_string()?.into()),
+            "type" if value.extract_string()? == "text" => continue,
+            "color" => {
+                let color = value.extract_string()?;
+                let valid = matches!(
+                    color,
+                    "black"
+                        | "dark_blue"
+                        | "dark_green"
+                        | "dark_aqua"
+                        | "dark_red"
+                        | "dark_purple"
+                        | "gold"
+                        | "gray"
+                        | "dark_gray"
+                        | "blue"
+                        | "green"
+                        | "aqua"
+                        | "red"
+                        | "light_purple"
+                        | "yellow"
+                        | "white"
+                ) || (color.len() == 7
+                    && color.starts_with('#')
+                    && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit));
+                if !valid {
+                    return None;
+                }
+                serde_json::Value::String(color.into())
+            }
+            "bold" | "italic" | "underlined" | "strikethrough" | "obfuscated" => {
+                let NbtTag::Byte(value) = value else {
+                    return None;
+                };
+                serde_json::Value::Bool(*value != 0)
+            }
+            "extra" => {
+                let NbtTag::List(children) = value else {
+                    return None;
+                };
+                if children.is_empty() {
+                    return None;
+                }
+                // The upstream extra decoder expects objects rather than strings.
+                let children = children
+                    .iter()
+                    .map(|child| {
+                        let json = component_json(child, depth + 1)?;
+                        Some(match json {
+                            serde_json::Value::String(text) => serde_json::json!({"text": text}),
+                            object => object,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                serde_json::Value::Array(children)
+            }
+            "click_event" => {
+                let NbtTag::Compound(event) = value else {
+                    return None;
+                };
+                if event.child_tags.len() != 2 || event.get_string("action")? != "run_command" {
+                    return None;
+                }
+                let command = event.get_string("command")?;
+                // RunCommand.CODEC uses ExtraCodecs.CHAT_STRING in 26.3.
+                if command
+                    .chars()
+                    .any(|character| character < ' ' || matches!(character, '\u{7f}' | '\u{a7}'))
+                {
+                    return None;
+                }
+                serde_json::json!({"action": "run_command", "command": command})
+            }
+            _ => return None,
+        };
+        json.insert(key.to_string(), value);
+    }
+    Some(serde_json::Value::Object(json))
+}
+
+/// NBT list entries must share a type. Mixed plain/styled component lists use
+/// explicit text compounds, including nested extras, without parsing strings.
+fn canonical_component(tag: NbtTag) -> NbtTag {
+    match tag {
+        NbtTag::String(text) => {
+            NbtTag::Compound(TextComponent::text(text.to_string()).0.to_nbt_compound())
+        }
+        NbtTag::Compound(mut compound) => {
+            if let Some(NbtTag::List(extra)) = compound.get("extra") {
+                let extra = extra.iter().cloned().map(canonical_component).collect();
+                compound.put_list("extra", extra);
+            }
+            NbtTag::Compound(compound)
+        }
+        other => other,
+    }
+}
+
+fn encode_lines(lines: &[SignLine; 4], for_client: bool) -> Vec<NbtTag> {
+    let tags: Vec<_> = lines
+        .iter()
+        .map(|line| {
+            if for_client {
+                line.client_nbt()
+            } else {
+                line.raw_nbt()
+            }
+        })
+        .collect();
+    if tags.iter().all(|tag| matches!(tag, NbtTag::String(_))) {
+        tags
+    } else {
+        tags.into_iter()
+            .zip(lines)
+            .map(|(tag, line)| {
+                if !for_client && matches!(line, SignLine::Unsupported(_)) {
+                    tag
+                } else {
+                    canonical_component(tag)
+                }
+            })
+            .collect()
+    }
+}
+
+struct FaceData {
+    messages: [SignLine; 4],
+    filtered_messages: [SignLine; 4],
+    color: DyeColor,
+    has_glowing_text: bool,
+}
+
+impl Default for FaceData {
+    fn default() -> Self {
+        let messages = std::array::from_fn(|_| SignLine::literal("".into()));
+        Self {
+            filtered_messages: messages.clone(),
+            messages,
+            color: DyeColor::Black,
+            has_glowing_text: false,
+        }
+    }
+}
+
+impl FaceData {
+    fn decode_lines(tag: Option<&NbtTag>) -> Option<[SignLine; 4]> {
+        let NbtTag::List(lines) = tag? else {
+            return None;
+        };
+        if lines.len() != 4 {
+            return None;
+        }
+        // The binary NBT reader already unwraps exactly one empty-key transport
+        // wrapper at each list-element boundary. Remaining compounds are authored
+        // values (including protected nested wrappers), never another wrapper to
+        // peel here. The SNBT parser, like Java NbtOps.createList, keeps them intact.
+        Some(std::array::from_fn(|index| {
+            SignLine::from_nbt(&lines[index])
+        }))
+    }
+
+    fn from_nbt(tag: Option<&NbtTag>) -> Self {
+        let Some(NbtTag::Compound(nbt)) = tag else {
+            return Self::default();
+        };
+        // 26.3 requires exactly four raw lines. Its filtered field is lenient:
+        // a missing or invalid list uses the raw messages, never shifts lines.
+        let Some(messages) = Self::decode_lines(nbt.get("messages")) else {
+            return Self::default();
+        };
+        let Some(color) = DyeColor::by_name(nbt.get_string("color").unwrap_or("black")) else {
+            return Self::default();
+        };
+        Self {
+            filtered_messages: Self::decode_lines(nbt.get("filtered_messages"))
+                .unwrap_or_else(|| messages.clone()),
+            messages,
+            color,
+            has_glowing_text: nbt.get_bool("has_glowing_text").unwrap_or(false),
+        }
+    }
+
+    fn supported(&self) -> bool {
+        self.messages
+            .iter()
+            .chain(&self.filtered_messages)
+            .all(|line| matches!(line, SignLine::Known { .. }))
+    }
+
+    fn to_nbt(&self, for_client: bool) -> NbtTag {
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("has_glowing_text", self.has_glowing_text);
+        nbt.put_string("color", self.color.name().to_string());
+        nbt.put_list("messages", encode_lines(&self.messages, for_client));
+        if self.messages != self.filtered_messages {
+            nbt.put_list(
+                "filtered_messages",
+                encode_lines(&self.filtered_messages, for_client),
+            );
+        }
+        NbtTag::Compound(nbt)
     }
 }
 
 impl Default for SignText {
     fn default() -> Self {
-        Self {
-            has_glowing_text: AtomicBool::new(false),
-            color: AtomicI8::new(DyeColor::Black as i8),
-            messages: Arc::new(Mutex::new(Self::empty_messages())),
-            filtered_messages: Arc::new(Mutex::new(Self::empty_messages())),
-        }
-    }
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<SignText> for NbtTag {
-    fn from(value: SignText) -> Self {
-        let messages = value
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let filtered_messages = value
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        value.to_nbt(&messages, &filtered_messages)
-    }
-}
-
-impl From<NbtTag> for SignText {
-    fn from(tag: NbtTag) -> Self {
-        let Some(nbt) = tag.extract_compound() else {
-            return Self::default();
-        };
-        let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
-        let color = nbt.get_string("color").unwrap_or("black");
-        let messages: Vec<Box<str>> = nbt.get_list("messages").map_or_else(Vec::new, |list| {
-            list.iter()
-                .filter_map(|tag| tag.extract_string().map(Box::from))
-                .collect()
-        });
-        let get_message =
-            |i: usize| -> Box<str> { messages.get(i).cloned().unwrap_or_else(|| Box::from("")) };
-
-        let parsed_messages = [
-            get_message(0),
-            get_message(1),
-            get_message(2),
-            get_message(3),
-        ];
-
-        let filtered_messages: Option<Vec<Box<str>>> =
-            nbt.get_list("filtered_messages").map(|list| {
-                list.iter()
-                    .filter_map(|tag| tag.extract_string().map(Box::from))
-                    .collect()
-            });
-
-        let parsed_filtered = filtered_messages.map_or_else(
-            || parsed_messages.clone(),
-            |filtered| {
-                let get_filtered = |i: usize| -> Box<str> {
-                    filtered.get(i).cloned().unwrap_or_else(|| Box::from(""))
-                };
-                [
-                    get_filtered(0),
-                    get_filtered(1),
-                    get_filtered(2),
-                    get_filtered(3),
-                ]
-            },
-        );
-
-        Self {
-            has_glowing_text: AtomicBool::new(has_glowing_text),
-            color: AtomicI8::new(DyeColor::by_name(color).unwrap_or(DyeColor::Black).id() as i8),
-            messages: Arc::new(Mutex::new(parsed_messages)),
-            filtered_messages: Arc::new(Mutex::new(parsed_filtered)),
-        }
+        Self::from_data(FaceData::default())
     }
 }
 
 impl SignText {
     pub const LINES: usize = 4;
 
-    fn to_nbt(&self, messages: &[Box<str>; 4], filtered_messages: &[Box<str>; 4]) -> NbtTag {
-        let mut nbt = NbtCompound::new();
-        nbt.put_bool("has_glowing_text", self.has_glowing_text());
-        nbt.put_string("color", self.get_color().name().to_string());
-        nbt.put_list(
-            "messages",
-            messages.iter().cloned().map(NbtTag::String).collect(),
-        );
-        if filtered_messages != messages {
-            nbt.put_list(
-                "filtered_messages",
-                filtered_messages
-                    .iter()
-                    .cloned()
-                    .map(NbtTag::String)
-                    .collect(),
-            );
+    fn from_data(data: FaceData) -> Self {
+        Self {
+            has_glowing_text: Arc::new(AtomicBool::new(data.has_glowing_text)),
+            color: Arc::new(AtomicI8::new(data.color.id() as i8)),
+            messages: Arc::new(Mutex::new(data.messages)),
+            filtered_messages: Arc::new(Mutex::new(data.filtered_messages)),
         }
-        NbtTag::Compound(nbt)
+    }
+
+    fn snapshot_unlocked(&self) -> FaceData {
+        let messages = self
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let filtered = self
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        FaceData {
+            messages: messages.clone(),
+            filtered_messages: filtered.clone(),
+            color: self.get_color(),
+            has_glowing_text: self.has_glowing_text(),
+        }
+    }
+
+    fn apply_unlocked(&self, data: FaceData) {
+        let mut messages = self
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut filtered = self
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *messages = data.messages;
+        *filtered = data.filtered_messages;
+        self.color.store(data.color.id() as i8, Ordering::Relaxed);
+        self.has_glowing_text
+            .store(data.has_glowing_text, Ordering::Relaxed);
     }
 
     #[must_use]
     pub fn empty_messages() -> [Box<str>; 4] {
-        [Box::from(""), Box::from(""), Box::from(""), Box::from("")]
-    }
-
-    #[must_use]
-    pub fn new(
-        messages: [Box<str>; 4],
-        filtered_messages: Option<[Box<str>; 4]>,
-        color: DyeColor,
-        has_glowing_text: bool,
-    ) -> Self {
-        let filtered = filtered_messages.unwrap_or_else(|| messages.clone());
-        Self {
-            has_glowing_text: AtomicBool::new(has_glowing_text),
-            color: AtomicI8::new(color.id() as i8),
-            messages: Arc::new(Mutex::new(messages)),
-            filtered_messages: Arc::new(Mutex::new(filtered)),
-        }
+        std::array::from_fn(|_| "".into())
     }
 
     #[must_use]
     pub fn from_messages(messages: [Box<str>; 4]) -> Self {
-        Self::new(messages, None, DyeColor::Black, false)
+        let messages = messages.map(SignLine::literal);
+        Self::from_data(FaceData {
+            filtered_messages: messages.clone(),
+            messages,
+            ..FaceData::default()
+        })
     }
 
     #[must_use]
@@ -173,205 +399,306 @@ impl SignText {
         self.has_glowing_text.load(Ordering::Relaxed)
     }
 
-    pub fn set_has_glowing_text(&self, has_glowing_text: bool) {
-        self.has_glowing_text
-            .store(has_glowing_text, Ordering::Relaxed);
-    }
-
     #[must_use]
     pub fn get_color(&self) -> DyeColor {
-        let c = self.color.load(Ordering::Relaxed);
-        if c >= 0 {
-            DyeColor::by_id(c as u8).unwrap_or(DyeColor::Black)
-        } else {
-            DyeColor::Black
-        }
-    }
-
-    pub fn set_color(&self, color: DyeColor) {
-        self.color.store(color.id() as i8, Ordering::Relaxed);
+        DyeColor::by_id(self.color.load(Ordering::Relaxed) as u8).unwrap_or(DyeColor::Black)
     }
 
     #[must_use]
     pub fn get_message(&self, index: usize, should_filter: bool) -> Box<str> {
-        if index >= Self::LINES {
-            return Box::from("");
-        }
-        let lock = if should_filter {
-            self.filtered_messages.lock()
-        } else {
-            self.messages.lock()
-        };
-        lock.unwrap_or_else(std::sync::PoisonError::into_inner)[index].clone()
-    }
-
-    pub fn set_message(&self, index: usize, message: Box<str>, filtered_message: Option<Box<str>>) {
-        if index >= Self::LINES {
-            return;
-        }
-        let filtered = filtered_message.unwrap_or_else(|| message.clone());
-        self.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)[index] = message;
-        self.filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)[index] = filtered;
+        self.get_messages(should_filter)
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| "".into())
     }
 
     #[must_use]
     pub fn get_messages(&self, should_filter: bool) -> [Box<str>; 4] {
-        let lock = if should_filter {
-            self.filtered_messages.lock()
+        let messages = if should_filter {
+            &self.filtered_messages
         } else {
-            self.messages.lock()
-        };
-        lock.unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            &self.messages
+        }
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::array::from_fn(|index| messages[index].text())
     }
 
     #[must_use]
     pub fn has_message(&self, should_filter: bool) -> bool {
-        let messages = self.get_messages(should_filter);
-        messages.iter().any(|msg| !msg.is_empty())
+        self.get_messages(should_filter)
+            .iter()
+            .any(|msg| !msg.is_empty())
     }
 
     #[must_use]
-    pub fn has_any_click_commands(&self, should_filter: bool) -> bool {
-        let messages = self.get_messages(should_filter);
-        for msg in &messages {
-            if msg.is_empty() || !msg.starts_with('{') {
-                continue;
-            }
-            if let Ok(component) = serde_json::from_str::<TextComponent>(msg)
-                && let Some(ClickEvent::RunCommand { .. }) = &component.0.style.click_event
-            {
-                return true;
-            }
+    pub fn has_editable_text(&self) -> bool {
+        self.messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .all(|line| matches!(line, SignLine::Known { .. }))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_message_storage(&self, other: &Self, filtered: bool) -> bool {
+        if filtered {
+            Arc::ptr_eq(&self.filtered_messages, &other.filtered_messages)
+        } else {
+            Arc::ptr_eq(&self.messages, &other.messages)
         }
-        false
     }
 }
 
-/// Shared persisted fields for standing and hanging signs. Editor state stays live.
-pub(super) struct SignData {
-    pub front_text: SignText,
-    pub back_text: SignText,
-    pub is_waxed: bool,
+struct SignData {
+    front: FaceData,
+    back: FaceData,
+    waxed: bool,
+    allow_op_features: bool,
 }
 
 impl SignData {
-    pub fn from_nbt(nbt: &NbtCompound) -> Self {
+    fn from_nbt(nbt: &NbtCompound) -> Self {
         Self {
-            front_text: nbt
-                .get("front_text")
-                .cloned()
-                .map(SignText::from)
-                .unwrap_or_default(),
-            back_text: nbt
-                .get("back_text")
-                .cloned()
-                .map(SignText::from)
-                .unwrap_or_default(),
-            is_waxed: nbt.get_bool("is_waxed").unwrap_or(false),
+            front: FaceData::from_nbt(nbt.get("front_text")),
+            back: FaceData::from_nbt(nbt.get("back_text")),
+            waxed: nbt.get_bool("is_waxed").unwrap_or(false),
+            allow_op_features: nbt.get_bool("allow_op_features").unwrap_or(false),
         }
     }
 
-    pub fn apply(self, front: &SignText, back: &SignText, waxed: &AtomicBool) {
-        let front_messages = self.front_text.get_messages(false);
-        let front_filtered = self.front_text.get_messages(true);
-        let back_messages = self.back_text.get_messages(false);
-        let back_filtered = self.back_text.get_messages(true);
+    fn validate(&self) -> Result<(), BlockEntityLoadError> {
+        if self.front.supported() && self.back.supported() {
+            Ok(())
+        } else {
+            Err(BlockEntityLoadError::Unsupported("sign component form"))
+        }
+    }
+}
 
-        // Use the same lock order as serialization. Retain every published text Arc
-        // and keep reloads and persisted/client snapshots from seeing half a reload.
-        let mut live_front = front
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut live_front_filtered = front
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut live_back = back
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut live_back_filtered = back
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *live_front = front_messages;
-        *live_front_filtered = front_filtered;
-        *live_back = back_messages;
-        *live_back_filtered = back_filtered;
-        front.set_color(self.front_text.get_color());
-        front.set_has_glowing_text(self.front_text.has_glowing_text());
-        back.set_color(self.back_text.get_color());
-        back.set_has_glowing_text(self.back_text.has_glowing_text());
-        waxed.store(self.is_waxed, Ordering::Relaxed);
+/// One gate covers both faces, wax and privileged actions. Inner message Arcs and
+/// editor ownership survive reloads. No external callback is made under this gate.
+pub(super) struct SignState {
+    gate: Mutex<()>,
+    front: SignText,
+    back: SignText,
+    waxed: AtomicBool,
+    allow_op_features: AtomicBool,
+    editor: Arc<Mutex<Option<uuid::Uuid>>>,
+    #[cfg(test)]
+    edit_hook: Mutex<Option<Box<dyn FnOnce() + Send + Sync>>>,
+}
+
+impl SignState {
+    pub(super) fn from_nbt(nbt: &NbtCompound) -> Self {
+        let data = SignData::from_nbt(nbt);
+        Self {
+            gate: Mutex::new(()),
+            front: SignText::from_data(data.front),
+            back: SignText::from_data(data.back),
+            waxed: AtomicBool::new(data.waxed),
+            allow_op_features: AtomicBool::new(data.allow_op_features),
+            editor: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            edit_hook: Mutex::new(None),
+        }
     }
 
-    pub fn write_nbt(front: &SignText, back: &SignText, waxed: &AtomicBool, nbt: &mut NbtCompound) {
-        let front_messages = front
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let front_filtered = front
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let back_messages = back
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let back_filtered = back
-            .filtered_messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        nbt.put("front_text", front.to_nbt(&front_messages, &front_filtered));
-        nbt.put("back_text", back.to_nbt(&back_messages, &back_filtered));
-        nbt.put_bool("is_waxed", waxed.load(Ordering::Relaxed));
+    pub(super) fn new(is_front: bool, messages: [Box<str>; 4]) -> Self {
+        let mut state = Self::from_nbt(&NbtCompound::new());
+        if is_front {
+            state.front = SignText::from_messages(messages);
+        } else {
+            state.back = SignText::from_messages(messages);
+        }
+        state
     }
+
+    fn apply_unlocked(&self, data: SignData) {
+        self.front.apply_unlocked(data.front);
+        self.back.apply_unlocked(data.back);
+        self.waxed.store(data.waxed, Ordering::Relaxed);
+        self.allow_op_features
+            .store(data.allow_op_features, Ordering::Relaxed);
+    }
+
+    fn write_unlocked(&self, nbt: &mut NbtCompound, for_client: bool) {
+        nbt.put(
+            "front_text",
+            self.front.snapshot_unlocked().to_nbt(for_client),
+        );
+        nbt.put(
+            "back_text",
+            self.back.snapshot_unlocked().to_nbt(for_client),
+        );
+        nbt.put_bool("is_waxed", self.waxed.load(Ordering::Relaxed));
+        if self.allow_op_features.load(Ordering::Relaxed) {
+            nbt.put_bool("allow_op_features", true);
+        } else {
+            nbt.child_tags.remove("allow_op_features");
+        }
+    }
+
+    fn full_nbt_unlocked(&self, id: &str, position: BlockPos) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_string());
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        self.write_unlocked(&mut nbt, false);
+        nbt
+    }
+
+    pub(super) fn load_nbt(&self, nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
+        let data = SignData::from_nbt(nbt);
+        data.validate()?;
+        let _gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.apply_unlocked(data);
+        Ok(())
+    }
+
+    pub(super) fn edit_nbt(
+        &self,
+        id: &str,
+        position: BlockPos,
+        edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
+        publish: &mut dyn FnMut(NbtCompound),
+    ) -> Result<bool, BlockEntityLoadError> {
+        let _gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut nbt = self.full_nbt_unlocked(id, position);
+        #[cfg(test)]
+        {
+            let hook = self
+                .edit_hook
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+            if let Some(hook) = hook {
+                hook();
+            }
+        }
+        if edit(&mut nbt) == NbtEditDecision::Abort {
+            return Ok(false);
+        }
+        let data = SignData::from_nbt(&nbt);
+        data.validate()?;
+        self.apply_unlocked(data);
+        publish(self.full_nbt_unlocked(id, position));
+        Ok(true)
+    }
+
+    pub(super) fn snapshot_nbt(
+        &self,
+        id: &str,
+        position: BlockPos,
+        publish: &mut dyn FnMut(NbtCompound),
+    ) {
+        let _gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        publish(self.full_nbt_unlocked(id, position));
+    }
+
+    pub(super) fn write_nbt(&self, nbt: &mut NbtCompound, for_client: bool) {
+        let _gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.write_unlocked(nbt, for_client);
+    }
+
+    fn item_editor_matches(&self, player: uuid::Uuid) -> bool {
+        self.editor
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_none_or(|editor| editor == player)
+    }
+
+    pub(super) fn tick(&self, world: &World, position: &BlockPos) {
+        let editor = *self
+            .editor
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(id) = editor {
+            // Official 26.3 playerIsTooFarAwayToEdit uses interaction range + 4.
+            let valid = world
+                .get_player_by_uuid(id)
+                .is_some_and(|player| player.can_interact_with_block_at(position, 4.0));
+            if !valid {
+                let mut current = self
+                    .editor
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if *current == Some(id) {
+                    *current = None;
+                }
+            }
+        }
+    }
+}
+
+/// Pure client projection for chunk packets, which start from pending disk NBT.
+/// Unsupported loaded lines retain their index and remain unchanged on disk.
+#[must_use]
+pub(crate) fn client_nbt_from_persisted(nbt: &NbtCompound) -> NbtCompound {
+    let data = SignData::from_nbt(nbt);
+    let mut client = nbt.clone();
+    client.put("front_text", data.front.to_nbt(true));
+    client.put("back_text", data.back.to_nbt(true));
+    client.put_bool("is_waxed", data.waxed);
+    if data.allow_op_features {
+        client.put_bool("allow_op_features", true);
+    } else {
+        client.child_tags.remove("allow_op_features");
+    }
+    client
 }
 
 impl BlockEntity for SignBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
-
     fn get_position(&self) -> BlockPos {
         self.position
     }
 
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
-    where
-        Self: Sized,
-    {
-        let data = SignData::from_nbt(nbt);
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self {
         Self {
             position,
-            front_text: data.front_text,
-            back_text: data.back_text,
-            is_waxed: AtomicBool::new(data.is_waxed),
-            currently_editing_player: Arc::new(Mutex::new(None)),
+            state: SignState::from_nbt(nbt),
         }
     }
-
     fn load_nbt(&self, nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
-        SignData::from_nbt(nbt).apply(&self.front_text, &self.back_text, &self.is_waxed);
-        Ok(())
+        self.state.load_nbt(nbt)
     }
-
+    fn edit_nbt(
+        &self,
+        edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
+        publish: &mut dyn FnMut(NbtCompound),
+    ) -> Result<bool, BlockEntityLoadError> {
+        self.state.edit_nbt(Self::ID, self.position, edit, publish)
+    }
+    fn snapshot_nbt(&self, publish: &mut dyn FnMut(NbtCompound)) {
+        self.state.snapshot_nbt(Self::ID, self.position, publish);
+    }
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        SignData::write_nbt(&self.front_text, &self.back_text, &self.is_waxed, nbt);
+        self.state.write_nbt(nbt, false);
     }
-
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.write_nbt(&mut nbt);
+        self.state.write_nbt(&mut nbt, true);
         Some(nbt)
     }
-
+    fn tick(&self, world: &Arc<World>) {
+        self.state.tick(world, &self.position);
+    }
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -379,35 +706,16 @@ impl BlockEntity for SignBlockEntity {
 
 impl SignBlockEntity {
     pub const ID: &'static str = "minecraft:sign";
-
     #[must_use]
     pub fn new(position: BlockPos, is_front: bool, messages: [Box<str>; 4]) -> Self {
         Self {
             position,
-            is_waxed: AtomicBool::new(false),
-            front_text: if is_front {
-                SignText::from_messages(messages.clone())
-            } else {
-                SignText::default()
-            },
-            back_text: if is_front {
-                SignText::default()
-            } else {
-                SignText::from_messages(messages)
-            },
-            currently_editing_player: Arc::new(Mutex::new(None)),
+            state: SignState::new(is_front, messages),
         }
     }
-
     #[must_use]
     pub fn empty(position: BlockPos) -> Self {
-        Self {
-            position,
-            is_waxed: AtomicBool::new(false),
-            front_text: SignText::default(),
-            back_text: SignText::default(),
-            currently_editing_player: Arc::new(Mutex::new(None)),
-        }
+        Self::new(position, true, SignText::empty_messages())
     }
 }
 
@@ -430,22 +738,20 @@ impl<'a> SignEntityRef<'a> {
             })
     }
 
+    const fn state(&self) -> &'a SignState {
+        match self {
+            Self::Sign(sign) => &sign.state,
+            Self::Hanging(sign) => &sign.state,
+        }
+    }
     #[must_use]
     pub const fn front_text(&self) -> &'a SignText {
-        match self {
-            Self::Sign(s) => &s.front_text,
-            Self::Hanging(s) => &s.front_text,
-        }
+        &self.state().front
     }
-
     #[must_use]
     pub const fn back_text(&self) -> &'a SignText {
-        match self {
-            Self::Sign(s) => &s.back_text,
-            Self::Hanging(s) => &s.back_text,
-        }
+        &self.state().back
     }
-
     #[must_use]
     pub const fn get_text(&self, is_front: bool) -> &'a SignText {
         if is_front {
@@ -454,27 +760,143 @@ impl<'a> SignEntityRef<'a> {
             self.back_text()
         }
     }
-
     #[must_use]
     pub fn is_waxed(&self) -> bool {
-        match self {
-            Self::Sign(s) => s.is_waxed.load(Ordering::Relaxed),
-            Self::Hanging(s) => s.is_waxed.load(Ordering::Relaxed),
-        }
+        self.state().waxed.load(Ordering::Relaxed)
     }
-
-    pub fn set_waxed(&self, waxed: bool) {
-        match self {
-            Self::Sign(s) => s.is_waxed.store(waxed, Ordering::Relaxed),
-            Self::Hanging(s) => s.is_waxed.store(waxed, Ordering::Relaxed),
-        }
-    }
-
     #[must_use]
     pub const fn currently_editing_player(&self) -> &'a Arc<Mutex<Option<uuid::Uuid>>> {
-        match self {
-            Self::Sign(s) => &s.currently_editing_player,
-            Self::Hanging(s) => &s.currently_editing_player,
+        &self.state().editor
+    }
+
+    /// Atomically recheck the designated editor/wax after the plugin event and
+    /// replace all raw/filtered lines together. Returns before any world update.
+    #[must_use]
+    pub fn update_player_text(
+        &self,
+        editor: uuid::Uuid,
+        is_front: bool,
+        should_filter: bool,
+        messages: [Box<str>; 4],
+    ) -> bool {
+        let state = self.state();
+        let _gate = state
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut current = state
+            .editor
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.waxed.load(Ordering::Relaxed) || *current != Some(editor) {
+            return false;
         }
+        let face = self.get_text(is_front);
+        let mut data = face.snapshot_unlocked();
+        if !data.supported() {
+            return false;
+        }
+        let previous = if should_filter {
+            &data.filtered_messages
+        } else {
+            &data.messages
+        };
+        data.messages =
+            std::array::from_fn(|index| previous[index].with_literal_text(messages[index].clone()));
+        data.filtered_messages = data.messages.clone();
+        face.apply_unlocked(data);
+        *current = None;
+        true
+    }
+
+    /// Item preconditions and persisted changes share the command mutation gate.
+    #[must_use]
+    pub fn apply_color(&self, player: uuid::Uuid, is_front: bool, color: DyeColor) -> bool {
+        let state = self.state();
+        let _gate = state
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let face = self.get_text(is_front);
+        if state.waxed.load(Ordering::Relaxed)
+            || !state.item_editor_matches(player)
+            || face.get_color() == color
+        {
+            return false;
+        }
+        face.color.store(color.id() as i8, Ordering::Relaxed);
+        true
+    }
+    #[must_use]
+    pub fn apply_glowing(&self, player: uuid::Uuid, is_front: bool, glowing: bool) -> bool {
+        let state = self.state();
+        let _gate = state
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let face = self.get_text(is_front);
+        if state.waxed.load(Ordering::Relaxed)
+            || !state.item_editor_matches(player)
+            || face.has_glowing_text() == glowing
+        {
+            return false;
+        }
+        face.has_glowing_text.store(glowing, Ordering::Relaxed);
+        true
+    }
+    #[must_use]
+    pub fn apply_wax(&self, player: uuid::Uuid) -> bool {
+        let state = self.state();
+        let _gate = state
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !state.item_editor_matches(player) {
+            return false;
+        }
+        !state.waxed.swap(true, Ordering::Relaxed)
+    }
+
+    /// Clone the complete dispatch input, then release every sign lock. A command
+    /// can now read or edit this exact sign without reentering a held message gate.
+    #[must_use]
+    pub fn click_commands(&self, is_front: bool, should_filter: bool) -> (bool, Vec<String>) {
+        let state = self.state();
+        let _gate = state
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let face = self.get_text(is_front);
+        let data = face.snapshot_unlocked();
+        let lines = if should_filter {
+            data.filtered_messages
+        } else {
+            data.messages
+        };
+        (
+            state.allow_op_features.load(Ordering::Relaxed),
+            lines.iter().filter_map(SignLine::run_command).collect(),
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn on_next_edit(&self, hook: impl FnOnce() + Send + Sync + 'static) {
+        *self
+            .state()
+            .edit_hook
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Box::new(hook));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn mutation_is_locked(&self) -> bool {
+        matches!(
+            self.state().gate.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        )
     }
 }
+
+#[cfg(test)]
+#[path = "sign_tests.rs"]
+mod tests;

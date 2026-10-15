@@ -17,8 +17,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_world::tick::TickPriority;
 use uuid::Uuid;
 
@@ -501,8 +499,13 @@ impl BlockBehaviour for SignBlock {
             is_facing_front_text(args.world, args.position, args.block, args.player);
         let text = sign_entity.get_text(is_front_text);
 
-        let executed_click_command =
-            execute_click_commands_if_present(args.world, args.player, args.position, text);
+        let executed_click_command = execute_click_commands_if_present(
+            args.world,
+            args.player,
+            args.position,
+            &sign_entity,
+            is_front_text,
+        );
 
         if sign_entity.is_waxed() {
             let is_hanging = args.block.name.contains("hanging");
@@ -574,8 +577,6 @@ impl BlockBehaviour for SignBlock {
         {
             let is_front_text =
                 is_facing_front_text(args.world, args.position, args.block, args.player);
-            let text = sign_entity.get_text(is_front_text);
-
             let result = if let Some(honeycomb_item) =
                 pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
             {
@@ -583,9 +584,9 @@ impl BlockBehaviour for SignBlock {
             } else if let Some(g_ink_sac_item) =
                 pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
             {
-                g_ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                g_ink_sac_item.apply_to_sign(&args, &block_entity, &sign_entity, is_front_text)
             } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
-                ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                ink_sac_item.apply_to_sign(&args, &block_entity, &sign_entity, is_front_text)
             } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
                 let color_name = args
                     .item_stack
@@ -593,13 +594,25 @@ impl BlockBehaviour for SignBlock {
                     .registry_key
                     .strip_suffix("_dye")
                     .unwrap_or(args.item_stack.item.registry_key);
-                dye.apply_to_sign(&args, &block_entity, text, color_name)
+                dye.apply_to_sign(
+                    &args,
+                    &block_entity,
+                    &sign_entity,
+                    is_front_text,
+                    color_name,
+                )
             } else {
                 BlockActionResult::PassToDefaultBlockAction
             };
 
             if result == BlockActionResult::Success {
-                execute_click_commands_if_present(args.world, args.player, args.position, text);
+                execute_click_commands_if_present(
+                    args.world,
+                    args.player,
+                    args.position,
+                    &sign_entity,
+                    is_front_text,
+                );
                 if pumpkin_item.as_any().is::<GlowingInkSacItem>() {
                     args.player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign,
@@ -636,90 +649,81 @@ fn other_player_is_editing_sign(
     world: &World,
     position: &BlockPos,
 ) -> bool {
-    let currently_editing = currently_editing_player
+    let currently_editing = *currently_editing_player
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(editing_player_id) = *currently_editing
+    if let Some(editing_player_id) = currently_editing
         && editing_player_id != player.gameprofile.id
-        && let Some(editing_player) = world.get_player_by_uuid(editing_player_id)
-        && editing_player.can_interact_with_block_at(position, 4.0)
     {
-        return true;
+        if world
+            .get_player_by_uuid(editing_player_id)
+            .is_some_and(|editing_player| editing_player.can_interact_with_block_at(position, 4.0))
+        {
+            return true;
+        }
+        let mut current = currently_editing_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *current == Some(editing_player_id) {
+            *current = None;
+        }
     }
     false
 }
 
-/// Checks whether all messages on the given sign text face are plain text or empty.
+/// All understood contents are plain text, even when they carry trusted styling.
 fn has_editable_text(text: &Text) -> bool {
-    let messages = text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    messages.iter().all(|msg| is_plain_or_empty_text(msg))
+    text.has_editable_text()
 }
 
-fn is_plain_or_empty_text(text: &str) -> bool {
-    if text.is_empty() {
-        return true;
-    }
-    if !text.starts_with('{') {
-        return true;
-    }
-    match serde_json::from_str::<TextComponent>(text) {
-        Ok(component) => {
-            component.0.style.click_event.is_none()
-                && component.0.style.hover_event.is_none()
-                && component.0.extra.is_empty()
-                && matches!(
-                    *component.0.content,
-                    pumpkin_util::text::TextContent::Text { .. }
-                )
-        }
-        Err(_) => true,
-    }
-}
-
-/// Executes any `run_command` click events defined in the sign's text messages.
+/// Executes sign actions only after its coherent action snapshot releases locks.
 fn execute_click_commands_if_present(
     world: &Arc<World>,
     player: &Arc<Player>,
     position: &BlockPos,
-    text: &Text,
+    sign: &SignEntityRef<'_>,
+    is_front: bool,
 ) -> bool {
     let Some(server) = world.server.upgrade() else {
         return false;
     };
+    let source = CommandSource::new(
+        CommandSender::Dummy,
+        world.clone(),
+        Some(player.clone()),
+        position.to_centered_f64(),
+        Vector2::new(0.0, 0.0),
+        player.gameprofile.name.clone(),
+        player.get_display_name(),
+        server.clone(),
+    );
+    let dispatcher = server.command_dispatcher.load();
+    execute_sign_click_commands(
+        sign,
+        is_front,
+        player.is_text_filtering_enabled(),
+        &source,
+        &dispatcher,
+    )
+}
 
-    let messages = text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    let mut has_run_command = false;
-    for msg in messages.iter() {
-        if msg.is_empty() || !msg.starts_with('{') {
-            continue;
-        }
-        if let Ok(component) = serde_json::from_str::<TextComponent>(msg)
-            && let Some(ClickEvent::RunCommand { command }) = &component.0.style.click_event
-        {
-            let source = CommandSource::new(
-                CommandSender::Dummy,
-                world.clone(),
-                Some(player.clone()),
-                position.to_centered_f64(),
-                Vector2::new(0.0, 0.0),
-                player.gameprofile.name.clone(),
-                player.get_display_name(),
-                server.clone(),
-            );
-            let command_str = command.strip_prefix('/').unwrap_or(command);
-            let dispatcher = server.command_dispatcher.load();
-            dispatcher.handle_command(&source, command_str);
-            has_run_command = true;
+/// Shared by real interaction and dispatcher regressions. Literal packet text
+/// never creates a click event, and disabled privileged actions never dispatch.
+pub(crate) fn execute_sign_click_commands(
+    sign: &SignEntityRef<'_>,
+    is_front: bool,
+    should_filter: bool,
+    source: &CommandSource,
+    dispatcher: &crate::command::dispatcher::CommandDispatcher,
+) -> bool {
+    let (allowed, commands) = sign.click_commands(is_front, should_filter);
+    let has_command = !commands.is_empty();
+    if allowed {
+        for command in commands {
+            dispatcher.handle_command(source, command.strip_prefix('/').unwrap_or(&command));
         }
     }
-    has_run_command
+    has_command
 }
 
 /// Returns the direction of the block supporting the wall sign.

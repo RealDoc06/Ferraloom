@@ -366,7 +366,7 @@ async fn destroy_deferred_removal_preserves_lever_notifications() {
 }
 
 async fn destroy_replacements_retain_new_entities_and_poi() {
-    use crate::block::entities::{block_entity_from_nbt, sign::SignBlockEntity};
+    use crate::block::entities::block_entity_from_nbt;
     use pumpkin_nbt::compound::NbtCompound;
 
     let (_folder, world) = world().await;
@@ -384,14 +384,17 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
             BlockFlags::NOTIFY_ALL,
         );
         let old_entity = world.get_block_entity(&pos).expect("source sign entity");
-        old_entity
-            .as_any()
-            .downcast_ref::<SignBlockEntity>()
-            .unwrap()
-            .front_text
-            .messages
-            .lock()
-            .unwrap()[0] = "old sign text".into();
+        let mut front = NbtCompound::new();
+        front.put_list(
+            "messages",
+            ["old sign text", "", "", ""]
+                .into_iter()
+                .map(|text| pumpkin_nbt::tag::NbtTag::String(text.into()))
+                .collect(),
+        );
+        let mut nbt = NbtCompound::new();
+        nbt.put_compound("front_text", front);
+        old_entity.load_nbt(&nbt).unwrap();
         assert_eq!(
             dispatcher
                 .execute_input(
@@ -407,15 +410,10 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
             assert!(entity.as_any().is::<ChestBlockEntity>());
             assert_eq!(world.get_block(&pos), &Block::CHEST);
         } else {
-            let sign = entity.as_any().downcast_ref::<SignBlockEntity>().unwrap();
-            assert!(
-                sign.front_text
-                    .messages
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .all(|line| line.is_empty())
-            );
+            let sign =
+                crate::block::entities::sign::SignEntityRef::from_block_entity(entity.as_ref())
+                    .unwrap();
+            assert!(!sign.front_text().has_message(false));
             assert_eq!(world.get_block(&pos), &Block::SPRUCE_SIGN);
         }
         // The new handle must remain available to both packet and save paths.
