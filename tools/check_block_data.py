@@ -775,8 +775,9 @@ def literal_command_case(server: LoggedServer, client: Client, name: str) -> dic
     expected = component_state(name, "literal-base")
     initial = fresh_rich(server, client, fixture, expected)
     editor = fixture_editor(server, client, fixture, 1)
-    messages = [LITERAL_COMMAND, "literal second", "literal third", "literal fourth"]
-    expected["front_text"].update(messages=messages, filtered_messages=messages.copy())
+    messages = [LITERAL_COMMAND, "§cRed§r §khidden§r §G stays §x stays", "§AUpper§r §7Gray§r", "literal fourth"]
+    received_messages = [LITERAL_COMMAND, "Red hidden §G stays §x stays", "Upper Gray", "literal fourth"]
+    expected["front_text"].update(messages=received_messages, filtered_messages=received_messages.copy())
     submitted = submit_rich(server, client, fixture, messages, expected, 1)
     typed = literal_identity(server, fixture, LITERAL_COMMAND)
     expected.update(is_waxed=True, allow_op_features=True)

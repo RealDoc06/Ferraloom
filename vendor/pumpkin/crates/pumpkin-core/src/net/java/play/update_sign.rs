@@ -1,6 +1,24 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+/// Match Java ChatFormatting.stripFormatting, including its ASCII case rules.
+fn strip_sign_formatting(line: &str) -> Box<str> {
+    let mut result = String::with_capacity(line.len());
+    let mut characters = line.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character == '\u{a7}'
+            && characters.peek().is_some_and(|code| {
+                code.is_ascii_hexdigit() || matches!(code.to_ascii_lowercase(), 'k'..='o' | 'r')
+            })
+        {
+            characters.next();
+        } else {
+            result.push(character);
+        }
+    }
+    result.into_boxed_str()
+}
+
 impl JavaClient {
     pub fn handle_sign_update(&self, player: &Player, sign_data: &SUpdateSign<'_>) {
         let world = player.get_entity().world.load_full();
@@ -24,18 +42,19 @@ impl JavaClient {
             return;
         }
 
-        let lines = vec![
-            sign_data.line_1.to_string(),
-            sign_data.line_2.to_string(),
-            sign_data.line_3.to_string(),
-            sign_data.line_4.to_string(),
-        ];
+        let new_messages = [
+            sign_data.line_1,
+            sign_data.line_2,
+            sign_data.line_3,
+            sign_data.line_4,
+        ]
+        .map(strip_sign_formatting);
 
         if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
             let mut event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
                 player_arc,
                 sign_data.location,
-                lines,
+                new_messages.iter().map(ToString::to_string).collect(),
             );
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
@@ -44,13 +63,6 @@ impl JavaClient {
                 return;
             }
         }
-
-        let new_messages = [
-            Box::<str>::from(sign_data.line_1),
-            Box::<str>::from(sign_data.line_2),
-            Box::<str>::from(sign_data.line_3),
-            Box::<str>::from(sign_data.line_4),
-        ];
 
         // Callbacks hold no sign locks. Revalidate editor and wax atomically;
         // Java expires distant editors during the sign tick, not this packet.
@@ -63,5 +75,24 @@ impl JavaClient {
             return;
         }
         world.update_block_entity(&block_entity);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_sign_formatting;
+
+    #[test]
+    fn submitted_sign_text_strips_only_recognized_legacy_formatting() {
+        for (input, expected) in [
+            ("§aGreen §Rreset §khidden§r", "Green reset hidden"),
+            ("§G §x §\n§", "§G §x §\n§"),
+            (
+                "§c{\"text\":\"literal §Acontent\"}",
+                "{\"text\":\"literal content\"}",
+            ),
+        ] {
+            assert_eq!(strip_sign_formatting(input).as_ref(), expected);
+        }
     }
 }
