@@ -618,29 +618,31 @@ def gate_removal(server: Server, block: str, destroy: bool) -> dict:
 
 def tripwire_removal(server: Server, remove_hook: bool) -> dict:
     """Require a connected line before removing string or one of its hooks."""
+    # Separate lines avoid item drops from earlier removals powering this fixture.
+    z = 4 if remove_hook else 1
     frozen = server.command("tick freeze")
     try:
         protocol.require(any(line.endswith("The game is frozen") for line in frozen), "Freeze was not acknowledged")
-        setup = ("fill -1 240 7 5 242 9 air", "fill -1 239 7 5 239 9 stone",
-                 "setblock 0 240 8 stone", "setblock 4 240 8 stone",
-                 "setblock 1 240 8 tripwire_hook[facing=east]", "setblock 3 240 8 tripwire_hook[facing=west]",
-                 "setblock 2 240 8 tripwire")
+        setup = (f"fill -1 240 {z - 1} 5 242 {z + 1} air", f"fill -1 239 {z - 1} 5 239 {z + 1} stone",
+                 f"setblock 0 240 {z} stone", f"setblock 4 240 {z} stone",
+                 f"setblock 1 240 {z} tripwire_hook[facing=east]", f"setblock 3 240 {z} tripwire_hook[facing=west]",
+                 f"setblock 2 240 {z} tripwire")
         for command in setup:
             server.command(command)
         step_ticks(server, 20)
-        precondition = "if block 1 240 8 tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 8 tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 8 tripwire[attached=true]"
+        precondition = f"if block 1 240 {z} tripwire_hook[facing=east,attached=true,powered=false] if block 3 240 {z} tripwire_hook[facing=west,attached=true,powered=false] if block 2 240 {z} tripwire[attached=true]"
         check_predicate(server, precondition)
         removed_x = 1 if remove_hook else 2
-        command = f"setblock {removed_x} 240 8 air"
+        command = f"setblock {removed_x} 240 {z} air"
         server.command(f"execute store result score TripwireRemoved parity run {command}")
         removal_predicate = None
         if not remove_hook:
-            removal_predicate = "if block 1 240 8 tripwire_hook[attached=true,powered=true] if block 3 240 8 tripwire_hook[attached=true,powered=true]"
+            removal_predicate = f"if block 1 240 {z} tripwire_hook[attached=true,powered=true] if block 3 240 {z} tripwire_hook[attached=true,powered=true]"
             check_predicate(server, removal_predicate)
         step_ticks(server, 20)
-        predicate = f"if score TripwireRemoved parity matches 1 if block {removed_x} 240 8 air if block 3 240 8 tripwire_hook[attached=false,powered=false]"
+        predicate = f"if score TripwireRemoved parity matches 1 if block {removed_x} 240 {z} air if block 3 240 {z} tripwire_hook[attached=false,powered=false]"
         if not remove_hook:
-            predicate += " if block 1 240 8 tripwire_hook[attached=false,powered=false]"
+            predicate += f" if block 1 240 {z} tripwire_hook[attached=false,powered=false]"
         check_predicate(server, predicate)
         return {"setup": list(setup), "precondition": precondition, "command": command, "predicate": predicate,
                 "removal_predicate": removal_predicate, "setup_ticks": 20, "after_removal_ticks": 20}
