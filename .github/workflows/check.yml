@@ -24,7 +24,7 @@ jobs:
       - run: cargo test --locked
         env:
           PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar
-      - run: cargo test --locked -p pumpkin-command --lib argument_types::block
+      - run: cargo test --locked -p pumpkin-command --lib argument_types
       - run: cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
         env:
           PUMPKIN_MINECRAFT_SERVER_JAR: ${{ github.workspace }}/.cache/vanilla/26.3/server.jar

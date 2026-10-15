@@ -118,8 +118,9 @@ SCENARIOS = [
     Scenario("data.modify_merge_recursive", ("players.commands",),
              ('data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}',
               'data merge storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,replace:0},list:[1],scalar:0,object:{old:1}}}',
-              'execute store result score MergeRecursive parity run data modify storage ferraloom:merge_recursive object merge from storage ferraloom:merge_source parts[]'),
-             'if score MergeRecursive parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}'),
+              'execute store result score MergeRecursive parity run data modify storage ferraloom:merge_recursive object merge from storage ferraloom:merge_source parts[]',
+              'execute store result score MergeListLength parity run data get storage ferraloom:merge_recursive object.list'),
+             'if score MergeRecursive parity matches 1 if score MergeListLength parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}'),
     Scenario("data.modify_merge_counts", ("players.commands",),
              ('data merge storage ferraloom:merge_counts_source {parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}',
               'data merge storage ferraloom:merge_counts {rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},{kind:hit,payload:{keep:2,nested:{value:0}}},{kind:skip,payload:{keep:3,nested:{value:0}}}]}',
@@ -137,14 +138,25 @@ SCENARIOS = [
     Scenario("data.modify_merge_partial_failure", ("players.commands",),
              ('data merge storage ferraloom:merge_partial {rows:[{value:{keep:1}},{value:7},{}],keep:9}',
               'execute store success score MergePartial parity run data modify storage ferraloom:merge_partial rows[].value merge value {added:2}'),
-             'if score MergePartial parity matches 0 if data storage ferraloom:merge_partial {rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}',
+             'if score MergePartial parity matches 0 if data storage ferraloom:merge_partial rows[2].value if data storage ferraloom:merge_partial {rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}',
              expected_last_feedback="Expected an object: got 7"),
+    Scenario("data.modify_merge_primitive_parent", ("players.commands",),
+             ('data merge storage ferraloom:merge_array {numbers:[I;3,4]}',
+              'execute store success score MergeArrayParent parity run data modify storage ferraloom:merge_array numbers[].child merge value {added:2}'),
+             'if score MergeArrayParent parity matches 0 if data storage ferraloom:merge_array {numbers:[I;3,4]}',
+             expected_last_feedback="Nothing changed. The specified properties already have these values"),
     Scenario("data.storage_namespaces", ("players.commands",),
              ('data merge storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1}',
               'data merge storage ferraloom_other:path/probe {text:"other namespace",phase:1}',
+              'data merge storage .:dot {answer:73}',
               'data modify storage ferraloom:removed value set value 9',
               'execute store result score StorageRemoved parity run data remove storage ferraloom:removed value'),
-             'if score StorageRemoved parity matches 1 if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1} if data storage ferraloom_other:path/probe {text:"other namespace",phase:1} unless data storage ferraloom:removed value'),
+             'if score StorageRemoved parity matches 1 if data storage ferraloom:persist {nested:{answer:42},values:[I;3,4],phase:1} if data storage ferraloom_other:path/probe {text:"other namespace",phase:1} if data storage .:dot {answer:73} unless data storage ferraloom:removed value'),
+    Scenario("data.storage_namespace_rejection", ("players.commands",),
+             ('scoreboard players set NamespaceEscape parity 99',
+              'execute store success score NamespaceEscape parity run data modify storage ..:unsafe value set value 1'),
+             'if score NamespaceEscape parity matches 99 if data storage .:dot {answer:73} if data storage ferraloom:persist {nested:{answer:42},phase:1}',
+             expected_last_feedback="Invalid ID"),
     Scenario("data.modify_providers", ("players.commands",),
              ("setblock 4 230 4 chest", "setblock 6 229 6 stone",
               'summon pig 6 230 6 {Tags:["ferraloom_data_source"],NoAI:1b,NoGravity:1b,Health:7.0f}',
@@ -473,9 +485,11 @@ def run(server: Server, quick: bool) -> list[dict]:
             server.command("save-off")
             unflushed = Scenario("persistence.unflushed_write", ("persistence.chunk_data",), ("setblock 13 200 14 emerald_block",), "if block 13 200 14 emerald_block")
             results.append(recorded(unflushed.id, unflushed.features, lambda: run_scenario(server, unflushed)))
-            results.append(recorded("persistence.command_storage_manual", ("persistence.map_data",), lambda: command_storage_state(server, 1)))
             server.command("data modify storage ferraloom:persist phase set value 2")
             server.command("data modify storage ferraloom_other:path/probe phase set value 2")
+            results.append(recorded("persistence.command_storage_manual", ("persistence.map_data",), lambda: command_storage_state(server, 2)))
+            server.command("data modify storage ferraloom:persist phase set value 3")
+            server.command("data modify storage ferraloom_other:path/probe phase set value 3")
             exit_code = server.stop()
             results.append(recorded("lifecycle.clean_shutdown", ("lifecycle.shutdown",), lambda: check_exit(exit_code, server.forced_stop)))
             server.start()
@@ -490,9 +504,9 @@ def run(server: Server, quick: bool) -> list[dict]:
             results.append(recorded("persistence.entity_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 7)))
             results.append(recorded("persistence.scoreboard_team_restart", ("persistence.scoreboard_data",), lambda: check_team_state(server)))
             results.append(recorded("persistence.scoreboard_display_restart", ("persistence.scoreboard_data",), lambda: check_display_state(server)))
-            results.append(recorded("persistence.command_storage_restart", ("persistence.map_data",), lambda: command_storage_state(server, 2)))
-            server.command("data modify storage ferraloom:persist phase set value 3")
-            server.command("data modify storage ferraloom_other:path/probe phase set value 3")
+            results.append(recorded("persistence.command_storage_restart", ("persistence.map_data",), lambda: command_storage_state(server, 3)))
+            server.command("data modify storage ferraloom:persist phase set value 4")
+            server.command("data modify storage ferraloom_other:path/probe phase set value 4")
             entity_signal_write = Scenario("persistence.entity_signal_write", ("persistence.entity_data",), ("damage @e[type=pig,tag=ferraloom_saved,limit=1] 2 generic",), 'if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]')
             results.append(recorded(entity_signal_write.id, entity_signal_write.features, lambda: run_scenario(server, entity_signal_write)))
             signal_write = Scenario("persistence.signal_write", ("persistence.chunk_data",), ("setblock 12 200 14 lapis_block",), "if block 12 200 14 lapis_block")
@@ -506,7 +520,7 @@ def run(server: Server, quick: bool) -> list[dict]:
                 wait_loaded(server)
                 results.append(recorded(signal_read.id, signal_read.features, lambda: run_scenario(server, signal_read)))
                 results.append(recorded("persistence.entity_signal_restart", ("persistence.entity_data",), lambda: wait_saved_entity(server, 5)))
-                results.append(recorded("persistence.command_storage_signal_restart", ("persistence.map_data",), lambda: command_storage_state(server, 3)))
+                results.append(recorded("persistence.command_storage_signal_restart", ("persistence.map_data",), lambda: command_storage_state(server, 4)))
             else:
                 results.append({"id": signal_read.id, "features": list(signal_read.features), "result": "skipped",
                                 "reason": "SIGTERM did not complete cleanly; no shutdown durability claim"})
@@ -637,12 +651,14 @@ def command_storage_state(server: Server, phase: int) -> dict:
     """Check live namespaced contents and vanilla-format files after an explicit save."""
     predicate = (f'if data storage ferraloom:persist {{nested:{{answer:42}},values:[I;3,4],phase:{phase}}} '
                  f'if data storage ferraloom_other:path/probe {{text:"other namespace",phase:{phase}}} '
+                 'if data storage .:dot {answer:73} '
                  'unless data storage ferraloom:removed value')
     check_predicate(server, predicate)
     server.save_flush()
     namespaces = {}
     for namespace, key, expected in (("ferraloom", "persist", {"nested": {"answer": 42}, "values": (3, 4), "phase": phase}),
-                                     ("ferraloom_other", "path/probe", {"text": "other namespace", "phase": phase})):
+                                     ("ferraloom_other", "path/probe", {"text": "other namespace", "phase": phase}),
+                                     (".", "dot", {"answer": 73})):
         path = server.directory / "world/data" / namespace / "command_storage.dat"
         saved = decode_nbt(gzip.decompress(path.read_bytes()))
         protocol.require(saved.get("DataVersion") == 5023, f"Wrong command storage data version: {saved}")
@@ -797,7 +813,7 @@ def cross_world(source: str, destination: str, run_dir: Path, args: argparse.Nam
             wait_saved_entity(server, 5)
             check_team_state(server)
             check_display_state(server)
-            command_storage_state(server, 3)
+            command_storage_state(server, 4)
             code = server.stop()
             check_exit(code, server.forced_stop)
             errors = [line for line in server.log_path.read_text().splitlines()

@@ -3230,7 +3230,9 @@
         "data modify merge counts changed compounds and rejects unchanged results",
         "data modify merge validates every source before creating targets",
         "data modify merge preserves vanilla partial storage changes on failure",
-        "execute data conditions distinguish present and absent paths for all providers"
+        "execute data conditions distinguish present and absent paths for all providers",
+        "data modify merge through a primitive array parent reports unchanged",
+        "invalid storage namespace fails parsing without changing a stored score"
       ],
       "rust_status": "partial",
       "evidence": [

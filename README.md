@@ -53,7 +53,7 @@ The [feature checklist](docs/features.md) contains all 200 feature families with
 cargo fmt --all -- --check
 cargo fmt --manifest-path vendor/pumpkin/Cargo.toml --all -- --check
 cargo test --locked
-cargo test --locked -p pumpkin-command --lib argument_types::block
+cargo test --locked -p pumpkin-command --lib argument_types
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib --target-dir target -- --test-threads=2
 cargo clippy --locked --all-targets -- -D warnings

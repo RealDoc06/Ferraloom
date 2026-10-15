@@ -358,6 +358,14 @@
     "command.data_conditions": {
       "feature_id": "players.commands",
       "scenario": "execute data conditions distinguish present and absent paths for all providers"
+    },
+    "data.modify_merge_primitive_parent": {
+      "feature_id": "players.commands",
+      "scenario": "data modify merge through a primitive array parent reports unchanged"
+    },
+    "data.storage_namespace_rejection": {
+      "feature_id": "players.commands",
+      "scenario": "invalid storage namespace fails parsing without changing a stored score"
     }
   }
 }
