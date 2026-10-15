@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-15T15:03:30.842775+00:00",
+  "result": "passed",
+  "target_version": "26.3",
+  "protocol": 777,
+  "scope": "One default-LZ4 Rust overworld chunk and marker loaded by vanilla, without conversion. No other storage, entities, dimensions, crash durability or full parity claim.",
+  "fixture": "$REPO/.cache/runs/default-storage-9z8r_rsk",
+  "transport": "isolated offline 127.0.0.1",
+  "workers": 2,
+  "tool_sha256": "aae8e58481aef78ee1b410e105f4699c5ce8950989fad75308c27ad6a4cbcbfa",
+  "observations": {
+    "rust_marker": "if block 3 200 11 amethyst_block",
+    "rust_shutdown": {
+      "exit_code": 0,
+      "forced": false
+    },
+    "source_compression_byte": 4,
+    "source_chunk_data_version": 5023,
+    "source_level_data_version": 5023,
+    "source_region_sha256": "26471821d9ce616b0d39cc65a77515504581463b9b9f57237f6864f980a52b2f",
+    "copied_region_sha256": "26471821d9ce616b0d39cc65a77515504581463b9b9f57237f6864f980a52b2f",
+    "vanilla_marker": "if block 3 200 11 amethyst_block",
+    "vanilla_shutdown": {
+      "exit_code": 0,
+      "forced": false
+    },
+    "destination_load_save_errors": 0,
+    "destination_level_data_version": 5023
+  },
+  "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+  "server_sha256": "d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64",
+  "rust_binary_sha256": "4782ff8aa3e1bad398f049b82a6786f28cfc04a2d4a4b8211cef8491ccfdb0c4",
+  "rust_config_sha256": "f799b96ed5cdbfa69b92169d0ace96448779013e572a1664bf4edd23acefeeba",
+  "lz4_decoder": {
+    "coordinate": "at.yawk.lz4:lz4-java:1.10.1",
+    "sha256": "a58a84c4271e50df4c96ed916ccb7e48a869f8ed9cdcda1ad5d3d4c33b0214a3"
+  },
+  "duration_seconds": 22.891
+}

@@ -185,7 +185,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `players.swimming` | Match movement modes, collision size and stamina interactions | 0/0/0 | 0/0/0 | unverified |
 | `players.oxygen` | Match air supply, powder snow and environmental damage | 0/0/0 | 0/0/0 | unverified |
 | `players.interaction` | Match spawn protection, adventure restrictions and operator bypass | 0/0/0 | 0/0/0 | unverified |
-| `players.commands` | Match complete target command tree and execution semantics | 0/0/0 | 0/0/0 | unverified |
+| `players.commands` | Match complete target command tree and execution semantics | 6/0/0 | 6/0/0 | partial |
 | `players.command_context` | Match selectors, positions, rotations, dimensions and result storage | 0/0/0 | 0/0/0 | unverified |
 | `players.permissions` | Match permission levels and operator configuration | 0/0/0 | 0/0/0 | unverified |
 | `players.gamerules` | Match all target gamerules, types, defaults and effects | 0/0/0 | 0/0/0 | unverified |
