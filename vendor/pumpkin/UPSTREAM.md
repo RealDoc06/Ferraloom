@@ -14,4 +14,6 @@ Local patches cover status connection handling, command block states and predica
 
 Additional patches persist a shared server scoreboard, snapshot player watch transitions before releasing generation tickets, and cancel abandoned postprocessing requests through owned activation demands. Scheduled block/fluid ticks use their own eligibility range. Server autosaves serialize complete snapshots and flushes, including during simulation freeze. The ordinary unload path still needs complete save-off handling.
 
+Durable NBT writes propagate encoding failures and replace files through synchronized staging files, preserving previous player, chunk, entity and metadata saves on failure. Block simulation owns terrain leases and watcher references until callbacks finish and block entities are snapshotted; block-entity migration and ticking use the block range with loaded entities. Player transfers and respawns share a transition gate, and spectators can receive existing ready chunks without requesting view generation. Legacy scoreboard paths are read before starting an empty board, and new saves use the current namespaced path. Command-block result counts reset for each execution.
+
 Upstream license and asset notices are retained. Ferraloom's differential suite records behavior changes against the official server. See the Git history for local patches.

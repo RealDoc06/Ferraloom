@@ -137,9 +137,15 @@ evidence.
   Ferraloom now schedules server-wide autosaves outside the frozen simulation
   branch; its ordinary terrain unload path still needs the save-off gate.
 - The foundation's `Nbt::write_to_writer` drops serialization failures before
-  writing its byte buffer. The scoreboard writer instead uses the fallible
-  Java NBT serializer directly, so an oversized modified-UTF string cannot
-  replace an existing valid save with a truncated document.
+  writing its byte buffer. Durable writers now use a shared fallible Java NBT
+  serializer and synchronized atomic replacement. Oversized modified-UTF keys
+  or values return errors before replacing existing saves. Separate tests
+  cover player files, chunk/entity caches, metadata, POI and PUMP containers.
+- `BaseCommandBlock.performCommand` resets `successCount` before executing a
+  command, including attempts that fail. Ferraloom now resets that count too.
+  Last-execution tracking and the complete command-block lifecycle remain
+  separate compatibility work; the scheduled-callback test advances game time
+  between executions.
 
 The original underground sample differed in three unsupported glow-lichen
 states and four gold-ore cells. Deferred postprocessing removed the lichen
