@@ -525,6 +525,7 @@ mod tests {
         }
         assert!(chunk.pending_block_entities.lock().unwrap().is_empty());
         assert!(world.block_entities.contains_key(&original));
+        drop(chest);
         drop(held);
         assert!(moving.await.unwrap());
         assert!(!world.level.is_chunk_watched(&original));

@@ -92,6 +92,7 @@ pub struct Level {
     pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
     pub(crate) chunk_activation: crate::chunk_system::activation::ChunkActivation,
     pub(crate) chunk_lifecycle: Arc<std::sync::RwLock<()>>,
+    pub chunk_unload: Arc<crate::chunk_system::unload::ChunkUnloadCoordinator>,
     pub chunk_activation_changed: Arc<tokio::sync::Notify>,
     pub(crate) chunk_activation_revision: Arc<AtomicU64>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
@@ -115,6 +116,7 @@ pub struct Level {
 
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
+    runtime: tokio::runtime::Handle,
     pub chunk_system_tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub cancel_token: CancellationToken,
@@ -293,6 +295,7 @@ impl Level {
             loaded_chunk_changes: Arc::new(SegQueue::new()),
             chunk_activation: crate::chunk_system::activation::ChunkActivation::default(),
             chunk_lifecycle: Arc::new(std::sync::RwLock::new(())),
+            chunk_unload: Arc::new(crate::chunk_system::unload::ChunkUnloadCoordinator::default()),
             chunk_activation_changed: Arc::new(tokio::sync::Notify::new()),
             chunk_activation_revision: Arc::new(AtomicU64::new(0)),
             loaded_entity_chunks: Arc::new(DashMap::new()),
@@ -305,6 +308,7 @@ impl Level {
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
+            runtime: tokio::runtime::Handle::current(),
             chunk_system_tasks: TaskTracker::new(),
             cancel_token: CancellationToken::new(),
             shut_down_chunk_system: AtomicBool::new(false),
@@ -370,7 +374,7 @@ impl Level {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.tasks.spawn(task)
+        self.tasks.spawn_on(task, &self.runtime)
     }
 
     pub async fn shutdown(&self) -> Result<(), String> {

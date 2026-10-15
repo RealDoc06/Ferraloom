@@ -83,6 +83,10 @@ pub trait WorldPortalExt: Send + Sync {
     );
 
     fn spawn_structure_entities(&self, _entities: Vec<NbtCompound>) {}
+
+    /// Schedule World-owned live state snapshots after the terrain scheduler
+    /// releases its publication locks. Plain Levels have no live block entities.
+    fn request_chunk_unload_snapshots(&self) {}
 }
 
 pub trait BlockAccessor: Send + Sync {

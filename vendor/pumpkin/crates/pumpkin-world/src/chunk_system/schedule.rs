@@ -58,6 +58,7 @@ pub struct GenerationSchedule {
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
     chunk_lifecycle: Arc<std::sync::RwLock<()>>,
+    chunk_unload: Arc<super::unload::ChunkUnloadCoordinator>,
     chunk_activation_changed: Arc<tokio::sync::Notify>,
     chunk_activation_revision: Arc<std::sync::atomic::AtomicU64>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
@@ -133,6 +134,8 @@ impl GenerationSchedule {
             .chunk_lifecycle
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut unload = self.chunk_unload.access();
+        unload.published(pos);
         let previous = self.public_chunk_map.insert(pos, chunk.clone());
         self.chunk_activation_revision
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -226,6 +229,7 @@ impl GenerationSchedule {
                     public_chunk_map: level_sched.loaded_chunks.clone(),
                     loaded_chunk_changes: level_sched.loaded_chunk_changes.clone(),
                     chunk_lifecycle: level_sched.chunk_lifecycle.clone(),
+                    chunk_unload: level_sched.chunk_unload.clone(),
                     chunk_activation_changed: level_sched.chunk_activation_changed.clone(),
                     chunk_activation_revision: level_sched.chunk_activation_revision.clone(),
                     unload_chunks: HashSetType::default(),
@@ -913,13 +917,19 @@ impl GenerationSchedule {
     }
 
     fn process_unload_queue(&mut self, level: &Level) {
-        if self.unload_chunks.is_empty() {
+        // Vanilla save-off keeps ordinary terrain resident. Entity-manager
+        // cleanup is independent; shutdown still saves and releases terrain.
+        if self.unload_chunks.is_empty()
+            || (!level.save_enabled.load(Relaxed) && !level.shut_down_chunk_system.load(Relaxed))
+        {
             return;
         }
 
         let mut unload_chunks = HashSetType::default();
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
+        let coordinator = self.chunk_unload.clone();
+        let mut snapshots_requested = false;
         for pos in unload_chunks {
             let lifecycle = level
                 .chunk_lifecycle
@@ -954,6 +964,17 @@ impl GenerationSchedule {
                 continue;
             }
 
+            let mut unload = coordinator.access();
+            if holder.public
+                && let Some(Chunk::Level(chunk)) = &holder.chunk
+                && !unload.prepare_or_defer(pos, chunk)
+            {
+                self.chunk_map.insert(pos, holder);
+                self.unload_chunks.insert(pos);
+                snapshots_requested = true;
+                continue;
+            }
+
             for task in holder.tasks {
                 if !task.is_null() {
                     let is_in_flight = self.graph.nodes.get(task).is_some_and(|n| n.in_flight);
@@ -971,6 +992,8 @@ impl GenerationSchedule {
                 self.unpublish_chunk_locked(pos);
                 holder.public = false;
             }
+            unload.finished(pos);
+            drop(unload);
 
             drop(loading);
             drop(lifecycle);
@@ -988,6 +1011,13 @@ impl GenerationSchedule {
                         }
                     }
                 }
+            }
+        }
+        if snapshots_requested {
+            // The World may read terrain while serializing a BE. Never invoke
+            // it while holding publication/ticket/coordinator locks.
+            if let Some(world) = level.world_portal.load().as_ref() {
+                world.request_chunk_unload_snapshots();
             }
         }
         if chunks.is_empty() {

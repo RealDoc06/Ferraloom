@@ -35,6 +35,8 @@ pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+#[cfg(test)]
+mod unload_tests;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
@@ -153,6 +155,7 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::level::SyncChunk;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
@@ -375,6 +378,7 @@ pub struct World {
     block_simulation_changed: tokio::sync::Notify,
     simulation_callbacks: std::sync::atomic::AtomicUsize,
     simulation_callbacks_finished: tokio::sync::Notify,
+    unload_snapshot_worker: std::sync::atomic::AtomicBool,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
@@ -411,6 +415,28 @@ impl Drop for SimulationCallbacks<'_> {
         if self.0.simulation_callbacks.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.0.simulation_callbacks_finished.notify_waiters();
         }
+    }
+}
+
+struct BlockSimulationReconcile(Arc<World>);
+
+impl Drop for BlockSimulationReconcile {
+    fn drop(&mut self) {
+        self.0
+            .active_chunk_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .reconciling_block_chunks = false;
+    }
+}
+
+struct UnloadSnapshotWorker(Arc<World>);
+
+impl Drop for UnloadSnapshotWorker {
+    fn drop(&mut self) {
+        self.0
+            .unload_snapshot_worker
+            .store(false, Ordering::Release);
     }
 }
 
@@ -539,6 +565,7 @@ impl World {
             block_simulation_changed: tokio::sync::Notify::new(),
             simulation_callbacks: std::sync::atomic::AtomicUsize::new(0),
             simulation_callbacks_finished: tokio::sync::Notify::new(),
+            unload_snapshot_worker: std::sync::atomic::AtomicBool::new(false),
             server,
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
@@ -638,7 +665,10 @@ impl World {
     /// One worker owns simulation watches and entity loading. Desired-set changes
     /// interrupt its receiver, so moving players cannot queue unload tasks behind
     /// old entity reads. Terrain tickets are acquired synchronously by the caller.
-    async fn reconcile_block_simulation_chunks(self: Arc<Self>) {
+    async fn reconcile_block_simulation_chunks(
+        self: Arc<Self>,
+        _running: BlockSimulationReconcile,
+    ) {
         use pumpkin_world::chunk_system::ChunkLoading;
 
         loop {
@@ -702,9 +732,8 @@ impl World {
             if !abandoned.is_empty() {
                 let _lifecycle = self.entity_lifecycle.lock().await;
                 for pos in &abandoned {
-                    self.save_block_entities(*pos);
                     if !self.level.is_chunk_watched(pos) {
-                        self.block_entities.remove(pos);
+                        self.retire_block_entities(*pos, None);
                     }
                 }
             }
@@ -769,14 +798,14 @@ impl World {
                 }
             }
 
-            let mut tracker = self
+            let tracker = self
                 .active_chunk_tracker
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if tracker.requested_block_chunks == tracker.watched_block_chunks
                 && tracker.requested_block_chunks == tracker.owned_block_chunks
             {
-                tracker.reconciling_block_chunks = false;
+                drop(tracker);
                 return;
             }
         }
@@ -788,15 +817,15 @@ impl World {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         let players = self.players.load();
+        let mut tracker = self
+            .active_chunk_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let forced_chunks = self
             .forced_chunks
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let mut tracker = self
-            .active_chunk_tracker
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut requested = std::mem::take(&mut tracker.requested_chunks);
         let mut newly_active = Vec::new();
         let mut current_players = FxHashSet::default();
@@ -890,10 +919,11 @@ impl World {
 
         if reconcile {
             let world = self.clone();
+            let running = BlockSimulationReconcile(self.clone());
             if let Some(server) = self.server.upgrade() {
-                server.spawn_task(world.reconcile_block_simulation_chunks());
+                server.spawn_task(world.reconcile_block_simulation_chunks(running));
             } else {
-                tokio::spawn(world.reconcile_block_simulation_chunks());
+                tokio::spawn(world.reconcile_block_simulation_chunks(running));
             }
         }
 
@@ -1120,6 +1150,98 @@ impl World {
             }
             self.add_block_entity_nbt(block_entity.get_position(), &nbt);
         }
+    }
+
+    /// The coordinator fences new handles; the map write guard fences tick-list
+    /// clones. Uniqueness also excludes Weak upgrades and inventory handles, so
+    /// an in-flight command cannot mutate a detached BE after its final snapshot.
+    /// The caller holds entity_lifecycle. No publication write lock is held here.
+    fn retire_block_entities(&self, pos: Vector2<i32>, requested: Option<&SyncChunk>) -> bool {
+        let mut unload = self.level.chunk_unload.access();
+        let current = self
+            .level
+            .loaded_chunks
+            .get(&pos)
+            .map(|chunk| chunk.value().clone());
+        let chunk = if let Some(requested) = requested {
+            if !unload.is_requested(pos, requested)
+                || current
+                    .as_ref()
+                    .is_some_and(|current| !Arc::ptr_eq(current, requested))
+            {
+                return false;
+            }
+            requested.clone()
+        } else if let Some(current) = current {
+            current
+        } else {
+            // Keep the live map recoverable if an unrelated publication changed.
+            return false;
+        };
+        let mut entities = match self.block_entities.entry(pos) {
+            dashmap::mapref::entry::Entry::Occupied(entities) => entities,
+            dashmap::mapref::entry::Entry::Vacant(_) => {
+                unload.mark_prepared(pos, &chunk);
+                return true;
+            }
+        };
+        let unique = entities
+            .get_mut()
+            .values_mut()
+            .all(|entity| Arc::get_mut(entity).is_some());
+        if !unique {
+            // The ordinary watch cleanup already took a best-effort snapshot.
+            // Keep this map for the final unload instead of waiting on BE locks
+            // while a live caller may itself be acquiring the coordinator.
+            if requested.is_none() {
+                unload.mark_live(pos);
+            }
+            return false;
+        }
+        for entity in entities.get().values() {
+            let position = entity.get_position();
+            let mut nbt = NbtCompound::new();
+            entity.write_internal(&mut nbt);
+            if let Some(custom_data) = self.custom_block_entity_data.get(&position)
+                && !custom_data.is_empty()
+            {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            }
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(position, nbt);
+            chunk.mark_dirty(true);
+        }
+        // Keep the shard write lock through removal: tick vectors clone handles
+        // directly from this map without going through get_block_entity.
+        entities.remove();
+        unload.mark_prepared(pos, &chunk);
+        true
+    }
+
+    fn request_chunk_unload_snapshots(self: &Arc<Self>) {
+        if self.unload_snapshot_worker.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let world = self.clone();
+        let running = UnloadSnapshotWorker(self.clone());
+        self.level.spawn_task(async move {
+            let _running = running;
+            let _lifecycle = world.entity_lifecycle.lock().await;
+            let requests = world.level.chunk_unload.access().requests();
+            let mut prepared = false;
+            for (pos, chunk) in requests {
+                prepared |= world.retire_block_entities(pos, Some(&chunk));
+            }
+            // Busy handles stay requested for the next ordinary unload pass.
+            // Only successful snapshots wake the scheduler; retries never spin.
+            if prepared {
+                world.level.should_unload.store(true, Ordering::Release);
+                world.level.level_channel.notify();
+            }
+        });
     }
 
     /// Broadcasts an entity status update / event to all players tracking the specified entity,
@@ -4359,7 +4481,7 @@ impl World {
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let _transfer = player.world_transfer.lock().await;
-        if player.client.closed() {
+        if player.client.closed() || (!alive && player.living_entity.health.load() > 0.0) {
             return;
         }
         let current_world = player.world();
@@ -5488,7 +5610,7 @@ impl World {
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
         for chunk_pos in &chunks_set {
-            self.block_entities.remove(chunk_pos);
+            self.retire_block_entities(*chunk_pos, None);
         }
         Ok(())
     }
@@ -6678,25 +6800,23 @@ impl World {
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
+        let mut unload = self.level.chunk_unload.access();
+        let chunk = self.level.loaded_chunks.get(&chunk_pos)?.value().clone();
         if let Some(entity) = self
             .block_entities
             .get(&chunk_pos)
             .and_then(|m| m.get(block_pos).cloned())
         {
+            unload.mark_live(chunk_pos);
             return Some(entity);
         }
 
-        let nbt = self
-            .level
-            .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
-                    .pending_block_entities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get(block_pos)
-                    .cloned()
-            })
-            .flatten()?;
+        let nbt = chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(block_pos)
+            .cloned()?;
         if let Some(custom_data) = nbt
             .get_compound("PumpkinCustomData")
             .or_else(|| nbt.get_compound("BukkitValues"))
@@ -6709,6 +6829,7 @@ impl World {
             .entry(chunk_pos)
             .or_default()
             .insert(*block_pos, entity.clone());
+        unload.mark_live(chunk_pos);
         Some(entity)
     }
 
@@ -6788,6 +6909,11 @@ impl World {
             );
         }
 
+        let mut unload = self.level.chunk_unload.access();
+        if !self.level.is_chunk_loaded(&chunk_pos) {
+            return;
+        }
+        unload.mark_live(chunk_pos);
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -6799,7 +6925,7 @@ impl World {
             full_nbt.put_int("x", block_pos.0.x);
             full_nbt.put_int("y", block_pos.0.y);
             full_nbt.put_int("z", block_pos.0.z);
-            self.add_block_entity_nbt(block_pos, &full_nbt);
+            self.write_pending_block_entity_nbt(block_pos, &full_nbt);
         }
 
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
@@ -6808,6 +6934,15 @@ impl World {
     }
 
     pub fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
+        let mut unload = self.level.chunk_unload.access();
+        if !self.level.is_chunk_loaded(&block_pos.chunk_position()) {
+            return;
+        }
+        unload.mark_live(block_pos.chunk_position());
+        self.write_pending_block_entity_nbt(block_pos, nbt);
+    }
+
+    fn write_pending_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
         if self
             .level
             .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
@@ -6827,6 +6962,7 @@ impl World {
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk_pos = block_pos.chunk_position();
+        let mut unload = self.level.chunk_unload.access();
         // The NBT copy also serves lazy loading; leaving it revives removed entities.
         let removed_pending = self
             .level
@@ -6850,6 +6986,7 @@ impl World {
                     chunk_block_entities.remove(block_pos).is_some()
                 });
         if removed || removed_pending {
+            unload.mark_live(chunk_pos);
             self.custom_block_entity_data.remove(block_pos);
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
@@ -7732,6 +7869,10 @@ pub struct WorldPortal(pub Arc<World>);
 
 // Pure Beauty :cap:
 impl WorldPortalExt for WorldPortal {
+    fn request_chunk_unload_snapshots(&self) {
+        self.0.request_chunk_unload_snapshots();
+    }
+
     fn can_place_at(
         &self,
         block: &pumpkin_data::Block,

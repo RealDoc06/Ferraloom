@@ -27,6 +27,7 @@ pub mod dag;
 pub mod generation;
 pub mod generation_cache;
 pub mod schedule;
+pub mod unload;
 pub mod worker_logic;
 
 #[cfg(test)]

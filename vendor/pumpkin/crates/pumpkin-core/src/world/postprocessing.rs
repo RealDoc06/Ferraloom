@@ -332,6 +332,7 @@ mod tests {
                 .contains(&ChunkLoading::FULL_CHUNK_LEVEL)
         );
         dispenser.set_stack(0, ItemStack::new(1, &Item::STONE));
+        drop(dispenser);
         drop(callbacks);
         settle_simulation(&world).await;
         assert!(!world.level.is_chunk_watched(&pos.chunk_position()));
