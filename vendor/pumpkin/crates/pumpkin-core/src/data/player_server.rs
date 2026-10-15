@@ -117,41 +117,11 @@ impl ServerPlayerData {
         Ok(())
     }
 
-    /// Loads player data and applies it to a player.
-    ///
-    /// This function loads a player's data and applies it to their Player instance.
-    /// For new players, it creates default data without errors.
-    ///
-    /// # Arguments
-    ///
-    /// * `player` - The player to load data for and apply to.
-    ///
-    /// # Returns
-    ///
-    /// A Result indicating success or the error that occurred.
+    /// Loads returning-player data. Only absent files or disabled saving permit
+    /// defaults; storage errors must prevent the caller from admitting the player.
     pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
-        let result = self.storage.load_player_data(uuid);
-
-        match result {
-            Ok((should_load, data)) => {
-                if !should_load {
-                    // No data to load, continue with default data
-                    return Ok(None);
-                }
-                Ok(Some(data))
-            }
-            Err(e) => {
-                if self.storage.is_save_enabled() {
-                    // Only log as error if player data saving is enabled
-                    error!("Error loading player data for {uuid}: {e}");
-                } else {
-                    // Otherwise just log as info since it's expected
-                    debug!("Not loading player data for {uuid} (saving disabled)");
-                }
-                // Continue with default data even if there's an error
-                Ok(None)
-            }
-        }
+        let (should_load, data) = self.storage.load_player_data(uuid)?;
+        Ok(should_load.then_some(data))
     }
 
     /// Extracts and saves data from a player.
@@ -183,11 +153,61 @@ impl ServerPlayerData {
 mod test {
     use crate::data::player_server::ServerPlayerData;
     use pumpkin_nbt::compound::NbtCompound;
-    use pumpkin_world::data::player_data::PlayerDataStorage;
+    use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
     use std::time::Duration;
     use std::time::Instant;
     use tempfile::tempdir;
     use uuid::Uuid;
+
+    #[test]
+    fn server_player_load_propagates_corruption_and_io_errors_without_defaulting() {
+        let directory = tempdir().unwrap();
+        let player_data = ServerPlayerData::new(directory.path(), Duration::from_secs(30), true);
+        let uuid = Uuid::from_u128(99);
+        assert_eq!(player_data.load_data(&uuid).unwrap(), None);
+        let path = player_data.storage.get_player_data_path(&uuid);
+        std::fs::write(&path, b"corrupt player").unwrap();
+        assert!(matches!(
+            player_data.load_data(&uuid),
+            Err(PlayerDataError::Nbt(_))
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), b"corrupt player");
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(matches!(
+            player_data.load_data(&uuid),
+            Err(PlayerDataError::Io(_))
+        ));
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn server_player_load_returns_recovered_data_and_keeps_disabled_defaults() {
+        let directory = tempdir().unwrap();
+        let player_data = ServerPlayerData::new(directory.path(), Duration::from_secs(30), true);
+        let uuid = Uuid::from_u128(100);
+        let mut previous = NbtCompound::new();
+        previous.put_int("InventoryMarker", 42);
+        player_data
+            .storage
+            .save_player_data(&uuid, previous.clone())
+            .unwrap();
+        player_data
+            .storage
+            .save_player_data(&uuid, NbtCompound::new())
+            .unwrap();
+        let path = player_data.storage.get_player_data_path(&uuid);
+        std::fs::write(&path, b"corrupt player").unwrap();
+        assert_eq!(player_data.load_data(&uuid).unwrap(), Some(previous));
+
+        std::fs::write(&path, b"disabled save preserves this").unwrap();
+        let disabled = ServerPlayerData::new(directory.path(), Duration::from_secs(30), false);
+        assert_eq!(disabled.load_data(&uuid).unwrap(), None);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"disabled save preserves this"
+        );
+    }
 
     #[tokio::test]
     async fn player_data_storage_new() {

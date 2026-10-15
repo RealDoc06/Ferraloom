@@ -672,7 +672,23 @@ impl Server {
 
         let first_world = self.worlds.load().first().cloned()?;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
+        // Reject before constructing or publishing a player, so disconnect and
+        // autosave paths cannot replace unreadable data with a default player.
+        let data = match self.player_data_storage.load_data(&profile.id) {
+            Ok(data) => data,
+            Err(error) => {
+                error!(
+                    "Refusing login for {}: failed to load player data: {error}",
+                    profile.id
+                );
+                client.try_kick(
+                    DisconnectReason::Kicked,
+                    &TextComponent::text("Your player data could not be loaded. Please contact the server administrator."),
+                );
+                return None;
+            }
+        };
+        let (world, nbt) = if let Some(data) = data {
             if let Some(dimension_key) = data.get_string("Dimension") {
                 if let Some(dimension) = Dimension::from_name(dimension_key) {
                     let world = self.get_world_from_dimension(dimension);
@@ -686,7 +702,7 @@ impl Server {
                 (first_world, Some(data))
             }
         } else {
-            // No player data found or an error occurred, default to the Overworld.
+            // No player data found, default to the Overworld.
             (first_world, None)
         };
 
@@ -1361,5 +1377,105 @@ impl Server {
                 plugin_name,
             );
         self.plugin_manager.fire(self, &mut disable_event).await;
+    }
+}
+
+#[cfg(test)]
+mod player_data_tests {
+    use super::*;
+    use crate::net::PacketRateLimiter;
+    use crate::net::java::{JavaClient, pending::PendingConnection};
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_util::world_seed::Seed;
+
+    #[tokio::test]
+    async fn player_data_failure_rejects_login_before_player_publication_or_save() {
+        let directory = tempfile::tempdir().unwrap();
+        let basic = BasicConfiguration {
+            default_level_name: directory.path().to_string_lossy().into_owned(),
+            seed: Seed(0),
+            allow_nether: false,
+            allow_end: false,
+            allow_chat_reports: false,
+            use_favicon: false,
+            ..BasicConfiguration::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.java.online_mode = false;
+        advanced.networking.bedrock.online_mode = false;
+        let data = VanillaData {
+            banned_ip_list: Default::default(),
+            banned_player_list: Default::default(),
+            operator_config: Default::default(),
+            user_cache: Default::default(),
+            whitelist_config: Default::default(),
+        };
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            data,
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        let uuid = uuid::Uuid::from_u128(101);
+        let path = directory
+            .path()
+            .join("players/data")
+            .join(format!("{uuid}.dat"));
+        let backup = path.with_extension("dat_old");
+        fs::write(&path, b"corrupt primary").unwrap();
+        fs::write(&backup, b"corrupt backup").unwrap();
+        let profile = GameProfile {
+            id: uuid,
+            name: "BrokenPlayer".into(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+
+        // A temporary connected pair supplies the real Java client without a
+        // login handshake, world ticks, external auth or a running game listener.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (remote, accepted) =
+            tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
+        let _remote = remote.unwrap();
+        let (stream, address) = accepted.unwrap();
+        drop(listener);
+        let pending = PendingConnection::new(
+            stream,
+            address,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        pending.connection_state.store(ConnectionState::Play);
+        let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        java.start_outgoing_packet_task();
+        let client = Arc::new(ClientPlatform::Java(java));
+
+        assert!(server.add_player(client.clone(), profile, None).is_none());
+        let java = client.java().unwrap();
+        assert!(java.is_closed());
+        assert!(java.player.load().is_none());
+        assert!(
+            server
+                .worlds
+                .load()
+                .iter()
+                .all(|world| world.players.load().is_empty())
+        );
+        server
+            .player_data_storage
+            .save_all_players(&server)
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
+            .await
+            .unwrap();
+        server.shutdown().await;
+        assert_eq!(fs::read(&path).unwrap(), b"corrupt primary");
+        assert_eq!(fs::read(&backup).unwrap(), b"corrupt backup");
+        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
     }
 }
