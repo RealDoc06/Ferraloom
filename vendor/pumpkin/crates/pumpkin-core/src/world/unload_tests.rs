@@ -1,10 +1,12 @@
 //! Exercise terrain eviction through the live scheduler and read fresh region
 //! files afterward. No loaded chunk is removed or inserted by these fixtures.
 use super::*;
-use crate::block::entities::{chest::ChestBlockEntity, hopper::HopperBlockEntity};
+use crate::block::entities::{
+    chest::ChestBlockEntity, furnace::FurnaceBlockEntity, hopper::HopperBlockEntity,
+};
 use pumpkin_config::world::LevelConfig;
 use pumpkin_data::{
-    block_properties::{FacingHopper, HopperLikeProperties},
+    block_properties::{FacingHopper, FurnaceLikeProperties, HopperLikeProperties},
     item::Item,
 };
 use pumpkin_util::world_seed::Seed;
@@ -19,6 +21,10 @@ use pumpkin_world::{
 use std::time::Duration;
 
 async fn scheduler_world() -> (tempfile::TempDir, Arc<World>) {
+    scheduler_world_with_east_halo(7).await
+}
+
+async fn scheduler_world_with_east_halo(max_x: i32) -> (tempfile::TempDir, Arc<World>) {
     let folder = tempfile::tempdir().unwrap();
     let seed = Level::from_root_folder(
         &LevelConfig::default(),
@@ -30,7 +36,7 @@ async fn scheduler_world() -> (tempfile::TempDir, Arc<World>) {
     // Force/activation tickets reach radius seven. FULL disk fixtures satisfy
     // every holder without starting terrain generation on the test machine.
     let mut chunks = Vec::new();
-    for x in -7..=7 {
+    for x in -7..=max_x {
         for z in -7..=7 {
             let chunk = ChunkData::empty_sync(x, z);
             *chunk.light_engine.lock().unwrap() = ChunkLight {
@@ -312,7 +318,15 @@ async fn scheduler_rechecks_renewed_ticket_and_invalidated_snapshot_before_evict
     ticket(&world, pos, true);
     drop(lifecycle);
     tokio::time::timeout(Duration::from_secs(5), async {
-        while world.block_entities.contains_key(&pos) {
+        while world.unload_snapshot_worker.load(Ordering::Acquire)
+            || world
+                .level
+                .chunk_unload
+                .access()
+                .requests()
+                .iter()
+                .any(|(requested, _)| *requested == pos)
+        {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
@@ -320,7 +334,11 @@ async fn scheduler_rechecks_renewed_ticket_and_invalidated_snapshot_before_evict
     .unwrap();
     assert!(
         world.level.is_chunk_loaded(&pos),
-        "renewed FULL ticket wins over the prepared unload"
+        "renewed FULL ticket cancels the pending unload"
+    );
+    assert!(
+        world.block_entities.contains_key(&pos),
+        "renewal keeps live block entities in the map"
     );
     let entity = world.get_block_entity(&position).unwrap();
     entity
@@ -335,6 +353,96 @@ async fn scheduler_rechecks_renewed_ticket_and_invalidated_snapshot_before_evict
         saved_chest(&world, position).await.get_stack(0).item_count,
         9
     );
+    world.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn renewed_block_ticking_furnace_keeps_cooking_when_another_chunk_requests_unload() {
+    // The second FULL ticket needs its own disk halo, outside the renewed
+    // simulation owner's radius, so its real unload can trigger another pass.
+    let (_folder, world) = scheduler_world_with_east_halo(12).await;
+    let pos = Vector2::new(0, 0);
+    let other = Vector2::new(7, 0);
+    let position = BlockPos::new(1, 100, 1);
+    ticket(&world, pos, true);
+    ticket(&world, other, true);
+    let chunk = published(&world, pos).await;
+    published(&world, other).await;
+    let mut properties = FurnaceLikeProperties::default(&Block::FURNACE);
+    properties.lit = true;
+    chunk.set_block_absolute_y(1, position.0.y, 1, properties.to_state_id(&Block::FURNACE));
+    let furnace = Arc::new(FurnaceBlockEntity::new(position));
+    furnace.set_stack(0, ItemStack::new(3, &Item::RAW_IRON));
+    furnace.set_stack(1, ItemStack::new(1, &Item::COAL));
+    furnace.cooking_total_time.store(200, Ordering::Relaxed);
+    furnace.cooking_time_spent.store(20, Ordering::Relaxed);
+    furnace.lit_time_remaining.store(1000, Ordering::Relaxed);
+    furnace.lit_total_time.store(1000, Ordering::Relaxed);
+    furnace.comparator_dirty.store(false, Ordering::Relaxed);
+    world.add_block_entity(furnace.clone());
+    drop(chest(&world, BlockPos::new(113, 100, 1), 1));
+
+    // Keep an inventory handle while the first owner leaves. The worker must
+    // defer this request without detaching the live furnace.
+    ticket(&world, pos, false);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !world
+            .level
+            .chunk_unload
+            .access()
+            .requests()
+            .iter()
+            .any(|(requested, _)| *requested == pos)
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the scheduler must request the initial furnace snapshot");
+    ticket(&world, pos, true);
+    world.forced_chunks.lock().unwrap().insert(pos);
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            world.update_active_chunks();
+            let ready = {
+                let tracker = world.active_chunk_tracker.lock().unwrap();
+                tracker.loaded_block_ticking_chunks == tracker.requested_block_chunks
+                    && world.block_ticking_chunks.read().unwrap().len() == 9
+            };
+            if ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("renewed furnace must become block ticking");
+    for _ in 0..5 {
+        world.tick_block_entities(&tokio::runtime::Handle::current());
+    }
+    assert_eq!(furnace.cooking_time_spent.load(Ordering::Relaxed), 25);
+    drop(furnace);
+
+    // Do not call get_block_entity or update_active_chunks before inspecting
+    // progress: those could conceal a lost live map by migrating saved NBT.
+    ticket(&world, other, false);
+    unloaded(&world, other).await;
+    for _ in 0..5 {
+        world.tick_block_entities(&tokio::runtime::Handle::current());
+    }
+    let entities = world
+        .block_entities
+        .get(&pos)
+        .expect("renewed active furnace must stay live");
+    let furnace = entities
+        .get(&position)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<FurnaceBlockEntity>()
+        .unwrap();
+    assert_eq!(furnace.cooking_time_spent.load(Ordering::Relaxed), 30);
+    assert_eq!(furnace.get_stack(0).item_count, 3);
+    drop(entities);
     world.shutdown().await.unwrap();
 }
 

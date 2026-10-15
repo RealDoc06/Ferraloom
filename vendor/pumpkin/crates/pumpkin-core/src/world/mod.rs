@@ -1124,11 +1124,8 @@ impl World {
         first_error.map_or(Ok(()), Err)
     }
 
-    /// Serializes the live block entities of a chunk back into that chunk's block
-    /// entity data. The live map is the source of truth while a chunk is loaded -
-    /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
-    /// entity up - so this has to run before the chunk is dropped, or everything
-    /// the entity did since it was loaded is lost.
+    /// Refreshes the saved NBT from live block entities before saving or unloading.
+    /// Lazy loading clones that NBT, so the live map holds the latest changes.
     fn save_block_entities(&self, chunk_pos: Vector2<i32>) {
         let Some(block_entities) = self
             .block_entities
@@ -1157,6 +1154,14 @@ impl World {
     /// an in-flight command cannot mutate a detached BE after its final snapshot.
     /// The caller holds entity_lifecycle. No publication write lock is held here.
     fn retire_block_entities(&self, pos: Vector2<i32>, requested: Option<&SyncChunk>) -> bool {
+        // Check live tickets before taking the coordinator, matching scheduler
+        // order. A ticket may have returned before its scheduler change arrives.
+        let loading = requested.map(|_| {
+            self.level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
         let mut unload = self.level.chunk_unload.access();
         let current = self
             .level
@@ -1164,11 +1169,22 @@ impl World {
             .get(&pos)
             .map(|chunk| chunk.value().clone());
         let chunk = if let Some(requested) = requested {
-            if !unload.is_requested(pos, requested)
-                || current
-                    .as_ref()
-                    .is_some_and(|current| !Arc::ptr_eq(current, requested))
+            if !unload.is_requested(pos, requested) {
+                return false;
+            }
+            if loading.as_ref().is_some_and(|loading| {
+                loading.pos_level.get(&pos).is_some_and(|level| {
+                    *level <= pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL
+                })
+            }) {
+                unload.cancel(pos);
+                return false;
+            }
+            if current
+                .as_ref()
+                .is_none_or(|current| !Arc::ptr_eq(current, requested))
             {
+                unload.cancel(pos);
                 return false;
             }
             requested.clone()
@@ -1218,6 +1234,9 @@ impl World {
         // directly from this map without going through get_block_entity.
         entities.remove();
         unload.mark_prepared(pos, &chunk);
+        // A new owner can arrive immediately after this snapshot. The next
+        // active-chunk pass migrates pending BEs even if eligibility never changed.
+        self.pending_block_entity_migrations.push(pos);
         true
     }
 

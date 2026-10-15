@@ -155,6 +155,8 @@ impl GenerationSchedule {
             .chunk_lifecycle
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut unload = self.chunk_unload.access();
+        unload.cancel(pos);
         self.unpublish_chunk_locked(pos)
     }
 
@@ -636,6 +638,9 @@ impl GenerationSchedule {
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
             debug_assert_eq!(holder.target_stage, old_stage);
             holder.target_stage = new_stage;
+            if new_stage != StagedChunkEnum::None {
+                self.chunk_unload.access().cancel(pos);
+            }
 
             // Effective target is what we actually need to schedule tasks up to.
             let effective_old = old_stage.max(holder.dependency_stage);
@@ -696,6 +701,7 @@ impl GenerationSchedule {
                         let dependency = stage.get_direct_dependencies();
                         let radius = stage.get_direct_radius();
                         self.unload_chunks.remove(&pos);
+                        self.chunk_unload.access().cancel(pos);
                         let req_stage = dependency[0];
                         let newly_created = Self::ensure_dependency_chain(
                             &mut self.graph,
@@ -730,6 +736,7 @@ impl GenerationSchedule {
                             for &(dx, dz) in pumpkin_data::chunk_view_lut::get_chebyshev_ring(r) {
                                 let new_pos = pos.add_raw(dx as i32, dz as i32);
                                 self.unload_chunks.remove(&new_pos);
+                                self.chunk_unload.access().cancel(new_pos);
                                 worklist.push_back((new_pos, req_stage, task));
                             }
                         }
@@ -746,6 +753,7 @@ impl GenerationSchedule {
 
         while let Some((pos, req_stage, dep_task)) = worklist.pop_front() {
             self.unload_chunks.remove(&pos);
+            self.chunk_unload.access().cancel(pos);
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
             let newly_created = Self::ensure_dependency_chain(
                 &mut self.graph,
@@ -946,6 +954,7 @@ impl GenerationSchedule {
                 .get(&pos)
                 .is_some_and(|level| *level <= ChunkLoading::FULL_CHUNK_LEVEL)
             {
+                coordinator.access().cancel(pos);
                 self.unload_chunks.insert(pos);
                 continue;
             }
@@ -955,10 +964,12 @@ impl GenerationSchedule {
             if holder.target_stage != StagedChunkEnum::None
                 || holder.dependency_stage != StagedChunkEnum::None
             {
+                coordinator.access().cancel(pos);
                 self.chunk_map.insert(pos, holder);
                 continue;
             }
             if !holder.occupied.is_null() {
+                coordinator.access().cancel(pos);
                 self.chunk_map.insert(pos, holder);
                 self.unload_chunks.insert(pos);
                 continue;

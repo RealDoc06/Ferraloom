@@ -35,6 +35,12 @@ impl ChunkUnloadAccess<'_> {
     }
 
     pub fn published(&mut self, pos: ChunkPos) {
+        self.cancel(pos);
+    }
+
+    /// A renewed owner or a publication change invalidates an earlier decision
+    /// to retire this position, including snapshots prepared before the renewal.
+    pub fn cancel(&mut self, pos: ChunkPos) {
         if self.0.contains_key(&pos) {
             self.mark_live(pos);
         }
@@ -111,6 +117,10 @@ mod tests {
         assert!(access.prepare_or_defer(pos, &chunk));
         access.mark_prepared(pos, &chunk);
         access.mark_live(pos);
+        assert!(!access.prepare_or_defer(pos, &chunk));
+        access.cancel(pos);
+        assert!(!access.is_requested(pos, &chunk));
+        assert!(access.requests().is_empty());
         assert!(!access.prepare_or_defer(pos, &chunk));
         access.mark_prepared(pos, &chunk);
         assert!(access.prepare_or_defer(pos, &chunk));
