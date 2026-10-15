@@ -3093,7 +3093,10 @@
         "fill destroy of identical source fluid is unchanged and fails",
         "fill destroy dries wet sponge in the Nether",
         "data modify copies block entity and storage sources without changing them",
-        "data modify indexes insertion and extracts strings from all providers"
+        "data modify indexes insertion and extracts strings from all providers",
+        "fill destroy preserves a replacement container block entity",
+        "fill destroy preserves a replacement sign block entity",
+        "entity selectors exclude dying living entities before removal"
       ],
       "rust_status": "partial",
       "evidence": [

@@ -61,6 +61,7 @@ class Scenario:
     settle: float = 0.15
     precondition: str | None = None
     force_dimension: str | None = None
+    expected_last_feedback: str | None = None
 
 
 SCENARIOS = [
@@ -88,8 +89,18 @@ SCENARIOS = [
              "if score FillFence parity matches 1 if block 4 225 4 oak_fence[east=true] if block 5 225 4 oak_fence[west=true]"),
     Scenario("block.fill_destroy_same_fluid", ("players.commands",),
              ("fill 8 224 4 10 225 6 stone", "setblock 9 225 5 water",
+              "execute store result score FillFluidControl parity store success score FillFluidControlSuccess parity run fill 10 225 5 10 225 5 water destroy",
               "execute store result score FillFluidResult parity store success score FillFluidSuccess parity run fill 9 225 5 9 225 5 water destroy"),
-             "if score FillFluidResult parity matches 0 if score FillFluidSuccess parity matches 0 if block 9 225 5 water[level=0]"),
+             "if score FillFluidControl parity matches 1 if score FillFluidControlSuccess parity matches 1 if score FillFluidResult parity matches 0 if score FillFluidSuccess parity matches 0 if block 9 225 5 water[level=0]",
+             expected_last_feedback="No blocks were filled"),
+    Scenario("block.fill_destroy_container_replacement", ("players.commands",),
+             ("setblock 0 231 0 stone", "setblock 0 232 0 oak_sign",
+              "execute store result score SignChest parity run fill 0 232 0 0 232 0 chest destroy"),
+             "if score SignChest parity matches 1 if block 0 232 0 chest if data block 0 232 0 x"),
+    Scenario("block.fill_destroy_sign_replacement", ("players.commands",),
+             ("setblock 2 231 0 stone", "setblock 2 232 0 oak_sign",
+              "execute store result score SignSign parity run fill 2 232 0 2 232 0 spruce_sign destroy"),
+             "if score SignSign parity matches 1 if block 2 232 0 spruce_sign if data block 2 232 0 x"),
     Scenario("scoreboard.objective_count", ("players.scoreboards",), ("execute store result score ObjectiveFirst parity run scoreboard objectives add counted_a dummy", "execute store result score ObjectiveSecond parity run scoreboard objectives add counted_b dummy", "execute store result score ObjectiveRemovedA parity run scoreboard objectives remove counted_a", "execute store result score ObjectiveRemovedB parity run scoreboard objectives remove counted_b", "scoreboard players remove ObjectiveSecond parity 1", "scoreboard players add ObjectiveRemovedB parity 1"), "if score ObjectiveSecond parity = ObjectiveFirst parity if score ObjectiveRemovedA parity = ObjectiveFirst parity if score ObjectiveRemovedB parity = ObjectiveFirst parity"),
     Scenario("scoreboard.display_set", ("players.scoreboards",), ("scoreboard players set DisplayResult parity 17", "scoreboard players set DisplaySuccess parity 17", "execute store result score DisplayResult parity store success score DisplaySuccess parity run scoreboard objectives setdisplay sidebar parity"), "if score DisplayResult parity matches 0 if score DisplaySuccess parity matches 1"),
     Scenario("scoreboard.trigger_enable", ("players.scoreboards",), ("scoreboard objectives add unlock trigger", "scoreboard players set Candidate unlock 13", "scoreboard players enable Candidate unlock", "execute store success score EnableAgain parity run scoreboard players enable Candidate unlock"), "if score Candidate unlock matches 13 if score EnableAgain parity matches 0"),
@@ -128,6 +139,10 @@ SCENARIOS = [
     Scenario("entity.summon", ("entities.spawning",), ('summon pig 8 201 8 {Tags:["ferraloom_probe"],NoAI:1b}',), "if entity @e[type=pig,tag=ferraloom_probe,limit=1]"),
     Scenario("entity.damage", ("entities.combat",), ("damage @e[type=pig,tag=ferraloom_probe,limit=1] 5 generic",), "if entity @e[type=pig,tag=ferraloom_probe,nbt={Health:5.0f},limit=1]"),
     Scenario("entity.kill", ("entities.lifecycle",), ("kill @e[tag=ferraloom_probe]",), "unless entity @e[tag=ferraloom_probe]", 1.5, "if entity @e[tag=ferraloom_probe]"),
+    Scenario("entity.dying_selector", ("players.commands",),
+             ('summon pig 8 201 10 {Tags:["ferraloom_dying_selector"],NoAI:1b}',
+              "kill @e[type=pig,tag=ferraloom_dying_selector]"),
+             "unless entity @e[type=pig,tag=ferraloom_dying_selector]", settle=0),
     Scenario("command.entity_count", ("players.commands",), ('summon pig 14 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', 'summon pig 15 200 12 {Tags:["ferraloom_count_probe"],NoAI:1b}', "scoreboard players set EntityCopies parity 0", "execute as @e[type=pig,tag=ferraloom_count_probe] run scoreboard players add EntityCopies parity 1", "kill @e[tag=ferraloom_count_probe]"), "if score EntityCopies parity matches 2"),
     Scenario("world.forceload_query", ("world.chunk_tickets",), ("execute store result score ForceListBefore parity store success score ForceListOk parity run forceload query", "execute store result score ForceQuery parity store success score ForceQueryOk parity run forceload query 0 0", "execute store success score ForceQueryMissing parity run forceload query 160000 160000", "execute in minecraft:the_end store result score ForceEmpty parity store success score ForceEmptyOk parity run forceload query", "execute store result score ForceListAfter parity run forceload query"), "if score ForceListBefore parity = ForceListAfter parity if score ForceListOk parity matches 1 if score ForceQuery parity matches 1 if score ForceQueryOk parity matches 1 if score ForceQueryMissing parity matches 0 if score ForceEmpty parity matches 0 if score ForceEmptyOk parity matches 1"),
     Scenario("world.forceload_counts", ("world.chunk_tickets",), ("execute store result score ForceFirst parity store success score ForceFirstOk parity run forceload add 96 0", "execute store result score ForceMore parity run forceload add 96 0 112 0", "execute store success score ForceDuplicate parity run forceload add 96 0 112 0", "execute store result score ForceRemoved parity run forceload remove 96 0 112 0", "execute store success score ForceMissing parity run forceload remove 96 0 112 0"), "if score ForceFirst parity matches 1 if score ForceFirstOk parity matches 1 if score ForceMore parity matches 1 if score ForceDuplicate parity matches 0 if score ForceRemoved parity matches 2 if score ForceMissing parity matches 0"),
@@ -316,11 +331,18 @@ def run_scenario(server: Server, scenario: Scenario) -> dict:
         wait_loaded(server, scenario.force_dimension)
     if scenario.precondition is not None:
         check_predicate(server, scenario.precondition)
+    last_output = []
     for command in scenario.commands:
-        server.command(command)
+        last_output = server.command(command)
+    if scenario.expected_last_feedback is not None:
+        protocol.require(any(line.endswith(scenario.expected_last_feedback) for line in last_output),
+                         f"Missing final command feedback {scenario.expected_last_feedback!r}: {last_output[-6:]}")
     time.sleep(scenario.settle)
     check_predicate(server, scenario.predicate)
-    return {"predicate": scenario.predicate, "commands": list(scenario.commands)}
+    detail = {"predicate": scenario.predicate, "commands": list(scenario.commands)}
+    if scenario.expected_last_feedback is not None:
+        detail.update(expected_last_feedback=scenario.expected_last_feedback, last_command_output=last_output)
+    return detail
 
 
 def stop_by_signal(server: Server, timeout: float = 45) -> dict:

@@ -291,6 +291,18 @@
     "data.modify_insert_string": {
       "feature_id": "players.commands",
       "scenario": "data modify indexes insertion and extracts strings from all providers"
+    },
+    "block.fill_destroy_container_replacement": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy preserves a replacement container block entity"
+    },
+    "block.fill_destroy_sign_replacement": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy preserves a replacement sign block entity"
+    },
+    "entity.dying_selector": {
+      "feature_id": "players.commands",
+      "scenario": "entity selectors exclude dying living entities before removal"
     }
   }
 }

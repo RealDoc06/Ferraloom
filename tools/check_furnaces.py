@@ -72,11 +72,10 @@ def paired_results(report: dict) -> dict:
                 detail["storage_observations"] = observations
             result = "passed" if passed else "failed"
             if passed and names == ("zero-step",):
-                observation = observations.get("zero-step", {})
-                if not isinstance(observation, dict) or observation.get("raw_chunk_unchanged") is not False:
-                    result = "skipped"
-                    detail["reason"] = ("No zero-step chunk rewrite was observed. Preserved bytes alone "
-                                        "do not exercise the runtime's furnace encoding.")
+                result = "skipped"
+                detail["reason"] = ("Zero-step saved values are preserved, but this phase does not directly "
+                                    "observe furnace decoding or encoding. Changed chunk bytes can include "
+                                    "metadata; stepped phases establish cooking continuation.")
             entry = {"id": test_id, "features": ["blocks.processing"], "result": result, "detail": detail}
             errors = [report.get("error"), case.get("error"), case.get("source_integrity_error")]
             errors.extend(phase.get("error") for phase in phases)

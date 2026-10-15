@@ -8,13 +8,29 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import protocol
-from parity.suite import Server, check_signal_exit, compare_command_trees, is_server_say, pin_binary, recorded, stop_by_signal
+from parity.suite import Scenario, Server, check_signal_exit, compare_command_trees, is_server_say, pin_binary, recorded, run_scenario, stop_by_signal
 
 
 class HarnessTests(unittest.TestCase):
+    def test_no_change_scenario_rejects_an_unrelated_command_error(self):
+        scenario = Scenario("fluid", (), ("fill 0 200 0 0 200 0 water destroy",),
+                            "if block 0 200 0 water", settle=0,
+                            expected_last_feedback="No blocks were filled")
+        server = Mock()
+        with patch("parity.suite.check_predicate") as check:
+            server.command.return_value = ["Incorrect argument for command"]
+            with self.assertRaisesRegex(AssertionError, "Missing final command feedback"):
+                run_scenario(server, scenario)
+            check.assert_not_called()
+            server.command.return_value = ["[Server thread/INFO]: No blocks were filled"]
+            detail = run_scenario(server, scenario)
+            check.assert_called_once_with(server, scenario.predicate)
+            self.assertEqual(detail["last_command_output"], server.command.return_value)
+
     def test_command_syntax_comparison_normalizes_arguments_but_retains_missing_branches(self):
         def tree(roots, paths):
             return [{"id": "network.command_tree", "result": "passed", "detail": {"roots": roots, "literal_paths": paths}}]

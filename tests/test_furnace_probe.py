@@ -65,11 +65,12 @@ class FurnaceProbeTests(unittest.TestCase):
                                         "phases": [{"name": name, "result": "passed",
                                                     **({"storage_observation": {"raw_chunk_unchanged": False}}
                                                        if name == "zero-step" else {})} for name in names]})
-        self.assertTrue(all(case["result"] == "passed" for entries in paired_results(report).values() for case in entries))
+        for entries in paired_results(report).values():
+            self.assertEqual([case["result"] for case in entries], ["skipped", "passed", "passed"])
         report["cases"][2]["exit"]["passed"] = False
         results = paired_results(report)
         self.assertEqual([case["result"] for case in results["rust"]], ["failed", "failed", "passed"])
-        self.assertTrue(all(case["result"] == "passed" for case in results["vanilla"]))
+        self.assertEqual([case["result"] for case in results["vanilla"]], ["skipped", "passed", "passed"])
         report["source_integrity_checks"][0]["passed"] = False
         self.assertTrue(all(case["result"] == "failed" for entries in paired_results(report).values() for case in entries))
 
@@ -80,7 +81,7 @@ class FurnaceProbeTests(unittest.TestCase):
                                          "storage_observation": {"raw_chunk_unchanged": False}},
                                         {"name": "after-63", "result": "passed"}]}]}
         results = paired_results(report)
-        self.assertEqual([case["result"] for case in results["rust"]], ["passed", "failed", "failed"])
+        self.assertEqual([case["result"] for case in results["rust"]], ["skipped", "failed", "failed"])
         self.assertTrue(all(case["result"] == "failed" for case in results["vanilla"]))
 
     def test_zero_step_preservation_is_not_imported_as_an_encoding_pass(self):
@@ -93,9 +94,9 @@ class FurnaceProbeTests(unittest.TestCase):
         entries = paired_results(report)["rust"]
         self.assertEqual([entry["result"] for entry in entries], ["skipped", "passed", "failed"])
         self.assertEqual(entries[0]["detail"]["storage_observations"], {"zero-step": observation})
-        self.assertIn("No zero-step chunk rewrite", entries[0]["detail"]["reason"])
-        for missing in ({}, {"raw_chunk_unchanged": None}):
-            report["cases"][0]["phases"][0]["storage_observation"] = missing
+        self.assertIn("does not directly observe furnace decoding or encoding", entries[0]["detail"]["reason"])
+        for marker in ({}, {"raw_chunk_unchanged": None}, {"raw_chunk_unchanged": False}):
+            report["cases"][0]["phases"][0]["storage_observation"] = marker
             self.assertEqual(paired_results(report)["rust"][0]["result"], "skipped")
 
     def test_failed_run_keeps_its_diagnostic_in_every_paired_observation(self):
