@@ -1,0 +1,91 @@
+"""Check acceptance boundaries without running Minecraft or creating world files."""
+from __future__ import annotations
+
+import copy
+from pathlib import Path
+import struct
+import sys
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from parity import furnaces, worlds
+
+
+def text(value: str) -> bytes:
+    encoded = value.encode()
+    return struct.pack(">H", len(encoded)) + encoded
+
+
+def named(kind: int, name: str, payload: bytes) -> bytes:
+    return bytes([kind]) + text(name) + payload
+
+
+EXPECTED = {"furnace": {
+    "id": "minecraft:furnace", "x": 4097, "y": 200, "z": 1,
+    "cooking_time_spent": 37, "cooking_total_time": 200,
+    "lit_time_remaining": 1364, "lit_total_time": 1600, "speed_multiplier": 1.0,
+    "RecipesUsed": {"minecraft:iron_ingot_from_smelting_raw_iron": 1},
+    "Items": [{"Slot": 0, "id": "minecraft:raw_iron", "count": 15,
+               "components": {"minecraft:custom_name": '{"text":"Keep me"}'}}],
+}}
+
+
+def snapshot(timer_kind: int = 3) -> dict:
+    """Independent byte fixture exercises both plain and typed NBT decoders."""
+    item = (named(1, "Slot", b"\0") + named(8, "id", text("minecraft:raw_iron"))
+            + named(3, "count", struct.pack(">i", 15))
+            + named(10, "components", named(8, "minecraft:custom_name", text('{"text":"Keep me"}')) + b"\0") + b"\0")
+    payload = (named(8, "id", text("minecraft:furnace"))
+               + named(3, "x", struct.pack(">i", 4097))
+               + named(3, "y", struct.pack(">i", 200))
+               + named(3, "z", struct.pack(">i", 1))
+               + named(timer_kind, "cooking_time_spent", struct.pack(">h" if timer_kind == 2 else ">i", 37))
+               + named(3, "cooking_total_time", struct.pack(">i", 200))
+               + named(3, "lit_time_remaining", struct.pack(">i", 1364))
+               + named(3, "lit_total_time", struct.pack(">i", 1600))
+               + named(5, "speed_multiplier", struct.pack(">f", 1.0))
+               + named(10, "RecipesUsed", named(3, "minecraft:iron_ingot_from_smelting_raw_iron", struct.pack(">i", 1)) + b"\0")
+               + named(9, "Items", b"\x0a" + struct.pack(">i", 1) + item) + b"\0")
+    raw = named(10, "", payload)
+    reader = furnaces.TypedReader(raw)
+    reader.number("B")
+    reader.string()
+    typed = reader.value(10)
+    return {"block_entities": {"furnace": worlds.decode_nbt(raw)}, "typed_block_entities": {"furnace": typed}}
+
+
+class FurnaceProbeTests(unittest.TestCase):
+    def test_numeric_short_is_a_canonical_difference_without_semantic_failure(self):
+        self.assertEqual(furnaces.compare_snapshot(snapshot(), EXPECTED)["result"], "passed")
+        result = furnaces.compare_snapshot(snapshot(timer_kind=2), EXPECTED)
+        self.assertEqual(result["semantic_result"], "passed")
+        self.assertEqual(result["canonical_storage_result"], "failed")
+        self.assertEqual(result["failures"], [{"fixture": "furnace", "key": "cooking_time_spent",
+                                             "expected": "Int", "actual": "Short", "passed": False}])
+
+    def test_item_components_survive_normalization_and_changes_fail(self):
+        saved = snapshot()
+        components = saved["block_entities"]["furnace"]["Items"][0]["components"]
+        self.assertEqual(furnaces.semantic_state(saved["block_entities"]["furnace"])["Items"][0]["components"], components)
+        for replacement in ({}, {"minecraft:custom_name": '{"text":"Changed"}'}):
+            with self.subTest(replacement=replacement):
+                changed = copy.deepcopy(saved)
+                changed["block_entities"]["furnace"]["Items"][0]["components"] = replacement
+                result = furnaces.compare_snapshot(changed, EXPECTED)
+                self.assertEqual(result["semantic_result"], "failed")
+                self.assertEqual(result["canonical_storage_result"], "passed")
+                self.assertEqual([check["key"] for check in result["failures"]], ["Items"])
+
+    def test_case_sensitive_timer_and_recipe_changes_fail_semantics(self):
+        for field in ("cooking_time_spent", "RecipesUsed"):
+            with self.subTest(field=field):
+                saved = snapshot()
+                be = saved["block_entities"]["furnace"]
+                be[field.upper()] = be.pop(field)
+                result = furnaces.compare_snapshot(saved, EXPECTED)
+                self.assertEqual(result["semantic_result"], "failed")
+                self.assertEqual([check["key"] for check in result["semantic_checks"] if not check["passed"]], [field])
+
+
+if __name__ == "__main__":
+    unittest.main()

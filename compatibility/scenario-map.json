@@ -243,6 +243,14 @@
     "network.command_tree": {
       "feature_id": "players.commands",
       "scenario": "wire command tree decodes completely"
+    },
+    "world.forceload_query": {
+      "feature_id": "world.chunk_tickets",
+      "scenario": "force-load query distinguishes missing chunks and empty lists"
+    },
+    "command.selector_scores": {
+      "feature_id": "players.commands",
+      "scenario": "score selectors use entity UUIDs and require existing scores"
     }
   }
 }

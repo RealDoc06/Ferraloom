@@ -908,7 +908,8 @@
         "forced chunk",
         "portal ticket expiry",
         "forced chunks activate while simulation is frozen",
-        "force-load commands count only changed chunks"
+        "force-load commands count only changed chunks",
+        "force-load query distinguishes missing chunks and empty lists"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -3031,7 +3032,8 @@
         "chained execute score stores preserve both callbacks",
         "execute score store preserves prior scores when a conditional branch is empty",
         "execute as runs once for each selected entity",
-        "wire command tree decodes completely"
+        "wire command tree decodes completely",
+        "score selectors use entity UUIDs and require existing scores"
       ],
       "rust_status": "partial",
       "evidence": [
