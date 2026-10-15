@@ -308,8 +308,7 @@ async fn modify_value_modes_and_entity_target_return_affected_counts() {
         ("items prepend value 1", 1),
         ("items insert -2 value 9", 1),
         ("items[0] set value 8", 1),
-        // Creating a missing compound exercises merge registration without
-        // asserting the separate existing-compound merge semantics.
+        // A missing compound is created before merging its contents.
         ("created merge value {key:7}", 1),
         ("rows[].n set value 5", 2),
     ] {
@@ -401,4 +400,224 @@ async fn modify_unchanged_and_errors_preserve_nbt_through_dispatcher() {
         assert_eq!(fixture.storage("repair:target"), target);
         assert_eq!(fixture.sources(), before);
     }
+}
+
+#[tokio::test]
+async fn modify_merge_recursively_retains_siblings_and_combines_sources_in_order() {
+    let fixture = Fixture::new().await;
+    fixture.put_storage(
+        "repair:source",
+        compound(
+            "{parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},\
+             {nested:{last:5,replace:6}}]}",
+        ),
+    );
+    let sources = fixture.sources();
+    fixture.put_storage(
+        "repair:target",
+        compound(
+            "{untouched:99,object:{sibling:2,nested:{keep:1,replace:0},\
+             list:[1],scalar:0,object:{old:1}}}",
+        ),
+    );
+
+    assert_eq!(
+        fixture
+            .execute(
+                "data modify storage repair:target object merge from storage repair:source parts[]"
+            )
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        fixture.storage("repair:target"),
+        compound(
+            "{untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},\
+             list:[2],scalar:{inside:7},object:2}}"
+        )
+    );
+    assert_eq!(fixture.sources(), sources);
+}
+
+#[tokio::test]
+async fn modify_merge_counts_changed_compounds_and_rejects_unchanged_results() {
+    let fixture = Fixture::new().await;
+    fixture.put_storage(
+        "repair:source",
+        compound("{parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}"),
+    );
+    let sources = fixture.sources();
+    fixture.put_storage(
+        "repair:target",
+        compound(
+            "{rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},\
+             {kind:hit,payload:{keep:2,nested:{value:0}}},\
+             {kind:skip,payload:{keep:3,nested:{value:0}}}]}",
+        ),
+    );
+
+    // Three compounds match, but the first already equals the final source
+    // merge. Intermediate source changes do not increase the result count.
+    assert_eq!(
+        fixture
+            .execute("data modify storage repair:target rows[].payload merge from storage repair:source parts[]")
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        fixture.storage("repair:target"),
+        compound(
+            "{rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},\
+             {kind:hit,payload:{keep:2,nested:{value:2,extra:5}}},\
+             {kind:skip,payload:{keep:3,nested:{value:2,extra:5}}}]}"
+        )
+    );
+    assert_eq!(
+        fixture
+            .execute(
+                "data modify storage repair:target rows[{kind:hit}].payload merge value {added:8}"
+            )
+            .unwrap(),
+        2
+    );
+    let expected = compound(
+        "{rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5},added:8}},\
+         {kind:hit,payload:{keep:2,nested:{value:2,extra:5},added:8}},\
+         {kind:skip,payload:{keep:3,nested:{value:2,extra:5}}}]}",
+    );
+    assert_eq!(fixture.storage("repair:target"), expected);
+    for suffix in [
+        "rows[].payload merge from storage repair:source parts[]",
+        "rows[{kind:hit}].payload merge value {added:8}",
+        "rows[-1].payload merge value {}",
+        "rows[0].payload{keep:99} merge value {added:8}",
+    ] {
+        let error = fixture
+            .execute(&format!("data modify storage repair:target {suffix}"))
+            .unwrap_err();
+        assert!(error.is(&ERROR_MERGE_UNCHANGED), "{suffix}: {error:?}");
+        assert_eq!(fixture.storage("repair:target"), expected);
+    }
+    assert_eq!(fixture.sources(), sources);
+}
+
+#[tokio::test]
+async fn modify_merge_type_errors_validate_sources_before_changing_targets() {
+    let fixture = Fixture::new().await;
+    fixture.put_storage(
+        "repair:source",
+        compound("{mixed:[{value:{added:2}},{value:7}],number:42}"),
+    );
+    let sources = fixture.sources();
+    let target = compound("{object:{keep:1},scalar:7,numbers:[I;3,4]}");
+    fixture.put_storage("repair:target", target.clone());
+
+    for (suffix, offending_tag) in [
+        ("object merge from storage repair:source mixed[].value", "7"),
+        (
+            "missing.path merge from storage repair:source mixed[].value",
+            "7",
+        ),
+        ("scalar merge value {added:2}", "7"),
+        ("numbers[] merge value {added:2}", "3"),
+        ("numbers[-1] merge value {added:2}", "4"),
+        ("object merge string storage repair:source number", "\"42\""),
+    ] {
+        let error = fixture
+            .execute(&format!("data modify storage repair:target {suffix}"))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            ERROR_EXPECTED_OBJECT
+                .create_without_context(TextComponent::text(offending_tag.to_owned())),
+            "{suffix}"
+        );
+        assert_eq!(fixture.storage("repair:target"), target);
+        assert_eq!(fixture.sources(), sources);
+    }
+    let error = fixture
+        .execute("data modify storage repair:target numbers[].child merge value {added:2}")
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ERROR_NOTHING_FOUND.create_without_context(TextComponent::text("numbers[].child"))
+    );
+    for (provider, target_path, offending_tag) in [
+        ("entity @s", "Tags[]", "\"original\""),
+        ("block 0 64 0", "id", "\"minecraft:chest\""),
+    ] {
+        let error = fixture
+            .execute(&format!(
+                "data modify {provider} {target_path} merge value {{added:2}}"
+            ))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            ERROR_EXPECTED_OBJECT
+                .create_without_context(TextComponent::text(offending_tag.to_owned())),
+            "{provider}"
+        );
+    }
+    assert_eq!(fixture.storage("repair:target"), target);
+    assert_eq!(fixture.sources(), sources);
+}
+
+#[tokio::test]
+async fn modify_merge_preserves_vanilla_storage_side_effects_on_failure() {
+    let fixture = Fixture::new().await;
+    let sources = fixture.sources();
+    fixture.put_storage(
+        "repair:target",
+        compound("{rows:[{value:{keep:1}},{value:7},{}],keep:9}"),
+    );
+
+    let error = fixture
+        .execute("data modify storage repair:target rows[].value merge value {added:2}")
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ERROR_EXPECTED_OBJECT.create_without_context(TextComponent::text("7"))
+    );
+    // Official storage returns live tags: all target paths are created first,
+    // then the first compound is merged before the scalar aborts the command.
+    assert_eq!(
+        fixture.storage("repair:target"),
+        compound("{rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}")
+    );
+
+    fixture.put_storage("repair:target", compound("{keep:9,rows:[]}"));
+    for (suffix, expected) in [
+        (
+            "created.nested merge value {}",
+            "{keep:9,rows:[],created:{nested:{}}}",
+        ),
+        (
+            "rows[{kind:new}] merge value {kind:new}",
+            "{keep:9,rows:[{kind:new}],created:{nested:{}}}",
+        ),
+    ] {
+        let error = fixture
+            .execute(&format!("data modify storage repair:target {suffix}"))
+            .unwrap_err();
+        assert!(error.is(&ERROR_MERGE_UNCHANGED), "{suffix}: {error:?}");
+        assert_eq!(fixture.storage("repair:target"), compound(expected));
+    }
+    assert_eq!(
+        fixture
+            .execute("data modify storage repair:target rows[{kind:other}] merge value {added:2}")
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        fixture.storage("repair:target"),
+        compound("{keep:9,rows:[{kind:new},{kind:other,added:2}],created:{nested:{}}}")
+    );
+
+    // Empty roots supplied for absent storage are not attached until success.
+    let error = fixture
+        .execute("data modify storage repair:absent created.nested merge value {}")
+        .unwrap_err();
+    assert!(error.is(&ERROR_MERGE_UNCHANGED));
+    assert_eq!(fixture.storage("repair:absent"), NbtCompound::new());
+    assert_eq!(fixture.sources(), sources);
 }

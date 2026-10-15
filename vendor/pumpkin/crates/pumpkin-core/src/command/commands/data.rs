@@ -30,7 +30,7 @@ use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::argument_types::nbt::{NbtCompoundArgumentType, NbtTagArgumentType};
 use crate::command::argument_types::nbt_path::{
-    ERROR_DATA_TOO_DEEP, NbtPath, NbtPathArgumentType, is_too_deep,
+    ERROR_DATA_TOO_DEEP, NbtPath, NbtPathArgumentType, NbtPathNode, compare_nbt, is_too_deep,
 };
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
@@ -690,6 +690,147 @@ fn resolve_source_tags(
     }
 }
 
+/// Mutable get-or-create traversal for merge, using the parsed path's node rules.
+/// Primitive arrays are handled separately at the leaf since their elements
+/// cannot contain compounds or supply mutable NbtTag references.
+fn merge_node_targets<'a>(
+    parent: &'a mut NbtTag,
+    node: &NbtPathNode,
+    create: impl FnOnce() -> NbtTag,
+) -> Vec<&'a mut NbtTag> {
+    match (node, parent) {
+        (NbtPathNode::CompoundChild(name), NbtTag::Compound(compound)) => vec![
+            compound
+                .child_tags
+                .entry(name.clone().into())
+                .or_insert_with(create),
+        ],
+        (NbtPathNode::AllElements, NbtTag::List(list)) => {
+            if list.is_empty() {
+                list.push(create());
+            }
+            list.iter_mut().collect()
+        }
+        (NbtPathNode::IndexedElement(index), NbtTag::List(list)) => {
+            let index = if *index < 0 {
+                list.len() as i32 + index
+            } else {
+                *index
+            };
+            usize::try_from(index)
+                .ok()
+                .and_then(|index| list.get_mut(index))
+                .into_iter()
+                .collect()
+        }
+        (NbtPathNode::MatchElement(pattern), NbtTag::List(list)) => {
+            let pattern = NbtTag::Compound(pattern.clone());
+            if !list.iter().any(|tag| compare_nbt(&pattern, tag)) {
+                list.push(pattern.clone());
+            }
+            list.iter_mut()
+                .filter(|tag| compare_nbt(&pattern, tag))
+                .collect()
+        }
+        (NbtPathNode::MatchObject(name, pattern), NbtTag::Compound(compound)) => {
+            let pattern = NbtTag::Compound(pattern.clone());
+            let tag = compound
+                .child_tags
+                .entry(name.clone().into())
+                .or_insert_with(|| pattern.clone());
+            if compare_nbt(&pattern, tag) {
+                vec![tag]
+            } else {
+                Vec::new()
+            }
+        }
+        (NbtPathNode::MatchRootObject(pattern), tag) => {
+            if compare_nbt(&NbtTag::Compound(pattern.clone()), tag) {
+                vec![tag]
+            } else {
+                Vec::new()
+            }
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn merge_path_parents<'a>(root: &'a mut NbtTag, path: &NbtPath) -> Option<Vec<&'a mut NbtTag>> {
+    let mut parents = vec![root];
+    for nodes in path.nodes().windows(2) {
+        let mut next = Vec::new();
+        for parent in parents {
+            next.extend(merge_node_targets(parent, &nodes[0], || {
+                nodes[1].create_preferred_parent_tag()
+            }));
+        }
+        if next.is_empty() {
+            return None;
+        }
+        parents = next;
+    }
+    Some(parents)
+}
+
+fn modify_merge(root: &mut NbtTag, path: &NbtPath, sources: &[NbtTag]) -> CommandExecutorResult {
+    // Validate and combine every source before creating or modifying targets.
+    let mut combined = NbtCompound::new();
+    for tag in sources {
+        if is_too_deep(tag, 0) {
+            return Err(ERROR_DATA_TOO_DEEP.create_without_context());
+        }
+        let NbtTag::Compound(compound) = tag else {
+            return Err(
+                ERROR_EXPECTED_OBJECT.create_without_context(TextComponent::text(tag.to_string()))
+            );
+        };
+        combined.merge(compound);
+    }
+
+    let Some(last_node) = path.nodes().last() else {
+        return Ok(0);
+    };
+    let Some(parents) = merge_path_parents(root, path) else {
+        // Reuse the path API's exact not-found prefix after parent creation.
+        path.get(root)?;
+        return Ok(0);
+    };
+    // Complete get-or-create for all parents before applying any merges.
+    let mut targets = Vec::new();
+    for parent in parents {
+        if matches!(
+            parent,
+            NbtTag::ByteArray(_) | NbtTag::IntArray(_) | NbtTag::LongArray(_)
+        ) {
+            let mut tags = Vec::new();
+            last_node.get_tag(parent, &mut tags);
+            if let Some(tag) = tags.first() {
+                targets.push(Err(ERROR_EXPECTED_OBJECT
+                    .create_without_context(TextComponent::text(tag.to_string()))));
+            }
+            continue;
+        }
+        targets.extend(
+            merge_node_targets(parent, last_node, || NbtTag::Compound(NbtCompound::new()))
+                .into_iter()
+                .map(Ok),
+        );
+    }
+    let mut changed = 0;
+    for tag in targets {
+        let tag = tag?;
+        let NbtTag::Compound(target) = tag else {
+            return Err(
+                ERROR_EXPECTED_OBJECT.create_without_context(TextComponent::text(tag.to_string()))
+            );
+        };
+        let before = target.clone();
+        target.merge(&combined);
+        changed += i32::from(before != *target);
+    }
+    Ok(changed)
+}
+
 fn execute_modify(
     context: &CommandContext,
     target_kind: TargetKind,
@@ -712,22 +853,21 @@ fn execute_modify(
             target_path.set(&mut root, last_tag)?
         }
         ModifyMode::Merge => {
-            let mut combined = NbtCompound::new();
-            for tag in &source_tags {
-                if is_too_deep(tag, 0) {
-                    return Err(ERROR_DATA_TOO_DEEP.create_without_context());
-                }
-                if let NbtTag::Compound(c) = tag {
-                    for (k, v) in &c.child_tags {
-                        combined.child_tags.insert(k.clone(), v.clone());
-                    }
-                } else {
-                    return Err(ERROR_EXPECTED_OBJECT
-                        .create_without_context(TextComponent::text(format!("{tag:?}"))));
+            let result = modify_merge(&mut root, target_path, &source_tags);
+            if !matches!(&result, Ok(count) if *count > 0)
+                && target_kind == TargetKind::Storage
+                && !target_data.is_empty()
+            {
+                // Java exposes existing storage compounds by reference, so
+                // path creation and earlier merges survive a later failure.
+                // A missing storage instead supplies an unattached empty tag.
+                if let NbtTag::Compound(updated) = &root
+                    && updated != &target_data
+                {
+                    target_accessor.set_data(updated)?;
                 }
             }
-
-            target_path.set(&mut root, NbtTag::Compound(combined))?
+            result?
         }
     };
 
