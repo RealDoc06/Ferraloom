@@ -479,7 +479,13 @@ impl EntitySelectorPredicate {
     #[allow(clippy::too_many_lines)]
     pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
-            Self::IsAlive => entity.get_entity().is_alive(),
+            Self::IsAlive => {
+                // Living entities remain in the world during their death animation.
+                entity.get_entity().is_alive()
+                    && entity
+                        .get_living_entity()
+                        .is_none_or(|living| living.health.load() > 0.0)
+            }
             Self::GameMode(mode, invert) => entity
                 .get_player()
                 .is_some_and(|p| (p.gamemode.load() == *mode) ^ invert),
@@ -573,5 +579,61 @@ impl EntitySelectorPredicate {
             }
             Self::AllOf(predicates) => predicates.iter().all(|predicate| predicate.test(entity)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::{level::Level, world_info::LevelData};
+    use std::sync::Weak;
+
+    #[tokio::test]
+    async fn alive_selector_excludes_dying_living_entities_before_they_are_removed() {
+        let directory = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            Weak::new(),
+            Arc::default(),
+        ));
+        let pig = crate::entity::r#type::from_type(
+            &EntityType::PIG,
+            Vector3::new(0.0, 100.0, 0.0),
+            &world,
+            Uuid::from_u128(1),
+        );
+        let living = pig.get_living_entity().unwrap();
+        assert!(EntitySelectorPredicate::IsAlive.test(pig.as_ref()));
+        living.health.store(0.0);
+        assert!(!pig.get_entity().is_removed());
+        assert!(!EntitySelectorPredicate::IsAlive.test(pig.as_ref()));
+        living.health.store(7.0);
+        assert!(EntitySelectorPredicate::IsAlive.test(pig.as_ref()));
+
+        let item = crate::entity::r#type::from_type(
+            &EntityType::ITEM,
+            Vector3::new(0.0, 100.0, 0.0),
+            &world,
+            Uuid::from_u128(2),
+        );
+        assert!(EntitySelectorPredicate::IsAlive.test(item.as_ref()));
+        item.get_entity()
+            .removal_reason
+            .store(Some(crate::entity::RemovalReason::Discarded));
+        assert!(!EntitySelectorPredicate::IsAlive.test(item.as_ref()));
     }
 }
