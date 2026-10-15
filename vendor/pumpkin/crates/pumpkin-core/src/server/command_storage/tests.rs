@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    command::commands::data::{DataAccessor, StorageDataAccessor},
-    data::VanillaData,
-};
+use crate::{command::CommandSource, data::VanillaData};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::world_info::{LevelData, WorldInfoWriter, anvil::AnvilLevelInfo};
@@ -80,9 +77,51 @@ fn value(answer: i32) -> NbtCompound {
 }
 
 fn set(server: &Arc<Server>, id: &str, value: &NbtCompound) {
-    StorageDataAccessor::new(id.to_owned(), server.clone())
-        .set_data(value)
-        .unwrap();
+    let source = CommandSource {
+        server: Some(server.clone()),
+        ..CommandSource::dummy().with_world(server.worlds.load()[0].clone())
+    };
+    let dispatcher = server.command_dispatcher.load();
+    let previous = server
+        .command_storage
+        .lock()
+        .unwrap()
+        .get(id)
+        .cloned()
+        .unwrap_or_default();
+    for key in previous.child_tags.keys() {
+        dispatcher
+            .execute_input(
+                &format!(
+                    "data remove storage {id} {}",
+                    serde_json::to_string(key).unwrap()
+                ),
+                &source,
+            )
+            .unwrap();
+    }
+    if value.is_empty() {
+        // Exercise a namespace touched and emptied before its first save.
+        dispatcher
+            .execute_input(
+                &format!("data modify storage {id} temporary set value 1"),
+                &source,
+            )
+            .unwrap();
+        dispatcher
+            .execute_input(&format!("data remove storage {id} temporary"), &source)
+            .unwrap();
+    } else {
+        dispatcher
+            .execute_input(
+                &format!(
+                    "data merge storage {id} {}",
+                    NbtTag::Compound(value.clone())
+                ),
+                &source,
+            )
+            .unwrap();
+    }
 }
 
 async fn autosave(server: &Arc<Server>) {
