@@ -267,6 +267,30 @@
     "block.fill_destroy": {
       "feature_id": "players.commands",
       "scenario": "fill destroy completes and counts block replacements"
+    },
+    "block.fill_destroy_sponge": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy applies sponge absorption callbacks"
+    },
+    "block.fill_destroy_shapes": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy connects new and neighboring fences"
+    },
+    "block.fill_destroy_same_fluid": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy of identical source fluid is unchanged and fails"
+    },
+    "block.fill_destroy_nether_sponge": {
+      "feature_id": "players.commands",
+      "scenario": "fill destroy dries wet sponge in the Nether"
+    },
+    "data.modify_providers": {
+      "feature_id": "players.commands",
+      "scenario": "data modify copies block entity and storage sources without changing them"
+    },
+    "data.modify_insert_string": {
+      "feature_id": "players.commands",
+      "scenario": "data modify indexes insertion and extracts strings from all providers"
     }
   }
 }

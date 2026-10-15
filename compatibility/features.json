@@ -3087,7 +3087,13 @@
         "execute as runs once for each selected entity",
         "wire command tree decodes completely",
         "score selectors use entity UUIDs and require existing scores",
-        "fill destroy completes and counts block replacements"
+        "fill destroy completes and counts block replacements",
+        "fill destroy applies sponge absorption callbacks",
+        "fill destroy connects new and neighboring fences",
+        "fill destroy of identical source fluid is unchanged and fails",
+        "fill destroy dries wet sponge in the Nether",
+        "data modify copies block entity and storage sources without changing them",
+        "data modify indexes insertion and extracts strings from all providers"
       ],
       "rust_status": "partial",
       "evidence": [

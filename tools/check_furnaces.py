@@ -64,10 +64,26 @@ def paired_results(report: dict) -> dict:
             passed = (healthy and len(phases) == len(names)
                       and {phase["name"] for phase in phases} == set(names)
                       and all(phase["result"] == "passed" for phase in phases))
-            entries.append({"id": test_id, "features": ["blocks.processing"],
-                            "result": "passed" if passed else "failed",
-                            "detail": {"mode": mode, "phases": list(names), "healthy_process": bool(healthy),
-                                       "scope": "Selected saved-state, cooking and remainder fixtures; raw phase checks are in cases."}})
+            detail = {"mode": mode, "phases": list(names), "healthy_process": bool(healthy),
+                      "scope": "Selected saved-state, cooking and remainder fixtures; raw phase checks are in cases."}
+            observations = {phase["name"]: phase["storage_observation"] for phase in phases
+                            if "storage_observation" in phase}
+            if observations:
+                detail["storage_observations"] = observations
+            result = "passed" if passed else "failed"
+            if passed and names == ("zero-step",):
+                observation = observations.get("zero-step", {})
+                if not isinstance(observation, dict) or observation.get("raw_chunk_unchanged") is not False:
+                    result = "skipped"
+                    detail["reason"] = ("No zero-step chunk rewrite was observed. Preserved bytes alone "
+                                        "do not exercise the runtime's furnace encoding.")
+            entry = {"id": test_id, "features": ["blocks.processing"], "result": result, "detail": detail}
+            errors = [report.get("error"), case.get("error"), case.get("source_integrity_error")]
+            errors.extend(phase.get("error") for phase in phases)
+            messages = list(dict.fromkeys(error for error in errors if error))
+            if messages:
+                entry["error"] = "; ".join(messages)
+            entries.append(entry)
     return servers
 
 

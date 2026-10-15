@@ -62,7 +62,9 @@ class FurnaceProbeTests(unittest.TestCase):
             for mode, names in (("main", ("zero-step", "after-63", "after-163")),
                                 ("lava", ("lava-after-1", "lava-after-200"))):
                 report["cases"].append({"runtime": kind, "mode": mode, "exit": {"passed": True},
-                                        "phases": [{"name": name, "result": "passed"} for name in names]})
+                                        "phases": [{"name": name, "result": "passed",
+                                                    **({"storage_observation": {"raw_chunk_unchanged": False}}
+                                                       if name == "zero-step" else {})} for name in names]})
         self.assertTrue(all(case["result"] == "passed" for entries in paired_results(report).values() for case in entries))
         report["cases"][2]["exit"]["passed"] = False
         results = paired_results(report)
@@ -74,11 +76,35 @@ class FurnaceProbeTests(unittest.TestCase):
     def test_missing_continuation_phase_cannot_be_reported_as_a_pass(self):
         report = {"source_fixture": {"result": "passed"}, "source_integrity_checks": [{"passed": True}],
                   "cases": [{"runtime": "rust", "mode": "main", "exit": {"passed": True},
-                             "phases": [{"name": "zero-step", "result": "passed"},
+                             "phases": [{"name": "zero-step", "result": "passed",
+                                         "storage_observation": {"raw_chunk_unchanged": False}},
                                         {"name": "after-63", "result": "passed"}]}]}
         results = paired_results(report)
         self.assertEqual([case["result"] for case in results["rust"]], ["passed", "failed", "failed"])
         self.assertTrue(all(case["result"] == "failed" for case in results["vanilla"]))
+
+    def test_zero_step_preservation_is_not_imported_as_an_encoding_pass(self):
+        observation = {"raw_chunk_unchanged": True, "scope": "Preservation only"}
+        report = {"source_fixture": {"result": "passed"}, "source_integrity_checks": [{"passed": True}],
+                  "cases": [{"runtime": "rust", "mode": "main", "exit": {"passed": True},
+                             "phases": [{"name": "zero-step", "result": "passed", "storage_observation": observation},
+                                        {"name": "after-63", "result": "passed"},
+                                        {"name": "after-163", "result": "passed"}]}]}
+        entries = paired_results(report)["rust"]
+        self.assertEqual([entry["result"] for entry in entries], ["skipped", "passed", "failed"])
+        self.assertEqual(entries[0]["detail"]["storage_observations"], {"zero-step": observation})
+        self.assertIn("No zero-step chunk rewrite", entries[0]["detail"]["reason"])
+        for missing in ({}, {"raw_chunk_unchanged": None}):
+            report["cases"][0]["phases"][0]["storage_observation"] = missing
+            self.assertEqual(paired_results(report)["rust"][0]["result"], "skipped")
+
+    def test_failed_run_keeps_its_diagnostic_in_every_paired_observation(self):
+        report = {"error": "ValueError: Official server checksum mismatch", "cases": [],
+                  "source_integrity_checks": []}
+        for entries in paired_results(report).values():
+            for entry in entries:
+                self.assertEqual(entry["result"], "failed")
+                self.assertEqual(entry["error"], report["error"])
 
     def test_numeric_short_is_a_canonical_difference_without_semantic_failure(self):
         self.assertEqual(furnaces.compare_snapshot(snapshot(), EXPECTED)["result"], "passed")
