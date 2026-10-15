@@ -292,6 +292,32 @@ async fn scheduler_retains_external_inventory_through_unwatch_and_late_command_w
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn snapshot_worker_refuses_pending_request_when_full_ticket_already_returned() {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        let (_folder, world) = scheduler_world().await;
+        let pos = Vector2::new(0, 0);
+        ticket(&world, pos, true);
+        let chunk = published(&world, pos).await;
+        drop(chest(&world, BlockPos::new(1, 100, 1), 2));
+        let lifecycle = world.entity_lifecycle.lock().await;
+        {
+            let mut unload = world.level.chunk_unload.access();
+            // Model the worker running before the scheduler consumes a renewed
+            // FULL ticket. No external BE handle can block retirement instead.
+            assert!(!unload.prepare_or_defer(pos, &chunk));
+            assert!(unload.is_requested(pos, &chunk));
+        }
+        assert!(!world.retire_block_entities(pos, Some(&chunk)));
+        assert!(world.block_entities.contains_key(&pos));
+        assert!(!world.level.chunk_unload.access().is_requested(pos, &chunk));
+        drop(lifecycle);
+        world.shutdown().await.unwrap();
+    })
+    .await
+    .expect("direct renewed-ticket snapshot check must finish within 15 seconds");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn scheduler_rechecks_renewed_ticket_and_invalidated_snapshot_before_eviction() {
     let (_folder, world) = scheduler_world().await;
     let pos = Vector2::new(0, 0);
