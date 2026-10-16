@@ -1,4 +1,4 @@
-//! Preservation gate for saved items before a modeled inventory consumes them.
+//! Preservation gates before a modeled inventory consumes an item.
 //! This does not implement unsupported component gameplay or network codecs.
 
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -7,6 +7,7 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 pub enum ItemStackAdmissionError {
     EnvelopeExtensions,
     Unreadable,
+    Unwritable,
     Lossy,
 }
 
@@ -19,8 +20,59 @@ impl ItemStackAdmissionError {
                 "item envelope extensions are not modeled; components use the central item codec"
             }
             Self::Unreadable => "item cannot be read by the current item codec",
+            Self::Unwritable => "item contains data the current persistence writer cannot encode",
             Self::Lossy => "item cannot round-trip losslessly through the current item codec",
         }
+    }
+}
+
+/// Check the persistence projection of an already decoded stack before publishing
+/// it. This cannot recover data discarded by an upstream wire/command decoder and
+/// does not certify component gameplay or wire fidelity. Transient components are
+/// intentionally omitted by the writer; component removals remain valid patches.
+pub fn validate_runtime_item_stack(
+    stack: &super::ItemStack,
+) -> Result<(), ItemStackAdmissionError> {
+    if stack.is_empty() && stack.patch.is_empty() {
+        return Ok(());
+    }
+    // A compound writer would overwrite duplicate patch keys before the NBT gate
+    // could see them. Reject that ambiguity, including add/remove collisions.
+    let mut seen = std::collections::HashSet::new();
+    for (id, value) in &stack.patch {
+        if !seen.insert(*id)
+            || value
+                .as_ref()
+                .is_some_and(|value| value.get_self_enum() != *id)
+        {
+            return Err(ItemStackAdmissionError::Lossy);
+        }
+    }
+    let mut written = NbtCompound::new();
+    stack.write_item_stack(&mut written);
+    // Inspect before decoding: a placeholder's End can survive the in-memory
+    // codec round trip while terminating the enclosing compound on disk.
+    let mut pending: Vec<_> = written.child_tags.values().collect();
+    while let Some(tag) = pending.pop() {
+        match tag {
+            NbtTag::End => return Err(ItemStackAdmissionError::Unwritable),
+            NbtTag::Compound(compound) => pending.extend(compound.child_tags.values()),
+            NbtTag::List(items) => pending.extend(items),
+            _ => {}
+        }
+    }
+    written
+        .clone()
+        .serialize_content(&mut pumpkin_nbt::serializer::NbtWriteHelperJava::new(
+            &mut std::io::sink(),
+        ))
+        .map_err(|_| ItemStackAdmissionError::Unwritable)?;
+    if stack.is_empty() {
+        // Empty stacks clear inventory slots, but some entity writers still
+        // serialize their patches. They must pass the End/encoding checks too.
+        Ok(())
+    } else {
+        validate_item_stack(&written)
     }
 }
 
@@ -197,5 +249,132 @@ fn normalize_potion_defaults(data: &mut NbtTag) {
                 effect.child_tags.remove("show_particles");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        data_component::DataComponent,
+        data_component_impl::{
+            BundleContentsImpl, ContainerImpl, CustomDataImpl, DataComponentImpl,
+            TooltipDisplayImpl,
+        },
+        item::Item,
+        item_stack::ItemStack,
+    };
+
+    #[test]
+    fn runtime_admission_rejects_writerless_components_including_nested_stacks() {
+        let bad = ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![(
+                DataComponent::TooltipDisplay,
+                Some(TooltipDisplayImpl.to_dyn()),
+            )],
+        );
+        let nested = ItemStack::new_with_component(
+            1,
+            &Item::SHULKER_BOX,
+            vec![(
+                DataComponent::Container,
+                Some(
+                    ContainerImpl {
+                        items: vec![(0, bad.clone())],
+                    }
+                    .to_dyn(),
+                ),
+            )],
+        );
+        let bundle = ItemStack::new_with_component(
+            1,
+            &Item::BUNDLE,
+            vec![(
+                DataComponent::BundleContents,
+                Some(
+                    BundleContentsImpl {
+                        items: vec![bad.clone()],
+                    }
+                    .to_dyn(),
+                ),
+            )],
+        );
+        for stack in [bad.copy_with_count(0), bad, nested, bundle] {
+            assert_eq!(
+                validate_runtime_item_stack(&stack),
+                Err(ItemStackAdmissionError::Unwritable)
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_admission_preserves_removals_nested_items_and_opaque_custom_data() {
+        let healthy = ItemStack::new_with_component(
+            37,
+            &Item::GOLD_INGOT,
+            vec![(DataComponent::TooltipDisplay, None)],
+        );
+        let nested = ItemStack::new_with_component(
+            1,
+            &Item::SHULKER_BOX,
+            vec![(
+                DataComponent::Container,
+                Some(
+                    ContainerImpl {
+                        items: vec![(0, healthy.clone())],
+                    }
+                    .to_dyn(),
+                ),
+            )],
+        );
+        let bundle = ItemStack::new_with_component(
+            1,
+            &Item::BUNDLE,
+            vec![(
+                DataComponent::BundleContents,
+                Some(
+                    BundleContentsImpl {
+                        items: vec![healthy.clone()],
+                    }
+                    .to_dyn(),
+                ),
+            )],
+        );
+        let mut authored = NbtCompound::new();
+        let mut components = NbtCompound::new();
+        components.put_string("minecraft:instrument", "opaque authored value");
+        authored.put_compound("components", components);
+        let custom = ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![(
+                DataComponent::CustomData,
+                Some(CustomDataImpl::new(authored).to_dyn()),
+            )],
+        );
+        for stack in [ItemStack::EMPTY.clone(), healthy, nested, bundle, custom] {
+            assert_eq!(validate_runtime_item_stack(&stack), Ok(()));
+        }
+    }
+
+    #[test]
+    fn runtime_admission_refuses_duplicate_patch_keys_before_the_writer_overwrites_them() {
+        let stack = ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![
+                (DataComponent::TooltipDisplay, None),
+                (
+                    DataComponent::TooltipDisplay,
+                    Some(TooltipDisplayImpl.to_dyn()),
+                ),
+            ],
+        );
+        assert_eq!(
+            validate_runtime_item_stack(&stack),
+            Err(ItemStackAdmissionError::Lossy)
+        );
     }
 }

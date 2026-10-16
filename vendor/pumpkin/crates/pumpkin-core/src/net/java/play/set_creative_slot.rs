@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_data::item_stack::admission::validate_runtime_item_stack;
 
 impl JavaClient {
     pub fn handle_set_creative_slot(
@@ -15,6 +16,17 @@ impl JavaClient {
         let item_stack = packet
             .clicked_item
             .to_stack_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION);
+        if validate_runtime_item_stack(&item_stack).is_err() {
+            // The client predicts creative edits and drops. Force the authoritative
+            // menu/cursor even when its tracked stacks have not changed. Reject
+            // before plugins, equipment notifications, inventory writes or drops.
+            player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .sync_state();
+            return Ok(());
+        }
         let mut creative_event =
             crate::plugin::api::events::inventory::inventory_creative::InventoryCreativeEvent::new(
                 player.clone(),
@@ -81,3 +93,7 @@ impl JavaClient {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "set_creative_slot_tests.rs"]
+mod tests;
