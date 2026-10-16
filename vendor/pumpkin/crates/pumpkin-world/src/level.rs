@@ -1257,7 +1257,15 @@ mod tests {
             .lock()
             .unwrap()
             .insert(block_pos, container.clone());
-        let source_nbt = source.to_bytes().unwrap();
+        let source_tree = || {
+            let bytes = source.to_bytes().unwrap();
+            pumpkin_nbt::Nbt::read(&mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+                std::io::Cursor::new(bytes),
+            ))
+            .unwrap()
+            .root_tag
+        };
+        let source_nbt = source_tree();
 
         // Seed actual region bytes without invoking the guarded reader. The
         // Level must subsequently use its own file cache, IO worker and scheduler.
@@ -1350,7 +1358,8 @@ mod tests {
             std::fs::read(&healthy_path).unwrap(),
             healthy_after_flush.unwrap()
         );
-        assert_eq!(source.to_bytes().unwrap(), source_nbt);
+        // Fresh encodings can reorder compound keys; disk bytes above stay exact.
+        assert_eq!(source_tree(), source_nbt);
         assert_eq!(
             source.pending_block_entities.lock().unwrap()[&block_pos],
             container
