@@ -494,7 +494,9 @@ fn validate_player_data(data: &NbtCompound) -> Result<(), PlayerDataError> {
             for (key, value) in &effect.child_tags {
                 let supported = match key.as_ref() {
                     "id" => matches!(value, NbtTag::String(_)),
-                    "amplifier" => matches!(value, NbtTag::Int(0..=255)),
+                    // Java's unsigned-byte codec stores 128..=255 as negative NBT bytes.
+                    // Keep accepting bounded ints from earlier Pumpkin saves.
+                    "amplifier" => matches!(value, NbtTag::Byte(_) | NbtTag::Int(0..=255)),
                     "duration" => matches!(value, NbtTag::Int(_)),
                     "ambient" | "show_particles" | "show_icon" => {
                         matches!(value, NbtTag::Byte(0 | 1))
@@ -539,12 +541,29 @@ fn validate_player_item(item: &NbtCompound, field: &str) -> Result<(), PlayerDat
         || item
             .get("components")
             .is_some_and(|tag| !matches!(tag, NbtTag::Compound(_)))
-        || !pumpkin_data::item_stack::ItemStack::read_item_stack(item)
-            .is_some_and(|stack| !stack.is_empty())
     {
         return Err(unsupported(
             field,
             "item cannot be read by the current item codec",
+        ));
+    }
+    let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(item)
+        .filter(|stack| !stack.is_empty())
+        .ok_or_else(|| unsupported(field, "item cannot be read by the current item codec"))?;
+    let mut written = NbtCompound::new();
+    stack.write_item_stack(&mut written);
+    let mut expected = item.clone();
+    // The inventory owns Slot. The item writer always emits an empty component
+    // patch, whereas Java can omit it. All other data, including nested stacks,
+    // must survive the actual codec unchanged before the player is admitted.
+    expected.child_tags.remove("Slot");
+    if expected.get("components").is_none() {
+        expected.put_compound("components", NbtCompound::new());
+    }
+    if written != expected {
+        return Err(unsupported(
+            field,
+            "item cannot round-trip losslessly through the current item codec",
         ));
     }
     Ok(())

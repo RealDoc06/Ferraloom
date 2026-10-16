@@ -83,7 +83,7 @@ impl NBTStorage for pumpkin_data::potion::Effect {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put("id", self.effect_type.minecraft_name);
         if self.amplifier > 0 {
-            nbt.put("amplifier", NbtTag::Int(i32::from(self.amplifier)));
+            nbt.put("amplifier", NbtTag::Byte(self.amplifier as i8));
         }
         nbt.put("duration", NbtTag::Int(self.duration));
         if self.ambient {
@@ -111,7 +111,14 @@ impl NBTStorageInit for pumpkin_data::potion::Effect {
             warn!("Unable to read effect. Show icon is not present");
             return None;
         };
-        let amplifier = nbt.get_int("amplifier").unwrap_or(0) as u8;
+        // 26.3 uses ExtraCodecs.UNSIGNED_BYTE; bounded ints remain readable for
+        // earlier Pumpkin saves. Invalid values must not wrap or become zero.
+        let amplifier = match nbt.get("amplifier") {
+            None => 0,
+            Some(NbtTag::Byte(value)) => *value as u8,
+            Some(NbtTag::Int(value)) => u8::try_from(*value).ok()?,
+            _ => return None,
+        };
         let duration = nbt.get_int("duration").unwrap_or(0);
         let ambient = nbt.get_byte("ambient").unwrap_or(0) == 1;
         let show_particles = nbt.get_byte("show_particles").unwrap_or(1) == 1;

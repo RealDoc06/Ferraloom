@@ -2732,11 +2732,11 @@ impl LivingEntity {
             }
         }
 
-        // Clamp any persisted absorption to the entity's configured max
-        let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
-        let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
-        let clamped_abs = raw_abs.max(0.0).min(max_abs);
-        self.absorption.store(clamped_abs);
+        // 26.3 loads through internalSetAbsorptionAmount before attributes and
+        // effects, bypassing the regular setter's max-attribute clamp. Clamping
+        // against our initial attributes here would erase saved yellow hearts.
+        self.absorption
+            .store(nbt.get_float("AbsorptionAmount").unwrap_or(0.0));
 
         // Load fall distance, but if this entity is currently marked dead ensure we don't restore
         // a lethal fall distance that would immediately re-kill on spawn.

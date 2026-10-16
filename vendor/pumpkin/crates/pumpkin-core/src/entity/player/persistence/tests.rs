@@ -75,6 +75,25 @@ fn seed(storage: &PlayerDataStorage, uuid: Uuid, data: NbtCompound) {
     storage.save_player_data(snapshot).unwrap();
 }
 
+fn assert_refused_unchanged(snbt: &str, field: &str) {
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(513);
+    seed(&storage, uuid, compound("{opaque:42}"));
+    seed(&storage, uuid, compound(snbt));
+    let path = storage.get_player_data_path(&uuid);
+    let backup_path = path.with_extension("dat_old");
+    let primary = std::fs::read(&path).unwrap();
+    let backup = std::fs::read(&backup_path).unwrap();
+    assert!(
+        matches!(storage.load_player_data(&uuid), Err(PlayerDataError::Unsupported { field: actual, .. }) if actual == field),
+        "{snbt}"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), primary);
+    assert_eq!(std::fs::read(&backup_path).unwrap(), backup);
+    assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 2);
+}
+
 #[tokio::test]
 async fn player_dat_preserves_vanilla_remainder_across_snapshots_and_reloads() {
     let fixture = Fixture::new().await;
@@ -176,7 +195,7 @@ async fn player_dat_removed_modeled_fields_do_not_return_from_the_remainder() {
         Inventory:[{Slot:0b,id:"minecraft:stone",count:37},{Slot:100b,id:"minecraft:diamond_boots",count:1}],
         equipment:{offhand:{id:"minecraft:shield",count:1},head:{id:"minecraft:diamond_helmet",count:1}},
         EnderItems:[{Slot:2b,id:"minecraft:diamond",count:7}],
-        active_effects:[{id:"minecraft:speed",duration:200,amplifier:1,show_icon:1b}],
+        active_effects:[{id:"minecraft:speed",duration:200,amplifier:1b,show_icon:1b}],
         respawn:{dimension:"minecraft:overworld",pos:[I;1,64,2],yaw:42.0f,pitch:0.0f,extension:7},
         RootVehicle:{Attach:[I;0,0,0,42]},
         CustomName:{text:"Old",extension:9},HasVisualFire:1b,Tags:[old],
@@ -387,21 +406,192 @@ fn player_dat_unsupported_partial_state_refuses_without_backup_fallback_or_repla
             "equipment.body",
         ),
     ] {
-        let folder = tempfile::tempdir().unwrap();
-        let storage = PlayerDataStorage::new(folder.path(), true);
-        let uuid = Uuid::from_u128(513);
-        seed(&storage, uuid, compound("{opaque:42}"));
-        seed(&storage, uuid, compound(snbt));
-        let path = storage.get_player_data_path(&uuid);
-        let backup_path = path.with_extension("dat_old");
-        let primary = std::fs::read(&path).unwrap();
-        let backup = std::fs::read(&backup_path).unwrap();
-        assert!(
-            matches!(storage.load_player_data(&uuid), Err(PlayerDataError::Unsupported { field: actual, .. }) if actual == field),
-            "{snbt}"
+        assert_refused_unchanged(snbt, field);
+    }
+}
+
+#[tokio::test]
+async fn player_dat_effect_amplifier_loads_unsigned_bytes_and_legacy_ints() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(514);
+    // Bytecode-derived shapes: Details uses UNSIGNED_BYTE with default zero.
+    // The int cases exercise old Pumpkin output, not an observed Java save.
+    for (amplifier, expected) in [
+        (None, 0),
+        (Some(NbtTag::Byte(0)), 0),
+        (Some(NbtTag::Byte(1)), 1),
+        (Some(NbtTag::Byte(-1)), 255),
+        (Some(NbtTag::Int(1)), 1),
+        (Some(NbtTag::Int(255)), 255),
+    ] {
+        let mut effect = compound(r#"{id:"minecraft:regeneration",duration:200,show_icon:1b}"#);
+        if let Some(amplifier) = amplifier {
+            effect.put("amplifier", amplifier);
+        }
+        let mut data = NbtCompound::new();
+        data.put_list("active_effects", vec![NbtTag::Compound(effect)]);
+        seed(&storage, uuid, data);
+        for _ in 0..2 {
+            let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+            let mut current = player(fixture.source.world(), uuid).await;
+            NBTStorage::read_nbt(&mut current, &mut loaded);
+            let effect = current
+                .living_entity
+                .get_effect(&pumpkin_data::effect::StatusEffect::REGENERATION)
+                .unwrap();
+            assert_eq!(effect.amplifier, expected);
+            assert_eq!(effect.duration, 200);
+            assert!(!effect.ambient);
+            assert!(effect.show_particles);
+            assert!(effect.show_icon);
+            let saved = save(&storage, &current);
+            let effects = saved.get_list("active_effects").unwrap();
+            assert_eq!(effects.len(), 1);
+            let effect = effects[0].extract_compound().unwrap();
+            assert_eq!(
+                effect.get("amplifier"),
+                (expected != 0)
+                    .then_some(NbtTag::Byte(expected as i8))
+                    .as_ref()
+            );
+        }
+    }
+}
+
+#[test]
+fn player_dat_effect_amplifier_outside_supported_range_refuses_unchanged() {
+    for amplifier in ["-1", "256", "1s"] {
+        assert_refused_unchanged(
+            &format!(
+                r#"{{active_effects:[{{id:"minecraft:regeneration",amplifier:{amplifier},show_icon:1b}}]}}"#
+            ),
+            "active_effects.amplifier",
         );
-        assert_eq!(std::fs::read(&path).unwrap(), primary);
-        assert_eq!(std::fs::read(&backup_path).unwrap(), backup);
-        assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 2);
+    }
+}
+
+#[tokio::test]
+async fn player_dat_absorption_survives_load_before_attributes_and_effects() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(515);
+    // The official 26.3 load path calls the unclamped internal absorption setter.
+    // Attributes remain opaque here; this checks preservation, not their gameplay.
+    let original = compound(
+        r#"{
+        AbsorptionAmount:4.0f,
+        attributes:[{id:"minecraft:max_absorption",base:4.0d}],
+        active_effects:[{id:"minecraft:absorption",duration:200,show_icon:1b}]
+    }"#,
+    );
+    seed(&storage, uuid, original.clone());
+    for _ in 0..2 {
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        assert_eq!(
+            current
+                .living_entity
+                .get_attribute_value(&pumpkin_data::attributes::Attributes::MAX_ABSORPTION),
+            0.0
+        );
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        assert_eq!(current.get_absorption(), 4.0);
+        assert!(
+            current
+                .living_entity
+                .get_effect(&pumpkin_data::effect::StatusEffect::ABSORPTION)
+                .is_some()
+        );
+        let saved = save(&storage, &current);
+        assert_eq!(saved.get_float("AbsorptionAmount"), Some(4.0));
+        assert_eq!(saved.get("attributes"), original.get("attributes"));
+    }
+}
+
+#[test]
+fn player_dat_lossy_books_and_nested_items_refuse_unchanged() {
+    // These refusals describe Rust codec capacity, not Java source validity.
+    for (snbt, field) in [
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:written_book",count:1,components:{"minecraft:written_book_content":{title:"Copy",author:"Author",pages:[],generation:1}}}]}"#,
+            "Inventory",
+        ),
+        (
+            r#"{EnderItems:[{Slot:0b,id:"minecraft:written_book",count:1,components:{"minecraft:written_book_content":{title:{raw:"Copy",filtered:"Filtered"},author:"Author",pages:[],resolved:1b}}}]}"#,
+            "EnderItems",
+        ),
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[{slot:0,item:{id:"minecraft:stick",count:1,components:{"minecraft:custom_name":{text:"Keep",color:"red"}}}}]}}]}"#,
+            "Inventory",
+        ),
+        (
+            r#"{EnderItems:[{Slot:0b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[{id:"minecraft:stick",count:1,components:{"minecraft:custom_name":{text:"Keep",color:"red"}}}]}}]}"#,
+            "EnderItems",
+        ),
+        (
+            r#"{equipment:{offhand:{id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[{slot:0,item:{id:"minecraft:stone",count:1,components:{},extension:42}}]}}}}"#,
+            "equipment",
+        ),
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[{id:"minecraft:stone",count:257,components:{}}]}}]}"#,
+            "Inventory",
+        ),
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:stick",count:1,components:{"!minecraft:custom_name":{extension:42}}}]}"#,
+            "Inventory",
+        ),
+    ] {
+        assert_refused_unchanged(snbt, field);
+    }
+}
+
+#[tokio::test]
+async fn player_dat_literal_names_and_lossless_containers_survive_actual_player_save() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(516);
+    // The first three slots match the Java-shaped interchange fixture's literal
+    // names and ordinary count. Nested positive cases keep a represented patch.
+    let original = compound(
+        r#"{
+        Inventory:[
+            {Slot:0b,id:"minecraft:stick",count:1,components:{"minecraft:item_name":"Interchange item"}},
+            {Slot:1b,id:"minecraft:gold_ingot",count:37},
+            {Slot:2b,id:"minecraft:stick",count:1,components:{"minecraft:custom_name":"Interchange custom"}},
+            {Slot:3b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[{slot:0,item:{id:"minecraft:stone",count:5,components:{"minecraft:custom_name":"Nested stone"}}}]}}
+        ],
+        EnderItems:[{Slot:2b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[{id:"minecraft:stick",count:2,components:{"minecraft:item_name":"Nested stick"}}]}}],
+        equipment:{offhand:{id:"minecraft:shield",count:1,components:{"minecraft:custom_name":"Shield"}}}
+    }"#,
+    );
+    seed(&storage, uuid, original.clone());
+    let mut expected = original.clone();
+    let Some(NbtTag::List(inventory)) = expected.child_tags.get_mut("Inventory") else {
+        panic!("expected inventory");
+    };
+    let NbtTag::Compound(gold) = &mut inventory[1] else {
+        panic!("expected gold stack");
+    };
+    gold.put_compound("components", NbtCompound::new());
+    let mut offhand = original
+        .get_compound("equipment")
+        .unwrap()
+        .get_compound("offhand")
+        .unwrap()
+        .clone();
+    offhand.put_byte("Slot", -106);
+    inventory.push(NbtTag::Compound(offhand));
+    for _ in 0..2 {
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        let saved = save(&storage, &current);
+        for key in ["Inventory", "EnderItems", "equipment"] {
+            assert_eq!(saved.get(key), expected.get(key), "{key}");
+        }
     }
 }
