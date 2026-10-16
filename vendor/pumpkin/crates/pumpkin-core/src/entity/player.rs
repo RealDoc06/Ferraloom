@@ -755,7 +755,7 @@ impl Player {
             current_block_destroy_stage: AtomicI32::new(-1),
             current_block_breaking_speed: AtomicU32::new(0),
             synced_mining_efficiency_level: AtomicI32::new(-1),
-            enchantment_seed: AtomicI32::new(rand::random()),
+            enchantment_seed: AtomicI32::new(0),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
@@ -8131,6 +8131,29 @@ mod tests {
     use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn new_player_starts_with_zero_seed_and_preserves_a_loaded_nonzero_seed() {
+        use crate::data::player_server::test::{close_fixture, player_fixture};
+        use std::sync::atomic::Ordering;
+
+        let fixture = player_fixture().await;
+        assert_eq!(fixture.player.enchantment_seed.load(Ordering::Relaxed), 0);
+        let mut saved = NbtCompound::new();
+        fixture.player.write_custom_nbt(&mut saved);
+        assert_eq!(saved.get_int("XpSeed"), Some(0));
+
+        saved.put_int("XpSeed", -123_456_789);
+        fixture.player.read_custom_nbt(&saved);
+        assert_eq!(
+            fixture.player.enchantment_seed.load(Ordering::Relaxed),
+            -123_456_789
+        );
+        let mut reloaded = NbtCompound::new();
+        fixture.player.write_custom_nbt(&mut reloaded);
+        assert_eq!(reloaded.get_int("XpSeed"), Some(-123_456_789));
+        close_fixture(&fixture).await;
+    }
 
     #[test]
     fn player_screen_slots_map_to_bedrock_inventory() {

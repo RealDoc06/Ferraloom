@@ -79,6 +79,44 @@ class TypedNBTTests(unittest.TestCase):
         self.assertEqual(typed["B"], {"nbt_type": "List", "element_type": 3, "value": []})
 
 
+class EnchantmentSeedTests(unittest.TestCase):
+    def test_seed_requires_exact_int_width_and_nonzero_reload_prerequisite(self):
+        for value in (-2147483648, -123456789, 123456789, 2147483647):
+            saved = {"typed": {"XpSeed": {"nbt_type": "Int", "value": value}}}
+            self.assertEqual(player_data.enchantment_seed(saved, nonzero=True), saved["typed"]["XpSeed"])
+        zero = {"typed": {"XpSeed": {"nbt_type": "Int", "value": 0}}}
+        self.assertEqual(player_data.enchantment_seed(zero), zero["typed"]["XpSeed"])
+        with self.assertRaisesRegex(AssertionError, "nonzero"):
+            player_data.enchantment_seed(zero, nonzero=True)
+        for seed in (None, {"nbt_type": "Long", "value": 17}, {"nbt_type": "Int", "value": True},
+                     {"nbt_type": "Int", "value": 17.0}, {"nbt_type": "Int", "value": "17"},
+                     {"nbt_type": "Int", "value": -2147483649}, {"nbt_type": "Int", "value": 2147483648}):
+            with self.subTest(seed=seed), self.assertRaisesRegex(AssertionError, "invalid_enchantment_seed"):
+                player_data.enchantment_seed({"typed": {"XpSeed": seed}})
+
+    def test_reload_witness_requires_initial_zero_and_observed_exact_live_seed(self):
+        # Synthetic observations exercise the real helper, never runtime evidence.
+        initial = {"typed": {"XpSeed": {"nbt_type": "Int", "value": 0}}}
+        reloaded = {"typed": {"XpSeed": {"nbt_type": "Int", "value": -123456789}}}
+        server = Mock()
+        with patch.object(player_data, "typed_predicate", return_value={"observed": True}) as predicate:
+            result = player_data.seed_reload_witness(server, initial, reloaded)
+            predicate.assert_called_once_with(server, f"if data entity {player_data.NAME} {{XpSeed:-123456789}}")
+            self.assertEqual(result["initial_saved"], initial["typed"]["XpSeed"])
+            self.assertEqual(result["reloaded_saved"], reloaded["typed"]["XpSeed"])
+            with self.assertRaisesRegex(AssertionError, "initial_seed_must_be_zero"):
+                player_data.seed_reload_witness(server, reloaded, reloaded)
+            with self.assertRaisesRegex(AssertionError, "nonzero"):
+                player_data.seed_reload_witness(server, initial, initial)
+            # A separately observed positive seed is equally valid; no fixed RNG expectation.
+            positive = {"typed": {"XpSeed": {"nbt_type": "Int", "value": 987654321}}}
+            player_data.seed_reload_witness(server, initial, positive)
+            predicate.assert_called_with(server, f"if data entity {player_data.NAME} {{XpSeed:987654321}}")
+        with patch.object(player_data, "typed_predicate", side_effect=AssertionError("wrong live seed")):
+            with self.assertRaisesRegex(AssertionError, "wrong live seed"):
+                player_data.seed_reload_witness(server, initial, reloaded)
+
+
 class ExperienceReferenceTests(unittest.TestCase):
     def test_exact_saved_fraction_total_and_type_are_required(self):
         # Explicit primary values, not a second implementation of XP arithmetic.
@@ -234,23 +272,23 @@ class StatisticsContinuityTests(unittest.TestCase):
             path = world / "players/stats" / f"{player_data.PLAYER_ID}.json"
             path.parent.mkdir(parents=True)
             source_data = {"DataVersion": 5023, "stats": {"minecraft:custom": {
-                "minecraft:open_barrel": 3, "minecraft:leave_game": 1, "future:unknown_stat": 17}}}
+                "minecraft:open_barrel": 3, "minecraft:leave_game": 2, "future:unknown_stat": 17}}}
             path.write_text(json.dumps(source_data))
             source = player_data.read_statistics(world)
-            self.assertEqual(player_data.statistics_counts(source, 3, 1)["counts"]["minecraft:open_barrel"], 3)
+            self.assertEqual(player_data.statistics_counts(source, 3, 2)["counts"]["minecraft:open_barrel"], 3)
             self.assertEqual(source["data"]["stats"]["minecraft:custom"]["future:unknown_stat"], 17)
             with self.assertRaises(AssertionError):
-                player_data.statistics_counts(source, 5, 2)
-            for opens, leaves in ((5, 2), (5, 1), (3, 2)):
+                player_data.statistics_counts(source, 5, 3)
+            for opens, leaves in ((5, 3), (5, 2), (3, 3)):
                 continued = deepcopy(source_data)
                 continued["stats"]["minecraft:custom"].update({"minecraft:open_barrel": opens, "minecraft:leave_game": leaves})
                 path.write_text(json.dumps(continued))
                 saved = player_data.read_statistics(world)
-                if (opens, leaves) == (5, 2):
-                    self.assertEqual(player_data.statistics_counts(saved, 5, 2)["counts"]["minecraft:leave_game"], 2)
+                if (opens, leaves) == (5, 3):
+                    self.assertEqual(player_data.statistics_counts(saved, 5, 3)["counts"]["minecraft:leave_game"], 3)
                 else:
                     with self.subTest(opens=opens, leaves=leaves), self.assertRaises(AssertionError):
-                        player_data.statistics_counts(saved, 5, 2)
+                        player_data.statistics_counts(saved, 5, 3)
 
     def test_canonical_json_rejects_duplicate_keys_versions_and_noninteger_counts(self):
         invalid = [

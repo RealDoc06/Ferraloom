@@ -2,6 +2,7 @@
 """Bounded, actual same-identity 26.3 player interchange in both directions.
 
 Exactly four sequential server boots: fresh Java -> Rust and fresh Rust -> Java.
+Each source uses two real logins to establish a loaded nonzero enchantment seed.
 Seven composite scenario IDs per direction cover received inventory/position/health,
 typed live identity/XP, advancements, and actual requested statistics continuation.
 Whole worlds are copied unchanged after clean disconnect/save/stop. No UUID
@@ -46,7 +47,7 @@ CASES = {
 }
 DEFERRED = [
     {"id": "player_data.statistics_remaining", "result": "unverified", "reason":
-     "Only same-UUID DataVersion 5023 open_barrel 3->5 and leave_game 1->2 are covered by this composite. Legacy private Statistics refusal, DFU, unknown named/numeric IDs, time/freeze semantics, contention and full counter gameplay remain unverified; no verified-family promotion."},
+     "Only same-UUID DataVersion 5023 open_barrel 3->5 and leave_game 2->3 are covered by this composite. Legacy private Statistics refusal, DFU, unknown named/numeric IDs, time/freeze semantics, contention and full counter gameplay remain unverified; no verified-family promotion."},
     {"id": "player_data.remaining_scope", "result": "unverified", "reason":
      "No legacy UUID migration, DFU, failed-load fixtures, unknown-ID sentinels, equipment/offhand/ender inventory, nondefault selected slot/dimension/respawn, gameplay for recipes/attributes/Brain/post-effects, XP wire decoding, signed/online identity or network-security claim. No third server boot to reload the destination's final mutation."},
 ]
@@ -148,6 +149,27 @@ def read_player(world: Path) -> dict:
     typed = reader.value(10)
     require(reader.offset == len(raw) and isinstance(typed, dict), "Invalid player NBT root or trailing data")
     return {"path": str(path), "sha256": digest(path), "raw_nbt_sha256": hashlib.sha256(raw).hexdigest(), "typed": typed}
+
+
+def enchantment_seed(saved: dict, *, nonzero: bool = False) -> dict:
+    """Retain the exact typed seed; zero is valid until the load-witness prerequisite."""
+    seed = saved["typed"].get("XpSeed")
+    require(isinstance(seed, dict) and seed.get("nbt_type") == "Int"
+            and type(seed.get("value")) is int and -2147483648 <= seed["value"] <= 2147483647,
+            {"invalid_enchantment_seed": seed})
+    require(not nonzero or seed["value"] != 0, "Source reload did not establish a nonzero enchantment seed")
+    return seed
+
+
+def seed_reload_witness(server: LoggedServer, initial: dict, reloaded: dict) -> dict:
+    """Prove the observed source seed through real reload, save and typed live state."""
+    initial_seed = enchantment_seed(initial)
+    require(initial_seed["value"] == 0, {"initial_seed_must_be_zero": initial_seed})
+    reloaded_seed = enchantment_seed(reloaded, nonzero=True)
+    live = typed_predicate(server, f'if data entity {NAME} {{XpSeed:{reloaded_seed["value"]}}}')
+    return {"initial_saved": initial_seed, "reloaded_saved": reloaded_seed, "reloaded_live": live,
+            "scope": "Actual same-UUID source rejoin establishes the seed; no expected random value or seed rewrite. "
+                     "Java initializes zero and replaces zero/missing on load. A zero random result fails this fixture prerequisite."}
 
 
 def timestamp(value: object) -> datetime:
@@ -286,6 +308,12 @@ def primary_inputs(report: dict) -> dict:
         "experience": {**XP_PRIMARY, "expectations": {
             label: {**xp._asdict(), "progress": xp.progress}
             for label, xp in (("after_add_223", SOURCE_XP), ("after_reload_then_add_4", CONTINUED_XP))}},
+        "enchantment_seed": {"class": "net.minecraft.world.entity.player.Player",
+            "constructor_offsets": "61..63: enchantmentSeed = 0",
+            "read_additional_save_data_offsets": "108..139: getIntOr(XpSeed, 0); zero -> random.nextInt()",
+            "add_additional_save_data_offsets": "97..105: putInt(XpSeed, enchantmentSeed)",
+            "scope": "Exact pinned inner JAR above; source prelude observes a real saved zero -> loaded nonzero for Java. "
+                     "No equality between independently generated random seeds across runtimes."},
         "scope": "Exact literal item_name/custom_name through the shared client codec; no rendering normalization."}
     return definitions
 
@@ -463,7 +491,7 @@ def validate_player(saved: dict, *, count: int, xp: ExperienceReference, positio
                   for entry in entries]
     require(sorted(normalized, key=lambda entry: entry["Slot"]["value"]) == wanted,
             {"expected_inventory": wanted, "actual_inventory": entries})
-    require(data.get("XpSeed", {}).get("nbt_type") == "Int", "Missing typed enchantment seed")
+    enchantment_seed(saved)
     return {"player_dat": saved["path"], "sha256": saved["sha256"], "independent_player_data_version": 5023,
             "checked_fields": [*expected, "XpLevel", "XpP", "XpTotal", "Inventory", "XpSeed"],
             "experience": experience, "inventory": inventory}
@@ -561,11 +589,14 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             lambda state: state.get("chunks", 0) >= 49, timeout=60)["chunks"]}, guarded=False)
         return client
 
-    def disconnect_and_stop(fixture: Fixture, client: Client, role: str) -> None:
+    def disconnect_and_save(fixture: Fixture, client: Client, role: str) -> None:
         stage(role + "_disconnect", fixture, lambda: fixture.close(client))
         stage(role + "_no_player", fixture, lambda: wait_predicate(fixture.server, f"unless entity @a[name={NAME}]"))
         stage(role + "_save", fixture, fixture.server.save_flush, guarded=False)
         stage(role + "_saved_frozen", fixture, lambda: require_frozen(fixture.server))
+
+    def disconnect_and_stop(fixture: Fixture, client: Client, role: str) -> None:
+        disconnect_and_save(fixture, client, role)
         stage(role + "_stop", fixture, fixture.stop, guarded=False)
         require(fixture.server.process is not None and fixture.server.process.returncode == 0
                 and all(client.process.returncode == 0 and not client.forced_close for client in fixture.clients),
@@ -585,8 +616,31 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
               server.command("difficulty normal"), server.command("scoreboard objectives add pdprobe dummy"),
               command_result(server, "gamerule natural_health_regeneration false", 1, mode="success")))
         stage("source_barrel_place", source, lambda: command_result(server, f"setblock {BARREL_POS} minecraft:barrel", 1, mode="success"))
+        source_world = server.directory / "world"
+        initial_client = connect(source, "source_seed_initial")
+        stage("source_seed_initial_identity", source, lambda: identity_witness(server, initial_client))
+        stage("source_seed_initial_live", source,
+              lambda: typed_predicate(server, f"if data entity {NAME} {{XpSeed:0}}"))
+        stage("source_seed_initial_online_save", source, server.save_flush, guarded=False)
+        stage("source_seed_initial_online_frozen", source, lambda: require_frozen(server))
+        initial_player = stage("source_seed_initial_snapshot", source, lambda: read_player(source_world), guarded=False)
+        detail["source_seed_initial_player"] = write_json(directory / "source-seed-initial-player.json", initial_player)
+        disconnect_and_save(source, initial_client, "source_seed_initial")
         client = connect(source, "source")
         stage("source_identity", source, lambda: identity_witness(server, client))
+        stage("source_seed_reloaded_save", source, server.save_flush, guarded=False)
+        stage("source_seed_reloaded_frozen", source, lambda: require_frozen(server))
+        reloaded_player = stage("source_seed_reloaded_snapshot", source, lambda: read_player(source_world), guarded=False)
+        detail["source_seed_reloaded_player"] = write_json(directory / "source-seed-reloaded-player.json", reloaded_player)
+        # The real same-UUID admission waits through every prior final save;
+        # no-player plus save-all alone does not fence a removed session's IO.
+        initial_statistics = stage("source_seed_initial_statistics_snapshot", source,
+                                   lambda: read_statistics(source_world), guarded=False)
+        detail["source_seed_initial_statistics"] = write_json(directory / "source-seed-initial-statistics.json", initial_statistics)
+        stage("source_seed_initial_statistics_count", source,
+              lambda: require(initial_statistics["data"]["stats"].get("minecraft:custom", {}).get("minecraft:leave_game") == 1,
+                              "Initial source disconnect was not saved exactly once"), guarded=False)
+        stage("source_seed_reload_witness", source, lambda: seed_reload_witness(server, initial_player, reloaded_player))
         stage("source_position", source, lambda: teleport_exact(server, client, POSITION))
         stage("source_initial_state", source, lambda: (server.command(f"gamemode survival {NAME}"),
               server.command(f"clear {NAME}"), command_result(server, "gamerule natural_health_regeneration", 0),
@@ -613,15 +667,16 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             stage(f"source_barrel_open_{opening}", source, lambda: barrel_open_close(server, client))
         stage("source_statistics_live", source, lambda: request_statistics(client, stats_contract, 3))
         disconnect_and_stop(source, client, "source")
-        source_world = server.directory / "world"
         immutable = world_hashes(source_world)
         detail["source_after_stop"] = immutable
         original_player = read_player(source_world)
+        require(enchantment_seed(original_player, nonzero=True) == enchantment_seed(reloaded_player, nonzero=True),
+                "Source setup changed the observed reloaded enchantment seed")
         detail["source_player"] = write_json(directory / "source-player.json", original_player)
         detail["source_canonical_state"] = validate_player(original_player, count=37, xp=SOURCE_XP, position=POSITION)
         original_statistics = stage("source_statistics_json", source, lambda: read_statistics(source_world), guarded=False)
         detail["source_statistics"] = write_json(directory / "source-statistics.json", original_statistics)
-        stage("source_statistics_counts", source, lambda: statistics_counts(original_statistics, 3, 1), guarded=False)
+        stage("source_statistics_counts", source, lambda: statistics_counts(original_statistics, 3, 2), guarded=False)
         original_advancements = read_advancements(source_world, definitions)
         detail["source_advancements"] = write_json(directory / "source-advancements.json", original_advancements)
         missing = sorted(set(definitions[ADVENTURE]["criteria"]) - set(original_advancements["data"][ADVENTURE]["criteria"]))
@@ -698,7 +753,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             final = read_statistics(destination_world)
             detail["destination_statistics"] = write_json(directory / "destination-statistics.json", final)
             return {"direction": detail["direction"], "uuid": str(PLAYER_ID),
-                    "source_json": statistics_counts(original_statistics, 3, 1), "destination_json": statistics_counts(final, 5, 2),
+                    "source_json": statistics_counts(original_statistics, 3, 2), "destination_json": statistics_counts(final, 5, 3),
                     "source_live": detail["stages"]["source_statistics_live"]["detail"],
                     "destination_import": detail["stages"]["destination_statistics_import"]["detail"],
                     "destination_live": detail["stages"]["destination_statistics_live"]["detail"],
@@ -708,7 +763,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
                                     "server": str(fixture.server.log_path), "commands": str(fixture.server.directory / "commands.jsonl")}
                              for role, fixture in (("source", source), ("destination", destination))},
                     "primary_reports": stats_contract["reports"], "whole_world_copy": copy_evidence,
-                    "scope": "Both runtimes in one transfer composite; received open_barrel 3/3/5 and independent stopped JSON 3/1 -> 5/2. Other counters are observations only."}
+                    "scope": "Both runtimes in one transfer composite; received open_barrel 3/3/5 and independent stopped JSON 3/2 -> 5/3 after one additional real source seed-initialization rejoin. Other counters are observations only."}
 
         record("statistics_continuation", destination, saved_statistics, live=False)
         detail["destination_after_stop"] = world_hashes(destination_world)
