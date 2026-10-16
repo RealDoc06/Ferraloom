@@ -727,11 +727,24 @@ impl World {
         SimulationCallbacks(self)
     }
 
-    /// Reserve lifetime before inspecting readiness. Retirement withdraws
-    /// readiness first, then waits for these callbacks before saving/unloading.
+    /// Packet input and generic continuations may run over absent terrain when
+    /// no simulation owner or ticket requires it. Published terrain still needs
+    /// a ready, non-retiring chunk pinned for the synchronous callback.
     pub(crate) fn enter_packet_callbacks(
         &self,
         chunk: Option<Vector2<i32>>,
+    ) -> Option<PacketCallbacks<'_>> {
+        self.enter_packet_callbacks_inner(chunk, false)
+    }
+
+    /// Reserve lifetime before inspecting ownership/readiness. Simulation
+    /// retirement retains ownership until its callback wait and cleanup finish.
+    /// Explicit mutation stages must retain their terrain requirement even when
+    /// ordinary input would need only the world lifetime.
+    fn enter_packet_callbacks_inner(
+        &self,
+        chunk: Option<Vector2<i32>>,
+        terrain_required: bool,
     ) -> Option<PacketCallbacks<'_>> {
         let callbacks = self.enter_simulation_callbacks();
         if self.packet_admission_closed.load(Ordering::SeqCst)
@@ -744,7 +757,8 @@ impl World {
                 .active_chunk_tracker
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if tracker.owned_block_chunks.contains(&chunk)
+            let owned = tracker.owned_block_chunks.contains(&chunk);
+            if owned
                 && (!tracker.requested_block_chunks.contains(&chunk)
                     || !tracker.watched_block_chunks.contains(&chunk))
             {
@@ -761,7 +775,17 @@ impl World {
             if !loading.pos_level.get(&chunk).is_some_and(|level| {
                 *level <= pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL
             }) {
-                return None;
+                // A weaker ticket still represents pending terrain, not an
+                // existing-only spectator over genuinely unowned space.
+                if terrain_required || owned || loading.pos_level.contains_key(&chunk) {
+                    return None;
+                }
+                if !self.level.loaded_chunks.contains_key(&chunk) {
+                    return Some(PacketCallbacks {
+                        _callbacks: callbacks,
+                        _chunk: None,
+                    });
+                }
             }
             let terrain = self.level.ready_chunk(chunk)?;
             if self
@@ -824,7 +848,7 @@ impl World {
             {
                 return std::task::Poll::Ready(None);
             }
-            let Some(_callbacks) = self.enter_packet_callbacks(chunk) else {
+            let Some(_callbacks) = self.enter_packet_callbacks_inner(chunk, true) else {
                 // The runner retries world admission on readiness publication.
                 if let Some(activity) =
                     crate::entity::player::packet_activity::ActivityLease::current()

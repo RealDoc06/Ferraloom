@@ -134,11 +134,20 @@ impl Fixture {
         fixture
     }
 
+    async fn build(count: usize, allow_nether: bool, controlled_terrain: bool) -> Self {
+        Self::build_for_mode(count, allow_nether, controlled_terrain, GameMode::Survival).await
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "Keep server, terrain, transport and session admission setup in one fixture."
     )]
-    async fn build(count: usize, allow_nether: bool, controlled_terrain: bool) -> Self {
+    async fn build_for_mode(
+        count: usize,
+        allow_nether: bool,
+        controlled_terrain: bool,
+        gamemode: GameMode,
+    ) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -183,18 +192,23 @@ impl Fixture {
                 info.spawn_x = 0;
                 info.spawn_y = 65;
                 info.spawn_z = 0;
+                if gamemode == GameMode::Spectator {
+                    info.game_rules.spectators_generate_chunks = false;
+                }
                 info
             });
             let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
             chunk.post_processing_ready.store(true, Ordering::Release);
             let center = pumpkin_util::math::vector2::Vector2::new(0, 0);
             world.level.loaded_chunks.insert(center, chunk);
-            let mut loading = world.level.chunk_loading.lock().unwrap();
-            loading.add_ticket(
-                center,
-                pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL,
-            );
-            loading.send_change();
+            if gamemode != GameMode::Spectator {
+                let mut loading = world.level.chunk_loading.lock().unwrap();
+                loading.add_ticket(
+                    center,
+                    pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL,
+                );
+                loading.send_change();
+            }
         }
         let mut players = Vec::new();
         let mut peers = Vec::new();
@@ -229,7 +243,7 @@ impl Fixture {
                 profile,
                 PlayerConfig::default(),
                 &world,
-                GameMode::Survival,
+                gamemode,
             ));
             player.permission_lvl.store(PermissionLvl::Four);
             player.advancements.lock().unwrap().load().unwrap();
@@ -257,6 +271,54 @@ impl Fixture {
             players,
             peers,
         }
+    }
+
+    /// Registered existing-only spectators own a delivered view, but no terrain
+    /// tickets. Ready cached terrain keeps later creative admission independent
+    /// of generation; no fixture Full ticket can mask the spectator's input gate.
+    async fn unticketed_spectators(count: usize) -> Self {
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+
+        let fixture = Self::build_for_mode(count, false, true, GameMode::Spectator).await;
+        let world = fixture.players[0].world();
+        let radius = i32::from(
+            fixture
+                .server
+                .advanced_config
+                .networking
+                .java
+                .simulation_distance
+                .get(),
+        ) + 2;
+        for x in -radius..=radius {
+            for z in -radius..=radius {
+                let chunk = pumpkin_world::chunk::ChunkData::empty_sync(x, z);
+                chunk.post_processing_ready.store(true, Ordering::Release);
+                world.level.loaded_chunks.insert(Vector2::new(x, z), chunk);
+            }
+        }
+        for player in &fixture.players {
+            let view = Cylindrical::new(
+                player.get_entity().chunk_pos.load(),
+                crate::world::chunker::get_view_distance(player),
+            );
+            let revision = player.chunk_watches.request().publish(&world, view);
+            bounded(player.chunk_watches.apply(revision)).await.unwrap();
+            crate::world::chunker::update_position(player);
+        }
+        world.update_active_chunks();
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(
+            world
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .pos_level
+                .is_empty()
+        );
+        fixture
     }
 
     /// Stop terrain publication before installing synthetic FULL chunks. Keep
@@ -1584,6 +1646,158 @@ async fn connected_transfer_and_respawn_finish_before_following_input() {
     assert!(player.living_entity.health.load() > 0.0);
     assert_eq!(player.inventory.get_selected_slot(), 3);
     assert!(!player.client.closed());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unticketed_spectator_can_run_commands_and_return_to_creative() {
+    let fixture = bounded(Fixture::unticketed_spectators(1)).await;
+    let player = &fixture.players[0];
+    let world = player.world();
+    let position = player.get_entity().chunk_pos.load();
+    let ticks = player.tick_counter.load(Ordering::Relaxed);
+    assert!(world.get_player_by_uuid(player.gameprofile.id).is_some());
+    assert!(player.is_spectator());
+    assert!(
+        !world
+            .level_info
+            .load()
+            .game_rules
+            .spectators_generate_chunks
+    );
+    // Explicit terrain mutation remains pending even though ordinary input can
+    // use the existing-only world lifetime (or pin already-ready cached terrain).
+    let activity = player.packet_activity.enter_mutation().unwrap();
+    let mut terrain_stage = Box::pin(activity.scope(world.packet_stage(Some(position), async {})));
+    assert!(futures::poll!(&mut terrain_stage).is_pending());
+    drop(terrain_stage);
+
+    // Existing-only movement may leave the player over absent terrain. A command
+    // that touches no terrain still has a world lifetime and an owned completion.
+    let (_, terrain) = world.level.loaded_chunks.remove(&position).unwrap();
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "experience add @s 2 levels",
+        },
+    );
+    settled(player).await;
+    assert_eq!(player.experience_level.load(Ordering::Relaxed), 2);
+    assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    assert!(
+        world
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .pos_level
+            .is_empty()
+    );
+
+    // Returning to a cached ready chunk does not itself create a generation
+    // ticket. The real gamemode command must admit and create its own tickets.
+    world.level.loaded_chunks.insert(position, terrain);
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "gamemode creative @s",
+        },
+    );
+    enqueue(player, &SSetHeldItem { slot: 6 });
+    settled(player).await;
+    assert_eq!(player.gamemode.load(), GameMode::Creative);
+    assert_eq!(player.inventory.get_selected_slot(), 6);
+    assert!(!world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks);
+    assert_eq!(player.packet_activity.state().active, 0);
+    assert!(player.inbound_packets.is_empty());
+    assert!(!player.client.closed());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unticketed_spectator_close_drains_accepted_command_and_discards_following_input() {
+    let fixture = bounded(Fixture::unticketed_spectators(1)).await;
+    let player = &fixture.players[0];
+    let world = player.world();
+    let position = player.get_entity().chunk_pos.load();
+    world.level.loaded_chunks.remove(&position).unwrap();
+    let barrier = Arc::new(Barrier::default());
+    fixture.server.plugin_manager.register(
+        Arc::new(CommandBarrier {
+            player: player.gameprofile.id,
+            barrier: barrier.clone(),
+            descendant: None,
+        }),
+        EventPriority::Normal,
+        true,
+    );
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "experience add @s 3 levels",
+        },
+    );
+    enqueue(player, &SSetHeldItem { slot: 7 });
+    dispatch(player).await;
+    bounded(barrier.entered.notified()).await;
+    let mut finish = Box::pin(crate::finish_player_session(&fixture.server, player));
+    assert!(futures::poll!(&mut finish).is_pending());
+    assert!(player.packet_activity.state().sealed);
+    assert!(player.inbound_packets.is_empty());
+    barrier.release.notify_one();
+    drive_until(&fixture.server, finish).await.unwrap();
+    assert_eq!(player.experience_level.load(Ordering::Relaxed), 3);
+    assert_eq!(player.inventory.get_selected_slot(), 0);
+    assert_eq!(player.packet_activity.state().active, 0);
+    assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    let saved = fixture
+        .server
+        .player_data_storage
+        .load_data(&player.gameprofile.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.get_int("XpLevel"), Some(3));
+    assert_eq!(saved.get_int("SelectedItemSlot"), Some(0));
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unready_and_retiring_terrain_still_park_spectator_input() {
+    let fixture = bounded(Fixture::unticketed_spectators(1)).await;
+    let player = &fixture.players[0];
+    let world = player.world();
+    let position = player.get_entity().chunk_pos.load();
+    let chunk = world.level.ready_chunk(position).unwrap();
+    let required = world.hold_packet_chunk(position);
+    chunk.post_processing_ready.store(false, Ordering::Release);
+    enqueue(player, &SSetHeldItem { slot: 5 });
+    dispatch(player).await;
+    assert_eq!(player.inventory.get_selected_slot(), 0);
+    assert_eq!(player.inbound_packets.len(), 1);
+
+    chunk.post_processing_ready.store(true, Ordering::Release);
+    drop(required);
+    {
+        let mut unload = world.level.chunk_unload.access();
+        unload.mark_live(position);
+        assert!(!unload.prepare_or_defer(position, &chunk));
+    };
+    fixture.server.packet_runner.retry_worlds();
+    dispatch(player).await;
+    assert_eq!(player.inventory.get_selected_slot(), 0);
+    assert_eq!(player.inbound_packets.len(), 1);
+    assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+
+    world.withdraw_packet_admission().await;
+    world.level.chunk_unload.access().cancel(position);
+    fixture.server.packet_runner.retry_worlds();
+    dispatch(player).await;
+    assert_eq!(player.inventory.get_selected_slot(), 0);
+    world.restore_packet_admission();
+    settled(player).await;
+    assert_eq!(player.inventory.get_selected_slot(), 5);
+    assert_eq!(player.packet_activity.state().active, 0);
     fixture.finish().await;
 }
 
