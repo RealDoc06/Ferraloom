@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use pumpkin_data::{BlockStateId, poi::PoiType};
 use pumpkin_util::math::position::BlockPos;
 
 use super::{PoiEntry, PoiReconcileError, PoiSectionReplacement, PoiStorage};
@@ -91,11 +92,52 @@ pub struct PoiAreaReadRequest {
 /// Private query evidence, never an acknowledgment or a persistent replacement.
 pub struct PoiTerrainOverlay {
     pub pos: ChunkPos,
-    pub sections: Vec<(i32, BlockPalette)>,
+    pub sections: Vec<ClassifiedPoiSection>,
+}
+
+/// Pure occupancy from one visited section. Tickets and Valid are deliberately
+/// absent: only the final common window may resolve them against the store.
+pub struct ClassifiedPoiSection {
+    pub section_y: i32,
+    entries: Vec<(u16, PoiType)>,
+}
+
+impl ClassifiedPoiSection {
+    fn from_states(section_y: i32, states: impl Iterator<Item = BlockStateId>) -> Self {
+        Self {
+            section_y,
+            // Both callers supply exactly one 4096-state section in palette order.
+            entries: states
+                .enumerate()
+                .filter_map(|(index, state)| {
+                    PoiType::from_state(state).map(|kind| (index as u16, kind))
+                })
+                .collect(),
+        }
+    }
+
+    #[must_use]
+    pub const fn entries(&self) -> &[(u16, PoiType)] {
+        self.entries.as_slice()
+    }
+
+    fn kinds(&self) -> impl Iterator<Item = Option<PoiType>> + '_ {
+        let mut entries = self.entries().iter().peekable();
+        (0..BlockPalette::VOLUME).map(move |index| {
+            if entries
+                .peek()
+                .is_some_and(|(at, _)| usize::from(*at) == index)
+            {
+                entries.next().map(|(_, kind)| *kind)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 impl PoiTerrainOverlay {
-    pub fn resident(proto: &crate::ProtoChunk) -> Self {
+    pub fn classify_resident(proto: &crate::ProtoChunk) -> Self {
         let sections = proto
             .poi_read_sections()
             .iter()
@@ -104,10 +146,14 @@ impl PoiTerrainOverlay {
                 if relative_y < 0 || relative_y + 16 > i32::from(proto.height()) {
                     return None;
                 }
-                Some((
+                Some(ClassifiedPoiSection::from_states(
                     *y,
-                    BlockPalette::from_fn(|x, y, z| {
-                        proto.get_block_state_raw(x as i32, relative_y + y as i32, z as i32)
+                    (0..BlockPalette::VOLUME).map(|index| {
+                        proto.get_block_state_raw(
+                            (index % 16) as i32,
+                            relative_y + (index / 256) as i32,
+                            (index / 16 % 16) as i32,
+                        )
                     }),
                 ))
             })
@@ -118,7 +164,7 @@ impl PoiTerrainOverlay {
         }
     }
 
-    pub fn decoded(chunk: &crate::chunk::ChunkData) -> Result<Self, PoiQueryError> {
+    pub fn classify_decoded(chunk: &crate::chunk::ChunkData) -> Result<Self, PoiQueryError> {
         let terrain = chunk.read_for_poi();
         if chunk.section.block_sections.is_poisoned() {
             return Err(PoiReconcileError::TerrainPoisoned.into());
@@ -128,7 +174,12 @@ impl PoiTerrainOverlay {
             .iter()
             .enumerate()
             .filter(|(index, _)| chunk.section.poi_read_sections[*index])
-            .map(|(index, palette)| (chunk.section.min_y / 16 + index as i32, palette.clone()))
+            .map(|(index, palette)| {
+                ClassifiedPoiSection::from_states(
+                    chunk.section.min_y / 16 + index as i32,
+                    palette.iter(),
+                )
+            })
             .collect();
         Ok(Self {
             pos: ChunkPos::new(chunk.x, chunk.z),
@@ -164,16 +215,17 @@ impl PoiStorage {
         let mut entries = self.copy_area(area)?;
         for overlay in overlays {
             let loaded = self.loaded_poi_region(overlay.pos)?;
-            for (y, palette) in &overlay.sections {
-                if loaded
-                    .region
-                    .section_validity
-                    .get(&(overlay.pos.x, overlay.pos.y, *y))
-                    == Some(&1)
+            for section in &overlay.sections {
+                if loaded.region.section_validity.get(&(
+                    overlay.pos.x,
+                    overlay.pos.y,
+                    section.section_y,
+                )) == Some(&1)
                 {
                     continue;
                 }
-                let replacement = loaded.classify_section(*y, palette, None, false)?;
+                let replacement =
+                    loaded.plan_section_kinds(section.section_y, section.kinds(), None, false)?;
                 area.replace_section(&mut entries, replacement);
             }
         }

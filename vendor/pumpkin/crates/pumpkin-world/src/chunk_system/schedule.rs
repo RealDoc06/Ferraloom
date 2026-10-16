@@ -247,9 +247,11 @@ impl GenerationSchedule {
                 && let Some(chunk) = &holder.chunk
             {
                 match chunk {
-                    Chunk::Proto(proto) => overlays.push(PoiTerrainOverlay::resident(proto)),
+                    Chunk::Proto(proto) => {
+                        overlays.push(PoiTerrainOverlay::classify_resident(proto));
+                    }
                     Chunk::Level(chunk) if !holder.public => {
-                        match PoiTerrainOverlay::decoded(chunk) {
+                        match PoiTerrainOverlay::classify_decoded(chunk) {
                             Ok(overlay) => overlays.push(overlay),
                             Err(error) => return Some(Err(error)),
                         }
@@ -259,8 +261,8 @@ impl GenerationSchedule {
             }
         }
         for overlay in &mut overlays {
-            overlay.sections.retain(|(y, _)| {
-                (query.request.min_section..query.request.end_section).contains(y)
+            overlay.sections.retain(|section| {
+                (query.request.min_section..query.request.end_section).contains(&section.section_y)
             });
         }
         Some(

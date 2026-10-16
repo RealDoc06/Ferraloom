@@ -150,6 +150,24 @@ impl LoadedPoiRegion<'_> {
         changes: Option<&PoiSectionChanges>,
         complete: bool,
     ) -> Result<PoiSectionReplacement, PoiReconcileError> {
+        self.plan_section_kinds(
+            section_y,
+            palette.iter().map(PoiType::from_state),
+            changes,
+            complete,
+        )
+    }
+
+    /// Resolve every position against current records under the storage guard.
+    /// Query overlays supply preclassified kinds; saves classify their captured
+    /// palette lazily here and retain the same reset-mask/ticket behavior.
+    fn plan_section_kinds(
+        &self,
+        section_y: i32,
+        kinds: impl Iterator<Item = Option<PoiType>>,
+        changes: Option<&PoiSectionChanges>,
+        complete: bool,
+    ) -> Result<PoiSectionReplacement, PoiReconcileError> {
         let origin = (
             self.chunk.x.checked_mul(16),
             section_y.checked_mul(16),
@@ -167,7 +185,7 @@ impl LoadedPoiRegion<'_> {
             )
         };
         let mut replacement = Vec::new();
-        for (index, state) in palette.iter().enumerate() {
+        for (index, kind) in kinds.enumerate() {
             let key = position(index);
             let old = self.region.entries.get(&key);
             if let Some(old) = old
@@ -180,7 +198,7 @@ impl LoadedPoiRegion<'_> {
                     pos: old.pos(),
                 });
             }
-            if let Some(kind) = PoiType::from_state(state) {
+            if let Some(kind) = kind {
                 let free_tickets = old
                     .filter(|old| {
                         old.poi_type == kind.identifier()

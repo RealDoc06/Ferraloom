@@ -101,7 +101,7 @@ async fn read_reserved_poi(
     let mut overlays = Vec::with_capacity(request.positions.len());
     while let Some(data) = receive.recv().await {
         match data {
-            Loaded(chunk) => overlays.push(PoiTerrainOverlay::decoded(&chunk)?),
+            Loaded(chunk) => overlays.push(PoiTerrainOverlay::classify_decoded(&chunk)?),
             LoadedData::Missing(pos) => overlays.push(PoiTerrainOverlay {
                 pos,
                 sections: Vec::new(),

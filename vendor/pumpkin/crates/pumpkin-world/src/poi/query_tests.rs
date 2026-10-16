@@ -277,9 +277,13 @@ fn empty_read_overlay_visits_only_listed_sections_without_publishing() {
     let runtime = TestRuntime::new(directory.path().to_owned());
     let path = directory.path().join("r.0.0.mca");
     let before = std::fs::read(&path).unwrap();
-    let overlay = PoiTerrainOverlay::decoded(&decoded).unwrap();
+    let overlay = PoiTerrainOverlay::classify_decoded(&decoded).unwrap();
     assert_eq!(
-        overlay.sections.iter().map(|(y, _)| *y).collect::<Vec<_>>(),
+        overlay
+            .sections
+            .iter()
+            .map(|section| section.section_y)
+            .collect::<Vec<_>>(),
         vec![0, 2]
     );
     runtime
@@ -455,4 +459,87 @@ fn cache_query_repeated_single_and_batch_writes_keep_aba_and_empty_results_priva
     assert!(storage.regions[&(0, 0)].entries.contains_key(&(17, 0, 1)));
     storage.save_all().unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+// R27 F5 production-path control, UNRUN.
+#[test]
+fn classified_cold_sections_merge_current_tickets_validity_and_unknown_refusals() {
+    let directory = tempfile::tempdir().unwrap();
+    let decoded = sparse_read_fixture(directory.path());
+    let home = Block::WHITE_BED
+        .states
+        .iter()
+        .map(|state| state.id)
+        .find(|state| PoiType::from_state(*state) == Some(PoiType::Home))
+        .unwrap();
+    decoded.set_blocks_batch([(1, 0, 1, home), (1, 32, 1, home)]);
+    let overlay = PoiTerrainOverlay::classify_decoded(&decoded).unwrap();
+    let runtime = TestRuntime::new(directory.path().to_owned());
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage.preload_area(area()).unwrap();
+        // Classification predates this ticket mutation and knows no cached Valid.
+        storage
+            .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), -11)
+            .unwrap();
+        storage.save_all().unwrap();
+    };
+    let path = directory.path().join("r.0.0.mca");
+    let before = std::fs::read(&path).unwrap();
+    let entries = runtime
+        .runtime
+        .capture_area_with_overlays(area(), std::slice::from_ref(&overlay), &[])
+        .unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 0)
+            .unwrap()
+            .free_tickets,
+        -11
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 16)
+            .unwrap()
+            .free_tickets,
+        -7
+    );
+    let valid = entries.iter().find(|entry| entry.y == 32).unwrap();
+    assert_eq!(valid.poi_type, PoiType::Meeting.identifier());
+    assert_eq!(valid.free_tickets, 3);
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        assert_eq!(storage.regions[&(0, 0)].section_validity[&(0, 0, 0)], 0);
+        storage.save_all().unwrap();
+    };
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+
+    // Even a position absent from the sparse classified POIs must be checked.
+    let unknown = BlockPos::new(2, 0, 1);
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage
+            .add_with_free_tickets(unknown, "future:poi", -9)
+            .unwrap();
+        storage.save_all().unwrap();
+    };
+    let refused_bytes = std::fs::read(&path).unwrap();
+    assert!(matches!(
+        runtime.runtime.capture_area_with_overlays(area(), &[overlay], &[]),
+        Err(PoiQueryError::Reconciliation(PoiReconcileError::UnknownType { pos, .. }))
+            if pos == unknown
+    ));
+    let mut storage = runtime.runtime.storage.lock().unwrap();
+    assert_eq!(
+        storage.regions[&(0, 0)].entries[&(1, 0, 1)].free_tickets,
+        -11
+    );
+    assert_eq!(
+        storage.regions[&(0, 0)].entries[&(2, 0, 1)].free_tickets,
+        -9
+    );
+    storage.save_all().unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), refused_bytes);
 }

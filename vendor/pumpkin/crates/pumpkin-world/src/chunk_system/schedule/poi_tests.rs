@@ -361,10 +361,9 @@ async fn cold_query_waits_for_queued_a_and_fences_later_ordinary_b_through_captu
     await_private_read(&schedule, active.as_mut().unwrap()).await;
     let query = active.as_ref().unwrap();
     assert!(
-        query.disk.as_ref().unwrap()[0]
-            .sections
-            .iter()
-            .any(|(y, palette)| *y == 0 && palette.get(0, 0, 0) == home())
+        query.disk.as_ref().unwrap()[0].sections.iter().any(
+            |section| section.section_y == 0 && section.entries().contains(&(0, PoiType::Home))
+        )
     );
     assert!(schedule.io_lock.0.lock().unwrap()[&pos].poi.is_some());
     schedule
@@ -516,7 +515,11 @@ async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_foo
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let mut generated = crate::ProtoChunk::new(0, 0, &level.world_gen.load());
     generated.set_block_state(1, 0, 1, Block::BELL.default_state);
-    assert!(PoiTerrainOverlay::resident(&generated).sections.is_empty());
+    assert!(
+        PoiTerrainOverlay::classify_resident(&generated)
+            .sections
+            .is_empty()
+    );
 }
 
 // C2 cancellation follow-up: actual pending-write failure and retry, UNRUN.
