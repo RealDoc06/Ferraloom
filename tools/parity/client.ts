@@ -929,6 +929,8 @@ function main() {
   let buffer = Buffer.alloc(0);
   let phase: 'login' | 'configuration' | 'play' = 'login';
   let compression = -1;
+  const traceWrites = process.env.FERRALOOM_TRACE_WRITES === '1';
+  let transportWriteSequence = 0;
   let ready = false;
   let quitting = false;
   let expectedDisconnect: 'disconnect.spam' | null = null;
@@ -970,7 +972,18 @@ function main() {
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
-    socket.write(Buffer.concat([varInt(packet.length), packet]));
+    const frame = Buffer.concat([varInt(packet.length), packet]);
+    if (traceWrites) {
+      if (++transportWriteSequence > 4096) throw new Error('Transport write trace exceeded limit');
+      const context = { write_sequence: transportWriteSequence, packet_id: id, phase,
+        wire_bytes: frame.length, received_packets: state.packets, pid: process.pid };
+      emit({ event: 'transport_write_queued', ...context, captured_at: new Date().toISOString() });
+      socket.write(frame, error => {
+        emit({ event: 'transport_write_callback', ...context, captured_at: new Date().toISOString(),
+          error: error?.message ?? null, code: error && 'code' in error ? error.code : null,
+          scope: 'Node write completion only; no peer delivery acknowledgment' });
+      });
+    } else socket.write(frame);
     // write() returning false means queued with backpressure, not an unsent packet.
     if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64'),
       ...(values.horns ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
