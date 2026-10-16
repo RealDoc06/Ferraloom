@@ -1340,7 +1340,8 @@ mod tests {
             container
         );
 
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+        let reader =
+            ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
         let (send, mut receive) = mpsc::channel(1);
         reader
             .fetch_chunks(&level.level_folder, &[healthy_pos], send)
