@@ -50391,7 +50391,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:11",
+                    song: crate::jukebox_song::JukeboxSong::Id11,
                 },
             ),
             (
@@ -50446,7 +50446,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:13",
+                    song: crate::jukebox_song::JukeboxSong::Id13,
                 },
             ),
             (
@@ -50501,7 +50501,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:5",
+                    song: crate::jukebox_song::JukeboxSong::Id5,
                 },
             ),
             (
@@ -50556,7 +50556,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:blocks",
+                    song: crate::jukebox_song::JukeboxSong::Blocks,
                 },
             ),
             (
@@ -50611,7 +50611,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:bounce",
+                    song: crate::jukebox_song::JukeboxSong::Bounce,
                 },
             ),
             (
@@ -50666,7 +50666,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:cat",
+                    song: crate::jukebox_song::JukeboxSong::Cat,
                 },
             ),
             (
@@ -50721,7 +50721,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:chirp",
+                    song: crate::jukebox_song::JukeboxSong::Chirp,
                 },
             ),
             (
@@ -50776,7 +50776,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:creator",
+                    song: crate::jukebox_song::JukeboxSong::Creator,
                 },
             ),
             (
@@ -50831,7 +50831,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:creator_music_box",
+                    song: crate::jukebox_song::JukeboxSong::CreatorMusicBox,
                 },
             ),
             (
@@ -50886,7 +50886,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:far",
+                    song: crate::jukebox_song::JukeboxSong::Far,
                 },
             ),
             (
@@ -50941,7 +50941,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:lava_chicken",
+                    song: crate::jukebox_song::JukeboxSong::LavaChicken,
                 },
             ),
             (
@@ -50996,7 +50996,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:mall",
+                    song: crate::jukebox_song::JukeboxSong::Mall,
                 },
             ),
             (
@@ -51051,7 +51051,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:mellohi",
+                    song: crate::jukebox_song::JukeboxSong::Mellohi,
                 },
             ),
             (
@@ -51106,7 +51106,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:otherside",
+                    song: crate::jukebox_song::JukeboxSong::Otherside,
                 },
             ),
             (
@@ -51161,7 +51161,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:pigstep",
+                    song: crate::jukebox_song::JukeboxSong::Pigstep,
                 },
             ),
             (
@@ -51216,7 +51216,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:precipice",
+                    song: crate::jukebox_song::JukeboxSong::Precipice,
                 },
             ),
             (
@@ -51271,7 +51271,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:relic",
+                    song: crate::jukebox_song::JukeboxSong::Relic,
                 },
             ),
             (
@@ -51326,7 +51326,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:stal",
+                    song: crate::jukebox_song::JukeboxSong::Stal,
                 },
             ),
             (
@@ -51381,7 +51381,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:strad",
+                    song: crate::jukebox_song::JukeboxSong::Strad,
                 },
             ),
             (
@@ -51436,7 +51436,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:tears",
+                    song: crate::jukebox_song::JukeboxSong::Tears,
                 },
             ),
             (
@@ -51491,7 +51491,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:wait",
+                    song: crate::jukebox_song::JukeboxSong::Wait,
                 },
             ),
             (
@@ -51546,7 +51546,7 @@ impl Item {
             (
                 JukeboxPlayable,
                 &JukeboxPlayableImpl {
-                    song: "minecraft:ward",
+                    song: crate::jukebox_song::JukeboxSong::Ward,
                 },
             ),
             (

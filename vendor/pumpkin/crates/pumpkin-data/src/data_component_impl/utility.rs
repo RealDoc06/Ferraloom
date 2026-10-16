@@ -868,22 +868,37 @@ impl DataComponentImpl for ProfileImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct JukeboxPlayableImpl {
-    pub song: &'static str,
+    pub song: crate::jukebox_song::JukeboxSong,
 }
 impl JukeboxPlayableImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let song = compound.get_string("song")?;
-        let static_song = crate::jukebox_song::JukeboxSong::from_name(
-            song.strip_prefix("minecraft:").unwrap_or(song),
-        )
-        .map_or("", |s| s.to_name());
-        Some(Self { song: static_song })
+        // RegistryFixedCodec is reference-only. Custom registries and direct
+        // stream holders are outside the supported builtin configuration.
+        let NbtTag::String(name) = data else {
+            return None;
+        };
+        Some(Self {
+            song: crate::jukebox_song::JukeboxSong::from_name(name)?,
+        })
     }
 }
 impl DataComponentImpl for JukeboxPlayableImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.song.asset_id().into())
+    }
+
+    fn get_hash(&self) -> i32 {
+        // The reference codec hashes the canonical Identifier string through
+        // HashOps. These 22 identifiers are ASCII; no map or tooltip field.
+        get_str_hash(self.song.asset_id()) as i32
+    }
+
     default_impl!(JukeboxPlayable);
 }
+
+#[cfg(test)]
+#[path = "jukebox_tests.rs"]
+mod jukebox_tests;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RecipesImpl;

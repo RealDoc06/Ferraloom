@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum JukeboxSong {
     Id11,
@@ -26,9 +26,73 @@ pub enum JukeboxSong {
     Ward,
 }
 impl JukeboxSong {
+    /// Builtin references in the exact configuration registry order.
+    #[must_use]
+    pub const fn all() -> &'static [Self; 22] {
+        &[
+            Self::Id11,
+            Self::Id13,
+            Self::Id5,
+            Self::Blocks,
+            Self::Bounce,
+            Self::Cat,
+            Self::Chirp,
+            Self::Creator,
+            Self::CreatorMusicBox,
+            Self::Far,
+            Self::LavaChicken,
+            Self::Mall,
+            Self::Mellohi,
+            Self::Otherside,
+            Self::Pigstep,
+            Self::Precipice,
+            Self::Relic,
+            Self::Stal,
+            Self::Strad,
+            Self::Tears,
+            Self::Wait,
+            Self::Ward,
+        ]
+    }
+
+    /// Checked inverse of the raw registry ID, not the stream holder marker.
+    #[must_use]
+    pub fn from_id(id: u32) -> Option<Self> {
+        Self::all().get(usize::try_from(id).ok()?).copied()
+    }
+
+    #[must_use]
+    pub const fn asset_id(&self) -> &'static str {
+        match self {
+            Self::Id11 => "minecraft:11",
+            Self::Id13 => "minecraft:13",
+            Self::Id5 => "minecraft:5",
+            Self::Blocks => "minecraft:blocks",
+            Self::Bounce => "minecraft:bounce",
+            Self::Cat => "minecraft:cat",
+            Self::Chirp => "minecraft:chirp",
+            Self::Creator => "minecraft:creator",
+            Self::CreatorMusicBox => "minecraft:creator_music_box",
+            Self::Far => "minecraft:far",
+            Self::LavaChicken => "minecraft:lava_chicken",
+            Self::Mall => "minecraft:mall",
+            Self::Mellohi => "minecraft:mellohi",
+            Self::Otherside => "minecraft:otherside",
+            Self::Pigstep => "minecraft:pigstep",
+            Self::Precipice => "minecraft:precipice",
+            Self::Relic => "minecraft:relic",
+            Self::Stal => "minecraft:stal",
+            Self::Strad => "minecraft:strad",
+            Self::Tears => "minecraft:tears",
+            Self::Wait => "minecraft:wait",
+            Self::Ward => "minecraft:ward",
+        }
+    }
+
     #[doc = r" Returns the `JukeboxSong` from the string name (e.g., 'pigstep')."]
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
         match name {
             "11" => Some(Self::Id11),
             "13" => Some(Self::Id13),

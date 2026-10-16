@@ -2451,13 +2451,26 @@ impl DataComponentCodec<Self> for OminousBottleAmplifierImpl {
 
 impl DataComponentCodec<Self> for JukeboxPlayableImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let song_id = Sound::from_name(self.song).map_or(0, |s| s as i32);
-        seq.write_var_int(&VarInt::from(song_id))
+        // Configuration gates the same sent registry snapshot before these
+        // context-free codecs can use its builtin numeric references.
+        seq.write_var_int(&VarInt(self.song.get_id() as i32 + 1))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self { song: "" })
+        let holder = seq.get_var_int()?.0;
+        if holder == 0 {
+            return Err(ReadingError::Message(
+                "Direct jukebox song holders are unsupported".into(),
+            ));
+        }
+        let song = holder
+            .checked_sub(1)
+            .and_then(|id| u32::try_from(id).ok())
+            .and_then(pumpkin_data::jukebox_song::JukeboxSong::from_id)
+            .ok_or_else(|| {
+                ReadingError::Message("Unknown jukebox song registry reference".into())
+            })?;
+        Ok(Self { song })
     }
 }
 
@@ -2837,6 +2850,10 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
         Ok(Self)
     }
 }
+
+#[cfg(test)]
+#[path = "jukebox_tests.rs"]
+mod jukebox_tests;
 
 #[cfg(test)]
 mod tests {

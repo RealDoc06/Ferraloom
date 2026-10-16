@@ -2,27 +2,30 @@
 use super::*;
 use pumpkin_data::{
     instrument::Instrument,
+    jukebox_song::JukeboxSong,
     registry::{REGISTRY_V_26_3, Registry},
 };
 
 #[derive(Debug, PartialEq, Eq)]
-enum InstrumentProfileError {
+enum RegistryProfileError {
     MissingRegistry,
     UnsupportedEntries,
+    MissingJukeboxRegistry,
+    UnsupportedJukeboxEntries,
 }
 
 /// The context-free instrument component codec and gameplay table support the
 /// pinned builtin profile only. Check keys, order and full property bytes on
 /// the exact merged snapshot that will be sent, before any registry packets.
-fn validate_instrument_profile(snapshot: &[Registry]) -> Result<(), InstrumentProfileError> {
+fn validate_instrument_profile(snapshot: &[Registry]) -> Result<(), RegistryProfileError> {
     let instrument = snapshot
         .iter()
         .find(|registry| registry.registry_id == "minecraft:instrument")
-        .ok_or(InstrumentProfileError::MissingRegistry)?;
+        .ok_or(RegistryProfileError::MissingRegistry)?;
     let builtin = REGISTRY_V_26_3
         .iter()
         .find(|registry| registry.registry_id == "instrument")
-        .ok_or(InstrumentProfileError::MissingRegistry)?;
+        .ok_or(RegistryProfileError::MissingRegistry)?;
     if instrument.registry_entries.len() != Instrument::all().len()
         || builtin.entries.len() != Instrument::all().len()
         || !instrument
@@ -38,14 +41,45 @@ fn validate_instrument_profile(snapshot: &[Registry]) -> Result<(), InstrumentPr
                     && entry.data.as_deref() == Some(expected.data)
             })
     {
-        return Err(InstrumentProfileError::UnsupportedEntries);
+        return Err(RegistryProfileError::UnsupportedEntries);
+    }
+    Ok(())
+}
+
+/// Song references, level-event IDs and playback properties share this exact
+/// snapshot. Direct/custom songs need a registry-aware implementation first.
+fn validate_jukebox_profile(snapshot: &[Registry]) -> Result<(), RegistryProfileError> {
+    let songs = snapshot
+        .iter()
+        .find(|registry| registry.registry_id == "minecraft:jukebox_song")
+        .ok_or(RegistryProfileError::MissingJukeboxRegistry)?;
+    let builtin = REGISTRY_V_26_3
+        .iter()
+        .find(|registry| registry.registry_id == "jukebox_song")
+        .ok_or(RegistryProfileError::MissingJukeboxRegistry)?;
+    if songs.registry_entries.len() != JukeboxSong::all().len()
+        || builtin.entries.len() != JukeboxSong::all().len()
+        || !songs
+            .registry_entries
+            .iter()
+            .zip(builtin.entries)
+            .zip(JukeboxSong::all())
+            .enumerate()
+            .all(|(id, ((entry, expected), song))| {
+                song.get_id() as usize == id
+                    && expected.name == song.to_name()
+                    && entry.entry_id == song.asset_id()
+                    && entry.data.as_deref() == Some(expected.data)
+            })
+    {
+        return Err(RegistryProfileError::UnsupportedJukeboxEntries);
     }
     Ok(())
 }
 
 fn registry_snapshot(
     datapacks: &crate::data::datapack::DatapackManager,
-) -> Result<Vec<Registry>, InstrumentProfileError> {
+) -> Result<Vec<Registry>, RegistryProfileError> {
     let mut snapshot = Registry::get_synced(CURRENT_MC_VERSION);
     for registry in &mut snapshot {
         registry.registry_entries = if registry.registry_id == "minecraft:damage_type" {
@@ -55,6 +89,7 @@ fn registry_snapshot(
         };
     }
     validate_instrument_profile(&snapshot)?;
+    validate_jukebox_profile(&snapshot)?;
     Ok(snapshot)
 }
 
@@ -66,9 +101,9 @@ impl PendingConnection {
             Err(error) => {
                 tracing::warn!(
                     ?error,
-                    "Unsupported instrument registry profile; refusing configuration"
+                    "Unsupported instrument or jukebox song registry profile; refusing configuration"
                 );
-                self.kick(TextComponent::text("Unsupported instrument registry profile: only the builtin Minecraft 26.3 instruments are supported"))
+                self.kick(TextComponent::text("Unsupported registry profile: only builtin Minecraft 26.3 instruments and jukebox songs are supported"))
                     .await;
                 return;
             }
@@ -89,6 +124,10 @@ impl PendingConnection {
         self.send_packet_now(&CFinishConfig).await;
     }
 }
+
+#[cfg(test)]
+#[path = "jukebox_profile_tests.rs"]
+mod jukebox_profile_tests;
 
 #[cfg(test)]
 mod tests {
@@ -164,7 +203,7 @@ mod tests {
         missing.retain(|registry| registry.registry_id != "minecraft:instrument");
         assert_eq!(
             validate_instrument_profile(&missing),
-            Err(InstrumentProfileError::MissingRegistry)
+            Err(RegistryProfileError::MissingRegistry)
         );
         let mut reordered = Registry::get_synced(CURRENT_MC_VERSION);
         reordered
@@ -175,7 +214,7 @@ mod tests {
             .swap(0, 1);
         assert_eq!(
             validate_instrument_profile(&reordered),
-            Err(InstrumentProfileError::UnsupportedEntries)
+            Err(RegistryProfileError::UnsupportedEntries)
         );
 
         for key in ["custom:horn", "minecraft:sing_goat_horn"] {
@@ -197,7 +236,7 @@ mod tests {
                 merge_dynamic_registry_entries(&instrument.registry_entries, &custom);
             assert_eq!(
                 validate_instrument_profile(&snapshot),
-                Err(InstrumentProfileError::UnsupportedEntries)
+                Err(RegistryProfileError::UnsupportedEntries)
             );
         }
     }

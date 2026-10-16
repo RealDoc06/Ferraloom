@@ -178,6 +178,13 @@ fn normalize_item_defaults(item: &mut NbtCompound) {
     };
     for (name, data) in &mut components.child_tags {
         match name.as_ref() {
+            "minecraft:jukebox_playable" => {
+                if let NbtTag::String(name) = data
+                    && let Some(song) = crate::jukebox_song::JukeboxSong::from_name(name)
+                {
+                    *name = song.asset_id().into();
+                }
+            }
             "minecraft:instrument" => {
                 if let NbtTag::String(name) = data
                     && let Some(instrument) = crate::instrument::Instrument::from_name(name)

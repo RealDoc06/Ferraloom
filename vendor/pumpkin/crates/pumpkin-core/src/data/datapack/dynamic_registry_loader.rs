@@ -13,6 +13,7 @@ pub const DYNAMIC_REGISTRIES: &[(&str, &[&str])] = &[
     ("minecraft:cat_variant", &["cat_variant", "cat_variants"]),
     ("minecraft:frog_variant", &["frog_variant", "frog_variants"]),
     ("minecraft:instrument", &["instrument", "instruments"]),
+    ("minecraft:jukebox_song", &["jukebox_song"]),
     (
         "minecraft:trim_material",
         &["trim_material", "trim_materials"],
@@ -121,6 +122,7 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     base_dir: &Path,
     current_dir: &Path,
     registry_map: &mut HashMap<String, RegistryEntryData, S>,
+    retain_invalid_definition: bool,
 ) {
     let Ok(entries) = fs::read_dir(current_dir) else {
         return;
@@ -128,7 +130,13 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            load_registry_dir_recursive(namespace, base_dir, &path, registry_map);
+            load_registry_dir_recursive(
+                namespace,
+                base_dir,
+                &path,
+                registry_map,
+                retain_invalid_definition,
+            );
         } else if path
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
@@ -141,17 +149,14 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let entry_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(val) = serde_json::from_str::<Value>(&content)
-            {
-                let nbt_bytes = json_to_registry_nbt_bytes(&val);
-                registry_map.insert(
-                    entry_id.clone(),
-                    RegistryEntryData {
-                        entry_id,
-                        data: Some(nbt_bytes),
-                    },
-                );
+            let data = fs::read_to_string(&path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+                .map(|value| json_to_registry_nbt_bytes(&value));
+            // An unreadable song override must still reach the configuration
+            // gate. Ignoring it would silently accept the builtin profile.
+            if data.is_some() || retain_invalid_definition {
+                registry_map.insert(entry_id.clone(), RegistryEntryData { entry_id, data });
             }
         }
     }
@@ -174,7 +179,13 @@ pub fn load_dynamic_registries_from_ns<
             let reg_dir = ns_path.join(dir_name);
             if reg_dir.is_dir() {
                 let before = registry_map.len();
-                load_registry_dir_recursive(namespace, &reg_dir, &reg_dir, registry_map);
+                load_registry_dir_recursive(
+                    namespace,
+                    &reg_dir,
+                    &reg_dir,
+                    registry_map,
+                    registry_id == "minecraft:jukebox_song",
+                );
                 total_loaded += registry_map.len() - before;
             }
         }
