@@ -627,8 +627,8 @@ impl World {
                 for pos in &removed {
                     loading.remove_force_ticket(*pos);
                 }
-                loading.send_change();
-            }
+                loading.send_change()
+            };
             *held = desired;
             drop(held);
 
@@ -686,6 +686,10 @@ impl World {
     /// One worker owns simulation watches and entity loading. Desired-set changes
     /// interrupt its receiver, so moving players cannot queue unload tasks behind
     /// old entity reads. Terrain tickets are acquired synchronously by the caller.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep reconciliation ownership, activation changes and their publication in one pass."
+    )]
     async fn reconcile_block_simulation_chunks(
         self: Arc<Self>,
         _running: BlockSimulationReconcile,
@@ -832,6 +836,10 @@ impl World {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the player, forced-ticket and simulation inputs in the same activation update."
+    )]
     pub fn update_active_chunks(self: &Arc<Self>) {
         let _simulation_callbacks = self.enter_simulation_callbacks();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
@@ -1164,7 +1172,7 @@ impl World {
     /// The coordinator fences new handles; the map write guard fences tick-list
     /// clones. Uniqueness also excludes Weak upgrades and inventory handles, so
     /// an in-flight command cannot mutate a detached BE after its final snapshot.
-    /// The caller holds entity_lifecycle. No publication write lock is held here.
+    /// The caller holds `entity_lifecycle`. No publication write lock is held here.
     fn retire_block_entities(&self, pos: Vector2<i32>, requested: Option<&SyncChunk>) -> bool {
         // Check live tickets before taking the coordinator, matching scheduler
         // order. A ticket may have returned before its scheduler change arrives.
@@ -1478,6 +1486,10 @@ impl World {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "Preserve the owned setter API while the retry closure borrows its input."
+    )]
     pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
         level_info::update_level_info(&self.level_info, |info| {
             match (info.game_rules.get_mut(rule), &value) {
@@ -2680,7 +2692,7 @@ impl World {
         // 5. Parallel Chunk Spawners via Rayon
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
-            for pos in active_chunks.iter() {
+            for pos in &active_chunks {
                 if let Some(chunk) = self.level.ready_chunk(*pos) {
                     spawning_chunks.push((*pos, chunk));
                 }
@@ -6942,6 +6954,10 @@ impl World {
             .collect()
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "Retain the owned entity through snapshot publication and world callbacks."
+    )]
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         block_entity.bind_world(self);
         let position = block_entity.get_position();
