@@ -16,6 +16,7 @@ def client() -> Client:
     observed.events = []
     observed.statistics_values = {}
     observed.jukeboxes = False
+    observed.crafting = False
     return observed
 
 
