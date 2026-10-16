@@ -1,9 +1,14 @@
 use super::*;
 use crate::command::commands::data::tests::Fixture;
+use crate::plugin::{api::events::EventPriority, world::spawn_change::SpawnChangeEvent};
 use pumpkin_util::Difficulty;
 use std::collections::BTreeSet;
 use std::{
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     thread,
     time::Duration,
 };
@@ -293,6 +298,146 @@ async fn concurrent_command_and_world_updates_preserve_every_round() {
             worker.join().unwrap();
         }
     });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn server_difficulty_lock_and_force_recheck_policy_after_retry() {
+    const WAIT: Duration = Duration::from_secs(10);
+    let fixture = fixture().await;
+    let server = fixture.source.server();
+    let world = fixture.source.world();
+    assert!(Arc::ptr_eq(&server.level_info, &world.level_info));
+    assert!(!server.basic_config.hardcore);
+    update_level_info(&server.level_info, |info| {
+        info.spawn_x = -47;
+        info.day_time = 12345;
+        info.map_id = 99;
+    });
+    assert_eq!(
+        fixture.execute("gamerule random_tick_speed 11").unwrap(),
+        11
+    );
+    let (loaded_tx, loaded_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+
+    thread::scope(|scope| {
+        let delayed = scope.spawn(move || {
+            let mut attempts = 0;
+            let previous = crate::world::level_info::update_level_info_if(
+                &server.level_info,
+                |info| {
+                    attempts += 1;
+                    let permitted = !info.difficulty_locked;
+                    if attempts == 1 {
+                        loaded_tx.send(()).unwrap();
+                        resume_rx.recv_timeout(WAIT).unwrap();
+                    }
+                    permitted
+                },
+                |info| info.difficulty = Difficulty::Peaceful,
+            );
+            (attempts, previous)
+        });
+        loaded_rx.recv_timeout(WAIT).unwrap();
+        server.set_difficulty_locked(true);
+        let locked = server.level_info.load_full();
+        server.set_difficulty(Difficulty::Easy, false);
+        assert!(Arc::ptr_eq(&locked, &server.level_info.load_full()));
+
+        server.set_difficulty(Difficulty::Easy, true);
+        assert_eq!(server.get_difficulty(), Difficulty::Easy);
+        assert!(world.level_info.load().difficulty_locked);
+        assert_eq!(fixture.execute("gamerule keep_inventory true").unwrap(), 1);
+        resume_tx.send(()).unwrap();
+        let (attempts, previous) = delayed.join().unwrap();
+        assert_eq!(attempts, 2);
+        assert!(previous.difficulty_locked);
+        assert_eq!(previous.difficulty, Difficulty::Easy);
+        assert_eq!(server.get_difficulty(), Difficulty::Easy);
+    });
+
+    server.set_difficulty_locked(false);
+    server.set_difficulty(Difficulty::Hard, false);
+    let info = server.level_info.load();
+    assert_eq!(info.difficulty, Difficulty::Hard);
+    assert!(!info.difficulty_locked);
+    assert!(info.game_rules.keep_inventory);
+    assert_eq!(info.game_rules.random_tick_speed, 11);
+    assert_eq!((info.spawn_x, info.day_time, info.map_id), (-47, 12345, 99));
+    assert_eq!(world.level_info.load().difficulty, Difficulty::Hard);
+}
+
+struct SpawnReentry {
+    calls: AtomicUsize,
+}
+
+impl crate::plugin::EventHandler<SpawnChangeEvent> for SpawnReentry {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<crate::server::Server>,
+        event: &'a mut SpawnChangeEvent,
+    ) -> crate::plugin::BoxFuture<'a, ()> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(
+            event.previous_position,
+            pumpkin_util::math::position::BlockPos::new(-47, 70, 81)
+        );
+        assert_eq!((event.previous_yaw, event.previous_pitch), (12.0, -3.0));
+        assert_eq!(
+            event.new_position,
+            pumpkin_util::math::position::BlockPos::new(8, 72, 9)
+        );
+        server.set_difficulty_locked(true);
+        server.set_difficulty(Difficulty::Hard, true);
+        event
+            .world
+            .set_game_rule(&GameRule::KeepInventory, GameRuleValue::Bool(true));
+        event
+            .world
+            .set_game_rule(&GameRule::RandomTickSpeed, GameRuleValue::Int(11));
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn setworldspawn_preserves_reentrant_rule_and_difficulty_updates() {
+    let mut fixture = fixture().await;
+    crate::command::commands::setworldspawn::register(
+        &mut fixture.dispatcher,
+        &PermissionRegistry::default(),
+    );
+    let server = fixture.source.server();
+    let world = fixture.source.world();
+    assert!(Arc::ptr_eq(&server.level_info, &world.level_info));
+    update_level_info(&server.level_info, |info| {
+        info.spawn_x = -47;
+        info.spawn_y = 70;
+        info.spawn_z = 81;
+        info.spawn_yaw = 12.0;
+        info.spawn_pitch = -3.0;
+        info.day_time = 12345;
+        info.map_id = 99;
+    });
+    let hook = Arc::new(SpawnReentry {
+        calls: AtomicUsize::new(0),
+    });
+    server.plugin_manager.register::<SpawnChangeEvent, _>(
+        hook.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    assert_eq!(fixture.execute("setworldspawn 8 72 9").unwrap(), 1);
+    assert_eq!(hook.calls.load(Ordering::Relaxed), 1);
+    let info = server.level_info.load();
+    assert_eq!((info.spawn_x, info.spawn_y, info.spawn_z), (8, 72, 9));
+    assert_eq!((info.spawn_yaw, info.spawn_pitch), (0.0, 0.0));
+    assert_eq!(info.difficulty, Difficulty::Hard);
+    assert!(info.difficulty_locked);
+    assert!(info.game_rules.keep_inventory);
+    assert_eq!(info.game_rules.random_tick_speed, 11);
+    assert_eq!((info.day_time, info.map_id), (12345, 99));
+    assert_eq!(world.level_info.load().game_rules, info.game_rules);
 }
 
 #[tokio::test]

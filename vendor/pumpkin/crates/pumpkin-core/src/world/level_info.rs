@@ -1,18 +1,34 @@
 use arc_swap::ArcSwap;
 use pumpkin_world::world_info::LevelData;
+use std::sync::Arc;
 
 /// Retry a level-info edit against the latest snapshot until it commits.
 /// Edits must be side-effect free: RCU may retry them. Send feedback and run
-/// callbacks only after this function returns.
+/// callbacks only after this function returns. Returns the committed previous snapshot.
 pub(crate) fn update_level_info(
     level_info: &ArcSwap<LevelData>,
+    edit: impl FnMut(&mut LevelData),
+) -> Arc<LevelData> {
+    update_level_info_if(level_info, |_| true, edit)
+}
+
+/// Check the condition on every retry, retaining the snapshot if it declines.
+/// Returns the previous snapshot from the successful CAS even when unchanged;
+/// callers can check the same condition on it before running side effects.
+/// Both closures must be side-effect free.
+pub(crate) fn update_level_info_if(
+    level_info: &ArcSwap<LevelData>,
+    mut condition: impl FnMut(&LevelData) -> bool,
     mut edit: impl FnMut(&mut LevelData),
-) {
+) -> Arc<LevelData> {
     level_info.rcu(|current| {
+        if !condition(current) {
+            return current.clone();
+        }
         let mut updated = (**current).clone();
         edit(&mut updated);
-        updated
-    });
+        Arc::new(updated)
+    })
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
@@ -13,6 +11,7 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
+use crate::world::level_info::update_level_info;
 
 const DESCRIPTION: &str = "Sets the world spawn point.";
 const PERMISSION: &str = "minecraft:command.setworldspawn";
@@ -71,15 +70,13 @@ impl CommandExecutor for SetWorldSpawnExecutor {
                 .fire_blocking(&server_arc, &mut event);
         }
 
-        let mut new_info = (**current_info).clone();
-
-        new_info.spawn_x = new_position.0.x;
-        new_info.spawn_y = new_position.0.y;
-        new_info.spawn_z = new_position.0.z;
-        new_info.spawn_yaw = new_yaw;
-        new_info.spawn_pitch = new_pitch;
-
-        server.level_info.store(Arc::new(new_info));
+        update_level_info(&server.level_info, |info| {
+            info.spawn_x = new_position.0.x;
+            info.spawn_y = new_position.0.y;
+            info.spawn_z = new_position.0.z;
+            info.spawn_yaw = new_yaw;
+            info.spawn_pitch = new_pitch;
+        });
 
         context.source.send_feedback(
             TextComponent::translate_cross(

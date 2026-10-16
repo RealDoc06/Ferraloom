@@ -1004,37 +1004,40 @@ impl Server {
     ///
     /// This function updates the difficulty level of the server and broadcasts the change to all players.
     /// It also iterates through all worlds to ensure the difficulty is applied consistently.
-    /// If `force_update` is `Some(true)`, the difficulty will be set regardless of the current state.
-    /// If `force_update` is `Some(false)` or `None`, the difficulty will only be updated if it is not locked.
+    /// If `force_update` is `true`, the difficulty will be set regardless of the current state.
+    /// If `force_update` is `false`, the difficulty will only be updated if it is not locked.
     ///
     /// # Arguments
     ///
     /// * `difficulty`: The new difficulty level to set. This should be one of the variants of the `Difficulty` enum.
-    /// * `force_update`: An optional boolean that, if set to `Some(true)`, forces the difficulty to be updated even if it is currently locked.
+    /// * `force_update`: Whether to update the difficulty even if it is currently locked.
     ///
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
     pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
-        let current_info = self.level_info.load();
-        if current_info.difficulty_locked && !force_update {
-            return;
-        }
-
         let new_difficulty = if self.basic_config.hardcore {
             Difficulty::Hard
         } else {
             difficulty
         };
 
-        let mut new_info = (**current_info).clone();
-
-        new_info.difficulty = new_difficulty;
-        let locked = new_info.difficulty_locked;
-        self.level_info.store(Arc::new(new_info));
+        let previous = crate::world::level_info::update_level_info_if(
+            &self.level_info,
+            |info| force_update || !info.difficulty_locked,
+            |info| info.difficulty = new_difficulty,
+        );
+        if previous.difficulty_locked && !force_update {
+            return;
+        }
+        let locked = previous.difficulty_locked;
 
         for world in self.worlds.load().iter() {
-            world.set_difficulty(new_difficulty);
+            // Server-created worlds share this ArcSwap. Rewriting it here could
+            // overwrite a newer difficulty; only independent worlds need a write.
+            if !Arc::ptr_eq(&self.level_info, &world.level_info) {
+                world.set_difficulty(new_difficulty);
+            }
             world.broadcast_editioned(
                 &CChangeDifficulty::new(new_difficulty as u8, locked),
                 &pumpkin_protocol::bedrock::client::CSetDifficulty {
@@ -1046,11 +1049,10 @@ impl Server {
 
     /// Sets the difficulty lock status of the server and broadcasts the update to all players.
     pub fn set_difficulty_locked(&self, locked: bool) {
-        let current_info = self.level_info.load();
-        let mut new_info = (**current_info).clone();
-        new_info.difficulty_locked = locked;
-        let difficulty = new_info.difficulty;
-        self.level_info.store(Arc::new(new_info));
+        let previous = crate::world::level_info::update_level_info(&self.level_info, |info| {
+            info.difficulty_locked = locked;
+        });
+        let difficulty = previous.difficulty;
 
         for world in self.worlds.load().iter() {
             world.broadcast_editioned(
