@@ -2490,18 +2490,15 @@ dependencies = [
 [[package]]
 name = "pumpkin-data"
 version = "0.2.0+26.3-26.51"
-source = "git+https://github.com/Pumpkin-MC/Pumpkin.git?rev=5b53f064af8708ba33fcaa533b81ca29a53a3310#5b53f064af8708ba33fcaa533b81ca29a53a3310"
 dependencies = [
  "crc32c",
- "flate2",
+ "criterion",
  "phf",
  "pumpkin-nbt",
  "pumpkin-util",
  "rand 0.10.3",
- "reqwest",
- "rustls",
  "serde",
- "serde_json",
+ "sha1 0.11.0",
  "zip",
 ]
 
@@ -2565,7 +2562,6 @@ dependencies = [
 [[package]]
 name = "pumpkin-protocol"
 version = "0.2.0+26.3-26.51"
-source = "git+https://github.com/Pumpkin-MC/Pumpkin.git?rev=5b53f064af8708ba33fcaa533b81ca29a53a3310#5b53f064af8708ba33fcaa533b81ca29a53a3310"
 dependencies = [
  "aes 0.9.3",
  "async-compression",
@@ -2576,6 +2572,7 @@ dependencies = [
  "cfb8",
  "flate2",
  "hybrid-array",
+ "pumpkin-command",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",

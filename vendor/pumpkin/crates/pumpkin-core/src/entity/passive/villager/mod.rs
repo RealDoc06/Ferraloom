@@ -639,7 +639,7 @@ impl VillagerEntity {
             let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
             stack.patch.push((
                 DataComponent::ItemName,
-                Some(ItemNameImpl { name: name.into() }.to_dyn()),
+                Some(ItemNameImpl::Translated { name: name.into() }.to_dyn()),
             ));
             stack
         } else {
