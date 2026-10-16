@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::chunk::format::anvil::SingleChunkDataSerializer;
-use crate::chunk::io::{ChunkSerializer, LoadedData, run_blocking};
+use crate::chunk::io::{ChunkSerializer, EncodedPoiCommit, LoadedData, run_blocking};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -105,17 +105,19 @@ where
         &mut self,
         chunk_data: Arc<Self::Data>,
         _chunk_config: &Self::ChunkConfig,
-    ) -> Result<(), ChunkWritingError> {
+    ) -> Result<Option<EncodedPoiCommit>, ChunkWritingError> {
         let (x, z) = chunk_data.position();
         let rel_x = x.rem_euclid(32);
         let rel_z = z.rem_euclid(32);
         let index = (rel_x + rel_z * 32) as usize;
 
-        let compressed = run_blocking(move || {
-            let bytes = chunk_data
-                .to_bytes_for_save()
+        let (compressed, receipt) = run_blocking(move || {
+            let encoded = chunk_data
+                .capture_for_save()
                 .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
-            Ok::<_, ChunkWritingError>(compress_to_vec(&bytes[..], CompressionLevel::Fastest))
+            let compressed = compress_to_vec(&encoded.bytes[..], CompressionLevel::Fastest);
+            encoded.validate()?;
+            Ok::<_, ChunkWritingError>((compressed, encoded.poi))
         })
         .await
         .map_err(|_| {
@@ -128,7 +130,7 @@ where
             .chunks
             .insert(index.to_string(), compressed.into());
 
-        Ok(())
+        Ok(receipt)
     }
 
     async fn get_chunks(
@@ -282,7 +284,7 @@ mod tests {
             data: vec![1, 2, 3],
         };
 
-        pump_file.update_chunk(Arc::new(chunk), &()).await.unwrap();
+        let _receipt = pump_file.update_chunk(Arc::new(chunk), &()).await.unwrap();
         pump_file.write(&file_path).await.unwrap();
 
         let bytes = tokio::fs::read(&file_path).await.unwrap();

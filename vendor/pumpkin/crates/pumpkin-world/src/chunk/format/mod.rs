@@ -33,7 +33,7 @@ use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
     poi_binding::{EncodedPoiSnapshot, PoiCapturePurpose},
-    poi_changes::PoiSavePlan,
+    poi_changes::PoiCaptureStamp,
 };
 pub mod anvil;
 pub mod linear;
@@ -131,12 +131,20 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     fn to_bytes_for_save(&self) -> Result<Bytes, ChunkSerializingError> {
-        let mut capture = self.capture_poi_snapshot(PoiCapturePurpose::Save)?;
-        capture
-            .storage
-            .save_prepared_region(Vector2::new(self.x, self.z))
-            .map_err(ChunkSerializingError::PoiIo)?;
-        Ok(capture.bytes)
+        Ok(self.capture_poi_snapshot(PoiCapturePurpose::Save)?.bytes)
+    }
+
+    fn capture_for_save(
+        self: &std::sync::Arc<Self>,
+    ) -> Result<super::io::EncodedChunk, ChunkSerializingError> {
+        let capture = self.capture_poi_snapshot(PoiCapturePurpose::Save)?;
+        Ok(super::io::EncodedChunk {
+            bytes: capture.bytes,
+            poi: Some(super::poi_binding::EncodedPoiCommit::new(
+                self.clone(),
+                capture.stamp,
+            )),
+        })
     }
 
     #[inline]
@@ -592,12 +600,12 @@ impl ChunkData {
         })
     }
 
-    /// Shared managed save/unload barrier. Capture and application keep the same
-    /// storage guard; encoding runs with no publication or terrain guard held.
+    /// Private save/unload capture. All guards end before fallible encoding.
+    /// Only actual backend completion may apply and acknowledge this capture.
     pub(super) fn capture_poi_snapshot(
         &self,
         purpose: PoiCapturePurpose,
-    ) -> Result<EncodedPoiSnapshot<'_>, ChunkSerializingError> {
+    ) -> Result<EncodedPoiSnapshot, ChunkSerializingError> {
         use crate::poi::PoiReconcileError;
         if matches!(purpose, PoiCapturePurpose::Unload) && self.status != ChunkStatus::Full {
             return Err(PoiReconcileError::IncompleteTerrain.into());
@@ -627,20 +635,15 @@ impl ChunkData {
             .storage
             .lock()
             .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let (root, plan) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
+        let (root, stamp) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
+        drop(storage);
         drop(current);
         drop(lifecycle);
-        // Capture released light/heightmap/terrain/metadata. F1's fallible encoder
-        // MUST succeed before captured POI becomes visible even in shared memory:
-        // a sibling save or save_all may later flush the entire POI region.
         let bytes = crate::nbt_io::encode_compound(root)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-        let stamp = plan.map(PoiSavePlan::apply).transpose()?.flatten();
-        Ok(EncodedPoiSnapshot {
-            bytes,
-            storage,
-            stamp,
-        })
+        let stamp = stamp.ok_or(PoiReconcileError::UnboundChunk)?;
+        self.validate_poi_capture(&stamp)?;
+        Ok(EncodedPoiSnapshot { bytes, stamp })
     }
 
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
@@ -651,10 +654,10 @@ impl ChunkData {
     /// One root builder for pure encoding and actual saves. POI planning and
     /// palette serialization share this terrain guard and existing field order.
     #[allow(clippy::too_many_lines)]
-    fn capture_root<'a>(
-        &'a self,
-        loaded_poi: Option<crate::poi::LoadedPoiRegion<'a>>,
-    ) -> Result<(NbtCompound, Option<PoiSavePlan<'a>>), ChunkSerializingError> {
+    fn capture_root(
+        &self,
+        loaded_poi: Option<crate::poi::LoadedPoiRegion<'_>>,
+    ) -> Result<(NbtCompound, Option<PoiCaptureStamp>), ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -693,7 +696,7 @@ impl ChunkData {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let terrain = self.read_for_poi();
         let plan = loaded_poi
-            .map(|loaded| terrain.plan_for_save(loaded))
+            .map(|loaded| terrain.capture_for_save(&loaded))
             .transpose()?;
         let block_lock = terrain.palettes();
         let biome_lock = self
@@ -1183,12 +1186,19 @@ mod tests {
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
 
-    // UNRUN: pause at the actual capture/encode boundary, using production plans
-    // and actual writers. No hook, fake revision model or timing race is needed.
-    #[test]
-    fn encoded_poi_plan_preserves_reset_history_on_both_sides_of_apply() {
-        use crate::chunk::poi_binding::TestRuntime;
-        use crate::poi::{PoiReconcileError, PoiRegion};
+    // UNRUN: actual backend bytes and file completion on both sides of a late
+    // writer. A capture alone never publishes or acknowledges reset history.
+    #[tokio::test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Keep the actual capture, late-write refusal and recovery observations together."
+    )]
+    async fn encoded_poi_plan_preserves_reset_history_on_both_sides_of_apply() {
+        use crate::chunk::{
+            io::ChunkSerializer,
+            poi_binding::{TestRuntime, complete_poi_batch},
+        };
+        use crate::poi::PoiRegion;
         use pumpkin_data::poi::PoiType;
 
         for write_after_apply in [false, true] {
@@ -1207,7 +1217,16 @@ mod tests {
             for x in [1, 2] {
                 chunk.set_block_absolute_y(x, 0, 1, home);
             }
-            chunk.to_bytes_for_save().unwrap();
+            let config = pumpkin_config::chunk::AnvilChunkConfig::default();
+            let terrain_path = directory.path().join("r.0.0.mca");
+            let mut backend = anvil::AnvilChunkFile::<ChunkData>::default();
+            let mut baseline = backend
+                .update_chunk(chunk.clone(), &config)
+                .await
+                .unwrap()
+                .unwrap();
+            backend.write(&terrain_path).await.unwrap();
+            complete_poi_batch(std::iter::once(&mut baseline)).unwrap();
             {
                 let mut storage = runtime.runtime.storage.lock().unwrap();
                 for x in [1, 2] {
@@ -1220,40 +1239,30 @@ mod tests {
                         .unwrap();
                 }
                 storage.save_all().unwrap();
-            };
+            }
             let path = directory.path().join("poi/r.0.0.mca");
             let before = std::fs::read(&path).unwrap();
-            // First ABA is already pending at capture; the second happens only
-            // after successful encoding, either before or after plan application.
             chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR);
             chunk.set_block_absolute_y(1, 0, 1, home);
-            {
-                let lifecycle = runtime.runtime.lifecycle.read().unwrap();
-                let current = chunk.check_poi_publication(&runtime.chunks).unwrap();
-                let mut storage = runtime.runtime.storage.lock().unwrap();
-                let (root, plan) = chunk
-                    .capture_root(Some(storage.loaded_poi_region(pos).unwrap()))
-                    .unwrap();
-                drop(current);
-                drop(lifecycle);
-                let encoded = crate::nbt_io::encode_compound(root).unwrap();
-                let snapshot = ChunkData::from_bytes(&encoded, pos).unwrap();
-                assert_eq!(snapshot.section.get_block_absolute_y(2, 0, 1), Some(home));
-                let plan = plan.unwrap();
-                if write_after_apply {
-                    let _stamp = plan.apply().unwrap();
-                    chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
-                    chunk.set_block_absolute_y(2, 0, 1, home);
-                } else {
-                    chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
-                    chunk.set_block_absolute_y(2, 0, 1, home);
-                    assert!(matches!(
-                        plan.apply(),
-                        Err(PoiReconcileError::StaleSaveCapture)
-                    ));
-                }
-                storage.save_all().unwrap();
-            };
+            let mut receipt = backend
+                .update_chunk(chunk.clone(), &config)
+                .await
+                .unwrap()
+                .unwrap();
+            runtime.runtime.storage.lock().unwrap().save_all().unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            backend.write(&terrain_path).await.unwrap();
+            if write_after_apply {
+                complete_poi_batch(std::iter::once(&mut receipt)).unwrap();
+                chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
+                chunk.set_block_absolute_y(2, 0, 1, home);
+            } else {
+                chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
+                chunk.set_block_absolute_y(2, 0, 1, home);
+                assert!(complete_poi_batch(std::iter::once(&mut receipt)).is_err());
+                assert!(receipt.needs_recapture());
+            }
+            runtime.runtime.storage.lock().unwrap().save_all().unwrap();
             let saved = PoiRegion::load(&path).unwrap();
             let entries = saved.get_all();
             assert_eq!(
@@ -1275,8 +1284,13 @@ mod tests {
             if !write_after_apply {
                 assert_eq!(std::fs::read(&path).unwrap(), before);
             }
-            // A successful retry must still see both original and later ABA bits.
-            chunk.to_bytes_for_save().unwrap();
+            let mut retry = backend
+                .update_chunk(chunk.clone(), &config)
+                .await
+                .unwrap()
+                .unwrap();
+            backend.write(&terrain_path).await.unwrap();
+            complete_poi_batch(std::iter::once(&mut retry)).unwrap();
             let saved = PoiRegion::load(&path).unwrap();
             assert_eq!(saved.get_all().len(), 2);
             assert!(saved.get_all().iter().all(|entry| entry.poi_type
@@ -1455,7 +1469,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("region");
         let mut region = S::default();
-        region.update_chunk(data.clone(), &config).await.unwrap();
+        let _receipt = region.update_chunk(data.clone(), &config).await.unwrap();
         region.write(&path).await.unwrap();
         let previous = std::fs::read(&path).unwrap();
         let previous_cached = cached_chunk_data(&region).await;

@@ -98,12 +98,45 @@ where
     fn flush(&self) -> impl Future<Output = Result<(), ChunkWritingError>> + Send + '_;
 }
 
+pub use super::poi_binding::EncodedPoiCommit;
+
+/// Owned chunk encoding, private until the backend accepts it after compression.
+#[derive(Debug)]
+pub struct EncodedChunk {
+    pub bytes: Bytes,
+    pub poi: Option<EncodedPoiCommit>,
+}
+
+impl EncodedChunk {
+    pub(crate) fn validate(&self) -> Result<(), ChunkWritingError> {
+        if let Some(poi) = &self.poi {
+            poi.validate()?;
+        }
+        Ok(())
+    }
+}
+
+/// File completion includes the containing directory on platforms supporting it.
+pub(crate) async fn sync_parent(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        tokio::fs::File::open(parent).await?.sync_all().await?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like `ChunkData` or `EntityData`
 pub trait ChunkSerializer: Send + Sync + Default + 'static {
-    type Data: Send + Sync + Sized + Dirtiable;
+    type Data: Send + Sync + Sized + Dirtiable + 'static;
     type WriteBackend;
 
     type ChunkConfig;
@@ -122,12 +155,13 @@ pub trait ChunkSerializer: Send + Sync + Default + 'static {
     /// Create a new instance from bytes
     fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
 
-    /// Add the chunk data to the serializer
+    /// Replace cached bytes only after encoding/compression succeeds. The returned
+    /// receipt belongs to those bytes and must complete only after `write` succeeds.
     fn update_chunk(
         &mut self,
         chunk_data: Arc<Self::Data>,
         chunk_config: &Self::ChunkConfig,
-    ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send;
+    ) -> impl Future<Output = Result<Option<EncodedPoiCommit>, ChunkWritingError>> + Send;
 
     /// Get the chunks data from the serializer
     fn get_chunks(

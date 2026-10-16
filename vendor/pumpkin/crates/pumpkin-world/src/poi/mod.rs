@@ -2,6 +2,10 @@ use rustc_hash::FxHashMap;
 use std::collections::hash_map::Entry;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use tracing::info;
 
 use flate2::Compression;
@@ -100,8 +104,8 @@ pub struct LoadedPoiRegion<'a> {
     pub(crate) identity: std::sync::Arc<()>,
 }
 
-/// Private, validated replacement. Save capture keeps its loaded-region borrow
-/// until application, so ticket lookup cannot race another storage operation.
+/// Private, validated replacement. Ticket lookup and application must share
+/// the same loaded-region borrow; no detached save receipt contains tickets.
 pub(crate) struct PoiSectionReplacement {
     section_y: i32,
     origin: (i32, i32, i32),
@@ -245,7 +249,7 @@ impl LoadedPoiRegion<'_> {
         self.region
             .dirty_chunks
             .insert((self.chunk.x, self.chunk.y));
-        self.region.dirty = true;
+        self.region.mark_dirty();
     }
 }
 
@@ -361,7 +365,7 @@ pub struct PoiChunkData {
 }
 
 /// POI data for a single region (32x32 chunks) using MCA format
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PoiRegion {
     /// Entries indexed by position
     entries: FxHashMap<(i32, i32, i32), PoiEntry>,
@@ -371,6 +375,9 @@ pub struct PoiRegion {
     /// Track which chunks are dirty
     dirty_chunks: rustc_hash::FxHashSet<(i32, i32)>,
     dirty: bool,
+    // Identity changes on every mutation, avoiding revision wrap/ABA on IO ack.
+    version: Arc<()>,
+    write_active: Arc<AtomicBool>,
 }
 
 impl PoiRegion {
@@ -405,7 +412,7 @@ impl PoiRegion {
             .or_insert(1);
         let key = (entry.x, entry.y, entry.z);
         self.entries.insert(key, entry);
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     pub fn remove(&mut self, pos: &BlockPos) -> bool {
@@ -414,7 +421,7 @@ impl PoiRegion {
             let chunk_x = pos.0.x >> 4;
             let chunk_z = pos.0.z >> 4;
             self.dirty_chunks.insert((chunk_x, chunk_z));
-            self.dirty = true;
+            self.mark_dirty();
             return true;
         }
         false
@@ -577,7 +584,34 @@ impl PoiRegion {
         })
     }
 
-    pub fn save(&mut self, path: &Path) -> std::io::Result<()> {
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+        self.version = Arc::new(());
+    }
+
+    fn reserve_write(&self) -> io::Result<PoiWriteReservation> {
+        self.write_active
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "POI region write is already pending",
+                )
+            })?;
+        Ok(PoiWriteReservation(self.write_active.clone()))
+    }
+
+    pub fn save(&mut self, path: &Path) -> io::Result<()> {
+        if !self.dirty {
+            return Ok(());
+        }
+        // Never wait for an IO owner while the caller holds storage. A managed
+        // snapshot may need storage to acknowledge its completed write.
+        let _reservation = self.reserve_write()?;
+        self.write_snapshot(path)
+    }
+
+    fn write_snapshot(&mut self, path: &Path) -> std::io::Result<()> {
         if !self.dirty {
             return Ok(());
         }
@@ -792,6 +826,29 @@ impl PoiRegion {
     }
 }
 
+struct PoiWriteReservation(Arc<AtomicBool>);
+
+impl Drop for PoiWriteReservation {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// The reservation serializes snapshots with public save_all without holding
+/// storage during encoding/IO. Later in-memory edits retain their own dirtiness.
+pub(crate) struct PoiRegionSave {
+    coords: (i32, i32),
+    path: PathBuf,
+    region: PoiRegion,
+    _reservation: PoiWriteReservation,
+}
+
+impl PoiRegionSave {
+    pub(crate) fn write(&mut self) -> io::Result<()> {
+        self.region.write_snapshot(&self.path)
+    }
+}
+
 /// Region-based POI storage using MCA format
 pub struct PoiStorage {
     identity: std::sync::Arc<()>,
@@ -998,16 +1055,34 @@ impl PoiStorage {
         Ok(best.map(|(pos, poi_type, _)| (pos, poi_type)))
     }
 
-    /// Flush only the prepared region, after terrain encoding and after releasing
-    /// terrain/publication guards. Other unavailable regions do not block it.
-    pub(crate) fn save_prepared_region(&mut self, chunk: ChunkPos) -> io::Result<()> {
-        let path = self.region_path(chunk.x >> 5, chunk.y >> 5);
-        std::fs::create_dir_all(&self.folder)?;
+    /// Reserve one region and copy its current accepted memory. Encoding and IO
+    /// operate on the owned copy after releasing the global store mutex.
+    pub(crate) fn begin_region_save(
+        &mut self,
+        chunk: ChunkPos,
+    ) -> io::Result<Option<PoiRegionSave>> {
+        let coords = (chunk.x >> 5, chunk.y >> 5);
+        let path = self.region_path(coords.0, coords.1);
         let loaded = self.loaded_poi_region(chunk).map_err(io::Error::other)?;
-        if loaded.region.is_dirty() {
-            loaded.region.save(&path)?;
+        if !loaded.region.is_dirty() {
+            return Ok(None);
         }
-        Ok(())
+        let reservation = loaded.region.reserve_write()?;
+        Ok(Some(PoiRegionSave {
+            coords,
+            path,
+            region: loaded.region.clone(),
+            _reservation: reservation,
+        }))
+    }
+
+    pub(crate) fn finish_region_save(&mut self, saved: &PoiRegionSave) {
+        if let Some(region) = self.regions.get_mut(&saved.coords)
+            && Arc::ptr_eq(&region.version, &saved.region.version)
+        {
+            region.dirty = false;
+            region.dirty_chunks.clear();
+        }
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {

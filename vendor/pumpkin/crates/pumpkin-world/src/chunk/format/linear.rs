@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
-use crate::chunk::io::{ChunkSerializer, LoadedData, run_blocking};
+use crate::chunk::io::{ChunkSerializer, EncodedPoiCommit, LoadedData, run_blocking, sync_parent};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
@@ -446,9 +446,12 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         }
         writer.write_all(&SIGNATURE).await?;
         writer.flush().await?;
+        writer.get_ref().sync_all().await?;
+        drop(writer);
 
-        // Atomic rename so a crash during write cannot produce a torn file.
+        // File and directory completion still cannot atomically commit POI.
         tokio::fs::rename(temp_path, path).await?;
+        sync_parent(path).await?;
         Ok(())
     }
 
@@ -564,12 +567,14 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         &mut self,
         chunk: Arc<Self::Data>,
         _chunk_config: &Self::ChunkConfig,
-    ) -> Result<(), ChunkWritingError> {
+    ) -> Result<Option<EncodedPoiCommit>, ChunkWritingError> {
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw = run_blocking(move || {
-            chunk
-                .to_bytes_for_save()
-                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))
+            let encoded = chunk
+                .capture_for_save()
+                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+            encoded.validate()?;
+            Ok::<_, ChunkWritingError>(encoded)
         })
         .await
         .map_err(|_| {
@@ -579,8 +584,8 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         self.timestamps[index] = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        self.chunks_data[index] = Some(chunk_raw);
-        Ok(())
+        self.chunks_data[index] = Some(chunk_raw.bytes);
+        Ok(chunk_raw.poi)
     }
 
     async fn get_chunks(

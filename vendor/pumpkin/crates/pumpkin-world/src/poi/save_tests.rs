@@ -239,15 +239,23 @@ async fn refused_poi_preserves_original_bytes_while_healthy_region_saves() {
     }
 }
 
-#[test]
-fn proto_capture_stays_incomplete_and_tracker_cannot_move_between_stores() {
+#[tokio::test]
+async fn proto_capture_stays_incomplete_and_tracker_cannot_move_between_stores() {
     let directory = tempfile::tempdir().unwrap();
-    let runtime = TestRuntime::new(directory.path().join("poi"));
+    let folder = folder(&directory);
+    let runtime = TestRuntime::new(folder.poi_folder.clone());
+    let writer = ChunkFileManager::<PumpFile<ChunkData>>::new(());
     let mut proto = ChunkData::empty(0, 0);
     proto.status = pumpkin_data::chunk::ChunkStatus::Features;
     proto.bind_poi(&runtime.runtime).unwrap();
     proto.set_block_absolute_y(1, 0, 1, home());
+    let proto = Arc::new(proto);
     proto.to_bytes_for_save().unwrap();
+    assert!(!folder.poi_folder.join("r.0.0.mca").exists());
+    writer
+        .save_chunks(&folder, vec![(ChunkPos::new(0, 0), proto.clone())])
+        .await
+        .unwrap();
     {
         let mut storage = runtime.runtime.storage.lock().unwrap();
         assert!(matches!(
@@ -263,10 +271,13 @@ fn proto_capture_stays_incomplete_and_tracker_cannot_move_between_stores() {
         saved.entries[&(1, 0, 1)].poi_type,
         PoiType::Home.identifier()
     );
-    let full = ChunkData::empty(0, 0);
+    let full = ChunkData::empty_sync(0, 0);
     full.bind_poi(&runtime.runtime).unwrap();
     full.set_block_absolute_y(1, 0, 1, home());
-    full.to_bytes_for_save().unwrap();
+    writer
+        .save_chunks(&folder, vec![(ChunkPos::new(0, 0), full.clone())])
+        .await
+        .unwrap();
     assert_eq!(
         PoiRegion::load(&directory.path().join("poi/r.0.0.mca"))
             .unwrap()
@@ -420,8 +431,9 @@ where
     let stamp = a.prepare_poi().unwrap();
     {
         let terrain = a.read_for_poi();
-        assert!(terrain.is_current(&stamp));
+        assert!(terrain.is_capture_current(&stamp));
     };
+    runtime.runtime.storage.lock().unwrap().save_all().unwrap();
     assert_eq!(std::fs::read(&poi_path).unwrap(), before_prepare);
     writer.flush().await.unwrap();
     assert!(!a.is_dirty());
@@ -447,8 +459,8 @@ async fn pump_failed_encode_cannot_leak_through_same_region_sibling_or_save_all(
 }
 
 // UNRUN: a later refused section must not publish/ack an earlier valid plan.
-#[test]
-fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
+#[tokio::test]
+async fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
     let directory = tempfile::tempdir().unwrap();
     let folder = folder(&directory);
     let runtime = TestRuntime::new(folder.poi_folder.clone());
@@ -456,7 +468,11 @@ fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
     chunk.bind_poi(&runtime.runtime).unwrap();
     runtime.chunks.insert(ChunkPos::new(0, 0), chunk.clone());
     chunk.set_block_absolute_y(1, 0, 1, home());
-    chunk.to_bytes_for_save().unwrap();
+    let writer = ChunkFileManager::<PumpFile<ChunkData>>::new(());
+    writer
+        .save_chunks(&folder, vec![(ChunkPos::new(0, 0), chunk.clone())])
+        .await
+        .unwrap();
     {
         let mut storage = runtime.runtime.storage.lock().unwrap();
         storage
@@ -498,7 +514,10 @@ fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
         // Explicitly repair the refused input; no lossy automatic admission.
         storage.remove(&BlockPos::new(1, 16, 1)).unwrap();
     };
-    chunk.to_bytes_for_save().unwrap();
+    writer
+        .save_chunks(&folder, vec![(ChunkPos::new(0, 0), chunk.clone())])
+        .await
+        .unwrap();
     let poi = PoiRegion::load(&poi_path).unwrap();
     assert_entry(&poi, (1, 0, 1), PoiType::Home, 1);
     assert_entry(&poi, (1, 16, 1), PoiType::Meeting, 32);

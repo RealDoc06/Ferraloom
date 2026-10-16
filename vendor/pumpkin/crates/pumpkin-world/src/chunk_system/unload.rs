@@ -7,7 +7,7 @@ enum UnloadState {
     Requested(SyncChunk),
     Prepared(
         Weak<crate::chunk::ChunkData>,
-        Option<crate::chunk::PoiReconciliationStamp>,
+        Option<crate::chunk::PoiCaptureStamp>,
     ),
 }
 
@@ -58,7 +58,7 @@ impl ChunkUnloadAccess<'_> {
             Some(UnloadState::Prepared(saved, stamp)) if saved.ptr_eq(&Arc::downgrade(chunk)) => {
                 if stamp.as_ref().map_or_else(
                     || !chunk.has_poi_binding(),
-                    |stamp| chunk.read_for_poi().is_current(stamp),
+                    |stamp| chunk.read_for_poi().is_capture_current(stamp),
                 ) {
                     return true;
                 }
@@ -98,7 +98,7 @@ impl ChunkUnloadAccess<'_> {
         &mut self,
         pos: ChunkPos,
         chunk: &SyncChunk,
-        stamp: crate::chunk::PoiReconciliationStamp,
+        stamp: crate::chunk::PoiCaptureStamp,
     ) {
         self.0.insert(
             pos,

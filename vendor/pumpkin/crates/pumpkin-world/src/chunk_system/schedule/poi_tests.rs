@@ -150,7 +150,13 @@ async fn no_be_retirement_rechecks_late_level_and_occupied_generation_writes() {
         panic!("expected Full terrain")
     };
     assert!(Arc::ptr_eq(source, &chunk));
-    source.to_bytes_for_save().unwrap();
+    // Private encoding cannot publish POI. Exercise the real post-file boundary.
+    level
+        .chunk_saver
+        .save_chunks(&level.level_folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    level.chunk_saver.flush().await.unwrap();
     let poi = PoiRegion::load(&level.level_folder.poi_folder.join("r.0.0.mca")).unwrap();
     assert!(
         poi.get_all()

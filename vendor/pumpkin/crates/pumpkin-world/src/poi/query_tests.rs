@@ -16,6 +16,21 @@ fn publish(runtime: &TestRuntime, x: i32) -> crate::level::SyncChunk {
     chunk
 }
 
+// Query fixtures explicitly use the separately accepted public memory API.
+// Private unload encoding no longer establishes a reconciled ticket baseline.
+fn reconcile_baseline(
+    runtime: &TestRuntime,
+    chunk: &ChunkData,
+) -> crate::chunk::PoiReconciliationStamp {
+    let mut storage = runtime.runtime.storage.lock().unwrap();
+    let pos = ChunkPos::new(chunk.x, chunk.z);
+    storage.preload_poi_region(pos).unwrap();
+    chunk
+        .read_for_poi()
+        .reconcile(&mut storage.loaded_poi_region(pos).unwrap())
+        .unwrap()
+}
+
 #[test]
 fn cache_query_actual_writers_preserve_tickets_and_reject_obsolete_preparation() {
     let directory = tempfile::tempdir().unwrap();
@@ -32,7 +47,7 @@ fn cache_query_actual_writers_preserve_tickets_and_reject_obsolete_preparation()
     second.set_blocks_batch([(1, 0, 1, Block::BELL.default_state.id)]);
     assert_eq!(runtime.runtime.snapshot(area()).unwrap().len(), 2);
     // A query no longer establishes the reconciled ticket baseline.
-    let baseline = first.prepare_poi().unwrap();
+    let baseline = reconcile_baseline(&runtime, &first);
     runtime
         .runtime
         .storage
@@ -331,8 +346,8 @@ fn cache_query_holds_both_terrain_sources_in_one_common_read_window() {
     let second = publish(&runtime, 1);
     first.set_block_absolute_y(1, 0, 1, Block::LECTERN.default_state.id);
     second.set_blocks_batch([(1, 0, 1, Block::COMPOSTER.default_state.id)]);
-    first.prepare_poi().unwrap();
-    second.prepare_poi().unwrap();
+    reconcile_baseline(&runtime, &first);
+    reconcile_baseline(&runtime, &second);
     // Both FULL sources now require private classification in the same window.
     first.set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
     second.set_blocks_batch([(2, 0, 1, Block::STONE.default_state.id)]);
@@ -410,8 +425,8 @@ fn cache_query_repeated_single_and_batch_writes_keep_aba_and_empty_results_priva
         .unwrap();
     first.set_block_absolute_y(1, 0, 1, home);
     second.set_blocks_batch([(1, 0, 1, Block::BELL.default_state.id)]);
-    let baseline = first.prepare_poi().unwrap();
-    second.prepare_poi().unwrap();
+    let baseline = reconcile_baseline(&runtime, &first);
+    reconcile_baseline(&runtime, &second);
     {
         let mut storage = runtime.runtime.storage.lock().unwrap();
         storage

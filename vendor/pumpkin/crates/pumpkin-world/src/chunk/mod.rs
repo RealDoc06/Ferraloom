@@ -22,7 +22,7 @@ pub(crate) mod poi_binding;
 pub(crate) mod poi_changes;
 pub mod postprocessing;
 
-pub use poi_changes::{PoiReconciliationStamp, PoiTerrainRead};
+pub use poi_changes::{PoiCaptureStamp, PoiReconciliationStamp, PoiTerrainRead};
 
 // TODO
 pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;

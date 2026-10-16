@@ -20,7 +20,10 @@ use tracing::{debug, trace};
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
     CompressionError,
-    io::{ChunkSerializer, Dirtiable, LoadedData, run_blocking},
+    io::{
+        ChunkSerializer, Dirtiable, EncodedChunk, EncodedPoiCommit, LoadedData, run_blocking,
+        sync_parent,
+    },
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -336,21 +339,21 @@ impl AnvilChunkData {
     }
 
     fn from_chunk<S>(
-        chunk: &S,
+        chunk: &Arc<S>,
         compression: Option<Compression>,
         chunk_config: &AnvilChunkConfig,
-    ) -> Result<Self, ChunkWritingError>
+    ) -> Result<(Self, Option<EncodedPoiCommit>), ChunkWritingError>
     where
         S: SingleChunkDataSerializer,
     {
-        let raw_bytes = chunk
-            .to_bytes_for_save()
+        let encoded = chunk
+            .capture_for_save()
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
         let level = chunk_config.compression.level;
         let compressed_data = compression
-            .compress_data(&raw_bytes, level)
+            .compress_data(&encoded.bytes, level)
             .map_err(ChunkWritingError::Compression)?;
 
         let serialized = Self {
@@ -363,7 +366,8 @@ impl AnvilChunkData {
                 serialized.sector_count()
             )));
         }
-        Ok(serialized)
+        encoded.validate()?;
+        Ok((serialized, encoded.poi))
     }
 }
 
@@ -469,7 +473,8 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         }
 
         write.flush().await?;
-        write.get_ref().sync_all().await
+        write.get_ref().sync_all().await?;
+        sync_parent(path).await
     }
 
     /// Write entire file, disregarding saved offsets
@@ -516,6 +521,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         write.get_ref().sync_all().await?;
         drop(write);
         tokio::fs::rename(temp_path, path).await?;
+        sync_parent(path).await?;
         Ok(())
     }
 }
@@ -535,9 +541,16 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
 
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
-    /// Actual persistence boundary. Pure packet/fixture encoding uses `to_bytes`.
+    /// Private managed encoding; this never publishes or persists captured POI.
     fn to_bytes_for_save(&self) -> Result<Bytes, ChunkSerializingError> {
         self.to_bytes()
+    }
+    /// Nonterrain serializers carry no completion receipt.
+    fn capture_for_save(self: &Arc<Self>) -> Result<EncodedChunk, ChunkSerializingError> {
+        Ok(EncodedChunk {
+            bytes: self.to_bytes_for_save()?,
+            poi: None,
+        })
     }
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> (i32, i32);
@@ -648,7 +661,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         &mut self,
         chunk: Arc<Self::Data>,
         chunk_config: &Self::ChunkConfig,
-    ) -> Result<(), ChunkWritingError> {
+    ) -> Result<Option<EncodedPoiCommit>, ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -660,8 +673,8 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
         let chunk_config_snapshot = chunk_config.clone();
-        let new_chunk_data = run_blocking(move || {
-            AnvilChunkData::from_chunk(&*chunk, compression_type, &chunk_config_snapshot)
+        let (new_chunk_data, receipt) = run_blocking(move || {
+            AnvilChunkData::from_chunk(&chunk, compression_type, &chunk_config_snapshot)
         })
         .await
         .map_err(|_| {
@@ -819,7 +832,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             }
         }
 
-        Ok(())
+        Ok(receipt)
     }
 
     async fn get_chunks(
@@ -1419,7 +1432,7 @@ mod tests {
             config.compression.algorithm = pumpkin_config::chunk::Compression::ZLib;
             config.compression.level = 0;
             let mut region = AnvilChunkFile::<RawChunk>::default();
-            region
+            let _receipt = region
                 .update_chunk(
                     Arc::new(RawChunk(Bytes::from_static(b"saved marker"))),
                     &config,

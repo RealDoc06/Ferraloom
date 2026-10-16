@@ -17,7 +17,8 @@ use crate::{
     level::LevelFolder,
 };
 
-use super::{ChunkSerializer, FileIO, LoadedData, run_blocking};
+use super::{ChunkSerializer, EncodedPoiCommit, FileIO, LoadedData, run_blocking};
+use crate::chunk::poi_binding::complete_poi_batch;
 
 /// A simple implementation of the `ChunkSerializer` trait that loads and saves data
 /// to disk using parallelism and a lazy-loading cache keyed by file path.
@@ -40,7 +41,12 @@ use super::{ChunkSerializer, FileIO, LoadedData, run_blocking};
 /// Acquire a loader's pending mutex before its region lock, never the reverse.
 ///
 /// Acquire `watchers` in its own critical section, separately from both the
-/// map and region locks.
+/// map and region locks. Inside a loader: pending -> cached region -> receipts.
+/// The async receipt guard may span backend encoding awaits; it is acquired
+/// BEFORE bytes change. Blocking completion owns only receipts, then briefly
+/// lifecycle/publication -> store -> terrain -> metadata. It releases all of
+/// those guards before POI encoding/IO. Cancellation leaves receipts owned by
+/// the cached region, and draining also waits for their blocking completion.
 pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
     file_locks: RwLock<BTreeMap<PathBuf, Arc<ChunkSerializerLazyLoader<S>>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
@@ -53,6 +59,21 @@ pub(crate) trait PathFromLevelFolder {
 
 type PendingChunks<T> = BTreeMap<(i32, i32), Arc<T>>;
 
+/// Until cached bytes and their receipt are installed, cancellation must restore
+/// dirty admission on the source retained in `unapplied`.
+struct EncodingAttempt<'a, D: Dirtiable> {
+    source: &'a D,
+    accepted: bool,
+}
+
+impl<D: Dirtiable> Drop for EncodingAttempt<'_, D> {
+    fn drop(&mut self) {
+        if !self.accepted {
+            self.source.mark_dirty(true);
+        }
+    }
+}
+
 struct ChunkSerializerLazyLoader<S: ChunkSerializer<WriteBackend = PathBuf>> {
     path: PathBuf,
     // Retain the newest source chunk even when opening the region fails.
@@ -61,9 +82,14 @@ struct ChunkSerializerLazyLoader<S: ChunkSerializer<WriteBackend = PathBuf>> {
     internal: OnceCell<Arc<RwLock<CachedRegion<S>>>>,
 }
 
+type PoiReceipts<T> = BTreeMap<(i32, i32), (Arc<T>, EncodedPoiCommit)>;
+
 struct CachedRegion<S: ChunkSerializer<WriteBackend = PathBuf>> {
     serializer: S,
     needs_write: bool,
+    // A blocking completion keeps this same owned map if its async caller is
+    // cancelled. Never move the only source/receipt into a disposable future.
+    receipts: Arc<Mutex<PoiReceipts<S::Data>>>,
 }
 
 impl<S: ChunkSerializer<WriteBackend = PathBuf>> CachedRegion<S> {
@@ -75,7 +101,34 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> CachedRegion<S> {
                 .map_err(ChunkWritingError::IoError)?;
             self.needs_write = false;
         }
-        Ok(())
+        let has_receipts = !self.receipts.lock().await.is_empty();
+        if !has_receipts {
+            return Ok(());
+        }
+        let receipts = self.receipts.clone();
+        run_blocking(move || {
+            let mut receipts = receipts.blocking_lock();
+            let result = complete_poi_batch(receipts.values_mut().map(|(_, receipt)| receipt));
+            receipts.retain(|_, (source, receipt)| !receipt.is_complete() || source.is_dirty());
+            result
+        })
+        .await
+        .map_err(|error| ChunkWritingError::IoError(std::io::Error::other(error)))?
+    }
+
+    async fn collect_recaptures(&mut self, pending: &mut PendingChunks<S::Data>) {
+        let mut receipts = self.receipts.lock().await;
+        receipts.retain(|position, (source, receipt)| {
+            if receipt.needs_recapture() || (receipt.is_complete() && source.is_dirty()) {
+                source.mark_dirty(true);
+                // Newest submitted owner always wins. A stale source cannot
+                // replace a newer pending Arc for the same coordinates.
+                pending.entry(*position).or_insert_with(|| source.clone());
+                false
+            } else {
+                true
+            }
+        });
     }
 }
 
@@ -109,7 +162,15 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
             return false;
         }
         loader.internal.get().is_none_or(|arc| {
-            Arc::strong_count(arc) == 1 && arc.try_read().is_ok_and(|cached| !cached.needs_write)
+            Arc::strong_count(arc) == 1
+                && arc.try_read().is_ok_and(|cached| {
+                    !cached.needs_write
+                        && Arc::strong_count(&cached.receipts) == 1
+                        && cached
+                            .receipts
+                            .try_lock()
+                            .is_ok_and(|receipts| receipts.is_empty())
+                })
         })
     }
 
@@ -121,6 +182,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                 Ok(Arc::new(RwLock::new(CachedRegion {
                     serializer,
                     needs_write: false,
+                    receipts: Arc::new(Mutex::new(BTreeMap::new())),
                 })))
             })
             .await
@@ -129,6 +191,9 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
 
     async fn apply_pending(&self, config: &S::ChunkConfig) -> Result<(), ChunkWritingError> {
         let mut pending = self.unapplied.lock().await;
+        if let Some(cached) = self.internal.get() {
+            cached.write().await.collect_recaptures(&mut pending).await;
+        }
         if pending.is_empty() {
             return Ok(());
         }
@@ -143,10 +208,24 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                 applied.push(*position);
                 continue;
             }
+            // Acquire before backend update: after it replaces bytes there must
+            // be no cancellation point before installing their matching receipt.
+            let receipts = region.receipts.clone();
+            let mut receipts = receipts.lock().await;
+            let mut attempt = EncodingAttempt {
+                source: chunk.as_ref(),
+                accepted: false,
+            };
             chunk.mark_dirty(false);
             match region.serializer.update_chunk(chunk.clone(), config).await {
-                Ok(()) => {
+                Ok(receipt) => {
+                    if let Some(receipt) = receipt {
+                        receipts.insert(*position, (chunk.clone(), receipt));
+                    } else {
+                        receipts.remove(position);
+                    }
                     region.needs_write = true;
+                    attempt.accepted = true;
                     applied.push(*position);
                 }
                 Err(error) => {
@@ -162,8 +241,12 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
     }
 
     async fn flush_serialized(&self) -> Result<(), ChunkWritingError> {
+        let mut pending = self.unapplied.lock().await;
         if let Some(cached) = self.internal.get() {
-            cached.write().await.flush(&self.path).await?;
+            let mut region = cached.write().await;
+            let written = region.flush(&self.path).await;
+            region.collect_recaptures(&mut pending).await;
+            written?;
         }
         Ok(())
     }
@@ -367,10 +450,26 @@ where
                 let loader = self.get_loader(&path).await;
                 let (retained, remaining) = {
                     let pending = loader.unapplied.lock().await;
+                    let cached = if let Some(cached) = loader.internal.get() {
+                        Some(cached.read().await)
+                    } else {
+                        None
+                    };
+                    let receipts = if let Some(cached) = &cached {
+                        Some(cached.receipts.lock().await)
+                    } else {
+                        None
+                    };
                     let mut retained = Vec::new();
                     let mut remaining = Vec::new();
                     for position in chunks {
-                        if let Some(chunk) = pending.get(&(position.x, position.y)) {
+                        if let Some(chunk) = pending.get(&(position.x, position.y)).or_else(|| {
+                            receipts.as_ref().and_then(|receipts| {
+                                receipts
+                                    .get(&(position.x, position.y))
+                                    .map(|(source, _)| source)
+                            })
+                        }) {
                             retained.push(chunk.clone());
                         } else {
                             remaining.push(position);
@@ -512,7 +611,11 @@ where
                 // Acquiring + immediately dropping the write-lock acts as a
                 // barrier: it can only succeed once all current lock holders
                 // have released their guards.
-                let _guard = serializer_arc.write().await;
+                let guard = serializer_arc.write().await;
+                let receipts = guard.receipts.clone();
+                // A cancelled async flush may have left its blocking completion
+                // alive. The shared receipt mutex is that work's final fence.
+                let _completion = receipts.lock().await;
             }
         });
 

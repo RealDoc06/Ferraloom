@@ -77,8 +77,8 @@ impl PoiSectionChanges {
     }
 }
 
-/// An in-memory preparation stamp, not a durable save receipt or publication ID.
-/// Stage B must pair this with the exact live `ChunkData` Arc under its lifecycle fence.
+/// Public memory reconciliation only, not a durable receipt or unload capture.
+/// Its revisions are acknowledged in memory for this exact terrain source.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PoiReconciliationStamp {
     revisions: Box<[u64]>,
@@ -91,45 +91,12 @@ pub struct PoiTerrainRead<'a> {
     palettes: RwLockReadGuard<'a, Box<[BlockPalette]>>,
 }
 
-/// An unpublished save plan, tied to its exact source and exclusive storage
-/// borrow. Dropping it after encode failure changes neither POI nor reset history.
-pub struct PoiSavePlan<'a> {
-    source: &'a ChunkData,
-    loaded: LoadedPoiRegion<'a>,
+/// Revisions of the private palette snapshot used by the terrain encoder.
+/// Unlike a reconciliation stamp, this proves neither application nor durability.
+#[derive(Debug, PartialEq, Eq)]
+pub struct PoiCaptureStamp {
     revisions: Box<[u64]>,
-    sections: Vec<(usize, PoiSectionReplacement)>,
-    complete: bool,
-}
-
-impl PoiSavePlan<'_> {
-    /// Call only after successful terrain encoding. A later terrain write refuses
-    /// the whole plan before mutation; its complete ABA history remains pending.
-    /// This brief read guard is released before the caller performs any POI IO.
-    pub(crate) fn apply(mut self) -> Result<Option<PoiReconciliationStamp>, PoiReconcileError> {
-        let terrain = self.source.read_for_poi();
-        let mut changes = terrain.changes_for(&self.loaded)?;
-        if self.revisions.len() != changes.sections.len()
-            || self
-                .revisions
-                .iter()
-                .zip(changes.sections.iter())
-                .any(|(revision, section)| *revision != section.revision)
-        {
-            return Err(PoiReconcileError::StaleSaveCapture);
-        }
-        changes.store = Some(self.loaded.identity.clone());
-        for (index, replacement) in self.sections {
-            self.loaded.apply_section(replacement);
-            if self.complete {
-                let section = &mut changes.sections[index];
-                section.applied_revision = section.revision;
-                section.reset_tickets = None;
-            }
-        }
-        Ok(self.complete.then_some(PoiReconciliationStamp {
-            revisions: self.revisions,
-        }))
-    }
+    store: Arc<()>,
 }
 
 impl ChunkData {
@@ -149,7 +116,7 @@ impl ChunkData {
     }
 }
 
-impl<'chunk> PoiTerrainRead<'chunk> {
+impl PoiTerrainRead<'_> {
     /// Classify pending FULL sections for an owned query result. The caller keeps
     /// storage and every source's terrain guard through the complete area capture.
     /// This does not publish replacements, acknowledge revisions or consume ABA bits.
@@ -205,44 +172,116 @@ impl<'chunk> PoiTerrainRead<'chunk> {
         })
     }
 
-    /// Capture without changing shared memory or acknowledging revisions. Proto
-    /// plans remain Valid0 and keep reset history even after successful encoding.
-    pub(crate) fn plan_for_save<'storage>(
+    /// Validate every affected section without retaining detached ticket values.
+    /// The terrain root builder consumes this same palette guard.
+    pub(crate) fn capture_for_save(
         &self,
-        loaded: LoadedPoiRegion<'storage>,
-    ) -> Result<PoiSavePlan<'storage>, PoiReconcileError>
-    where
-        'chunk: 'storage,
-    {
-        let changes = self.changes_for(&loaded)?;
+        loaded: &LoadedPoiRegion<'_>,
+    ) -> Result<PoiCaptureStamp, PoiReconcileError> {
+        let changes = self.changes_for(loaded)?;
         let complete = self.chunk.status == pumpkin_data::chunk::ChunkStatus::Full;
-        let mut sections = Vec::new();
         for (index, (palette, section)) in self
             .palettes
             .iter()
             .zip(changes.sections.iter())
             .enumerate()
         {
-            if complete && section.revision == section.applied_revision {
-                continue;
-            }
-            sections.push((
-                index,
+            if !complete || section.revision != section.applied_revision {
+                // Admission only. Commit must consult CURRENT tickets and masks.
                 loaded.plan_section(
                     self.chunk.section.min_y / 16 + index as i32,
                     palette,
                     section,
                     complete,
-                )?,
-            ));
+                )?;
+            }
         }
-        Ok(PoiSavePlan {
-            source: self.chunk,
-            loaded,
+        Ok(PoiCaptureStamp {
             revisions: changes.sections.iter().map(|s| s.revision).collect(),
-            sections,
-            complete,
+            store: loaded.identity.clone(),
         })
+    }
+
+    pub(crate) fn validate_capture(
+        &self,
+        loaded: &LoadedPoiRegion<'_>,
+        stamp: &PoiCaptureStamp,
+    ) -> Result<(), PoiReconcileError> {
+        let changes = self.changes_for(loaded)?;
+        if !Arc::ptr_eq(&stamp.store, &loaded.identity) {
+            return Err(PoiReconcileError::WrongStorage);
+        }
+        if stamp.revisions.len() != changes.sections.len()
+            || !stamp
+                .revisions
+                .iter()
+                .zip(changes.sections.iter())
+                .all(|(revision, section)| *revision == section.revision)
+        {
+            return Err(PoiReconcileError::StaleSaveCapture);
+        }
+        Ok(())
+    }
+
+    /// Post-terrain completion only. Validate all sections before applying any;
+    /// ticket lookup, replacement and acknowledgment share the current store lock.
+    pub(crate) fn commit_capture(
+        &self,
+        loaded: &mut LoadedPoiRegion<'_>,
+        stamp: &PoiCaptureStamp,
+    ) -> Result<(), PoiReconcileError> {
+        self.validate_capture(loaded, stamp)?;
+        let mut changes = self.changes_for(loaded)?;
+        let complete = self.chunk.status == pumpkin_data::chunk::ChunkStatus::Full;
+        let sections = self
+            .palettes
+            .iter()
+            .zip(changes.sections.iter())
+            .enumerate()
+            .filter(|(_, (_, section))| !complete || section.revision != section.applied_revision)
+            .map(|(index, (palette, section))| {
+                loaded
+                    .plan_section(
+                        self.chunk.section.min_y / 16 + index as i32,
+                        palette,
+                        section,
+                        complete,
+                    )
+                    .map(|replacement| (index, replacement))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        changes.store = Some(loaded.identity.clone());
+        for (index, replacement) in sections {
+            loaded.apply_section(replacement);
+            if complete {
+                let section = &mut changes.sections[index];
+                section.applied_revision = section.revision;
+                section.reset_tickets = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// Final unload fence for a private encoded capture, not a durable receipt.
+    #[must_use]
+    pub fn is_capture_current(&self, stamp: &PoiCaptureStamp) -> bool {
+        if self.chunk.section.block_sections.is_poisoned() {
+            return false;
+        }
+        let Ok(changes) = self.chunk.section.poi_changes.lock() else {
+            return false;
+        };
+        !changes.exhausted
+            && changes
+                .store
+                .as_ref()
+                .is_none_or(|store| Arc::ptr_eq(store, &stamp.store))
+            && stamp.revisions.len() == changes.sections.len()
+            && stamp
+                .revisions
+                .iter()
+                .zip(changes.sections.iter())
+                .all(|(revision, section)| *revision == section.revision)
     }
 
     fn changes_for(

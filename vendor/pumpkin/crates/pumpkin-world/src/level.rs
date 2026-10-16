@@ -1049,7 +1049,7 @@ impl Level {
     pub fn prepare_chunk_poi(
         &self,
         chunk: &SyncChunk,
-    ) -> Result<crate::chunk::PoiReconciliationStamp, crate::poi::PoiReconcileError> {
+    ) -> Result<crate::chunk::PoiCaptureStamp, crate::poi::PoiReconcileError> {
         let result = self
             .bind_chunk_poi(chunk)
             .and_then(|()| chunk.prepare_poi());
@@ -1064,7 +1064,7 @@ impl Level {
     pub async fn prepare_chunk_poi_for_unload(
         self: &Arc<Self>,
         chunk: SyncChunk,
-    ) -> Result<crate::chunk::PoiReconciliationStamp, crate::poi::PoiReconcileError> {
+    ) -> Result<crate::chunk::PoiCaptureStamp, crate::poi::PoiReconcileError> {
         let level = self.clone();
         let result = crate::chunk::io::run_blocking(move || level.prepare_chunk_poi(&chunk))
             .await
@@ -1416,7 +1416,7 @@ mod tests {
         // Level must subsequently use its own file cache, IO worker and scheduler.
         let path = level.level_folder.region_folder.join("r.0.0.mca");
         let mut region = AnvilChunkFile::<ChunkData>::default();
-        refused_region_stage(
+        let _receipt = refused_region_stage(
             "source region encoding",
             region.update_chunk(source.clone(), &AnvilChunkConfig::default()),
         )

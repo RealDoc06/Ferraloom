@@ -342,7 +342,7 @@ async fn selected_sing_reference_survives_container_region_save_and_reopen() {
         source.bind_poi(&runtime.runtime).unwrap();
         let path = folder.region_folder.join("r.0.0.mca");
         let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
-        region
+        let _receipt = region
             .update_chunk(source, &AnvilChunkConfig::default())
             .await
             .unwrap();
@@ -421,7 +421,7 @@ async fn refused_horn_and_unknown_chests_keep_mca_bytes_while_healthy_regions_wr
         source.bind_poi(&runtime.runtime).unwrap();
         let path = folder.region_folder.join("r.0.0.mca");
         let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
-        region
+        let _receipt = region
             .update_chunk(source.clone(), &AnvilChunkConfig::default())
             .await
             .unwrap();
@@ -601,7 +601,7 @@ async fn selected_jukebox_record_survives_actual_mca_item_save_and_fresh_reopen(
         source.bind_poi(&runtime.runtime).unwrap();
         let path = folder.region_folder.join("r.0.0.mca");
         let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
-        region
+        let _receipt = region
             .update_chunk(source, &AnvilChunkConfig::default())
             .await
             .unwrap();
@@ -674,7 +674,7 @@ async fn refused_jukebox_keeps_original_mca_bytes_across_retry_and_healthy_save(
     source.bind_poi(&runtime.runtime).unwrap();
     let path = folder.region_folder.join("r.0.0.mca");
     let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
-    region
+    let _receipt = region
         .update_chunk(source.clone(), &AnvilChunkConfig::default())
         .await
         .unwrap();
