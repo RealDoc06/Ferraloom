@@ -11,6 +11,8 @@ import { decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySo
 import { decodeJukeboxBlockEntityPacket, decodeJukeboxContainerPacket, decodeJukeboxLevelEvent, decodeSongRegistryPacket,
   encodeJukeboxSelect, encodeJukeboxSwap, encodeJukeboxUse,
   type SongRegistry } from './jukeboxes.ts';
+import { craftingAction, closeCrafting, decodeCraftingPacket, emptyCraftingState, encodeCraftingClick,
+  observeCrafting, type CraftAction, type CraftingPacket } from './crafting.ts';
 
 export const VERSION = '26.3';
 export const PROTOCOL = 777;
@@ -389,7 +391,7 @@ export function decodeChunkBlockEntities(payload: Buffer, mode: 'plain' | 'rich'
   return { x, z, section_bytes, block_entity_count, block_entities, signs, decoded_bytes: reader.offset };
 }
 
-function plainStackHash(stack: PlainStack): Buffer {
+export function plainStackHash(stack: PlainStack): Buffer {
   if (stack === null) return Buffer.from([0]);
   if (stack.components || stack.removed_components) throw new Error('SWAP hashed components are outside this plain-stack fixture');
   if (!Number.isSafeInteger(stack.item_id) || stack.item_id <= 0 || stack.item_id > 2147483647 ||
@@ -830,6 +832,7 @@ type Command = { id: string | number } & (
   | { action: 'state' }
   | { action: 'quit' }
   | { action: 'request_stats' }
+  | ({ action: 'craft_click'; slot: number } & CraftAction)
   | { action: 'expect_disconnect'; translation: 'disconnect.spam' }
   | { action: 'chat' | 'command'; text: string }
   | { action: 'trigger'; objective: string; value: number }
@@ -849,6 +852,11 @@ export function parseCommand(value: unknown): Command {
   if (!record(value) || (typeof value.id !== 'string' && !Number.isSafeInteger(value.id))) throw new Error('id must be a string or safe integer');
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
   if (value.action === 'state' || value.action === 'quit' || value.action === 'request_stats') return { id, action: value.action };
+  if (value.action === 'craft_click') {
+    if (typeof value.slot !== 'number' || !Number.isInteger(value.slot) || value.slot < 0 || value.slot >= 46) throw new Error('Invalid crafting slot');
+    if (Object.keys(value).some(key => !['id', 'action', 'slot', 'input', 'button'].includes(key))) throw new Error('Crafting IPC cannot supply predictions or revisions');
+    return { id, action: value.action, slot: value.slot, ...craftingAction(value.input, value.button) };
+  }
   if (value.action === 'expect_disconnect') {
     if (value.translation !== 'disconnect.spam') throw new Error('Only the explicit spam negative fixture may expect a disconnect');
     return { id, action: value.action, translation: value.translation };
@@ -940,12 +948,15 @@ function main() {
   const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false },
     'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
     'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false },
-    'jukeboxes': { type: 'boolean', default: false } } });
+    'jukeboxes': { type: 'boolean', default: false }, 'crafting': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   if (values.horns && !values['block-data']) throw new Error('--horns requires --block-data');
   if (values.jukeboxes && (!values['block-data'] || !values['raw-packets'] || values.horns || values['container-metadata'])) {
     throw new Error('--jukeboxes requires --block-data --raw-packets and an exclusive fixture decoder');
+  }
+  if (values.crafting && (!values['block-data'] || !values['raw-packets'] || values.horns || values.jukeboxes || values['container-metadata'])) {
+    throw new Error('--crafting requires --block-data --raw-packets and an exclusive plain decoder');
   }
   const socket = createConnection({ host: values.host, port });
   let buffer = Buffer.alloc(0);
@@ -976,6 +987,8 @@ function main() {
       slots: PlainStack[]; carried: PlainStack } | null,
     menu_packets: [] as (ContainerPacket & { sequence: number })[],
     player_inventory: null as PlayerInventoryObservation | null,
+    ...(values.crafting ? { crafting: emptyCraftingState() } : {}),
+    ...(values.crafting ? { crafting_packets: [] as (CraftingPacket & { sequence: number })[] } : {}),
     statistics_packets: 0,
     statistics_packet: null as (StatisticsPacket & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
     sign_packets: [] as (SignObservation & { sequence: number })[],
@@ -992,12 +1005,26 @@ function main() {
     block_ack: -1,
   };
   let jukeboxEvidenceBytes = 0;
+  let craftingEvidenceBytes = 0;
+  let craftingActionCount = 0;
+
+  function retainCraftingRaw(raw: Buffer) {
+    if (values.crafting && (craftingEvidenceBytes += raw.length) > 16 * 1024 * 1024) throw new Error('Crafting raw evidence budget exceeded');
+  }
+
+  function receiveCrafting(observation: CraftingPacket & { sequence: number }) {
+    state.crafting_packets!.push(observation);
+    if (state.crafting_packets!.length > 4096) throw new Error('Crafting observation budget exceeded');
+    state.crafting = observeCrafting(state.crafting!, observation);
+    emit({ event: 'crafting_packet', ...observation });
+  }
 
   function send(id: number, ...parts: Buffer[]) {
     if (quitting || socket.destroyed || socket.writableEnded || !socket.writable) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
     const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || ((values.horns || values.jukeboxes) && [54, 67].includes(id))) ? packet : null;
     if (values.jukeboxes && raw && (jukeboxEvidenceBytes += raw.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
+    if (raw) retainCraftingRaw(raw);
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
@@ -1015,7 +1042,7 @@ function main() {
     } else socket.write(frame);
     // write() returning false means queued with backpressure, not an unsent packet.
     if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64'),
-      ...(values.horns || values.jukeboxes ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+      ...(values.horns || values.jukeboxes || values.crafting ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
         payload_sha256: createHash('sha256').update(raw).digest('hex') } : {}) });
     return true;
   }
@@ -1054,11 +1081,12 @@ function main() {
     const id = reader.varInt();
     state.packets++;
     if (values['raw-packets'] && ((phase === 'play' && ([3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id) || (values.horns && [22, 50, 118].includes(id)) ||
-        (values.jukeboxes && [6, 8, 46, 47, 50, 118].includes(id)))) ||
+        (values.jukeboxes && [6, 8, 46, 47, 50, 118].includes(id)) || (values.crafting && id === 98))) ||
         ((values.horns || values.jukeboxes) && phase === 'configuration' && id === 7))) {
       if (values.jukeboxes && (jukeboxEvidenceBytes += payload.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
+      retainCraftingRaw(payload);
       emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64'),
-        ...(values.horns || values.jukeboxes ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+        ...(values.horns || values.jukeboxes || values.crafting ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
           payload_sha256: createHash('sha256').update(payload).digest('hex') } : {}) });
     }
     if (phase === 'login') {
@@ -1186,17 +1214,21 @@ function main() {
     }
     if (id === ids.play.inventory) state.inventory_packets++;
     if (id === ids.play.slot) state.slot_packets++;
+    if (values.crafting && (id === 98 || id === 110)) receiveCrafting({ ...decodeCraftingPacket(payload), sequence: state.packets });
     if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
       const observation = { ...(values.jukeboxes && id !== 60
         ? decodeJukeboxContainerPacket(payload, state.jukebox_registry!)
         : values.horns && id !== 60 ? decodeHornContainerPacket(payload, state.horn_registry!)
         : decodeContainerPacket(payload, values['container-metadata'])), sequence: state.packets };
       state.player_inventory = observePlayerInventory(state.player_inventory, observation);
+      if (values.crafting) receiveCrafting(observation);
       state.menu_packets.push(observation);
       if (values.jukeboxes) {
         if (state.menu_packets.length > 1024) throw new Error('Jukebox menu observation budget exceeded');
       } else if (values.horns) {
         if (state.menu_packets.length > 512) throw new Error('Horn menu observation budget exceeded');
+      } else if (values.crafting) {
+        if (state.menu_packets.length > 4096) throw new Error('Crafting menu evidence budget exceeded');
       } else if (state.menu_packets.length > 64) state.menu_packets.shift();
       if (observation.kind === 'open') {
         state.menu = { container_id: observation.container_id, menu_type: observation.menu_type,
@@ -1333,7 +1365,27 @@ function main() {
         emit({ id: command.id, ok: true, result: { expected_translation: expectedDisconnect } });
       } else {
         if (!ready) throw new Error('Client is not ready');
-        if (command.action === 'request_stats') {
+        if (command.action === 'craft_click') {
+          if (!values.crafting) throw new Error('Crafting actions require --crafting');
+          if (++craftingActionCount > 256) throw new Error('Crafting action budget exceeded');
+          const before = state.crafting!;
+          const after_sequence = state.packets;
+          const payload = encodeCraftingClick(before, command.slot, command);
+          const request = Buffer.concat([varInt(18), payload]);
+          const evidence = { action_number: craftingActionCount, input: command.input, slot: command.slot,
+            button: command.button, before, after_sequence, changed_slots: {},
+            payload_base64: request.toString('base64'), payload_sha256: createHash('sha256').update(request).digest('hex'),
+            acknowledgment: 'queued bytes only; require subsequent same-connection AwardStats fence' };
+          emit({ event: 'crafting_request', ...evidence });
+          if (!send(18, payload)) throw new Error('Crafting click was not queued');
+          emit({ id: command.id, ok: true, result: { ...evidence, written: true } });
+        } else if (command.action === 'close_menu' && values.crafting) {
+          const menu = state.crafting![state.crafting!.active];
+          if (!menu || !send(19, varInt(menu.container_id))) throw new Error('Crafting menu close was not queued');
+          state.crafting = closeCrafting(state.crafting!);
+          state.menu = null;
+          emit({ id: command.id, ok: true, result: { sent_action: command.action, written: true } });
+        } else if (command.action === 'request_stats') {
           const after_sequence = state.packets;
           if (!send(12, varInt(1))) throw new Error('Statistics request was not queued: connection is not writable');
           emit({ id: command.id, ok: true, result: { sent_action: command.action, packet_id: 12,
@@ -1390,6 +1442,7 @@ function main() {
             if (command.action === 'close_menu') {
               if (!send(19, varInt(menu.container_id))) throw new Error('Menu close was not queued');
               state.menu = null;
+              if (values.crafting) state.crafting = closeCrafting(state.crafting!);
             } else {
               if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
               if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');

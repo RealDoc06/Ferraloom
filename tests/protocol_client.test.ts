@@ -706,3 +706,148 @@ test('jukebox live BE requires compound and preserves leaked signed elapsed befo
   const other = Buffer.from(empty); other[9] = 1;
   assert.equal(decodeJukeboxBlockEntityPacket(other), null);
 });
+
+// Crafting expectations below are synthetic, primary-derived codec boundaries.
+// They are not captured runtime gold, Java component hashes or parity evidence.
+import { craftingAction, craftingInventorySlot, closeCrafting, decodeCraftingPacket,
+  emptyCraftingState, encodeCraftingClick, observeCrafting } from '../tools/parity/crafting.ts';
+import { plainStackHash, type PlainStack } from '../tools/parity/client.ts';
+
+function craftingPlayer(slots: PlainStack[] = Array<PlainStack>(46).fill(null)) {
+  return observeCrafting(emptyCraftingState(), { kind: 'content', packet_id: 18,
+    container_id: 0, state_id: 7, slots, carried: null, sequence: 10 });
+}
+
+test('crafting zero-map clicks encode player0 and table IDs with explicit action IDs', () => {
+  const player = craftingPlayer();
+  assert.equal(encodeCraftingClick(player, 4, { input: 'swap', button: 0 }).toString('hex'), '0007000400020000');
+  const opened = observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 3,
+    menu_type: 12, title: 'container.crafting', sequence: 11 });
+  const table = observeCrafting(opened, { kind: 'content', packet_id: 18, container_id: 3,
+    state_id: 7, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 12 });
+  assert.equal(encodeCraftingClick(table, 9, { input: 'throw', button: 1 }).toString('hex'), '0307000901040000');
+  assert.equal(encodeCraftingClick(player, 0, { input: 'pickup', button: 1 }).toString('hex'), '0007000001000000');
+  assert.equal(encodeCraftingClick(table, 0, { input: 'quick_move', button: 0 }).toString('hex'), '0307000000010000');
+});
+
+test('crafting pre-action cursor hash is present item-first and never predicts a result', () => {
+  const before = observeCrafting(craftingPlayer(), { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 11 });
+  const retained = structuredClone(before);
+  assert.equal(plainStackHash(null).toString('hex'), '00');
+  assert.equal(plainStackHash(before.cursor).toString('hex'), '01c109030000');
+  assert.equal(encodeCraftingClick(before, 36, { input: 'pickup', button: 0 }).toString('hex'), '0007002400000001c109030000');
+  assert.deepEqual(before, retained);
+  assert.throws(() => encodeCraftingClick({ ...before, cursor: { item_id: 1217, count: 3, components: {} } }, 0,
+    { input: 'pickup', button: 0 }));
+});
+
+test('crafting action grammar refuses unsupported inputs buttons slots and unknown baselines', () => {
+  for (const [input, button] of [['clone', 0], ['quick_craft', 0], ['pickup', 2], ['throw', -1],
+    ['quick_move', 8], ['swap', 9], ['swap', 0.5], ['pickup', '0'], ['swap', Infinity]]) {
+    assert.throws(() => craftingAction(input, button));
+  }
+  assert.deepEqual(craftingAction('swap', 8), { input: 'swap', button: 8 });
+  assert.deepEqual(craftingAction('quick_move', 1), { input: 'quick_move', button: 1 });
+  for (const slot of [-999, -1, 46, 1.5, NaN]) {
+    assert.throws(() => encodeCraftingClick(craftingPlayer(), slot, { input: 'pickup', button: 0 }));
+  }
+  assert.throws(() => encodeCraftingClick(emptyCraftingState(), 0, { input: 'pickup', button: 0 }));
+});
+
+test('crafting cursor98 and inventory110 decode ordinary count-first stacks', () => {
+  assert.deepEqual(decodeCraftingPacket(Buffer.from('6203c1090000', 'hex')),
+    { kind: 'cursor', packet_id: 98, stack: { item_id: 1217, count: 3 } });
+  assert.deepEqual(decodeCraftingPacket(Buffer.from('6e2840f6090000', 'hex')),
+    { kind: 'player_slot', packet_id: 110, slot: 40, stack: { item_id: 1270, count: 64 } });
+  assert.deepEqual(decodeCraftingPacket(Buffer.from('6200', 'hex')), { kind: 'cursor', packet_id: 98, stack: null });
+  assert.deepEqual(decodeCraftingPacket(Buffer.from('6e0000', 'hex')),
+    { kind: 'player_slot', packet_id: 110, slot: 0, stack: null });
+});
+
+test('crafting standalone codecs refuse truncation trailing bytes and component patches', () => {
+  for (const hex of ['6203c1090000', '6e2840f6090000']) {
+    const bytes = Buffer.from(hex, 'hex');
+    for (let end = 0; end < bytes.length; end++) assert.throws(() => decodeCraftingPacket(bytes.subarray(0, end)));
+    assert.throws(() => decodeCraftingPacket(Buffer.concat([bytes, Buffer.from([0])])));
+  }
+  for (const hex of ['6300', '62ffffffff0f', '6201000000', '6203c1090100', '6203c1090001',
+    '6e2900', '6effffffff0f00', '628080808010']) assert.throws(() => decodeCraftingPacket(Buffer.from(hex, 'hex')));
+  assert.throws(() => decodeCraftingPacket(Buffer.alloc(129)));
+});
+
+test('crafting player menu starts only from actual full content and keeps grid offset', () => {
+  const unknown = observeCrafting(emptyCraftingState(), { kind: 'slot', packet_id: 20,
+    container_id: 0, state_id: 1, slot: 4, stack: { item_id: 1217, count: 3 }, sequence: 1 });
+  assert.equal(unknown.player, null);
+  const player = craftingPlayer();
+  const changed = observeCrafting(player, { kind: 'slot', packet_id: 20, container_id: 0,
+    state_id: 8, slot: 4, stack: { item_id: 1217, count: 3 }, sequence: 11 });
+  assert.deepEqual(changed.player?.slots?.slice(0, 5), [null, null, null, null, { item_id: 1217, count: 3 }]);
+  assert.equal(changed.player?.state_id, 8);
+  assert.equal(player.player?.slots?.[4], null);
+  assert.throws(() => craftingPlayer(Array<PlainStack>(45).fill(null)));
+});
+
+test('crafting table requires received open12 and full content before any click', () => {
+  const player = craftingPlayer();
+  assert.throws(() => observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 3,
+    menu_type: 2, title: 'barrel', sequence: 11 }));
+  assert.throws(() => observeCrafting(player, { kind: 'content', packet_id: 18, container_id: 3,
+    state_id: 1, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 11 }));
+  const open = observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 3,
+    menu_type: 12, title: 'container.crafting', sequence: 11 });
+  assert.equal(open.table?.slots, null);
+  assert.throws(() => encodeCraftingClick(open, 9, { input: 'swap', button: 0 }));
+  assert.deepEqual(closeCrafting(open), { ...player, active: 'player', table: null });
+});
+
+test('crafting inventory110 routes offhand40 only to player45 and never table40', () => {
+  const opened = observeCrafting(craftingPlayer(), { kind: 'open', packet_id: 60,
+    container_id: 3, menu_type: 12, title: 'container.crafting', sequence: 11 });
+  const table = observeCrafting(opened, { kind: 'content', packet_id: 18, container_id: 3,
+    state_id: 19, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 12 });
+  const before = structuredClone(table);
+  const offhand = observeCrafting(table, { kind: 'player_slot', packet_id: 110, slot: 40,
+    stack: { item_id: 1270, count: 64 }, sequence: 13 });
+  assert.deepEqual(offhand.player?.slots?.[45], { item_id: 1270, count: 64 });
+  assert.equal(offhand.table?.slots?.[40], null);
+  assert.equal(offhand.player?.state_id, 7);
+  assert.equal(offhand.table?.state_id, 19);
+  assert.equal(craftingInventorySlot('table', 0), 37);
+  assert.equal(craftingInventorySlot('table', 35), 36);
+  assert.equal(craftingInventorySlot('table', 40), null);
+  assert.equal(craftingInventorySlot('player', 39), 5);
+  assert.deepEqual(table, before);
+});
+
+test('crafting global cursor and shared table slots preserve received revisions and snapshots', () => {
+  const source = Array<PlainStack>(46).fill(null);
+  source[36] = { item_id: 1217, count: 64 };
+  const player = craftingPlayer(source);
+  source[36]!.count = 1;
+  assert.equal(player.player?.slots?.[36]?.count, 64);
+  const opened = observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 3,
+    menu_type: 12, title: 'container.crafting', sequence: 11 });
+  const table = observeCrafting(opened, { kind: 'content', packet_id: 18, container_id: 3,
+    state_id: 2, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 12 });
+  const slot = observeCrafting(table, { kind: 'slot', packet_id: 20, container_id: 3,
+    state_id: 3, slot: 40, stack: { item_id: 1217, count: 3 }, sequence: 13 });
+  assert.deepEqual(slot.player?.slots?.[39], { item_id: 1217, count: 3 });
+  assert.equal(slot.player?.slots?.[45], null);
+  assert.equal(slot.player?.state_id, 7);
+  const cursor = observeCrafting(slot, { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 14 });
+  assert.equal(cursor.table?.state_id, 3);
+  assert.equal(cursor.player?.state_id, 7);
+  assert.equal(slot.cursor, null);
+  assert.deepEqual(cursor.cursor, { item_id: 1217, count: 3 });
+  assert.equal(table.table?.slots?.[40], null);
+});
+
+test('crafting IPC accepts only actions and refuses supplied predictions or menu revisions', () => {
+  const command = { id: 'craft', action: 'craft_click', slot: 4, input: 'swap', button: 0 };
+  assert.deepEqual(parseCommand(command), command);
+  for (const fields of [{ state_id: 7 }, { changed_slots: {} }, { carried: null }, { container_id: 0 },
+    { slot: 46 }, { input: 'clone' }, { button: 9 }]) assert.throws(() => parseCommand({ ...command, ...fields }));
+});

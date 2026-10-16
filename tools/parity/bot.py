@@ -45,13 +45,15 @@ class Client:
 
     def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client",
                  name: str = NAME, container_metadata: bool = False, raw_packets: bool = False,
-                 strict_offline_chat: bool = False, horns: bool = False, jukeboxes: bool = False):
+                 strict_offline_chat: bool = False, horns: bool = False, jukeboxes: bool = False,
+                 crafting: bool = False):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", log_name):
             raise ValueError("Invalid client log name")
         if not re.fullmatch(r"[A-Za-z0-9_]{1,16}", name, flags=re.ASCII):
             raise ValueError("Client name must be 1..16 ASCII username characters")
         self.name = name
         self.jukeboxes = jukeboxes
+        self.crafting = crafting
         self.expected_disconnect: dict | None = None
         self.forced_close = False
         self.sequence = 0
@@ -65,10 +67,11 @@ class Client:
             self.process = subprocess.Popen(
                 ["node", str(ROOT / "tools/parity/client.ts"), "--host", "127.0.0.1",
                  "--port", str(server.port), "--name", name,
-                 *(["--block-data"] if block_data or container_metadata or horns or jukeboxes else []),
+                 *(["--block-data"] if block_data or container_metadata or horns or jukeboxes or crafting else []),
                  *(["--container-metadata"] if container_metadata else []),
                  *(["--horns"] if horns else []),
                  *(["--jukeboxes"] if jukeboxes else []),
+                 *(["--crafting"] if crafting else []),
                  *(["--strict-offline-chat"] if strict_offline_chat else []),
                  *(["--raw-packets"] if raw_packets else [])],
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
@@ -120,6 +123,8 @@ class Client:
             self.events.append(message)
             if self.jukeboxes:
                 protocol.require(len(self.events) <= 16384, "Jukebox IPC evidence budget exceeded")
+            elif self.crafting:
+                protocol.require(len(self.events) <= 16384, "Crafting IPC evidence budget exceeded")
             else:
                 self.events = self.events[-100:]
         return message
@@ -183,6 +188,26 @@ class Client:
     def expect_spam_disconnect(self) -> None:
         """Arm only the named negative fixture; every other protocol error stays fatal."""
         self.request("expect_disconnect", translation="disconnect.spam")
+
+    def crafting_click(self, slot: int, action: str, button: int = 0) -> dict:
+        """Queue a nonpredicting click against the client's latest received state."""
+        protocol.require(self.crafting, "Crafting requires its explicit plain-item mode")
+        result = self.request("craft_click", slot=slot, input=action, button=button)
+        protocol.require(isinstance(result, dict) and result.get("written") is True, "Crafting click not queued")
+        return result
+
+    def crafting_fence(self) -> dict:
+        """A later AwardStats on this same stream fences execution, not success.
+
+        Callers still compare actual received effects and retained absolute stats.
+        An omitted counter is never evidence that its value was zero.
+        """
+        protocol.require(self.crafting, "Crafting fence requires opt-in mode")
+        sent = self.request("request_stats")
+        protocol.require(isinstance(sent, dict) and sent.get("written") is True, "Statistics request not queued")
+        state = self.wait_state(lambda value: value.get("statistics_packet") is not None
+                                and value["statistics_packet"]["sequence"] > sent["after_sequence"])
+        return {"request": sent, "response": state["statistics_packet"], "received": state["crafting"]}
 
     def wait_spam_disconnect(self, timeout: float = 10) -> dict:
         deadline = time.monotonic() + timeout
