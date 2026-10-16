@@ -1204,6 +1204,15 @@ impl VillagerEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get_in_square(pos, 48, None);
+            let saved_sites = match saved_sites {
+                Ok(sites) => sites,
+                Err(error) => {
+                    tracing::error!(
+                        "Aborting villager job-site lookup after POI storage failure: {error}"
+                    );
+                    return;
+                }
+            };
             for position in indexed_sites.into_iter().chain(saved_sites) {
                 let delta = position.0 - pos.0;
                 if i64::from(delta.x).pow(2) + i64::from(delta.y).pow(2) + i64::from(delta.z).pow(2)
