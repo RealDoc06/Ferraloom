@@ -620,7 +620,7 @@ impl PumpkinServer {
                                  {
 
                                      if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.set_player(player.clone());
+                                         client.set_player(&player);
                                      }
                                      world
                                          .spawn_java_player(&server_clone.basic_config, &player, &server_clone)

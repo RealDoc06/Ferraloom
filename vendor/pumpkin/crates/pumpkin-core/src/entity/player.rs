@@ -262,7 +262,6 @@ use pumpkin_inventory::screen_handler::{
     ScreenHandlerListener,
 };
 use pumpkin_inventory::sync_handler::SyncHandler;
-use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
@@ -1883,6 +1882,10 @@ impl Player {
     /// # Note
     /// This function does NOT send any packets. The caller is responsible for
     /// sending `NoRespawnBlockAvailable` if this returns `None`.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep readiness ownership and forced, bed and anchor spawn resolution together."
+    )]
     pub async fn calculate_respawn_point(&self) -> Option<CalculatedRespawnPoint> {
         type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
         type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;

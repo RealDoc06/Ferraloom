@@ -39,7 +39,7 @@ struct State {
 }
 
 #[derive(Default)]
-pub(crate) struct PacketActivity {
+pub struct PacketActivity {
     state: Mutex<State>,
     idle: Notify,
     player: OnceLock<Weak<Player>>,
@@ -53,7 +53,7 @@ pub(crate) struct PacketActivity {
 
 /// The ticker's bounded ready lane. One queue entry per session; overflow stays
 /// marked on the registered session and is refilled without dropping ownership.
-pub(crate) struct PacketRunner {
+pub struct PacketRunner {
     ready: ArrayQueue<Arc<PacketActivity>>,
     sessions: Mutex<Vec<Weak<PacketActivity>>>,
     overflow: AtomicBool,
@@ -88,7 +88,7 @@ struct PacketTask {
 
 /// The runtime only awaits the result. Aborting that waiter cannot drop the
 /// owned mutator. The runner can cancel a readiness-blocked operation on close.
-pub(crate) struct PacketCompletion<T> {
+pub struct PacketCompletion<T> {
     receive: tokio::sync::oneshot::Receiver<T>,
     task: Arc<PacketTask>,
 }
@@ -271,14 +271,14 @@ impl PacketRunner {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum AdmissionError {
+pub enum AdmissionError {
     Closed,
     Full,
 }
 
 /// Clones retain the same accepted operation, including after admission seals.
 #[derive(Clone)]
-pub(crate) struct ActivityLease(Arc<Work>);
+pub struct ActivityLease(Arc<Work>);
 
 struct Work {
     activity: Arc<PacketActivity>,
@@ -720,7 +720,7 @@ impl Drop for Work {
     }
 }
 
-pub(crate) struct Consumer {
+pub struct Consumer {
     activity: Arc<PacketActivity>,
     _lease: ActivityLease,
 }

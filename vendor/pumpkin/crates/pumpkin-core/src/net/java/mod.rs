@@ -230,9 +230,9 @@ impl JavaClient {
         }
     }
 
-    pub fn set_player(&self, player: Arc<Player>) {
+    pub fn set_player(&self, player: &Arc<Player>) {
         if let Some(server) = player.world().server.upgrade() {
-            player.packet_activity.bind(&player, &server.packet_runner);
+            player.packet_activity.bind(player, &server.packet_runner);
         }
         self.player.store(Arc::new(Some(player.clone())));
         if self.is_closed() {
@@ -1465,8 +1465,8 @@ mod frame_timer_tests {
                         packet.id, 300,
                         "split={split}, compressed={compressed}, encrypted={encrypted}"
                     );
-                    assert_eq!(packet.payload.as_ref(), &data[2..]);
-                }
+                    assert_eq!(packet.payload.as_ref(), &data[2..])
+                };
                 let second = tokio::time::timeout(Duration::from_secs(1), decoder.get_raw_packet())
                     .await
                     .unwrap()

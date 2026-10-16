@@ -1,4 +1,4 @@
-//! Focused packet/lifecycle acceptance. Authored here, explicitly UNRUN.
+//! Packet ordering, transport liveness and session-drain acceptance tests.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
@@ -113,10 +113,10 @@ impl EventHandler<PlayerChangeWorldEvent> for TransferBarrier {
 }
 
 struct Fixture {
-    _directory: tempfile::TempDir,
+    directory: tempfile::TempDir,
     server: Arc<Server>,
     players: Vec<Arc<Player>>,
-    _peers: Vec<tokio::net::TcpStream>,
+    peers: Vec<tokio::net::TcpStream>,
 }
 
 impl Fixture {
@@ -124,6 +124,10 @@ impl Fixture {
         Self::with_nether(count, false).await
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep server, terrain, transport and session admission setup in one fixture."
+    )]
     async fn with_nether(count: usize, allow_nether: bool) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
@@ -145,11 +149,11 @@ impl Fixture {
         advanced.networking.java.online_mode = false;
         advanced.networking.bedrock.online_mode = false;
         let data = VanillaData {
-            banned_ip_list: Default::default(),
-            banned_player_list: Default::default(),
-            operator_config: Default::default(),
-            user_cache: Default::default(),
-            whitelist_config: Default::default(),
+            banned_ip_list: std::sync::RwLock::default(),
+            banned_player_list: std::sync::RwLock::default(),
+            operator_config: std::sync::RwLock::default(),
+            user_cache: std::sync::RwLock::default(),
+            whitelist_config: std::sync::RwLock::default(),
         };
         let server = Server::new(
             basic,
@@ -223,7 +227,7 @@ impl Fixture {
             player
                 .screen_handler_sync_handler
                 .store_player(player.clone());
-            client.java().unwrap().set_player(player.clone());
+            client.java().unwrap().set_player(&player);
             let session = server
                 .player_data_storage
                 .reserve_player_session(player.gameprofile.id)
@@ -235,10 +239,10 @@ impl Fixture {
             players.push(player);
         }
         Self {
-            _directory: directory,
+            directory,
             server,
             players,
-            _peers: peers,
+            peers,
         }
     }
 
@@ -281,9 +285,9 @@ fn enqueue<P: ClientPacket + MultiVersionJavaPacket>(player: &Player, packet: &P
         .unwrap();
 }
 
-// These transport tests are UNRUN. Use the real encoder, decoder, close-aware
-// read, ingress admission and timeout helper. The duplex transport keeps
-// paused-clock assertions independent of operating-system socket readiness.
+// Use the real encoder, decoder, close-aware read, ingress admission and timeout
+// helper. Duplex transport keeps paused-clock assertions independent of
+// operating-system socket readiness.
 async fn receive_wire(player: &Player, bytes: Bytes) -> Result<(), AdmissionError> {
     let client = player.client.java().unwrap();
     let (write, read) = tokio::io::duplex(8192);
@@ -316,8 +320,8 @@ async fn receive<P: ClientPacket>(player: &Player, packet: &P) -> Result<(), Adm
     .await
 }
 
-/// Exercise exactly the runner called by Ticker::wait_until_next_tick, with no
-/// Player::tick or inbound dequeue in the harness.
+/// Exercise exactly the runner called by `wait_until_next_tick`, with no
+/// `Player::tick` or inbound dequeue in the harness.
 async fn dispatch(player: &Arc<Player>) {
     let server = player.world().server.upgrade().unwrap();
     bounded(tokio::task::spawn_blocking(move || {
@@ -393,7 +397,7 @@ impl EventHandler<PacketReceivedEvent> for TransportObserver {
                 // Exercise both rewrites and cancellation after transport
                 // accounting. Neither may turn this event into gameplay.
                 event.packet_id = SSetHeldItem::to_id(CURRENT_MC_VERSION);
-                event.payload = Bytes::copy_from_slice(&8_i16.to_be_bytes());
+                event.payload = Bytes::copy_from_slice(&8i16.to_be_bytes());
                 event.cancelled = keep_alive_count == 2;
             } else if self.rewrite_gameplay.load(Ordering::Relaxed) {
                 event.packet_id = keep_alive_id;
@@ -461,7 +465,7 @@ async fn received_keep_alive_stays_live_behind_real_command_and_ordered_hooks() 
     for _ in 0..3 {
         assert!(client.send_keep_alive_or_timeout(timeout).await);
         let id = client.keep_alive_id.load();
-        tokio::time::advance(interval - Duration::from_secs(1)).await;
+        tokio::time::advance(interval.checked_sub(Duration::from_secs(1)).unwrap()).await;
         receive(player, &SKeepAlive { keep_alive_id: id })
             .await
             .unwrap();
@@ -508,6 +512,10 @@ async fn received_keep_alive_stays_live_behind_real_command_and_ordered_hooks() 
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep exact-ID, duplicate, rewrite, close and capacity controls in one transport scenario."
+)]
 async fn transport_reply_requires_exact_outstanding_id_and_open_bounded_admission() {
     let fixture = bounded(Fixture::new(2)).await;
     let player = &fixture.players[0];
@@ -729,9 +737,13 @@ async fn actual_session_save_and_uuid_admission_wait_for_late_server_descendant(
     fixture.finish().await;
 }
 
-// UNRUN: uses the same finish implementation as both connection lifecycles.
+// Uses the same finish implementation as both connection lifecycles.
 // Only its exit-status destination is local to avoid process-global test races.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep all three writer failure combinations with persistence and sticky-status assertions."
+)]
 async fn final_session_write_failures_survive_empty_shutdown_snapshots() {
     use crate::PlayerSessionSaveError;
     use std::sync::atomic::AtomicI32;
@@ -762,7 +774,7 @@ async fn final_session_write_failures_survive_empty_shutdown_snapshots() {
             .await
             .unwrap();
         let player_path = fixture
-            ._directory
+            .directory
             .path()
             .join("players/data")
             .join(format!("{}.dat", player.gameprofile.id));
@@ -785,7 +797,7 @@ async fn final_session_write_failures_survive_empty_shutdown_snapshots() {
             11,
         );
         let statistics_dir = &fixture.server.statistics_manager.statistics_path;
-        let statistics_backup = fixture._directory.path().join("statistics-before-failure");
+        let statistics_backup = fixture.directory.path().join("statistics-before-failure");
         if fail_statistics {
             std::fs::rename(statistics_dir, &statistics_backup).unwrap();
             std::fs::write(statistics_dir, b"not a directory").unwrap();
@@ -992,7 +1004,7 @@ async fn cancellation_does_not_release_a_blocking_mutators_owned_lease() {
         worker_lease.sync_scope(|| {
             receive.recv_timeout(Duration::from_secs(15)).unwrap();
             worker_changed.store(true, Ordering::Release);
-        })
+        });
     });
     let (entered, started) = tokio::sync::oneshot::channel();
     let waiter = tokio::spawn(mutation.scope(async move {
@@ -1353,6 +1365,13 @@ async fn normal_and_frozen_ticks_decay_each_budget_once_while_work_is_pending() 
 
 #[tokio::test]
 async fn stopped_runner_still_completes_a_late_native_child_before_finals() {
+    struct StopRunner(Arc<PacketRunner>);
+    impl Drop for StopRunner {
+        fn drop(&mut self) {
+            self.0.finish_drain();
+        }
+    }
+
     let fixture = Fixture::new(1).await;
     let player = &fixture.players[0];
     let barrier = Arc::new(Barrier::default());
@@ -1376,12 +1395,6 @@ async fn stopped_runner_still_completes_a_late_native_child_before_finals() {
     bounded(barrier.entered.notified()).await;
     let ticks = player.tick_counter.load(Ordering::Relaxed);
     fixture.server.packet_runner.begin_drain();
-    struct StopRunner(Arc<PacketRunner>);
-    impl Drop for StopRunner {
-        fn drop(&mut self) {
-            self.0.finish_drain();
-        }
-    }
     let _stop_runner = StopRunner(fixture.server.packet_runner.clone());
     let server = fixture.server.clone();
     let drain_loop =
@@ -1567,7 +1580,7 @@ async fn close_discards_unadmitted_input_when_chunk_readiness_never_returns() {
 async fn actual_socket_ingress_accepts_a_command_burst_and_exact_keepalive() {
     let mut fixture = Fixture::new(1).await;
     let player = fixture.players[0].clone();
-    let peer = fixture._peers.remove(0);
+    let peer = fixture.peers.remove(0);
     let (_reader, writer) = peer.into_split();
     let mut encoder = TCPNetworkEncoder::new(writer);
     let server = fixture.server.clone();
@@ -1633,6 +1646,10 @@ async fn actual_socket_ingress_accepts_a_command_burst_and_exact_keepalive() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the real block mutation, racing tick and outgoing ACK ordering assertions together."
+)]
 async fn actual_block_update_precedes_covering_ack_when_completion_races_a_tick() {
     use pumpkin_protocol::{
         ServerPacket,
@@ -1703,7 +1720,7 @@ async fn actual_block_update_precedes_covering_ack_when_completion_races_a_tick(
     // If the race tick preceded the resumed mutation, the following real tick
     // owns its covering ACK. Packet completion itself must never send that ACK.
     real_tick(&fixture.server, true).await;
-    let (reader, _writer) = fixture._peers.remove(0).into_split();
+    let (reader, _writer) = fixture.peers.remove(0).into_split();
     let mut decoder = TCPNetworkDecoder::new(reader);
     let mut observed_update = false;
     bounded(async {

@@ -17,9 +17,7 @@ impl JavaClient {
                     return None;
                 }
                 let player_c = player.clone();
-                let Some(server) = player.world().server.upgrade() else {
-                    return None;
-                };
+                let server = player.world().server.upgrade()?;
                 let hardcore = server.basic_config.hardcore;
                 return Some(Box::pin(async move {
                     player_c
