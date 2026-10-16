@@ -1894,6 +1894,50 @@ async fn opaque_container_metadata_survives_unrelated_edits_and_restart() {
 }
 
 #[tokio::test]
+async fn noncompound_and_unknown_lock_fields_keep_java_access_and_raw_persistence() {
+    // Exact 26.3 codec probe: non-map tags have no partial; unknown record keys
+    // are ignored, including alongside a valid custom_name predicate.
+    for kind in CONTAINERS {
+        for lock in [
+            "'legacy string'",
+            "1b",
+            "[]",
+            "{foo:1b}",
+            "{foo:1b,components:{'minecraft:custom_name':'key'}}",
+        ] {
+            let fixture = Fixture::new().await;
+            let input = compound(&format!("{{lock:{lock}}}"));
+            let live = kind.from_nbt(&input, BLOCK_POS);
+            fixture.install(kind.block(), live.clone());
+            let inventory = live.clone().get_inventory().unwrap();
+            let keyed = lock.contains("custom_name");
+            let mut key = ItemStack::new(1, &Item::STICK);
+            key.set_custom_name("key".into());
+            assert_eq!(live.can_open_container(&ItemStack::EMPTY, false), !keyed);
+            assert!(live.can_open_container(&key, false));
+            assert_eq!(
+                fixture.execute("data merge block 0 64 0 {CustomName:'Keep'}"),
+                1
+            );
+            inventory.set_stack(0, ItemStack::new(2, &Item::APPLE));
+            fixture.source.world().update_block_entity(&live);
+            assert!(Arc::ptr_eq(
+                &inventory,
+                &live.clone().get_inventory().unwrap()
+            ));
+            assert_eq!(saved(live.as_ref()).get("lock"), input.get("lock"));
+            let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+            assert_eq!(saved(reloaded.as_ref()).get("lock"), input.get("lock"));
+            assert_eq!(
+                reloaded.can_open_container(&ItemStack::EMPTY, false),
+                !keyed
+            );
+            assert!(reloaded.can_open_container(&key, false));
+        }
+    }
+}
+
+#[tokio::test]
 async fn unsupported_container_metadata_edits_are_typed_atomic_refusals() {
     use crate::block::entities::{BlockEntityLoadError, NbtEditDecision};
     for kind in CONTAINERS {
@@ -1911,6 +1955,9 @@ async fn unsupported_container_metadata_edits_are_typed_atomic_refusals() {
         for candidate in [
             "{lock:{items:'minecraft:stick'}}",
             "{lock:{count:2}}",
+            // Java returns a partial retaining the name predicate here. This
+            // bounded port refuses the known-field mix instead of unlocking it.
+            "{lock:{count:bad,components:{'minecraft:custom_name':'key'}}}",
             "{lock:{predicates:{'minecraft:custom_data':{key:1}}}}",
             "{lock:{components:{'minecraft:custom_name':{text:'key',bold:1b}}}}",
             "{CustomName:{translate:'container.chest'}}",

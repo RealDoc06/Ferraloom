@@ -29,14 +29,15 @@ impl ContainerLock {
     fn decode(tag: Option<&NbtTag>) -> Self {
         let Some(tag) = tag else { return Self::Any };
         let NbtTag::Compound(predicate) = tag else {
-            return Self::Unsupported;
+            // 26.3 LockCode's record codec has no partial for a non-map tag;
+            // fromTag therefore falls back to NO_LOCK. Keep the raw tag on disk.
+            return Self::Any;
         };
-        // ItemPredicate also supports items, count and partial predicates. Do not
-        // interpret these as an unlocked container until their codecs are ported.
-        if predicate
-            .child_tags
-            .keys()
-            .any(|key| !matches!(key.as_ref(), "components" | "predicates"))
+        // RecordCodecBuilder ignores unknown top-level fields. Known fields
+        // remain conservative: malformed mixes can have DFU partials that retain
+        // a valid custom_name predicate, so errors must not all become NO_LOCK.
+        if predicate.get("items").is_some()
+            || predicate.get("count").is_some()
             || predicate.get("predicates").is_some_and(
                 |tag| !matches!(tag, NbtTag::Compound(value) if value.child_tags.is_empty()),
             )
