@@ -316,7 +316,7 @@ use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
-use crate::world::{BlockBreakingProgress, World};
+use crate::world::{BlockBreakingProgress, DestinationReadiness, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
@@ -1870,36 +1870,40 @@ impl Player {
 
     /// Calculates the player's respawn point based on stored spawn data.
     ///
-    /// Returns a valid respawn point, `Ok(None)` for an invalid block, or a terrain load error.
+    /// Distinguishes a valid point, an invalid block, cancellation, and a terrain load error.
     ///
     /// # Behavior
     /// - If `force` flag is set (via `/spawnpoint` command), validates the spawn position is safe
     ///   (both the block and block above allow mob spawn).
     /// - For beds: validates the bed block still exists and finds a valid spawn position around it.
     /// - For respawn anchors (Nether): validates the anchor has charges and finds a valid spawn position.
-    /// - Returns `None` if the spawn block is invalid/missing (caller should send
+    /// - Returns `Invalid` if the spawn block is invalid/missing (caller should send
     ///   `NoRespawnBlockAvailable` game event and use world spawn).
     ///
     /// # Note
     /// This function does NOT send any packets. The caller is responsible for
-    /// sending `NoRespawnBlockAvailable` if this returns `Ok(None)`.
+    /// sending `NoRespawnBlockAvailable` only for `Invalid` after destination preparation.
     #[expect(
         clippy::too_many_lines,
         reason = "Keep readiness ownership and forced, bed and anchor spawn resolution together."
     )]
-    pub async fn calculate_respawn_point(
-        &self,
-    ) -> Result<Option<CalculatedRespawnPoint>, ChunkUnavailable> {
+    pub async fn calculate_respawn_point(&self) -> Result<RespawnPointOutcome, ChunkUnavailable> {
         type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
         type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 
+        if crate::STOP_INTERRUPT.is_cancelled()
+            || self.world().level.cancel_token.is_cancelled()
+            || self.client.closed()
+        {
+            return Ok(RespawnPointOutcome::Aborted);
+        }
         let respawn_point = {
             let respawn_guard = self
                 .respawn_point
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let Some(point) = respawn_guard.clone() else {
-                return Ok(None);
+                return Ok(RespawnPointOutcome::Invalid);
             };
             point
         };
@@ -1922,7 +1926,9 @@ impl Player {
                 let fetch = world.level.get_or_fetch_chunk(Vector2::new(cx, cz), |_| ());
                 tokio::select! {
                     biased;
-                    () = self.client.await_close_interrupt() => return Ok(None),
+                    () = crate::STOP_INTERRUPT.cancelled() => return Ok(RespawnPointOutcome::Aborted),
+                    () = world.level.cancel_token.cancelled() => return Ok(RespawnPointOutcome::Aborted),
+                    () = self.client.await_close_interrupt() => return Ok(RespawnPointOutcome::Aborted),
                     result = fetch => result?,
                 }
             }
@@ -1931,13 +1937,14 @@ impl Player {
         let _terrain = world.hold_packet_chunk(pos.chunk_position());
         let mut demand = world.level.activation_demand();
         demand.replace([pos.chunk_position()]);
-        if !world
+        if world
             .prepare_packet_destination(pos.chunk_position(), self)
-            .await
+            .await?
+            == DestinationReadiness::Aborted
         {
-            return Ok(None);
+            return Ok(RespawnPointOutcome::Aborted);
         }
-        Ok(world
+        let calculated = world
             .packet_stage(Some(pos.chunk_position()), async {
                 let (block, state_id) = world.get_block_and_state_id(pos);
 
@@ -2023,8 +2030,12 @@ impl Player {
 
                 None
             })
-            .await
-            .flatten())
+            .await;
+        Ok(match calculated {
+            Some(Some(point)) => RespawnPointOutcome::Valid(point),
+            Some(None) => RespawnPointOutcome::Invalid,
+            None => RespawnPointOutcome::Aborted,
+        })
     }
 
     /// Find a valid spawn position around a bed.
@@ -4185,11 +4196,16 @@ impl Player {
         let _terrain = new_world.hold_packet_chunk(destination_chunk);
         let mut demand = new_world.level.activation_demand();
         demand.replace([destination_chunk]);
-        if !new_world
+        match new_world
             .prepare_packet_destination(destination_chunk, self)
             .await
         {
-            return;
+            Ok(DestinationReadiness::Ready) => {}
+            Ok(DestinationReadiness::Aborted) => return,
+            Err(error) => {
+                self.kick_for_chunk_failure(&error);
+                return;
+            }
         }
         let Some(Some(player)) = current_world
             .packet_stage(Some(source_chunk), async {
@@ -7578,6 +7594,14 @@ pub struct RespawnPoint {
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,
+}
+
+/// An aborted readiness wait says nothing about whether the saved spawn block is valid.
+#[must_use]
+pub enum RespawnPointOutcome {
+    Valid(CalculatedRespawnPoint),
+    Invalid,
+    Aborted,
 }
 
 pub struct CalculatedRespawnPoint {

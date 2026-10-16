@@ -440,6 +440,14 @@ pub enum RespawnOutcome {
     Aborted,
 }
 
+/// Readiness cancellation is distinct from a refused storage read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use]
+pub(crate) enum DestinationReadiness {
+    Ready,
+    Aborted,
+}
+
 /// Terrain ownership, not a callback guard. A destination can keep its chunk
 /// loaded while source cleanup waits for reconciliation.
 pub(crate) struct PacketChunkTicket {
@@ -837,34 +845,31 @@ impl World {
         self: &Arc<Self>,
         chunk: Vector2<i32>,
         player: &Player,
-    ) -> bool {
-        let fetched = tokio::select! {
+    ) -> Result<DestinationReadiness, ChunkUnavailable> {
+        tokio::select! {
             biased;
-            () = player.client.await_close_interrupt() => return false,
-            result = self.level.get_or_fetch_chunk(chunk, |_| ()) => result,
-        };
-        if let Err(error) = fetched {
-            player.kick_for_chunk_failure(&error);
-            return false;
+            () = crate::STOP_INTERRUPT.cancelled() => return Ok(DestinationReadiness::Aborted),
+            () = self.level.cancel_token.cancelled() => return Ok(DestinationReadiness::Aborted),
+            () = player.client.await_close_interrupt() => return Ok(DestinationReadiness::Aborted),
+            result = self.level.get_or_fetch_chunk(chunk, |_| ()) => result?,
         }
         // Unpublished players and non-packet callers retain their existing
         // execution context. Published Java transfers always own an activity.
         if crate::entity::player::packet_activity::ActivityLease::current().is_none() {
-            return true;
+            return Ok(DestinationReadiness::Ready);
         }
         let ready = self.packet_stage(None, self.get_ready_chunk(chunk, player));
         let result = tokio::select! {
             biased;
-            () = player.client.await_close_interrupt() => return false,
+            () = crate::STOP_INTERRUPT.cancelled() => return Ok(DestinationReadiness::Aborted),
+            () = self.level.cancel_token.cancelled() => return Ok(DestinationReadiness::Aborted),
+            () = player.client.await_close_interrupt() => return Ok(DestinationReadiness::Aborted),
             result = ready => result,
         };
         match result {
-            Some(Ok(Some(_))) => true,
-            Some(Err(error)) => {
-                player.kick_for_chunk_failure(&error);
-                false
-            }
-            _ => false,
+            Some(Ok(Some(_))) => Ok(DestinationReadiness::Ready),
+            Some(Err(error)) => Err(error),
+            _ => Ok(DestinationReadiness::Aborted),
         }
     }
 
@@ -4770,7 +4775,11 @@ impl World {
         alive: bool,
     ) -> RespawnOutcome {
         let _transfer = player.world_transfer.lock().await;
-        if player.client.closed() || (!alive && player.living_entity.health.load() > 0.0) {
+        if crate::STOP_INTERRUPT.is_cancelled()
+            || self.level.cancel_token.is_cancelled()
+            || player.client.closed()
+            || (!alive && player.living_entity.health.load() > 0.0)
+        {
             return RespawnOutcome::Aborted;
         }
         let current_world = player.world();
@@ -4807,12 +4816,15 @@ impl World {
         let prepare = async {
             // Get respawn position and dimension
             let respawn = match player.calculate_respawn_point().await {
-                Ok(respawn) => respawn,
+                Ok(crate::entity::player::RespawnPointOutcome::Valid(respawn)) => Some(respawn),
+                Ok(crate::entity::player::RespawnPointOutcome::Invalid) => None,
+                Ok(crate::entity::player::RespawnPointOutcome::Aborted) => return None,
                 Err(error) => {
                     player.kick_for_chunk_failure(&error);
                     return None;
                 }
             };
+            let invalid_respawn = respawn.is_none();
             let (position, yaw, pitch, respawn_dimension) = if let Some(respawn) = respawn {
                 (
                     respawn.position,
@@ -4824,36 +4836,14 @@ impl World {
                 if player.client.closed() {
                     return None;
                 }
-                // No valid respawn point - send notification if player had one set
-                if player
-                    .respawn_point
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some()
-                {
-                    player
-                        .send_client_packet(&CGameEvent::new(
-                            GameEvent::NoRespawnBlockAvailable,
-                            0.0,
-                        ))
-                        .await;
-                    let mut guard = player
-                        .respawn_point
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(point) = guard.as_ref()
-                        && !point.force
-                    {
-                        *guard = None;
-                    }
-                }
-
                 // FIXME: This spawn position calculation is incorrect. Should use vanilla's
                 // proper spawn position calculation (see #1381). The y-level calculation
                 // needs to account for spawn radius and find a safe spawn position.
                 let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
                 tokio::select! {
                     biased;
+                    () = crate::STOP_INTERRUPT.cancelled() => return None,
+                    () = default_world.level.cancel_token.cancelled() => return None,
                     () = player.client.await_close_interrupt() => return None,
                     result = default_world.level.get_or_fetch_chunk(chunk_pos, |_| ()) => {
                         if let Err(error) = result {
@@ -4889,9 +4879,9 @@ impl World {
                 s.plugin_manager.fire(s, &mut spawn_loc_event).await;
             }
             let position = spawn_loc_event.spawn_pos;
-            Some((position, yaw, pitch, respawn_dimension))
+            Some((position, yaw, pitch, respawn_dimension, invalid_respawn))
         };
-        let Some(Some((position, yaw, pitch, respawn_dimension))) = current_world
+        let Some(Some((position, yaw, pitch, respawn_dimension, invalid_respawn))) = current_world
             .packet_stage(Some(source_chunk), prepare)
             .await
         else {
@@ -4976,11 +4966,16 @@ impl World {
         let _terrain = target_world.hold_packet_chunk(destination_chunk);
         let mut destination_demand = target_world.level.activation_demand();
         destination_demand.replace([destination_chunk]);
-        if !target_world
+        match target_world
             .prepare_packet_destination(destination_chunk, player)
             .await
         {
-            return RespawnOutcome::Aborted;
+            Ok(DestinationReadiness::Ready) => {}
+            Ok(DestinationReadiness::Aborted) => return RespawnOutcome::Aborted,
+            Err(error) => {
+                player.kick_for_chunk_failure(&error);
+                return RespawnOutcome::Aborted;
+            }
         }
         if target_world.uuid != current_world.uuid {
             if current_world
@@ -4998,6 +4993,26 @@ impl World {
         }
         let committed = target_world
             .packet_stage(Some(destination_chunk), async {
+                if invalid_respawn {
+                    // Only an invalid block clears the saved point, after destination preparation.
+                    if player
+                        .respawn_point
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .is_some()
+                    {
+                        player.send_game_event(GameEvent::NoRespawnBlockAvailable, 0.0);
+                        let mut guard = player
+                            .respawn_point
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some(point) = guard.as_ref()
+                            && !point.force
+                        {
+                            *guard = None;
+                        }
+                    }
+                }
                 if target_world.uuid != current_world.uuid {
                     player.change_world_chunks(&current_world.level, &target_world);
                     player.living_entity.entity.set_world(target_world.clone());

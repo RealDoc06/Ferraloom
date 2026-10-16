@@ -2,7 +2,7 @@
 //! stops chunk workers; only the loopback client's outgoing packet task runs.
 
 use super::World;
-use crate::command::commands::data::tests::Fixture;
+use crate::data::player_server::test::{close_fixture, player_fixture, stop_chunk_workers};
 use crate::entity::{EntityBase, player::Player};
 use crate::net::{
     ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
@@ -21,7 +21,7 @@ const VANILLA_223_BITS: u32 = 0x3e67_39c4;
 
 struct ConnectedPlayer {
     player: Arc<Player>,
-    _peer: TcpStream,
+    peer: TcpStream,
 }
 
 impl ConnectedPlayer {
@@ -56,10 +56,7 @@ impl ConnectedPlayer {
             mode,
         ));
         world.players.store(Arc::new(vec![player.clone()]));
-        Self {
-            player,
-            _peer: peer,
-        }
+        Self { player, peer }
     }
 }
 
@@ -77,8 +74,9 @@ impl Drop for ConnectedPlayer {
 }
 
 async fn respawned_player_data(mode: GameMode, keep_inventory: bool, alive: bool) -> NbtCompound {
-    let fixture = Fixture::new().await;
-    let world = fixture.source.world();
+    let fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    let world = &fixture.player.world();
     world.level_info.rcu(|current| {
         let mut info = (**current).clone();
         info.spawn_x = 8;
@@ -118,6 +116,9 @@ async fn respawned_player_data(mode: GameMode, keep_inventory: bool, alive: bool
     storage.save_player_data(snapshot).unwrap();
     let (found, saved) = storage.load_player_data(&player.gameprofile.id).unwrap();
     assert!(found);
+    drop(connected);
+    world.players.store(Arc::new(vec![fixture.player.clone()]));
+    close_fixture(&fixture).await;
     saved
 }
 
@@ -157,8 +158,9 @@ async fn respawn_preserves_score_and_experience_for_keep_inventory_spectator_and
 
 #[tokio::test]
 async fn world_info_refresh_preserves_live_health() {
-    let fixture = Fixture::new().await;
-    let world = fixture.source.world();
+    let fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    let world = &fixture.player.world();
     let connected = ConnectedPlayer::new(world, GameMode::Survival).await;
     let player = &connected.player;
     player.set_client_loaded(true);
@@ -174,4 +176,166 @@ async fn world_info_refresh_preserves_live_health() {
     let mut saved = NbtCompound::new();
     EntityBase::write_nbt(player.as_ref() as &dyn EntityBase, &mut saved);
     assert_eq!(saved.get_float("Health"), Some(7.0));
+    drop(connected);
+    world.players.store(Arc::new(vec![fixture.player.clone()]));
+    close_fixture(&fixture).await;
+}
+
+/// Cancel the bed world's readiness wait while the accepted source remains usable.
+/// This must not turn cancellation into an invalid-bed notification or saved bed deletion.
+#[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the real two-world wait, wire barrier and persisted-state assertions together."
+)]
+async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_bed_event() {
+    use crate::entity::player::RespawnPoint;
+    use pumpkin_data::{dimension::Dimension, packet::CURRENT_MC_VERSION};
+    use pumpkin_protocol::{
+        MultiVersionJavaPacket,
+        java::{
+            client::play::{CGameEvent, CKeepAlive, GameEvent},
+            packet_decoder::TCPNetworkDecoder,
+        },
+    };
+    use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+    use pumpkin_world::{chunk::ChunkData, chunk_system::ChunkLoading};
+    use std::{future::Future, task::Poll};
+
+    let fixture = player_fixture().await;
+    let bed_fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    stop_chunk_workers(&bed_fixture).await;
+    let world = fixture.player.world();
+    let bed_level = bed_fixture.player.world().level.clone();
+    let bed_world = Arc::new(World::load(
+        bed_level.clone(),
+        bed_fixture.player.world().level_info.clone(),
+        Dimension::THE_NETHER,
+        world.block_registry.clone(),
+        Arc::downgrade(&fixture.server),
+        world.scoreboard.clone(),
+    ));
+    fixture
+        .server
+        .worlds
+        .store(Arc::new(vec![world.clone(), bed_world]));
+    let source = Vector2::new(0, 0);
+    let source_chunk = ChunkData::empty_sync(0, 0);
+    source_chunk
+        .post_processing_ready
+        .store(true, Ordering::Release);
+    world.level.loaded_chunks.insert(source, source_chunk);
+    {
+        let mut loading = world.level.chunk_loading.lock().unwrap();
+        loading.add_ticket(source, ChunkLoading::FULL_CHUNK_LEVEL);
+        loading.send_change();
+    }
+    let bed_chunk = Vector2::new(4, 4);
+    bed_level
+        .loaded_chunks
+        .insert(bed_chunk, ChunkData::empty_sync(4, 4));
+    let mut connected = ConnectedPlayer::new(&world, GameMode::Survival).await;
+    let player = &connected.player;
+    player.get_entity().set_pos(Vector3::new(0.5, 65.0, 0.5));
+    player.get_entity().last_pos.store(player.position());
+    player.living_entity.health.store(0.0);
+    player.hunger_manager.level.store(13);
+    player.hunger_manager.saturation.store(2.5);
+    let bed = RespawnPoint {
+        dimension: Dimension::THE_NETHER,
+        position: BlockPos::new(72, 65, 72),
+        yaw: 37.0,
+        force: false,
+    };
+    *player.respawn_point.lock().unwrap() = Some(bed.clone());
+    let mut before = NbtCompound::new();
+    EntityBase::write_nbt(player.as_ref() as &dyn EntityBase, &mut before);
+    let java = player.client.java().unwrap();
+    java.set_player(player);
+    assert!(world.enter_packet_callbacks(Some(source)).is_some());
+    let source_tickets = world.level.chunk_loading.lock().unwrap().ticket.clone();
+    let bed_tickets = bed_level.chunk_loading.lock().unwrap().ticket.clone();
+    let activity = player.packet_activity.enter_mutation().unwrap();
+    {
+        let respawn = activity.scope(world.respawn_player(player, false));
+        tokio::pin!(respawn);
+        std::future::poll_fn(|cx| {
+            assert!(respawn.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        assert!(!bed_level.is_chunk_ready(&bed_chunk));
+        assert_ne!(bed_level.chunk_loading.lock().unwrap().ticket, bed_tickets);
+        assert_eq!(*player.respawn_point.lock().unwrap(), Some(bed.clone()));
+        assert!(!java.is_closed());
+        bed_level.cancel_token.cancel();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(10), respawn)
+                .await
+                .unwrap(),
+            super::RespawnOutcome::Aborted,
+        );
+    }
+    assert!(!java.is_closed());
+    assert!(world.enter_packet_callbacks(Some(source)).is_some());
+    assert_eq!(
+        world.level.chunk_loading.lock().unwrap().ticket,
+        source_tickets
+    );
+    assert_eq!(bed_level.chunk_loading.lock().unwrap().ticket, bed_tickets);
+    assert_eq!(*player.respawn_point.lock().unwrap(), Some(bed));
+    assert_eq!(player.gamemode.load(), GameMode::Survival);
+    assert_eq!(player.living_entity.health.load(), 0.0);
+    assert_eq!(player.hunger_manager.level.load(), 13);
+    assert_eq!(player.hunger_manager.saturation.load(), 2.5);
+    assert_eq!(player.position(), Vector3::new(0.5, 65.0, 0.5));
+
+    // A FIFO wire barrier proves no earlier packet was hidden by writer scheduling.
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        java.send_packet(&CKeepAlive::new(26)),
+    )
+    .await
+    .unwrap();
+    java.flush_channel();
+    let mut decoder = TCPNetworkDecoder::new(&mut connected.peer);
+    let packet = tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        packet.id != CGameEvent::to_id(CURRENT_MC_VERSION)
+            || packet.payload.first() != Some(&(GameEvent::NoRespawnBlockAvailable as u8))
+    );
+    assert_eq!(
+        packet.id,
+        CKeepAlive::to_id(CURRENT_MC_VERSION),
+        "cancelled respawn must send no packets before the barrier"
+    );
+    assert_eq!(packet.payload.as_ref(), &26_i64.to_be_bytes());
+    drop(decoder);
+
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let snapshot = storage.snapshot_player_data(player.gameprofile.id, |nbt| {
+        EntityBase::write_nbt(player.as_ref() as &dyn EntityBase, nbt);
+    });
+    storage.save_player_data(snapshot).unwrap();
+    let (found, saved) = storage.load_player_data(&player.gameprofile.id).unwrap();
+    assert!(found);
+    for key in ["respawn", "abilities"] {
+        assert_eq!(saved.get_compound(key), before.get_compound(key));
+    }
+    assert!(saved.get_compound("respawn").is_some());
+    assert_eq!(
+        saved.get_int("playerGameType"),
+        before.get_int("playerGameType")
+    );
+    assert_eq!(saved.get_float("Health"), Some(0.0));
+    drop(connected);
+    world.players.store(Arc::new(vec![fixture.player.clone()]));
+    fixture.server.worlds.store(Arc::new(vec![world]));
+    close_fixture(&fixture).await;
+    close_fixture(&bed_fixture).await;
 }
