@@ -6,6 +6,8 @@ import { createConnection } from 'node:net';
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { inflateSync, deflateSync } from 'node:zlib';
+import { decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySoundPacket, decodeHornLoginHeader, decodeHornRegistryPacket,
+  encodeHornSelect, encodeHornSwap, encodeHornUse, type HornRegistry } from './horns.ts';
 
 export const VERSION = '26.3';
 export const PROTOCOL = 777;
@@ -63,7 +65,7 @@ class Reader {
   string() { return this.take(this.varInt()).toString('utf8'); }
 }
 
-export type PlainStack = { item_id: number; count: number; components?: Record<string, unknown> } | null;
+export type PlainStack = { item_id: number; count: number; components?: Record<string, unknown>; removed_components?: string[] } | null;
 export type ContainerPacket =
   | { kind: 'open'; packet_id: 60; container_id: number; menu_type: number; title: string;
       title_component?: unknown; title_nbt?: unknown }
@@ -386,7 +388,7 @@ export function decodeChunkBlockEntities(payload: Buffer, mode: 'plain' | 'rich'
 
 function plainStackHash(stack: PlainStack): Buffer {
   if (stack === null) return Buffer.from([0]);
-  if (stack.components) throw new Error('SWAP hashed components are outside this plain-stack fixture');
+  if (stack.components || stack.removed_components) throw new Error('SWAP hashed components are outside this plain-stack fixture');
   if (!Number.isSafeInteger(stack.item_id) || stack.item_id <= 0 || stack.item_id > 2147483647 ||
       !Number.isSafeInteger(stack.count) || stack.count <= 0 || stack.count > 2147483647) throw new Error('Invalid plain stack hash');
   // HashedStack optional presence, registry item, count, added hash map, removed set.
@@ -833,6 +835,8 @@ type Command = { id: string | number } & (
   | { action: 'sign_update'; x: number; y: number; z: number; messages: string[]; slot: SignSlot }
   | { action: 'close_menu' }
   | { action: 'swap_hands' }
+  | { action: 'horn_select'; hotbar: number }
+  | { action: 'horn_use'; hand: 0 | 1; other_hotbar?: number }
   | { action: 'swap'; slot: number; hotbar: number }
 );
 
@@ -846,6 +850,20 @@ export function parseCommand(value: unknown): Command {
   }
   if (value.action === 'close_menu') return { id, action: value.action };
   if (value.action === 'swap_hands') return { id, action: value.action };
+  if (value.action === 'horn_select') {
+    if (typeof value.hotbar !== 'number') throw new Error('Horn selection requires a hotbar slot');
+    encodeHornSelect(value.hotbar);
+    return { id, action: value.action, hotbar: value.hotbar };
+  }
+  if (value.action === 'horn_use') {
+    if (value.hand !== 0 && value.hand !== 1) throw new Error('Horn use requires actual main/offhand');
+    if (value.other_hotbar !== undefined) {
+      if (value.hand !== 0 || typeof value.other_hotbar !== 'number') throw new Error('Other-horn retry requires main hand/hotbar');
+      encodeHornSelect(value.other_hotbar);
+    }
+    return { id, action: value.action, hand: value.hand,
+      ...(typeof value.other_hotbar === 'number' ? { other_hotbar: value.other_hotbar } : {}) };
+  }
   if (value.action === 'trigger') {
     if (typeof value.objective !== 'string' || typeof value.value !== 'number') throw new Error('Trigger requires objective/value');
     encodeTrigger(value.objective, value.value);
@@ -903,9 +921,10 @@ function emit(value: unknown) {
 function main() {
   const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false },
     'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
-    'strict-offline-chat': { type: 'boolean', default: false } } });
+    'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
+  if (values.horns && !values['block-data']) throw new Error('--horns requires --block-data');
   const socket = createConnection({ host: values.host, port });
   let buffer = Buffer.alloc(0);
   let phase: 'login' | 'configuration' | 'play' = 'login';
@@ -936,6 +955,10 @@ function main() {
     sign_packets: [] as (SignObservation & { sequence: number })[],
     chunk_packets: [] as (Omit<ReturnType<typeof decodeChunkBlockEntities>, 'signs' | 'decoded_bytes'> & { sequence: number })[],
     sounds: [] as (ReturnType<typeof decodeSoundPacket> & { sequence: number; payload_base64: string })[],
+    horn_registry: null as (HornRegistry & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
+    horn_login_header: null as (ReturnType<typeof decodeHornLoginHeader> & { sequence: number; payload_sha256: string }) | null,
+    horn_cooldowns: [] as (ReturnType<typeof decodeHornCooldownPacket> & { sequence: number; payload_base64: string })[],
+    horn_entity_sounds: [] as (ReturnType<typeof decodeHornEntitySoundPacket> & { sequence: number; payload_base64: string })[],
     disconnect: null as ReturnType<typeof decodeDisconnect> | null,
     block_ack: -1,
   };
@@ -943,13 +966,15 @@ function main() {
   function send(id: number, ...parts: Buffer[]) {
     if (quitting || socket.destroyed || socket.writableEnded || !socket.writable) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
-    const raw = values['raw-packets'] && phase === 'play' && [7, 9, 12, 18, 19, 41, 66].includes(id) ? packet : null;
+    const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || (values.horns && [54, 67].includes(id))) ? packet : null;
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
     socket.write(Buffer.concat([varInt(packet.length), packet]));
     // write() returning false means queued with backpressure, not an unsent packet.
-    if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64') });
+    if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64'),
+      ...(values.horns ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+        payload_sha256: createHash('sha256').update(raw).digest('hex') } : {}) });
     return true;
   }
 
@@ -984,8 +1009,11 @@ function main() {
     const reader = new Reader(payload);
     const id = reader.varInt();
     state.packets++;
-    if (values['raw-packets'] && phase === 'play' && [3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id)) {
-      emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64') });
+    if (values['raw-packets'] && ((phase === 'play' && ([3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id) || (values.horns && [22, 50, 118].includes(id)))) ||
+        (values.horns && phase === 'configuration' && id === 7))) {
+      emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64'),
+        ...(values.horns ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+          payload_sha256: createHash('sha256').update(payload).digest('hex') } : {}) });
     }
     if (phase === 'login') {
       if (id === 0) throw new Error(`Login disconnected: ${reader.string()}`);
@@ -1007,9 +1035,18 @@ function main() {
       if (id === ids.config.keepAlive) { send(4, reader.take(8)); state.keepalives++; }
       if (id === ids.config.ping) send(5, reader.take(4));
       if (id === ids.config.registry) state.registry_packets++;
+      if (values.horns && id === ids.config.registry && reader.string() === 'minecraft:instrument') {
+        if (state.horn_registry !== null) throw new Error('Duplicate instrument registry packet');
+        state.horn_registry = { ...decodeHornRegistryPacket(payload), sequence: state.packets,
+          payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
+        emit({ event: 'horn_registry', ...state.horn_registry });
+      }
       if (id === ids.config.knownPacks) send(7, varInt(0));
       if (id === ids.config.conduct) send(9);
-      if (id === ids.config.finish) { send(3); phase = 'play'; state.phase = phase; }
+      if (id === ids.config.finish) {
+        if (values.horns && state.horn_registry === null) throw new Error('Missing instrument registry before PLAY');
+        send(3); phase = 'play'; state.phase = phase;
+      }
       return;
     }
     if (id === ids.play.disconnect) {
@@ -1029,6 +1066,12 @@ function main() {
     if (id === ids.play.keepAlive) { send(28, reader.take(8)); state.keepalives++; }
     if (id === ids.play.ping) send(45, reader.take(4));
     if (id === ids.play.login) state.login = true;
+    if (values.horns && id === ids.play.login) {
+      if (state.horn_login_header !== null) throw new Error('Duplicate horn Login header');
+      state.horn_login_header = { ...decodeHornLoginHeader(payload), sequence: state.packets,
+        payload_sha256: createHash('sha256').update(payload).digest('hex') };
+      emit({ event: 'horn_login_header', ...state.horn_login_header });
+    }
     if (id === ids.play.statistics) {
       const observation = { ...decodeStatisticsPacket(payload), sequence: state.packets,
         payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
@@ -1070,10 +1113,14 @@ function main() {
     if (id === ids.play.inventory) state.inventory_packets++;
     if (id === ids.play.slot) state.slot_packets++;
     if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
-      const observation = { ...decodeContainerPacket(payload, values['container-metadata']), sequence: state.packets };
+      const observation = { ...(values.horns && id !== 60
+        ? decodeHornContainerPacket(payload, state.horn_registry!)
+        : decodeContainerPacket(payload, values['container-metadata'])), sequence: state.packets };
       state.player_inventory = observePlayerInventory(state.player_inventory, observation);
       state.menu_packets.push(observation);
-      if (state.menu_packets.length > 64) state.menu_packets.shift();
+      if (values.horns) {
+        if (state.menu_packets.length > 512) throw new Error('Horn menu observation budget exceeded');
+      } else if (state.menu_packets.length > 64) state.menu_packets.shift();
       if (observation.kind === 'open') {
         state.menu = { container_id: observation.container_id, menu_type: observation.menu_type,
           opened_sequence: observation.sequence, state_id: 0, slots: [], carried: null };
@@ -1089,11 +1136,26 @@ function main() {
       }
       emit({ event: 'menu_packet', ...observation });
     }
-    if (values['container-metadata'] && id === 119) {
+    if ((values['container-metadata'] || values.horns) && id === 119) {
       const observation = { ...decodeSoundPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
+      if (values.horns && observation.registry_id === null) throw new Error('Inline coordinate sound unsupported by horn fixture; raw packet retained');
       state.sounds.push(observation);
-      if (state.sounds.length > 64) state.sounds.shift();
+      if (values.horns) {
+        if (state.sounds.length > 256) throw new Error('Horn coordinate sound observation budget exceeded');
+      } else if (state.sounds.length > 64) state.sounds.shift();
       emit({ event: 'sound', ...observation });
+    }
+    if (values.horns && id === 22) {
+      const observation = { ...decodeHornCooldownPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
+      state.horn_cooldowns.push(observation);
+      if (state.horn_cooldowns.length > 128) throw new Error('Horn cooldown observation budget exceeded');
+      emit({ event: 'horn_cooldown', ...observation });
+    }
+    if (values.horns && id === 118) {
+      const observation = { ...decodeHornEntitySoundPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
+      state.horn_entity_sounds.push(observation);
+      if (state.horn_entity_sounds.length > 128) throw new Error('Horn entity sound observation budget exceeded');
+      emit({ event: 'horn_entity_sound', ...observation });
     }
     if (id === ids.play.health) { state.health = reader.float(); state.food = reader.varInt(); }
     if (id === ids.play.position) {
@@ -1198,12 +1260,27 @@ function main() {
           if (!send(12, varInt(1))) throw new Error('Statistics request was not queued: connection is not writable');
           emit({ id: command.id, ok: true, result: { sent_action: command.action, packet_id: 12,
             action_id: 1, written: true, after_sequence } });
+        } else if (command.action === 'horn_select' || command.action === 'horn_use') {
+          if (!values.horns || state.horn_registry === null) throw new Error('Horn actions require --horns and the received registry');
+          const after_sequence = state.packets;
+          if (command.action === 'horn_select') {
+            if (!send(54, encodeHornSelect(command.hotbar))) throw new Error('Horn slot selection was not queued');
+          } else {
+            const { yaw, pitch } = state.position!;
+            // Two ordinary use packets in one bounded IPC action make retry truly
+            // immediate. Optional slot switch exercises the shared item group.
+            if (!send(67, encodeHornUse(command.hand, ++interactionSequence, yaw, pitch))) throw new Error('Horn use was not queued');
+            if (command.other_hotbar !== undefined && !send(54, encodeHornSelect(command.other_hotbar))) throw new Error('Other horn selection was not queued');
+            if (!send(67, encodeHornUse(command.hand, ++interactionSequence, yaw, pitch))) throw new Error('Horn retry was not queued');
+          }
+          emit({ id: command.id, ok: true, result: { sent_action: command.action, written: true, after_sequence,
+            interaction_sequence: interactionSequence, ...(command.action === 'horn_use' ? { hand: command.hand, uses: 2 } : { hotbar: command.hotbar }) } });
         } else if (command.action === 'move') {
           const previous = state.position!;
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
         } else if (command.action === 'swap_hands') {
-          if (!values['container-metadata']) throw new Error('Swap-hands fixture requires --container-metadata');
+          if (!values['container-metadata'] && !values.horns) throw new Error('Swap-hands fixture requires --container-metadata or --horns');
           send(41, encodeSwapHands(++interactionSequence));
           emit({ id: command.id, ok: true, result: { sent_action: command.action, interaction_sequence: interactionSequence } });
         } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap' || command.action === 'sign_update') {
@@ -1223,7 +1300,10 @@ function main() {
             } else {
               if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
               if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');
-              send(18, encodeContainerSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots));
+              const payload = values.horns
+                ? encodeHornSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots)
+                : encodeContainerSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots);
+              send(18, payload);
             }
           }
           emit({ id: command.id, ok: true, result: { sent_action: command.action,

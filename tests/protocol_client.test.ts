@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, decodeContainerTitle, decodeStatisticsPacket, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
+import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, decodeContainerPacket, decodeContainerTitle, decodeStatisticsPacket, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
+import { HORN_NAMES, crc32c, decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySoundPacket, decodeHornLoginHeader, decodeHornRegistryPacket,
+  encodeHornSelect, encodeHornStackHash, encodeHornSwap, encodeHornUse, hornRegistryEntries,
+  instrumentHashPreimage, referenceName } from '../tools/parity/horns.ts';
 
 test('probe version matches the repository compatibility target', () => {
   const target: unknown = JSON.parse(readFileSync(new URL('../compatibility/target.json', import.meta.url), 'utf8'));
@@ -71,6 +74,211 @@ test('plain barrel title retains its translation key without a rendering claim',
   assert.deepEqual(decodeContainerTitle({ translate: 'container.barrel', type: 'translatable' }),
     { translate: 'container.barrel', type: 'translatable' });
   assert.throws(() => decodeContainerTitle({ translate: 'container.barrel', with: ['invented'] }));
+});
+
+test('horn CRC32C uses independent known inputs and the exact typed UTF16 preimage', () => {
+  assert.equal(crc32c(Buffer.alloc(0)), 0);
+  assert.equal(crc32c(Buffer.from('123456789', 'ascii')), 0xe3069283);
+  // Handwritten HashOps STRING encoding, not a captured Java hash/packet golden.
+  assert.equal(instrumentHashPreimage('minecraft:sing_goat_horn').toString('hex'),
+    '0c180000006d0069006e006500630072006100660074003a00730069006e0067005f0067006f00610074005f0068006f0072006e00');
+});
+
+function hornProfiles() {
+  const indices = { admire: 4, call: 5, dream: 7, feel: 3, ponder: 0, seek: 2, sing: 1, yearn: 6 };
+  return HORN_NAMES.map(name => ({ identifier: `minecraft:${name}_goat_horn`, data: {
+    sound_event: `minecraft:item.goat_horn.sound.${indices[name]}`, use_duration: 7, range: 256,
+    description: { translate: `instrument.minecraft.${name}_goat_horn` },
+  } }));
+}
+
+test('horn reference IDs follow the captured registry order on each connection', () => {
+  const entries = hornRegistryEntries(hornProfiles().reverse());
+  const registry = { registry: 'minecraft:instrument' as const, entries, payload_bytes: 0, decoded_bytes: 0 };
+  assert.equal(referenceName(registry, 1), 'minecraft:yearn_goat_horn');
+  assert.equal(referenceName(registry, 2), 'minecraft:sing_goat_horn');
+  assert.equal(referenceName(registry, 8), 'minecraft:admire_goat_horn');
+  for (const marker of [0, -1, 9, 1.5, NaN]) assert.throws(() => referenceName(registry, marker));
+});
+
+test('horn registry refuses duplicate, missing, unknown and overridden builtin profiles', () => {
+  const profiles = hornProfiles();
+  assert.throws(() => hornRegistryEntries(profiles.slice(1)));
+  assert.throws(() => hornRegistryEntries([...profiles.slice(1), profiles[1]!]));
+  assert.throws(() => hornRegistryEntries([{ ...profiles[0]!, identifier: 'test:custom' }, ...profiles.slice(1)]));
+  for (const change of [{ range: 255 }, { use_duration: 1 }, { durability_damage: 1 },
+    { sound_event: 'minecraft:item.goat_horn.sound.0' }, { extra: 0 }, { description: { text: 'custom' } }]) {
+    assert.throws(() => hornRegistryEntries([{ ...profiles[0]!, data: { ...profiles[0]!.data, ...change } }, ...profiles.slice(1)]));
+  }
+});
+
+// Codec-derived inputs below exercise decoder boundaries, not runtime goldens.
+function hornNbt(value: string | number | Record<string, unknown>): Buffer {
+  if (typeof value === 'string') {
+    const bytes = Buffer.from(value), length = Buffer.alloc(2);
+    length.writeUInt16BE(bytes.length);
+    return Buffer.concat([Buffer.from([8]), length, bytes]);
+  }
+  if (typeof value === 'number') return Buffer.concat([Buffer.from([5]), numericBytes('float', value)]);
+  const fields = Object.entries(value).map(([key, child]) => {
+    assert.ok(typeof child === 'string' || typeof child === 'number' || (typeof child === 'object' && child !== null && !Array.isArray(child)));
+    const encoded = hornNbt(child as string | number | Record<string, unknown>);
+    const name = Buffer.from(key), length = Buffer.alloc(2);
+    length.writeUInt16BE(name.length);
+    return Buffer.concat([encoded.subarray(0, 1), length, name, encoded.subarray(1)]);
+  });
+  return Buffer.concat([Buffer.from([10]), ...fields, Buffer.from([0])]);
+}
+
+function hornRegistryPacket() {
+  return Buffer.concat([Buffer.from([7]), wireString('minecraft:instrument'), Buffer.from([8]),
+    ...hornProfiles().reverse().map(entry => Buffer.concat([wireString(entry.identifier), Buffer.from([1]), hornNbt(entry.data)]))]);
+}
+
+test('horn configuration requires present complete profiles and consumes exactly the packet', () => {
+  const packet = hornRegistryPacket(), registry = decodeHornRegistryPacket(packet);
+  assert.equal(registry.decoded_bytes, packet.length);
+  assert.equal(referenceName(registry, 2), 'minecraft:sing_goat_horn');
+  for (const end of [0, 1, 7, packet.length - 1]) assert.throws(() => decodeHornRegistryPacket(packet.subarray(0, end)));
+  assert.throws(() => decodeHornRegistryPacket(Buffer.concat([packet, Buffer.from([0])])));
+  const start = 1 + wireString('minecraft:instrument').length;
+  for (const count of [0, 7, 9, 255]) {
+    const broken = Buffer.from(packet);
+    broken[start] = count;
+    assert.throws(() => decodeHornRegistryPacket(broken));
+  }
+  for (const present of [0, 2]) {
+    const broken = Buffer.from(packet);
+    broken[start + 1 + wireString('minecraft:yearn_goat_horn').length] = present;
+    assert.throws(() => decodeHornRegistryPacket(broken));
+  }
+  const duplicateNbt = Buffer.concat([Buffer.from([7]), wireString('minecraft:instrument'), Buffer.from([8]),
+    wireString('minecraft:yearn_goat_horn'), Buffer.from([1]),
+    Buffer.from('0a0300016100000000030001610000000000', 'hex')]);
+  assert.throws(() => decodeHornRegistryPacket(duplicateNbt), /Duplicate horn NBT key/u);
+});
+
+test('horn slot codec binds holders and preserves removal while generic decoding stays off', () => {
+  const registry = decodeHornRegistryPacket(hornRegistryPacket());
+  // slot packet20, player0,state1,slot36, count1,item1504, add2/remove0,
+  // instrument63->received reference2 (Sing), followed by damage3=7 sentinel.
+  const packet = Buffer.from('140001002401e00b02003f020307', 'hex');
+  const result = decodeHornContainerPacket(packet, registry);
+  assert.ok(result.kind === 'slot');
+  assert.deepEqual(result.stack, { item_id: 1504, count: 1,
+    components: { 'minecraft:instrument': 'minecraft:sing_goat_horn', 'minecraft:damage': 7 } });
+  assert.throws(() => decodeContainerPacket(packet));
+  const removal = decodeHornContainerPacket(Buffer.from('140001002401e00b00013f', 'hex'), registry);
+  assert.ok(removal.kind === 'slot');
+  assert.deepEqual(removal.stack, { item_id: 1504, count: 1, removed_components: ['minecraft:instrument'] });
+  for (let length = 0; length < packet.length; length++) assert.throws(() => decodeHornContainerPacket(packet.subarray(0, length), registry));
+  for (const hex of [
+    '140001002401e00b01003f00', // direct holder unsupported
+    '140001002401e00b01003f09', // unknown holder
+    '140001002401e00b02003f023f02', // duplicate added component
+    '140001002401e00b01013f023f', // conflicting removal
+    '140001002401e00b01007f00', // unknown component
+    '140001002401e00b00023f3f', // duplicate/excess removed count
+    '140001002401e00b0400', // excess added count
+    '1200012e00', // truncated 46-slot content
+  ]) assert.throws(() => decodeHornContainerPacket(Buffer.from(hex, 'hex'), registry));
+  assert.throws(() => decodeHornContainerPacket(Buffer.concat([packet, Buffer.from([0])]), registry));
+});
+
+test('horn cooldown and use actions retain exact fields and reject malformed boundaries', () => {
+  const packet = Buffer.concat([Buffer.from([22]), wireString('minecraft:goat_horn'), Buffer.from([0x8c, 1])]);
+  assert.deepEqual(decodeHornCooldownPacket(packet), { packet_id: 22, group: 'minecraft:goat_horn', ticks: 140,
+    payload_bytes: packet.length, decoded_bytes: packet.length });
+  for (let length = 0; length < packet.length; length++) assert.throws(() => decodeHornCooldownPacket(packet.subarray(0, length)));
+  assert.throws(() => decodeHornCooldownPacket(Buffer.concat([packet, Buffer.from([0])])));
+  assert.throws(() => decodeHornCooldownPacket(Buffer.concat([Buffer.from([22]), wireString('test:unknown'), Buffer.from([1])])));
+  assert.equal(encodeHornUse(0, 1, 90, 0).toString('hex'), '000142b4000000000000');
+  assert.equal(encodeHornUse(1, 128, 0, -90).toString('hex'), '01800100000000c2b40000');
+  assert.equal(encodeHornSelect(8).toString('hex'), '0008');
+  assert.throws(() => encodeHornUse(2, 1, 0, 0));
+  assert.throws(() => encodeHornUse(0, -1, 0, 0));
+  assert.throws(() => encodeHornUse(0, 1, Infinity, 0));
+  assert.throws(() => encodeHornUse(0, 1, 0, 91));
+  for (const hotbar of [-1, 9, 1.5]) assert.throws(() => encodeHornSelect(hotbar));
+  assert.deepEqual(parseCommand({ id: 1, action: 'horn_use', hand: 0, other_hotbar: 4 }),
+    { id: 1, action: 'horn_use', hand: 0, other_hotbar: 4 });
+  assert.throws(() => parseCommand({ id: 1, action: 'horn_use', hand: 1, other_hotbar: 4 }));
+  assert.throws(() => parseCommand({ id: 1, action: 'horn_select', hotbar: 9 }));
+});
+
+test('horn named control components remain opaque or typed and reject altered profiles', () => {
+  const registry = decodeHornRegistryPacket(hornRegistryPacket());
+  const custom = Buffer.concat([Buffer.from('140001002401e00b010000', 'hex'), hornNbt({ instrument: 'minecraft:sing_goat_horn' })]);
+  const decoded = decodeHornContainerPacket(custom, registry);
+  assert.ok(decoded.kind === 'slot');
+  assert.deepEqual(decoded.stack, { item_id: 1504, count: 1,
+    components: { 'minecraft:custom_data': { instrument: 'minecraft:sing_goat_horn' } } });
+  const cooldown = Buffer.concat([Buffer.from('140001002401e00b02001a3f80000001', 'hex'), wireString('test:horn_group'), Buffer.from([63, 2])]);
+  const control = decodeHornContainerPacket(cooldown, registry);
+  assert.ok(control.kind === 'slot');
+  assert.deepEqual(control.stack, { item_id: 1504, count: 1, components: {
+    'minecraft:use_cooldown': { seconds: 1, cooldown_group: 'test:horn_group' }, 'minecraft:instrument': 'minecraft:sing_goat_horn',
+  } });
+  for (let length = 0; length < cooldown.length; length++) assert.throws(() => decodeHornContainerPacket(cooldown.subarray(0, length), registry));
+  for (const data of [{ instrument: 'test:custom' }, { instrument: 'minecraft:sing_goat_horn', extra: 1 }]) {
+    assert.throws(() => decodeHornContainerPacket(Buffer.concat([custom.subarray(0, 11), hornNbt(data)]), registry));
+  }
+  const bad = Buffer.from(cooldown);
+  bad[15] = 2; // Optional group boolean must be exactly1 in this named control.
+  assert.throws(() => decodeHornContainerPacket(bad, registry));
+});
+
+test('horn entity sound118 consumes holder category entity floats seed and rejects direct or truncated data', () => {
+  // Codec-derived layout; sound1 is intentionally not a runtime horn mapping.
+  const packet = Buffer.from('76020207418000003f8000000102030405060708', 'hex');
+  assert.deepEqual(decodeHornEntitySoundPacket(packet), { packet_id: 118, registry_id: 1, source: 2, entity_id: 7,
+    volume: 16, pitch: 1, seed: '0102030405060708', payload_bytes: 20, decoded_bytes: 20 });
+  for (let length = 0; length < packet.length; length++) assert.throws(() => decodeHornEntitySoundPacket(packet.subarray(0, length)));
+  assert.throws(() => decodeHornEntitySoundPacket(Buffer.concat([packet, Buffer.from([0])])));
+  for (const [index, value] of [[0, 119], [1, 0], [2, 10]] as const) {
+    const broken = Buffer.from(packet);
+    broken[index] = value;
+    assert.throws(() => decodeHornEntitySoundPacket(broken));
+  }
+  const nonfinite = Buffer.from(packet);
+  nonfinite.writeFloatBE(Infinity, 4);
+  assert.throws(() => decodeHornEntitySoundPacket(nonfinite));
+});
+
+test('horn predictions use one fixed-width instrument checksum and never hash opaque controls', () => {
+  const stack = { item_id: 1504, count: 1, components: { 'minecraft:instrument': 'minecraft:sing_goat_horn' } };
+  const hash = encodeHornStackHash(stack);
+  assert.equal(hash.length, 11); // present,item1504,count,added1,id63,int32,removed0
+  assert.equal(hash.subarray(0, 6).toString('hex'), '01e00b01013f');
+  assert.equal(hash[10], 0);
+  assert.equal(encodeHornStackHash({ item_id: 1504, count: 1 }).toString('hex'), '01e00b010000');
+  assert.equal(encodeHornStackHash({ item_id: 1504, count: 1, removed_components: ['minecraft:instrument'] }).toString('hex'), '01e00b0100013f');
+  for (const components of [{ 'minecraft:instrument': 'test:unknown' }, { 'minecraft:custom_data': { instrument: 'minecraft:sing_goat_horn' } },
+    { 'minecraft:use_cooldown': { seconds: 1, cooldown_group: 'test:horn_group' } }]) {
+    assert.throws(() => encodeHornStackHash({ item_id: 1504, count: 1, components }));
+  }
+  const slots = Array.from({ length: 63 }, (_, slot) => slot === 6 ? stack : null), before = JSON.stringify(slots);
+  const swap = encodeHornSwap(1, 2, 6, 0, slots);
+  assert.equal(swap.subarray(0, 7).toString('hex'), '01020006000202');
+  assert.equal(swap.subarray(7, 12).toString('hex'), '0006000036');
+  assert.equal(JSON.stringify(slots), before);
+  assert.throws(() => encodeHornSwap(1, 2, 6, 0, slots.slice(1)));
+});
+
+test('horn Login header retains signed fixed-width entity ID and an explicitly undecoded remainder', () => {
+  // Synthetic header and arbitrary remainder, deliberately not a full Login fixture.
+  const packet = Buffer.from('3201020304aabbcc', 'hex');
+  assert.deepEqual(decodeHornLoginHeader(packet), { packet_id: 50, entity_id: 0x01020304, header_only: true,
+    header_bytes: 5, payload_bytes: 8, undecoded_bytes: 3, undecoded_base64: Buffer.from('aabbcc', 'hex').toString('base64'),
+    payload_base64: packet.toString('base64') });
+  const header = decodeHornLoginHeader(packet.subarray(0, 5));
+  assert.equal(header.header_only, true);
+  assert.equal(header.undecoded_bytes, 0); // Never promotes a header to full Login validation.
+  for (let length = 0; length < 5; length++) assert.throws(() => decodeHornLoginHeader(packet.subarray(0, length)));
+  for (const hex of ['3101020304', '32ffffffff', '3280000000']) {
+    assert.throws(() => decodeHornLoginHeader(Buffer.from(hex, 'hex')));
+  }
+  assert.throws(() => decodeHornLoginHeader(Buffer.alloc(65537)));
 });
 
 function wireString(value: string): Buffer {
