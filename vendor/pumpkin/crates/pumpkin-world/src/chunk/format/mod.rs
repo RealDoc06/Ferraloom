@@ -1151,9 +1151,8 @@ mod tests {
                         "Items",
                         vec![NbtTag::Compound(supported), NbtTag::Compound(item)],
                     );
-                    let error = match parse_saved_container(container) {
-                        Err(error) => error,
-                        Ok(_) => panic!("a rejected stack must refuse the entire saved chunk"),
+                    let Err(error) = parse_saved_container(container) else {
+                        panic!("a rejected stack must refuse the entire saved chunk");
                     };
                     let message = error.to_string();
                     assert!(message.contains(id));

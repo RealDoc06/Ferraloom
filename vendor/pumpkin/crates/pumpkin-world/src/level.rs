@@ -1203,11 +1203,15 @@ impl Level {
 mod tests {
     use super::*;
     use crate::chunk::{format::anvil::SingleChunkDataSerializer, io::ChunkSerializer};
-    use pumpkin_config::world::LevelConfig;
+    use pumpkin_config::{chunk::AnvilChunkConfig, world::LevelConfig};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use tempfile::TempDir;
 
     #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep refused-region byte preservation and independent healthy-write controls together."
+    )]
     async fn refused_container_region_survives_read_flush_and_shutdown_without_publication() {
         let directory = TempDir::new().unwrap();
         let level = Level::from_root_folder(
@@ -1254,7 +1258,7 @@ mod tests {
         let path = level.level_folder.region_folder.join("r.0.0.mca");
         let mut region = AnvilChunkFile::<ChunkData>::default();
         region
-            .update_chunk(source.clone(), &Default::default())
+            .update_chunk(source.clone(), &AnvilChunkConfig::default())
             .await
             .unwrap();
         region.write(&path).await.unwrap();
@@ -1266,10 +1270,11 @@ mod tests {
             // The weakest ticket requests only this chunk, without a Full halo.
             loading.add_ticket(position, ChunkLoading::MAX_LEVEL - 1);
             loading.send_change();
-        }
+        };
         let failure = timeout(Duration::from_secs(10), async {
             loop {
-                if let Some(failure) = level.fatal_save_failure.lock().unwrap().clone() {
+                let failure = level.fatal_save_failure.lock().unwrap().clone();
+                if let Some(failure) = failure {
                     break failure;
                 }
                 tokio::time::sleep(Duration::from_millis(5)).await;
@@ -1335,7 +1340,7 @@ mod tests {
             container
         );
 
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
         let (send, mut receive) = mpsc::channel(1);
         reader
             .fetch_chunks(&level.level_folder, &[healthy_pos], send)
