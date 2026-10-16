@@ -3455,12 +3455,36 @@ impl EntityBase for LivingEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            if item_in_use
+            let horn = item_in_use
                 .as_ref()
-                .is_some_and(|item| item.item.id == Item::GOAT_HORN.id)
+                .filter(|item| item.item.id == Item::GOAT_HORN.id);
+            let horn_hand = horn.and_then(|_| {
+                *self
+                    .active_hand
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            });
+            if let Some(item) = horn
+                && horn_hand
+                    .is_none_or(|hand| !self.get_stack_in_hand(caller, hand).are_equal(item))
             {
-                // Finishing a toot only stops use. The horn already awarded its
-                // statistic and started its cooldown when use began.
+                // Completion belongs to the actual active stack, never an equal
+                // horn in the other hand after this stack was replaced.
+                self.clear_active_hand();
+            } else if let Some(item) = horn
+                && item.get_data_component::<ConsumableImpl>().is_none()
+            {
+                // Item.finishUsingItem leaves non-consumables intact, then
+                // ItemStack applies the original stack's after-use components.
+                if let Some(player) = caller.get_player()
+                    && let Some(cooldown) = item.get_use_cooldown()
+                {
+                    let group = cooldown
+                        .cooldown_group
+                        .clone()
+                        .unwrap_or_else(|| "minecraft:goat_horn".into());
+                    player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
+                }
                 self.clear_active_hand();
             } else if let Some(item) = item_in_use.as_ref() {
                 // Consume item
@@ -3496,21 +3520,33 @@ impl EntityBase for LivingEntity {
                 }
 
                 if let Some(player) = caller.get_player() {
+                    if horn_hand.is_some() {
+                        // Consumable.onConsume awards a second use, independently
+                        // of InstrumentItem.use's successful-start statistic.
+                        player.increment_stat(StatisticCategory::Used, i32::from(item.item.id), 1);
+                    }
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
                             item_id: format!("minecraft:{}", item.item.registry_key),
                         },
                     );
 
-                    // Prefer modifying the exact stack that matches the consumed item:
+                    // Non-horns retain the existing stack matching order:
                     // 1) selected hotbar (held_item)
                     // 2) off-hand
                     // 3) fallback to active_hand if the above didn't match
                     let mut handled = false;
 
+                    if let Some(hand) = horn_hand {
+                        let mut stack = player.inventory.get_stack_in_hand(hand);
+                        stack.decrement_unless_creative(player.gamemode.load(), 1);
+                        player.inventory.set_stack_in_hand(hand, stack);
+                        handled = true;
+                    }
+
                     // Check main hand (hotbar selected)
                     let mut held = player.inventory.held_item();
-                    if held.are_items_and_components_equal(item) {
+                    if !handled && held.are_items_and_components_equal(item) {
                         if is_potion {
                             if player.gamemode.load() != GameMode::Creative {
                                 held.decrement(1);
@@ -3569,10 +3605,13 @@ impl EntityBase for LivingEntity {
                     }
 
                     if let Some(cooldown) = item.get_use_cooldown() {
-                        let group = cooldown
-                            .cooldown_group
-                            .clone()
-                            .unwrap_or_else(|| item.item.registry_key.to_string());
+                        let group = cooldown.cooldown_group.clone().unwrap_or_else(|| {
+                            if horn_hand.is_some() {
+                                "minecraft:goat_horn".into()
+                            } else {
+                                item.item.registry_key.to_string()
+                            }
+                        });
                         player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
                     }
                 }

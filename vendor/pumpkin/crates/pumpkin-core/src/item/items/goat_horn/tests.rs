@@ -221,7 +221,8 @@ fn assert_entity_sound_packets(packets: &[RawPacket], sound: Sound, source_entit
     assert!(sound_packet.is_empty());
 }
 
-fn assert_cooldown_packets(packets: &[RawPacket], group: &str) {
+fn assert_cooldown_packets(packets: &[RawPacket], group: &str, ticks: i32) {
+    assert_eq!(CItemCooldown::to_id(CURRENT_MC_VERSION), 22);
     assert!(packets.iter().all(|packet| {
         packet.id != CEntitySoundEffect::to_id(CURRENT_MC_VERSION)
             && packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
@@ -233,7 +234,7 @@ fn assert_cooldown_packets(packets: &[RawPacket], group: &str) {
     assert_eq!(cooldowns.len(), 1);
     let mut cooldown = &cooldowns[0].payload[..];
     assert_eq!(cooldown.get_str().unwrap().as_ref(), group);
-    assert_eq!(cooldown.get_var_int().unwrap().0, 140);
+    assert_eq!(cooldown.get_var_int().unwrap().0, ticks);
     assert!(cooldown.is_empty());
 }
 
@@ -244,7 +245,7 @@ fn assert_effect_packets(
     sound: Sound,
     group: &str,
 ) {
-    assert_cooldown_packets(performer_packets, group);
+    assert_cooldown_packets(performer_packets, group, 140);
     assert_entity_sound_packets(observer_packets, sound, source_entity_id);
 }
 
@@ -253,6 +254,25 @@ fn assert_no_effect_packets(packets: &[RawPacket]) {
         != CEntitySoundEffect::to_id(CURRENT_MC_VERSION)
         && packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
         && packet.id != CItemCooldown::to_id(CURRENT_MC_VERSION)));
+}
+
+fn consumable_with_speed_effect() -> ConsumableImpl {
+    let mut consumable = ItemStack::new(1, &Item::APPLE)
+        .get_data_component::<ConsumableImpl>()
+        .unwrap()
+        .clone();
+    consumable.effects = Cow::Owned(vec![ConsumeEffect::ApplyEffects((
+        Cow::Owned(vec![StatusEffectInstance {
+            effect_id: Cow::Borrowed("minecraft:speed"),
+            amplifier: 0,
+            duration: 200,
+            ambient: false,
+            show_particles: false,
+            show_icon: false,
+        }]),
+        1.0,
+    ))]);
+    consumable
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -543,7 +563,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
     clippy::too_many_lines,
     reason = "Follow real Player/LivingEntity ticks through horn expiry and a food positive control."
 )]
-async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
+async fn horn_expiry_ticks_apply_only_explicit_finish_cooldown() {
     let mut fixture = player_fixture().await;
     stop_chunk_workers(&fixture).await;
     let player = fixture.player.clone();
@@ -576,42 +596,41 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
     observe(&mut reader, &player).await;
     observe(&mut observer.reader, &observer.player).await;
 
-    // A deterministic consume effect makes accidental consumption observable,
-    // independently of stack decrement. The apple below validates this observer.
+    // Food alone does not make a horn consumable. The apple remains a positive
+    // control for the generic food/effect/ConsumeItem completion path below.
     let apple = ItemStack::new(2, &Item::APPLE);
     let food = apple.get_data_component::<FoodImpl>().unwrap().clone();
-    let mut consumable = apple
-        .get_data_component::<ConsumableImpl>()
-        .unwrap()
-        .clone();
-    consumable.effects = Cow::Owned(vec![ConsumeEffect::ApplyEffects((
-        Cow::Owned(vec![StatusEffectInstance {
-            effect_id: Cow::Borrowed("minecraft:speed"),
-            amplifier: 0,
-            duration: 200,
-            ambient: false,
-            show_particles: false,
-            show_icon: false,
-        }]),
-        1.0,
-    ))]);
+    let consumable = consumable_with_speed_effect();
 
     for hand in [Hand::Right, Hand::Left] {
-        for explicit_cooldown in [false, true] {
-            let group = if explicit_cooldown {
-                "test:expiry_horns"
-            } else {
-                "minecraft:goat_horn"
-            };
+        for (finish_cooldown, food_only) in [
+            (None, false),
+            (
+                Some(UseCooldownImpl::new(1.0, Some("test:expiry_horns".into()))),
+                false,
+            ),
+            (None, true),
+            (Some(UseCooldownImpl::new(1.0, None)), true),
+        ] {
+            let group = finish_cooldown
+                .as_ref()
+                .and_then(|cooldown| cooldown.cooldown_group.as_deref())
+                .unwrap_or("minecraft:goat_horn");
             let mut horn = ItemStack::new(1, &Item::GOAT_HORN);
             horn.set_data_component(InstrumentImpl {
                 instrument: Instrument::SingGoatHorn,
             });
-            if explicit_cooldown {
-                // 600 generic ticks must never replace the instrument's 140.
-                horn.set_data_component(UseCooldownImpl::new(30.0, Some(group.into())));
+            if let Some(cooldown) = finish_cooldown.as_ref() {
+                // Use begins with 140 instrument ticks. ItemStack reapplies
+                // this explicit component as 20 ticks only after completion.
+                horn.set_data_component(cooldown.clone());
+            }
+            if food_only {
                 horn.set_data_component(food.clone());
-                horn.set_data_component(consumable.clone());
+                if finish_cooldown.is_some() {
+                    horn.set_data_component(consumable.clone());
+                    horn.remove_data_component(DataComponent::Consumable);
+                }
             }
             // Equal stacks catch the old completion branch consuming the main
             // hand even when the off hand was active.
@@ -623,8 +642,8 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
             observe(&mut reader, &player).await;
             observe(&mut observer.reader, &observer.player).await;
 
-            // The second use must succeed solely because the first real use
-            // expired. Neither timer nor active-hand state is advanced manually.
+            // Reuse waits for both use and any explicit finish cooldown. Neither
+            // timer nor active-hand state is advanced manually.
             for _ in 0..2 {
                 let before = used();
                 let event_count = events.instrument_events.load(Ordering::Relaxed);
@@ -688,8 +707,15 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                     {
                         let cooldowns = player.item_cooldowns.lock().unwrap();
                         let cooldown = cooldowns.get(group).unwrap();
-                        assert_eq!(cooldown.start_tick, started);
-                        assert_eq!(cooldown.duration, 140);
+                        let finished_with_cooldown = elapsed == 140 && finish_cooldown.is_some();
+                        assert_eq!(
+                            cooldown.start_tick,
+                            started + if finished_with_cooldown { 140 } else { 0 }
+                        );
+                        assert_eq!(
+                            cooldown.duration,
+                            if finished_with_cooldown { 20 } else { 140 }
+                        );
                     };
                     assert_eq!(used(), before + 1);
                     assert_eq!(
@@ -718,7 +744,12 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                     }
                     // Drain each production tick, including the expiry tick,
                     // so unrelated inventory updates cannot fill the queue.
-                    assert_no_effect_packets(&observe(&mut reader, &player).await);
+                    let packets = observe(&mut reader, &player).await;
+                    if elapsed == 140 && finish_cooldown.is_some() {
+                        assert_cooldown_packets(&packets, group, 20);
+                    } else {
+                        assert_no_effect_packets(&packets);
+                    }
                     assert_no_effect_packets(
                         &observe(&mut observer.reader, &observer.player).await,
                     );
@@ -727,6 +758,48 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                     player.living_entity.hurt_cooldown.load(Ordering::Relaxed),
                     1
                 );
+                if finish_cooldown.is_some() {
+                    assert!(player.is_on_cooldown(group));
+                    use_packet(&player, &server, hand);
+                    assert_eq!(used(), before + 1);
+                    assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
+                    assert_no_effect_packets(&observe(&mut reader, &player).await);
+                    assert_no_effect_packets(
+                        &observe(&mut observer.reader, &observer.player).await,
+                    );
+                    for elapsed in 1..=20 {
+                        player.tick(&server);
+                        assert_eq!(
+                            player.tick_counter.load(Ordering::Relaxed),
+                            started + 140 + elapsed
+                        );
+                        assert_eq!(player.is_on_cooldown(group), elapsed < 20);
+                        assert_eq!(used(), before + 1);
+                        assert_eq!(
+                            events.instrument_events.load(Ordering::Relaxed),
+                            event_count + 1
+                        );
+                        assert_eq!(
+                            player.living_entity.item_use_time.load(Ordering::Relaxed),
+                            0
+                        );
+                        assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
+                        assert!(player.living_entity.item_in_use.lock().unwrap().is_none());
+                        assert!(!player.has_advancement(Advancement::HUSBANDRY_ROOT));
+                        for held_hand in [Hand::Right, Hand::Left] {
+                            assert!(
+                                player
+                                    .inventory()
+                                    .get_stack_in_hand(held_hand)
+                                    .are_equal(&horn)
+                            );
+                        }
+                        assert_no_effect_packets(&observe(&mut reader, &player).await);
+                        assert_no_effect_packets(
+                            &observe(&mut observer.reader, &observer.player).await,
+                        );
+                    }
+                }
                 assert!(!player.is_on_cooldown(group));
             }
         }
@@ -804,6 +877,217 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Exercise component-gated horn consumption and replaced active stacks through real ticks."
+)]
+async fn consumable_horn_expiry_consumes_only_the_active_hand() {
+    let mut fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    let player = fixture.player.clone();
+    let server = fixture.server.clone();
+    player.get_entity().set_pos(Vector3::new(0.5, 65.0, 0.5));
+    player.set_client_loaded(true);
+    fixture
+        .client
+        .java()
+        .unwrap()
+        .version
+        .store(CURRENT_MC_VERSION);
+    player.world().level_info.rcu(|current| {
+        let mut info = (**current).clone();
+        info.game_rules.natural_health_regeneration = false;
+        info
+    });
+    let events = Arc::new(UseEvents::default());
+    server.plugin_manager.register::<GenericGameEvent, _>(
+        events.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let (remote, _write) = fixture._remote.split();
+    let mut reader = TCPNetworkDecoder::new(remote);
+    let mut observer = SoundObserver::new(&server, &player.world()).await;
+    observe(&mut reader, &player).await;
+    observe(&mut observer.reader, &observer.player).await;
+    let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
+    let food = ItemStack::new(1, &Item::APPLE)
+        .get_data_component::<FoodImpl>()
+        .unwrap()
+        .clone();
+
+    for hand in [Hand::Right, Hand::Left] {
+        for (with_food, replace_active) in [(false, false), (true, false), (true, true)] {
+            let other_hand = if hand == Hand::Right {
+                Hand::Left
+            } else {
+                Hand::Right
+            };
+            let group = if with_food {
+                "test:consume_horns"
+            } else {
+                "minecraft:goat_horn"
+            };
+            player
+                .advancements
+                .lock()
+                .unwrap()
+                .revoke(Advancement::HUSBANDRY_ROOT, "consumed_item");
+            player
+                .living_entity
+                .remove_effect(&pumpkin_data::effect::StatusEffect::SPEED);
+            player.hunger_manager.level.store(10);
+            player.hunger_manager.saturation.store(0.0);
+            let mut horn = ItemStack::new(1, &Item::GOAT_HORN);
+            horn.set_data_component(consumable_with_speed_effect());
+            horn.set_data_component(UseCooldownImpl::new(1.0, with_food.then(|| group.into())));
+            if with_food {
+                horn.set_data_component(food.clone());
+            }
+            // Identical main/offhand components must not redirect completion to
+            // the main hand when the offhand was used.
+            player.inventory().set_stack_in_hand(hand, horn.clone());
+            player
+                .inventory()
+                .set_stack_in_hand(other_hand, horn.clone());
+            observe(&mut reader, &player).await;
+            observe(&mut observer.reader, &observer.player).await;
+            let before = used();
+            let event_count = events.instrument_events.load(Ordering::Relaxed);
+            let started = player.tick_counter.load(Ordering::Relaxed);
+            use_packet(&player, &server, hand);
+            assert_eq!(used(), before + 1);
+            assert_eq!(
+                player.living_entity.item_use_time.load(Ordering::Relaxed),
+                140
+            );
+            assert_effect_packets(
+                &observe(&mut reader, &player).await,
+                &observe(&mut observer.reader, &observer.player).await,
+                player.entity_id(),
+                Sound::ItemGoatHornSound0,
+                group,
+            );
+            let replacement = ItemStack::new(1, &Item::STICK);
+            if replace_active {
+                player
+                    .inventory()
+                    .set_stack_in_hand(hand, replacement.clone());
+            }
+            for elapsed in 1..=140 {
+                player.tick(&server);
+                let consumed = elapsed == 140 && !replace_active;
+                assert_eq!(
+                    player.tick_counter.load(Ordering::Relaxed),
+                    started + elapsed
+                );
+                assert_eq!(
+                    player.living_entity.item_use_time.load(Ordering::Relaxed),
+                    140 - elapsed
+                );
+                assert_eq!(
+                    *player.living_entity.active_hand.lock().unwrap(),
+                    (elapsed < 140).then_some(hand)
+                );
+                assert_eq!(used(), before + if consumed { 2 } else { 1 });
+                assert_eq!(
+                    events.instrument_events.load(Ordering::Relaxed),
+                    event_count + 1
+                );
+                assert_eq!(
+                    player.has_advancement(Advancement::HUSBANDRY_ROOT),
+                    consumed
+                );
+                assert_eq!(
+                    player.hunger_manager.level.load(),
+                    if consumed && with_food { 14 } else { 10 }
+                );
+                assert_eq!(
+                    player.hunger_manager.saturation.load(),
+                    if consumed && with_food { 2.4 } else { 0.0 }
+                );
+                assert_eq!(
+                    player
+                        .living_entity
+                        .active_effects
+                        .lock()
+                        .unwrap()
+                        .contains_key(&pumpkin_data::effect::StatusEffect::SPEED),
+                    consumed
+                );
+                let active_stack = player.inventory().get_stack_in_hand(hand);
+                if consumed {
+                    assert!(active_stack.is_empty());
+                } else {
+                    assert!(active_stack.are_equal(if replace_active {
+                        &replacement
+                    } else {
+                        &horn
+                    }));
+                }
+                assert!(
+                    player
+                        .inventory()
+                        .get_stack_in_hand(other_hand)
+                        .are_equal(&horn)
+                );
+                {
+                    let cooldowns = player.item_cooldowns.lock().unwrap();
+                    let cooldown = cooldowns.get(group).unwrap();
+                    assert_eq!(
+                        cooldown.start_tick,
+                        started + if consumed { 140 } else { 0 }
+                    );
+                    assert_eq!(cooldown.duration, if consumed { 20 } else { 140 });
+                }
+                let packets = observe(&mut reader, &player).await;
+                let cooldowns: Vec<_> = packets
+                    .iter()
+                    .filter(|packet| packet.id == CItemCooldown::to_id(CURRENT_MC_VERSION))
+                    .collect();
+                assert_eq!(cooldowns.len(), usize::from(consumed));
+                if consumed {
+                    let mut payload = &cooldowns[0].payload[..];
+                    assert_eq!(payload.get_str().unwrap().as_ref(), group);
+                    assert_eq!(payload.get_var_int().unwrap().0, 20);
+                    assert!(payload.is_empty());
+                }
+                // Consumable particles, sounds and EAT/DRINK event parity are
+                // separate gaps; do not assert their absence as a Java contract.
+                observe(&mut observer.reader, &observer.player).await;
+            }
+            assert!(player.living_entity.item_in_use.lock().unwrap().is_none());
+            if !replace_active {
+                assert!(player.is_on_cooldown(group));
+                let finished_used = used();
+                // The still-full identical horn cannot be used in the other hand
+                // until the explicit completion cooldown elapses.
+                use_packet(&player, &server, other_hand);
+                assert_eq!(used(), finished_used);
+                assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
+                assert_no_effect_packets(&observe(&mut reader, &player).await);
+                assert_no_effect_packets(&observe(&mut observer.reader, &observer.player).await);
+                for elapsed in 1..=20 {
+                    player.tick(&server);
+                    assert_eq!(
+                        player.tick_counter.load(Ordering::Relaxed),
+                        started + 140 + elapsed
+                    );
+                    assert_eq!(player.is_on_cooldown(group), elapsed < 20);
+                    assert_eq!(used(), finished_used);
+                    observe(&mut reader, &player).await;
+                    observe(&mut observer.reader, &observer.player).await;
+                }
+            }
+            assert!(!player.is_on_cooldown(group));
+        }
+    }
+    drop(reader);
+    observer.close().await;
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn horn_entity_sound_recipients_exclude_performer_and_strict_range_boundary() {
     let mut fixture = player_fixture().await;
     stop_chunk_workers(&fixture).await;
@@ -850,7 +1134,11 @@ async fn horn_entity_sound_recipients_exclude_performer_and_strict_range_boundar
             player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id)),
             before + 1
         );
-        assert_cooldown_packets(&observe(&mut reader, &player).await, "minecraft:goat_horn");
+        assert_cooldown_packets(
+            &observe(&mut reader, &player).await,
+            "minecraft:goat_horn",
+            140,
+        );
         let packets = observe(&mut observer.reader, &observer.player).await;
         if audible {
             assert_entity_sound_packets(&packets, Sound::ItemGoatHornSound0, player.entity_id());
