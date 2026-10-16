@@ -32,6 +32,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
+    poi_binding::{EncodedPoiSnapshot, PoiCapturePurpose},
     poi_changes::PoiSavePlan,
 };
 pub mod anvil;
@@ -113,44 +114,12 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     fn to_bytes_for_save(&self) -> Result<Bytes, ChunkSerializingError> {
-        use crate::poi::PoiReconcileError;
-        let runtime = self.poi_runtime()?;
-        let pos = Vector2::new(self.x, self.z);
-        // IO preload holds storage alone. Never acquire lifecycle from here.
-        runtime
+        let mut capture = self.capture_poi_snapshot(PoiCapturePurpose::Save)?;
+        capture
             .storage
-            .lock()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?
-            .preload_poi_region(pos)
+            .save_prepared_region(Vector2::new(self.x, self.z))
             .map_err(ChunkSerializingError::PoiIo)?;
-        let lifecycle = runtime
-            .lifecycle
-            .read()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let chunks = runtime
-            .chunks
-            .upgrade()
-            .ok_or(PoiReconcileError::ObsoletePublication)?;
-        let current = self.check_poi_publication(&chunks)?;
-        let mut storage = runtime
-            .storage
-            .lock()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let (root, plan) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
-        drop(current);
-        drop(lifecycle);
-        // Capture released light/heightmap/terrain/metadata. F1's fallible encoder
-        // MUST succeed before captured POI becomes visible even in shared memory:
-        // a sibling save or save_all may later flush the entire POI region.
-        let bytes = crate::nbt_io::encode_compound(root)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-        if let Some(plan) = plan {
-            plan.apply()?;
-        }
-        storage
-            .save_prepared_region(pos)
-            .map_err(ChunkSerializingError::PoiIo)?;
-        Ok(bytes)
+        Ok(capture.bytes)
     }
 
     #[inline]
@@ -600,6 +569,57 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
             custom_data: std::sync::Mutex::new(custom_data),
+        })
+    }
+
+    /// Shared managed save/unload barrier. Capture and application keep the same
+    /// storage guard; encoding runs with no publication or terrain guard held.
+    pub(super) fn capture_poi_snapshot(
+        &self,
+        purpose: PoiCapturePurpose,
+    ) -> Result<EncodedPoiSnapshot<'_>, ChunkSerializingError> {
+        use crate::poi::PoiReconcileError;
+        if matches!(purpose, PoiCapturePurpose::Unload) && self.status != ChunkStatus::Full {
+            return Err(PoiReconcileError::IncompleteTerrain.into());
+        }
+        let runtime = self.poi_runtime()?;
+        let pos = Vector2::new(self.x, self.z);
+        // IO preload holds storage alone. Never acquire lifecycle from here.
+        runtime
+            .storage
+            .lock()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?
+            .preload_poi_region(pos)
+            .map_err(ChunkSerializingError::PoiIo)?;
+        let lifecycle = runtime
+            .lifecycle
+            .read()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
+        let chunks = runtime
+            .chunks
+            .upgrade()
+            .ok_or(PoiReconcileError::ObsoletePublication)?;
+        let current = self.check_poi_publication(&chunks)?;
+        if matches!(purpose, PoiCapturePurpose::Unload) && current.is_none() {
+            return Err(PoiReconcileError::ObsoletePublication.into());
+        }
+        let mut storage = runtime
+            .storage
+            .lock()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
+        let (root, plan) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
+        drop(current);
+        drop(lifecycle);
+        // Capture released light/heightmap/terrain/metadata. F1's fallible encoder
+        // MUST succeed before captured POI becomes visible even in shared memory:
+        // a sibling save or save_all may later flush the entire POI region.
+        let bytes = crate::nbt_io::encode_compound(root)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let stamp = plan.map(PoiSavePlan::apply).transpose()?.flatten();
+        Ok(EncodedPoiSnapshot {
+            bytes,
+            storage,
+            stamp,
         })
     }
 
@@ -1201,7 +1221,7 @@ mod tests {
                 assert_eq!(snapshot.section.get_block_absolute_y(2, 0, 1), Some(home));
                 let plan = plan.unwrap();
                 if write_after_apply {
-                    plan.apply().unwrap();
+                    let _stamp = plan.apply().unwrap();
                     chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
                     chunk.set_block_absolute_y(2, 0, 1, home);
                 } else {

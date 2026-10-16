@@ -70,6 +70,8 @@ pub enum PoiReconcileError {
     IncompleteTerrain,
     #[error("POI preparation worker failed: {0}")]
     PreparationWorkerFailed(String),
+    #[error("Terrain encoding refused managed POI preparation: {0}")]
+    TerrainEncoding(#[source] pumpkin_nbt::Error),
     #[error("POI terrain coordinates or section layout are invalid")]
     InvalidCoordinates,
     #[error("POI section revision exhausted; chunk preparation is unavailable")]

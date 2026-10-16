@@ -105,7 +105,7 @@ impl PoiSavePlan<'_> {
     /// Call only after successful terrain encoding. A later terrain write refuses
     /// the whole plan before mutation; its complete ABA history remains pending.
     /// This brief read guard is released before the caller performs any POI IO.
-    pub(crate) fn apply(mut self) -> Result<(), PoiReconcileError> {
+    pub(crate) fn apply(mut self) -> Result<Option<PoiReconciliationStamp>, PoiReconcileError> {
         let terrain = self.source.read_for_poi();
         let mut changes = terrain.changes_for(&self.loaded)?;
         if self.revisions.len() != changes.sections.len()
@@ -126,7 +126,9 @@ impl PoiSavePlan<'_> {
                 section.reset_tickets = None;
             }
         }
-        Ok(())
+        Ok(self.complete.then_some(PoiReconciliationStamp {
+            revisions: self.revisions,
+        }))
     }
 }
 

@@ -1,11 +1,11 @@
 //! Runtime ownership uses Level's existing publication and IO fences. There is
 //! no second publication registry: a binding lives exactly as long as its chunk.
 
-use std::sync::{Arc, Mutex, RwLock, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 
 use dashmap::{DashMap, mapref::one::Ref};
 
-use super::{ChunkData, PoiReconciliationStamp};
+use super::{ChunkData, ChunkSerializingError, PoiReconciliationStamp};
 use crate::{
     chunk_system::ChunkPos,
     level::SyncChunk,
@@ -16,6 +16,20 @@ pub(crate) struct PoiRuntime {
     pub(crate) storage: Arc<Mutex<PoiStorage>>,
     pub(crate) lifecycle: Arc<RwLock<()>>,
     pub(crate) chunks: Weak<DashMap<ChunkPos, SyncChunk>>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum PoiCapturePurpose {
+    Save,
+    Unload,
+}
+
+/// Both managed paths cross the same encoder before publishing captured POI.
+/// A save retains this guard through its flush; preparation drops it without IO.
+pub(super) struct EncodedPoiSnapshot<'a> {
+    pub(super) bytes: bytes::Bytes,
+    pub(super) storage: MutexGuard<'a, PoiStorage>,
+    pub(super) stamp: Option<PoiReconciliationStamp>,
 }
 
 impl ChunkData {
@@ -60,34 +74,20 @@ impl ChunkData {
         Ok(current)
     }
 
-    /// In-memory unload preparation for the exact current Arc. IO preload is a
-    /// separate phase; all guards are released before this owned stamp returns.
+    /// Encode the exact current FULL Arc before publishing its POI in memory.
+    /// Preload may read disk, but preparation never writes a POI file. All guards
+    /// are released before this stamp returns; actual saving captures again.
     pub(crate) fn prepare_poi(&self) -> Result<PoiReconciliationStamp, PoiReconcileError> {
-        let runtime = self.poi_runtime()?;
-        let pos = ChunkPos::new(self.x, self.z);
-        runtime
-            .storage
-            .lock()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?
-            .preload_poi_region(pos)
-            .map_err(PoiReconcileError::RegionUnavailable)?;
-        let _lifecycle = runtime
-            .lifecycle
-            .read()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let chunks = runtime
-            .chunks
-            .upgrade()
-            .ok_or(PoiReconcileError::ObsoletePublication)?;
-        let _current = self
-            .check_poi_publication(&chunks)?
-            .ok_or(PoiReconcileError::ObsoletePublication)?;
-        let mut storage = runtime
-            .storage
-            .lock()
-            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let mut loaded = storage.loaded_poi_region(pos)?;
-        let stamp = self.read_for_poi().reconcile(&mut loaded)?;
+        let capture = self
+            .capture_poi_snapshot(PoiCapturePurpose::Unload)
+            .map_err(|error| match error {
+                ChunkSerializingError::ErrorSerializingChunk(error) => {
+                    PoiReconcileError::TerrainEncoding(error)
+                }
+                ChunkSerializingError::Poi(error) => error,
+                ChunkSerializingError::PoiIo(error) => PoiReconcileError::RegionUnavailable(error),
+            })?;
+        let stamp = capture.stamp.ok_or(PoiReconcileError::IncompleteTerrain)?;
         // An initial scan can repair missing/stale POI even when loaded terrain
         // itself was clean. Retirement must queue the bound actual-save hook.
         self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);

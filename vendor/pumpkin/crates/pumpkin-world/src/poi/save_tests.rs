@@ -368,6 +368,15 @@ where
     a.set_block_absolute_y(2, 0, 1, home());
     a.set_custom_data("test", "refused", NbtTag::End);
     assert!(matches!(
+        a.prepare_poi(),
+        Err(PoiReconcileError::TerrainEncoding(_))
+    ));
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage.save_all().unwrap();
+        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+    };
+    assert!(matches!(
         a.to_bytes_for_save(),
         Err(ChunkSerializingError::ErrorSerializingChunk(_))
     ));
@@ -407,6 +416,13 @@ where
     };
     assert_same_region_disk::<S>(&folder, config.clone(), false).await;
     a.set_custom_data("test", "refused", NbtTag::Int(7));
+    let before_prepare = std::fs::read(&poi_path).unwrap();
+    let stamp = a.prepare_poi().unwrap();
+    {
+        let terrain = a.read_for_poi();
+        assert!(terrain.is_current(&stamp));
+    };
+    assert_eq!(std::fs::read(&poi_path).unwrap(), before_prepare);
     writer.flush().await.unwrap();
     assert!(!a.is_dirty());
     assert_same_region_disk::<S>(&folder, config, true).await;
@@ -456,6 +472,10 @@ fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
     chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR);
     chunk.set_block_absolute_y(1, 0, 1, home());
     chunk.set_block_absolute_y(1, 16, 1, Block::BELL.default_state.id);
+    assert!(matches!(
+        chunk.prepare_poi(),
+        Err(PoiReconcileError::UnknownType { .. })
+    ));
     assert!(matches!(
         chunk.to_bytes_for_save(),
         Err(ChunkSerializingError::Poi(
