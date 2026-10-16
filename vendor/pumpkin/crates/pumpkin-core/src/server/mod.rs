@@ -54,6 +54,8 @@ use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
 #[cfg(test)]
+mod clock_persistence_tests;
+#[cfg(test)]
 mod scoreboard_tests;
 
 mod command_storage;

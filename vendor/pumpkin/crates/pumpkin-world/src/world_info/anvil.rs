@@ -720,6 +720,74 @@ mod test {
     }
 
     #[test]
+    fn game_time_defaults_to_zero_independently_of_legacy_day_time() {
+        assert_eq!(LevelData::default(Seed(42)).game_time, 0);
+        for time in [None, Some(0)] {
+            let folder = TempDir::new().unwrap();
+            let mut root = converted_level_dat(Some(42));
+            let mut data = root.get_compound("Data").unwrap().clone();
+            if let Some(time) = time {
+                data.put_long("Time", time);
+            }
+            root.put_compound("Data", data);
+            write_level_dat(folder.path(), root);
+
+            let loaded = AnvilLevelInfo.read_world_info(folder.path()).unwrap();
+            assert_eq!(loaded.game_time, 0);
+            assert_eq!(loaded.day_time, 5000);
+            AnvilLevelInfo
+                .write_world_info(&loaded, folder.path())
+                .unwrap();
+            let saved = read_level_dat(folder.path());
+            assert_eq!(
+                saved.get_compound("Data").unwrap().get("Time"),
+                Some(&NbtTag::Long(0))
+            );
+        }
+    }
+
+    #[test]
+    fn game_time_round_trips_as_long_separately_from_day_clock() {
+        let folder = TempDir::new().unwrap();
+        let initial_time = i64::from(i32::MAX) + 12_345;
+        let mut root = converted_level_dat(Some(42));
+        let mut data = root.get_compound("Data").unwrap().clone();
+        data.put_long("Time", initial_time);
+        data.put_string("unknown_clock_neighbor", "retained".into());
+        root.put_compound("Data", data);
+        write_level_dat(folder.path(), root);
+
+        let mut loaded = AnvilLevelInfo.read_world_info(folder.path()).unwrap();
+        assert_eq!((loaded.game_time, loaded.day_time), (initial_time, 5000));
+        loaded.game_time += 7;
+        loaded.day_time = 19_000;
+        AnvilLevelInfo
+            .write_world_info(&loaded, folder.path())
+            .unwrap();
+
+        let saved = read_level_dat(folder.path());
+        let data = saved.get_compound("Data").unwrap();
+        assert_eq!(data.get("Time"), Some(&NbtTag::Long(initial_time + 7)));
+        assert_eq!(data.get_string("unknown_clock_neighbor"), Some("retained"));
+        assert_eq!(
+            data.get_long("DayTime"),
+            Some(5000),
+            "legacy unknown tag stays untouched"
+        );
+        let reloaded = AnvilLevelInfo.read_world_info(folder.path()).unwrap();
+        assert_eq!(
+            (reloaded.game_time, reloaded.day_time),
+            (initial_time + 7, 19_000)
+        );
+        assert_eq!(
+            (reloaded.spawn_x, reloaded.spawn_y, reloaded.spawn_z),
+            (128, 72, -64)
+        );
+        assert_eq!(reloaded.world_gen_settings.seed, 42);
+        assert_eq!(reloaded.difficulty, Difficulty::Hard);
+    }
+
+    #[test]
     fn preserve_level_dat_seed() {
         let seed = 1337;
 

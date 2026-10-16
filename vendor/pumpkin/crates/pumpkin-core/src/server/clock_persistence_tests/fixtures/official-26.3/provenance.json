@@ -1,0 +1,26 @@
+{
+  "version": "26.3",
+  "data_version": 5023,
+  "protocol": 777,
+  "official_jar_sha256": "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6",
+  "report_origin": "/home/doc/code/Ferraloom/.cache/reviews/runtime-jukebox27/attempts/h14-dirty1/jukeboxes-h14-dirty1.json",
+  "report_sha256": "4619ba8866104488090ef99453411d9604b6a67023cf9da7f4a85e5760244f77",
+  "origin_directory": "/home/doc/code/Ferraloom/.cache/runs/jukeboxes-o6hgcqq6/java_source/world",
+  "origin_state": "Stopped synthetic Java test world; saved Time=1572. No Player data or credentials included.",
+  "copy_policy": "Only the following three raw files, copied byte-for-byte without alteration.",
+  "files": {
+    "level.dat": {
+      "bytes": 418,
+      "sha256": "766a157df933802f5391caacad9f87bb939d5114e02aa1fd25546525b9a5072d"
+    },
+    "data/minecraft/world_clocks.dat": {
+      "bytes": 103,
+      "sha256": "6ec982935e6c959295bb33b2ac39bc93cc1836b28f80b96d01a122a35f1f8ebb"
+    },
+    "data/minecraft/world_gen_settings.dat": {
+      "bytes": 243,
+      "sha256": "90bc90f4cc5d209b935d969c6366059eec2717e83a466066f6fb41058b1c0f67"
+    }
+  },
+  "validation": "Tests authored source-only and UNRUN at handoff. No new runtime, parity, or ledger-promotion claim."
+}
