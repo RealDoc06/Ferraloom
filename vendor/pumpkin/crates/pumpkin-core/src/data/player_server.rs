@@ -36,8 +36,8 @@ struct PlayerSessionSlot {
     changed: Notify,
 }
 
-/// Exclusive ownership from admission through the final player and advancement
-/// saves. Keep this on the Player, then move it into the disconnect future.
+/// Exclusive ownership from admission through the final player, advancement and
+/// statistics saves. Move this lease from the Player into the disconnect future.
 pub(crate) struct PlayerSession {
     slot: Arc<PlayerSessionSlot>,
     _guard: OwnedMutexGuard<()>,
@@ -81,7 +81,7 @@ impl ServerPlayerData {
         }
     }
 
-    /// Reserve before loading either saved file. A replaced owner is closed,
+    /// Reserve before loading any player persistence family. A replaced owner is closed,
     /// then its final save must release the lease before the new load can start.
     pub(crate) async fn reserve_player_session(&self, uuid: uuid::Uuid) -> PlayerSession {
         let slot = {

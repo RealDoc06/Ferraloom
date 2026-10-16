@@ -1,6 +1,6 @@
 # Architecture and completion contract
 
-Ferraloom builds on a pinned Pumpkin core, with independent tests against the official Minecraft Java 26.3 server. Core, world, and command modules are maintained locally so observed compatibility defects can be fixed in this repository. Other engine dependencies remain pinned to the shared upstream revision. Engine attribution stays visible in startup logs, dependency metadata, and this repository.
+Ferraloom builds on a pinned Pumpkin core, with independent tests against the official Minecraft Java 26.3 server. Core, world, command, data and protocol modules are maintained locally so observed compatibility defects can be fixed in this repository. Other engine dependencies remain pinned to the shared upstream revision. Engine attribution stays visible in startup logs, dependency metadata, and this repository.
 
 The runtime initializes named Tokio network workers and Rayon CPU workers. The engine parallelizes world, player, entity, and chunk work, with a ticker coordinating simulation phases. Chunk generation has additional engine-owned pools. `--workers` describes the two configurable pools, not a process-wide thread limit. Correctness under different schedules and measured throughput remain separate acceptance gates.
 
@@ -32,8 +32,8 @@ Failed recovery ends login before a Player is constructed or published.
 Snapshots reserve their sequence before capture; the storage lock rejects a
 snapshot older than the last successful write before encoding or backup rotation.
 
-An owned lease reserves each UUID before loading player data and advancements.
-Replacement admission waits for the previous session's leave callbacks and both final
+An owned lease reserves each UUID before loading player data, advancements and statistics.
+Replacement admission waits for the previous session's leave callbacks and all three final
 saves, with a bounded wait and client-close cancellation. Cleanup removes the
 exact Player instance. Advancement snapshots and atomic JSON writes currently
 share a server-wide gate; a blocking writer retains that gate after cancellation,
@@ -42,6 +42,15 @@ respawn handlers still spawn server-owned work outside the client task tracker.
 Complete packet ordering and draining all mutations before final saves remain
 unfinished. Per-player parallel saves
 and the existing chunk-coordinator lock latency remain performance work.
+
+Statistics use Java's `players/stats/<uuid>.json`, with namespaced identifiers
+separate from runtime numeric IDs. Capture and atomic replacement share a manager
+gate, and admission waits for outstanding writes. Player NBT, advancements and
+statistics each get a final save attempt even when another family fails. Current
+DataVersion 5023 is required; unknown named statistics and JSON extensions are
+retained without sending unknown numeric IDs to clients. Nonempty or malformed
+private `Statistics` NBT from older Ferraloom builds refuses admission and saving.
+There is no automatic migration or merging of private and canonical counters.
 
 Fill-destroy commands release chunk guards before invoking gameplay callbacks.
 Deferred neighbor notifications have their own hook, separate from immediate

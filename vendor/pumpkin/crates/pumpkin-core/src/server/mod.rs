@@ -4,6 +4,7 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::NBTStorage;
+use crate::entity::player::statistics::StatisticsDataError;
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
@@ -791,13 +792,21 @@ impl Server {
 
         if let Err(error) = self.statistics_manager.load_player(&player) {
             error!(
-                "Refusing login for {}: failed to load statistics: {error}",
-                player.gameprofile.id
+                "Refusing login for {}: statistics admission failed (canonical file {}): {error}. Player NBT is players/data/{}.dat relative to the world; see docs/compatibility.md for the legacy format policy",
+                player.gameprofile.id,
+                self.statistics_manager
+                    .player_path(player.gameprofile.id)
+                    .display(),
+                player.gameprofile.id,
             );
-            player.client.try_kick(
-                DisconnectReason::Kicked,
-                &TextComponent::text("Your statistics data could not be loaded. Please contact the server administrator."),
-            );
+            let message = if matches!(error, StatisticsDataError::LegacyPrivateStatistics) {
+                "Your saved statistics use an older Ferraloom format. Please ask the server administrator about migration."
+            } else {
+                "Your statistics data could not be loaded. Please contact the server administrator."
+            };
+            player
+                .client
+                .try_kick(DisconnectReason::Kicked, &TextComponent::text(message));
             return None;
         }
 

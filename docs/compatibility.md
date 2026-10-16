@@ -54,6 +54,16 @@ currently starts after configuration; vanilla begins it before configuration.
 
 ## Inventory scope
 
+Older Ferraloom builds wrote private numeric counters in the `Statistics` tag of
+`<world>/players/data/<uuid>.dat`. This version uses the canonical
+`<world>/players/stats/<uuid>.json` and refuses a nonempty or malformed private tag,
+including when no JSON exists. No migration tool is implemented. Back up the
+entire world and retain both files; removing the tag would discard history, and
+adding the two sets of counters can double count it. To keep using those players,
+run the matching older build against a copy of its pre-upgrade world backup.
+Absent or empty private tags are accepted. A refusal prevents player publication
+and statistics saves; the server log identifies the UUID and canonical file.
+
 Each family records its expected behavior, required reference scenarios, Rust status and evidence. Families cover protocol, authentication, world generation, dimensions, data packs, storage, block simulation, redstone, entities, AI, combat, inventories, recipes, player systems, commands and administration. Concurrency, determinism and multicore performance are tracked separately because they are Ferraloom requirements rather than vanilla features.
 
 This is a family-level inventory. It does not enumerate every block state, item, entity, recipe, advancement, command branch or data-pack resource in the release. Registry and resource manifests extracted from the pinned official server must supply that lower-level coverage. Each new target registry entry needs an implementation mapping and reference scenario. Broad entries such as `blocks.new_version` explicitly track this outstanding work; their presence does not count as coverage for individual entries.

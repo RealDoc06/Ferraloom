@@ -19,7 +19,7 @@ pub enum StatisticsDataError {
     #[error("Unsupported statistics DataVersion {0}; no statistics data fixer is implemented")]
     UnsupportedVersion(i32),
     #[error(
-        "Nonempty or malformed private Statistics NBT requires explicit migration; canonical JSON and private counters are never merged"
+        "Legacy player NBT contains a nonempty or malformed Statistics tag; no migration is implemented. Preserve the player .dat and canonical statistics JSON; login and statistics saves are disabled, and their counters are never merged"
     )]
     LegacyPrivateStatistics,
     #[error("Statistics have not been successfully loaded")]
