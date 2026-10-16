@@ -4,6 +4,7 @@ use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
@@ -15,6 +16,7 @@ use crate::command::argument_types::entity_anchor::{
     EntityAnchor, EntityAnchorArgumentType, EntityAnchorExt,
 };
 use crate::command::context::command_context::CommandContext;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -206,6 +208,15 @@ impl CommandExecutor for EntitiesToPosExecutor {
 
 struct EntitiesToPosWithRotationExecutor;
 
+impl EntitiesToPosWithRotationExecutor {
+    fn rotation(context: &CommandContext) -> Result<(f32, f32), CommandSyntaxError> {
+        let rotation = RotationArgumentType::get(context, "rotation")?.rotation(&context.source);
+        // Java 26.3 sends +180 as -180. Wrap after resolving relative yaw,
+        // before teleport constructs the packet; retain the existing pitch path.
+        Ok((wrap_degrees(rotation.y), rotation.x))
+    }
+}
+
 impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = EntityArgumentType::get_entities(context, "targets")?;
@@ -215,9 +226,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             return Err(ERROR_INVALID_POSITION.create_without_context());
         }
 
-        let rot = RotationArgumentType::get(context, "rotation")?.rotation(&context.source);
-        let yaw = rot.y;
-        let pitch = rot.x;
+        let (yaw, pitch) = Self::rotation(context)?;
         let world = context.source.world();
 
         for target in &targets {
@@ -400,4 +409,65 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         );
 
     dispatcher.register_with_aliases(cmd, &["tp"]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::CommandSource;
+    use pumpkin_util::math::vector2::Vector2;
+
+    fn parsed_rotation(rotation: &str, source_rotation: Vector2<f32>) -> (f32, f32) {
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource {
+            rotation: source_rotation,
+            ..CommandSource::dummy()
+        });
+        let input = format!("tp @s 4099.5 200 3.5 {rotation}");
+        let parsed = dispatcher.parse_input(&input, &source);
+        assert!(parsed.errors.is_empty(), "{input}: {:?}", parsed.errors);
+        assert_eq!(parsed.reader.remaining_length(), 0, "{input}");
+        let context = parsed.context.build(&input);
+        assert!(context.get_last_child().command.is_some(), "{input}");
+        EntitiesToPosWithRotationExecutor::rotation(context.get_last_child()).unwrap()
+    }
+
+    #[test]
+    fn absolute_teleport_yaw_uses_java_half_open_range() {
+        // Cached 26.3 Mth.wrapDegrees(float) supplies these source expectations.
+        // The paired player-data failure directly observed only +180 -> -180.
+        let cases: [(f32, f32); 9] = [
+            (180.0, -180.0),
+            (-180.0, -180.0),
+            (540.0, -180.0),
+            (-540.0, -180.0),
+            (720.0, 0.0),
+            (-720.0, -0.0),
+            (-181.0, 179.0),
+            (181.0, -179.0),
+            (90.0, 90.0),
+        ];
+        for (requested, expected) in cases {
+            let (yaw, pitch) = parsed_rotation(&format!("{requested} -10"), Vector2::new(0.0, 0.0));
+            assert_eq!(yaw.to_bits(), expected.to_bits(), "yaw {requested}");
+            assert_eq!(pitch, -10.0);
+        }
+    }
+
+    #[test]
+    fn relative_teleport_yaw_wraps_after_resolution_without_changing_pitch() {
+        for (rotation, expected) in [
+            ("~10 ~-25", (-180.0, -10.0)),
+            ("~-350 ~0", (-180.0, 15.0)),
+            ("~-351 ~80", (179.0, 95.0)),
+            ("~-80 ~0", (90.0, 15.0)),
+        ] {
+            assert_eq!(
+                parsed_rotation(rotation, Vector2::new(15.0, 170.0)),
+                expected,
+                "{rotation}"
+            );
+        }
+    }
 }

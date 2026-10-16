@@ -132,6 +132,48 @@ class ExperienceReferenceTests(unittest.TestCase):
                     player_data.vitals_witness(server, client, reference, player_data.POSITION)
 
 
+class TeleportExpectationTests(unittest.TestCase):
+    def test_boundary_keeps_positive_command_and_requires_exact_negative_packet(self):
+        server, client = Mock(), Mock()
+        client.state.return_value = {"teleport_confirmations": 1}
+        expected = {"x": 4099.5, "y": 200.0, "z": 3.5, "yaw": -180.0, "pitch": -10.0}
+
+        def received(predicate):
+            # Synthetic predicate inputs exercise the helper, not a real client.
+            self.assertFalse(predicate({"teleport_confirmations": 1, "server_position": expected}))
+            for axis, wrong in (("yaw", 180.0), ("yaw", -540.0), ("pitch", 10.0), ("x", 4099.0)):
+                self.assertFalse(predicate({"teleport_confirmations": 2,
+                                            "server_position": {**expected, axis: wrong}}))
+            state = {"teleport_confirmations": 2, "server_position": expected}
+            self.assertTrue(predicate(state))
+            return state
+
+        client.wait_state.side_effect = received
+        result = player_data.teleport_exact(server, client, player_data.CONTINUED_TELEPORT,
+                                            expected_server_rotation=(-180.0, -10.0))
+        command = f"tp {player_data.NAME} 4099.5 200.0 3.5 180.0 -10.0"
+        server.command.assert_called_once_with(command)
+        self.assertEqual(result["command"], command)
+        self.assertEqual(result["received_position"], expected)
+        self.assertEqual(result["expected_position"], expected)
+        self.assertEqual(player_data.CONTINUED_POSITION, expected)
+
+    def test_unchanged_ninety_degree_control_uses_exact_default_expectation(self):
+        server, client = Mock(), Mock()
+        client.state.return_value = {"teleport_confirmations": 1}
+
+        def received(predicate):
+            state = {"teleport_confirmations": 2, "server_position": player_data.POSITION}
+            self.assertTrue(predicate(state))
+            self.assertFalse(predicate({**state, "server_position": {**player_data.POSITION, "yaw": 450.0}}))
+            return state
+
+        client.wait_state.side_effect = received
+        result = player_data.teleport_exact(server, client, player_data.POSITION)
+        server.command.assert_called_once_with(f"tp {player_data.NAME} 4097.5 200.0 3.5 90.0 15.0")
+        self.assertEqual(result["expected_position"], player_data.POSITION)
+
+
 class AdvancementContinuationTests(unittest.TestCase):
     def test_untouched_timestamp_and_new_criterion_are_both_required(self):
         old_time, new_time = "2026-10-16 03:00:00 +0200", "2026-10-16 03:01:00 +0200"

@@ -57,7 +57,9 @@ ADVENTURE = "minecraft:adventure/adventuring_time"
 PLAIN = "minecraft:plains"
 UNTOUCHED_CRITERION = "minecraft:snowy_taiga"
 POSITION = {"x": 4097.5, "y": 200.0, "z": 3.5, "yaw": 90.0, "pitch": 15.0}
-CONTINUED_POSITION = {**POSITION, "x": 4099.5, "yaw": 180.0, "pitch": -10.0}
+CONTINUED_TELEPORT = {**POSITION, "x": 4099.5, "yaw": 180.0, "pitch": -10.0}
+# Keep the +180 command boundary; Java 26.3 sends and saves its canonical -180 yaw.
+CONTINUED_POSITION = {**CONTINUED_TELEPORT, "yaw": -180.0}
 BARREL = {"x": 4098, "y": 200, "z": 3}
 BARREL_POS = "4098 200 3"
 REGISTRIES_SHA256 = "51f62d56f8bd0e9134ee88dd9226b64e9e56cf6a32377540d44291bf47ecdac6"
@@ -349,11 +351,18 @@ def vitals_witness(server: LoggedServer, client: Client, xp: ExperienceReference
             "query_points": command_result(server, f"experience query {NAME} points", xp.query_points)}
 
 
-def teleport_exact(server: LoggedServer, client: Client, position: dict) -> dict:
+def teleport_exact(server: LoggedServer, client: Client, position: dict, *,
+                   expected_server_rotation: tuple[float, float] | None = None) -> dict:
+    """Keep command angles independent of the exact received rotation expectation."""
+    expected_position = (position if expected_server_rotation is None else
+                         {**position, "yaw": expected_server_rotation[0], "pitch": expected_server_rotation[1]})
     before = client.state()["teleport_confirmations"]
-    output = server.command(f"tp {NAME} " + " ".join(str(position[axis]) for axis in ("x", "y", "z", "yaw", "pitch")))
-    state = client.wait_state(lambda state: state["teleport_confirmations"] > before and state.get("server_position") == position)
-    return {"output": output, "received_position": state["server_position"], "confirmations": state["teleport_confirmations"]}
+    command = f"tp {NAME} " + " ".join(str(position[axis]) for axis in ("x", "y", "z", "yaw", "pitch"))
+    output = server.command(command)
+    state = client.wait_state(lambda state: state["teleport_confirmations"] > before
+                              and state.get("server_position") == expected_position)
+    return {"command": command, "expected_position": expected_position, "output": output,
+            "received_position": state["server_position"], "confirmations": state["teleport_confirmations"]}
 
 
 def barrel_ready(server: LoggedServer, client: Client) -> dict:
@@ -656,7 +665,8 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             advancement_command(target_server, "grant", ADVENTURE, added, 1),
             advancement_command(target_server, "revoke", ADVENTURE, added, 1),
             advancement_command(target_server, "grant", ADVENTURE, added, 1)])
-        stage("destination_position", destination, lambda: teleport_exact(target_server, target_client, CONTINUED_POSITION))
+        stage("destination_position", destination, lambda: teleport_exact(target_server, target_client, CONTINUED_TELEPORT,
+              expected_server_rotation=(CONTINUED_POSITION["yaw"], CONTINUED_POSITION["pitch"])))
         stage("destination_mutated_inventory", destination, lambda: inventory_witness(target_server, target_client, 41))
         stage("destination_mutated_vitals", destination, lambda: vitals_witness(target_server, target_client, CONTINUED_XP, CONTINUED_POSITION))
         disconnect_and_stop(destination, target_client, "destination")
