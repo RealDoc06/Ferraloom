@@ -2089,6 +2089,26 @@ impl MenuFixture {
     async fn new() -> Self {
         Self(crate::command::commands::data::tests::Fixture::new().await)
     }
+
+    async fn with_registry(registry: Arc<crate::block::registry::BlockRegistry>) -> Self {
+        let mut fixture = Self::new().await;
+        let original = fixture.source.world();
+        // Reuse the stopped Full-chunk level and live server required by Player;
+        // this World only substitutes a registry that records real callbacks.
+        let world = Arc::new(World::load(
+            original.level.clone(),
+            original.level_info.clone(),
+            Dimension::OVERWORLD,
+            registry,
+            original.server.clone(),
+            original.scoreboard.clone(),
+        ));
+        fixture.0.source = CommandSource {
+            server: fixture.source.server.clone(),
+            ..CommandSource::dummy().with_world(world).with_silent()
+        };
+        fixture
+    }
 }
 
 impl std::ops::Deref for MenuFixture {
@@ -2583,4 +2603,168 @@ async fn recount_revision_rejects_open_close_aba_before_menu_scan() {
     );
     recheck_viewers(&world, &[live.as_ref()]);
     assert_viewer_effects(ChestKind::Normal, &world, live.as_ref(), 0);
+}
+
+#[tokio::test]
+async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates() {
+    use crate::block::blocks::{barrel::BarrelBlock, chests::ChestBlock};
+    use crate::block::{BlockMetadata, OnNeighborUpdateArgs, OnSyncedBlockEventArgs};
+    use pumpkin_data::BlockId;
+
+    #[derive(Default)]
+    struct Observed {
+        events: Mutex<Vec<(BlockPos, u8, u8)>>,
+        neighbors: Mutex<Vec<BlockPos>>,
+    }
+    impl Observed {
+        fn take_events(&self) -> Vec<(BlockPos, u8, u8)> {
+            std::mem::take(&mut *self.events.lock().unwrap())
+        }
+        fn take_neighbors(&self) -> Vec<BlockPos> {
+            std::mem::take(&mut *self.neighbors.lock().unwrap())
+        }
+    }
+    struct RecordEvents(Arc<Observed>);
+    impl BlockMetadata for RecordEvents {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::CHEST, BlockId::TRAPPED_CHEST, BlockId::BARREL].into()
+        }
+    }
+    impl BlockBehaviour for RecordEvents {
+        fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+            self.0
+                .events
+                .lock()
+                .unwrap()
+                .push((*args.position, args.r#type, args.data));
+            // Observe the actual queue flush, then retain the production decision
+            // about forwarding the event. The BE/listener is never substituted.
+            match args.block.id {
+                BlockId::CHEST => ChestBlock.on_synced_block_event(args),
+                BlockId::TRAPPED_CHEST => TrappedChestBlock.on_synced_block_event(args),
+                BlockId::BARREL => BarrelBlock.on_synced_block_event(args),
+                _ => unreachable!(),
+            }
+        }
+    }
+    struct RecordNeighbors(ChestKind, Arc<Observed>);
+    impl BlockMetadata for RecordNeighbors {
+        fn ids() -> Box<[BlockId]> {
+            [BlockId::COMPARATOR].into()
+        }
+    }
+    impl BlockBehaviour for RecordNeighbors {
+        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+            let live = args.world.get_block_entity(&BLOCK_POS).unwrap();
+            // Reenter the real tracker to catch callbacks under its state lock.
+            let _count = self.0.viewers(live.as_ref());
+            self.1.neighbors.lock().unwrap().push(*args.position);
+        }
+    }
+
+    for kind in CONTAINERS {
+        let observed = Arc::new(Observed::default());
+        let mut registry = default_registry();
+        Arc::get_mut(&mut registry)
+            .unwrap()
+            .register(RecordEvents(observed.clone()));
+        Arc::get_mut(&mut registry)
+            .unwrap()
+            .register(RecordNeighbors(kind, observed.clone()));
+        let fixture = MenuFixture::with_registry(registry).await;
+        let world = fixture.source.world();
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        for position in [OTHER_POS, OTHER_POS.down()] {
+            fixture.set_state(position, Block::COMPARATOR.default_state.id);
+        }
+        let expected_events = |count| {
+            if matches!(kind, ChestKind::Barrel) {
+                Vec::new()
+            } else {
+                vec![(BLOCK_POS, 1, count)]
+            }
+        };
+        let player = registered_menu_player(&world, GameMode::Survival).await;
+        let factory = kind.factory(&world, &BLOCK_POS);
+        open_menu(&player, factory.as_ref(), BLOCK_POS);
+        live.tick(&world);
+        world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(1));
+        assert_eq!(kind.viewers(live.as_ref()), 1);
+        let neighbors = observed.take_neighbors();
+        if matches!(kind, ChestKind::Trapped) {
+            assert_eq!(neighbors, [OTHER_POS, OTHER_POS.down()]);
+        }
+        if matches!(kind, ChestKind::Barrel) {
+            assert!(BarrelLikeProperties::from_state_id(world.get_block_state_id(&BLOCK_POS)).open);
+        }
+
+        // No repeat on ticks 2–4. Exactly one on tick 5, then on each accepted
+        // five-tick recheck. Neither unchanged recount updates neighbors.
+        for _ in 0..3 {
+            live.tick(&world);
+            world.flush_synced_block_events();
+            assert!(observed.take_events().is_empty());
+        }
+        live.tick(&world);
+        world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(1));
+        assert!(observed.take_neighbors().is_empty());
+        recheck_viewers(&world, &[live.as_ref()]);
+        world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(1));
+        assert!(observed.take_neighbors().is_empty());
+
+        let publication = player.menu_publication.begin();
+        recheck_viewers(&world, &[live.as_ref()]);
+        world.flush_synced_block_events();
+        assert!(
+            observed.take_events().is_empty(),
+            "deferred scan is not a recount"
+        );
+        assert!(observed.take_neighbors().is_empty());
+        drop(publication);
+        if let Some(chest) = live.as_any().downcast_ref::<ChestBlockEntity>() {
+            let another = registered_menu_player(&world, GameMode::Survival).await;
+            let another_factory = kind.factory(&world, &BLOCK_POS);
+            chest.viewers.before_recount(move || {
+                open_menu(&another, another_factory.as_ref(), BLOCK_POS);
+                another.on_handled_screen_closed();
+            });
+            recheck_viewers(&world, &[live.as_ref()]);
+            world.flush_synced_block_events();
+            assert!(
+                observed.take_events().is_empty(),
+                "stale revision is not accepted"
+            );
+            assert!(observed.take_neighbors().is_empty());
+        }
+        recheck_viewers(&world, &[live.as_ref()]);
+        world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(1));
+        assert!(observed.take_neighbors().is_empty());
+
+        player.on_handled_screen_closed();
+        live.tick(&world);
+        world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(0));
+        assert_eq!(kind.viewers(live.as_ref()), 0);
+        let neighbors = observed.take_neighbors();
+        if matches!(kind, ChestKind::Trapped) {
+            assert_eq!(neighbors, [OTHER_POS, OTHER_POS.down()]);
+        }
+        if matches!(kind, ChestKind::Barrel) {
+            assert!(
+                !BarrelLikeProperties::from_state_id(world.get_block_state_id(&BLOCK_POS)).open
+            );
+        }
+        recheck_viewers(&world, &[live.as_ref()]);
+        world.flush_synced_block_events();
+        assert!(
+            observed.take_events().is_empty(),
+            "inactive counters do not resend"
+        );
+        assert!(observed.take_neighbors().is_empty());
+    }
 }

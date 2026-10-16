@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_inventory::{
     Inventory, generic_container_screen_handler::GenericContainerScreenHandler,
-    screen_handler::InventoryPlayer,
 };
 use pumpkin_util::math::position::BlockPos;
 
@@ -120,14 +119,13 @@ impl ContainerViewerCount {
                 None
             } else {
                 state.ticks_until_recheck = state.ticks_until_recheck.saturating_sub(1);
-                if state.ticks_until_recheck == 0 {
+                (state.ticks_until_recheck == 0).then(|| {
                     state.ticks_until_recheck = 5;
-                    Some(state.revision.clone())
-                } else {
-                    None
-                }
+                    state.revision.clone()
+                })
             }
         };
+        let mut recounted = false;
         if let Some(revision) = revision {
             #[cfg(test)]
             {
@@ -146,6 +144,7 @@ impl ContainerViewerCount {
             {
                 state.current = count;
                 state.revision = Arc::new(());
+                recounted = true;
             }
         }
         let (old, current) = {
@@ -164,6 +163,11 @@ impl ContainerViewerCount {
                 (_, 0) => entity.on_container_close(world, position),
                 _ => {}
             }
+        }
+        // Java recheckOpeners notifies even when its accepted count is unchanged.
+        // Chest listeners resend the lid event; trapped neighbor updates remain
+        // gated by old != current, and the barrel count listener is empty.
+        if recounted || old != current {
             entity.on_viewer_count_update(world, position, old, current);
         }
     }
