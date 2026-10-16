@@ -1668,11 +1668,15 @@ mod tests {
 
         let fixture = CommandFixture::new().await;
         let entity = fixture.player.get_entity();
+        // Decimal coordinates keep facing targets on these exact test axes.
         for (modifier, expected_x) in [
             ("rotated 0 0 at @s", 1.0),
             ("rotated 0 0 rotated as @s", 1.0),
-            ("rotated 0 0 facing 5 64 0", 1.0),
-            ("positioned -5 64 0 rotated 0 0 facing entity @s feet", -4.0),
+            ("rotated 0 0 facing 5.0 64.0 0.0", 1.0),
+            (
+                "positioned -5.0 64.0 0.0 rotated 0 0 facing entity @s feet",
+                -4.0,
+            ),
         ] {
             entity.set_pos(Vector3::new(0.0, 64.0, 0.0));
             entity.set_rotation(-90.0, 0.0);

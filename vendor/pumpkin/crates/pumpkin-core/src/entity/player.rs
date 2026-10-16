@@ -8153,6 +8153,12 @@ mod tests {
         let mut reloaded = NbtCompound::new();
         fixture.player.write_custom_nbt(&mut reloaded);
         assert_eq!(reloaded.get_int("XpSeed"), Some(-123_456_789));
+        // Loading player NBT invalidates statistics until canonical JSON is loaded.
+        fixture
+            .server
+            .statistics_manager
+            .load_player(&fixture.player)
+            .unwrap();
         close_fixture(&fixture).await;
     }
 

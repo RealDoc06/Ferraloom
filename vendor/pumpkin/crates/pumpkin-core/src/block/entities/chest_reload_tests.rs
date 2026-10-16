@@ -3009,11 +3009,13 @@ async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing
         };
         assert_eq!(observed.take_events(), expected);
         let neighbors = observed.take_neighbors();
-        if matches!(kind, ChestKind::Trapped) {
-            assert_eq!(neighbors, [OTHER_POS, OTHER_POS.down()].repeat(3));
-        } else {
-            assert!(neighbors.is_empty());
-        }
+        let expected_neighbors = match kind {
+            ChestKind::Trapped => [OTHER_POS, OTHER_POS.down()].repeat(3),
+            // Each state change notifies adjacent blocks and analog-output observers.
+            ChestKind::Barrel => vec![OTHER_POS; 6],
+            ChestKind::Normal => Vec::new(),
+        };
+        assert_eq!(neighbors, expected_neighbors);
 
         for _ in 0..2 {
             live.tick(world);
