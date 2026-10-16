@@ -1,14 +1,17 @@
 use rustc_hash::FxHashMap;
-use std::io::{Cursor, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::info;
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+use pumpkin_nbt::{NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
+
+use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION as DATA_VERSION;
 
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -22,8 +25,31 @@ const HEADER_SIZE: usize = SECTOR_SIZE * 2; // Location table + timestamp table
 /// Compression type for MCA format
 const COMPRESSION_ZLIB: u8 = 2;
 
-// Data version for 1.21
-const DATA_VERSION: i32 = 3955;
+// The previous private writer stamped 3955 on records with separate x/y/z Ints.
+// This is a bounded repair of that format, not support for vanilla 1.21 or DFU.
+const LEGACY_XYZ_DATA_VERSION: i32 = 3955;
+
+fn invalid_data(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+fn region_coords_from_path(path: &Path) -> io::Result<(i32, i32)> {
+    let parts: Vec<_> = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .split('.')
+        .collect();
+    if let ["r", x, z, "mca"] = parts.as_slice()
+        && let (Ok(x), Ok(z)) = (x.parse(), z.parse())
+    {
+        return Ok((x, z));
+    }
+    Err(invalid_data(format!(
+        "Invalid POI region path: {}",
+        path.display()
+    )))
+}
 
 /// A single Point of Interest entry (serializable)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +63,45 @@ pub struct PoiEntry {
 }
 
 impl PoiEntry {
+    /// Accept the current typed position or the exact previous private layout.
+    /// Never fall back from a malformed `pos`, combine layouts, or invent axes.
+    fn from_nbt(record: &NbtCompound, data_version: i32) -> io::Result<Self> {
+        let has_xyz = ["x", "y", "z"]
+            .iter()
+            .any(|axis| record.get(axis).is_some());
+        let [x, y, z] = match (data_version, record.get("pos"), has_xyz) {
+            (DATA_VERSION, Some(NbtTag::IntArray(pos)), false) => pos
+                .as_slice()
+                .try_into()
+                .map_err(|_| invalid_data("POI pos must contain exactly three Ints"))?,
+            (LEGACY_XYZ_DATA_VERSION, None, true) => {
+                let axis = |name| {
+                    record
+                        .get_int(name)
+                        .ok_or_else(|| invalid_data(format!("Legacy POI requires an Int {name}")))
+                };
+                [axis("x")?, axis("y")?, axis("z")?]
+            }
+            _ => return Err(invalid_data("Unsupported or malformed POI position layout")),
+        };
+        let poi_type = record
+            .get_string("type")
+            .ok_or_else(|| invalid_data("POI requires a String type"))?
+            .to_owned();
+        let free_tickets = match record.get("free_tickets") {
+            None => 0,
+            Some(NbtTag::Int(value)) => *value,
+            Some(_) => return Err(invalid_data("POI free_tickets must be an Int")),
+        };
+        Ok(Self {
+            x,
+            y,
+            z,
+            poi_type,
+            free_tickets,
+        })
+    }
+
     #[must_use]
     pub fn new_portal(pos: BlockPos) -> Self {
         Self {
@@ -54,7 +119,7 @@ impl PoiEntry {
     }
 }
 
-/// POI section data (serializable) - vanilla format
+/// Runtime section data; the MCA codec supplies the vanilla record layout.
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct PoiSectionData {
@@ -64,7 +129,7 @@ pub struct PoiSectionData {
     pub records: Vec<PoiEntry>,
 }
 
-/// POI chunk data (serializable) - vanilla format
+/// Runtime chunk data; persistence uses the explicit typed NBT codec below.
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct PoiChunkData {
@@ -78,6 +143,9 @@ pub struct PoiChunkData {
 pub struct PoiRegion {
     /// Entries indexed by position
     entries: FxHashMap<(i32, i32, i32), PoiEntry>,
+    /// Preserve loaded validity and empty sections when rewriting the region.
+    /// Keys are absolute chunk x/z and section y coordinates.
+    section_validity: FxHashMap<(i32, i32, i32), i8>,
     /// Track which chunks are dirty
     dirty_chunks: rustc_hash::FxHashSet<(i32, i32)>,
     dirty: bool,
@@ -110,6 +178,9 @@ impl PoiRegion {
         let chunk_x = entry.x >> 4;
         let chunk_z = entry.z >> 4;
         self.dirty_chunks.insert((chunk_x, chunk_z));
+        self.section_validity
+            .entry((chunk_x, chunk_z, entry.y >> 4))
+            .or_insert(1);
         let key = (entry.x, entry.y, entry.z);
         self.entries.insert(key, entry);
         self.dirty = true;
@@ -145,6 +216,17 @@ impl PoiRegion {
     /// Group entries by chunk, then create chunk NBT data
     fn get_chunk_data(&self, chunk_x: i32, chunk_z: i32) -> Option<PoiChunkData> {
         let mut sections: FxHashMap<String, PoiSectionData> = FxHashMap::default();
+        for (&(x, z, y), &valid) in &self.section_validity {
+            if (x, z) == (chunk_x, chunk_z) {
+                sections.insert(
+                    y.to_string(),
+                    PoiSectionData {
+                        valid,
+                        records: Vec::new(),
+                    },
+                );
+            }
+        }
 
         for entry in self.entries.values() {
             let entry_chunk_x = entry.x >> 4;
@@ -186,9 +268,7 @@ impl PoiRegion {
             let mut rec_list = Vec::new();
             for rec in &sec_data.records {
                 let mut rec_comp = pumpkin_nbt::compound::NbtCompound::new();
-                rec_comp.put_int("x", rec.x);
-                rec_comp.put_int("y", rec.y);
-                rec_comp.put_int("z", rec.z);
+                rec_comp.put("pos", NbtTag::IntArray(vec![rec.x, rec.y, rec.z]));
                 rec_comp.put_string("type", rec.poi_type.clone());
                 rec_comp.put_int("free_tickets", rec.free_tickets);
                 rec_list.push(pumpkin_nbt::tag::NbtTag::Compound(rec_comp));
@@ -218,34 +298,53 @@ impl PoiRegion {
         let nbt = pumpkin_nbt::Nbt::read(&mut reader)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
-        let data_version = nbt.get_int("DataVersion").unwrap_or(DATA_VERSION);
+        if cursor.position() != cursor.get_ref().len() as u64 {
+            return Err(invalid_data("Trailing POI NBT data"));
+        }
+        let data_version = nbt
+            .get_int("DataVersion")
+            .ok_or_else(|| invalid_data("POI requires an Int DataVersion"))?;
+        if !matches!(data_version, DATA_VERSION | LEGACY_XYZ_DATA_VERSION) {
+            return Err(invalid_data(format!(
+                "Unsupported POI DataVersion {data_version}; no DFU is applied"
+            )));
+        }
         let mut sections = FxHashMap::default();
-
-        if let Some(sec_tag) = nbt.get_compound("Sections") {
-            for (sec_key, tag) in &sec_tag.child_tags {
-                if let pumpkin_nbt::tag::NbtTag::Compound(sec_comp) = tag {
-                    let valid = sec_comp.get_byte("Valid").unwrap_or(1);
-                    let mut records = Vec::new();
-                    if let Some(pumpkin_nbt::tag::NbtTag::List(rec_list)) = sec_comp.get("Records")
-                    {
-                        for rec_t in rec_list {
-                            if let pumpkin_nbt::tag::NbtTag::Compound(rc) = rec_t {
-                                records.push(PoiEntry {
-                                    x: rc.get_int("x").unwrap_or(0),
-                                    y: rc.get_int("y").unwrap_or(0),
-                                    z: rc.get_int("z").unwrap_or(0),
-                                    poi_type: rc
-                                        .get_string("type")
-                                        .unwrap_or(POI_TYPE_NETHER_PORTAL)
-                                        .to_string(),
-                                    free_tickets: rc.get_int("free_tickets").unwrap_or(0),
-                                });
-                            }
-                        }
-                    }
-                    sections.insert(sec_key.to_string(), PoiSectionData { valid, records });
-                }
+        let sec_tag = nbt
+            .get_compound("Sections")
+            .ok_or_else(|| invalid_data("POI requires a Sections compound"))?;
+        for (sec_key, tag) in &sec_tag.child_tags {
+            let section_y = sec_key
+                .parse::<i32>()
+                .map_err(|_| invalid_data("Invalid POI section coordinate"))?;
+            if section_y.to_string() != sec_key.as_ref() {
+                return Err(invalid_data("Noncanonical POI section coordinate"));
             }
+            let NbtTag::Compound(sec_comp) = tag else {
+                return Err(invalid_data("POI section must be a compound"));
+            };
+            // The official codec defaults absent Valid to false. Reject malformed
+            // tags rather than claiming equivalence to its lenient decoding.
+            let valid = match sec_comp.get("Valid") {
+                None => 0,
+                Some(NbtTag::Byte(value @ (0 | 1))) => *value,
+                Some(_) => return Err(invalid_data("POI Valid must be a boolean Byte")),
+            };
+            let rec_list = sec_comp
+                .get_list("Records")
+                .ok_or_else(|| invalid_data("POI requires a Records list"))?;
+            let mut records = Vec::with_capacity(rec_list.len());
+            for tag in rec_list {
+                let NbtTag::Compound(record) = tag else {
+                    return Err(invalid_data("POI record must be a compound"));
+                };
+                let entry = PoiEntry::from_nbt(record, data_version)?;
+                if entry.y >> 4 != section_y {
+                    return Err(invalid_data("POI position does not belong to its section"));
+                }
+                records.push(entry);
+            }
+            sections.insert(sec_key.to_string(), PoiSectionData { valid, records });
         }
 
         Ok(PoiChunkData {
@@ -259,7 +358,7 @@ impl PoiRegion {
             return Ok(());
         }
 
-        if self.entries.is_empty() {
+        if self.entries.is_empty() && self.section_validity.is_empty() {
             // Don't save empty regions, delete the file if it exists
             if path.exists() {
                 std::fs::remove_file(path)?;
@@ -272,14 +371,23 @@ impl PoiRegion {
         // Build all chunk data
         let mut chunk_data_map: FxHashMap<usize, Vec<u8>> = FxHashMap::default();
 
-        // Collect all unique chunks that have entries
+        let region_coords = region_coords_from_path(path)?;
+        // Include empty loaded sections, which still carry validity information.
         let mut chunks_with_data: rustc_hash::FxHashSet<(i32, i32)> =
             rustc_hash::FxHashSet::default();
+        for &(x, z, _) in self.section_validity.keys() {
+            chunks_with_data.insert((x, z));
+        }
         for entry in self.entries.values() {
             chunks_with_data.insert((entry.x >> 4, entry.z >> 4));
         }
 
         for (chunk_x, chunk_z) in &chunks_with_data {
+            if (*chunk_x >> 5, *chunk_z >> 5) != region_coords {
+                return Err(invalid_data(
+                    "POI position is outside the destination region",
+                ));
+            }
             if let Some(chunk_data) = self.get_chunk_data(*chunk_x, *chunk_z) {
                 let compressed = Self::compress_chunk_data(&chunk_data)?;
                 let index = Self::chunk_index(*chunk_x, *chunk_z);
@@ -304,6 +412,11 @@ impl PoiRegion {
                 // Calculate sector count needed
                 let data_len = compressed.len() + 5; // 4 bytes length + 1 byte compression + data
                 let sector_count = data_len.div_ceil(SECTOR_SIZE) as u32;
+                if sector_count > u32::from(u8::MAX) {
+                    return Err(invalid_data(
+                        "POI chunk exceeds the inline MCA sector limit",
+                    ));
+                }
 
                 // Build padded sector data
                 let mut padded = Vec::with_capacity(sector_count as usize * SECTOR_SIZE);
@@ -346,16 +459,18 @@ impl PoiRegion {
     }
 
     pub fn load(path: &Path) -> std::io::Result<Self> {
-        if !path.exists() {
-            return Ok(Self::new());
-        }
-
-        let file_data = std::fs::read(path)?;
+        let file_data = match std::fs::read(path) {
+            Ok(data) => data,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::new()),
+            Err(error) => return Err(error),
+        };
         if file_data.len() < HEADER_SIZE {
-            return Ok(Self::new());
+            return Err(invalid_data("Truncated POI region header"));
         }
 
+        let region_coords = region_coords_from_path(path)?;
         let mut region = Self::new();
+        let mut occupied_sectors = rustc_hash::FxHashSet::default();
 
         // Parse location table
         for index in 0..CHUNK_COUNT {
@@ -370,23 +485,31 @@ impl PoiRegion {
             let sector_offset = (location >> 8) as usize;
             let sector_count = (location & 0xFF) as usize;
 
-            if sector_offset == 0 || sector_count == 0 {
+            if location == 0 {
                 continue;
+            }
+            if sector_offset < 2 || sector_count == 0 {
+                return Err(invalid_data(format!(
+                    "Invalid POI allocation at chunk {index}"
+                )));
             }
 
             let byte_offset = sector_offset * SECTOR_SIZE;
             let byte_end = byte_offset + sector_count * SECTOR_SIZE;
 
             if byte_end > file_data.len() {
-                continue;
+                return Err(invalid_data(format!(
+                    "Truncated POI allocation at chunk {index}"
+                )));
+            }
+            for sector in sector_offset..sector_offset + sector_count {
+                if !occupied_sectors.insert(sector) {
+                    return Err(invalid_data("Overlapping POI chunk allocations"));
+                }
             }
 
             // Read chunk data
             let chunk_bytes = &file_data[byte_offset..byte_end];
-            if chunk_bytes.len() < 5 {
-                continue;
-            }
-
             let length = u32::from_be_bytes([
                 chunk_bytes[0],
                 chunk_bytes[1],
@@ -395,28 +518,52 @@ impl PoiRegion {
             ]) as usize;
             let compression = chunk_bytes[4];
 
-            if compression != COMPRESSION_ZLIB || length < 1 || length > chunk_bytes.len() - 4 {
-                continue;
+            if compression != COMPRESSION_ZLIB {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!("Unsupported POI compression {compression} at chunk {index}"),
+                ));
+            }
+            if length <= 1 || length > chunk_bytes.len() - 4 {
+                return Err(invalid_data(format!("Invalid POI length at chunk {index}")));
             }
 
             let compressed = &chunk_bytes[5..5 + length - 1];
 
-            match Self::decompress_chunk_data(compressed) {
-                Ok(chunk_data) => {
-                    for (_section_key, section) in chunk_data.sections {
-                        for entry in section.records {
-                            let key = (entry.x, entry.y, entry.z);
-                            region.entries.insert(key, entry);
-                        }
+            let chunk_data = Self::decompress_chunk_data(compressed)
+                .map_err(|error| invalid_data(format!("Invalid POI chunk {index}: {error}")))?;
+            // Re-encode the recognized private layout on the next successful save.
+            region.dirty |= chunk_data.data_version == LEGACY_XYZ_DATA_VERSION;
+            let chunk_x = i64::from(region_coords.0) * 32 + (index % REGION_SIZE) as i64;
+            let chunk_z = i64::from(region_coords.1) * 32 + (index / REGION_SIZE) as i64;
+            let (chunk_x, chunk_z) = (
+                i32::try_from(chunk_x).map_err(|_| invalid_data("POI chunk x overflow"))?,
+                i32::try_from(chunk_z).map_err(|_| invalid_data("POI chunk z overflow"))?,
+            );
+            if chunk_data.data_version == LEGACY_XYZ_DATA_VERSION {
+                region.dirty_chunks.insert((chunk_x, chunk_z));
+            }
+            for (section_key, section) in chunk_data.sections {
+                let section_y = section_key
+                    .parse::<i32>()
+                    .map_err(|_| invalid_data("Invalid POI section coordinate"))?;
+                region
+                    .section_validity
+                    .insert((chunk_x, chunk_z, section_y), section.valid);
+                for entry in section.records {
+                    if (entry.x >> 4, entry.z >> 4) != (chunk_x, chunk_z) {
+                        return Err(invalid_data(
+                            "POI position does not belong to its MCA chunk",
+                        ));
                     }
-                }
-                Err(e) => {
-                    warn!("Failed to parse POI chunk at index {index}: {e}");
+                    let key = (entry.x, entry.y, entry.z);
+                    if region.entries.insert(key, entry).is_some() {
+                        return Err(invalid_data("Duplicate POI position"));
+                    }
                 }
             }
         }
 
-        region.dirty = false;
         Ok(region)
     }
 }
@@ -427,6 +574,9 @@ pub struct PoiStorage {
     folder: PathBuf,
     /// Loaded regions, keyed by (`region_x`, `region_z`)
     regions: FxHashMap<(i32, i32), PoiRegion>,
+    /// Failed regions stay unavailable until storage is reopened. Never retry
+    /// them as empty after a caught panic or a recovered poisoned mutex.
+    load_errors: FxHashMap<(i32, i32), io::Error>,
 }
 
 impl PoiStorage {
@@ -435,6 +585,7 @@ impl PoiStorage {
         Self {
             folder: poi_folder,
             regions: FxHashMap::default(),
+            load_errors: FxHashMap::default(),
         }
     }
 
@@ -448,14 +599,24 @@ impl PoiStorage {
         self.folder.join(format!("r.{rx}.{rz}.mca"))
     }
 
+    #[allow(
+        clippy::panic,
+        reason = "The existing infallible API must not replace unreadable POIs with an empty writable region"
+    )]
     fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
+        if let Some(error) = self.load_errors.get(&(rx, rz)) {
+            panic!("{error}");
+        }
         let path = self.region_path(rx, rz);
+        let load_errors = &mut self.load_errors;
         self.regions.entry((rx, rz)).or_insert_with(|| {
             PoiRegion::load(&path).unwrap_or_else(|e| {
-                if path.exists() {
-                    warn!("Failed to load POI region {}: {}", path.display(), e);
-                }
-                PoiRegion::new()
+                let message = format!(
+                    "Refusing to replace unreadable POI region {}: {e}",
+                    path.display()
+                );
+                load_errors.insert((rx, rz), io::Error::new(e.kind(), message.clone()));
+                panic!("{message}");
             })
         })
     }
@@ -589,6 +750,11 @@ impl PoiStorage {
         if saved > 0 {
             info!("Saved {saved} POI region(s)");
         }
+        // Healthy loaded regions can persist, but the overall save must still
+        // report a failed lazy load. No failed region was inserted into the map.
+        if let Some(error) = self.load_errors.values().next() {
+            return Err(io::Error::new(error.kind(), error.to_string()));
+        }
         Ok(())
     }
 
@@ -604,6 +770,9 @@ impl PoiStorage {
         self.regions.values().map(|r| r.get_all().len()).sum()
     }
 }
+
+#[cfg(test)]
+mod persistence_tests;
 
 #[cfg(test)]
 mod tests {
