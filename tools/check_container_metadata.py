@@ -538,12 +538,15 @@ def paired_main(label: str, cases: dict[str, str], runner: Callable, scope: str,
         official = oracle.acquire()
         report["official"] = {"path": str(official), "sha1": digest(official, "sha1"), "sha256": digest(official),
                               "inner_sha256": digest(oracle.CACHE / "minecraft.jar")}
+        report["server_sha1"] = report["official"]["sha1"]
+        report["server_sha256"] = report["official"]["sha256"]
         require(report["official"]["inner_sha256"] == PRIMARY["inner_jar_sha256"], "Cached inner jar differs from the bytecode used to derive these fixtures")
         original = args.rust_binary.resolve()
         binary_digest = digest(original)
         args.rust_binary = suite.pin_binary(original, run)
         report["rust_binary"] = {"source": str(original), "pinned": str(args.rust_binary), "sha256": digest(args.rust_binary)}
         require(binary_digest == digest(args.rust_binary) == digest(original), "Rust binary changed while pinning")
+        report["rust_binary_sha256"] = binary_digest
         args.java = str(Path(shutil.which(args.java) or args.java).resolve())
         version = subprocess.run([args.java, "-version"], capture_output=True, text=True, timeout=15, check=True)
         report["java"] = {"path": args.java, "sha256": digest(Path(args.java)), "version": version.stdout + version.stderr}
