@@ -2257,6 +2257,32 @@ impl World {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
     }
 
+    /// Builtin instruments follow their performer and exclude its local sound.
+    pub(crate) fn play_instrument_sound(
+        &self,
+        performer: &Player,
+        instrument: pumpkin_data::instrument::Instrument,
+    ) {
+        let packet = pumpkin_protocol::java::client::play::CEntitySoundEffect::new(
+            IdOr::Id(instrument.sound() as u16),
+            SoundCategory::Records,
+            performer.entity_id().into(),
+            instrument.range() / 16.0,
+            1.0,
+            rng().random::<i64>(),
+        );
+        let position = performer.position();
+        let range_squared = f64::from(instrument.range()).powi(2);
+        let players = self.players.load();
+        let recipients = players.iter().filter(|candidate| {
+            !std::ptr::eq(candidate.as_ref(), performer)
+                && candidate.world().dimension.minecraft_name == self.dimension.minecraft_name
+                && candidate.position().squared_distance_to_vec(&position) < range_squared
+        });
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(&packet, recipients_by_version);
+    }
+
     /// Plays a custom sound event by identifier for all players in range.
     pub fn play_custom_sound(
         &self,

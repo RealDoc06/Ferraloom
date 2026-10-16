@@ -1,8 +1,9 @@
 //! Source-authored protocol-777 contracts. These do not claim paired Java proof.
 use super::*;
 use crate::{
-    data::player_server::test::{close_fixture, player_fixture, stop_chunk_workers},
+    data::player_server::test::{close_fixture, java_client, player_fixture, stop_chunk_workers},
     entity::EntityBase,
+    net::{GameProfile, PlayerConfig},
     plugin::{
         EventHandler,
         api::events::{
@@ -15,7 +16,9 @@ use crate::{
         },
     },
     server::Server,
+    world::World,
 };
+use arc_swap::ArcSwap;
 use futures::future::BoxFuture;
 use pumpkin_data::{
     Block,
@@ -27,13 +30,13 @@ use pumpkin_data::{
     },
     item_stack::ItemStack,
     packet::CURRENT_MC_VERSION,
-    sound::Sound,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     RawPacket, VarInt,
     java::{
-        client::play::{CItemCooldown, CKeepAlive, CSoundEffect},
+        client::play::{CEntitySoundEffect, CItemCooldown, CKeepAlive, CSoundEffect},
         packet_decoder::TCPNetworkDecoder,
         server::play::{SUseItem, SUseItemOn},
     },
@@ -53,6 +56,65 @@ use std::{
     time::Duration,
 };
 use tokio::io::AsyncRead;
+use tokio::net::TcpStream;
+use uuid::Uuid;
+
+struct SoundObserver {
+    player: Arc<Player>,
+    reader: TCPNetworkDecoder<TcpStream>,
+}
+
+impl SoundObserver {
+    async fn new(server: &Arc<Server>, world: &Arc<World>) -> Self {
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "HornObserver".into(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let (client, remote) = java_client(server, &profile).await;
+        client.java().unwrap().version.store(CURRENT_MC_VERSION);
+        let player = Arc::new(Player::new(
+            client,
+            profile,
+            PlayerConfig::default(),
+            world,
+            GameMode::Survival,
+        ));
+        player.get_entity().set_pos(Vector3::new(8.5, 65.0, 0.5));
+        player.set_client_loaded(true);
+        world.add_player(&player).unwrap();
+        Self {
+            player,
+            reader: TCPNetworkDecoder::new(remote),
+        }
+    }
+
+    async fn close(self) {
+        let client = self.player.client.clone();
+        drop(self);
+        tokio::time::timeout(Duration::from_secs(5), client.java().unwrap().await_tasks())
+            .await
+            .unwrap();
+    }
+}
+
+impl Drop for SoundObserver {
+    fn drop(&mut self) {
+        let world = self.player.world();
+        world.players.rcu(|players| {
+            players
+                .iter()
+                .filter(|player| !Arc::ptr_eq(player, &self.player))
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+        world
+            .entity_tracker
+            .remove_entity(self.player.as_ref(), &world);
+        self.player.client.java().unwrap().close();
+    }
+}
 
 #[derive(Default)]
 struct UseEvents {
@@ -134,10 +196,16 @@ async fn observe<R: AsyncRead + Unpin>(
     .unwrap()
 }
 
-fn assert_effect_packets(packets: &[RawPacket], sound: Sound, group: &str) {
+fn assert_entity_sound_packets(packets: &[RawPacket], sound: Sound, source_entity_id: i32) {
+    assert_eq!(CEntitySoundEffect::to_id(CURRENT_MC_VERSION), 118);
+    assert_eq!(CSoundEffect::to_id(CURRENT_MC_VERSION), 119);
+    assert!(packets.iter().all(|packet| {
+        packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
+            && packet.id != CItemCooldown::to_id(CURRENT_MC_VERSION)
+    }));
     let sounds: Vec<_> = packets
         .iter()
-        .filter(|packet| packet.id == CSoundEffect::to_id(CURRENT_MC_VERSION))
+        .filter(|packet| packet.id == CEntitySoundEffect::to_id(CURRENT_MC_VERSION))
         .collect();
     assert_eq!(sounds.len(), 1);
     let mut sound_packet = &sounds[0].payload[..];
@@ -146,18 +214,18 @@ fn assert_effect_packets(packets: &[RawPacket], sound: Sound, group: &str) {
         sound_packet.get_var_int().unwrap().0,
         SoundCategory::Records as i32
     );
-    assert_eq!(
-        [
-            sound_packet.get_i32_be().unwrap(),
-            sound_packet.get_i32_be().unwrap(),
-            sound_packet.get_i32_be().unwrap()
-        ],
-        [4, 520, 4]
-    );
+    assert_eq!(sound_packet.get_var_int().unwrap().0, source_entity_id);
     assert_eq!(sound_packet.get_f32_be().unwrap(), 16.0);
     assert_eq!(sound_packet.get_f32_be().unwrap(), 1.0);
     sound_packet.get_i64_be().unwrap();
     assert!(sound_packet.is_empty());
+}
+
+fn assert_cooldown_packets(packets: &[RawPacket], group: &str) {
+    assert!(packets.iter().all(|packet| {
+        packet.id != CEntitySoundEffect::to_id(CURRENT_MC_VERSION)
+            && packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
+    }));
     let cooldowns: Vec<_> = packets
         .iter()
         .filter(|packet| packet.id == CItemCooldown::to_id(CURRENT_MC_VERSION))
@@ -169,11 +237,22 @@ fn assert_effect_packets(packets: &[RawPacket], sound: Sound, group: &str) {
     assert!(cooldown.is_empty());
 }
 
+fn assert_effect_packets(
+    performer_packets: &[RawPacket],
+    observer_packets: &[RawPacket],
+    source_entity_id: i32,
+    sound: Sound,
+    group: &str,
+) {
+    assert_cooldown_packets(performer_packets, group);
+    assert_entity_sound_packets(observer_packets, sound, source_entity_id);
+}
+
 fn assert_no_effect_packets(packets: &[RawPacket]) {
-    assert!(packets.iter().all(
-        |packet| packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
-            && packet.id != CItemCooldown::to_id(CURRENT_MC_VERSION)
-    ));
+    assert!(packets.iter().all(|packet| packet.id
+        != CEntitySoundEffect::to_id(CURRENT_MC_VERSION)
+        && packet.id != CSoundEffect::to_id(CURRENT_MC_VERSION)
+        && packet.id != CItemCooldown::to_id(CURRENT_MC_VERSION)));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -210,7 +289,9 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
     let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
     let (remote, _write) = fixture._remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
+    let mut observer = SoundObserver::new(&server, &player.world()).await;
     observe(&mut reader, &player).await;
+    observe(&mut observer.reader, &observer.player).await;
 
     // Expected sound assignments come from Instruments.bootstrap, not sound().
     for (instrument, sound) in [
@@ -277,6 +358,8 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             );
             assert_effect_packets(
                 &observe(&mut reader, &player).await,
+                &observe(&mut observer.reader, &observer.player).await,
+                player.entity_id(),
                 sound,
                 "minecraft:goat_horn",
             );
@@ -288,6 +371,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
                 event_count + 1
             );
             assert_no_effect_packets(&observe(&mut reader, &player).await);
+            assert_no_effect_packets(&observe(&mut observer.reader, &observer.player).await);
         }
     }
     let mut stack = ItemStack::new(1, &Item::GOAT_HORN);
@@ -301,6 +385,8 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
     use_packet(&player, &server, Hand::Left);
     assert_effect_packets(
         &observe(&mut reader, &player).await,
+        &observe(&mut observer.reader, &observer.player).await,
+        player.entity_id(),
         Sound::ItemGoatHornSound1,
         "test:horns",
     );
@@ -313,6 +399,8 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
     assert_eq!(used(), before_reuse + 1);
     assert_effect_packets(
         &observe(&mut reader, &player).await,
+        &observe(&mut observer.reader, &observer.player).await,
+        player.entity_id(),
         Sound::ItemGoatHornSound1,
         "test:horns",
     );
@@ -344,6 +432,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             .cancel_interact
             .store(failure == "interact_cancelled", Ordering::Relaxed);
         observe(&mut reader, &player).await;
+        observe(&mut observer.reader, &observer.player).await;
         let before = used();
         let event_count = events.instrument_events.load(Ordering::Relaxed);
         use_packet(&player, &server, Hand::Left);
@@ -365,6 +454,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
                 .are_items_and_components_equal(&candidate)
         );
         assert_no_effect_packets(&observe(&mut reader, &player).await);
+        assert_no_effect_packets(&observe(&mut observer.reader, &observer.player).await);
     }
     player.gamemode.store(GameMode::Survival);
     events.cancel_consume.store(false, Ordering::Relaxed);
@@ -382,6 +472,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             player.living_entity.clear_active_hand();
             player.inventory().set_stack_in_hand(hand, stack.clone());
             observe(&mut reader, &player).await;
+            observe(&mut observer.reader, &observer.player).await;
             let before = used();
             let event_count = events.instrument_events.load(Ordering::Relaxed);
             if on_block {
@@ -418,6 +509,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             assert!(!player.is_on_cooldown("test:horns"));
             assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
             assert_no_effect_packets(&observe(&mut reader, &player).await);
+            assert_no_effect_packets(&observe(&mut observer.reader, &observer.player).await);
             use_packet(&player, &server, hand);
             assert_eq!(used(), before + 1);
             assert_eq!(
@@ -434,12 +526,15 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             );
             assert_effect_packets(
                 &observe(&mut reader, &player).await,
+                &observe(&mut observer.reader, &observer.player).await,
+                player.entity_id(),
                 Sound::ItemGoatHornSound1,
                 "test:horns",
             );
         }
     }
     drop(reader);
+    observer.close().await;
     close_fixture(&fixture).await;
 }
 
@@ -477,7 +572,9 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
     let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
     let (remote, _write) = fixture._remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
+    let mut observer = SoundObserver::new(&server, &player.world()).await;
     observe(&mut reader, &player).await;
+    observe(&mut observer.reader, &observer.player).await;
 
     // A deterministic consume effect makes accidental consumption observable,
     // independently of stack decrement. The apple below validates this observer.
@@ -524,6 +621,7 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                     .set_stack_in_hand(held_hand, horn.clone());
             }
             observe(&mut reader, &player).await;
+            observe(&mut observer.reader, &observer.player).await;
 
             // The second use must succeed solely because the first real use
             // expired. Neither timer nor active-hand state is advanced manually.
@@ -543,6 +641,8 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                 );
                 assert_effect_packets(
                     &observe(&mut reader, &player).await,
+                    &observe(&mut observer.reader, &observer.player).await,
+                    player.entity_id(),
                     Sound::ItemGoatHornSound1,
                     group,
                 );
@@ -619,6 +719,9 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                     // Drain each production tick, including the expiry tick,
                     // so unrelated inventory updates cannot fill the queue.
                     assert_no_effect_packets(&observe(&mut reader, &player).await);
+                    assert_no_effect_packets(
+                        &observe(&mut observer.reader, &observer.player).await,
+                    );
                 }
                 assert_eq!(
                     player.living_entity.hurt_cooldown.load(Ordering::Relaxed),
@@ -647,6 +750,7 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
         Some(Hand::Left)
     );
     observe(&mut reader, &player).await;
+    observe(&mut observer.reader, &observer.player).await;
     for elapsed in 1..=32 {
         player.tick(&server);
         if elapsed < 32 {
@@ -667,6 +771,7 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
             );
         }
         observe(&mut reader, &player).await;
+        observe(&mut observer.reader, &observer.player).await;
     }
     apple.decrement(1);
     assert!(
@@ -694,5 +799,67 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
     );
     assert_eq!(used(), before_food);
     drop(reader);
+    observer.close().await;
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn horn_entity_sound_recipients_exclude_performer_and_strict_range_boundary() {
+    let mut fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    let player = fixture.player.clone();
+    let server = fixture.server.clone();
+    let origin = Vector3::new(0.5, 65.0, 0.5);
+    player.get_entity().set_pos(origin);
+    player.set_client_loaded(true);
+    fixture
+        .client
+        .java()
+        .unwrap()
+        .version
+        .store(CURRENT_MC_VERSION);
+    player
+        .inventory()
+        .set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::GOAT_HORN));
+    let mut observer = SoundObserver::new(&server, &player.world()).await;
+    let (remote, _write) = fixture._remote.split();
+    let mut reader = TCPNetworkDecoder::new(remote);
+    observe(&mut reader, &player).await;
+    observe(&mut observer.reader, &observer.player).await;
+
+    // Exact primary PlayerList.broadcast sums all three squared coordinate
+    // differences and sends only when distance squared is strictly below range².
+    for (offset, audible) in [
+        (Vector3::new(255.5, 0.0, 0.0), true),
+        (Vector3::new(-255.5, 0.0, 0.0), true),
+        (Vector3::new(0.0, 255.5, 0.0), true),
+        (Vector3::new(0.0, 0.0, 255.5), true),
+        (Vector3::new(256.0, 0.0, 0.0), false),
+        (Vector3::new(256.5, 0.0, 0.0), false),
+        (Vector3::new(0.0, 256.0, 0.0), false),
+        (Vector3::new(0.0, 0.0, 256.0), false),
+        (Vector3::new(200.0, 0.0, 200.0), false),
+    ] {
+        observer.player.get_entity().set_pos(origin + offset);
+        // This scenario isolates recipients. The separate expiry test advances
+        // both use time and cooldown through production Player ticks.
+        player.tick_counter.fetch_add(140, Ordering::Relaxed);
+        let before = player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
+        use_packet(&player, &server, Hand::Right);
+        assert_eq!(
+            player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id)),
+            before + 1
+        );
+        assert_cooldown_packets(&observe(&mut reader, &player).await, "minecraft:goat_horn");
+        let packets = observe(&mut observer.reader, &observer.player).await;
+        if audible {
+            assert_entity_sound_packets(&packets, Sound::ItemGoatHornSound0, player.entity_id());
+        } else {
+            assert_no_effect_packets(&packets);
+        }
+    }
+
+    drop(reader);
+    observer.close().await;
     close_fixture(&fixture).await;
 }

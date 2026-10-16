@@ -6,7 +6,6 @@ use pumpkin_data::data_component_impl::InstrumentImpl;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::instrument::Instrument;
 use pumpkin_data::item::Item;
-use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_util::Hand;
 
@@ -68,13 +67,7 @@ impl GoatHornItem {
         player.living_entity.set_active_hand(hand, stack, duration);
         let world = player.world();
         let position = player.position();
-        world.play_sound_fine(
-            instrument.sound(),
-            SoundCategory::Records,
-            &position,
-            instrument.range() / 16.0,
-            1.0,
-        );
+        world.play_instrument_sound(player, instrument);
         // This is the existing game-event hook, not a vibration implementation.
         world.emit_game_event(GameEvent::InstrumentPlay.name(), position);
         // All eight supported builtins have durability_damage = 0. Inline
