@@ -124,17 +124,29 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let rule_registry = GameRuleRegistry::default();
 
     for rule in GameRule::all() {
-        let rule_literal = literal(rule.to_string()).executes(QueryExecutor(rule.clone()));
-        let branch = match rule_registry.get(rule) {
-            GameRuleValue::Int(_) => rule_literal.then(
-                argument("value", IntegerArgumentType::any())
-                    .executes(SetIntExecutor(rule.clone())),
-            ),
-            GameRuleValue::Bool(_) => rule_literal
-                .then(argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone()))),
-        };
-        cmd = cmd.then(branch);
+        let name = rule.to_string();
+        // 26.3's default packet advertises both spellings for all 58 default rules.
+        // Keep the existing bare experimental rule until feature-aware registration
+        // and packet advertisement are handled together.
+        let namespaced = (*rule != GameRule::MaxMinecartSpeed).then(|| format!("minecraft:{name}"));
+        for name in std::iter::once(name).chain(namespaced) {
+            let rule_literal = literal(name).executes(QueryExecutor(rule.clone()));
+            let branch = match rule_registry.get(rule) {
+                GameRuleValue::Int(_) => rule_literal.then(
+                    argument("value", IntegerArgumentType::any())
+                        .executes(SetIntExecutor(rule.clone())),
+                ),
+                GameRuleValue::Bool(_) => rule_literal.then(
+                    argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone())),
+                ),
+            };
+            cmd = cmd.then(branch);
+        }
     }
 
     dispatcher.register(cmd);
 }
+
+#[cfg(test)]
+#[path = "gamerule_tests.rs"]
+mod tests;
