@@ -165,7 +165,7 @@ fn use_packet(player: &Arc<Player>, server: &Arc<Server>, hand: Hand) {
     player.client.java().unwrap().handle_use_item(
         player,
         &SUseItem {
-            hand: VarInt(if hand == Hand::Right { 0 } else { 1 }),
+            hand: VarInt(i32::from(hand != Hand::Right)),
             sequence: VarInt(1),
             yaw: 0.0,
             pitch: -90.0,
@@ -483,7 +483,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
                     .handle_use_item_on(
                         &player,
                         &SUseItemOn {
-                            hand: VarInt(if hand == Hand::Right { 0 } else { 1 }),
+                            hand: VarInt(i32::from(hand != Hand::Right)),
                             position: BlockPos::new(0, 64, 0),
                             face: VarInt(1),
                             cursor_pos: Vector3::new(0.5, 1.0, 0.5),
@@ -689,8 +689,8 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                         let cooldowns = player.item_cooldowns.lock().unwrap();
                         let cooldown = cooldowns.get(group).unwrap();
                         assert_eq!(cooldown.start_tick, started);
-                        assert_eq!(cooldown.duration, 140);
-                    }
+                        assert_eq!(cooldown.duration, 140)
+                    };
                     assert_eq!(used(), before + 1);
                     assert_eq!(
                         events.instrument_events.load(Ordering::Relaxed),

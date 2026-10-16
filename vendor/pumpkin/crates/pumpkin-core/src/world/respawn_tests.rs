@@ -265,10 +265,10 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
             &fixture.server,
             std::future::poll_fn(|cx| {
                 assert!(respawn.as_mut().poll(cx).is_pending());
-                if bed_level.chunk_loading.lock().unwrap().ticket != bed_tickets {
-                    Poll::Ready(())
-                } else {
+                if bed_level.chunk_loading.lock().unwrap().ticket == bed_tickets {
                     Poll::Pending
+                } else {
+                    Poll::Ready(())
                 }
             }),
         )

@@ -304,7 +304,7 @@ pub(crate) mod test {
     }
 
     /// Drive admitted packet tasks without adding a gameplay tick or receiving input.
-    pub(crate) async fn drive_packet_future<F: std::future::Future>(
+    pub async fn drive_packet_future<F: std::future::Future>(
         server: &Arc<crate::server::Server>,
         future: F,
     ) -> F::Output {
