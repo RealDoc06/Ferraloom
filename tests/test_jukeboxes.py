@@ -4,7 +4,9 @@ from copy import deepcopy
 import hashlib
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
@@ -160,6 +162,63 @@ class JukeboxCampaignTests(unittest.TestCase):
         conflict[5]['removed_components'] = [discs.COMPONENT]
         with self.assertRaises(AssertionError):
             discs.menu_semantics(conflict)
+
+    def test_actual_ejected_item_must_match_record_including_count_and_components(self):
+        for expected in (discs.stack(), discs.stack(discs.CAT), discs.stack(opaque=True)):
+            actual = deepcopy(expected)
+            discs.validate_ejected_item(actual, expected)
+            self.assertEqual(actual, expected)
+        for name in ('11', ':11', discs.DEFAULT):
+            discs.validate_ejected_item({**discs.stack(), 'components': {discs.COMPONENT: name}}, discs.stack())
+        wrong = (
+            {'id': 'minecraft:stone', 'count': discs.atom('Int', 1)},
+            {**discs.stack(), 'count': discs.atom('Int', 2)},
+            {**discs.stack(), 'count': discs.atom('Byte', 1)},
+            {**discs.stack(), 'count': discs.atom('Int', True)},
+            discs.stack(discs.CAT), discs.stack(removed=True), discs.stack(opaque=True),
+            {**discs.stack(), 'components': {'minecraft:custom_name': 'wrong'}},
+        )
+        for actual in wrong:
+            with self.subTest(actual=actual), self.assertRaises(AssertionError):
+                discs.validate_ejected_item(actual, discs.stack())
+        for expected in (discs.stack(discs.CAT), discs.stack(opaque=True)):
+            with self.assertRaises(AssertionError):
+                discs.validate_ejected_item(discs.stack(), expected)
+
+    def test_creative_recovery_rejects_wrong_saved_drop_before_kill(self):
+        # Synthetic action inputs exercise the real recovery path, without a server.
+        for actual, expected in (
+                ({'id': 'minecraft:stone', 'count': discs.atom('Int', 1)}, discs.stack()),
+                ({**discs.stack(), 'count': discs.atom('Int', 2)}, discs.stack()),
+                (discs.stack(discs.CAT), discs.stack()), (discs.stack(), discs.stack(opaque=True))):
+            server = SimpleNamespace(directory=Path('/SYNTHETIC'), command=Mock(return_value=['SYNTHETIC Item']), save_flush=Mock())
+            fixture = SimpleNamespace(server=server, report={'active_boot': 'java_source'})
+            entity = {'id': 'minecraft:item', 'UUID': {'nbt_type': 'IntArray', 'value': [1, 2, 3, 4]}, 'Item': actual}
+            with self.subTest(actual=actual), patch.object(discs, 'read_fixture', return_value={'typed': {'Entities': inventory(entity)}}), \
+                    patch.object(discs, 'typed_predicate', return_value={'synthetic': True}), patch.object(discs, 'command_result') as removal:
+                with self.assertRaises(AssertionError):
+                    discs.recover.__wrapped__(fixture, [], expected, creative=True)
+                removal.assert_not_called()
+                self.assertEqual(fixture.report['observations'][0]['drops'][0]['Item'], actual)
+                server.command.assert_called_once()
+
+    def test_offhand_intervening_record_rejects_silent_ejection_or_replacement(self):
+        for ticks in (None, 2):
+            original = {'id': 'minecraft:jukebox', 'RecordItem': discs.stack()}
+            if ticks is not None:
+                original['ticks_since_song_started'] = discs.atom('Long', ticks)
+            discs.validate_offhand_record(original, discs.stack(), ticks)
+            for record in (None, discs.stack(discs.CAT), {**discs.stack(), 'count': discs.atom('Int', 2)}):
+                changed = deepcopy(original)
+                if record is None:
+                    del changed['RecordItem']
+                else:
+                    changed['RecordItem'] = record
+                with self.subTest(ticks=ticks, record=record), self.assertRaises(AssertionError):
+                    discs.validate_offhand_record(changed, discs.stack(), ticks)
+            changed = {**original, 'ticks_since_song_started': discs.atom('Long', 0)}
+            with self.assertRaises(AssertionError):
+                discs.validate_offhand_record(changed, discs.stack(), ticks)
 
     def test_level_events_require_exact_raw_song_id_position_transport_and_single_delivery(self):
         reg = registry()

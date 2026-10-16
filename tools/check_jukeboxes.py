@@ -147,6 +147,15 @@ def semantic_stack(value: object) -> dict:
     return result
 
 
+def validate_ejected_item(value: object, expected_disc: dict) -> None:
+    require(semantic_stack(value) == semantic_stack(expected_disc), {'wrong_ejected_item': value, 'expected': expected_disc})
+
+
+def validate_offhand_record(value: dict, expected_disc: dict, ticks: int | None) -> None:
+    require(record_state(value) == {'record': semantic_stack(expected_disc), 'elapsed': ticks},
+            {'offhand_changed_record': value, 'expected': expected_disc, 'expected_elapsed': ticks})
+
+
 def item_slots(value: object, minimum: int, maximum: int) -> dict[int, dict]:
     result = {}
     for entry in compounds(value):
@@ -318,9 +327,10 @@ def campaign_rows(report: dict) -> list[dict]:
              'composite': 'four boots, eight received registries, two unchanged copies, final provenance and clean teardown required'} for case in CASES]
 
 
-def read_fixture(world: Path, artifact: Path) -> dict:
-    """Read exact chunk256,0 with existing bounded Anvil/NBT readers; retain bytes."""
-    directories = [p for p in (world / 'region', world / 'dimensions/minecraft/overworld/region') if p.is_dir()]
+def read_fixture(world: Path, artifact: Path, *, entities: bool = False) -> dict:
+    """Retain exact terrain/entity chunk256,0 with bounded Anvil/NBT readers."""
+    folder = 'entities' if entities else 'region'
+    directories = [p for p in (world / folder, world / 'dimensions/minecraft/overworld' / folder) if p.is_dir()]
     require(len(directories) == 1, 'Expected one overworld region directory')
     region = directories[0] / 'r.8.0.mca'
     with region.open('rb') as source:
@@ -343,6 +353,12 @@ def read_fixture(world: Path, artifact: Path) -> dict:
     chunk = reader.value(10)
     write_json(artifact.with_suffix('.typed.json'), {'typed': chunk, 'decoded_bytes': reader.offset, 'payload_bytes': len(raw)})
     require(reader.offset == len(raw), 'Trailing chunk bytes')
+    if entities:
+        require(chunk.get('DataVersion') == atom('Int', 5023), 'Wrong entity chunk version')
+        # Preserve writer-specific position metadata; recovery binds the saved
+        # drop to the live nearest entity by its exact typed UUID.
+        return {'path': str(region), 'region_sha256': digest(region), 'raw_nbt': str(artifact),
+                'raw_nbt_sha256': hashlib.sha256(raw).hexdigest(), 'full_typed': str(artifact.with_suffix('.typed.json')), 'typed': chunk}
     require(chunk.get('DataVersion') == atom('Int', 5023) and chunk.get('xPos') == atom('Int', 256)
             and chunk.get('zPos') == atom('Int', 0), 'Wrong chunk identity/version')
     entries = compounds(chunk['block_entities'])
@@ -526,10 +542,33 @@ def interact(fixture: Fixture, clients: list[Client], hand: int, *, song: str | 
 
 
 @bounded
-def recover(fixture: Fixture, clients: list[Client], *, creative: bool) -> None:
+def offhand_retained(fixture: Fixture, expected_disc: dict, ticks: int | None) -> dict:
+    evidence = snapshot(fixture, 'after_offhand_occupied')
+    evidence['has_record'] = typed_predicate(fixture.server, f'if block {pos(JUKEBOX)} minecraft:jukebox[has_record=true]')
+    evidence['no_drop'] = typed_predicate(fixture.server, f'at {NAME} unless entity @e[type=minecraft:item,distance=..8]')
+    validate_offhand_record(evidence['chunk']['typed']['jukebox'], expected_disc, ticks)
+    return evidence
+
+
+@bounded
+def recover(fixture: Fixture, clients: list[Client], expected_disc: dict, *, creative: bool) -> None:
     server = fixture.server
     evidence = retain(fixture, 'real_ejected_item', {'data': server.command(
         f'execute at {NAME} run data get entity @e[type=minecraft:item,distance=..8,limit=1,sort=nearest] Item')})
+    server.save_flush()
+    stem = f"{fixture.report['active_boot']}-{len(fixture.report['observations']):04d}-drop.nbt"
+    evidence['entities'] = read_fixture(server.directory / 'world', server.directory / stem, entities=True)
+    drops = [entity for entity in compounds(evidence['entities']['typed']['Entities']) if entity.get('id') == 'minecraft:item']
+    evidence['drops'] = drops
+    require(len(drops) == 1, 'Expected exactly one saved fixture drop')
+    drop = drops[0]
+    identity = drop.get('UUID')
+    require(isinstance(identity, dict) and set(identity) == {'nbt_type', 'value'} and identity['nbt_type'] == 'IntArray'
+            and isinstance(identity['value'], list) and len(identity['value']) == 4
+            and all(type(value) is int and -2**31 <= value < 2**31 for value in identity['value']), 'Invalid dropped entity UUID')
+    evidence['live_identity'] = typed_predicate(server,
+        f'at {NAME} if data entity @e[type=minecraft:item,distance=..8,limit=1,sort=nearest] {{UUID:[I;{",".join(map(str, identity["value"]))}]}}')
+    validate_ejected_item(drop.get('Item'), expected_disc)
     command = f'execute at {NAME} run ' + (f'kill @e[type=minecraft:item,distance=..8]' if creative else f'tp @e[type=minecraft:item,distance=..8] {NAME}')
     evidence['command'] = command_result(server, command, 1)
     if not creative:
@@ -574,8 +613,9 @@ def cycle(fixture: Fixture, clients: list[Client], song: str, *, hand: int, crea
     # Vanilla TRY_WITH_EMPTY_HAND fallback runs for main hand. Offhand occupied
     # no-op is separately observed; it must not eject or award anything.
     interact(fixture, clients, 1, song=None, events=[], awards=0)
+    offhand_retained(fixture, expected_disc, None if natural else 2)
     interact(fixture, clients, 0, song=None, events=[] if natural else [1011], awards=0)
-    recover(fixture, clients, creative=creative)
+    recover(fixture, clients, expected_disc, creative=creative)
     if creative and hand:
         with interaction_deadline(server, 'restore_actual_hand'):
             owner.request('swap_hands')
