@@ -13,11 +13,35 @@ use pumpkin_data::{item::Item, item_stack::ItemStack};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{GameMode, math::vector3::Vector3};
 use pumpkin_world::data::player_data::PlayerDataStorage;
-use std::{sync::Arc, sync::atomic::Ordering, time::Duration};
+use std::{future::Future, sync::Arc, sync::atomic::Ordering, task::Poll, time::Duration};
 use tokio::net::{TcpListener, TcpStream};
 use uuid::Uuid;
 
 const VANILLA_223_BITS: u32 = 0x3e67_39c4;
+
+/// Drive admitted packet tasks without adding a gameplay tick or receiving input.
+async fn drive_packet_future<F: Future>(
+    server: &Arc<crate::server::Server>,
+    future: F,
+) -> F::Output {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::pin!(future);
+        loop {
+            if let Poll::Ready(value) =
+                std::future::poll_fn(|cx| Poll::Ready(future.as_mut().poll(cx))).await
+            {
+                return value;
+            }
+            let server = server.clone();
+            tokio::task::spawn_blocking(move || server.packet_runner.run_ready(&server, None))
+                .await
+                .unwrap();
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap()
+}
 
 struct ConnectedPlayer {
     player: Arc<Player>,
@@ -200,7 +224,6 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
     };
     use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
     use pumpkin_world::{chunk::ChunkData, chunk_system::ChunkLoading};
-    use std::{future::Future, task::Poll};
 
     let fixture = player_fixture().await;
     let bed_fixture = player_fixture().await;
@@ -260,10 +283,17 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
     {
         let respawn = activity.scope(world.respawn_player(player, false));
         tokio::pin!(respawn);
-        std::future::poll_fn(|cx| {
-            assert!(respawn.as_mut().poll(cx).is_pending());
-            Poll::Ready(())
-        })
+        drive_packet_future(
+            &fixture.server,
+            std::future::poll_fn(|cx| {
+                assert!(respawn.as_mut().poll(cx).is_pending());
+                if bed_level.chunk_loading.lock().unwrap().ticket != bed_tickets {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }),
+        )
         .await;
         assert!(!bed_level.is_chunk_ready(&bed_chunk));
         assert_ne!(bed_level.chunk_loading.lock().unwrap().ticket, bed_tickets);
@@ -271,9 +301,7 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
         assert!(!java.is_closed());
         bed_level.cancel_token.cancel();
         assert_eq!(
-            tokio::time::timeout(Duration::from_secs(10), respawn)
-                .await
-                .unwrap(),
+            drive_packet_future(&fixture.server, respawn).await,
             super::RespawnOutcome::Aborted,
         );
     };

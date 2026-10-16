@@ -1598,16 +1598,32 @@ mod player_data_tests {
             ));
         let path = world.level.level_folder.region_folder.join("r.0.0.mca");
         fs::write(&path, b"refused returning-player region").unwrap();
-        tokio::time::timeout(
-            Duration::from_secs(10),
-            world.spawn_java_player(
-                &fixture.server.basic_config,
-                &fixture.player,
-                &fixture.server,
-            ),
-        )
-        .await
-        .unwrap();
+        let spawn = world.spawn_java_player(
+            &fixture.server.basic_config,
+            &fixture.player,
+            &fixture.server,
+        );
+        tokio::pin!(spawn);
+        let completed = tokio::time::timeout(Duration::from_secs(10), &mut spawn).await;
+        let center = fixture.player.get_entity().chunk_pos.load();
+        let failures: Vec<_> = (-1..=1)
+            .flat_map(|dx| (-1..=1).map(move |dz| center.add_raw(dx, dz)))
+            .filter_map(|pos| world.level.chunk_listener.failure(pos))
+            .collect();
+        let (tickets, level) = {
+            let loading = world.level.chunk_loading.lock().unwrap();
+            (
+                loading.ticket.get(&center).cloned(),
+                loading.pos_level.get(&center).copied(),
+            )
+        };
+        assert!(
+            completed.is_ok(),
+            "spawn wait timed out: center={center:?}, loaded={}, ready={}, closed={}, tickets={tickets:?}, level={level:?}, failures={failures:?}",
+            world.level.loaded_chunks.contains_key(&center),
+            world.level.ready_chunk(center).is_some(),
+            java.is_closed(),
+        );
         assert!(
             java.is_closed(),
             "a refused ready-chunk wait must close the connected session"
