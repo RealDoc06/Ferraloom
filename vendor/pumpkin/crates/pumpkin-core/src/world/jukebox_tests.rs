@@ -872,7 +872,13 @@ async fn inventory_and_real_hopper_share_synchronous_transitions_and_predicates(
     set_state(&world, below, hopper_state.to_state_id(&Block::HOPPER));
     world.add_block_entity(destination.clone());
     observe(&mut reader, &player).await;
+    assert!(world.is_current_block_entity(destination.as_ref()));
+    assert!(HopperLikeProperties::from_state_id(world.get_block_state_id(&below)).enabled);
     destination.tick(&world);
+    assert_eq!(
+        persisted(destination.as_ref()).get_int("TransferCooldown"),
+        Some(0)
+    );
     assert_eq!(inventory.get_stack(0).item.id, Item::PAPER.id);
     assert!(level_events(&observe(&mut reader, &player).await).is_empty());
     for slot in 0..4 {
@@ -882,10 +888,38 @@ async fn inventory_and_real_hopper_share_synchronous_transitions_and_predicates(
     inventory.set_stack(0, disc(JukeboxSong::Cat, 1));
     assert!(inventory.can_transfer_to(destination.as_ref(), 0, &inventory.get_stack(0)));
     observe(&mut reader, &player).await;
+    // Playback's neighbor notification powers and disables the hopper below.
+    // An empty destination slot permits extraction only once that power ends.
+    assert_eq!(power(&world), 15);
+    assert!(!HopperLikeProperties::from_state_id(world.get_block_state_id(&below)).enabled);
+    destination.tick(&world);
+    assert!(!inventory.is_empty());
+    assert_eq!(
+        persisted(destination.as_ref()).get_int("TransferCooldown"),
+        Some(0)
+    );
+    assert!(level_events(&observe(&mut reader, &player).await).is_empty());
+    // Cat lasts 185 seconds plus 20 padded ticks; the next production tick
+    // stops it and notifies the hopper. Do not force ENABLED or reset cooldown.
+    let finishing = live.clone();
+    let tick_world = world.clone();
+    bounded(move || {
+        for _ in 0..3721 {
+            finishing.tick(&tick_world);
+        }
+    })
+    .await;
+    assert!(!live.is_playing());
+    assert_eq!(power(&world), 0);
+    assert!(HopperLikeProperties::from_state_id(world.get_block_state_id(&below)).enabled);
+    assert!(world.is_current_block_entity(destination.as_ref()));
+    assert!(world.is_current_block_entity(live.as_ref()));
+    assert!(inventory.get_stack(0).are_equal(&disc(JukeboxSong::Cat, 1)));
     destination.tick(&world);
     assert!(inventory.is_empty());
     assert_eq!(destination.get_stack(4).item.id, Item::MUSIC_DISC_11.id);
     assert_eq!(destination.get_stack(4).item_count, 1);
+    // Natural completion emitted one stop; extracting the stopped record adds none.
     assert_eq!(
         level_events(&observe(&mut reader, &player).await),
         vec![(1011, 0)]
