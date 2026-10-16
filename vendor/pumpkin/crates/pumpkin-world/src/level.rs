@@ -1207,6 +1207,12 @@ mod tests {
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use tempfile::TempDir;
 
+    async fn refused_region_stage<T>(stage: &str, future: impl Future<Output = T>) -> T {
+        timeout(Duration::from_secs(10), future)
+            .await
+            .unwrap_or_else(|_| panic!("refused-region test timed out during {stage}"))
+    }
+
     #[tokio::test]
     #[expect(
         clippy::too_many_lines,
@@ -1257,11 +1263,15 @@ mod tests {
         // Level must subsequently use its own file cache, IO worker and scheduler.
         let path = level.level_folder.region_folder.join("r.0.0.mca");
         let mut region = AnvilChunkFile::<ChunkData>::default();
-        region
-            .update_chunk(source.clone(), &AnvilChunkConfig::default())
+        refused_region_stage(
+            "source region encoding",
+            region.update_chunk(source.clone(), &AnvilChunkConfig::default()),
+        )
+        .await
+        .unwrap();
+        refused_region_stage("source region write", region.write(&path))
             .await
             .unwrap();
-        region.write(&path).await.unwrap();
         drop(region);
         let before = std::fs::read(&path).unwrap();
         let mut published = level.chunk_listener.add_single_chunk_listener(position);
@@ -1284,7 +1294,7 @@ mod tests {
         let failure = match failure {
             Ok(failure) => failure,
             Err(error) => {
-                let _ = level.shutdown().await;
+                let _ = refused_region_stage("refusal timeout cleanup", level.shutdown()).await;
                 panic!("saved container read must report a fatal refusal: {error}");
             }
         };
@@ -1295,21 +1305,27 @@ mod tests {
         let healthy = ChunkData::empty_sync(32, 0);
         healthy.set_block_absolute_y(3, 64, 4, Block::DIAMOND_BLOCK.default_state.id);
         healthy.mark_dirty(true);
-        level
-            .chunk_saver
-            .watch_chunks(&level.level_folder, &[healthy_pos])
-            .await;
-        level
-            .chunk_saver
-            .save_chunks(&level.level_folder, vec![(healthy_pos, healthy)])
-            .await
-            .unwrap();
-        let flushed = level.save_and_flush().await;
+        refused_region_stage(
+            "healthy region watch",
+            level
+                .chunk_saver
+                .watch_chunks(&level.level_folder, &[healthy_pos]),
+        )
+        .await;
+        refused_region_stage(
+            "healthy region save",
+            level
+                .chunk_saver
+                .save_chunks(&level.level_folder, vec![(healthy_pos, healthy)]),
+        )
+        .await
+        .unwrap();
+        let flushed = refused_region_stage("explicit flush", level.save_and_flush()).await;
         let after_flush = std::fs::read(&path).unwrap();
         let healthy_path = level.level_folder.region_folder.join("r.1.0.mca");
         let healthy_after_flush = std::fs::read(&healthy_path);
         let unavailable_after_flush = !level.loaded_chunks.contains_key(&position);
-        let shutdown = level.shutdown().await;
+        let shutdown = refused_region_stage("shutdown", level.shutdown()).await;
 
         assert!(failure.contains("minecraft:chest"));
         assert!(failure.contains("slot Some(6)"));
@@ -1343,10 +1359,14 @@ mod tests {
         let reader =
             ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
         let (send, mut receive) = mpsc::channel(1);
-        reader
-            .fetch_chunks(&level.level_folder, &[healthy_pos], send)
-            .await;
-        let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+        refused_region_stage(
+            "healthy region fresh read",
+            reader.fetch_chunks(&level.level_folder, &[healthy_pos], send),
+        )
+        .await;
+        let Some(LoadedData::Loaded(saved)) =
+            refused_region_stage("healthy region response", receive.recv()).await
+        else {
             panic!("independent healthy writes must survive the refused flush and shutdown");
         };
         assert_eq!(
