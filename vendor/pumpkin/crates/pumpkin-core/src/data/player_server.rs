@@ -643,8 +643,8 @@ pub(crate) mod test {
     }
 
     /// Common admission writes usercache through a cwd-based legacy API. Run
-    /// that one test in a separate process, keeping the test runner's cwd intact.
-    fn isolated_admission_test(name: &str) -> bool {
+    /// admission tests in separate processes, keeping the test runner's cwd intact.
+    pub fn isolated_admission_test(name: &str) -> bool {
         const CHILD: &str = "FERRALOOM_SESSION_ADMISSION_TEST";
         if std::env::var(CHILD).is_ok_and(|value| value == name) {
             return false;

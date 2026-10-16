@@ -1668,6 +1668,11 @@ mod player_data_tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ready_spawn_admits_first_and_returning_players_beside_a_refused_neighbor() {
+        if crate::data::player_server::test::isolated_admission_test(
+            "server::player_data_tests::ready_spawn_admits_first_and_returning_players_beside_a_refused_neighbor",
+        ) {
+            return;
+        }
         for returning in [false, true] {
             spawn_halo_admission_control(true, returning).await;
         }
