@@ -268,7 +268,7 @@ fn request_area(
     schedule: &GenerationSchedule,
     level: &Level,
     pos: ChunkPos,
-) -> tokio::sync::oneshot::Receiver<Result<AreaCapture, PoiQueryError>> {
+) -> tokio::sync::oneshot::Receiver<Result<Vec<PoiEntry>, PoiQueryError>> {
     let area =
         crate::poi::query::PoiArea::new(BlockPos::new(pos.x * 16, 0, pos.y * 16), 0).unwrap();
     let columns = {
@@ -380,9 +380,7 @@ async fn cold_query_waits_for_queued_a_and_fences_later_ordinary_b_through_captu
             .is_err()
     );
     schedule.poll_poi_requests(&level, &mut active);
-    let AreaCapture::Ready(entries) = result.await.unwrap().unwrap() else {
-        panic!("cold capture")
-    };
+    let entries = result.await.unwrap().unwrap();
     assert!(
         entries
             .iter()
@@ -492,9 +490,7 @@ async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_foo
     holder.occupied = NodeKey::null();
     schedule.graph.nodes.remove(occupy);
     schedule.poll_poi_requests(&level, &mut active);
-    let AreaCapture::Ready(entries) = receive.await.unwrap().unwrap() else {
-        panic!("private Proto capture")
-    };
+    let entries = receive.await.unwrap().unwrap();
     assert_eq!(
         entries.iter().find(|entry| entry.y == 0).unwrap().poi_type,
         PoiType::Meeting.identifier()

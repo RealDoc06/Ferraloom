@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use pumpkin_util::math::position::BlockPos;
 
-use super::{PoiEntry, PoiReconcileError, PoiStorage};
+use super::{PoiEntry, PoiReconcileError, PoiSectionReplacement, PoiStorage};
 use crate::chunk::palette::BlockPalette;
 use crate::{chunk::poi_binding::PoiRuntime, chunk_system::ChunkPos, level::SyncChunk};
 
@@ -12,7 +12,7 @@ use crate::{chunk::poi_binding::PoiRuntime, chunk_system::ChunkPos, level::SyncC
 pub enum PoiQueryError {
     #[error(transparent)]
     Reconciliation(#[from] PoiReconcileError),
-    #[error("POI area changed during its bounded preparation pass; retry the query")]
+    #[error("POI area ownership changed during terrain admission; retry the query")]
     ChangedDuringQuery,
     #[error("POI query radius must be between 0 and 256")]
     InvalidRadius,
@@ -63,11 +63,21 @@ impl PoiArea {
     fn contains(self, entry: &PoiEntry) -> bool {
         (self.min_x..=self.max_x).contains(&entry.x) && (self.min_z..=self.max_z).contains(&entry.z)
     }
-}
 
-pub enum AreaCapture {
-    Ready(Vec<PoiEntry>),
-    NeedsPreparation(Vec<SyncChunk>),
+    fn replace_section(self, entries: &mut Vec<PoiEntry>, replacement: PoiSectionReplacement) {
+        let (x, _, z) = replacement.origin;
+        entries.retain(|entry| {
+            entry.x >> 4 != x >> 4
+                || entry.z >> 4 != z >> 4
+                || entry.y >> 4 != replacement.section_y
+        });
+        entries.extend(
+            replacement
+                .entries
+                .into_iter()
+                .filter(|entry| self.contains(entry)),
+        );
+    }
 }
 
 pub struct PoiAreaReadRequest {
@@ -75,7 +85,7 @@ pub struct PoiAreaReadRequest {
     pub columns: Vec<ChunkPos>,
     pub min_section: i32,
     pub end_section: i32,
-    pub reply: tokio::sync::oneshot::Sender<Result<AreaCapture, PoiQueryError>>,
+    pub reply: tokio::sync::oneshot::Sender<Result<Vec<PoiEntry>, PoiQueryError>>,
 }
 
 /// Private query evidence, never an acknowledgment or a persistent replacement.
@@ -164,17 +174,7 @@ impl PoiStorage {
                     continue;
                 }
                 let replacement = loaded.classify_section(*y, palette, None, false)?;
-                entries.retain(|entry| {
-                    entry.x >> 4 != overlay.pos.x
-                        || entry.z >> 4 != overlay.pos.y
-                        || entry.y >> 4 != *y
-                });
-                entries.extend(
-                    replacement
-                        .entries
-                        .into_iter()
-                        .filter(|entry| area.contains(entry)),
-                );
+                area.replace_section(&mut entries, replacement);
             }
         }
         Ok(entries)
@@ -218,23 +218,10 @@ impl PoiRuntime {
             .lock()
             .map_err(|_| PoiReconcileError::OwnershipPoisoned)?
             .preload_area(area)?;
-        match self.capture_area(area)? {
-            AreaCapture::Ready(entries) => Ok(entries),
-            AreaCapture::NeedsPreparation(chunks) => {
-                // No area guard survives here. This is B's encoder barrier,
-                // never the public memory-only Stage A reconciliation API.
-                for chunk in chunks {
-                    chunk.prepare_poi().map_err(query_preparation_error)?;
-                }
-                match self.capture_area(area)? {
-                    AreaCapture::Ready(entries) => Ok(entries),
-                    AreaCapture::NeedsPreparation(_) => Err(PoiQueryError::ChangedDuringQuery),
-                }
-            }
-        }
+        self.capture_area(area)
     }
 
-    pub fn capture_area(self: &Arc<Self>, area: PoiArea) -> Result<AreaCapture, PoiQueryError> {
+    pub fn capture_area(self: &Arc<Self>, area: PoiArea) -> Result<Vec<PoiEntry>, PoiQueryError> {
         self.capture_area_with_overlays(area, &[], &[])
     }
 
@@ -245,7 +232,7 @@ impl PoiRuntime {
         area: PoiArea,
         overlays: &[PoiTerrainOverlay],
         expected: &[(ChunkPos, SyncChunk)],
-    ) -> Result<AreaCapture, PoiQueryError> {
+    ) -> Result<Vec<PoiEntry>, PoiQueryError> {
         let _lifecycle = self
             .lifecycle
             .read()
@@ -283,25 +270,13 @@ impl PoiRuntime {
             .lock()
             .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
         let terrain: Vec<_> = chunks.iter().map(|chunk| chunk.read_for_poi()).collect();
-        let mut pending = Vec::new();
+        let mut entries = storage.overlay_area(area, overlays)?;
         for (chunk, read) in chunks.iter().zip(&terrain) {
             let loaded = storage.loaded_poi_region(ChunkPos::new(chunk.x, chunk.z))?;
-            if !read.is_reconciled(&loaded)? {
-                pending.push(chunk.clone());
+            for replacement in read.query_replacements(&loaded)? {
+                area.replace_section(&mut entries, replacement);
             }
         }
-        if !pending.is_empty() {
-            return Ok(AreaCapture::NeedsPreparation(pending));
-        }
-        Ok(AreaCapture::Ready(storage.overlay_area(area, overlays)?))
-    }
-}
-
-pub fn query_preparation_error(error: PoiReconcileError) -> PoiQueryError {
-    match error {
-        PoiReconcileError::StaleSaveCapture | PoiReconcileError::ObsoletePublication => {
-            PoiQueryError::ChangedDuringQuery
-        }
-        error => error.into(),
+        Ok(entries)
     }
 }

@@ -11,8 +11,8 @@ use super::{
 use crate::chunk::io::Dirtiable;
 use crate::level::{ChunkUnavailable, Level, LoadedChunkChange, SyncChunk};
 use crate::poi::{
-    PoiQueryError,
-    query::{AreaCapture, PoiAreaReadRequest, PoiTerrainOverlay},
+    PoiEntry, PoiQueryError,
+    query::{PoiAreaReadRequest, PoiTerrainOverlay},
 };
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -207,7 +207,7 @@ impl GenerationSchedule {
         &self,
         level: &Level,
         query: &mut PendingPoiQuery,
-    ) -> Option<Result<AreaCapture, PoiQueryError>> {
+    ) -> Option<Result<Vec<PoiEntry>, PoiQueryError>> {
         if let Err(error) = query.poll_disk(&self.io_read, &self.io_lock)? {
             return Some(Err(error));
         }

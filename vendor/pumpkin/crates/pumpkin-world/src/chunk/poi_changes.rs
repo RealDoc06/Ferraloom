@@ -150,20 +150,31 @@ impl ChunkData {
 }
 
 impl<'chunk> PoiTerrainRead<'chunk> {
-    /// Metadata-only check under the final area terrain window. A query must
-    /// prepare dirty FULL sources through the managed encoder before retrying.
-    pub(crate) fn is_reconciled(
+    /// Classify pending FULL sections for an owned query result. The caller keeps
+    /// storage and every source's terrain guard through the complete area capture.
+    /// This does not publish replacements, acknowledge revisions or consume ABA bits.
+    pub(crate) fn query_replacements(
         &self,
         loaded: &LoadedPoiRegion<'_>,
-    ) -> Result<bool, PoiReconcileError> {
+    ) -> Result<Vec<PoiSectionReplacement>, PoiReconcileError> {
         if self.chunk.status != pumpkin_data::chunk::ChunkStatus::Full {
             return Err(PoiReconcileError::IncompleteTerrain);
         }
         let changes = self.changes_for(loaded)?;
-        Ok(changes
-            .sections
+        self.palettes
             .iter()
-            .all(|section| section.revision == section.applied_revision))
+            .zip(changes.sections.iter())
+            .enumerate()
+            .filter(|(_, (_, section))| section.revision != section.applied_revision)
+            .map(|(index, (palette, section))| {
+                loaded.plan_section(
+                    self.chunk.section.min_y / 16 + index as i32,
+                    palette,
+                    section,
+                    true,
+                )
+            })
+            .collect()
     }
 
     /// Stage B's terrain root builder must consume this exact palette snapshot.
