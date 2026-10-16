@@ -549,6 +549,8 @@ impl GenerationSchedule {
             return;
         }
 
+        Self::hold_failed_read_waiters(&mut self.graph, &self.chunk_map, &self.waiting_for_chunks);
+
         let mut now_ready: Vec<NodeKey> = Vec::new();
         let mut stale: Vec<NodeKey> = Vec::new();
 
@@ -607,6 +609,142 @@ impl GenerationSchedule {
                 self.queue.push(TaskHeapNode(priority, node_key));
             }
         }
+    }
+
+    /// Finish the read attempt without releasing its fence or scheduling replacement terrain.
+    fn finish_failed_read(graph: &mut DAG, holder: &mut ChunkHolder) {
+        debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
+        debug_assert!(holder.chunk.is_none());
+        debug_assert!(!holder.public);
+        debug_assert!(graph.nodes.contains_key(holder.occupied));
+        holder.read_failed = true;
+        let read = graph
+            .nodes
+            .get_mut(holder.tasks[StagedChunkEnum::Empty as usize])
+            .expect("failed read task exists");
+        read.in_flight = false;
+    }
+
+    /// A parked task can need read-only neighbors beyond its explicit stage dependencies.
+    /// Retain the failed neighbor's fence as a real dependency so ready-task recovery cannot
+    /// repeatedly dispatch a task whose input will remain unavailable.
+    fn hold_failed_read_waiters(
+        graph: &mut DAG,
+        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
+        waiting: &HashSetType<NodeKey>,
+    ) {
+        for &task in waiting {
+            let Some((pos, radius)) = graph
+                .nodes
+                .get(task)
+                .map(|node| (node.pos, node.stage.get_read_radius()))
+            else {
+                continue;
+            };
+            for dx in -radius..=radius {
+                for dz in -radius..=radius {
+                    let Some(holder) = chunk_map
+                        .get(&pos.add_raw(dx, dz))
+                        .filter(|holder| holder.read_failed)
+                    else {
+                        continue;
+                    };
+                    let mut edge = graph.nodes[holder.occupied].edge;
+                    while !edge.is_null() && graph.edges[edge].to != task {
+                        edge = graph.edges[edge].next;
+                    }
+                    if edge.is_null() {
+                        graph.add_edge(holder.occupied, task);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every residual idle node must belong to work blocked by a retained failed-read fence.
+    /// Without a failed read this requires an empty graph, as on the healthy idle path.
+    fn blocked_read_nodes(
+        graph: &DAG,
+        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
+    ) -> HashSetType<NodeKey> {
+        let mut roots = HashSetType::default();
+        let mut pending = Vec::new();
+        for holder in chunk_map.values().filter(|holder| holder.read_failed) {
+            assert_eq!(holder.current_stage, StagedChunkEnum::None);
+            assert!(holder.chunk.is_none() && !holder.public);
+            let fence = graph
+                .nodes
+                .get(holder.occupied)
+                .expect("failed read retains its occupancy fence");
+            assert_eq!(fence.pos, ChunkPos::new(i32::MAX, i32::MAX));
+            assert_eq!(fence.stage, StagedChunkEnum::None);
+            assert_eq!(fence.in_degree, 0);
+            assert!(roots.insert(holder.occupied), "failed reads share a fence");
+            pending.push(holder.occupied);
+        }
+
+        let mut blocked = HashSetType::default();
+        let mut edges = HashSetType::default();
+        let mut incoming = HashMapType::<NodeKey, u32>::default();
+        while let Some(key) = pending.pop() {
+            if !blocked.insert(key) {
+                continue;
+            }
+            let mut edge = graph.nodes[key].edge;
+            while !edge.is_null() {
+                assert!(edges.insert(edge), "shared or cyclic DAG edge chain");
+                let link = &graph.edges[edge];
+                // Cancellation can leave incoming links to an already removed node.
+                if graph.nodes.contains_key(link.to) {
+                    *incoming.entry(link.to).or_default() += 1;
+                    pending.push(link.to);
+                }
+                edge = link.next;
+            }
+        }
+
+        for (key, node) in &graph.nodes {
+            assert!(
+                blocked.contains(&key),
+                "idle node is not blocked by a failed read: {node:?}"
+            );
+            assert!(
+                !node.in_flight && !node.in_queue,
+                "idle node is still dispatched: {node:?}"
+            );
+            assert_eq!(node.in_degree, incoming.get(&key).copied().unwrap_or(0));
+            if node.stage == StagedChunkEnum::None {
+                assert!(roots.contains(&key), "unowned occupancy fence");
+            } else {
+                assert!(node.in_degree > 0, "failed-read dependent is ready");
+                let holder = chunk_map
+                    .get(&node.pos)
+                    .expect("pending task holder exists");
+                assert_eq!(holder.tasks[node.stage as usize], key);
+            }
+        }
+        let mut ready: Vec<_> = roots.into_iter().collect();
+        let mut released = 0;
+        while let Some(key) = ready.pop() {
+            released += 1;
+            let mut edge = graph.nodes[key].edge;
+            while !edge.is_null() {
+                let link = &graph.edges[edge];
+                if let Some(degree) = incoming.get_mut(&link.to) {
+                    *degree -= 1;
+                    if *degree == 0 {
+                        ready.push(link.to);
+                    }
+                }
+                edge = link.next;
+            }
+        }
+        assert_eq!(
+            released,
+            blocked.len(),
+            "blocked dependency graph has a cycle"
+        );
+        blocked
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1282,10 +1420,16 @@ impl GenerationSchedule {
                 self.check_waiting_tasks();
             }
             RecvChunk::ReadFailure(error) => {
-                // Keep the holder occupied: a read error is not an absent
-                // chunk, and must never cause replacement terrain generation.
+                // A failed read is terminal for this holder, not an absent chunk.
+                // Its retained fence blocks replacement terrain and dependent generation.
                 error!("Preserving unreadable chunk {pos:?}: {error}");
                 self.record_save_failure(&error);
+                let holder = self
+                    .chunk_map
+                    .get_mut(&pos)
+                    .expect("failed read holder exists");
+                Self::finish_failed_read(&mut self.graph, holder);
+                self.check_waiting_tasks();
             }
             RecvChunk::GenerationFailure {
                 pos: fail_pos,
@@ -1843,23 +1987,23 @@ impl GenerationSchedule {
         let unreleased_count = self.graph.nodes.len();
         if unreleased_count > 0 {
             warn!(
-                "Cleaning up {} unreleased nodes from incomplete tasks",
+                "Discarding {} cancelled or failed-read nodes after scheduler shutdown",
                 unreleased_count
             );
         }
+        // Dispatch has ended and workers have drained or reached the existing timeout.
+        // Releasing these terminal graph records cannot schedule replacement work.
+        self.queue.clear();
+        self.waiting_for_chunks.clear();
+        self.graph.nodes.clear();
         self.graph.edges.clear();
     }
 
     fn debug_check(&self) -> bool {
-        if !self.graph.nodes.is_empty() {
-            for (key, value) in &self.graph.nodes {
-                error!("unrelease node {key:?}: {value:?}");
-            }
-            panic!("nodes count error");
-        }
+        let blocked = Self::blocked_read_nodes(&self.graph, &self.chunk_map);
         for (pos, holder) in &self.chunk_map {
-            for i in &holder.tasks {
-                debug_assert!(i.is_null());
+            for task in &holder.tasks {
+                debug_assert!(task.is_null() || blocked.contains(task));
             }
             debug_assert_eq!(
                 holder.target_stage,
@@ -1868,8 +2012,10 @@ impl GenerationSchedule {
                 )
             );
             let effective = holder.target_stage.max(holder.dependency_stage);
-            debug_assert!(holder.current_stage >= effective);
-            debug_assert!(holder.occupied.is_null());
+            for stage in (holder.current_stage as usize + 1)..=(effective as usize) {
+                debug_assert!(blocked.contains(&holder.tasks[stage]));
+            }
+            debug_assert!(holder.occupied.is_null() || holder.read_failed);
             if holder.current_stage != StagedChunkEnum::None {
                 debug_assert_eq!(
                     holder.chunk.as_ref().expect("chunk exists").get_stage_id(),
@@ -1880,3 +2026,6 @@ impl GenerationSchedule {
         true
     }
 }
+
+#[cfg(test)]
+mod refused_read_tests;

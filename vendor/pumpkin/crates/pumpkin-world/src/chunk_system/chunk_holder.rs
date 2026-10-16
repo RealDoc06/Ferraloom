@@ -12,6 +12,9 @@ pub struct ChunkHolder {
     pub current_stage: StagedChunkEnum,
     pub chunk: Option<Chunk>,
     pub occupied: NodeKey,
+    /// A failed disk read retains its occupancy fence until scheduler shutdown.
+    /// The chunk stays unavailable even when tickets are removed and re-added.
+    pub read_failed: bool,
     pub occupied_by: EdgeKey,
     pub public: bool,
     pub tasks: [NodeKey; StagedChunkEnum::COUNT],
@@ -25,6 +28,7 @@ impl Default for ChunkHolder {
             current_stage: StagedChunkEnum::None,
             chunk: None,
             occupied: NodeKey::null(),
+            read_failed: false,
             occupied_by: EdgeKey::null(),
             public: false,
             tasks: [NodeKey::null(); StagedChunkEnum::COUNT],
