@@ -370,7 +370,7 @@ mod tests {
         );
         let mut authored = NbtCompound::new();
         let mut components = NbtCompound::new();
-        components.put_string("minecraft:instrument", "opaque authored value");
+        components.put_string("minecraft:instrument", "opaque authored value".into());
         authored.put_compound("components", components);
         let custom = ItemStack::new_with_component(
             1,
@@ -448,10 +448,10 @@ mod tests {
         );
 
         let mut aliases = NbtCompound::new();
-        aliases.put_string("custom_name", "A");
-        aliases.put_string("minecraft:custom_name", "B");
+        aliases.put_string("custom_name", "A".into());
+        aliases.put_string("minecraft:custom_name", "B".into());
         let mut authored_item = NbtCompound::new();
-        authored_item.put_string("id", "minecraft:stick");
+        authored_item.put_string("id", "minecraft:stick".into());
         authored_item.put_compound("components", aliases);
         let mut authored = NbtCompound::new();
         authored.put_list(

@@ -623,6 +623,7 @@ mod tests {
                     .get_data_component::<CustomNameImpl>()
                     .unwrap()
                     .name
+                    .clone()
                     .get_text(),
                 "A"
             );

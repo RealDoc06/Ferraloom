@@ -313,7 +313,7 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
         CKeepAlive::to_id(CURRENT_MC_VERSION),
         "cancelled respawn must send no packets before the barrier"
     );
-    assert_eq!(packet.payload.as_ref(), &26_i64.to_be_bytes());
+    assert_eq!(packet.payload.as_ref(), &26i64.to_be_bytes());
     drop(decoder);
 
     let folder = tempfile::tempdir().unwrap();

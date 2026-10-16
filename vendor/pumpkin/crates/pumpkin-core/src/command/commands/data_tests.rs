@@ -1430,7 +1430,7 @@ async fn clone_refuses_contaminated_source_before_any_destination_or_move_mutati
     );
     let world = fixture.source.world();
     let source = world.get_block_entity(&BLOCK_POS).unwrap();
-    source.get_inventory().unwrap().set_stack(
+    source.clone().get_inventory().unwrap().set_stack(
         0,
         ItemStack::new_with_component(
             1,
@@ -1454,7 +1454,7 @@ async fn clone_refuses_contaminated_source_before_any_destination_or_move_mutati
         assert_eq!(world.get_block_state_id(&destination), destination_before);
         assert!(world.get_block_entity(&destination).is_none());
     }
-    source.get_inventory().unwrap().set_stack(
+    source.clone().get_inventory().unwrap().set_stack(
         0,
         ItemStack::new_with_component(
             37,

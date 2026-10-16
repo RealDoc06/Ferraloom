@@ -2032,7 +2032,7 @@ impl Player {
             })
             .await;
         Ok(match calculated {
-            Some(Some(point)) => RespawnPointOutcome::Valid(point),
+            Some(Some(point)) => RespawnPointOutcome::Valid(Box::new(point)),
             Some(None) => RespawnPointOutcome::Invalid,
             None => RespawnPointOutcome::Aborted,
         })
@@ -7599,7 +7599,7 @@ pub struct RespawnPoint {
 /// An aborted readiness wait says nothing about whether the saved spawn block is valid.
 #[must_use]
 pub enum RespawnPointOutcome {
-    Valid(CalculatedRespawnPoint),
+    Valid(Box<CalculatedRespawnPoint>),
     Invalid,
     Aborted,
 }

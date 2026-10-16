@@ -4816,7 +4816,7 @@ impl World {
         let prepare = async {
             // Get respawn position and dimension
             let respawn = match player.calculate_respawn_point().await {
-                Ok(crate::entity::player::RespawnPointOutcome::Valid(respawn)) => Some(respawn),
+                Ok(crate::entity::player::RespawnPointOutcome::Valid(respawn)) => Some(*respawn),
                 Ok(crate::entity::player::RespawnPointOutcome::Invalid) => None,
                 Ok(crate::entity::player::RespawnPointOutcome::Aborted) => return None,
                 Err(error) => {

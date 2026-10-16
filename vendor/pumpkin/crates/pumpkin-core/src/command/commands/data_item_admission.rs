@@ -31,9 +31,9 @@ fn list(nbt: &NbtCompound, key: &str, slots: Option<usize>) -> Result<(), Comman
     for entry in nbt.get_list(key).unwrap_or_default() {
         if let Some(entry) = entry.extract_compound() {
             if let Some(size) = slots
-                && !entry
+                && entry
                     .get_byte("Slot")
-                    .is_some_and(|slot| (slot as usize) < size)
+                    .is_none_or(|slot| (slot as usize) >= size)
             {
                 continue;
             }
@@ -49,9 +49,9 @@ pub(super) fn block(block: &dyn BlockEntity, nbt: &NbtCompound) -> Result<(), Co
     if matches!(
         block.resource_location(),
         "minecraft:chest" | "minecraft:trapped_chest" | "minecraft:barrel"
-    ) && !nbt
+    ) && nbt
         .get_string("LootTable")
-        .is_some_and(|key| pumpkin_util::identifier::Identifier::parse(key).is_ok())
+        .is_none_or(|key| pumpkin_util::identifier::Identifier::parse(key).is_err())
     {
         list(nbt, "Items", Some(27))?;
     }
