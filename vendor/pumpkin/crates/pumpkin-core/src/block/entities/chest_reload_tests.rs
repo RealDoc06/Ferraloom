@@ -2894,7 +2894,7 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effects() {
     use crate::plugin::{
         EventPriority, api::events::inventory::inventory_open::InventoryOpenEvent,
