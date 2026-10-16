@@ -43,7 +43,9 @@ use crate::chunk::poi_binding::complete_poi_batch;
 /// Acquire `watchers` in its own critical section, separately from both the
 /// map and region locks. Inside a loader: pending -> cached region -> receipts.
 /// The async receipt guard may span backend encoding awaits; it is acquired
-/// BEFORE bytes change. Blocking completion owns only receipts, then briefly
+/// BEFORE bytes change. Completion acquires an owned receipt guard before
+/// queuing its blocking task, so cancellation cannot expose a later receipt to
+/// an earlier terrain write. Blocking completion owns only receipts, then briefly
 /// lifecycle/publication -> store -> terrain -> metadata. It releases all of
 /// those guards before POI encoding/IO. Cancellation leaves receipts owned by
 /// the cached region, and draining also waits for their blocking completion.
@@ -90,6 +92,13 @@ struct CachedRegion<S: ChunkSerializer<WriteBackend = PathBuf>> {
     // A blocking completion keeps this same owned map if its async caller is
     // cancelled. Never move the only source/receipt into a disposable future.
     receipts: Arc<Mutex<PoiReceipts<S::Data>>>,
+    // Stop after actual terrain IO so a test can occupy the blocking pool before
+    // completion is queued. This does not replace the backend or completion.
+    #[cfg(test)]
+    completion_queue_gate: Option<(
+        tokio::sync::oneshot::Sender<()>,
+        tokio::sync::oneshot::Receiver<()>,
+    )>,
 }
 
 impl<S: ChunkSerializer<WriteBackend = PathBuf>> CachedRegion<S> {
@@ -101,13 +110,19 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> CachedRegion<S> {
                 .map_err(ChunkWritingError::IoError)?;
             self.needs_write = false;
         }
-        let has_receipts = !self.receipts.lock().await.is_empty();
-        if !has_receipts {
+        #[cfg(test)]
+        if let Some((entered, resume)) = self.completion_queue_gate.take() {
+            let _ = entered.send(());
+            let _ = resume.await;
+        }
+        // Fence the exact map before spawn_blocking can queue the task. While
+        // awaiting this guard, cancellation leaves all receipts in the cache;
+        // afterwards the queued task owns it even if its caller is dropped.
+        let mut receipts = Arc::clone(&self.receipts).lock_owned().await;
+        if receipts.is_empty() {
             return Ok(());
         }
-        let receipts = self.receipts.clone();
         run_blocking(move || {
-            let mut receipts = receipts.blocking_lock();
             let result = complete_poi_batch(receipts.values_mut().map(|(_, receipt)| receipt));
             receipts.retain(|_, (source, receipt)| !receipt.is_complete() || source.is_dirty());
             result
@@ -183,6 +198,8 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                     serializer,
                     needs_write: false,
                     receipts: Arc::new(Mutex::new(BTreeMap::new())),
+                    #[cfg(test)]
+                    completion_queue_gate: None,
                 })))
             })
             .await
@@ -956,6 +973,192 @@ mod tests {
             panic!("missing terrain");
         };
         chunk.section.get_block_absolute_y(1, 0, 1).unwrap()
+    }
+
+    // UNRUN: the runtime's only blocking thread is occupied AFTER actual terrain
+    // IO. The completion task is queued, not paused after acquiring its mutex.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Keep the queued completion, cancellation, replacement save and disk observations together."
+    )]
+    async fn queued_completion_fences_replacement<S>(config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::PoiRegion;
+        use pumpkin_data::poi::PoiType;
+        use pumpkin_util::math::position::BlockPos;
+        let directory = TempDir::new().unwrap();
+        let folder = folder(&directory);
+        let runtime = TestRuntime::new(folder.poi_folder.clone());
+        let pos = Vector2::new(0, 0);
+        let writer = ChunkFileManager::<S>::new(config.clone());
+        let a = bound_home(&runtime, 0);
+        let home = a.section.get_block_absolute_y(1, 0, 1).unwrap();
+        runtime.chunks.insert(pos, a.clone());
+        writer
+            .save_chunks(&folder, vec![(pos, a.clone())])
+            .await
+            .unwrap();
+        let path = folder.region_folder.join(S::get_chunk_key(&pos));
+        let poi_path = folder.poi_folder.join("r.0.0.mca");
+        let writes_before = {
+            let mut storage = runtime.runtime.storage.lock().unwrap();
+            storage
+                .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
+                .unwrap();
+            storage.save_all().unwrap();
+            storage.completed_region_writes(pos)
+        };
+        let poi_before = std::fs::read(&poi_path).unwrap();
+        writer.watch_chunks(&folder, &[pos]).await;
+        a.set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
+        writer
+            .save_chunks(&folder, vec![(pos, a.clone())])
+            .await
+            .unwrap();
+        let loader = writer.get_loader(&path).await;
+        let cached = loader.get().await.unwrap();
+        let (entered, reached) = tokio::sync::oneshot::channel();
+        let (resume, resumed) = tokio::sync::oneshot::channel();
+        cached.write().await.completion_queue_gate = Some((entered, resumed));
+        let mut flush = Box::pin(writer.flush());
+        tokio::select! {
+            result = &mut flush => panic!("completion bypassed queue gate: {result:?}"),
+            result = reached => result.unwrap(),
+        }
+        assert_eq!(saved_block::<S>(&folder, config.clone(), 0).await, home);
+        let terrain_a = std::fs::read(&path).unwrap();
+        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+
+        let (occupied, ready) = tokio::sync::oneshot::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let blocker = tokio::task::spawn_blocking(move || {
+            occupied.send(()).unwrap();
+            released
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+        });
+        ready.await.unwrap();
+        resume.send(()).unwrap();
+        // Ignore cooperative budget so Pending means awaited work, not a yield.
+        // One explicit poll submits completion to the occupied blocking pool.
+        assert!(futures::poll!(tokio::task::unconstrained(flush.as_mut())).is_pending());
+        drop(flush); // Cancel while its blocking completion has not started.
+        {
+            let mut drain = Box::pin(writer.block_and_await_ongoing_tasks());
+            assert!(futures::poll!(tokio::task::unconstrained(drain.as_mut())).is_pending());
+            // Cancelling a guard waiter must also release pending/cache locks.
+        }
+
+        // The same published Arc changes after A's terrain write. Its later ABA
+        // must survive A's completion and remain private until B's terrain write.
+        let b = a.clone();
+        b.set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
+        b.set_block_absolute_y(2, 0, 1, Block::DIRT.default_state.id);
+        let original_b = Arc::downgrade(&b);
+        let mut save_b = Box::pin(writer.save_chunks(&folder, vec![(pos, b)]));
+        assert!(futures::poll!(tokio::task::unconstrained(save_b.as_mut())).is_pending());
+        assert!(original_b.upgrade().unwrap().is_dirty());
+        drop(save_b); // Cancellation while waiting leaves B admitted and dirty.
+        {
+            let pending = loader.unapplied.lock().await;
+            assert!(Arc::ptr_eq(
+                pending.get(&(pos.x, pos.y)).unwrap(),
+                &original_b.upgrade().unwrap()
+            ));
+        }
+        // Resume the retained submission through the same apply_pending path
+        // used by watched saves, without resubmitting B or writing its terrain.
+        let mut apply_b = Box::pin(loader.apply_pending(&writer.chunk_config));
+        assert!(futures::poll!(tokio::task::unconstrained(apply_b.as_mut())).is_pending());
+        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+        assert_eq!(std::fs::read(&path).unwrap(), terrain_a);
+        release.send(()).unwrap();
+        blocker.await.unwrap();
+        apply_b.await.unwrap();
+        writer.block_and_await_ongoing_tasks().await;
+
+        // A's stale worker finishes before B can install bytes and its receipt.
+        // B's ABA stays private through save_all until B's actual terrain write.
+        runtime.runtime.storage.lock().unwrap().save_all().unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), terrain_a);
+        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+        assert_eq!(
+            PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
+            0
+        );
+        {
+            let region = cached.read().await;
+            assert!(region.needs_write);
+            let receipts = region.receipts.lock().await;
+            let (source, receipt) = receipts.get(&(pos.x, pos.y)).unwrap();
+            assert!(Arc::ptr_eq(source, &original_b.upgrade().unwrap()));
+            assert!(!receipt.is_complete());
+        }
+        writer.flush().await.unwrap();
+        let reader = ChunkFileManager::<S>::new(config);
+        let (send, mut receive) = mpsc::channel(1);
+        reader.fetch_chunks(&folder, &[pos], send).await;
+        let Some(LoadedData::Loaded(saved_b)) = receive.recv().await else {
+            panic!("missing completed terrain B");
+        };
+        assert_eq!(saved_b.section.get_block_absolute_y(1, 0, 1), Some(home));
+        assert_eq!(
+            saved_b.section.get_block_absolute_y(2, 0, 1),
+            Some(Block::DIRT.default_state.id)
+        );
+        assert_ne!(std::fs::read(&path).unwrap(), terrain_a);
+        assert_eq!(
+            PoiRegion::load(&poi_path).unwrap().get_all()[0].poi_type,
+            PoiType::Home.identifier()
+        );
+        assert_eq!(
+            PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
+            1
+        );
+        assert_eq!(
+            runtime
+                .runtime
+                .storage
+                .lock()
+                .unwrap()
+                .completed_region_writes(pos),
+            writes_before + 1
+        );
+        assert!(!a.is_dirty());
+        assert!(cached.read().await.receipts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn all_formats_queued_completion_fences_cancelled_caller_and_replacement_save() {
+        tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                    Box::pin(queued_completion_fences_replacement::<
+                        AnvilChunkFile<ChunkData>,
+                    >(
+                        pumpkin_config::chunk::AnvilChunkConfig::default()
+                    ))
+                    .await;
+                    Box::pin(queued_completion_fences_replacement::<
+                        crate::chunk::format::linear::LinearV2File<ChunkData>,
+                    >(()))
+                    .await;
+                    Box::pin(queued_completion_fences_replacement::<
+                        crate::chunk::format::pump::PumpFile<ChunkData>,
+                    >(()))
+                    .await;
+                })
+                .await
+                .unwrap();
+            });
     }
 
     // UNRUN: actual all-format completion, cancellation, fetch and eviction.
