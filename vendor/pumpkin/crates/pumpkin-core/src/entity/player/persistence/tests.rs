@@ -394,8 +394,12 @@ fn player_dat_unsupported_partial_state_refuses_without_backup_fallback_or_repla
             "active_effects.hidden_effect",
         ),
         (
-            r#"{active_effects:[{id:"minecraft:speed",duration:20}]}"#,
-            "active_effects",
+            r#"{active_effects:[{id:"minecraft:speed",duration:20,show_icon:2b}]}"#,
+            "active_effects.show_icon",
+        ),
+        (
+            r#"{active_effects:[{id:"minecraft:speed",duration:20,show_particles:2b}]}"#,
+            "active_effects.show_particles",
         ),
         (
             r#"{Inventory:[{Slot:0b,id:"minecraft:stone",count:1,extension:42}]}"#,
@@ -469,6 +473,55 @@ fn player_dat_effect_amplifier_outside_supported_range_refuses_unchanged() {
             ),
             "active_effects.amplifier",
         );
+    }
+}
+
+#[tokio::test]
+async fn player_dat_effect_visibility_defaults_survive_actual_player_save_and_reload() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(517);
+    // Bytecode-derived Details shapes, not a captured gameplay witness. The
+    // writer omits default ambient/particles but always supplies show_icon;
+    // the reader also accepts its absence, inheriting the particles flag.
+    for (flags, show_particles, show_icon) in [
+        (",show_icon:1b", true, true),
+        ("", true, true),
+        (",show_particles:0b", false, false),
+        (",show_icon:0b", true, false),
+        (",show_particles:0b,show_icon:1b", false, true),
+        (",ambient:0b,show_particles:0b,show_icon:0b", false, false),
+    ] {
+        let effect = compound(&format!(
+            r#"{{id:"minecraft:regeneration",amplifier:1b,duration:200{flags}}}"#
+        ));
+        let mut original = NbtCompound::new();
+        original.put_list("active_effects", vec![NbtTag::Compound(effect)]);
+        seed(&storage, uuid, original);
+        let mut expected = compound(r#"{id:"minecraft:regeneration",amplifier:1b,duration:200}"#);
+        if !show_particles {
+            expected.put_bool("show_particles", false);
+        }
+        expected.put_bool("show_icon", show_icon);
+        for _ in 0..2 {
+            let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+            let mut current = player(fixture.source.world(), uuid).await;
+            NBTStorage::read_nbt(&mut current, &mut loaded);
+            let effect = current
+                .living_entity
+                .get_effect(&pumpkin_data::effect::StatusEffect::REGENERATION)
+                .unwrap();
+            assert_eq!(effect.amplifier, 1);
+            assert_eq!(effect.duration, 200);
+            assert!(!effect.ambient);
+            assert_eq!(effect.show_particles, show_particles, "{flags}");
+            assert_eq!(effect.show_icon, show_icon, "{flags}");
+            let saved = save(&storage, &current);
+            let effects = saved.get_list("active_effects").unwrap();
+            assert_eq!(effects.len(), 1);
+            assert_eq!(effects[0].extract_compound(), Some(&expected), "{flags}");
+        }
     }
 }
 

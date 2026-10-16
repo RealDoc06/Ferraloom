@@ -513,11 +513,8 @@ fn validate_player_data(data: &NbtCompound) -> Result<(), PlayerDataError> {
             let id = effect
                 .get_string("id")
                 .filter(|id| pumpkin_data::effect::StatusEffect::from_minecraft_name(id).is_some());
-            if !id.is_some_and(|id| ids.insert(id)) || effect.get_bool("show_icon").is_none() {
-                return Err(unsupported(
-                    "active_effects",
-                    "requires unique known ids and explicit show_icon for the current reader",
-                ));
+            if !id.is_some_and(|id| ids.insert(id)) {
+                return Err(unsupported("active_effects", "requires unique known ids"));
             }
         }
     }

@@ -92,6 +92,7 @@ impl NBTStorage for pumpkin_data::potion::Effect {
         if !self.show_particles {
             nbt.put("show_particles", NbtTag::Byte(0));
         }
+        // Details encodes Optional.of(showIcon), including when it matches particles.
         let show_icon: i8 = i8::from(self.show_icon);
         nbt.put("show_icon", NbtTag::Byte(show_icon));
     }
@@ -107,10 +108,6 @@ impl NBTStorageInit for pumpkin_data::potion::Effect {
             warn!("Unable to read effect. Unknown effect type: {effect_id}");
             return None;
         };
-        let Some(show_icon) = nbt.get_byte("show_icon") else {
-            warn!("Unable to read effect. Show icon is not present");
-            return None;
-        };
         // 26.3 uses ExtraCodecs.UNSIGNED_BYTE; bounded ints remain readable for
         // earlier Pumpkin saves. Invalid values must not wrap or become zero.
         let amplifier = match nbt.get("amplifier") {
@@ -122,7 +119,13 @@ impl NBTStorageInit for pumpkin_data::potion::Effect {
         let duration = nbt.get_int("duration").unwrap_or(0);
         let ambient = nbt.get_byte("ambient").unwrap_or(0) == 1;
         let show_particles = nbt.get_byte("show_particles").unwrap_or(1) == 1;
-        let show_icon = show_icon == 1;
+        // 26.3 Details::create defaults an omitted icon to the decoded particles
+        // flag, whose codec default is true. An explicit icon overrides it.
+        let show_icon = match nbt.get("show_icon") {
+            None => show_particles,
+            Some(NbtTag::Byte(value)) => *value == 1,
+            _ => return None,
+        };
         Some(Self {
             effect_type,
             duration,
