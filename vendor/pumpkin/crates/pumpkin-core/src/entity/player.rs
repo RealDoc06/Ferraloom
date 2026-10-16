@@ -2759,7 +2759,11 @@ impl Player {
         }
 
         // Statistics updates
-        if let Ok(mut stats) = self.stats.try_lock() {
+        {
+            let mut stats = self
+                .stats
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             stats.increment_custom(statistics::CustomStatistic::PlayTime, 1);
             stats.increment_custom(statistics::CustomStatistic::TotalWorldTime, 1);
             if !self.living_entity.dead.load(Ordering::Relaxed)
@@ -2956,7 +2960,7 @@ impl Player {
                         }
                         let item_id = p.inventory().held_item().item.id;
                         p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                        p.increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1);
+                        p.increment_stat(StatisticCategory::Mined, i32::from(block.id.as_u16()), 1);
                     }
                 }
             }
@@ -3367,12 +3371,11 @@ impl Player {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 stats_guard
-                    .stats
-                    .iter()
-                    .map(|((category, stat), value)| Statistic {
-                        category_id: VarInt(*category),
-                        statistic_id: VarInt(*stat),
-                        value: VarInt(*value),
+                    .network_entries()
+                    .map(|(category, stat, value)| Statistic {
+                        category_id: VarInt(category as i32),
+                        statistic_id: VarInt(stat),
+                        value: VarInt(value),
                     })
                     .collect()
             };
@@ -3405,15 +3408,17 @@ impl Player {
         } else {
             amount
         };
-        if let Ok(mut stats) = self.stats.try_lock() {
-            stats.increment(category, stat, final_amount);
-        }
+        self.stats
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .increment(category, stat, final_amount);
     }
 
     pub fn set_stat(&self, category: statistics::StatisticCategory, stat: i32, value: i32) {
-        if let Ok(mut stats) = self.stats.try_lock() {
-            stats.set(category, stat, value);
-        }
+        self.stats
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set(category, stat, value);
     }
 
     pub fn get_stat(&self, category: statistics::StatisticCategory, stat: i32) -> i32 {

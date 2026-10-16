@@ -71,6 +71,7 @@ pub mod ticker;
 pub use recipe::RecipeManager;
 
 use crate::data::advancement_data::AdvancementManager;
+use crate::data::statistics_data::StatisticsManager;
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -135,6 +136,7 @@ pub struct Server {
     pub random_sequences: std::sync::Mutex<crate::world::random_sequences::RandomSequences>,
     // Manages player advancement
     pub advancement_manager: Arc<AdvancementManager>,
+    pub statistics_manager: Arc<StatisticsManager>,
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
@@ -260,6 +262,10 @@ impl Server {
             players_dir.clone(),
             advanced_config.advancement.save_advancements,
         ));
+        let statistics_manager = Arc::new(StatisticsManager::new(
+            players_dir,
+            advanced_config.player_data.save_player_data,
+        ));
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
@@ -324,6 +330,7 @@ impl Server {
                 crate::world::random_sequences::RandomSequences::new(),
             ),
             advancement_manager,
+            statistics_manager,
             white_list,
             tick_rate_manager,
             tick_times_nanos: std::sync::Mutex::new([0; 100]),
@@ -697,12 +704,15 @@ impl Server {
         if client.closed() {
             return None;
         }
-        // An atomic advancement write may still be finishing on a blocking
-        // worker after its old disconnect future was cancelled.
+        // Atomic advancement/statistics writes can outlive a cancelled
+        // disconnect future on their blocking workers.
         tokio::select! {
             biased;
             () = client.await_close_interrupt() => return None,
-            result = tokio::time::timeout_at(admission_deadline, self.advancement_manager.wait_for_pending_saves()) => {
+            result = tokio::time::timeout_at(admission_deadline, async {
+                self.advancement_manager.wait_for_pending_saves().await;
+                self.statistics_manager.wait_for_pending_saves().await;
+            }) => {
                 if result.is_err() {
                     client.try_kick(DisconnectReason::LoggedInOtherLocation, &TextComponent::text("The previous session has not finished saving. Please try again."));
                     return None;
@@ -779,7 +789,19 @@ impl Server {
             }
         }
 
-        // Wrap in Arc after both persistence families are loaded.
+        if let Err(error) = self.statistics_manager.load_player(&player) {
+            error!(
+                "Refusing login for {}: failed to load statistics: {error}",
+                player.gameprofile.id
+            );
+            player.client.try_kick(
+                DisconnectReason::Kicked,
+                &TextComponent::text("Your statistics data could not be loaded. Please contact the server administrator."),
+            );
+            return None;
+        }
+
+        // Wrap in Arc after all three persistence families are loaded.
         let player = Arc::new(player);
         {
             let mut advancements = player

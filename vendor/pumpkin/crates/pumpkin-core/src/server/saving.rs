@@ -117,6 +117,12 @@ impl Server {
                 .map_err(|error| format!("Failed to save player advancements: {error}")),
         );
         record_error(
+            self.statistics_manager
+                .save_all_players(&self.get_all_players())
+                .await
+                .map_err(|error| format!("Failed to save player statistics: {error}")),
+        );
+        record_error(
             self.save_scoreboard()
                 .map_err(|error| format!("Failed to save scoreboard: {error}")),
         );

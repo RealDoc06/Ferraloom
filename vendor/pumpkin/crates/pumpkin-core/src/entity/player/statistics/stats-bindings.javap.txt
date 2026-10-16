@@ -1,0 +1,42 @@
+Minecraft 26.3 net.minecraft.stats.Stats static initializer, offsets 0..96
+Command: timeout 30s nice -n 19 javap -J-Xmx256m -classpath .cache/vanilla/26.3/minecraft.jar -c -p net.minecraft.stats.Stats
+Jar SHA256: a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6
+Full dump SHA256: 5052516d8ef52b0258691370bc555a8adebc4edc96fc422b55721d0b7faaeee0
+
+    Code:
+         0: ldc           #53                 // String mined
+         2: getstatic     #55                 // Field net/minecraft/core/registries/BuiltInRegistries.BLOCK:Lnet/minecraft/core/DefaultedRegistry;
+         5: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+         8: putstatic     #63                 // Field BLOCK_MINED:Lnet/minecraft/stats/StatType;
+        11: ldc           #66                 // String crafted
+        13: getstatic     #68                 // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+        16: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        19: putstatic     #71                 // Field ITEM_CRAFTED:Lnet/minecraft/stats/StatType;
+        22: ldc           #74                 // String used
+        24: getstatic     #68                 // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+        27: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        30: putstatic     #76                 // Field ITEM_USED:Lnet/minecraft/stats/StatType;
+        33: ldc           #79                 // String broken
+        35: getstatic     #68                 // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+        38: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        41: putstatic     #81                 // Field ITEM_BROKEN:Lnet/minecraft/stats/StatType;
+        44: ldc           #84                 // String picked_up
+        46: getstatic     #68                 // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+        49: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        52: putstatic     #86                 // Field ITEM_PICKED_UP:Lnet/minecraft/stats/StatType;
+        55: ldc           #89                 // String dropped
+        57: getstatic     #68                 // Field net/minecraft/core/registries/BuiltInRegistries.ITEM:Lnet/minecraft/core/DefaultedRegistry;
+        60: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        63: putstatic     #91                 // Field ITEM_DROPPED:Lnet/minecraft/stats/StatType;
+        66: ldc           #94                 // String killed
+        68: getstatic     #96                 // Field net/minecraft/core/registries/BuiltInRegistries.ENTITY_TYPE:Lnet/minecraft/core/DefaultedRegistry;
+        71: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        74: putstatic     #99                 // Field ENTITY_KILLED:Lnet/minecraft/stats/StatType;
+        77: ldc           #102                // String killed_by
+        79: getstatic     #96                 // Field net/minecraft/core/registries/BuiltInRegistries.ENTITY_TYPE:Lnet/minecraft/core/DefaultedRegistry;
+        82: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        85: putstatic     #104                // Field ENTITY_KILLED_BY:Lnet/minecraft/stats/StatType;
+        88: ldc           #107                // String custom
+        90: getstatic     #13                 // Field net/minecraft/core/registries/BuiltInRegistries.CUSTOM_STAT:Lnet/minecraft/core/Registry;
+        93: invokestatic  #59                 // Method makeRegistryStatType:(Ljava/lang/String;Lnet/minecraft/core/Registry;)Lnet/minecraft/stats/StatType;
+        96: putstatic     #25                 // Field CUSTOM:Lnet/minecraft/stats/StatType;

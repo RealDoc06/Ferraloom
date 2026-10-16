@@ -131,22 +131,8 @@ impl PreservedPlayerData {
                 }
             }
         }
-        // Statistics owns only parseable numeric counters; its file-format work
-        // is separate. Preserve any entries that its current reader skips.
-        if let Some(statistics) = nbt.get_compound("Statistics") {
-            let mut remainder = NbtCompound::new();
-            for (key, value) in &statistics.child_tags {
-                let modeled = key.split_once(':').is_some_and(|(category, stat)| {
-                    category.parse::<i32>().is_ok() && stat.parse::<i32>().is_ok()
-                }) && matches!(value, NbtTag::Int(_));
-                if !modeled {
-                    remainder.put(key, value.clone());
-                }
-            }
-            if !remainder.is_empty() {
-                compounds.put_compound("Statistics", remainder);
-            }
-        }
+        // Statistics owns and retains its complete private typed tree. Canonical
+        // JSON has separate load eligibility and never rewrites those counters.
         Self {
             top_level,
             compounds,

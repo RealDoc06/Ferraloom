@@ -525,6 +525,16 @@ impl PumpkinServer {
             SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
+        if let Err(e) = self
+            .server
+            .statistics_manager
+            .save_all_players(&self.server.get_all_players())
+            .await
+        {
+            error!("Error saving all players statistics during shutdown: {e}");
+            SERVER_EXIT_CODE.store(1, Ordering::Release);
+        }
+
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players() {
             player.kick(DisconnectReason::Shutdown, &kick_message);
@@ -731,6 +741,13 @@ pub(crate) enum PlayerSessionSaveError {
     Player(pumpkin_world::data::player_data::PlayerDataError),
     #[error("Advancements: {0}")]
     Advancements(entity::player::advancement::AdvancementDataError),
+    #[error("Statistics: {0}")]
+    Statistics(entity::player::statistics::StatisticsDataError),
+    #[error("{previous}; statistics: {statistics}")]
+    WithStatistics {
+        previous: Box<Self>,
+        statistics: entity::player::statistics::StatisticsDataError,
+    },
     #[error("Player data: {player}; advancements: {advancements}")]
     Both {
         player: pumpkin_world::data::player_data::PlayerDataError,
@@ -738,7 +755,7 @@ pub(crate) enum PlayerSessionSaveError {
     },
 }
 
-/// Keep this Player's admission lease through callbacks and both independent
+/// Keep this Player's admission lease through callbacks and all three independent
 /// persistence attempts. A duplicate cleanup never releases another session's lease.
 pub(crate) async fn finish_player_session(
     server: &Server,
@@ -760,13 +777,22 @@ pub(crate) async fn finish_player_session(
     server.remove_player(player);
     let player_data = server.player_data_storage.handle_player_leave(player);
     let advancements = server.advancement_manager.save_player(player).await;
-    match (player_data, advancements) {
+    let statistics = server.statistics_manager.save_player(player).await;
+    let previous = match (player_data, advancements) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(player), Ok(())) => Err(PlayerSessionSaveError::Player(player)),
         (Ok(()), Err(error)) => Err(PlayerSessionSaveError::Advancements(error)),
         (Err(player), Err(advancements)) => Err(PlayerSessionSaveError::Both {
             player,
             advancements,
+        }),
+    };
+    match (previous, statistics) {
+        (result, Ok(())) => result,
+        (Ok(()), Err(error)) => Err(PlayerSessionSaveError::Statistics(error)),
+        (Err(previous), Err(statistics)) => Err(PlayerSessionSaveError::WithStatistics {
+            previous: Box::new(previous),
+            statistics,
         }),
     }
 }

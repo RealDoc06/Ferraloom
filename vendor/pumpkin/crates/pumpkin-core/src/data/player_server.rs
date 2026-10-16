@@ -269,7 +269,7 @@ impl ServerPlayerData {
 }
 
 #[cfg(test)]
-mod test {
+pub(super) mod test {
     use crate::data::VanillaData;
     use crate::data::player_server::ServerPlayerData;
     use crate::entity::{NBTStorage, player::Player};
@@ -302,15 +302,15 @@ mod test {
         storage.save_player_data(snapshot)
     }
 
-    struct PlayerFixture {
-        _directory: tempfile::TempDir,
-        server: Arc<Server>,
-        player: Arc<Player>,
-        client: Arc<ClientPlatform>,
+    pub(crate) struct PlayerFixture {
+        pub(crate) _directory: tempfile::TempDir,
+        pub(crate) server: Arc<Server>,
+        pub(crate) player: Arc<Player>,
+        pub(crate) client: Arc<ClientPlatform>,
         _remote: tokio::net::TcpStream,
     }
 
-    async fn java_client(
+    pub(crate) async fn java_client(
         server: &Arc<Server>,
         profile: &GameProfile,
     ) -> (Arc<ClientPlatform>, tokio::net::TcpStream) {
@@ -333,7 +333,7 @@ mod test {
         (Arc::new(ClientPlatform::Java(java)), remote)
     }
 
-    async fn player_fixture() -> PlayerFixture {
+    pub(crate) async fn player_fixture() -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -381,6 +381,7 @@ mod test {
         ));
         // This fixture bypasses admission, which loads progress before publication.
         player.advancements.lock().unwrap().load().unwrap();
+        server.statistics_manager.load_player(&player).unwrap();
         player
             .screen_handler_sync_handler
             .store_player(player.clone());
@@ -401,7 +402,7 @@ mod test {
         }
     }
 
-    async fn close_fixture(fixture: &PlayerFixture) {
+    pub(crate) async fn close_fixture(fixture: &PlayerFixture) {
         if fixture
             .server
             .get_player_by_uuid(fixture.player.gameprofile.id)
@@ -489,6 +490,17 @@ mod test {
             pumpkin_util::GameMode::Survival,
         );
         rejoined.read_nbt(&mut loaded);
+        assert!(loaded.get("Statistics").is_none());
+        fixture
+            .server
+            .statistics_manager
+            .load_player(&rejoined)
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(fixture.server.statistics_manager.player_path(uuid)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(json["stats"]["minecraft:custom"]["minecraft:leave_game"], 1);
         assert_eq!(rejoined.experience_level.load(Ordering::Relaxed), 9);
         assert_eq!(
             rejoined.stats.lock().unwrap().get(
