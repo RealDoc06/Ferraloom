@@ -659,7 +659,7 @@ async fn drive_until<F: Future>(server: &Arc<Server>, future: F) -> F::Output {
 
 async fn settled(player: &Arc<Player>) {
     let server = player.world().server.upgrade().unwrap();
-    drive_until(
+    let result = futures::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(drive_until(
         &server,
         std::future::poll_fn(|_| {
             let state = player.packet_activity.state();
@@ -671,8 +671,35 @@ async fn settled(player: &Arc<Player>) {
                 std::task::Poll::Pending
             }
         }),
-    )
+    )))
     .await;
+    if let Err(panic) = result {
+        let world = player.world();
+        let state = player.packet_activity.state();
+        eprintln!(
+            "settled timeout: world={} epoch={} awaiting_teleport={} closed={} active={} blockers={} remaining={} inbound={}",
+            world.dimension.minecraft_name,
+            player.chunk_send_epoch.load(Ordering::Relaxed),
+            player.awaiting_teleport.lock().unwrap().is_some(),
+            player.client.closed(),
+            state.active,
+            state.dispatch_blockers,
+            state.remaining,
+            player.inbound_packets.len(),
+        );
+        drop(state);
+        let work = player.packet_activity.work.lock().unwrap();
+        for task in work.iter() {
+            eprintln!(
+                "pending task: ready={} explicit_world_stages={} cancelled={}",
+                task.ready.load(Ordering::Acquire),
+                task.explicit_world_stages,
+                task.cancelled.load(Ordering::Acquire),
+            );
+        }
+        drop(work);
+        std::panic::resume_unwind(panic);
+    }
 }
 
 struct TransportObserver {
