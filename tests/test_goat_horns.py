@@ -62,6 +62,24 @@ class HornCampaignTests(unittest.TestCase):
         self.assertEqual(retained_player[0], chest[6])
         self.assertEqual(sum(len(x) for x in (chest, player)), sum(len(x) for x in (retained_chest, retained_player)))
 
+    def test_live_cooldown_predicate_preserves_float_width_and_rejects_invalid_values(self):
+        # Exercise the real campaign control that reached Java setup before the
+        # shared predicate encoder rejected its nested cooldown Float.
+        _, player = horns.expected(False)
+        control = {"Slot": horns.atom("Byte", 3), **player[3]}
+        before = deepcopy(control)
+        predicate = horns.typed_snbt(control)
+        self.assertIn('"seconds":1.0f,"cooldown_group":"test:horn_group"', predicate)
+        self.assertNotIn("nbt_type", predicate)
+        self.assertEqual(control, before)
+        invalid = [
+            {"nbt_type": "Float", "value": value}
+            for value in (True, 1, "1.0", float("nan"), float("inf"), -float("inf"), 1e40)
+        ] + [{"nbt_type": "Float"}, {"nbt_type": "Float", "value": 1.0, "extra": 1}]
+        for value in invalid:
+            with self.subTest(value=value), self.assertRaises(AssertionError):
+                horns.typed_snbt({"seconds": value})
+
     def test_authoritative_menu_expectation_keeps_chest_and_hotbar_indices_separate(self):
         initial, retained = horns.menu_slots(False), horns.menu_slots(True)
         self.assertEqual(len(initial), 63)

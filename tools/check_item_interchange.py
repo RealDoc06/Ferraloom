@@ -19,6 +19,7 @@ import argparse
 from copy import deepcopy
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -232,6 +233,12 @@ def typed_snbt(value: object) -> str:
         number = typed_int(value, kind, -128 if kind == "Byte" else -2147483648,
                            127 if kind == "Byte" else 2147483647)
         return str(number) + ("b" if kind == "Byte" else "")
+    if kind == "Float":
+        number = value.get("value")
+        require(set(value) == {"nbt_type", "value"} and type(number) is float
+                and math.isfinite(number) and abs(number) <= 3.4028234663852886e38,
+                {"expected_type": "Float", "actual": value})
+        return repr(number) + "f"
     if kind == "IntArray":
         return "[I;" + ",".join(str(number) for number in value["value"]) + "]"
     if kind == "List":
