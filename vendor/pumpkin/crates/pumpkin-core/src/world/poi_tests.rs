@@ -1,10 +1,9 @@
 //! Stage C caller contracts, UNRUN pending root's native slot.
 
 use super::*;
-use crate::command::node::dispatcher::CommandDispatcher;
-use pumpkin_data::{BlockStateId, entity::EntityType};
+use crate::world::portal;
+use pumpkin_data::{BlockStateId, dimension::Dimension, entity::EntityType};
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
-use pumpkin_util::permission::PermissionRegistry;
 use pumpkin_world::chunk::ChunkData;
 use std::sync::Arc;
 
@@ -27,8 +26,7 @@ async fn locate_actual_raw_and_batch_writes_use_sphere_and_horizontal_result() {
         (0, origin.0.y + 256, 0, Block::LECTERN.default_state.id),
         (1, origin.0.y + 256, 0, Block::LECTERN.default_state.id),
     ]);
-    let mut dispatcher = CommandDispatcher::new();
-    crate::command::commands::locate::register(&mut dispatcher, &PermissionRegistry::default());
+    let dispatcher = fixture.source.server().command_dispatcher.load();
     assert_eq!(
         dispatcher
             .execute_input("locate poi minecraft:librarian", &fixture.source)

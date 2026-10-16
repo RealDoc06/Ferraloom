@@ -4,7 +4,6 @@ use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 use crate::block::blocks::bed::BedBlock;
-use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
 use pumpkin_data::effect::StatusEffect;
@@ -14,6 +13,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::{Block, Enchantment};
 use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
