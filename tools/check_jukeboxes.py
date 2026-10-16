@@ -348,9 +348,13 @@ def read_fixture(world: Path, artifact: Path, *, entities: bool = False) -> dict
         require(len(header) == worlds.SECTOR_BYTES * 2, 'Truncated Anvil header')
         location = int.from_bytes(header[:4], 'big')
         sector, count = location >> 8, location & 255
-        require(sector >= 2 and count > 0 and (sector + count) * worlds.SECTOR_BYTES <= region.stat().st_size, 'Invalid chunk allocation')
+        require(sector >= 2 and count > 0, 'Invalid chunk allocation')
+        # Java pads unused sector bytes on close, rather than on save-all flush.
+        # Validate the stored record itself, including its allocated capacity.
         source.seek(sector * worlds.SECTOR_BYTES)
-        length = int.from_bytes(source.read(4), 'big')
+        raw_length = source.read(4)
+        require(len(raw_length) == 4, 'Truncated chunk length')
+        length = int.from_bytes(raw_length, 'big')
         require(2 <= length <= min(count * worlds.SECTOR_BYTES - 4, worlds.MAX_NBT_BYTES), 'Invalid chunk length')
         record = source.read(length)
         require(len(record) == length, 'Truncated chunk')

@@ -224,8 +224,8 @@ def read_chunk(world: Path, chunk_x: int = 0, chunk_z: int = 0) -> dict:
                 raise ValueError(f'Chunk ({chunk_x}, {chunk_z}) is absent')
             if sector < 2 or count == 0:
                 raise ValueError('Invalid Anvil chunk sector allocation')
-            if (sector + count) * SECTOR_BYTES > region.stat().st_size:
-                raise ValueError('Chunk allocation extends beyond region file')
+            # RegionFile.flush forces the record; only close pads its last sector.
+            # Missing unused padding is valid, while truncated record bytes are not.
             handle.seek(sector * SECTOR_BYTES)
             raw_length = handle.read(4)
             if len(raw_length) != 4:

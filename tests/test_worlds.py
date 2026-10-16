@@ -253,11 +253,12 @@ class RegionComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'absent'):
                 worlds.read_chunk(world, 1, 0)
             valid = path.read_bytes()
+            record_end = 8192 + 4 + int.from_bytes(valid[8192:8196], 'big')
             for damaged in (
                 valid[:100],
                 b'\x00\x00\x01\x01' + valid[4:],
                 valid[:8192] + b'\x00\x00\x10\x00' + valid[8196:],
-                valid[:9000],
+                valid[:record_end - 1],
             ):
                 path.write_bytes(damaged)
                 with self.assertRaises(ValueError):
@@ -271,6 +272,17 @@ class RegionComparisonTests(unittest.TestCase):
             write_region(world, b'not-inline', compression=130)
             with self.assertRaisesRegex(ValueError, 'External'):
                 worlds.read_chunk(world)
+
+    def test_complete_region_record_does_not_require_unused_sector_padding(self):
+        # Codec-derived boundary, matching RegionFile.write/flush versus close.
+        with tempfile.TemporaryDirectory() as directory:
+            world = Path(directory)
+            path = write_region(world, chunk(()))
+            padded = path.read_bytes()
+            end = 8192 + 4 + int.from_bytes(padded[8192:8196], 'big')
+            self.assertLess(end, len(padded))
+            path.write_bytes(padded[:end])
+            self.assertEqual(worlds.read_chunk(world), worlds.decode_nbt(chunk(())))
 
 
 if __name__ == '__main__':

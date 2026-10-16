@@ -3,10 +3,13 @@ import base64
 from copy import deepcopy
 import hashlib
 from pathlib import Path
+import struct
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import zlib
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
@@ -76,6 +79,42 @@ def restore_snapshot(ticks, time=0):
 
 
 class JukeboxCampaignTests(unittest.TestCase):
+    def test_unpadded_terrain_and_entity_records_keep_strict_payload_bounds(self):
+        # Synthetic NBT boundaries, not runtime goldens. Java RegionFile pads on
+        # close, while the campaign reads the still-open file after save-all flush.
+        def named_int(name, value):
+            key = name.encode()
+            return b'\x03' + struct.pack('>H', len(key)) + key + struct.pack('>i', value)
+
+        for entities in (False, True):
+            with self.subTest(entities=entities), tempfile.TemporaryDirectory() as directory:
+                world = Path(directory)
+                region = world / ('entities' if entities else 'region') / 'r.8.0.mca'
+                region.parent.mkdir()
+                list_name = b'Entities' if entities else b'block_entities'
+                raw = (b'\x0a\x00\x00' + named_int('DataVersion', 5023)
+                       + named_int('xPos', 256) + named_int('zPos', 0)
+                       + b'\x09' + struct.pack('>H', len(list_name)) + list_name
+                       + b'\x0a\x00\x00\x00\x00\x00')
+                compressed = zlib.compress(raw)
+                record = struct.pack('>I', len(compressed) + 1) + b'\x02' + compressed
+                header = ((2 << 8) | 1).to_bytes(4, 'big') + bytes(8188)
+                valid = header + record
+                self.assertLess(len(valid), 12288)
+                region.write_bytes(valid)
+                artifact = world / 'valid.nbt'
+                result = discs.read_fixture(world, artifact, entities=entities)
+                self.assertEqual(artifact.read_bytes(), raw)
+                self.assertEqual(result['typed']['DataVersion'] if entities else result['typed'],
+                                 discs.atom('Int', 5023) if entities else {})
+                for index, damaged in enumerate((
+                        valid[:100], b'\x00\x00\x01\x01' + valid[4:],
+                        b'\x00\x00\x02\x00' + valid[4:], valid[:8195],
+                        header + struct.pack('>I', 4093) + record[4:], valid[:-1])):
+                    region.write_bytes(damaged)
+                    with self.subTest(case=index), self.assertRaises(AssertionError):
+                        discs.read_fixture(world, world / f'bad-{index}.nbt', entities=entities)
+
     def test_all_composites_require_boot_order_copies_provenance_cleanup_and_actual_observations(self):
         report = complete_report()
         self.assertEqual({row['result'] for row in discs.campaign_rows(report)}, {'passed'})
