@@ -12,7 +12,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 struct Workers {
     write: tokio::sync::mpsc::Receiver<WriteRequest>,
-    read: tokio::sync::mpsc::Receiver<Vec<ChunkPos>>,
+    read: tokio::sync::mpsc::Receiver<ReadRequest>,
 }
 
 // Real Level/store and real scheduler data, with automatic workers drained so
@@ -192,7 +192,11 @@ async fn queued_retirement_a_fences_replacement_b_until_actual_writer_finishes()
         level.clone(),
         schedule.io_lock.clone(),
     ));
-    schedule.io_read.send(vec![pos]).await.unwrap();
+    schedule
+        .io_read
+        .send(ReadRequest::Chunks(vec![pos]))
+        .await
+        .unwrap();
     // The existing read worker cannot return B while A owns the queued IO lock.
     let receive = schedule.recv_chunk.clone();
     assert!(
@@ -256,4 +260,265 @@ async fn queued_retirement_a_fences_replacement_b_until_actual_writer_finishes()
     drop(schedule);
     reader.await.unwrap();
     writer.await.unwrap();
+}
+
+// C2 additions below are UNRUN. The two Stage B scenarios above are unchanged
+// except the approved ReadRequest::Chunks envelope around the same coordinates.
+fn request_area(
+    schedule: &GenerationSchedule,
+    level: &Level,
+    pos: ChunkPos,
+) -> tokio::sync::oneshot::Receiver<Result<AreaCapture, PoiQueryError>> {
+    let area =
+        crate::poi::query::PoiArea::new(BlockPos::new(pos.x * 16, 0, pos.y * 16), 0).unwrap();
+    let columns = {
+        let mut storage = level.poi_storage.lock().unwrap();
+        storage.preload_area(area).unwrap();
+        storage.columns_needing_terrain(area, -4, 20).unwrap()
+    };
+    let (reply, receive) = tokio::sync::oneshot::channel();
+    schedule
+        .send_level
+        .request_poi(PoiAreaReadRequest {
+            area,
+            columns,
+            min_section: -4,
+            end_section: 20,
+            reply,
+        })
+        .unwrap();
+    receive
+}
+
+async fn await_private_read(schedule: &GenerationSchedule, query: &mut PendingPoiQuery) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(result) = query.poll_disk(&schedule.io_read, &schedule.io_lock) {
+                result.unwrap();
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+fn start_reader(
+    schedule: &GenerationSchedule,
+    level: &Arc<Level>,
+    read: tokio::sync::mpsc::Receiver<ReadRequest>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(io_read_work(
+        Arc::new(tokio::sync::Mutex::new(read)),
+        schedule.send_chunk.clone(),
+        level.clone(),
+        schedule.io_lock.clone(),
+    ))
+}
+
+async fn ordinary_read_result(schedule: &GenerationSchedule) -> (ChunkPos, RecvChunk) {
+    let receive = schedule.recv_chunk.clone();
+    tokio::task::spawn_blocking(move || receive.recv_timeout(Duration::from_secs(5)))
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn cold_query_waits_for_queued_a_and_fences_later_ordinary_b_through_capture() {
+    let (_directory, level, mut schedule, workers) = fixture().await;
+    schedule.send_level = Arc::new(LevelChannel::new());
+    let pos = ChunkPos::new(0, 0);
+    let a = publish(&mut schedule, &level, pos);
+    a.set_block_absolute_y(0, 0, 0, home());
+    schedule = tokio::task::spawn_blocking(move || {
+        let chunk = schedule.unpublish_chunk(pos).unwrap();
+        schedule.chunk_map.remove(&pos);
+        schedule
+            .queue_chunk_save(vec![(pos, Chunk::Level(chunk))])
+            .unwrap();
+        schedule
+    })
+    .await
+    .unwrap();
+    let result = request_area(&schedule, &level, pos);
+    let mut active = None;
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(active.as_ref().unwrap().reservation.is_none());
+    assert!(
+        active
+            .as_ref()
+            .unwrap()
+            .blocks(&Node::new(pos, StagedChunkEnum::Empty))
+    );
+    let reader = start_reader(&schedule, &level, workers.read);
+    let writer = tokio::spawn(io_write_work(
+        workers.write,
+        level.clone(),
+        schedule.io_lock.clone(),
+    ));
+    await_private_read(&schedule, active.as_mut().unwrap()).await;
+    let query = active.as_ref().unwrap();
+    assert!(
+        query.disk.as_ref().unwrap()[0]
+            .sections
+            .iter()
+            .any(|(y, palette)| *y == 0 && palette.get(0, 0, 0) == home())
+    );
+    assert!(schedule.io_lock.0.lock().unwrap()[&pos].poi.is_some());
+    schedule
+        .io_read
+        .send(ReadRequest::Chunks(vec![pos]))
+        .await
+        .unwrap();
+    let receive = schedule.recv_chunk.clone();
+    assert!(
+        tokio::task::spawn_blocking(move || receive.recv_timeout(Duration::from_millis(50)))
+            .await
+            .unwrap()
+            .is_err()
+    );
+    schedule.poll_poi_requests(&level, &mut active);
+    let AreaCapture::Ready(entries) = result.await.unwrap().unwrap() else {
+        panic!("cold capture")
+    };
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.poi_type == PoiType::Home.identifier())
+    );
+    assert!(active.is_none());
+    let (_, received) = ordinary_read_result(&schedule).await;
+    let RecvChunk::IO(Chunk::Level(b)) = received else {
+        panic!("ordinary Full read")
+    };
+    assert!(!Arc::ptr_eq(&a, &b));
+    schedule.publish_chunk(pos, &b);
+    assert_eq!(b.section.get_block_absolute_y(0, 0, 0), Some(home()));
+    assert!(!schedule.io_lock.0.lock().unwrap().contains_key(&pos));
+    drop(schedule);
+    reader.await.unwrap();
+    writer.await.unwrap();
+}
+
+#[tokio::test]
+async fn cancelled_and_closed_queries_release_reservations_for_following_normal_io() {
+    let (_directory, level, mut schedule, workers) = fixture().await;
+    schedule.send_level = Arc::new(LevelChannel::new());
+    let pos = ChunkPos::new(0, 0);
+    let cancelled = request_area(&schedule, &level, pos);
+    let mut active = None;
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(schedule.io_lock.0.lock().unwrap().contains_key(&pos));
+    drop(cancelled);
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(active.is_none());
+    assert!(!schedule.io_lock.0.lock().unwrap().contains_key(&pos));
+    let closed = request_area(&schedule, &level, pos);
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(active.is_some());
+    let queued = request_area(&schedule, &level, ChunkPos::new(1, 0));
+    schedule.close_poi_queries(&mut active);
+    assert!(closed.await.is_err());
+    assert!(matches!(queued.await.unwrap(), Err(PoiQueryError::Closed)));
+    assert!(schedule.io_lock.0.lock().unwrap().is_empty());
+    let reader = start_reader(&schedule, &level, workers.read);
+    schedule
+        .io_read
+        .send(ReadRequest::Chunks(vec![pos]))
+        .await
+        .unwrap();
+    let (received_pos, received) = ordinary_read_result(&schedule).await;
+    assert_eq!(received_pos, pos);
+    assert!(matches!(received, RecvChunk::IO(Chunk::Proto(_))));
+    assert!(schedule.io_lock.0.lock().unwrap().is_empty());
+    drop(schedule);
+    reader.await.unwrap();
+}
+
+#[tokio::test]
+async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_footprint() {
+    let (_directory, level, mut schedule, _workers) = fixture().await;
+    schedule.send_level = Arc::new(LevelChannel::new());
+    let decoded = crate::poi::query_tests::sparse_read_fixture(&level.level_folder.poi_folder);
+    let mut proto = crate::ProtoChunk::from_chunk_data(&decoded, &level.world_gen.load());
+    assert_eq!(proto.poi_read_sections(), &[0, 2]);
+    proto.set_block_state(1, 0, 1, BlockState::from_id(home()));
+    let pos = ChunkPos::new(0, 0);
+    let occupy = schedule
+        .graph
+        .nodes
+        .insert(Node::new(pos, StagedChunkEnum::None));
+    schedule.chunk_map.insert(
+        pos,
+        ChunkHolder {
+            current_stage: StagedChunkEnum::Empty,
+            occupied: occupy,
+            ..ChunkHolder::default()
+        },
+    );
+    let mut cache = Cache::new(0, 0, 1);
+    cache.chunks.push(Chunk::Proto(Box::new(proto)));
+    let area = crate::poi::query::PoiArea::new(BlockPos::new(1, 0, 1), 0).unwrap();
+    level
+        .poi_storage
+        .lock()
+        .unwrap()
+        .preload_area(area)
+        .unwrap();
+    let path = level.level_folder.poi_folder.join("r.0.0.mca");
+    let before = std::fs::read(&path).unwrap();
+    let (reply, mut receive) = tokio::sync::oneshot::channel();
+    schedule
+        .send_level
+        .request_poi(PoiAreaReadRequest {
+            area,
+            columns: vec![pos],
+            min_section: -4,
+            end_section: 20,
+            reply,
+        })
+        .unwrap();
+    let mut active = None;
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(matches!(
+        receive.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+    cache.set_block_state(&Vector3::new(1, 0, 1), &Block::BELL.default_state);
+    let holder = schedule.chunk_map.get_mut(&pos).unwrap();
+    holder.chunk = cache.chunks.pop();
+    holder.occupied = NodeKey::null();
+    schedule.graph.nodes.remove(occupy);
+    schedule.poll_poi_requests(&level, &mut active);
+    let AreaCapture::Ready(entries) = receive.await.unwrap().unwrap() else {
+        panic!("private Proto capture")
+    };
+    assert_eq!(
+        entries.iter().find(|entry| entry.y == 0).unwrap().poi_type,
+        PoiType::Meeting.identifier()
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 16)
+            .unwrap()
+            .free_tickets,
+        -7
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 32)
+            .unwrap()
+            .free_tickets,
+        3
+    );
+    assert!(level.loaded_chunks.is_empty());
+    level.poi_storage.lock().unwrap().save_all().unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let mut generated = crate::ProtoChunk::new(0, 0, &level.world_gen.load());
+    generated.set_block_state(1, 0, 1, &Block::BELL.default_state);
+    assert!(PoiTerrainOverlay::resident(&generated).sections.is_empty());
 }

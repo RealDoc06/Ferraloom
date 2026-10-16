@@ -436,7 +436,6 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
                 put(&world, pos, Block::OBSIDIAN.default_state.id);
             } else {
                 put(&world, pos, Block::NETHER_PORTAL.default_state.id);
-                world.portal_poi.lock().unwrap().add_portal(pos).unwrap();
             }
         }
     }
@@ -448,6 +447,10 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
         1
     );
     assert_eq!(world.get_block(&pos), &Block::STONECUTTER);
+    for chunk in &*world.level.loaded_chunks {
+        world.level.bind_chunk_poi(chunk.value()).unwrap();
+    }
+    world.level.poi_snapshot_in_square(pos, 0).unwrap();
     let mut poi = world.portal_poi.lock().unwrap();
     assert_eq!(
         poi.get_in_square(pos, 0, Some("minecraft:mason")).unwrap(),

@@ -6,6 +6,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::io::{FileIO, LoadedData, run_blocking};
 use crate::level::Level;
+use crate::poi::{PoiQueryError, query::PoiTerrainOverlay};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
@@ -28,6 +29,86 @@ pub enum WriteRequest {
     Chunks(Vec<(ChunkPos, Chunk)>),
     Entities,
     Flush(Vec<tokio::sync::oneshot::Sender<Result<(), String>>>),
+}
+
+pub(crate) enum ReadRequest {
+    Chunks(Vec<ChunkPos>),
+    Poi(PoiIoReadRequest),
+}
+
+pub(crate) struct PoiIoReadRequest {
+    pub(crate) positions: Vec<ChunkPos>,
+    pub(crate) reservation: Arc<()>,
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<Vec<PoiTerrainOverlay>, PoiQueryError>>,
+}
+
+async fn read_poi_area(mut request: PoiIoReadRequest, level: &Level, lock: &IOLock) {
+    let result = read_reserved_poi(&mut request, level, lock).await;
+    let _ = request.reply.send(result);
+    level.level_channel.notify();
+}
+
+async fn read_reserved_poi(
+    request: &mut PoiIoReadRequest,
+    level: &Level,
+    lock: &IOLock,
+) -> Result<Vec<PoiTerrainOverlay>, PoiQueryError> {
+    for pos in &request.positions {
+        loop {
+            let notified = lock.1.notified();
+            let ready = {
+                let entries = lock
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(entry) = entries.get(pos) else {
+                    return Err(PoiQueryError::Closed);
+                };
+                if !entry
+                    .poi
+                    .as_ref()
+                    .is_some_and(|id| Arc::ptr_eq(id, &request.reservation))
+                {
+                    return Err(PoiQueryError::Closed);
+                }
+                entry.writes == 0
+            };
+            if ready {
+                break;
+            }
+            tokio::select! {
+                () = notified => {},
+                () = request.reply.closed() => return Err(PoiQueryError::Closed),
+            }
+        }
+    }
+    // This request owns only a tag. It never waits on its own read reservation,
+    // and has no storage, publication or terrain guard across disk IO.
+    let (send, mut receive) = tokio::sync::mpsc::channel(request.positions.len().max(1));
+    tokio::select! {
+        () = level.chunk_saver.fetch_chunks(&level.level_folder, &request.positions, send) => {},
+        () = request.reply.closed() => return Err(PoiQueryError::Closed),
+    }
+    let mut overlays = Vec::with_capacity(request.positions.len());
+    while let Some(data) = receive.recv().await {
+        match data {
+            Loaded(chunk) => overlays.push(PoiTerrainOverlay::decoded(&chunk)?),
+            LoadedData::Missing(pos) => overlays.push(PoiTerrainOverlay {
+                pos,
+                sections: Vec::new(),
+            }),
+            LoadedData::Error((pos, error)) => {
+                return Err(PoiQueryError::NeedsTerrain {
+                    pos,
+                    reason: error.to_string(),
+                });
+            }
+        }
+    }
+    if overlays.len() != request.positions.len() {
+        return Err(PoiQueryError::Closed);
+    }
+    Ok(overlays)
 }
 
 /// Checks if a chunk needs relighting based on the current lighting configuration
@@ -95,8 +176,8 @@ fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> C
     }
 }
 
-pub async fn io_read_work(
-    recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Vec<ChunkPos>>>>,
+pub(crate) async fn io_read_work(
+    recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<ReadRequest>>>,
     send: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
     lock: IOLock,
@@ -109,8 +190,15 @@ pub async fn io_read_work(
             let mut lock_rx = recv.lock().await;
             lock_rx.recv().await
         };
-        let Some(batch) = batch else {
+        let Some(request) = batch else {
             break;
+        };
+        let batch = match request {
+            ReadRequest::Chunks(batch) => batch,
+            ReadRequest::Poi(request) => {
+                read_poi_area(request, &level, &lock).await;
+                continue;
+            }
         };
         for pos in &batch {
             // Lock handling
@@ -288,10 +376,9 @@ pub async fn io_write_work(
                 match data.entry(i) {
                     Entry::Occupied(mut entry) => {
                         let rc = entry.get_mut();
-                        if *rc <= 1 {
+                        rc.writes = rc.writes.saturating_sub(1);
+                        if rc.writes == 0 && rc.poi.is_none() {
                             entry.remove();
-                        } else {
-                            *rc -= 1;
                         }
                     }
                     Entry::Vacant(_) => {

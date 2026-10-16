@@ -188,3 +188,174 @@ async fn refused_query_cannot_leak_through_same_region_sibling_in_all_three_form
     Box::pin(refused_query_sibling::<LinearV2File<ChunkData>>(())).await;
     Box::pin(refused_query_sibling::<PumpFile<ChunkData>>(())).await;
 }
+
+// Shared source fixture for the actual decoder and scheduler conversion tests.
+pub fn sparse_read_fixture(folder: &Path) -> ChunkData {
+    use super::persistence_tests::{chunk, compress_fixture, record, section, write_mca};
+    std::fs::create_dir_all(folder).unwrap();
+    let records = [
+        (
+            "0",
+            section(
+                Some(0),
+                vec![record([1, 0, 1], PoiType::Home.identifier(), Some(0))],
+            ),
+        ),
+        (
+            "1",
+            section(
+                Some(0),
+                vec![record([1, 16, 1], PoiType::Home.identifier(), Some(-7))],
+            ),
+        ),
+        (
+            "2",
+            section(
+                Some(1),
+                vec![record([1, 32, 1], PoiType::Meeting.identifier(), Some(3))],
+            ),
+        ),
+    ];
+    let payload = compress_fixture(chunk(&records));
+    write_mca(&folder.join("r.0.0.mca"), &[(0, &payload)]);
+    let mut root = NbtCompound::new();
+    root.put_int("DataVersion", DATA_VERSION);
+    root.put_int("xPos", 0);
+    root.put_int("zPos", 0);
+    root.put_int("yPos", -4);
+    root.put_string("Status", "minecraft:empty".to_owned());
+    root.put_list(
+        "sections",
+        [0, 2]
+            .into_iter()
+            .map(|y| {
+                let mut section = NbtCompound::new();
+                section.put_byte("Y", y);
+                // Listed without block_states is a default section, not unvisited.
+                NbtTag::Compound(section)
+            })
+            .collect(),
+    );
+    let bytes = crate::nbt_io::encode_compound(root).unwrap();
+    ChunkData::internal_from_bytes(&bytes, ChunkPos::new(0, 0)).unwrap()
+}
+
+#[test]
+fn empty_read_overlay_visits_only_listed_sections_without_publishing() {
+    let directory = tempfile::tempdir().unwrap();
+    let decoded = sparse_read_fixture(directory.path());
+    let runtime = TestRuntime::new(directory.path().to_owned());
+    let path = directory.path().join("r.0.0.mca");
+    let before = std::fs::read(&path).unwrap();
+    let overlay = PoiTerrainOverlay::decoded(&decoded).unwrap();
+    assert_eq!(
+        overlay.sections.iter().map(|(y, _)| *y).collect::<Vec<_>>(),
+        vec![0, 2]
+    );
+    runtime
+        .runtime
+        .storage
+        .lock()
+        .unwrap()
+        .preload_area(area())
+        .unwrap();
+    let AreaCapture::Ready(entries) = runtime
+        .runtime
+        .capture_area_with_overlays(area(), &[overlay], &[])
+        .unwrap()
+    else {
+        panic!("private decoded query must not require FULL preparation");
+    };
+    assert!(!entries.iter().any(|entry| entry.y == 0));
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 16)
+            .unwrap()
+            .free_tickets,
+        -7
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry.y == 32)
+            .unwrap()
+            .free_tickets,
+        3
+    );
+    let mut storage = runtime.runtime.storage.lock().unwrap();
+    assert_eq!(storage.regions[&(0, 0)].section_validity[&(0, 0, 0)], 0);
+    assert!(storage.regions[&(0, 0)].entries.contains_key(&(1, 0, 1)));
+    storage.save_all().unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn cache_query_holds_both_terrain_sources_in_one_common_read_window() {
+    use std::sync::{TryLockError, mpsc};
+    use std::time::{Duration, Instant};
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = TestRuntime::new(directory.path().to_owned());
+    let first = publish(&runtime, 0);
+    let second = publish(&runtime, 1);
+    first.set_block_absolute_y(1, 0, 1, Block::LECTERN.default_state.id);
+    second.set_blocks_batch([(1, 0, 1, Block::COMPOSTER.default_state.id)]);
+    first.prepare_poi().unwrap();
+    second.prepare_poi().unwrap();
+    std::thread::scope(|scope| {
+        // A sorts before B. Only the real query can hold A while B is blocked.
+        let held_second = second.section.block_sections.write().unwrap();
+        let (captured, capture) = mpsc::channel();
+        let runtime = &runtime.runtime;
+        scope.spawn(move || {
+            captured.send(runtime.snapshot(area())).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match first.section.block_sections.try_write() {
+                Err(TryLockError::WouldBlock) => break,
+                Err(TryLockError::Poisoned(_)) => panic!("unexpected terrain poison"),
+                Ok(available) => drop(available),
+            }
+            assert!(Instant::now() < deadline, "query did not acquire A");
+            std::thread::yield_now();
+        }
+        let (starting, started) = mpsc::channel();
+        let (finished, finish) = mpsc::channel();
+        let first = &first;
+        scope.spawn(move || {
+            starting.send(()).unwrap();
+            first.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+            finished.send(()).unwrap();
+        });
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            finish.recv_timeout(Duration::from_millis(50)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+        drop(held_second);
+        let entries = capture
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries.iter().find(|entry| entry.x == 1).unwrap().poi_type,
+            PoiType::Librarian.identifier()
+        );
+        assert_eq!(
+            entries.iter().find(|entry| entry.x == 17).unwrap().poi_type,
+            PoiType::Farmer.identifier()
+        );
+        finish.recv_timeout(Duration::from_secs(5)).unwrap();
+    });
+    let entries = runtime.runtime.snapshot(area()).unwrap();
+    assert_eq!(
+        entries.iter().find(|entry| entry.x == 1).unwrap().poi_type,
+        PoiType::Meeting.identifier()
+    );
+    assert_eq!(
+        entries.iter().find(|entry| entry.x == 17).unwrap().poi_type,
+        PoiType::Farmer.identifier()
+    );
+}

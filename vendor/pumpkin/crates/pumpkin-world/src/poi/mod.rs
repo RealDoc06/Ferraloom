@@ -21,7 +21,7 @@ pub(crate) mod query;
 pub use query::PoiQueryError;
 
 #[cfg(test)]
-mod query_tests;
+pub(crate) mod query_tests;
 
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -140,6 +140,16 @@ impl LoadedPoiRegion<'_> {
         changes: &PoiSectionChanges,
         complete: bool,
     ) -> Result<PoiSectionReplacement, PoiReconcileError> {
+        self.classify_section(section_y, palette, Some(changes), complete)
+    }
+
+    fn classify_section(
+        &self,
+        section_y: i32,
+        palette: &BlockPalette,
+        changes: Option<&PoiSectionChanges>,
+        complete: bool,
+    ) -> Result<PoiSectionReplacement, PoiReconcileError> {
         let origin = (
             self.chunk.x.checked_mul(16),
             section_y.checked_mul(16),
@@ -173,7 +183,8 @@ impl LoadedPoiRegion<'_> {
             if let Some(kind) = PoiType::from_state(state) {
                 let free_tickets = old
                     .filter(|old| {
-                        old.poi_type == kind.identifier() && !changes.resets_tickets(index)
+                        old.poi_type == kind.identifier()
+                            && !changes.is_some_and(|changes| changes.resets_tickets(index))
                     })
                     .map_or(kind.max_tickets(), |old| old.free_tickets);
                 replacement.push(PoiEntry {

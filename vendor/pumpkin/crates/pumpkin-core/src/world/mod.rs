@@ -6382,27 +6382,6 @@ impl World {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .update_block(*position, new_block);
-
-            if is_new_block {
-                let mut poi = self
-                    .portal_poi
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                // The block write has already happened; report bookkeeping
-                // failure and let the storage's sticky error fail later saves.
-                if villager_poi::profession_for_block(old_block).is_some()
-                    && let Err(error) = poi.remove(position)
-                {
-                    tracing::error!(
-                        "Failed to remove POI after block write at {position:?}: {error}"
-                    );
-                }
-                if let Some(poi_type) = villager_poi::poi_type_for_block(new_block)
-                    && let Err(error) = poi.add_with_free_tickets(*position, poi_type, 1)
-                {
-                    tracing::error!("Failed to add POI after block write at {position:?}: {error}");
-                }
-            }
         }
 
         let old_state = replaced_block_state_id.to_state();

@@ -3,13 +3,17 @@ use super::chunk_holder::ChunkHolder;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::dag::{DAG, EdgeKey, Node, NodeKey};
 use super::generation_cache::{Cache, SurfaceBiomeNeighborhood};
-use super::worker_logic::{RecvChunk, WriteRequest, io_read_work, io_write_work};
+use super::worker_logic::{ReadRequest, RecvChunk, WriteRequest, io_read_work, io_write_work};
 use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
 };
 use crate::chunk::io::Dirtiable;
 use crate::level::{ChunkUnavailable, Level, LoadedChunkChange, SyncChunk};
+use crate::poi::{
+    PoiQueryError,
+    query::{AreaCapture, PoiAreaReadRequest, PoiTerrainOverlay},
+};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
@@ -22,6 +26,74 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
+
+/// One bounded request at a time. Cold coordinates stay reserved until the final
+/// owned snapshot, including while ordinary work queues a later holder for them.
+struct PendingPoiQuery {
+    request: PoiAreaReadRequest,
+    cold: Vec<ChunkPos>,
+    reservation: Option<super::PoiReadReservation>,
+    read: Option<tokio::sync::oneshot::Receiver<Result<Vec<PoiTerrainOverlay>, PoiQueryError>>>,
+    disk: Option<Vec<PoiTerrainOverlay>>,
+}
+
+impl PendingPoiQuery {
+    fn poll_disk(
+        &mut self,
+        io_read: &tokio::sync::mpsc::Sender<ReadRequest>,
+        io_lock: &IOLock,
+    ) -> Option<Result<(), PoiQueryError>> {
+        if self.disk.is_none() {
+            if self.cold.is_empty() {
+                self.disk = Some(Vec::new());
+            } else {
+                if self.reservation.is_none() {
+                    self.reservation =
+                        super::PoiReadReservation::try_new(io_lock, self.cold.clone());
+                }
+                let reservation = self.reservation.as_ref()?;
+                if self.read.is_none() {
+                    let (reply, receive) = tokio::sync::oneshot::channel();
+                    let request = super::worker_logic::PoiIoReadRequest {
+                        positions: self.cold.clone(),
+                        reservation: reservation.identity.clone(),
+                        reply,
+                    };
+                    match io_read.try_send(ReadRequest::Poi(request)) {
+                        Ok(()) => self.read = Some(receive),
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => return None,
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            return Some(Err(PoiQueryError::Closed));
+                        }
+                    }
+                }
+                match self.read.as_mut()?.try_recv() {
+                    Ok(Ok(disk)) => self.disk = Some(disk),
+                    Ok(Err(error)) => return Some(Err(error)),
+                    Err(tokio::sync::oneshot::error::TryRecvError::Empty) => return None,
+                    Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                        return Some(Err(PoiQueryError::Closed));
+                    }
+                }
+            }
+        }
+        Some(Ok(()))
+    }
+
+    fn blocks(&self, node: &Node) -> bool {
+        if node.stage <= StagedChunkEnum::Empty {
+            return node.stage == StagedChunkEnum::Empty && self.cold.contains(&node.pos);
+        }
+        let radius = node
+            .stage
+            .get_read_radius()
+            .max(node.stage.get_write_radius());
+        self.request.columns.iter().any(|pos| {
+            (i64::from(pos.x) - i64::from(node.pos.x)).abs() <= i64::from(radius)
+                && (i64::from(pos.y) - i64::from(node.pos.y)).abs() <= i64::from(radius)
+        })
+    }
+}
 
 pub(crate) struct TaskHeapNode(i8, NodeKey);
 impl PartialEq for TaskHeapNode {
@@ -74,7 +146,7 @@ pub struct GenerationSchedule {
     max_in_flight: u16,
     queue_dirty: bool,
     recv_chunk: crossbeam::channel::Receiver<(ChunkPos, RecvChunk)>,
-    io_read: tokio::sync::mpsc::Sender<Vec<ChunkPos>>,
+    io_read: tokio::sync::mpsc::Sender<ReadRequest>,
     io_write: tokio::sync::mpsc::Sender<WriteRequest>,
     send_chunk: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     listener: Arc<ChunkListener>,
@@ -85,6 +157,119 @@ pub struct GenerationSchedule {
 }
 
 impl GenerationSchedule {
+    fn close_poi_queries(&self, active: &mut Option<PendingPoiQuery>) {
+        active.take();
+        self.send_level.close_poi_requests();
+    }
+
+    fn poll_poi_requests(&self, level: &Level, active: &mut Option<PendingPoiQuery>) {
+        if active
+            .as_ref()
+            .is_some_and(|query| query.request.reply.is_closed())
+        {
+            // Drop releases the IO reservation and the worker's reply receiver.
+            *active = None;
+        }
+        if active.is_none() {
+            let Some(request) = self.send_level.take_poi_request() else {
+                return;
+            };
+            let cold = request
+                .columns
+                .iter()
+                .copied()
+                .filter(|pos| {
+                    !self.chunk_map.contains_key(pos) && !self.public_chunk_map.contains_key(pos)
+                })
+                .collect();
+            *active = Some(PendingPoiQuery {
+                request,
+                cold,
+                reservation: None,
+                read: None,
+                disk: None,
+            });
+        }
+        let result = active
+            .as_mut()
+            .and_then(|query| self.poll_poi_capture(level, query));
+        if let Some(result) = result
+            && let Some(mut query) = active.take()
+        {
+            // The final capture has ended. Release ownership before waking the
+            // caller, so its candidate FULL request cannot wait on this query.
+            query.reservation.take();
+            let _ = query.request.reply.send(result);
+        }
+    }
+
+    fn poll_poi_capture(
+        &self,
+        level: &Level,
+        query: &mut PendingPoiQuery,
+    ) -> Option<Result<AreaCapture, PoiQueryError>> {
+        if let Err(error) = query.poll_disk(&self.io_read, &self.io_lock)? {
+            return Some(Err(error));
+        }
+        // Resident ownership stays on this scheduler thread. In-flight caches
+        // must return first; no old Proto snapshot is kept across that wait.
+        for pos in &query.request.columns {
+            if query.cold.contains(pos) {
+                if self
+                    .chunk_map
+                    .get(pos)
+                    .is_some_and(|holder| holder.chunk.is_some() || !holder.occupied.is_null())
+                {
+                    return Some(Err(PoiQueryError::ChangedDuringQuery));
+                }
+                continue;
+            }
+            match self.chunk_map.get(pos) {
+                Some(holder) if holder.read_failed => {
+                    return Some(Err(PoiQueryError::NeedsTerrain {
+                        pos: *pos,
+                        reason: "resident terrain read failed".to_owned(),
+                    }));
+                }
+                Some(holder) if holder.chunk.is_none() || !holder.occupied.is_null() => {
+                    return None;
+                }
+                None if !self.public_chunk_map.contains_key(pos) => {
+                    return Some(Err(PoiQueryError::ChangedDuringQuery));
+                }
+                _ => {}
+            }
+        }
+        let mut overlays = query.disk.take()?;
+        let mut expected = Vec::new();
+        for pos in &query.request.columns {
+            if let Some(holder) = self.chunk_map.get(pos)
+                && let Some(chunk) = &holder.chunk
+            {
+                match chunk {
+                    Chunk::Proto(proto) => overlays.push(PoiTerrainOverlay::resident(proto)),
+                    Chunk::Level(chunk) if !holder.public => {
+                        match PoiTerrainOverlay::decoded(chunk) {
+                            Ok(overlay) => overlays.push(overlay),
+                            Err(error) => return Some(Err(error)),
+                        }
+                    }
+                    Chunk::Level(chunk) => expected.push((*pos, chunk.clone())),
+                }
+            }
+        }
+        for overlay in &mut overlays {
+            overlay.sections.retain(|(y, _)| {
+                (query.request.min_section..query.request.end_section).contains(y)
+            });
+        }
+        Some(
+            level
+                .poi_runtime
+                .capture_area_with_overlays(query.request.area, &overlays, &expected),
+        )
+    }
+
     fn record_save_failure(&self, message: &str) {
         self.fatal_save_failure
             .lock()
@@ -100,7 +285,7 @@ impl GenerationSchedule {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (position, _) in &chunks {
-                *locks.entry(*position).or_insert(0) += 1;
+                locks.entry(*position).or_default().writes += 1;
             }
         }
         if let Err(error) = self.io_write.blocking_send(WriteRequest::Chunks(chunks)) {
@@ -112,10 +297,9 @@ impl GenerationSchedule {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for (position, _) in chunks {
                     if let Some(count) = locks.get_mut(&position) {
-                        if *count <= 1 {
+                        count.writes = count.writes.saturating_sub(1);
+                        if count.writes == 0 && count.poi.is_none() {
                             locks.remove(&position);
-                        } else {
-                            *count -= 1;
                         }
                     }
                 }
@@ -1625,6 +1809,7 @@ impl GenerationSchedule {
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
         );
+        let mut poi_read = None;
         loop {
             if level.should_unload.swap(false, Relaxed) {
                 self.garbage_collect_dependencies();
@@ -1662,6 +1847,7 @@ impl GenerationSchedule {
                 }
             }
             if level.shut_down_chunk_system.load(Relaxed) {
+                self.close_poi_queries(&mut poi_read);
                 info!("Saving chunks before shutdown...");
                 self.garbage_collect_dependencies();
                 self.process_unload_queue(level);
@@ -1689,6 +1875,8 @@ impl GenerationSchedule {
                 self.receive_chunk(pos, data);
             }
 
+            self.poll_poi_requests(level, &mut poi_read);
+
             // 3. Re-sort if world state changed or new tasks added
             if self.queue_dirty {
                 self.sort_queue();
@@ -1697,6 +1885,7 @@ impl GenerationSchedule {
 
             // 4. Process ready tasks in the queue (up to max_in_flight)
             let mut io_batch = Vec::with_capacity(16);
+            let mut poi_deferred = Vec::new();
             'out2: while let Some(task) = self.queue.pop() {
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
@@ -1722,6 +1911,17 @@ impl GenerationSchedule {
                     }
                 }
 
+                if self
+                    .graph
+                    .nodes
+                    .get(task.1)
+                    .is_some_and(|node| poi_read.as_ref().is_some_and(|query| query.blocks(node)))
+                {
+                    // Keep the existing graph flags and restore this heap item
+                    // after dispatch. No query nodes or dependency edges exist.
+                    poi_deferred.push(task);
+                    continue;
+                }
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
                     node.in_queue = false;
                     if node.in_degree != 0 {
@@ -1793,7 +1993,7 @@ impl GenerationSchedule {
                         if io_batch.len() >= 16
                             && self
                                 .io_read
-                                .blocking_send(std::mem::take(&mut io_batch))
+                                .blocking_send(ReadRequest::Chunks(std::mem::take(&mut io_batch)))
                                 .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
@@ -1805,7 +2005,7 @@ impl GenerationSchedule {
                         if !io_batch.is_empty()
                             && self
                                 .io_read
-                                .blocking_send(std::mem::take(&mut io_batch))
+                                .blocking_send(ReadRequest::Chunks(std::mem::take(&mut io_batch)))
                                 .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
@@ -1959,11 +2159,23 @@ impl GenerationSchedule {
             if !io_batch.is_empty()
                 && self
                     .io_read
-                    .blocking_send(std::mem::take(&mut io_batch))
+                    .blocking_send(ReadRequest::Chunks(std::mem::take(&mut io_batch)))
                     .is_err()
             {
                 info!("IO read thread closed, saving remaining chunks...");
                 let _ = self.save_all_chunk(true);
+            }
+
+            self.queue.extend(poi_deferred);
+            if poi_read.is_some() {
+                // IO replies are separate from normal DAG completions. Existing
+                // in-flight generation can finish while an EMPTY read waits.
+                match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
+                    Ok((pos, data)) => self.receive_chunk(pos, data),
+                    Err(crossbeam::channel::RecvTimeoutError::Timeout) => {}
+                    Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
+                }
+                continue;
             }
 
             // 5. Wait for work or results
@@ -2038,6 +2250,7 @@ impl GenerationSchedule {
                 }
             }
         }
+        self.close_poi_queries(&mut poi_read);
         info!(
             "schedule: waiting for {} generation tasks to finish",
             self.running_task_count

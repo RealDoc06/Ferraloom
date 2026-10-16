@@ -114,6 +114,9 @@ pub struct ChunkEntityData {
 /// - Subchunks: 24 separate subchunks are stored.
 pub struct ChunkSections {
     pub count: usize,
+    // Decoder provenance only: listed section Ys, including default block_states.
+    // Runtime constructors are not a disk consistency visit.
+    pub(crate) poi_read_sections: Box<[bool]>,
     pub block_sections: RwLock<Box<[BlockPalette]>>,
     // Always acquire block_sections before this runtime-only metadata.
     poi_changes: std::sync::Mutex<poi_changes::PoiChanges>,
@@ -357,6 +360,7 @@ impl ChunkSections {
 
         Self {
             count: num_sections,
+            poi_read_sections: vec![false; num_sections].into_boxed_slice(),
             block_sections: RwLock::new(block_sections),
             poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(num_sections)),
             poi_binding: std::sync::OnceLock::new(),
@@ -384,6 +388,7 @@ impl ChunkSections {
 
         Self {
             count,
+            poi_read_sections: vec![false; count].into_boxed_slice(),
             block_sections: RwLock::new(block_sections),
             poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(count)),
             poi_binding: std::sync::OnceLock::new(),

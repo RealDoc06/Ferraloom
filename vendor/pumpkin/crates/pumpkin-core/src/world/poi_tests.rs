@@ -122,3 +122,96 @@ async fn job_query_and_claim_keep_owner_identity_and_defer_missing_terrain() {
         JobSiteClaim::Claimed
     ));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn portal_actual_palette_writes_use_empty_area_and_only_candidate_full_columns() {
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::block_properties::{HorizontalAxis, NetherPortalLikeProperties};
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::{level::Level, world_info::LevelData};
+    use std::time::Duration;
+    let directory = tempfile::tempdir().unwrap();
+    let level = Level::from_root_folder(
+        &LevelConfig::default(),
+        directory.path().into(),
+        0,
+        Dimension::OVERWORLD,
+    );
+    let chunks = [ChunkData::empty_sync(0, 0), ChunkData::empty_sync(1, 0)];
+    for chunk in &chunks {
+        level.bind_chunk_poi(chunk).unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(chunk.x, chunk.z), chunk.clone());
+    }
+    let state = NetherPortalLikeProperties {
+        axis: HorizontalAxis::X,
+    }
+    .to_state_id(&Block::NETHER_PORTAL);
+    // A real frame crosses the chunk edge. Neither World publication hook runs.
+    for x in 14..=17 {
+        let chunk = &chunks[(x >> 4) as usize];
+        chunk.set_blocks_batch((63..=67).map(|y| {
+            let block = if x == 14 || x == 17 || y == 63 || y == 67 {
+                Block::OBSIDIAN.default_state.id
+            } else {
+                state
+            };
+            ((x & 15) as usize, y, 1, block)
+        }));
+    }
+    chunks[0].set_block_absolute_y(15, 64, 1, BlockStateId::AIR);
+    chunks[0].set_block_absolute_y(15, 64, 1, state);
+    let world = Arc::new(World::load(
+        level,
+        Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+        Dimension::OVERWORLD,
+        crate::block::registry::default_registry(),
+        std::sync::Weak::new(),
+        Arc::default(),
+    ));
+    let query_world = world.clone();
+    let found = tokio::time::timeout(
+        Duration::from_secs(10),
+        tokio::task::spawn_blocking(move || {
+            portal::nether::NetherPortal::search_for_portal(&query_world, BlockPos::new(15, 64, 1))
+        }),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    assert_eq!(found.lower_corner, BlockPos::new(15, 64, 1));
+    assert_eq!((found.width, found.height), (2, 3));
+    assert_eq!(found.axis, HorizontalAxis::X);
+    assert_eq!(world.level.loaded_chunks.len(), 2);
+    assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    for x in 15..=16 {
+        chunks[(x >> 4) as usize]
+            .set_blocks_batch((64..=66).map(|y| ((x & 15) as usize, y, 1, BlockStateId::AIR)));
+    }
+    let query_world = world.clone();
+    assert!(
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            tokio::task::spawn_blocking(move || {
+                portal::nether::NetherPortal::search_for_portal(
+                    &query_world,
+                    BlockPos::new(15, 64, 1),
+                )
+            })
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .is_none()
+    );
+    assert_eq!(world.level.loaded_chunks.len(), 2);
+    tokio::time::timeout(Duration::from_secs(10), world.level.shutdown())
+        .await
+        .unwrap()
+        .unwrap();
+}

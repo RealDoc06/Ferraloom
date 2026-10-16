@@ -12,10 +12,7 @@ use rand::RngExt;
 use uuid::Uuid;
 
 use crate::{
-    block::{
-        BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnStateReplacedArgs,
-        RandomTickArgs,
-    },
+    block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, RandomTickArgs},
     entity::{EntityBase, r#type::from_type},
     world::{World, portal::nether::NetherPortal},
 };
@@ -140,18 +137,6 @@ impl BlockBehaviour for NetherPortalBlock {
         args.entity
             .get_entity()
             .try_use_portal(target_world, *args.position);
-    }
-
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        // Remove from POI storage when portal block is replaced
-        let mut poi_storage = args
-            .world
-            .portal_poi
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Err(error) = poi_storage.remove(args.position) {
-            tracing::error!(position = ?args.position, "Failed to remove replaced portal POI: {error}");
-        }
     }
 
     fn rotate(

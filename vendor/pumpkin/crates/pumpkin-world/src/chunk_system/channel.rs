@@ -2,6 +2,7 @@ use super::{ChunkLevel, ChunkPos, HashMapType};
 use crate::chunk_system::chunk_state::StagedChunkEnum;
 use crate::chunk_system::worker_logic::WriteRequest;
 use crate::level::Level;
+use crate::poi::{PoiQueryError, query::PoiAreaReadRequest};
 use crossbeam::queue::SegQueue;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
@@ -17,6 +18,8 @@ pub struct LevelChannel {
     pub value: Mutex<(Option<LevelChange>, Option<Vec<ChunkPos>>)>,
     pub notify: Condvar,
     write_requests: SegQueue<WriteRequest>,
+    poi_requests: crossbeam::queue::ArrayQueue<PoiAreaReadRequest>,
+    poi_closed: std::sync::atomic::AtomicBool,
 }
 
 impl Default for LevelChannel {
@@ -27,12 +30,45 @@ impl Default for LevelChannel {
 
 impl LevelChannel {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             value: Mutex::new((None, None)),
             notify: Condvar::new(),
             write_requests: SegQueue::new(),
+            poi_requests: crossbeam::queue::ArrayQueue::new(8),
+            poi_closed: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    pub(crate) fn request_poi(&self, request: PoiAreaReadRequest) -> Result<(), PoiQueryError> {
+        let _guard = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.poi_closed.load(SeqCst) {
+            return Err(PoiQueryError::Closed);
+        }
+        self.poi_requests
+            .push(request)
+            .map_err(|_| PoiQueryError::Busy)?;
+        self.notify.notify_one();
+        Ok(())
+    }
+
+    pub(crate) fn take_poi_request(&self) -> Option<PoiAreaReadRequest> {
+        self.poi_requests.pop()
+    }
+
+    pub(crate) fn close_poi_requests(&self) {
+        let _guard = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.poi_closed.store(true, SeqCst);
+        while let Some(request) = self.poi_requests.pop() {
+            let _ = request.reply.send(Err(PoiQueryError::Closed));
+        }
+        self.notify.notify_all();
     }
 
     pub fn request_flush(&self) -> tokio::sync::oneshot::Receiver<Result<(), String>> {
@@ -165,6 +201,7 @@ impl LevelChannel {
             && !level.should_unload.load(SeqCst)
             && !level.should_save.load(SeqCst)
             && self.write_requests.is_empty()
+            && self.poi_requests.is_empty()
             && !level.shut_down_chunk_system.load(SeqCst)
         {
             let (new_lock, timeout_res) = self

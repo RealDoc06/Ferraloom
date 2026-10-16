@@ -996,6 +996,72 @@ impl Level {
             .snapshot(crate::poi::query::PoiArea::new(center, radius)?)
     }
 
+    /// EMPTY admission is a scheduler-owned read procedure, not FULL generation
+    /// and not a Valid1 promise. Only a changed published FULL source is encoded.
+    pub async fn portal_poi_snapshot(
+        self: &Arc<Self>,
+        center: BlockPos,
+        radius: i32,
+    ) -> Result<Vec<crate::poi::PoiEntry>, crate::poi::PoiQueryError> {
+        use crate::poi::query::{
+            AreaCapture, PoiArea, PoiAreaReadRequest, query_preparation_error,
+        };
+        use crate::poi::{PoiQueryError, PoiReconcileError};
+        let area = PoiArea::new(center, radius)?;
+        let (min_section, end_section) = {
+            let generator = self.world_gen.load();
+            let dimension = generator.dimension();
+            (
+                dimension.min_y.div_euclid(16),
+                (dimension.min_y + dimension.height).div_euclid(16),
+            )
+        };
+        for pass in 0..2 {
+            let runtime = self.poi_runtime.clone();
+            let columns = crate::chunk::io::run_blocking(move || {
+                let mut storage = runtime
+                    .storage
+                    .lock()
+                    .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
+                storage.preload_area(area)?;
+                storage.columns_needing_terrain(area, min_section, end_section)
+            })
+            .await
+            .map_err(|error| PoiReconcileError::PreparationWorkerFailed(error.to_string()))??;
+            let (reply, receive) = oneshot::channel();
+            self.level_channel.request_poi(PoiAreaReadRequest {
+                area,
+                columns,
+                min_section,
+                end_section,
+                reply,
+            })?;
+            let capture = tokio::select! {
+                result = receive => result.map_err(|_| PoiQueryError::Closed)??,
+                () = self.cancel_token.cancelled() => return Err(PoiQueryError::Closed),
+            };
+            match capture {
+                AreaCapture::Ready(entries) => return Ok(entries),
+                AreaCapture::NeedsPreparation(chunks) => {
+                    if pass != 0 {
+                        return Err(PoiQueryError::ChangedDuringQuery);
+                    }
+                    crate::chunk::io::run_blocking(move || {
+                        for chunk in chunks {
+                            chunk.prepare_poi().map_err(query_preparation_error)?;
+                        }
+                        Ok::<(), PoiQueryError>(())
+                    })
+                    .await
+                    .map_err(|error| {
+                        PoiReconcileError::PreparationWorkerFailed(error.to_string())
+                    })??;
+                }
+            }
+        }
+        Err(PoiQueryError::ChangedDuringQuery)
+    }
+
     /// Memory-only binding before exposing a managed terrain Arc.
     pub fn bind_chunk_poi(&self, chunk: &SyncChunk) -> Result<(), crate::poi::PoiReconcileError> {
         chunk.bind_poi(&self.poi_runtime)
@@ -1945,7 +2011,16 @@ mod tests {
         );
         drop(send);
         let io_lock = Arc::new((
-            Mutex::new(std::iter::once((position, 1)).collect()),
+            Mutex::new(
+                std::iter::once((
+                    position,
+                    crate::chunk_system::IoLockState {
+                        writes: 1,
+                        ..Default::default()
+                    },
+                ))
+                .collect(),
+            ),
             tokio::sync::Notify::new(),
         ));
         io_write_work(receive, level.clone(), io_lock).await;

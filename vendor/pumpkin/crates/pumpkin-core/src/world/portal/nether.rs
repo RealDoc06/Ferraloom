@@ -284,14 +284,6 @@ impl NetherPortal {
                 state,
                 BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
             );
-            if let Err(error) = world
-                .portal_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .add_portal(pos)
-            {
-                tracing::error!("Failed to add POI after portal block write at {pos:?}: {error}");
-            }
         }
     }
 
@@ -513,79 +505,112 @@ impl NetherPortal {
             SEARCH_RADIUS_OVERWORLD
         };
 
-        let portal_positions = {
-            let mut poi_storage = world
-                .portal_poi
+        let handle = tokio::runtime::Handle::try_current().map_err(std::io::Error::other)?;
+        let entries = tokio::task::block_in_place(|| {
+            handle.block_on(world.level.portal_poi_snapshot(target_pos, search_radius))
+        })
+        .map_err(|error| match error {
+            pumpkin_world::poi::PoiQueryError::Reconciliation(
+                pumpkin_world::poi::PoiReconcileError::RegionUnavailable(error),
+            ) => error,
+            error => std::io::Error::other(error),
+        })?;
+        let mut portal_positions: Vec<_> = {
+            let border = world
+                .worldborder
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            poi_storage.get_in_square(
-                target_pos,
-                search_radius,
-                Some(poi::POI_TYPE_NETHER_PORTAL),
-            )?
+            entries
+                .into_iter()
+                .filter(|entry| {
+                    entry.poi_type == poi::POI_TYPE_NETHER_PORTAL
+                        && (min_y..=max_y).contains(&entry.y)
+                        && border.contains_block(entry.x, entry.z)
+                })
+                .map(|entry| entry.pos())
+                .collect()
         };
-
-        let mut candidate_chunks: Vec<Vector2<i32>> = Vec::new();
-        for pos in &portal_positions {
-            let chunk = Vector2::new(pos.0.x >> 4, pos.0.z >> 4);
-            if !candidate_chunks.contains(&chunk) {
-                candidate_chunks.push(chunk);
-            }
-        }
-        for chunk in candidate_chunks {
-            super::load_portal_chunks(world, chunk, 1)?;
-        }
-
-        let worldborder = world
-            .worldborder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        let mut best: Option<(PortalSearchResult, f64, i32)> = None;
+        portal_positions.sort_by_key(|pos| {
+            (
+                crate::world::poi::distance_squared(target_pos, *pos),
+                pos.0.y,
+            )
+        });
 
         for pos in portal_positions {
-            if pos.0.y < min_y || pos.0.y > max_y {
-                continue;
-            }
-
-            if !worldborder.contains_block(pos.0.x, pos.0.z) {
-                continue;
-            }
-
+            // Official candidate block validation requests FULL after the owned
+            // square observation. No whole-area FULL request or fixed halo.
+            super::load_portal_chunks(world, pos.chunk_position(), 0)?;
             let (block, state) = world.get_block_and_state(&pos);
             if block != &Block::NETHER_PORTAL {
                 continue;
             }
-            let props = NetherPortalLikeProperties::from_state_id(state.id);
-            let axis = props.axis;
-
+            let axis = NetherPortalLikeProperties::from_state_id(state.id).axis;
+            Self::load_candidate_axis(world, pos, axis)?;
+            // Existing rectangle/frame validation is retained. Its stronger
+            // obsidian-frame requirement is not proven by PortalForcer's POI
+            // selection primary and remains a separate destination parity gap.
             if let Some(portal) = Self::get_on_axis(world, &pos, axis)
                 && portal.was_already_valid()
             {
-                // Use POI position for distance calculation (matches vanilla behavior)
-                let dist = f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
-                let y = portal.lower_conor.0.y;
-
-                let is_better = best.as_ref().is_none_or(|(_, best_dist, best_y)| {
-                    dist < *best_dist || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
-                });
-
-                if is_better {
-                    best = Some((
-                        PortalSearchResult {
-                            lower_corner: portal.lower_conor,
-                            axis: portal.axis,
-                            width: portal.width,
-                            height: portal.height,
-                        },
-                        dist,
-                        y,
-                    ));
-                }
+                return Ok(Some(PortalSearchResult {
+                    lower_corner: portal.lower_conor,
+                    axis: portal.axis,
+                    width: portal.width,
+                    height: portal.height,
+                }));
             }
         }
+        Ok(None)
+    }
 
-        Ok(best.map(|(result, _, _)| result))
+    /// Prepare the columns actually visited by the retained frame validator.
+    /// Its downward scan stays in the candidate column; width scans may cross
+    /// chunk edges through air as well as portal blocks. No fixed halo is loaded.
+    fn load_candidate_axis(
+        world: &Arc<World>,
+        mut pos: BlockPos,
+        axis: HorizontalAxis,
+    ) -> std::io::Result<()> {
+        let direction = match axis {
+            HorizontalAxis::X => BlockDirection::East,
+            HorizontalAxis::Z => BlockDirection::South,
+        };
+        let original = pos;
+        let limit_y = pos.0.y - Self::MAX_HEIGHT as i32;
+        while pos.0.y > limit_y {
+            let (block, state) = world.get_block_and_state(&pos.down());
+            if !Self::valid_state_inside_portal(block, state, axis) {
+                break;
+            }
+            pos = pos.down();
+        }
+        Self::load_candidate_width(world, pos, direction.opposite(), axis)?;
+        if let Some(corner) = Self::get_lower_cornor(world, direction, &original, axis) {
+            Self::load_candidate_width(world, corner, direction, axis)?;
+        }
+        Ok(())
+    }
+
+    fn load_candidate_width(
+        world: &Arc<World>,
+        pos: BlockPos,
+        direction: BlockDirection,
+        axis: HorizontalAxis,
+    ) -> std::io::Result<()> {
+        for distance in 0..=Self::MAX_WIDTH {
+            let probe = pos.offset_dir(direction.to_offset(), distance as i32);
+            if !world.is_loaded(&probe) {
+                super::load_portal_chunks(world, probe.chunk_position(), 0)?;
+            }
+            let (block, state) = world.get_block_and_state(&probe);
+            if !Self::valid_state_inside_portal(block, state, axis)
+                || world.get_block(&probe.down()) != &Self::FRAME_BLOCK
+            {
+                break;
+            }
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -831,16 +856,6 @@ impl NetherPortal {
                     portal_state,
                     BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
                 );
-                if let Err(error) = world
-                    .portal_poi
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .add_portal(pos)
-                {
-                    tracing::error!(
-                        "Failed to add POI after portal block write at {pos:?}: {error}"
-                    );
-                }
             }
         }
     }

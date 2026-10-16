@@ -347,6 +347,7 @@ impl ChunkData {
         let mut sky_lights = vec![LightContainer::Empty(0); section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
         let mut biome_palettes = vec![BiomePalette::default(); section_count];
+        let mut poi_read_sections = vec![false; section_count].into_boxed_slice();
 
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
@@ -359,6 +360,7 @@ impl ChunkData {
                     if index >= section_count {
                         continue;
                     }
+                    poi_read_sections[index] = true;
 
                     let block_light = section_compound
                         .get("BlockLight")
@@ -437,11 +439,12 @@ impl ChunkData {
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(i32::from(min_y_section));
-        let section = ChunkSections::from_palettes(
+        let mut section = ChunkSections::from_palettes(
             block_palettes.into_boxed_slice(),
             biome_palettes.into_boxed_slice(),
             min_y,
         );
+        section.poi_read_sections = poi_read_sections;
 
         let heightmaps = root_tag.get_compound("Heightmaps").map_or(
             ChunkHeightmaps {

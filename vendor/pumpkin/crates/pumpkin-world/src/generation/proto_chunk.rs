@@ -142,6 +142,9 @@ pub struct ProtoChunk {
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
     pub(crate) flat_block_map: Vec<BlockStateId>,
+    // Serialized-section visitation survives palette normalization. Generation
+    // alone is not a disk consistency pass and leaves this footprint empty.
+    poi_read_sections: Box<[i32]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
@@ -248,6 +251,7 @@ impl ProtoChunk {
             default_block,
             biome_mixer_seed,
             flat_block_map: Vec::new(),
+            poi_read_sections: Box::new([]),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
                 biome_coords::from_block(CHUNK_DIM as i32) as usize
@@ -321,6 +325,12 @@ impl ProtoChunk {
             .collect();
 
         let section_data = &chunk_data.section;
+        proto_chunk.poi_read_sections = section_data
+            .poi_read_sections
+            .iter()
+            .enumerate()
+            .filter_map(|(index, listed)| listed.then_some(section_data.min_y / 16 + index as i32))
+            .collect();
         let heightmap_data = chunk_data
             .heightmap
             .lock()
@@ -419,6 +429,10 @@ impl ProtoChunk {
             proto_chunk.stage = saved_stage;
         }
         proto_chunk
+    }
+
+    pub(crate) fn poi_read_sections(&self) -> &[i32] {
+        &self.poi_read_sections
     }
 
     #[inline]

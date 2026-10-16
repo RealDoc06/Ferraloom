@@ -450,7 +450,7 @@ mod tests {
         assert_eq!(std::fs::read(path).unwrap(), source);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn poi_lookup_failure_aborts_portal_creation_and_fallback_transition() {
         let folder = tempfile::tempdir().unwrap();
         let level = Level::from_root_folder(
@@ -459,11 +459,11 @@ mod tests {
             0,
             Dimension::OVERWORLD,
         );
-        // Use one manually loaded chunk; no generation or server ticks are needed.
-        level.shutdown().await.unwrap();
-        level
-            .loaded_chunks
-            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        // Keep the real EMPTY read worker available for the missing-region query.
+        // No generation or server ticks are needed for its private read overlays.
+        let chunk = ChunkData::empty_sync(0, 0);
+        level.bind_chunk_poi(&chunk).unwrap();
+        level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
         let world = Arc::new(World::load(
             level,
             Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
@@ -478,6 +478,7 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+        world.level.shutdown().await.unwrap();
         let poi_folder = &world.level.level_folder.poi_folder;
         std::fs::create_dir_all(poi_folder).unwrap();
         let path = poi_folder.join("r.0.0.mca");
