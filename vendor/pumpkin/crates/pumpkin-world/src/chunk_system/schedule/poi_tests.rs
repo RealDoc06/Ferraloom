@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::{
-    chunk::{ChunkData, ChunkSerializingError, format::anvil::SingleChunkDataSerializer},
+    chunk::{
+        ChunkData, ChunkSerializingError, format::anvil::SingleChunkDataSerializer, io::FileIO,
+    },
     generation::proto_chunk::GenerationCache,
     poi::{PoiReconcileError, PoiRegion},
 };

@@ -131,7 +131,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> CachedRegion<S> {
         .map_err(|error| ChunkWritingError::IoError(std::io::Error::other(error)))?
     }
 
-    async fn collect_recaptures(&mut self, pending: &mut PendingChunks<S::Data>) {
+    async fn collect_recaptures(&self, pending: &mut PendingChunks<S::Data>) {
         let mut receipts = self.receipts.lock().await;
         receipts.retain(|position, (source, receipt)| {
             if receipt.needs_recapture() || (receipt.is_complete() && source.is_dirty()) {

@@ -124,11 +124,13 @@ pub(crate) async fn sync_parent(path: &std::path::Path) -> std::io::Result<()> {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or_else(|| std::path::Path::new("."));
-        tokio::fs::File::open(parent).await?.sync_all().await?;
+        tokio::fs::File::open(parent).await?.sync_all().await
     }
     #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
+    {
+        let _ = path;
+        Ok(())
+    }
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.

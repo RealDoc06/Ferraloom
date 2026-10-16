@@ -859,7 +859,7 @@ impl Drop for PoiWriteReservation {
     }
 }
 
-/// The reservation serializes snapshots with public save_all without holding
+/// The reservation serializes snapshots with public `save_all` without holding
 /// storage during encoding/IO. Later in-memory edits retain their own dirtiness.
 pub(crate) struct PoiRegionSave {
     coords: (i32, i32),

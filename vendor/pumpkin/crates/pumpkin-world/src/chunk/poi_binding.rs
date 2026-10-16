@@ -122,7 +122,7 @@ impl EncodedPoiCommit {
 /// Called only after successful terrain-file write. Group receipts by their
 /// actual storage/region; apply eligible sources, then write one owned snapshot.
 /// All lifecycle/store/terrain guards are released before POI encoding or IO.
-pub(crate) fn complete_poi_batch<'a>(
+pub fn complete_poi_batch<'a>(
     receipts: impl Iterator<Item = &'a mut EncodedPoiCommit>,
 ) -> Result<(), ChunkWritingError> {
     let mut groups = std::collections::BTreeMap::<_, Vec<_>>::new();
@@ -263,7 +263,7 @@ impl ChunkData {
     }
 
     /// Validate and encode privately. A capture stamp authorizes only the final
-    /// exact-Arc/revision retirement fence; FileManager retains actual save work.
+    /// exact-Arc/revision retirement fence; `FileManager` retains actual save work.
     pub(crate) fn prepare_poi(&self) -> Result<PoiCaptureStamp, PoiReconcileError> {
         let capture = self
             .capture_poi_snapshot(PoiCapturePurpose::Unload)
