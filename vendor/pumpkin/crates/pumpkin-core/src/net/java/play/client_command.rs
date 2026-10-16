@@ -178,10 +178,11 @@ mod tests {
         let terrain = ChunkData::empty_sync(0, 0);
         terrain.post_processing_ready.store(true, Ordering::Release);
         world.level.loaded_chunks.insert(source, terrain);
-        let mut loading = world.level.chunk_loading.lock().unwrap();
-        loading.add_ticket(source, ChunkLoading::FULL_CHUNK_LEVEL);
-        loading.send_change();
-        drop(loading);
+        {
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            loading.add_ticket(source, ChunkLoading::FULL_CHUNK_LEVEL);
+            loading.send_change()
+        };
         world.level_info.rcu(|current| {
             let mut info = (**current).clone();
             info.spawn_x = if refuse_destination { 256 } else { 0 };
