@@ -1660,6 +1660,7 @@ mod tests {
     use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
+    use pumpkin_util::math::vector3::Vector3;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn rotation_modifiers_use_registered_players_pitch_then_yaw() {

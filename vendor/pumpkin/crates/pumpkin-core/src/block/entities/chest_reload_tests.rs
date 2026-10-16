@@ -508,7 +508,7 @@ async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload()
                     .pending_block_entities
                     .lock()
                     .unwrap()
-                    .insert(BLOCK_POS, nbt);
+                    .insert(BLOCK_POS, nbt.clone());
             })
             .unwrap();
         // Admit actual saved bytes before the normal lazy constructor and its

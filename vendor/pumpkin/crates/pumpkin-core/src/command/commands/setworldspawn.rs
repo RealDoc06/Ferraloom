@@ -122,7 +122,6 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::command::{CommandSender, test::CommandFixture};
     use crate::entity::EntityBase;
 
