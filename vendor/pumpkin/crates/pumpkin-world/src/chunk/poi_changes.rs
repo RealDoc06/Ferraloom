@@ -1,12 +1,12 @@
 //! Coalesced POI history. Every access holds the chunk's terrain guard first.
 
-use std::sync::{Arc, RwLockReadGuard};
+use std::sync::{Arc, MutexGuard, RwLockReadGuard};
 
 use pumpkin_data::{BlockStateId, poi::PoiType};
 
 use super::{ChunkData, palette::BlockPalette};
 use crate::chunk_system::ChunkPos;
-use crate::poi::{LoadedPoiRegion, PoiReconcileError};
+use crate::poi::{LoadedPoiRegion, PoiReconcileError, PoiSectionReplacement};
 
 pub(super) struct PoiChanges {
     sections: Box<[PoiSectionChanges]>,
@@ -91,6 +91,45 @@ pub struct PoiTerrainRead<'a> {
     palettes: RwLockReadGuard<'a, Box<[BlockPalette]>>,
 }
 
+/// An unpublished save plan, tied to its exact source and exclusive storage
+/// borrow. Dropping it after encode failure changes neither POI nor reset history.
+pub(crate) struct PoiSavePlan<'a> {
+    source: &'a ChunkData,
+    loaded: LoadedPoiRegion<'a>,
+    revisions: Box<[u64]>,
+    sections: Vec<(usize, PoiSectionReplacement)>,
+    complete: bool,
+}
+
+impl PoiSavePlan<'_> {
+    /// Call only after successful terrain encoding. A later terrain write refuses
+    /// the whole plan before mutation; its complete ABA history remains pending.
+    /// This brief read guard is released before the caller performs any POI IO.
+    pub(crate) fn apply(mut self) -> Result<(), PoiReconcileError> {
+        let terrain = self.source.read_for_poi();
+        let mut changes = terrain.changes_for(&self.loaded)?;
+        if self.revisions.len() != changes.sections.len()
+            || self
+                .revisions
+                .iter()
+                .zip(changes.sections.iter())
+                .any(|(revision, section)| *revision != section.revision)
+        {
+            return Err(PoiReconcileError::StaleSaveCapture);
+        }
+        changes.store = Some(self.loaded.identity.clone());
+        for (index, replacement) in self.sections {
+            self.loaded.apply_section(replacement);
+            if self.complete {
+                let section = &mut changes.sections[index];
+                section.applied_revision = section.revision;
+                section.reset_tickets = None;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl ChunkData {
     /// Preload under storage alone first. Then hold lifecycle/storage before
     /// taking this guard; keep that same storage mutex through reconciliation.
@@ -108,7 +147,7 @@ impl ChunkData {
     }
 }
 
-impl PoiTerrainRead<'_> {
+impl<'chunk> PoiTerrainRead<'chunk> {
     /// Stage B's terrain root builder must consume this exact palette snapshot.
     #[must_use]
     pub fn palettes(&self) -> &[BlockPalette] {
@@ -137,23 +176,50 @@ impl PoiTerrainRead<'_> {
         })
     }
 
-    /// Proto snapshots classify their current terrain but remain Valid0 and keep
-    /// all pending revisions/reset bits. A later FULL conversion starts fresh.
-    pub(crate) fn reconcile_for_save(
+    /// Capture without changing shared memory or acknowledging revisions. Proto
+    /// plans remain Valid0 and keep reset history even after successful encoding.
+    pub(crate) fn plan_for_save<'storage>(
         &self,
-        loaded: &mut LoadedPoiRegion<'_>,
-    ) -> Result<(), PoiReconcileError> {
-        self.apply(
+        loaded: LoadedPoiRegion<'storage>,
+    ) -> Result<PoiSavePlan<'storage>, PoiReconcileError>
+    where
+        'chunk: 'storage,
+    {
+        let changes = self.changes_for(&loaded)?;
+        let complete = self.chunk.status == pumpkin_data::chunk::ChunkStatus::Full;
+        let mut sections = Vec::new();
+        for (index, (palette, section)) in self
+            .palettes
+            .iter()
+            .zip(changes.sections.iter())
+            .enumerate()
+        {
+            if complete && section.revision == section.applied_revision {
+                continue;
+            }
+            sections.push((
+                index,
+                loaded.plan_section(
+                    self.chunk.section.min_y / 16 + index as i32,
+                    palette,
+                    section,
+                    complete,
+                )?,
+            ));
+        }
+        Ok(PoiSavePlan {
+            source: self.chunk,
             loaded,
-            self.chunk.status == pumpkin_data::chunk::ChunkStatus::Full,
-        )
+            revisions: changes.sections.iter().map(|s| s.revision).collect(),
+            sections,
+            complete,
+        })
     }
 
-    fn apply(
+    fn changes_for(
         &self,
-        loaded: &mut LoadedPoiRegion<'_>,
-        complete: bool,
-    ) -> Result<(), PoiReconcileError> {
+        loaded: &LoadedPoiRegion<'_>,
+    ) -> Result<MutexGuard<'_, PoiChanges>, PoiReconcileError> {
         let chunk = self.chunk;
         if chunk.section.block_sections.is_poisoned() {
             return Err(PoiReconcileError::TerrainPoisoned);
@@ -166,7 +232,7 @@ impl PoiTerrainRead<'_> {
         if min_y % 16 != 0 || height.and_then(|h| min_y.checked_add(h)).is_none() {
             return Err(PoiReconcileError::InvalidCoordinates);
         }
-        let mut changes = chunk
+        let changes = chunk
             .section
             .poi_changes
             .lock()
@@ -177,13 +243,23 @@ impl PoiTerrainRead<'_> {
         if changes.sections.len() != self.palettes.len() {
             return Err(PoiReconcileError::InvalidCoordinates);
         }
-        match &changes.store {
-            Some(store) if !Arc::ptr_eq(store, &loaded.identity) => {
-                return Err(PoiReconcileError::WrongStorage);
-            }
-            None => changes.store = Some(loaded.identity.clone()),
-            Some(_) => {}
+        if changes
+            .store
+            .as_ref()
+            .is_some_and(|store| !Arc::ptr_eq(store, &loaded.identity))
+        {
+            return Err(PoiReconcileError::WrongStorage);
         }
+        Ok(changes)
+    }
+
+    fn apply(
+        &self,
+        loaded: &mut LoadedPoiRegion<'_>,
+        complete: bool,
+    ) -> Result<(), PoiReconcileError> {
+        let mut changes = self.changes_for(loaded)?;
+        changes.store = Some(loaded.identity.clone());
         for (index, (palette, section)) in self
             .palettes
             .iter()
@@ -193,7 +269,12 @@ impl PoiTerrainRead<'_> {
             if complete && section.revision == section.applied_revision {
                 continue;
             }
-            loaded.reconcile_section(min_y / 16 + index as i32, palette, section, complete)?;
+            loaded.reconcile_section(
+                self.chunk.section.min_y / 16 + index as i32,
+                palette,
+                section,
+                complete,
+            )?;
             // A failed section retains both its revision and complete ABA mask.
             if complete {
                 section.applied_revision = section.revision;

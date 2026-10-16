@@ -32,6 +32,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
+    poi_changes::PoiSavePlan,
 };
 pub mod anvil;
 pub mod linear;
@@ -135,13 +136,17 @@ impl SingleChunkDataSerializer for ChunkData {
             .storage
             .lock()
             .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let root = self.capture_root(Some(&mut storage.loaded_poi_region(pos)?))?;
+        let (root, plan) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
         drop(current);
         drop(lifecycle);
         // Capture released light/heightmap/terrain/metadata. F1's fallible encoder
-        // MUST succeed before this call makes any durable POI change.
+        // MUST succeed before captured POI becomes visible even in shared memory:
+        // a sibling save or save_all may later flush the entire POI region.
         let bytes = crate::nbt_io::encode_compound(root)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        if let Some(plan) = plan {
+            plan.apply()?;
+        }
         storage
             .save_prepared_region(pos)
             .map_err(ChunkSerializingError::PoiIo)?;
@@ -599,17 +604,17 @@ impl ChunkData {
     }
 
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        crate::nbt_io::encode_compound(self.capture_root(None)?)
+        crate::nbt_io::encode_compound(self.capture_root(None)?.0)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)
     }
 
-    /// One root builder for pure encoding and actual saves. Reconciliation and
+    /// One root builder for pure encoding and actual saves. POI planning and
     /// palette serialization share this terrain guard and existing field order.
     #[allow(clippy::too_many_lines)]
-    fn capture_root(
-        &self,
-        loaded_poi: Option<&mut crate::poi::LoadedPoiRegion<'_>>,
-    ) -> Result<NbtCompound, ChunkSerializingError> {
+    fn capture_root<'a>(
+        &'a self,
+        loaded_poi: Option<crate::poi::LoadedPoiRegion<'a>>,
+    ) -> Result<(NbtCompound, Option<PoiSavePlan<'a>>), ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -647,11 +652,9 @@ impl ChunkData {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let terrain = self.read_for_poi();
-        if let Some(loaded) = loaded_poi {
-            terrain
-                .reconcile_for_save(loaded)
-                .map_err(ChunkSerializingError::Poi)?;
-        }
+        let plan = loaded_poi
+            .map(|loaded| terrain.plan_for_save(loaded))
+            .transpose()?;
         let block_lock = terrain.palettes();
         let biome_lock = self
             .section
@@ -821,7 +824,7 @@ impl ChunkData {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }
 
-        Ok(root_compound)
+        Ok((root_compound, plan))
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
@@ -1140,6 +1143,107 @@ mod tests {
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
 
+    // UNRUN: pause at the actual capture/encode boundary, using production plans
+    // and actual writers. No hook, fake revision model or timing race is needed.
+    #[test]
+    fn encoded_poi_plan_preserves_reset_history_on_both_sides_of_apply() {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::{PoiReconcileError, PoiRegion};
+        use pumpkin_data::poi::PoiType;
+
+        for write_after_apply in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let runtime = TestRuntime::new(directory.path().join("poi"));
+            let chunk = ChunkData::empty_sync(0, 0);
+            let pos = Vector2::new(0, 0);
+            chunk.bind_poi(&runtime.runtime).unwrap();
+            runtime.chunks.insert(pos, chunk.clone());
+            let home = Block::WHITE_BED
+                .states
+                .iter()
+                .map(|state| state.id)
+                .find(|state| PoiType::from_state(*state) == Some(PoiType::Home))
+                .unwrap();
+            for x in [1, 2] {
+                chunk.set_block_absolute_y(x, 0, 1, home);
+            }
+            chunk.to_bytes_for_save().unwrap();
+            {
+                let mut storage = runtime.runtime.storage.lock().unwrap();
+                for x in [1, 2] {
+                    storage
+                        .add_with_free_tickets(
+                            BlockPos::new(x, 0, 1),
+                            PoiType::Home.identifier(),
+                            0,
+                        )
+                        .unwrap();
+                }
+                storage.save_all().unwrap();
+            };
+            let path = directory.path().join("poi/r.0.0.mca");
+            let before = std::fs::read(&path).unwrap();
+            // First ABA is already pending at capture; the second happens only
+            // after successful encoding, either before or after plan application.
+            chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR);
+            chunk.set_block_absolute_y(1, 0, 1, home);
+            {
+                let lifecycle = runtime.runtime.lifecycle.read().unwrap();
+                let current = chunk.check_poi_publication(&runtime.chunks).unwrap();
+                let mut storage = runtime.runtime.storage.lock().unwrap();
+                let (root, plan) = chunk
+                    .capture_root(Some(storage.loaded_poi_region(pos).unwrap()))
+                    .unwrap();
+                drop(current);
+                drop(lifecycle);
+                let encoded = crate::nbt_io::encode_compound(root).unwrap();
+                let snapshot = ChunkData::from_bytes(&encoded, pos).unwrap();
+                assert_eq!(snapshot.section.get_block_absolute_y(2, 0, 1), Some(home));
+                let plan = plan.unwrap();
+                if write_after_apply {
+                    plan.apply().unwrap();
+                    chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
+                    chunk.set_block_absolute_y(2, 0, 1, home);
+                } else {
+                    chunk.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
+                    chunk.set_block_absolute_y(2, 0, 1, home);
+                    assert!(matches!(
+                        plan.apply(),
+                        Err(PoiReconcileError::StaleSaveCapture)
+                    ));
+                }
+                storage.save_all().unwrap();
+            };
+            let saved = PoiRegion::load(&path).unwrap();
+            let entries = saved.get_all();
+            assert_eq!(
+                entries
+                    .iter()
+                    .find(|entry| entry.x == 1)
+                    .unwrap()
+                    .free_tickets,
+                i32::from(write_after_apply)
+            );
+            assert_eq!(
+                entries
+                    .iter()
+                    .find(|entry| entry.x == 2)
+                    .unwrap()
+                    .free_tickets,
+                0
+            );
+            if !write_after_apply {
+                assert_eq!(std::fs::read(&path).unwrap(), before);
+            }
+            // A successful retry must still see both original and later ABA bits.
+            chunk.to_bytes_for_save().unwrap();
+            let saved = PoiRegion::load(&path).unwrap();
+            assert_eq!(saved.get_all().len(), 2);
+            assert!(saved.get_all().iter().all(|entry| entry.poi_type
+                == PoiType::Home.identifier()
+                && entry.free_tickets == 1));
+        }
+    }
     fn parse_saved_container(mut container: NbtCompound) -> Result<ChunkData, ChunkReadingError> {
         let position = BlockPos::new(1, 64, 2);
         container.put_int("x", position.0.x);

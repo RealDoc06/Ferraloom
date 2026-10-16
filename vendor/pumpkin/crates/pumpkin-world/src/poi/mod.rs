@@ -74,6 +74,8 @@ pub enum PoiReconcileError {
     InvalidCoordinates,
     #[error("POI section revision exhausted; chunk preparation is unavailable")]
     RevisionExhausted,
+    #[error("Terrain changed after save capture; retry without acknowledging POI history")]
+    StaleSaveCapture,
     #[error("POI change metadata lock is poisoned; chunk preparation is unavailable")]
     MetadataPoisoned,
     #[error("Terrain lock is poisoned; POI preparation is unavailable")]
@@ -88,6 +90,15 @@ pub struct LoadedPoiRegion<'a> {
     chunk: ChunkPos,
     region: &'a mut PoiRegion,
     pub(crate) identity: std::sync::Arc<()>,
+}
+
+/// Private, validated replacement. Save capture keeps its loaded-region borrow
+/// until application, so ticket lookup cannot race another storage operation.
+pub(crate) struct PoiSectionReplacement {
+    section_y: i32,
+    origin: (i32, i32, i32),
+    entries: Vec<PoiEntry>,
+    complete: bool,
 }
 
 impl LoadedPoiRegion<'_> {
@@ -109,6 +120,18 @@ impl LoadedPoiRegion<'_> {
         changes: &PoiSectionChanges,
         complete: bool,
     ) -> Result<(), PoiReconcileError> {
+        let replacement = self.plan_section(section_y, palette, changes, complete)?;
+        self.apply_section(replacement);
+        Ok(())
+    }
+
+    pub(crate) fn plan_section(
+        &self,
+        section_y: i32,
+        palette: &BlockPalette,
+        changes: &PoiSectionChanges,
+        complete: bool,
+    ) -> Result<PoiSectionReplacement, PoiReconcileError> {
         let origin = (
             self.chunk.x.checked_mul(16),
             section_y.checked_mul(16),
@@ -154,23 +177,38 @@ impl LoadedPoiRegion<'_> {
                 });
             }
         }
-        // All validation precedes mutation, including removal of stale records.
+        Ok(PoiSectionReplacement {
+            section_y,
+            origin: (x, y, z),
+            entries: replacement,
+            complete,
+        })
+    }
+
+    /// No validation or IO remains after planning. The caller still owns the
+    /// same exclusive storage borrow used to read the original tickets.
+    pub(crate) fn apply_section(&mut self, replacement: PoiSectionReplacement) {
+        let (x, y, z) = replacement.origin;
         for index in 0..BlockPalette::VOLUME {
-            self.region.entries.remove(&position(index));
+            self.region.entries.remove(&(
+                x + (index % 16) as i32,
+                y + (index / 256) as i32,
+                z + (index / 16 % 16) as i32,
+            ));
         }
-        for entry in replacement {
+        for entry in replacement.entries {
             self.region
                 .entries
                 .insert((entry.x, entry.y, entry.z), entry);
         }
-        self.region
-            .section_validity
-            .insert((self.chunk.x, self.chunk.y, section_y), i8::from(complete));
+        self.region.section_validity.insert(
+            (self.chunk.x, self.chunk.y, replacement.section_y),
+            i8::from(replacement.complete),
+        );
         self.region
             .dirty_chunks
             .insert((self.chunk.x, self.chunk.y));
         self.region.dirty = true;
-        Ok(())
     }
 }
 

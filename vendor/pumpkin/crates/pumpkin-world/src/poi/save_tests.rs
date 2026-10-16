@@ -286,3 +286,200 @@ fn proto_capture_stays_incomplete_and_tracker_cannot_move_between_stores() {
         Err(PoiReconcileError::WrongStorage)
     ));
 }
+
+// UNRUN: real backend paths, with both chunks in the same terrain and POI region.
+fn assert_entry(poi: &PoiRegion, pos: (i32, i32, i32), kind: PoiType, tickets: i32) {
+    assert_eq!(poi.entries[&pos].poi_type, kind.identifier());
+    assert_eq!(poi.entries[&pos].free_tickets, tickets);
+}
+
+async fn assert_same_region_disk<S>(folder: &LevelFolder, config: S::ChunkConfig, retried: bool)
+where
+    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S::ChunkConfig: Clone + Send + Sync,
+{
+    let a = disk_chunk::<S>(folder, ChunkPos::new(0, 0), config.clone()).await;
+    let b = disk_chunk::<S>(folder, ChunkPos::new(1, 0), config).await;
+    let a_kind = if retried {
+        PoiType::Meeting
+    } else {
+        PoiType::Home
+    };
+    assert_eq!(
+        a.section.get_block_absolute_y(1, 0, 1),
+        Some(if retried {
+            Block::BELL.default_state.id
+        } else {
+            home()
+        })
+    );
+    assert_eq!(a.section.get_block_absolute_y(2, 0, 1), Some(home()));
+    assert_eq!(
+        b.section.get_block_absolute_y(1, 0, 1),
+        Some(Block::BELL.default_state.id)
+    );
+    let poi = PoiRegion::load(&folder.poi_folder.join("r.0.0.mca")).unwrap();
+    assert_entry(&poi, (1, 0, 1), a_kind, if retried { 32 } else { 0 });
+    assert_entry(&poi, (2, 0, 1), PoiType::Home, i32::from(retried));
+    assert_entry(&poi, (17, 0, 1), PoiType::Meeting, 32);
+    assert_eq!(poi.section_validity[&(0, 0, 0)], 1);
+    assert_eq!(poi.section_validity[&(1, 0, 0)], 1);
+}
+
+async fn same_region_encode_refusal<S>(config: S::ChunkConfig)
+where
+    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S::ChunkConfig: Clone + Send + Sync + 'static,
+{
+    let directory = tempfile::tempdir().unwrap();
+    let folder = folder(&directory);
+    let runtime = TestRuntime::new(folder.poi_folder.clone());
+    let a_pos = ChunkPos::new(0, 0);
+    let b_pos = ChunkPos::new(1, 0);
+    let a = ChunkData::empty_sync(0, 0);
+    let b = ChunkData::empty_sync(1, 0);
+    for (pos, chunk) in [(a_pos, &a), (b_pos, &b)] {
+        chunk.bind_poi(&runtime.runtime).unwrap();
+        runtime.chunks.insert(pos, chunk.clone());
+        chunk.set_block_absolute_y(1, 0, 1, home());
+    }
+    a.set_block_absolute_y(2, 0, 1, home());
+    let writer = ChunkFileManager::<S>::new(config.clone());
+    writer
+        .save_chunks(&folder, vec![(a_pos, a.clone()), (b_pos, b.clone())])
+        .await
+        .unwrap();
+    writer.flush().await.unwrap();
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        for x in [1, 2] {
+            storage
+                .add_with_free_tickets(BlockPos::new(x, 0, 1), PoiType::Home.identifier(), 0)
+                .unwrap();
+        }
+        storage.save_all().unwrap();
+    };
+    let terrain_path = folder.region_folder.join(S::get_chunk_key(&a_pos));
+    let terrain_before = std::fs::read(&terrain_path).unwrap();
+    let poi_path = folder.poi_folder.join("r.0.0.mca");
+    let poi_before = std::fs::read(&poi_path).unwrap();
+    a.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+    a.set_block_absolute_y(2, 0, 1, BlockStateId::AIR);
+    a.set_block_absolute_y(2, 0, 1, home());
+    a.set_custom_data("test", "refused", NbtTag::End);
+    assert!(matches!(
+        a.to_bytes_for_save(),
+        Err(ChunkSerializingError::ErrorSerializingChunk(_))
+    ));
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage.save_all().unwrap();
+        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+        // Force an actual same-region save_all write using an independent ticket edit.
+        storage
+            .add_with_free_tickets(BlockPos::new(17, 0, 1), PoiType::Home.identifier(), 0)
+            .unwrap();
+        storage.save_all().unwrap();
+    };
+    let poi = PoiRegion::load(&poi_path).unwrap();
+    assert_entry(&poi, (1, 0, 1), PoiType::Home, 0);
+    assert_entry(&poi, (2, 0, 1), PoiType::Home, 0);
+    assert_entry(&poi, (17, 0, 1), PoiType::Home, 0);
+    assert_eq!(std::fs::read(&terrain_path).unwrap(), terrain_before);
+    b.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+    assert!(
+        writer
+            .save_chunks(&folder, vec![(a_pos, a.clone()), (b_pos, b)])
+            .await
+            .is_err()
+    );
+    assert!(writer.flush().await.is_err());
+    assert!(a.is_dirty());
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    writer.fetch_chunks(&folder, &[a_pos], send).await;
+    let Some(LoadedData::Loaded(retained)) = receive.recv().await else {
+        panic!("failed source was discarded")
+    };
+    assert!(Arc::ptr_eq(&retained, &a));
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage.save_all().unwrap();
+    };
+    assert_same_region_disk::<S>(&folder, config.clone(), false).await;
+    a.set_custom_data("test", "refused", NbtTag::Int(7));
+    writer.flush().await.unwrap();
+    assert!(!a.is_dirty());
+    assert_same_region_disk::<S>(&folder, config, true).await;
+}
+
+#[tokio::test]
+async fn anvil_failed_encode_cannot_leak_through_same_region_sibling_or_save_all() {
+    Box::pin(same_region_encode_refusal::<AnvilChunkFile<ChunkData>>(
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
+    ))
+    .await;
+}
+
+#[tokio::test]
+async fn linear_failed_encode_cannot_leak_through_same_region_sibling_or_save_all() {
+    Box::pin(same_region_encode_refusal::<LinearV2File<ChunkData>>(())).await;
+}
+
+#[tokio::test]
+async fn pump_failed_encode_cannot_leak_through_same_region_sibling_or_save_all() {
+    Box::pin(same_region_encode_refusal::<PumpFile<ChunkData>>(())).await;
+}
+
+// UNRUN: a later refused section must not publish/ack an earlier valid plan.
+#[test]
+fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublished() {
+    let directory = tempfile::tempdir().unwrap();
+    let folder = folder(&directory);
+    let runtime = TestRuntime::new(folder.poi_folder.clone());
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.bind_poi(&runtime.runtime).unwrap();
+    runtime.chunks.insert(ChunkPos::new(0, 0), chunk.clone());
+    chunk.set_block_absolute_y(1, 0, 1, home());
+    chunk.to_bytes_for_save().unwrap();
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage
+            .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
+            .unwrap();
+        storage
+            .add_with_free_tickets(BlockPos::new(1, 16, 1), "future:unknown", -7)
+            .unwrap();
+        storage.save_all().unwrap();
+    };
+    let poi_path = folder.poi_folder.join("r.0.0.mca");
+    let before = std::fs::read(&poi_path).unwrap();
+    chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR);
+    chunk.set_block_absolute_y(1, 0, 1, home());
+    chunk.set_block_absolute_y(1, 16, 1, Block::BELL.default_state.id);
+    assert!(matches!(
+        chunk.to_bytes_for_save(),
+        Err(ChunkSerializingError::Poi(
+            PoiReconcileError::UnknownType { .. }
+        ))
+    ));
+    {
+        let mut storage = runtime.runtime.storage.lock().unwrap();
+        storage.save_all().unwrap();
+        assert_eq!(std::fs::read(&poi_path).unwrap(), before);
+        assert_entry(&storage.regions[&(0, 0)], (1, 0, 1), PoiType::Home, 0);
+        assert_eq!(
+            storage.regions[&(0, 0)].entries[&(1, 16, 1)].poi_type,
+            "future:unknown"
+        );
+        assert_eq!(
+            storage.regions[&(0, 0)].entries[&(1, 16, 1)].free_tickets,
+            -7
+        );
+        // Explicitly repair the refused input; no lossy automatic admission.
+        storage.remove(&BlockPos::new(1, 16, 1)).unwrap();
+    };
+    chunk.to_bytes_for_save().unwrap();
+    let poi = PoiRegion::load(&poi_path).unwrap();
+    assert_entry(&poi, (1, 0, 1), PoiType::Home, 1);
+    assert_entry(&poi, (1, 16, 1), PoiType::Meeting, 32);
+}
