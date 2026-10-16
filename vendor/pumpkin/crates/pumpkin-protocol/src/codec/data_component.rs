@@ -376,7 +376,8 @@ impl DataComponentCodec<Self> for LoreImpl {
 impl DataComponentCodec<Self> for ItemNameImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         let mut bytes = Vec::new();
-        self.write_data()
+        self.checked_write_data()
+            .map_err(|error| WritingError::Message(error.into()))?
             .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
             .map_err(|error| WritingError::Message(error.to_string()))?;
         seq.write_slice(&bytes)
@@ -384,8 +385,7 @@ impl DataComponentCodec<Self> for ItemNameImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq.get_nbt_strict()?;
-        Self::read_data(&tag)
-            .ok_or_else(|| ReadingError::Message("Invalid item_name component".into()))
+        Self::parse(&tag).map_err(|error| ReadingError::Message(error.into()))
     }
 }
 

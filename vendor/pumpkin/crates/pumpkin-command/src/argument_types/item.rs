@@ -1,4 +1,5 @@
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{DataComponentImpl, ItemNameImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
@@ -15,6 +16,11 @@ use crate::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 pub const ERROR_UNKNOWN_ITEM: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENT_ITEM_ID_INVALID,
     translation::java::ARGUMENT_ITEM_ID_INVALID,
+);
+
+pub const ERROR_INVALID_COMPONENT: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENTS_ITEM_COMPONENT_MALFORMED,
+    translation::java::ARGUMENTS_ITEM_COMPONENT_MALFORMED,
 );
 
 #[derive(Clone, Copy)]
@@ -65,16 +71,31 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemStackArgumentType 
                 if reader.peek() == Some('=') {
                     reader.skip();
                     reader.skip_whitespace();
+                    let value_start = reader.cursor();
                     let nbt_tag = SnbtParser::parse_for_commands(reader)?;
-                    if let (Some(data_comp), Some(comp_impl)) = (
-                        DataComponent::try_from_name(&key_str),
-                        pumpkin_data::data_component_impl::read_data(
-                            DataComponent::try_from_name(&key_str)
-                                .unwrap_or(DataComponent::CustomData),
-                            &nbt_tag,
-                        ),
-                    ) {
-                        patch.push((data_comp, Some(comp_impl)));
+                    let parsed = DataComponent::try_from_name(&key_str)
+                        .ok_or("Unknown data component")
+                        .and_then(|data_comp| {
+                            let component = if data_comp == DataComponent::ItemName {
+                                ItemNameImpl::parse(&nbt_tag).map(|name| name.to_dyn())
+                            } else {
+                                pumpkin_data::data_component_impl::read_data(data_comp, &nbt_tag)
+                                    .ok_or("Invalid or unsupported component value")
+                            }?;
+                            Ok((data_comp, Some(component)))
+                        });
+                    match parsed {
+                        Ok(component) => patch.push(component),
+                        Err(reason) => {
+                            // Point at the rejected value, not after its closing bracket.
+                            // No partially parsed stack is returned to /give.
+                            reader.set_cursor(value_start);
+                            return Err(ERROR_INVALID_COMPONENT.create(
+                                reader,
+                                TextComponent::text(key_str),
+                                TextComponent::text(reason),
+                            ));
+                        }
                     }
                 }
                 reader.skip_whitespace();
@@ -113,5 +134,44 @@ impl ItemStackArgumentType {
         name: &str,
     ) -> Result<ItemStack, CommandSyntaxError> {
         context.get_argument::<ItemStack>(name).cloned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejected_component_returns_typed_error_at_value_start() {
+        for value in [
+            "{color:'red'}",
+            "{text:'x',bold:'wrong'}",
+            "{nbt:'foo',storage:'minecraft:test'}",
+        ] {
+            let input = format!("give @s stick[damage=1,item_name={value}]");
+            let mut reader = StringReader::new(&input);
+            reader.set_cursor("give @s ".len());
+            let error = <ItemStackArgumentType as ArgumentType<()>>::parse(
+                &ItemStackArgumentType,
+                &mut reader,
+            )
+            .err()
+            .expect("invalid/unsupported component must refuse the command");
+            assert!(error.is(&ERROR_INVALID_COMPONENT));
+            let context = error.context.expect("component error needs cursor context");
+            assert_eq!(context.cursor, input.find(value).unwrap());
+            assert_eq!(context.input, input);
+            assert_eq!(reader.cursor(), context.cursor);
+        }
+    }
+
+    #[test]
+    fn another_rejected_component_is_not_silently_omitted() {
+        let mut reader = StringReader::new("stick[damage='wrong']");
+        let error =
+            <ItemStackArgumentType as ArgumentType<()>>::parse(&ItemStackArgumentType, &mut reader)
+                .err()
+                .expect("rejected component must not produce a successful stack");
+        assert!(error.is(&ERROR_INVALID_COMPONENT));
     }
 }

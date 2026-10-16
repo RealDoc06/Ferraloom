@@ -4,6 +4,7 @@ use std::{borrow::Cow, io::Cursor};
 
 use pumpkin_command::{
     argument_types::{argument_type::ArgumentType, item::ItemStackArgumentType},
+    snbt::SnbtParser,
     string_reader::StringReader,
 };
 use pumpkin_data::{
@@ -182,7 +183,7 @@ fn command_item_names_keep_literal_translation_and_rich_nbt() {
         ),
         (
             "{text:'item.minecraft.stick'}",
-            nbt_compound_tag! { "text": NbtTag::String("item.minecraft.stick".into()) },
+            NbtTag::String("item.minecraft.stick".into()),
         ),
         (
             "{translate:'item.minecraft.stick'}",
@@ -203,14 +204,14 @@ fn command_item_names_keep_literal_translation_and_rich_nbt() {
                 "translate": NbtTag::String("chat.type.text".into()),
                 "fallback": NbtTag::String("%s: %s".into()),
                 "with": NbtTag::List(vec![NbtTag::String("Doc".into()), nbt_compound_tag! { "text": NbtTag::String("hello".into()), "bold": NbtTag::Byte(1) }]),
-                "extra": NbtTag::List(vec![nbt_compound_tag! { "text": NbtTag::String("!".into()) }]),
+                "extra": NbtTag::List(vec![NbtTag::String("!".into())]),
             },
         ),
         (
             "{score:{name:'Doc',objective:'points'},extra:[{text:'!'}]}",
             nbt_compound_tag! {
                 "score": nbt_compound_tag! { "name": NbtTag::String("Doc".into()), "objective": NbtTag::String("points".into()) },
-                "extra": NbtTag::List(vec![nbt_compound_tag! { "text": NbtTag::String("!".into()) }]),
+                "extra": NbtTag::List(vec![NbtTag::String("!".into())]),
             },
         ),
         (
@@ -231,12 +232,25 @@ fn literal_witness_has_string_nbt_on_wire_and_both_inputs() {
     // TAG_String bytes for the literal shape in the retained vanilla hand witness.
     // This expected payload is deliberately independent of our NBT writer.
     let expected = b"\x08\x00\x0dFerraloom key";
-    let stack = command_stack("'Ferraloom key'");
-    let mut outgoing = Vec::new();
-    ItemStackSerializer(Cow::Borrowed(&stack))
-        .write(&mut outgoing)
-        .unwrap();
-    assert_eq!(outgoing, slot_bytes(expected, false));
+    for input in [
+        "'Ferraloom key'",
+        "{text:'Ferraloom key'}",
+        "{type:'text',text:'Ferraloom key'}",
+    ] {
+        let stack = command_stack(input);
+        for length_prefixed in [false, true] {
+            let mut outgoing = Vec::new();
+            let serializer = ItemStackSerializer(Cow::Borrowed(&stack));
+            if length_prefixed {
+                serializer
+                    .write_untrusted_with_version(&mut outgoing, &JavaMinecraftVersion::V_26_3)
+                    .unwrap();
+            } else {
+                serializer.write(&mut outgoing).unwrap();
+            }
+            assert_eq!(outgoing, slot_bytes(expected, length_prefixed));
+        }
+    }
     for length_prefixed in [false, true] {
         let bytes = slot_bytes(expected, length_prefixed);
         let mut cursor = Cursor::new(bytes.as_slice());
@@ -330,7 +344,7 @@ fn malformed_truncated_and_trailing_names_do_not_become_empty() {
     let valid = [
         NbtTag::String("Ferraloom key".into()),
         nbt_compound_tag! { "translate": NbtTag::String("item.minecraft.stick".into()) },
-        nbt_compound_tag! { "text": NbtTag::String("styled".into()), "extra": NbtTag::List(vec![nbt_compound_tag! { "text": NbtTag::String("!".into()) }]) },
+        nbt_compound_tag! { "text": NbtTag::String("styled".into()), "extra": NbtTag::List(vec![NbtTag::String("!".into())]) },
     ];
     for tag in valid {
         let payload = nbt_bytes(tag);
@@ -417,4 +431,302 @@ fn identical_display_projections_do_not_merge_component_identity() {
             .unwrap()
             .get_hash()
     );
+}
+
+fn snbt(input: &str) -> NbtTag {
+    let mut reader = StringReader::new(input);
+    let tag = SnbtParser::parse_for_commands(&mut reader).expect("test input must be valid SNBT");
+    assert_eq!(reader.cursor(), input.len());
+    tag
+}
+
+fn saved_stack(tag: NbtTag) -> NbtCompound {
+    let mut saved = NbtCompound::new();
+    saved.put_string("id", "minecraft:stick".into());
+    saved.put_int("count", 1);
+    saved.put(
+        "components",
+        nbt_compound_tag! { "minecraft:item_name": tag },
+    );
+    saved
+}
+
+/// Exercise real boundaries, including direct native construction that skips read_data.
+fn assert_refused_at_boundaries(input: &str) {
+    use pumpkin_command::argument_types::item::ERROR_INVALID_COMPONENT;
+
+    let tag = snbt(input);
+    assert!(ItemNameImpl::parse(&tag).is_err(), "accepted {input}");
+    let command = format!("stick[item_name={input}]");
+    let mut reader = StringReader::new(&command);
+    let error =
+        <ItemStackArgumentType as ArgumentType<()>>::parse(&ItemStackArgumentType, &mut reader)
+            .err()
+            .expect("refused component must fail the command, never omit its name");
+    assert!(
+        error.is(&ERROR_INVALID_COMPONENT),
+        "wrong error for {input}"
+    );
+    assert_eq!(error.context.unwrap().cursor, "stick[item_name=".len());
+    assert!(
+        ItemStack::read_item_stack(&saved_stack(tag.clone())).is_none(),
+        "loaded {input}"
+    );
+
+    let payload = nbt_bytes(tag.clone());
+    for length_prefixed in [false, true] {
+        let bytes = slot_bytes(&payload, length_prefixed);
+        let mut reader = Cursor::new(bytes);
+        let result = if length_prefixed {
+            ItemStackSerializer::read_length_prefixed_optional(&mut reader)
+        } else {
+            ItemStackSerializer::read(&mut reader)
+        };
+        assert!(
+            result.is_err(),
+            "accepted incoming {input}, length_prefixed={length_prefixed}"
+        );
+    }
+
+    let unchecked = ItemNameImpl::Component(tag);
+    let mut bytes = Vec::new();
+    assert!(data_component::serialize(DataComponent::ItemName, &unchecked, &mut bytes).is_err());
+    assert!(
+        bytes.is_empty(),
+        "component writer emitted unchecked data for {input}"
+    );
+    let mut stack = ItemStack::new(1, &Item::STICK);
+    stack.set_data_component(unchecked);
+    let serializer = ItemStackSerializer(Cow::Borrowed(&stack));
+    assert!(serializer.write(&mut Vec::new()).is_err());
+    assert!(
+        serializer
+            .write_untrusted_with_version(&mut Vec::new(), &JavaMinecraftVersion::V_26_3)
+            .is_err()
+    );
+}
+
+fn assert_accepted_at_boundaries(input: &str) {
+    let stack = command_stack(input);
+    let normalized = name(&stack);
+    let raw = snbt(input);
+    let loaded =
+        ItemStack::read_item_stack(&saved_stack(raw.clone())).expect("supported disk name");
+    assert_eq!(name(&loaded), normalized, "disk normalization for {input}");
+    let payload = nbt_bytes(raw);
+    for length_prefixed in [false, true] {
+        let mut reader = Cursor::new(slot_bytes(&payload, length_prefixed));
+        let decoded = if length_prefixed {
+            ItemStackSerializer::read_length_prefixed_optional(&mut reader)
+        } else {
+            ItemStackSerializer::read(&mut reader)
+        }
+        .expect("supported incoming name")
+        .to_stack();
+        assert_eq!(
+            name(&decoded),
+            normalized,
+            "incoming normalization for {input}"
+        );
+        assert!(stack.are_items_and_components_equal(&decoded));
+    }
+    assert_persistent_and_wire(stack, &normalized);
+}
+
+#[test]
+fn retained_official_57_case_codec_contract_at_real_item_boundaries() {
+    // Transcribed from the actual 26.3 ComponentSerialization probe retained in
+    // sign-usable-component-contract.txt, not inferred from this implementation.
+    // STREAM_CODEC uses getOrThrow: both NONE and PARTIAL must be refused.
+    // These are acceptance observations, not full canonical/render/hash parity.
+    #[derive(Clone, Copy)]
+    enum Primary {
+        None,
+        Partial,
+        Success,
+        SuccessUnsupported,
+    }
+    use Primary::{None, Partial, Success, SuccessUnsupported};
+    let cases = [
+        ("{}", None),
+        ("{color:'red'}", None),
+        ("{extra:['usable']}", None),
+        ("[]", None),
+        ("[17]", None),
+        ("[17,'usable']", Partial),
+        ("['usable',17]", Partial),
+        ("[{},'usable']", Partial),
+        ("[[]]", None),
+        ("[[17,'usable']]", Partial),
+        ("['one','two']", Success),
+        ("{text:'usable'}", Success),
+        ("{text:17}", None),
+        ("{text:['usable']}", None),
+        ("{text:{}}", None),
+        ("{text:'usable',bold:'wrong'}", Partial),
+        ("{text:'usable',color:'wrong'}", Partial),
+        ("{text:'usable',extra:[]}", Partial),
+        ("{text:'usable',extra:[17,'extra']}", Partial),
+        ("{text:'usable',extra:{}}", Partial),
+        ("{translate:'some.key'}", Success),
+        ("{translate:17}", None),
+        ("{translatable:'some.key'}", None),
+        ("{translate:'some.key',with:[17]}", Success),
+        ("{score:{name:'Doc',objective:'obj'}}", Success),
+        ("{score:{}}", None),
+        ("{score:'Doc'}", None),
+        ("{score:{name:'Doc'}}", None),
+        ("{score:{name:17,objective:'obj'}}", None),
+        ("{score:{name:'Doc',objective:17}}", None),
+        ("{selector:'@a'}", Success),
+        ("{selector:'Doc'}", Success),
+        ("{selector:'@bad'}", None),
+        ("{selector:17}", None),
+        ("{selector:'@a',separator:17}", None),
+        ("{keybind:'key.jump'}", Success),
+        ("{keybind:17}", None),
+        // Valid Java inputs, explicitly unsupported here until NBT path/source
+        // grammars are validated. Never relabel these as Java-invalid cases.
+        ("{nbt:'foo',storage:'minecraft:test'}", SuccessUnsupported),
+        ("{nbt:'foo',entity:'@a'}", SuccessUnsupported),
+        ("{nbt:'foo',block:'~ ~ ~'}", SuccessUnsupported),
+        ("{nbt:'foo'}", None),
+        ("{nbt:17,storage:'minecraft:test'}", None),
+        ("{object:'atlas',sprite:'minecraft:foo'}", Success),
+        ("{sprite:'minecraft:foo'}", Success),
+        ("{object:'atlas'}", None),
+        ("{object:'player',player:'Notch'}", Success),
+        ("{object:'unknown',sprite:'minecraft:foo'}", None),
+        ("{object:{}}", None),
+        ("{type:'text',text:'usable'}", Success),
+        ("{type:'text',translate:'key'}", None),
+        ("{type:'unknown',text:'usable'}", None),
+        ("{type:17,text:'usable'}", None),
+        ("{type:'translatable',translate:'key'}", Success),
+        ("{type:'selector',text:'usable'}", None),
+        ("{text:17,translate:'key'}", Success),
+        ("{text:'usable',translate:17}", Success),
+        ("{object:'unknown',text:'usable'}", Success),
+    ];
+    assert_eq!(cases.len(), 57);
+    for (input, primary) in cases {
+        match primary {
+            Success => assert_accepted_at_boundaries(input),
+            None | Partial => assert_refused_at_boundaries(input),
+            SuccessUnsupported => {
+                assert!(
+                    ItemNameImpl::parse(&snbt(input))
+                        .unwrap_err()
+                        .starts_with("Unsupported")
+                );
+                assert_refused_at_boundaries(input);
+            }
+        }
+    }
+}
+
+#[test]
+fn plain_text_canonicalizes_identity_disk_and_both_wire_inputs() {
+    let literal = command_stack("'Ferraloom key'");
+    let literal_name = literal.get_data_component::<ItemNameImpl>().unwrap();
+    for input in [
+        "{text:'Ferraloom key'}",
+        "{text:'Ferraloom key',type:'text'}",
+        "{text:'Ferraloom key',translate:17}",
+    ] {
+        let stack = command_stack(input);
+        assert!(literal.are_items_and_components_equal(&stack));
+        assert_eq!(
+            stack
+                .get_data_component::<ItemNameImpl>()
+                .unwrap()
+                .get_hash(),
+            literal_name.get_hash()
+        );
+        assert_accepted_at_boundaries(input);
+        assert_persistent_and_wire(stack, &NbtTag::String("Ferraloom key".into()));
+
+        // Even a native unchecked constructor must go through normalization.
+        let mut payload = Vec::new();
+        data_component::serialize(
+            DataComponent::ItemName,
+            &ItemNameImpl::Component(snbt(input)),
+            &mut payload,
+        )
+        .unwrap();
+        assert_eq!(payload, b"\x08\x00\x0dFerraloom key");
+    }
+    assert_eq!(
+        name(&command_stack("{text:17,translate:'key'}")),
+        snbt("{translate:'key'}")
+    );
+}
+
+#[test]
+fn supported_style_events_and_bytecode_shapes_are_checked_recursively() {
+    // Fields/codecs confirmed in 26.3 Style.Serializer, AtlasSprite, PlayerSprite,
+    // ClickEvent.CopyToClipboard and HoverEvent.ShowText disassemblies.
+    let input = "{text:'styled',color:'#12abef',bold:1b,italic:0b,underlined:1b,strikethrough:0b,obfuscated:0b,shadow_color:-1,font:'minecraft:default',insertion:'Doc',click_event:{action:'copy_to_clipboard',value:'hello'},hover_event:{action:'show_text',value:{text:'hover',color:'red'}},extra:['!']}";
+    assert_accepted_at_boundaries(input);
+    assert_persistent_and_wire(command_stack(input), &snbt(input));
+    for input in [
+        "{text:'x',italic:'true'}",
+        "{text:'x',underlined:{}}",
+        "{text:'x',strikethrough:[]}",
+        "{text:'x',obfuscated:'false'}",
+        "{text:'x',color:'#1000000'}",
+        "{text:'x',insertion:17}",
+        "{text:'x',font:'Bad Identifier'}",
+        "{text:'x',click_event:{action:'copy_to_clipboard',value:17}}",
+        "{text:'x',hover_event:{action:'show_text',value:{color:'red'}}}",
+        "{translate:'key',with:[{text:'x',bold:'wrong'}]}",
+        "{selector:'@a',separator:{text:'x',extra:[]}}",
+        "{sprite:'minecraft:foo',atlas:17}",
+        "{object:'player',player:'Notch',hat:'wrong'}",
+    ] {
+        assert_refused_at_boundaries(input);
+    }
+}
+
+#[test]
+fn unsupported_opaque_forms_cannot_bypass_outgoing_validation() {
+    // Unsupported is deliberately separate from Java-invalid. Expanding support
+    // requires the corresponding codec/grammar, not accepting these as opaque NBT.
+    for input in [
+        "{selector:'@a[tag=example]'}",
+        "{text:'x',hover_event:{action:'show_item',id:'minecraft:stick'}}",
+        "{text:'x',click_event:{action:'run_command',command:'/help'}}",
+        "{text:'x',shadow_color:[1.0f,1.0f,1.0f,1.0f]}",
+        "{object:'player',player:{name:'Notch',properties:[]}}",
+        "{text:'x',future_component_field:{value:17}}",
+    ] {
+        assert!(
+            ItemNameImpl::parse(&snbt(input))
+                .unwrap_err()
+                .starts_with("Unsupported")
+        );
+        assert_refused_at_boundaries(input);
+    }
+}
+
+#[test]
+fn literal_hash_uses_the_primary_utf16_preimage() {
+    use pumpkin_data::data_component_impl::Digest;
+
+    // Bytecode-derived preimages, not a paired Java execution. HashOps uses tag12,
+    // String.length and Guava putUnencodedChars: UTF-16LE, including surrogate pairs.
+    for (input, preimage) in [
+        (
+            "Schlüssel",
+            b"\x0c\x09\0\0\0S\0c\0h\0l\0\xfc\0s\0s\0e\0l\0".as_slice(),
+        ),
+        ("🔑", b"\x0c\x02\0\0\0\x3d\xd8\x11\xdd".as_slice()),
+    ] {
+        let mut expected = Digest::new();
+        expected.update(preimage);
+        let literal = ItemNameImpl::Literal {
+            name: Cow::Owned(input.into()),
+        };
+        assert_eq!(literal.get_hash(), expected.finalize() as i32);
+    }
 }
