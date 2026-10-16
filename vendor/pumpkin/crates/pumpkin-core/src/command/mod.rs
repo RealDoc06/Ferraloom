@@ -454,7 +454,7 @@ pub(crate) mod test {
     use crate::data::player_server::test::{PlayerFixture, close_fixture, player_fixture};
 
     /// Shares the player-data fixture's registered player and production dispatcher.
-    pub(crate) struct CommandFixture {
+    pub struct CommandFixture {
         pub(crate) server: Arc<Server>,
         pub(crate) player: Arc<Player>,
         fixture: PlayerFixture,

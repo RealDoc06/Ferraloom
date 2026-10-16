@@ -186,6 +186,10 @@ async fn integer_set_and_query_share_live_state_and_results_across_spellings() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep synchronized writers and per-round lost-update assertions together."
+)]
 async fn concurrent_command_and_world_updates_preserve_every_round() {
     const ROUNDS: i32 = 64;
     const WAIT: Duration = Duration::from_secs(10);
@@ -248,7 +252,7 @@ async fn concurrent_command_and_world_updates_preserve_every_round() {
                         } else {
                             Difficulty::Easy
                         }),
-                        _ => unreachable!(),
+                        _ => panic!("unexpected concurrent writer index: {writer}"),
                     }
                     finished.send(writer).unwrap();
                 }

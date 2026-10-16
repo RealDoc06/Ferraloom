@@ -45,11 +45,11 @@ async fn server_at(path: &Path, interval: u64) -> Arc<Server> {
     advanced.networking.java.online_mode = false;
     advanced.networking.bedrock.online_mode = false;
     let data = VanillaData {
-        banned_ip_list: Default::default(),
-        banned_player_list: Default::default(),
-        operator_config: Default::default(),
-        user_cache: Default::default(),
-        whitelist_config: Default::default(),
+        banned_ip_list: std::sync::RwLock::default(),
+        banned_player_list: std::sync::RwLock::default(),
+        operator_config: std::sync::RwLock::default(),
+        user_cache: std::sync::RwLock::default(),
+        whitelist_config: std::sync::RwLock::default(),
     };
     let server = Server::new(
         basic,
@@ -80,6 +80,10 @@ fn add_objective(server: &Server) {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep frozen autosave, watched cache and save-off controls in the same fixture."
+)]
 async fn frozen_autosave_flushes_watched_cache_and_respects_save_off_selection() {
     let folder = tempfile::tempdir().unwrap();
     let server = server_at(folder.path(), 2).await;
@@ -174,7 +178,9 @@ async fn frozen_autosave_flushes_watched_cache_and_respects_save_off_selection()
             .get_objective("autosaved")
             .is_some()
     );
-    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
+    );
     let (send, mut receive) = tokio::sync::mpsc::channel(1);
     reader
         .fetch_chunks(&overworld.level.level_folder, &[position], send)

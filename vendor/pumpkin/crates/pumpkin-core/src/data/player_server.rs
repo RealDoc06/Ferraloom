@@ -303,15 +303,15 @@ pub(crate) mod test {
         storage.save_player_data(snapshot)
     }
 
-    pub(crate) struct PlayerFixture {
-        pub(crate) _directory: tempfile::TempDir,
+    pub struct PlayerFixture {
+        pub(crate) directory: tempfile::TempDir,
         pub(crate) server: Arc<Server>,
         pub(crate) player: Arc<Player>,
         pub(crate) client: Arc<ClientPlatform>,
         _remote: tokio::net::TcpStream,
     }
 
-    pub(crate) async fn java_client(
+    pub async fn java_client(
         server: &Arc<Server>,
         profile: &GameProfile,
     ) -> (Arc<ClientPlatform>, tokio::net::TcpStream) {
@@ -334,7 +334,7 @@ pub(crate) mod test {
         (Arc::new(ClientPlatform::Java(java)), remote)
     }
 
-    pub(crate) async fn player_fixture() -> PlayerFixture {
+    pub async fn player_fixture() -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -349,11 +349,11 @@ pub(crate) mod test {
         advanced.networking.java.online_mode = false;
         advanced.networking.bedrock.online_mode = false;
         let vanilla_data = VanillaData {
-            banned_ip_list: Default::default(),
-            banned_player_list: Default::default(),
-            operator_config: Default::default(),
-            user_cache: Default::default(),
-            whitelist_config: Default::default(),
+            banned_ip_list: std::sync::RwLock::default(),
+            banned_player_list: std::sync::RwLock::default(),
+            operator_config: std::sync::RwLock::default(),
+            user_cache: std::sync::RwLock::default(),
+            whitelist_config: std::sync::RwLock::default(),
         };
         let server = Server::new(
             basic,
@@ -371,7 +371,7 @@ pub(crate) mod test {
             properties: ArcSwap::from_pointee(Vec::new()),
             profile_actions: None,
         };
-        let (client, _remote) = java_client(&server, &profile).await;
+        let (client, remote) = java_client(&server, &profile).await;
         let world = server.worlds.load().first().cloned().unwrap();
         let player = Arc::new(Player::new(
             client.clone(),
@@ -395,15 +395,15 @@ pub(crate) mod test {
         // Exercise the real world registry without Server::add_player's user-cache IO.
         world.add_player(&player).unwrap();
         PlayerFixture {
-            _directory: directory,
+            directory,
             server,
             player,
             client,
-            _remote,
+            _remote: remote,
         }
     }
 
-    pub(crate) async fn close_fixture(fixture: &PlayerFixture) {
+    pub async fn close_fixture(fixture: &PlayerFixture) {
         if fixture
             .server
             .get_player_by_uuid(fixture.player.gameprofile.id)
@@ -519,7 +519,7 @@ pub(crate) mod test {
                     .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
                     .is_done()
             );
-        }
+        };
         let rejoined = Arc::new(rejoined);
         rejoined
             .screen_handler_sync_handler
@@ -624,6 +624,10 @@ pub(crate) mod test {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep paused final saves, duplicate admission and cancellation in one session scenario."
+    )]
     async fn server_admission_waits_for_final_data_and_cleans_exact_duplicate() {
         if isolated_admission_test(
             "data::player_server::test::server_admission_waits_for_final_data_and_cleans_exact_duplicate",

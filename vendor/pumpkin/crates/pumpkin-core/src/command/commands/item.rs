@@ -395,7 +395,7 @@ mod tests {
                 let mut handler = player.player_screen_handler.lock().unwrap();
                 handler.add_listener(player.screen_handler_listener.clone());
                 handler.update_sync_handler(sync.clone());
-            }
+            };
             Self {
                 world,
                 player,

@@ -104,7 +104,9 @@ async fn unloaded(world: &World, pos: Vector2<i32>) {
 }
 
 async fn saved_chest(world: &World, position: BlockPos) -> ChestBlockEntity {
-    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
+    );
     let (send, mut receive) = tokio::sync::mpsc::channel(1);
     reader
         .fetch_chunks(
@@ -155,7 +157,7 @@ async fn scheduler_saves_hopper_push_into_unwatched_full_halo() {
         let mut loading = world.level.chunk_loading.lock().unwrap();
         loading.add_force_ticket(center);
         loading.send_change();
-    }
+    };
     world.forced_chunks.lock().unwrap().insert(center);
     world.update_active_chunks();
     let source = BlockPos::new(31, 100, 1);
@@ -238,7 +240,7 @@ async fn scheduler_saves_hopper_push_into_unwatched_full_halo() {
         let mut loading = world.level.chunk_loading.lock().unwrap();
         loading.remove_force_ticket(center);
         loading.send_change();
-    }
+    };
     unloaded(&world, target.chunk_position()).await;
     assert_eq!(saved_chest(&world, target).await.get_stack(0).item_count, 1);
     world.shutdown().await.unwrap();
@@ -306,7 +308,7 @@ async fn snapshot_worker_refuses_pending_request_when_full_ticket_already_return
             // FULL ticket. No external BE handle can block retirement instead.
             assert!(!unload.prepare_or_defer(pos, &chunk));
             assert!(unload.is_requested(pos, &chunk));
-        }
+        };
         assert!(!world.retire_block_entities(pos, Some(&chunk)));
         assert!(world.block_entities.contains_key(&pos));
         assert!(!world.level.chunk_unload.access().is_requested(pos, &chunk));

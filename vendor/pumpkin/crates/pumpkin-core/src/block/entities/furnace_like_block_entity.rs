@@ -888,7 +888,7 @@ mod tests {
                     800,
                     2.0,
                 ),
-                _ => unreachable!(),
+                _ => panic!("unexpected furnace kind in the continuation fixture: {kind}"),
             };
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", format!("minecraft:{kind}"));

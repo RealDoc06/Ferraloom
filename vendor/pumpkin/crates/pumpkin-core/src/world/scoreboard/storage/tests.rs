@@ -92,6 +92,10 @@ fn reads_actual_target_structure_and_defaults_without_using_our_encoder() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep modeled-field mutations and nested opaque preservation in one saved board."
+)]
 fn saves_all_modeled_fields_and_retains_unmodeled_nested_data() {
     let mut fixture = target_fixture();
     let mut data = fixture.get_compound("data").unwrap().clone();
@@ -164,9 +168,11 @@ fn saves_all_modeled_fields_and_retains_unmodeled_nested_data() {
     for (slot, _) in SLOTS {
         board.set_display_objective(&NoTarget, slot, Some("health"));
     }
-    let mut styled = Style::default();
-    styled.color = Some(Color::Named(NamedColor::Blue));
-    styled.italic = Some(false);
+    let styled = Style {
+        color: Some(Color::Named(NamedColor::Blue)),
+        italic: Some(false),
+        ..Style::default()
+    };
     let mut score = ScoreboardScore::new(
         "Styled",
         "parity",
@@ -495,7 +501,7 @@ fn shadow_color_and_nested_player_sprite_use_target_nbt_without_losing_model_fie
     profile.put_string("name", "Example".into());
     let sprite = TextComponent::player_sprite(profile.clone(), false);
     let mut display = TextComponent::text("Player: ");
-    display.0.extra.push(sprite.0.clone());
+    display.0.extra.push(sprite.0);
     display.0.style.shadow_color = Some(ARGBColor::new(128, 12, 34, 56));
     display.0.style.font = Some("minecraft:uniform".into());
     display.0.style.insertion = Some("example".into());

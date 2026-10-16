@@ -78,6 +78,10 @@ fn dropped_count(world: &World, item: &'static Item) -> u32 {
         .sum()
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep destroy-mode drops, entities and block-state checks under one dispatcher fixture."
+)]
 async fn destroy_commands() {
     let (_folder, world) = world().await;
     let dispatcher = dispatcher();
@@ -578,6 +582,10 @@ fn step_fixture_block_ticks(world: &Arc<World>, steps: usize) {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep both hook endpoints, replacement controls and updates in one removal scenario."
+)]
 async fn tripwire_removal_updates_attached_hooks_and_retains_replacements() {
     use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs};
     use pumpkin_data::BlockId;
@@ -766,6 +774,7 @@ async fn tripwire_removal_updates_attached_hooks_and_retains_replacements() {
 /// timeout. Bound the actual dispatcher test in a child process instead.
 #[test]
 fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
+    use std::io::{Read, Seek, SeekFrom};
     const CHILD: &str = "FERRALOOM_FILL_DESTROY_CHILD";
     if std::env::var_os(CHILD).is_some() {
         tokio::runtime::Builder::new_multi_thread()
@@ -805,7 +814,6 @@ fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
-    use std::io::{Read, Seek, SeekFrom};
     output.seek(SeekFrom::Start(0)).unwrap();
     let mut start = Vec::new();
     (&mut output).take(4096).read_to_end(&mut start).unwrap();
@@ -813,6 +821,10 @@ fn fill_destroy_dispatcher_releases_chunk_guards_and_preserves_drops() {
     let tail_offset = output.metadata().unwrap().len().saturating_sub(65536);
     output.seek(SeekFrom::Start(tail_offset)).unwrap();
     let mut tail = Vec::new();
+    #[expect(
+        clippy::verbose_file_reads,
+        reason = "Read the seeked tail through the retained child-output descriptor, not a reopened path."
+    )]
     output.read_to_end(&mut tail).unwrap();
     let tail = String::from_utf8_lossy(&tail);
     assert!(

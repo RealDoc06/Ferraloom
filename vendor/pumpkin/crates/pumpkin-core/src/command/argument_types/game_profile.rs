@@ -310,6 +310,10 @@ mod tests {
     use pumpkin_config::{op::Op, whitelist::WhitelistEntry};
 
     #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep isolated-process setup and legacy versus canonical identity controls together."
+    )]
     async fn legacy_admin_records_can_be_replaced_and_pardoned_by_name() {
         const CHILD: &str = "FERRALOOM_LEGACY_ADMIN_TEST_CHILD";
         if std::env::var_os(CHILD).is_none() {
@@ -333,7 +337,6 @@ mod tests {
         let server = fixture.source.server().clone();
         let source = fixture
             .source
-            .clone()
             .with_output(crate::command::CommandSender::Console);
         let name = "SpamObserver";
         let legacy = Uuid::parse_str("14209f43-09d3-4876-d114-4c2568f51fc3").unwrap();

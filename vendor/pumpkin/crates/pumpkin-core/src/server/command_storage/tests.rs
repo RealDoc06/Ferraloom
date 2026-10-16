@@ -28,11 +28,11 @@ async fn server_at(path: &Path) -> Result<Arc<Server>, pumpkin_world::world_info
     advanced.networking.java.online_mode = false;
     advanced.networking.bedrock.online_mode = false;
     let data = VanillaData {
-        banned_ip_list: Default::default(),
-        banned_player_list: Default::default(),
-        operator_config: Default::default(),
-        user_cache: Default::default(),
-        whitelist_config: Default::default(),
+        banned_ip_list: std::sync::RwLock::default(),
+        banned_player_list: std::sync::RwLock::default(),
+        operator_config: std::sync::RwLock::default(),
+        user_cache: std::sync::RwLock::default(),
+        whitelist_config: std::sync::RwLock::default(),
     };
     Server::new(
         basic,
@@ -282,9 +282,8 @@ async fn corrupt_storage_aborts_startup_without_replacing_it_or_creating_metadat
         let path = storage_path(folder.path(), "ferraloom");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, &bytes).unwrap();
-        let error = match server_at(folder.path()).await {
-            Ok(_) => panic!("corrupt command storage must fail startup"),
-            Err(error) => error,
+        let Err(error) = server_at(folder.path()).await else {
+            panic!("corrupt command storage must fail startup");
         };
         assert!(error.to_string().contains("command_storage.dat"), "{error}");
         assert_eq!(fs::read(path).unwrap(), bytes);
@@ -515,7 +514,7 @@ async fn malformed_public_map_entries_do_not_erase_their_namespace_or_block_heal
         let mut entries = server.command_storage.lock().unwrap();
         entries.insert("alpha:bad path".into(), value(99));
         entries.insert("..:escape".into(), value(99));
-    }
+    };
     let error = server.save_all(true).await.unwrap_err();
     assert!(error.contains("command storage"), "{error}");
     assert_eq!(fs::read(&alpha).unwrap(), previous);
@@ -525,7 +524,7 @@ async fn malformed_public_map_entries_do_not_erase_their_namespace_or_block_heal
         let mut entries = server.command_storage.lock().unwrap();
         entries.remove("alpha:bad path");
         entries.remove("..:escape");
-    }
+    };
     server.shutdown().await;
     assert_eq!(entry(&saved(folder.path(), "alpha"), "probe"), value(4));
 }

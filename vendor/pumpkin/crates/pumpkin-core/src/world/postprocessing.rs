@@ -190,11 +190,11 @@ mod tests {
         advanced.networking.java.online_mode = false;
         advanced.networking.bedrock.online_mode = false;
         let data = VanillaData {
-            banned_ip_list: Default::default(),
-            banned_player_list: Default::default(),
-            operator_config: Default::default(),
-            user_cache: Default::default(),
-            whitelist_config: Default::default(),
+            banned_ip_list: std::sync::RwLock::default(),
+            banned_player_list: std::sync::RwLock::default(),
+            operator_config: std::sync::RwLock::default(),
+            user_cache: std::sync::RwLock::default(),
+            whitelist_config: std::sync::RwLock::default(),
         };
         let server = Server::new(
             basic,
@@ -337,14 +337,15 @@ mod tests {
         settle_simulation(&world).await;
         assert!(!world.level.is_chunk_watched(&pos.chunk_position()));
         assert!(!world.block_entities.contains_key(&pos.chunk_position()));
-        let loading = world.level.chunk_loading.lock().unwrap();
-        assert!(
-            loading
-                .pos_level
-                .get(&pos.chunk_position())
-                .is_none_or(|level| *level > ChunkLoading::FULL_CHUNK_LEVEL)
-        );
-        drop(loading);
+        {
+            let loading = world.level.chunk_loading.lock().unwrap();
+            assert!(
+                loading
+                    .pos_level
+                    .get(&pos.chunk_position())
+                    .is_none_or(|level| *level > ChunkLoading::FULL_CHUNK_LEVEL)
+            );
+        };
 
         let (_, chunk) = world
             .level
@@ -356,7 +357,9 @@ mod tests {
             .write_chunks(vec![(pos.chunk_position(), chunk)])
             .await;
         world.level.chunk_saver.flush().await.unwrap();
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let (send, mut receive) = tokio::sync::mpsc::channel(1);
         reader
             .fetch_chunks(&world.level.level_folder, &[pos.chunk_position()], send)
@@ -586,7 +589,7 @@ mod tests {
                     .all(|pos| { (pos.x - center.x).abs() <= 1 && (pos.y - center.y).abs() <= 1 }),
                 "halo-only neighbors must not request another halo"
             );
-        }
+        };
 
         // A later neighboring generation stage removes both west supports, without
         // triggering live neighbor updates. The north face of `valid` still has support.
@@ -669,29 +672,29 @@ mod tests {
                 .schedule_fluid_tick(&Fluid::WATER, pos, 0, TickPriority::Normal);
         }
         settle_simulation(&world).await;
-        let entity_chunks = world.active_chunks.read().unwrap();
-        let block_chunks = world.block_ticking_chunks.read().unwrap();
-        assert_eq!(*entity_chunks, rustc_hash::FxHashSet::from_iter([center]));
-        assert_eq!(block_chunks.len(), 9);
-        assert!(block_chunks.contains(&neighbor.chunk_position()));
-        assert!(!block_chunks.contains(&outside.chunk_position()));
-        let ticks = world.level.get_tick_data(&entity_chunks, &block_chunks, 1);
-        assert_eq!(ticks.block_ticks.len(), 1);
-        assert_eq!(ticks.block_ticks[0].position, neighbor);
-        assert_eq!(ticks.fluid_ticks.len(), 1);
-        assert_eq!(ticks.fluid_ticks[0].position, neighbor);
-        assert!(ticks.random_ticks.is_empty());
-        assert!(
-            !world
-                .level
-                .get_tick_data(&block_chunks, &block_chunks, 1)
-                .random_ticks
-                .is_empty()
-        );
-        assert!(world.level.is_block_tick_scheduled(&outside, &Block::STONE));
-        assert!(world.level.is_fluid_tick_scheduled(&outside, &Fluid::WATER));
-        drop(block_chunks);
-        drop(entity_chunks);
+        {
+            let entity_chunks = world.active_chunks.read().unwrap();
+            let block_chunks = world.block_ticking_chunks.read().unwrap();
+            assert_eq!(*entity_chunks, rustc_hash::FxHashSet::from_iter([center]));
+            assert_eq!(block_chunks.len(), 9);
+            assert!(block_chunks.contains(&neighbor.chunk_position()));
+            assert!(!block_chunks.contains(&outside.chunk_position()));
+            let ticks = world.level.get_tick_data(&entity_chunks, &block_chunks, 1);
+            assert_eq!(ticks.block_ticks.len(), 1);
+            assert_eq!(ticks.block_ticks[0].position, neighbor);
+            assert_eq!(ticks.fluid_ticks.len(), 1);
+            assert_eq!(ticks.fluid_ticks[0].position, neighbor);
+            assert!(ticks.random_ticks.is_empty());
+            assert!(
+                !world
+                    .level
+                    .get_tick_data(&block_chunks, &block_chunks, 1)
+                    .random_ticks
+                    .is_empty()
+            );
+            assert!(world.level.is_block_tick_scheduled(&outside, &Block::STONE));
+            assert!(world.level.is_fluid_tick_scheduled(&outside, &Fluid::WATER));
+        };
         for pos in [center, neighbor.chunk_position()] {
             world
                 .level

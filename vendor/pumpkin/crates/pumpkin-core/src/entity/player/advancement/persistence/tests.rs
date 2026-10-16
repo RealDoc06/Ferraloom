@@ -386,7 +386,7 @@ fn timestamp_offsets_pre_epoch_precision_and_range_are_checked() {
         assert!(Timestamp::parse(text.into()).is_err());
     }
     let outside = UNIX_EPOCH
-        .checked_add(Duration::from_secs(253_402_300_800))
+        .checked_add(Duration::from_hours(70_389_528))
         .unwrap();
     assert!(matches!(
         Timestamp::from_time(outside),

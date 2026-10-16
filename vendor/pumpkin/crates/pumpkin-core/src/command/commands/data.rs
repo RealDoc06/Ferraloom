@@ -1238,4 +1238,4 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
 #[cfg(test)]
 #[path = "data_tests.rs"]
-pub(crate) mod tests;
+pub mod tests;

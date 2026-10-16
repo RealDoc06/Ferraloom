@@ -44,7 +44,7 @@ async fn symlinked_world_saves_and_fresh_loads_but_refuses_leaf_links() {
     let fixture = player_fixture().await;
     let directory = tempfile::tempdir().unwrap();
     let linked_world = directory.path().join("world");
-    std::os::unix::fs::symlink(fixture._directory.path(), &linked_world).unwrap();
+    std::os::unix::fs::symlink(fixture.directory.path(), &linked_world).unwrap();
     let manager = StatisticsManager::new(linked_world.join("players"), true);
     let uuid = fixture.player.gameprofile.id;
     assert!(!manager.player_path(uuid).exists());
@@ -65,7 +65,7 @@ async fn symlinked_world_saves_and_fresh_loads_but_refuses_leaf_links() {
     let fresh = Arc::new(Player::new(
         fixture.client.clone(),
         fixture.player.gameprofile.clone(),
-        Default::default(),
+        crate::net::PlayerConfig::default(),
         &fixture.player.world(),
         pumpkin_util::GameMode::Survival,
     ));
@@ -180,7 +180,7 @@ async fn observed_import_live_increment_save_and_actual_rejoin_preserve_unknowns
         .unwrap();
     assert_eq!(rejoined.get_custom_stat(CustomStatistic::OpenBarrel), 20);
     assert_eq!(rejoined.get_custom_stat(CustomStatistic::LeaveGame), 3);
-    let restarted = StatisticsManager::new(fixture._directory.path().join("players"), true);
+    let restarted = StatisticsManager::new(fixture.directory.path().join("players"), true);
     restarted.load_player(&rejoined).unwrap();
     assert_eq!(rejoined.get_custom_stat(CustomStatistic::OpenBarrel), 20);
     rejoined.increment_custom_stat(CustomStatistic::OpenBarrel, 1);
@@ -210,6 +210,10 @@ impl EventHandler<PlayerLoginEvent> for ObserveLogin {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep each invalid save with admission, callback, publication and no-write controls."
+)]
 async fn invalid_statistics_refuse_admission_callbacks_publication_and_saves() {
     let fixture = player_fixture().await;
     let manager = &fixture.server.statistics_manager;
@@ -218,7 +222,7 @@ async fn invalid_statistics_refuse_admission_callbacks_publication_and_saves() {
         .await
         .unwrap();
     let player_path = fixture
-        ._directory
+        .directory
         .path()
         .join("players/data")
         .join(format!("{uuid}.dat"));
@@ -279,7 +283,7 @@ async fn invalid_statistics_refuse_admission_callbacks_publication_and_saves() {
         let unpublished = Arc::new(Player::new(
             client.clone(),
             profile,
-            Default::default(),
+            crate::net::PlayerConfig::default(),
             &world,
             pumpkin_util::GameMode::Survival,
         ));
@@ -333,7 +337,7 @@ async fn legacy_only_and_conflicting_private_history_refuse_real_admission() {
         .unwrap();
     let path = manager.player_path(uuid);
     let player_path = fixture
-        ._directory
+        .directory
         .path()
         .join("players/data")
         .join(format!("{uuid}.dat"));
@@ -374,7 +378,7 @@ async fn legacy_only_and_conflicting_private_history_refuse_real_admission() {
             let mut unpublished = Player::new(
                 client.clone(),
                 profile,
-                Default::default(),
+                crate::net::PlayerConfig::default(),
                 &fixture.player.world(),
                 pumpkin_util::GameMode::Survival,
             );
@@ -404,7 +408,7 @@ async fn final_leave_statistics_save_once_even_when_both_other_families_fail() {
     let fixture = player_fixture().await;
     let uuid = fixture.player.gameprofile.id;
     let player_path = fixture
-        ._directory
+        .directory
         .path()
         .join("players/data")
         .join(format!("{uuid}.dat"));
@@ -559,7 +563,7 @@ async fn statistics_save_error_keeps_other_families_and_existing_combined_errors
     let uuid = fixture.player.gameprofile.id;
     fs::create_dir(
         fixture
-            ._directory
+            .directory
             .path()
             .join("players/data")
             .join(format!("{uuid}.dat")),
@@ -608,10 +612,10 @@ fn statistics_atomic_write_failure_preserves_previous_json_and_eligibility() {
             rlim_cur: 0,
             rlim_max: 0,
         };
-        // Assertions before changing process-wide state; always restore it before
-        // checking the expected failure or writing the completion sentinel.
+        // SAFETY: The rlimit output is initialized and live; SIG_IGN is valid.
+        // This branch runs only in the isolated child and restores its process state.
         let (limit, previous_signal) = unsafe {
-            assert_eq!(libc::getrlimit(libc::RLIMIT_FSIZE, &mut previous), 0);
+            assert_eq!(libc::getrlimit(libc::RLIMIT_FSIZE, &raw mut previous), 0);
             let previous_signal = libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
             assert_ne!(previous_signal, libc::SIG_ERR);
             let limit = libc::rlimit {
@@ -620,14 +624,17 @@ fn statistics_atomic_write_failure_preserves_previous_json_and_eligibility() {
             };
             (limit, previous_signal)
         };
+        // SAFETY: limit is a live initialized rlimit for this isolated child.
         unsafe {
-            assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &limit), 0);
-        }
+            assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &raw const limit), 0);
+        };
         let result = write_statistics_snapshots(vec![(path.clone(), bytes)]);
+        // SAFETY: previous and previous_signal are the live values returned
+        // above; restore the child's limit and signal disposition before assertions.
         unsafe {
-            assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &previous), 0);
+            assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &raw const previous), 0);
             libc::signal(libc::SIGXFSZ, previous_signal);
-        }
+        };
         assert!(result.is_err());
         assert_eq!(fs::read(&path).unwrap(), OBSERVED);
         assert_eq!(

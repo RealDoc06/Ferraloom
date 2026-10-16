@@ -1,4 +1,4 @@
-//! Exercise Server::tick with stopped chunk
+//! Exercise `Server::tick` with stopped chunk
 //! workers, registered Players and real menu factories; no socket tasks run.
 //! Pinned 26.3 ServerLevel.tick gates runBlockEvents at offsets 354-360; its
 //! runBlockEvents removes the first entry before callbacks and loops until empty.

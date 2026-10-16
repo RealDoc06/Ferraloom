@@ -182,6 +182,10 @@ async fn player_dat_preserves_vanilla_remainder_across_snapshots_and_reloads() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep import, live field removal and saved remainder assertions in one fixture."
+)]
 async fn player_dat_removed_modeled_fields_do_not_return_from_the_remainder() {
     let fixture = Fixture::new().await;
     let folder = tempfile::tempdir().unwrap();
@@ -647,6 +651,10 @@ fn player_dat_unmodeled_potion_and_firework_fields_refuse_unchanged() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep both authored formats, actual Player saves and unknown-tag controls together."
+)]
 async fn player_dat_java_and_rust_potions_survive_actual_player_save() {
     use pumpkin_data::{
         data_component_impl::{PotionContentsImpl, StatusEffectInstance},
@@ -751,7 +759,7 @@ async fn player_dat_java_and_rust_potions_survive_actual_player_save() {
                     .amplifier,
                 128
             );
-        }
+        };
         assert_eq!(
             save(&storage, &current).get("Inventory"),
             expected.get("Inventory")

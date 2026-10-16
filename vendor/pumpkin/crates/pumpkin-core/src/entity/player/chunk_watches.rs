@@ -450,6 +450,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep movement, pinned live data, snapshot and ticket-release assertions together."
+    )]
     async fn chunk_watches_movement_pins_old_terrain_until_live_chest_snapshot() {
         use crate::block::entities::{BlockEntity, chest::ChestBlockEntity};
         use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
@@ -486,7 +490,7 @@ mod tests {
             let mut loading = world.level.chunk_loading.lock().unwrap();
             loading.add_ticket(original, level);
             loading.add_ticket(destination, level);
-        }
+        };
         let revision = {
             let mut requested = owner.request();
             requested.retire(HeldChunkTickets::new(
@@ -518,7 +522,7 @@ mod tests {
                     .get(&original)
                     .is_some_and(|value| *value <= level)
             );
-        }
+        };
         assert!(chunk.pending_block_entities.lock().unwrap().is_empty());
         assert!(world.block_entities.contains_key(&original));
         drop(chest);
@@ -569,7 +573,7 @@ mod tests {
             let mut loading = source.level.chunk_loading.lock().unwrap();
             loading.add_ticket(original, level);
             loading.add_ticket(current, level);
-        }
+        };
         destination
             .level
             .chunk_loading
@@ -648,7 +652,7 @@ mod tests {
             assert_eq!(tickets.len(), 2);
             assert!(tickets.contains(&view_level));
             assert!(tickets.contains(&new_simulation));
-        }
+        };
         let spectator = {
             let mut requested = owner.request();
             assert!(requested.update_tickets(&mut held, &world.level, section.center, None, None,));

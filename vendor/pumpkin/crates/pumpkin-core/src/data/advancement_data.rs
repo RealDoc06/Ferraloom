@@ -186,17 +186,17 @@ mod tests {
                 rlim_cur: 0,
                 rlim_max: 0,
             };
-            // Called only in the isolated child test. Other tests never inherit
-            // a changed process-wide file-size limit or signal handler.
+            // SAFETY: Both rlimit pointers refer to live initialized values and
+            // SIG_IGN is valid. Only the isolated child changes its process state.
             unsafe {
-                assert_eq!(libc::getrlimit(libc::RLIMIT_FSIZE, &mut previous), 0);
+                assert_eq!(libc::getrlimit(libc::RLIMIT_FSIZE, &raw mut previous), 0);
                 let previous_signal = libc::signal(libc::SIGXFSZ, libc::SIG_IGN);
                 assert_ne!(previous_signal, libc::SIG_ERR);
                 let limited = libc::rlimit {
                     rlim_cur: bytes.min(previous.rlim_cur),
                     rlim_max: previous.rlim_max,
                 };
-                assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &limited), 0);
+                assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &raw const limited), 0);
                 Self {
                     previous,
                     previous_signal,
@@ -208,16 +208,17 @@ mod tests {
     #[cfg(unix)]
     impl Drop for FileSizeLimit {
         fn drop(&mut self) {
-            // Restore the child's limits even when an assertion unwinds.
+            // SAFETY: The saved limit remains live and the signal disposition
+            // came from signal(). Restore only this isolated child's process state.
             unsafe {
-                let _ = libc::setrlimit(libc::RLIMIT_FSIZE, &self.previous);
+                let _ = libc::setrlimit(libc::RLIMIT_FSIZE, &raw const self.previous);
                 libc::signal(libc::SIGXFSZ, self.previous_signal);
             }
         }
     }
 
     /// A real partial-write failure must leave the previous complete JSON in
-    /// place. Process isolation keeps RLIMIT_FSIZE away from parallel tests.
+    /// place. Process isolation keeps `RLIMIT_FSIZE` away from parallel tests.
     #[cfg(unix)]
     #[test]
     fn advancement_atomic_write_failure_keeps_previous_json() {

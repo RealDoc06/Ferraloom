@@ -1515,6 +1515,10 @@ mod player_data_tests {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep each save failure with admission, publication and no-replacement controls."
+    )]
     async fn failed_persistence_rejects_login(advancement_failure: bool) {
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
@@ -1530,11 +1534,11 @@ mod player_data_tests {
         advanced.networking.java.online_mode = false;
         advanced.networking.bedrock.online_mode = false;
         let data = VanillaData {
-            banned_ip_list: Default::default(),
-            banned_player_list: Default::default(),
-            operator_config: Default::default(),
-            user_cache: Default::default(),
-            whitelist_config: Default::default(),
+            banned_ip_list: std::sync::RwLock::default(),
+            banned_player_list: std::sync::RwLock::default(),
+            operator_config: std::sync::RwLock::default(),
+            user_cache: std::sync::RwLock::default(),
+            whitelist_config: std::sync::RwLock::default(),
         };
         let server = Server::new(
             basic,

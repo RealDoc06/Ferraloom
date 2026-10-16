@@ -95,7 +95,7 @@ impl ChestKind {
         }
     }
 
-    fn new(self, position: BlockPos) -> Arc<dyn BlockEntity> {
+    fn create(self, position: BlockPos) -> Arc<dyn BlockEntity> {
         match self {
             Self::Normal => Arc::new(ChestBlockEntity::new(position)),
             Self::Trapped => Arc::new(TrappedChestBlockEntity::new(position)),
@@ -103,7 +103,7 @@ impl ChestKind {
         }
     }
 
-    fn from_nbt(self, nbt: &NbtCompound, position: BlockPos) -> Arc<dyn BlockEntity> {
+    fn load(self, nbt: &NbtCompound, position: BlockPos) -> Arc<dyn BlockEntity> {
         match self {
             Self::Normal => Arc::new(ChestBlockEntity::from_nbt(nbt, position)),
             Self::Trapped => Arc::new(TrappedChestBlockEntity::from_nbt(nbt, position)),
@@ -285,7 +285,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    /// Same manually loaded Full-chunk pattern as fill_tests. No listener,
+    /// Same manually loaded Full-chunk pattern as `fill_tests`. No listener,
     /// server tick or authentication is started; stop workers before installing it.
     async fn new() -> Self {
         Self::with_registry(default_registry()).await
@@ -380,11 +380,10 @@ impl MenuPlayer {
             Arc::new(PlayerInventory::new(
                 Arc::new(Mutex::new(EntityEquipment::new())),
                 Arc::new(
-                    [(
+                    std::iter::once((
                         PlayerInventory::OFF_HAND_SLOT,
                         pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND,
-                    )]
-                    .into_iter()
+                    ))
                     .collect(),
                 ),
             )),
@@ -469,6 +468,10 @@ impl InventoryPlayer for MenuPlayer {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep saved-byte admission, menu, hopper, drop and reload assertions in one fixture."
+)]
 async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
@@ -517,7 +520,7 @@ async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload()
         world.update_block_entity(&container);
         let player = MenuPlayer::new();
         let menu = kind
-            .factory(&world, &BLOCK_POS)
+            .factory(world, &BLOCK_POS)
             .create_screen_handler(1, &player.0, &player)
             .unwrap();
         {
@@ -530,7 +533,7 @@ async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload()
                 );
             }
             menu.on_closed(&player);
-        }
+        };
 
         let hopper_pos = BLOCK_POS.down();
         let hopper: Arc<dyn BlockEntity> =
@@ -540,7 +543,7 @@ async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload()
         properties.enabled = true;
         properties.facing = FacingHopper::Down;
         fixture.set_state(hopper_pos, properties.to_state_id(&Block::HOPPER));
-        hopper.tick(&world);
+        hopper.tick(world);
         assert!(
             hopper
                 .clone()
@@ -633,7 +636,7 @@ async fn chest_data_updates_retained_single_menus_and_full_saved_state() {
     for kind in CHESTS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let chest = kind.new(BLOCK_POS);
+        let chest = kind.create(BLOCK_POS);
         let inventory = chest.clone().get_inventory().unwrap();
         inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
         inventory.set_stack(26, ItemStack::new(1, &Item::APPLE));
@@ -742,8 +745,8 @@ async fn chest_data_updates_both_retained_double_halves_and_clears_empty_or_remo
     for kind in CHESTS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let first = kind.new(BLOCK_POS);
-        let second = kind.new(OTHER_POS);
+        let first = kind.create(BLOCK_POS);
+        let second = kind.create(OTHER_POS);
         let first_inventory = first.clone().get_inventory().unwrap();
         let second_inventory = second.clone().get_inventory().unwrap();
         first_inventory.set_stack(0, ItemStack::new(2, &Item::DIAMOND));
@@ -838,7 +841,7 @@ async fn chest_data_updates_both_retained_double_halves_and_clears_empty_or_remo
 async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let chest = kind.new(BLOCK_POS);
+        let chest = kind.create(BLOCK_POS);
         let inventory = chest.clone().get_inventory().unwrap();
         inventory.set_stack(0, ItemStack::new(2, &Item::DIAMOND));
         fixture.install(kind.block(), chest.clone());
@@ -896,7 +899,7 @@ async fn chest_data_reloads_pending_loot_seed_defaults_and_saved_generated_items
         );
         // Use the production generation/commit path, never manual take/fill.
         let world = fixture.source.world();
-        reloaded.unpack_loot_table(&world);
+        reloaded.unpack_loot_table(world);
         assert!(!reloaded.has_loot_table());
         assert!(!reloaded.clone().get_inventory().unwrap().is_empty());
         world.update_block_entity(&reloaded);
@@ -913,7 +916,7 @@ fn chest_reload_matches_constructor_defaults_and_preserves_runtime_state() {
     // Pinned 26.3 javap references: ChestBlockEntity.loadAdditional,
     // RandomizableContainer.tryLoadLootTable and TagValueInput.getLongOr.
     for kind in CHESTS {
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         let inventory = live.clone().get_inventory().unwrap();
         inventory.on_open();
         for (snbt, expected_loot) in [
@@ -954,7 +957,7 @@ fn chest_reload_matches_constructor_defaults_and_preserves_runtime_state() {
             input.put_int("x", 99);
             input.put_int("y", -1);
             input.put_int("z", 88);
-            let constructed = kind.from_nbt(&input, BLOCK_POS);
+            let constructed = kind.load(&input, BLOCK_POS);
             live.clear_dirty();
             live.clear_comparator_dirty();
             live.load_nbt(&input).unwrap();
@@ -1018,7 +1021,7 @@ async fn pending_chest_loaded_by_world_unpacks_on_first_inventory_access() {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
         fixture.set_state(BLOCK_POS, kind.block().default_state.id);
-        let pending = kind.from_nbt(
+        let pending = kind.load(
             &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
             BLOCK_POS,
         );
@@ -1037,7 +1040,7 @@ async fn pending_chest_loaded_by_world_unpacks_on_first_inventory_access() {
         // command reads the inventory. No menu or /data call supplies it here.
         let live = world.get_block_entity(&BLOCK_POS).unwrap();
         assert!(live.has_loot_table());
-        let expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        let expected = generated_stacks(world, "minecraft:chests/simple_dungeon", 73);
         let inventory = live.clone().get_inventory().unwrap();
         assert_stacks(inventory.as_ref(), &expected);
         assert!(!live.has_loot_table());
@@ -1052,7 +1055,7 @@ async fn published_pending_chest_unpacks_before_first_inventory_deposit() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let live = kind.from_nbt(
+        let live = kind.load(
             &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
             BLOCK_POS,
         );
@@ -1070,7 +1073,7 @@ async fn published_pending_chest_unpacks_before_first_inventory_deposit() {
 
         // add_block_entity is the only binding path before this first access.
         inventory.set_stack(26, deposit.clone());
-        let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        let mut expected = generated_stacks(world, "minecraft:chests/simple_dungeon", 73);
         expected[26] = deposit;
         assert_stacks(inventory.as_ref(), &expected);
         assert!(!live.has_loot_table());
@@ -1100,7 +1103,7 @@ async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
         ] {
             let fixture = Fixture::new().await;
             let world = fixture.source.world();
-            let chest = kind.new(BLOCK_POS);
+            let chest = kind.create(BLOCK_POS);
             fixture.install(kind.block(), chest.clone());
             let inventory = chest.clone().get_inventory().unwrap();
             let player = MenuPlayer::new();
@@ -1111,7 +1114,7 @@ async fn chest_retained_menu_access_unpacks_data_loot_and_persists_deposits() {
             let pending = fixture.pending(BLOCK_POS);
             assert!(pending.get("Items").is_none());
             assert_eq!(pending.get_long("LootTableSeed"), Some(73));
-            let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+            let mut expected = generated_stacks(world, "minecraft:chests/simple_dungeon", 73);
             let occupied = expected.iter().position(|stack| !stack.is_empty()).unwrap();
             let deposit = ItemStack::read_item_stack(&compound("{id:'minecraft:emerald',count:11,components:{'minecraft:custom_data':{marker:17}}}")).unwrap();
 
@@ -1185,7 +1188,7 @@ async fn chest_stale_real_generation_cannot_fill_a_data_replacement() {
         ] {
             let fixture = Fixture::new().await;
             let world = fixture.source.world();
-            let chest = kind.new(BLOCK_POS);
+            let chest = kind.create(BLOCK_POS);
             fixture.install(kind.block(), chest.clone());
             let inventory = chest.clone().get_inventory().unwrap();
             let player = MenuPlayer::new();
@@ -1214,11 +1217,7 @@ async fn chest_stale_real_generation_cannot_fill_a_data_replacement() {
                 let pending = chest.has_loot_table();
                 let replacement_data = fixture.pending(BLOCK_POS);
                 let expected = if pending {
-                    generated_stacks(
-                        &world,
-                        replacement_data.get_string("LootTable").unwrap(),
-                        73,
-                    )
+                    generated_stacks(world, replacement_data.get_string("LootTable").unwrap(), 73)
                 } else {
                     let mut items = std::array::from_fn(|_| ItemStack::EMPTY.clone());
                     pumpkin_inventory::sync_read_items_from_nbt(&replacement_data, &mut items);
@@ -1255,7 +1254,7 @@ async fn chest_menu_insertion_rechecks_loot_loaded_after_ensure_unpacked() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let chest = kind.new(BLOCK_POS);
+        let chest = kind.create(BLOCK_POS);
         fixture.install(kind.block(), chest.clone());
         let inventory = chest.clone().get_inventory().unwrap();
         let player = MenuPlayer::new();
@@ -1282,7 +1281,7 @@ async fn chest_menu_insertion_rechecks_loot_loaded_after_ensure_unpacked() {
             resume_tx.send(()).unwrap();
             worker.join().unwrap();
         });
-        let mut expected = generated_stacks(&world, "minecraft:chests/simple_dungeon", 73);
+        let mut expected = generated_stacks(world, "minecraft:chests/simple_dungeon", 73);
         expected[26] = ItemStack::new(11, &Item::EMERALD);
         assert!(!chest.has_loot_table());
         assert_stacks(inventory.as_ref(), &expected);
@@ -1298,15 +1297,15 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
     for kind in CHESTS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let first = kind.new(BLOCK_POS);
-        let second = kind.new(OTHER_POS);
+        let first = kind.create(BLOCK_POS);
+        let second = kind.create(OTHER_POS);
         fixture.install(kind.block(), first.clone());
         fixture.install(kind.block(), second.clone());
         let mut player = MenuPlayer::new();
         player.1 = true;
         assert_eq!(fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), 1);
         let pending = saved(first.as_ref());
-        let single = chest_screen_handler_factory(&world, &BLOCK_POS).unwrap();
+        let single = chest_screen_handler_factory(world, &BLOCK_POS).unwrap();
         assert!(
             single
                 .create_screen_handler(1, &player.0, &player)
@@ -1325,7 +1324,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             assert_eq!(fixture.execute(&format!("data merge block {} 64 0 {{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}}", position.0.x)), 1);
             let pending = saved(entity.as_ref());
             for clicked in [BLOCK_POS, OTHER_POS] {
-                let factory = chest_screen_handler_factory(&world, &clicked).unwrap();
+                let factory = chest_screen_handler_factory(world, &clicked).unwrap();
                 assert!(
                     factory
                         .create_screen_handler(1, &player.0, &player)
@@ -1338,7 +1337,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             // Opening through production logic unpacks the pending half and
             // retains both Inventory Arcs in the actual double container menu.
             player.1 = false;
-            let factory = chest_screen_handler_factory(&world, &BLOCK_POS).unwrap();
+            let factory = chest_screen_handler_factory(world, &BLOCK_POS).unwrap();
             let menu = factory
                 .create_screen_handler(1, &player.0, &player)
                 .unwrap();
@@ -1357,7 +1356,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
             assert_eq!(kind.viewers(first.as_ref()), 0);
             assert_eq!(kind.viewers(second.as_ref()), 0);
             player.1 = true;
-            let spectator = chest_screen_handler_factory(&world, &OTHER_POS).unwrap();
+            let spectator = chest_screen_handler_factory(world, &OTHER_POS).unwrap();
             assert!(
                 spectator
                     .create_screen_handler(2, &player.0, &player)
@@ -1370,7 +1369,7 @@ async fn chest_pending_loot_refuses_spectator_open_for_single_and_either_double_
 #[test]
 fn chest_unbound_pending_inventory_refuses_deposits_without_consuming_loot() {
     for kind in CONTAINERS {
-        let chest = kind.from_nbt(
+        let chest = kind.load(
             &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
             BLOCK_POS,
         );
@@ -1444,7 +1443,7 @@ fn marker_stack() -> ItemStack {
 async fn live_container_command_holds_state_through_edit_and_retained_menu_deposit() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let inventory = live.clone().get_inventory().unwrap();
         inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
@@ -1497,8 +1496,8 @@ async fn live_container_command_holds_state_through_edit_and_retained_menu_depos
 async fn live_container_source_is_resolved_before_target_snapshot_and_independent_edits_progress() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let target = kind.new(BLOCK_POS);
-        let source = kind.new(OTHER_POS);
+        let target = kind.create(BLOCK_POS);
+        let source = kind.create(OTHER_POS);
         fixture.install(kind.block(), target.clone());
         fixture.install(kind.block(), source.clone());
         target
@@ -1542,13 +1541,13 @@ async fn live_container_source_is_resolved_before_target_snapshot_and_independen
 async fn live_container_older_autosave_snapshot_cannot_publish_after_newer_command() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         live.clone()
             .get_inventory()
             .unwrap()
             .set_stack(0, ItemStack::new(3, &Item::DIAMOND));
-        let other = kind.new(OTHER_POS);
+        let other = kind.create(OTHER_POS);
         fixture.install(kind.block(), other.clone());
         other
             .get_inventory()
@@ -1599,7 +1598,7 @@ async fn live_container_older_autosave_snapshot_cannot_publish_after_newer_comma
 async fn live_container_failed_and_unchanged_edits_preserve_state_token_pending_and_dirty_flags() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let live = kind.from_nbt(
+        let live = kind.load(
             &compound("{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"),
             BLOCK_POS,
         );
@@ -1648,7 +1647,7 @@ async fn live_container_self_and_opposing_source_commands_complete_without_neste
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         for position in [BLOCK_POS, OTHER_POS] {
-            let live = kind.new(position);
+            let live = kind.create(position);
             fixture.install(kind.block(), live.clone());
             let inventory = live.get_inventory().unwrap();
             inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
@@ -1735,7 +1734,7 @@ async fn live_container_comparator_callback_can_reenter_inventory_publication_an
             .unwrap()
             .register(ReentrantComparator(callback_tx));
         let fixture = Fixture::with_registry(registry).await;
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         live.clone()
             .get_inventory()
@@ -1769,14 +1768,14 @@ async fn container_metadata_survives_recursive_commands_retained_menu_writes_and
         let initial = compound(
             "{CustomName:{text:'Vault',color:'gold',bold:1b,extra:[{text:'!'}]},lock:{components:{'minecraft:custom_name':'key'}},components:{'minecraft:custom_data':{keep:7,nested:{left:1}}}}",
         );
-        let live = kind.from_nbt(&initial, BLOCK_POS);
+        let live = kind.load(&initial, BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let inventory = live.clone().get_inventory().unwrap();
         let player = MenuPlayer::new();
         let mut key = ItemStack::new(1, &Item::STICK);
         key.set_custom_name("key".into());
         player.0.set_held_item(key);
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let factory = kind.factory(world, &BLOCK_POS);
         let menu = factory
             .create_screen_handler(1, &player.0, &player)
             .unwrap();
@@ -1822,7 +1821,7 @@ async fn container_metadata_survives_recursive_commands_retained_menu_writes_and
         let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
         assert_eq!(saved(reloaded.as_ref()), persisted);
         assert_eq!(
-            kind.factory(&world, &BLOCK_POS)
+            kind.factory(world, &BLOCK_POS)
                 .get_display_name()
                 .get_text(),
             "Updated!"
@@ -1849,7 +1848,7 @@ async fn container_metadata_survives_recursive_commands_retained_menu_writes_and
         assert!(reloaded.container_custom_name().is_none());
         assert!(saved(reloaded.as_ref()).get("CustomName").is_none());
         assert_ne!(
-            kind.factory(&world, &BLOCK_POS)
+            kind.factory(world, &BLOCK_POS)
                 .get_display_name()
                 .get_text(),
             "Updated!"
@@ -1865,9 +1864,9 @@ async fn container_lock_checks_actual_main_hand_and_spectator_at_menu_creation()
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let factory = kind.factory(world, &BLOCK_POS);
         let mut player = MenuPlayer::new();
         assert_eq!(
             fixture.execute(
@@ -1949,11 +1948,11 @@ async fn container_denied_open_never_consumes_loot_or_increments_viewers() {
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let live = kind.from_nbt(&compound("{lock:{components:{'minecraft:custom_name':'key'}},LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), BLOCK_POS);
+        let live = kind.load(&compound("{lock:{components:{'minecraft:custom_name':'key'}},LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}"), BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let before = saved(live.as_ref());
         let token = kind.token(live.as_ref());
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let factory = kind.factory(world, &BLOCK_POS);
         let mut player = MenuPlayer::new();
         assert!(
             factory
@@ -1977,11 +1976,11 @@ async fn double_container_title_precedence_and_both_locks_follow_live_entities()
     for kind in CHESTS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
-        let first = kind.from_nbt(
+        let first = kind.load(
             &compound("{CustomName:'Right',lock:{components:{'minecraft:custom_name':'key'}}}"),
             BLOCK_POS,
         );
-        let second = kind.from_nbt(
+        let second = kind.load(
             &compound("{CustomName:'Left',lock:{components:{'minecraft:custom_name':'other'}}}"),
             OTHER_POS,
         );
@@ -1994,8 +1993,8 @@ async fn double_container_title_precedence_and_both_locks_follow_live_entities()
         properties.r#type = ChestType::Left;
         fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
         let factories = [
-            kind.factory(&world, &BLOCK_POS),
-            kind.factory(&world, &OTHER_POS),
+            kind.factory(world, &BLOCK_POS),
+            kind.factory(world, &OTHER_POS),
         ];
         let player = MenuPlayer::new();
         let mut key = ItemStack::new(1, &Item::STICK);
@@ -2037,7 +2036,7 @@ async fn opaque_container_metadata_survives_unrelated_edits_and_restart() {
         let input = compound(
             "{CustomName:{translate:'container.chest',fallback:'Storage'},lock:{items:'#minecraft:planks',count:{min:2},predicates:{'minecraft:custom_data':{key:1}}},components:{'minecraft:custom_data':{unknown:[I;1,2,3]}}}",
         );
-        let live = kind.from_nbt(&input, BLOCK_POS);
+        let live = kind.load(&input, BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:2}]"), 1);
         live.clone()
@@ -2049,11 +2048,11 @@ async fn opaque_container_metadata_survives_unrelated_edits_and_restart() {
             assert_eq!(saved(live.as_ref()).get(key), input.get(key));
         }
         assert!(!live.can_open_container(&ItemStack::new(64, &Item::OAK_PLANKS), false));
-        assert!(live.can_open_container(&ItemStack::EMPTY, true));
+        assert!(live.can_open_container(ItemStack::EMPTY, true));
         let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
         assert_eq!(saved(reloaded.as_ref()), saved(live.as_ref()));
         assert_eq!(fixture.execute("data remove block 0 64 0 lock"), 1);
-        assert!(reloaded.can_open_container(&ItemStack::EMPTY, false));
+        assert!(reloaded.can_open_container(ItemStack::EMPTY, false));
     }
 }
 
@@ -2071,13 +2070,13 @@ async fn noncompound_and_unknown_lock_fields_keep_java_access_and_raw_persistenc
         ] {
             let fixture = Fixture::new().await;
             let input = compound(&format!("{{lock:{lock}}}"));
-            let live = kind.from_nbt(&input, BLOCK_POS);
+            let live = kind.load(&input, BLOCK_POS);
             fixture.install(kind.block(), live.clone());
             let inventory = live.clone().get_inventory().unwrap();
             let keyed = lock.contains("custom_name");
             let mut key = ItemStack::new(1, &Item::STICK);
             key.set_custom_name("key".into());
-            assert_eq!(live.can_open_container(&ItemStack::EMPTY, false), !keyed);
+            assert_eq!(live.can_open_container(ItemStack::EMPTY, false), !keyed);
             assert!(live.can_open_container(&key, false));
             assert_eq!(
                 fixture.execute("data merge block 0 64 0 {CustomName:'Keep'}"),
@@ -2092,10 +2091,7 @@ async fn noncompound_and_unknown_lock_fields_keep_java_access_and_raw_persistenc
             assert_eq!(saved(live.as_ref()).get("lock"), input.get("lock"));
             let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
             assert_eq!(saved(reloaded.as_ref()).get("lock"), input.get("lock"));
-            assert_eq!(
-                reloaded.can_open_container(&ItemStack::EMPTY, false),
-                !keyed
-            );
+            assert_eq!(reloaded.can_open_container(ItemStack::EMPTY, false), !keyed);
             assert!(reloaded.can_open_container(&key, false));
         }
     }
@@ -2106,7 +2102,7 @@ async fn unsupported_container_metadata_edits_are_typed_atomic_refusals() {
     use crate::block::entities::{BlockEntityLoadError, NbtEditDecision};
     for kind in CONTAINERS {
         let fixture = Fixture::new().await;
-        let live = kind.from_nbt(
+        let live = kind.load(
             &compound(
                 "{CustomName:'Keep',LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}",
             ),
@@ -2170,7 +2166,7 @@ async fn unsupported_container_metadata_edits_are_typed_atomic_refusals() {
 #[test]
 fn container_load_replaces_metadata_without_replacing_retained_inventory_or_menu() {
     for kind in CONTAINERS {
-        let live = kind.from_nbt(&compound("{CustomName:'Old',lock:{components:{'minecraft:custom_name':'old key'}},components:{'minecraft:custom_data':{keep:1}}}"), BLOCK_POS);
+        let live = kind.load(&compound("{CustomName:'Old',lock:{components:{'minecraft:custom_name':'old key'}},components:{'minecraft:custom_data':{keep:1}}}"), BLOCK_POS);
         let inventory = live.clone().get_inventory().unwrap();
         let player = MenuPlayer::new();
         let menu = create_generic_9x3(1, &player.0, inventory.clone(), &player);
@@ -2365,11 +2361,11 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
         let observed = Arc::new(Observed::default());
         let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let inventory = live.clone().get_inventory().unwrap();
-        let factory = kind.factory(&world, &BLOCK_POS);
-        let spectator = registered_menu_player(&world, GameMode::Spectator).await;
+        let factory = kind.factory(world, &BLOCK_POS);
+        let spectator = registered_menu_player(world, GameMode::Spectator).await;
         live.load_nbt(&compound(
             "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}",
         ))
@@ -2381,13 +2377,13 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
                 .is_none()
         );
         assert_eq!(saved(live.as_ref()), pending);
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
         world.flush_synced_block_events();
         assert!(observed.take_events().is_empty());
         assert!(observed.take_neighbors().is_empty());
         live.load_nbt(&NbtCompound::new()).unwrap();
         let spectator_menu = open_menu(&spectator, factory.as_ref(), BLOCK_POS);
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
         world.flush_synced_block_events();
         assert!(observed.take_events().is_empty());
         assert!(std::ptr::eq(
@@ -2408,30 +2404,30 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
             &world.get_block_entity(&BLOCK_POS).unwrap()
         ));
         spectator.on_handled_screen_closed();
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
         world.flush_synced_block_events();
         assert!(observed.take_events().is_empty());
 
-        let normal = registered_menu_player(&world, GameMode::Survival).await;
+        let normal = registered_menu_player(world, GameMode::Survival).await;
         for spectator_closes_first in [true, false] {
             let _normal_menu = open_menu(&normal, factory.as_ref(), BLOCK_POS);
-            assert_viewer_effects(kind, &world, live.as_ref(), 1);
+            assert_viewer_effects(kind, world, live.as_ref(), 1);
             let _spectator_menu = open_menu(&spectator, factory.as_ref(), BLOCK_POS);
-            assert_viewer_effects(kind, &world, live.as_ref(), 1);
+            assert_viewer_effects(kind, world, live.as_ref(), 1);
             if spectator_closes_first {
                 // A spectator menu must not steal another viewer's count, even
                 // if its owner changes mode before the menu is closed.
                 spectator.gamemode.store(GameMode::Survival);
                 spectator.on_handled_screen_closed();
                 spectator.gamemode.store(GameMode::Spectator);
-                assert_viewer_effects(kind, &world, live.as_ref(), 1);
+                assert_viewer_effects(kind, world, live.as_ref(), 1);
                 normal.on_handled_screen_closed();
             } else {
                 normal.on_handled_screen_closed();
-                assert_viewer_effects(kind, &world, live.as_ref(), 0);
+                assert_viewer_effects(kind, world, live.as_ref(), 0);
                 spectator.on_handled_screen_closed();
             }
-            assert_viewer_effects(kind, &world, live.as_ref(), 0);
+            assert_viewer_effects(kind, world, live.as_ref(), 0);
         }
     }
 }
@@ -2442,8 +2438,8 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
         let observed = Arc::new(Observed::default());
         let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
-        let first = kind.new(BLOCK_POS);
-        let second = kind.new(OTHER_POS);
+        let first = kind.create(BLOCK_POS);
+        let second = kind.create(OTHER_POS);
         fixture.install(kind.block(), first.clone());
         fixture.install(kind.block(), second.clone());
         let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
@@ -2452,13 +2448,13 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
         fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
         properties.r#type = ChestType::Left;
         fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
-        let spectator = registered_menu_player(&world, GameMode::Spectator).await;
-        let normal = registered_menu_player(&world, GameMode::Survival).await;
+        let spectator = registered_menu_player(world, GameMode::Spectator).await;
+        let normal = registered_menu_player(world, GameMode::Survival).await;
         for clicked in [BLOCK_POS, OTHER_POS] {
-            let factory = kind.factory(&world, &clicked);
+            let factory = kind.factory(world, &clicked);
             let spectator_menu = open_menu(&spectator, factory.as_ref(), clicked);
             for entity in [&first, &second] {
-                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+                assert_viewer_effects(kind, world, entity.as_ref(), 0);
             }
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
@@ -2476,10 +2472,10 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
                 let menu = spectator_menu.lock().unwrap();
                 assert_eq!(menu.get_behaviour().slots[0].get_stack().item_count, 2);
                 assert_eq!(menu.get_behaviour().slots[27].get_stack().item_count, 5);
-            }
+            };
             let _normal_menu = open_menu(&normal, factory.as_ref(), clicked);
             for entity in [&first, &second] {
-                assert_viewer_effects(kind, &world, entity.as_ref(), 1);
+                assert_viewer_effects(kind, world, entity.as_ref(), 1);
             }
             world.flush_synced_block_events();
             assert_eq!(
@@ -2488,7 +2484,7 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
             );
             normal.on_handled_screen_closed();
             for entity in [&first, &second] {
-                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+                assert_viewer_effects(kind, world, entity.as_ref(), 0);
             }
             world.flush_synced_block_events();
             assert_eq!(
@@ -2499,7 +2495,7 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
             for entity in [&first, &second] {
-                assert_viewer_effects(kind, &world, entity.as_ref(), 0);
+                assert_viewer_effects(kind, world, entity.as_ref(), 0);
                 assert!(Arc::ptr_eq(
                     entity,
                     &world.get_block_entity(&entity.get_position()).unwrap()
@@ -2513,14 +2509,14 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
 async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
-    let player = registered_menu_player(&world, GameMode::Survival).await;
+    let player = registered_menu_player(world, GameMode::Survival).await;
     for kind in CONTAINERS {
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let factory = kind.factory(world, &BLOCK_POS);
         player.gamemode.store(GameMode::Survival);
         let retained = open_menu(&player, factory.as_ref(), BLOCK_POS);
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         assert_eq!(
             kind.viewers(live.as_ref()),
             1,
@@ -2538,18 +2534,18 @@ async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
         player.on_handled_screen_closed();
         // The upstream stop guard skips this decrement; the BE recount repairs it.
         for _ in 0..4 {
-            live.tick(&world);
+            live.tick(world);
             assert_eq!(kind.viewers(live.as_ref()), 1);
         }
-        live.tick(&world);
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        live.tick(world);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
 
         // A normal close still takes effect immediately, without waiting five ticks.
         player.gamemode.store(GameMode::Survival);
         open_menu(&player, factory.as_ref(), BLOCK_POS);
-        assert_viewer_effects(kind, &world, live.as_ref(), 1);
+        assert_viewer_effects(kind, world, live.as_ref(), 1);
         player.on_handled_screen_closed();
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
     }
 }
 
@@ -2557,11 +2553,11 @@ async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
 async fn double_recount_uses_both_retained_half_identities_after_mode_change_and_replacement() {
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
-    let player = registered_menu_player(&world, GameMode::Survival).await;
+    let player = registered_menu_player(world, GameMode::Survival).await;
     for kind in CHESTS {
         for clicked in [BLOCK_POS, OTHER_POS] {
-            let first = kind.new(BLOCK_POS);
-            let second = kind.new(OTHER_POS);
+            let first = kind.create(BLOCK_POS);
+            let second = kind.create(OTHER_POS);
             fixture.install(kind.block(), first.clone());
             fixture.install(kind.block(), second.clone());
             let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
@@ -2571,20 +2567,20 @@ async fn double_recount_uses_both_retained_half_identities_after_mode_change_and
             properties.r#type = ChestType::Left;
             fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
             player.gamemode.store(GameMode::Survival);
-            let factory = kind.factory(&world, &clicked);
+            let factory = kind.factory(world, &clicked);
             let retained = open_menu(&player, factory.as_ref(), clicked);
-            recheck_viewers(&world, &[first.as_ref(), second.as_ref()]);
+            recheck_viewers(world, &[first.as_ref(), second.as_ref()]);
             for entity in [&first, &second] {
                 assert_eq!(kind.viewers(entity.as_ref()), 1);
             }
 
             // A replacement at the same coordinates is not owned by this menu.
-            let replacement = kind.new(BLOCK_POS);
+            let replacement = kind.create(BLOCK_POS);
             world.add_block_entity(replacement.clone());
             let replacement_inventory = replacement.clone().get_inventory().unwrap();
             replacement_inventory.on_open();
             recheck_viewers(
-                &world,
+                world,
                 &[replacement.as_ref(), first.as_ref(), second.as_ref()],
             );
             assert_eq!(kind.viewers(replacement.as_ref()), 0);
@@ -2604,9 +2600,9 @@ async fn double_recount_uses_both_retained_half_identities_after_mode_change_and
 
             player.gamemode.store(GameMode::Spectator);
             player.on_handled_screen_closed();
-            recheck_viewers(&world, &[first.as_ref(), second.as_ref()]);
-            assert_viewer_effects(kind, &world, first.as_ref(), 0);
-            assert_viewer_effects(kind, &world, second.as_ref(), 0);
+            recheck_viewers(world, &[first.as_ref(), second.as_ref()]);
+            assert_viewer_effects(kind, world, first.as_ref(), 0);
+            assert_viewer_effects(kind, world, second.as_ref(), 0);
         }
     }
 }
@@ -2651,13 +2647,13 @@ impl ScreenHandlerFactory for PausingFactory {
 async fn recount_defers_between_factory_on_open_and_player_menu_publication() {
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
-    let old = registered_menu_player(&world, GameMode::Survival).await;
-    let next = registered_menu_player(&world, GameMode::Survival).await;
-    let live = ChestKind::Barrel.new(BLOCK_POS);
+    let old = registered_menu_player(world, GameMode::Survival).await;
+    let next = registered_menu_player(world, GameMode::Survival).await;
+    let live = ChestKind::Barrel.create(BLOCK_POS);
     fixture.install(&Block::BARREL, live.clone());
-    let factory = ChestKind::Barrel.factory(&world, &BLOCK_POS);
+    let factory = ChestKind::Barrel.factory(world, &BLOCK_POS);
     open_menu(&old, factory.as_ref(), BLOCK_POS);
-    recheck_viewers(&world, &[live.as_ref()]);
+    recheck_viewers(world, &[live.as_ref()]);
     let (created, wait_created) = mpsc::channel();
     let (resume, wait_resume) = mpsc::channel();
     let factory = PausingFactory {
@@ -2677,16 +2673,16 @@ async fn recount_defers_between_factory_on_open_and_player_menu_publication() {
         // A nested transition ending cannot clear the pending outer publication.
         drop(next.menu_publication.begin());
         assert!(next.menu_publication.is_active());
-        recheck_viewers(&world, &[live.as_ref()]);
-        assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 2);
+        recheck_viewers(world, &[live.as_ref()]);
+        assert_viewer_effects(ChestKind::Barrel, world, live.as_ref(), 2);
         resume.send(()).unwrap();
         pending.join().unwrap();
     });
     assert!(!next.menu_publication.is_active());
-    recheck_viewers(&world, &[live.as_ref()]);
-    assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 1);
+    recheck_viewers(world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Barrel, world, live.as_ref(), 1);
     next.on_handled_screen_closed();
-    assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 0);
+    assert_viewer_effects(ChestKind::Barrel, world, live.as_ref(), 0);
 }
 
 struct MenuEventHook<E>(Box<dyn Fn(&mut E) + Send + Sync>);
@@ -2713,14 +2709,14 @@ async fn recount_defers_during_close_callback_and_cancelled_open_releases_guard(
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
     let server = world.server.upgrade().unwrap();
-    let first = registered_menu_player(&world, GameMode::Survival).await;
-    let second = registered_menu_player(&world, GameMode::Survival).await;
-    let live = ChestKind::Trapped.new(BLOCK_POS);
+    let first = registered_menu_player(world, GameMode::Survival).await;
+    let second = registered_menu_player(world, GameMode::Survival).await;
+    let live = ChestKind::Trapped.create(BLOCK_POS);
     fixture.install(&Block::TRAPPED_CHEST, live.clone());
-    let factory = ChestKind::Trapped.factory(&world, &BLOCK_POS);
+    let factory = ChestKind::Trapped.factory(world, &BLOCK_POS);
     open_menu(&first, factory.as_ref(), BLOCK_POS);
     open_menu(&second, factory.as_ref(), BLOCK_POS);
-    recheck_viewers(&world, &[live.as_ref()]);
+    recheck_viewers(world, &[live.as_ref()]);
     assert_eq!(ChestKind::Trapped.viewers(live.as_ref()), 2);
     let (closing, wait_closing) = mpsc::channel();
     let (resume, wait_resume) = mpsc::channel();
@@ -2750,15 +2746,15 @@ async fn recount_defers_during_close_callback_and_cancelled_open_releases_guard(
             first.on_handled_screen_closed();
         });
         wait_closing.recv_timeout(Duration::from_secs(5)).unwrap();
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         // The closed menu is still published, but may not be counted back in.
-        assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 1);
+        assert_viewer_effects(ChestKind::Trapped, world, live.as_ref(), 1);
         resume.send(()).unwrap();
         pending.join().unwrap();
     });
     assert!(!first.menu_publication.is_active());
-    recheck_viewers(&world, &[live.as_ref()]);
-    assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 1);
+    recheck_viewers(world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Trapped, world, live.as_ref(), 1);
     server.plugin_manager.register::<InventoryOpenEvent, _>(
         Arc::new(MenuEventHook(Box::new(|event: &mut InventoryOpenEvent| {
             assert!(event.player.menu_publication.is_active());
@@ -2775,34 +2771,34 @@ async fn recount_defers_during_close_callback_and_cancelled_open_releases_guard(
     assert!(!first.menu_publication.is_active());
     assert_eq!(ChestKind::Trapped.viewers(live.as_ref()), 1);
     second.on_handled_screen_closed();
-    assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 0);
+    assert_viewer_effects(ChestKind::Trapped, world, live.as_ref(), 0);
 }
 
 #[tokio::test]
 async fn recount_revision_rejects_open_close_aba_before_menu_scan() {
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
-    let old = registered_menu_player(&world, GameMode::Survival).await;
-    let next = registered_menu_player(&world, GameMode::Survival).await;
+    let old = registered_menu_player(world, GameMode::Survival).await;
+    let next = registered_menu_player(world, GameMode::Survival).await;
     let live = Arc::new(ChestBlockEntity::new(BLOCK_POS));
     fixture.install(&Block::CHEST, live.clone());
-    let factory = ChestKind::Normal.factory(&world, &BLOCK_POS);
+    let factory = ChestKind::Normal.factory(world, &BLOCK_POS);
     open_menu(&old, factory.as_ref(), BLOCK_POS);
-    recheck_viewers(&world, &[live.as_ref()]);
+    recheck_viewers(world, &[live.as_ref()]);
     old.gamemode.store(GameMode::Spectator);
     old.on_handled_screen_closed();
     live.viewers.before_recount(move || {
         open_menu(&next, factory.as_ref(), BLOCK_POS);
         next.on_handled_screen_closed();
     });
-    recheck_viewers(&world, &[live.as_ref()]);
+    recheck_viewers(world, &[live.as_ref()]);
     assert_eq!(
         live.get_viewer_count(),
         1,
         "same numeric count has a new revision"
     );
-    recheck_viewers(&world, &[live.as_ref()]);
-    assert_viewer_effects(ChestKind::Normal, &world, live.as_ref(), 0);
+    recheck_viewers(world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Normal, world, live.as_ref(), 0);
 }
 
 #[derive(Default)]
@@ -2849,7 +2845,7 @@ impl BlockBehaviour for RecordEvents {
             BlockId::CHEST => ChestBlock.on_synced_block_event(args),
             BlockId::TRAPPED_CHEST => TrappedChestBlock.on_synced_block_event(args),
             BlockId::BARREL => BarrelBlock.on_synced_block_event(args),
-            _ => unreachable!(),
+            _ => panic!("recording fixture received an unexpected container block"),
         }
     }
 }
@@ -2879,7 +2875,7 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         let observed = Arc::new(Observed::default());
         let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         for position in [OTHER_POS, OTHER_POS.down()] {
             fixture.set_state(position, Block::COMPARATOR.default_state.id);
@@ -2891,8 +2887,8 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
                 vec![(BLOCK_POS, 1, count)]
             }
         };
-        let player = registered_menu_player(&world, GameMode::Survival).await;
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let player = registered_menu_player(world, GameMode::Survival).await;
+        let factory = kind.factory(world, &BLOCK_POS);
         open_menu(&player, factory.as_ref(), BLOCK_POS);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(1));
@@ -2908,21 +2904,21 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         // No repeat on ticks 1–4. Exactly one on tick 5, then on each accepted
         // five-tick recheck. Neither unchanged recount updates neighbors.
         for _ in 0..4 {
-            live.tick(&world);
+            live.tick(world);
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
         }
-        live.tick(&world);
+        live.tick(world);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(1));
         assert!(observed.take_neighbors().is_empty());
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(1));
         assert!(observed.take_neighbors().is_empty());
 
         let publication = player.menu_publication.begin();
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         world.flush_synced_block_events();
         assert!(
             observed.take_events().is_empty(),
@@ -2931,13 +2927,13 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         assert!(observed.take_neighbors().is_empty());
         drop(publication);
         if let Some(chest) = live.as_any().downcast_ref::<ChestBlockEntity>() {
-            let another = registered_menu_player(&world, GameMode::Survival).await;
-            let another_factory = kind.factory(&world, &BLOCK_POS);
+            let another = registered_menu_player(world, GameMode::Survival).await;
+            let another_factory = kind.factory(world, &BLOCK_POS);
             chest.viewers.before_recount(move || {
                 open_menu(&another, another_factory.as_ref(), BLOCK_POS);
                 another.on_handled_screen_closed();
             });
-            recheck_viewers(&world, &[live.as_ref()]);
+            recheck_viewers(world, &[live.as_ref()]);
             world.flush_synced_block_events();
             assert_eq!(
                 observed.take_events(),
@@ -2946,7 +2942,7 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
             );
             assert!(observed.take_neighbors().is_empty());
         }
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(1));
         assert!(observed.take_neighbors().is_empty());
@@ -2964,11 +2960,11 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
                 !BarrelLikeProperties::from_state_id(world.get_block_state_id(&BLOCK_POS)).open
             );
         }
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(0));
         assert!(observed.take_neighbors().is_empty());
-        recheck_viewers(&world, &[live.as_ref()]);
+        recheck_viewers(world, &[live.as_ref()]);
         world.flush_synced_block_events();
         assert!(
             observed.take_events().is_empty(),
@@ -2984,13 +2980,13 @@ async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing
         let observed = Arc::new(Observed::default());
         let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
-        let live = kind.new(BLOCK_POS);
+        let live = kind.create(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         for position in [OTHER_POS, OTHER_POS.down()] {
             fixture.set_state(position, Block::COMPARATOR.default_state.id);
         }
-        let player = registered_menu_player(&world, GameMode::Survival).await;
-        let factory = kind.factory(&world, &BLOCK_POS);
+        let player = registered_menu_player(world, GameMode::Survival).await;
+        let factory = kind.factory(world, &BLOCK_POS);
         open_menu(&player, factory.as_ref(), BLOCK_POS);
         world.flush_synced_block_events();
         observed.take_events();
@@ -2999,12 +2995,12 @@ async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing
         // The first open already scheduled tick 5. A reopen at tick 2 must not
         // postpone it, even when the final count returns to zero before flush.
         for _ in 0..2 {
-            live.tick(&world);
+            live.tick(world);
         }
         player.on_handled_screen_closed();
         open_menu(&player, factory.as_ref(), BLOCK_POS);
         player.on_handled_screen_closed();
-        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        assert_viewer_effects(kind, world, live.as_ref(), 0);
         world.flush_synced_block_events();
         let expected = if matches!(kind, ChestKind::Barrel) {
             Vec::new()
@@ -3020,11 +3016,11 @@ async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing
         }
 
         for _ in 0..2 {
-            live.tick(&world);
+            live.tick(world);
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
         }
-        live.tick(&world);
+        live.tick(world);
         world.flush_synced_block_events();
         let expected = if matches!(kind, ChestKind::Barrel) {
             Vec::new()
@@ -3034,7 +3030,7 @@ async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing
         assert_eq!(observed.take_events(), expected);
         assert!(observed.take_neighbors().is_empty());
         for _ in 0..10 {
-            live.tick(&world);
+            live.tick(world);
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
         }
@@ -3052,10 +3048,10 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
             let observed = Arc::new(Observed::default());
             let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
             let world = fixture.source.world();
-            let original = kind.new(BLOCK_POS);
+            let original = kind.create(BLOCK_POS);
             fixture.install(kind.block(), original.clone());
             let second = double.then(|| {
-                let second = kind.new(OTHER_POS);
+                let second = kind.create(OTHER_POS);
                 fixture.install(kind.block(), second.clone());
                 let mut properties = ChestLikeProperties::default(kind.block());
                 properties.facing = HorizontalFacing::South;
@@ -3065,19 +3061,19 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
                 fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
                 second
             });
-            let old_player = registered_menu_player(&world, GameMode::Survival).await;
-            let new_player = registered_menu_player(&world, GameMode::Survival).await;
-            let old_factory = kind.factory(&world, &BLOCK_POS);
+            let old_player = registered_menu_player(world, GameMode::Survival).await;
+            let new_player = registered_menu_player(world, GameMode::Survival).await;
+            let old_factory = kind.factory(world, &BLOCK_POS);
             let retained = open_menu(&old_player, old_factory.as_ref(), BLOCK_POS);
-            assert_viewer_effects(kind, &world, original.as_ref(), 1);
+            assert_viewer_effects(kind, world, original.as_ref(), 1);
             world.flush_synced_block_events();
             drop(observed.take_events());
 
-            let replacement = kind.new(BLOCK_POS);
+            let replacement = kind.create(BLOCK_POS);
             world.add_block_entity(replacement.clone());
-            let new_factory = kind.factory(&world, &BLOCK_POS);
+            let new_factory = kind.factory(world, &BLOCK_POS);
             open_menu(&new_player, new_factory.as_ref(), BLOCK_POS);
-            assert_viewer_effects(kind, &world, replacement.as_ref(), 1);
+            assert_viewer_effects(kind, world, replacement.as_ref(), 1);
             world.flush_synced_block_events();
             drop(observed.take_events());
 
@@ -3104,7 +3100,7 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
             );
             old_player.on_handled_screen_closed();
             assert_eq!(kind.viewers(original.as_ref()), 0);
-            assert_viewer_effects(kind, &world, replacement.as_ref(), 1);
+            assert_viewer_effects(kind, world, replacement.as_ref(), 1);
             world.flush_synced_block_events();
             assert_eq!(
                 observed.take_events(),
@@ -3115,10 +3111,10 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
                 }
             );
             if let Some(second) = second {
-                assert_viewer_effects(kind, &world, second.as_ref(), 1);
+                assert_viewer_effects(kind, world, second.as_ref(), 1);
             }
             new_player.on_handled_screen_closed();
-            assert_viewer_effects(kind, &world, replacement.as_ref(), 0);
+            assert_viewer_effects(kind, world, replacement.as_ref(), 0);
         }
     }
 }
@@ -3128,15 +3124,15 @@ async fn barrel_menu_callbacks_preserve_facing_without_a_tick() {
     let fixture = MenuFixture::new().await;
     let world = fixture.source.world();
     let kind = ChestKind::Barrel;
-    let live = kind.new(BLOCK_POS);
+    let live = kind.create(BLOCK_POS);
     fixture.install(kind.block(), live.clone());
     let mut properties = BarrelLikeProperties::from_state_id(Block::BARREL.default_state.id);
     properties.facing = Facing::East;
     properties.open = false;
     let closed = properties.to_state_id(&Block::BARREL);
     fixture.set_state(BLOCK_POS, closed);
-    let player = registered_menu_player(&world, GameMode::Survival).await;
-    let factory = kind.factory(&world, &BLOCK_POS);
+    let player = registered_menu_player(world, GameMode::Survival).await;
+    let factory = kind.factory(world, &BLOCK_POS);
 
     open_menu(&player, factory.as_ref(), BLOCK_POS);
     properties.open = true;
@@ -3161,14 +3157,14 @@ async fn barrel_menu_callbacks_do_not_restore_replaced_blocks() {
             let fixture = MenuFixture::new().await;
             let world = fixture.source.world();
             let kind = ChestKind::Barrel;
-            let live = kind.new(BLOCK_POS);
+            let live = kind.create(BLOCK_POS);
             fixture.install(kind.block(), live.clone());
-            let player = registered_menu_player(&world, GameMode::Survival).await;
+            let player = registered_menu_player(world, GameMode::Survival).await;
             // Retain the actual factory/menu before the replacement starts.
-            let factory = kind.factory(&world, &BLOCK_POS);
+            let factory = kind.factory(world, &BLOCK_POS);
             if !opening {
                 open_menu(&player, factory.as_ref(), BLOCK_POS);
-                assert_viewer_effects(kind, &world, live.as_ref(), 1);
+                assert_viewer_effects(kind, world, live.as_ref(), 1);
             }
 
             // Deterministically stop in the replacement window: the chunk has
@@ -3217,14 +3213,14 @@ async fn viewer_drain_recovers_after_neighbor_panic_and_preserves_queued_order()
     let observed = Arc::new(Observed::default());
     let fixture = Fixture::with_registry(observed.registry(kind)).await;
     let world = fixture.source.world();
-    let live = kind.new(BLOCK_POS);
+    let live = kind.create(BLOCK_POS);
     fixture.install(kind.block(), live.clone());
     for position in [OTHER_POS, OTHER_POS.down()] {
         fixture.set_state(position, Block::COMPARATOR.default_state.id);
     }
     // Use the actual menu inventory adapter without holding a menu mutex
     // across the injected panic. This isolates publisher unwind recovery.
-    let inventory = live.clone().get_menu_inventory(&world).unwrap();
+    let inventory = live.clone().get_menu_inventory(world).unwrap();
     let nested = inventory.clone();
     *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |_| {
         nested.on_open();
@@ -3244,7 +3240,7 @@ async fn viewer_drain_recovers_after_neighbor_panic_and_preserves_queued_order()
     // The next callback must claim the abandoned drain and publish the older
     // queued transitions first, without a tick or replaying the partial update.
     inventory.on_close();
-    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_viewer_effects(kind, world, live.as_ref(), 0);
     assert_eq!(
         observed.take_neighbors(),
         [OTHER_POS, OTHER_POS.down()].repeat(3)
@@ -3257,12 +3253,12 @@ async fn viewer_drain_recovers_after_neighbor_panic_and_preserves_queued_order()
 
     // Both directions still publish immediately after normal drain release.
     inventory.on_open();
-    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    assert_viewer_effects(kind, world, live.as_ref(), 1);
     assert_eq!(observed.take_neighbors(), [OTHER_POS, OTHER_POS.down()]);
     world.flush_synced_block_events();
     assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 1)]);
     inventory.on_close();
-    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_viewer_effects(kind, world, live.as_ref(), 0);
     assert_eq!(observed.take_neighbors(), [OTHER_POS, OTHER_POS.down()]);
     world.flush_synced_block_events();
     assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 0)]);
@@ -3278,14 +3274,14 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
     let observed = Arc::new(Observed::default());
     let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
     let world = fixture.source.world();
-    let live = kind.new(BLOCK_POS);
+    let live = kind.create(BLOCK_POS);
     fixture.install(kind.block(), live.clone());
     fixture.set_state(OTHER_POS, Block::COMPARATOR.default_state.id);
     fixture.set_state(OTHER_POS.down(), Block::COMPARATOR.default_state.id);
-    let first = registered_menu_player(&world, GameMode::Survival).await;
-    let second = registered_menu_player(&world, GameMode::Survival).await;
-    let factory = kind.factory(&world, &BLOCK_POS);
-    let next_factory = kind.factory(&world, &BLOCK_POS);
+    let first = registered_menu_player(world, GameMode::Survival).await;
+    let second = registered_menu_player(world, GameMode::Survival).await;
+    let factory = kind.factory(world, &BLOCK_POS);
+    let next_factory = kind.factory(world, &BLOCK_POS);
     let next = second.clone();
     *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |world| {
         // A real world callback can read inventory state and enter another
@@ -3297,7 +3293,7 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
         next.on_handled_screen_closed();
     }));
     let first_menu = open_menu(&first, factory.as_ref(), BLOCK_POS);
-    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    assert_viewer_effects(kind, world, live.as_ref(), 1);
     world.flush_synced_block_events();
     // The pending event set coalesces the repeated count; all three count
     // transitions still notify neighbors before the flush.
@@ -3307,7 +3303,7 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
     );
     assert_eq!(observed.take_neighbors().len(), 6);
 
-    let next_factory = kind.factory(&world, &BLOCK_POS);
+    let next_factory = kind.factory(world, &BLOCK_POS);
     *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |world| {
         // Upstream on_closed invokes Inventory::on_close while holding this
         // menu. The callback must complete without attempting to relock it.
@@ -3319,7 +3315,7 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
         second.on_handled_screen_closed();
     }));
     first.on_handled_screen_closed();
-    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_viewer_effects(kind, world, live.as_ref(), 0);
     world.flush_synced_block_events();
     assert_eq!(
         observed.take_events(),
@@ -3342,7 +3338,7 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
             .is_none()
     );
     assert!(!first.menu_publication.is_active());
-    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_viewer_effects(kind, world, live.as_ref(), 0);
     world.flush_synced_block_events();
     assert!(observed.take_events().is_empty());
     assert!(observed.take_neighbors().is_empty());
@@ -3354,12 +3350,12 @@ async fn overlapping_viewer_callbacks_drain_in_order_without_waiting_under_menu_
     let observed = Arc::new(Observed::default());
     let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
     let world = fixture.source.world();
-    let live = kind.new(BLOCK_POS);
+    let live = kind.create(BLOCK_POS);
     fixture.install(kind.block(), live.clone());
     fixture.set_state(OTHER_POS, Block::COMPARATOR.default_state.id);
-    let first = registered_menu_player(&world, GameMode::Survival).await;
-    let second = registered_menu_player(&world, GameMode::Survival).await;
-    let factory = kind.factory(&world, &BLOCK_POS);
+    let first = registered_menu_player(world, GameMode::Survival).await;
+    let second = registered_menu_player(world, GameMode::Survival).await;
+    let factory = kind.factory(world, &BLOCK_POS);
     let (entered, wait_entered) = mpsc::channel();
     let (resume, wait_resume) = mpsc::channel();
     let wait_resume = Mutex::new(wait_resume);
@@ -3391,9 +3387,9 @@ async fn overlapping_viewer_callbacks_drain_in_order_without_waiting_under_menu_
         observed.take_events(),
         [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2)]
     );
-    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    assert_viewer_effects(kind, world, live.as_ref(), 1);
     first.on_handled_screen_closed();
     world.flush_synced_block_events();
     assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 0)]);
-    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_viewer_effects(kind, world, live.as_ref(), 0);
 }

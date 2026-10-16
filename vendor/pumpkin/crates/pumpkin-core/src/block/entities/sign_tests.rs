@@ -1,5 +1,5 @@
 //! Real dispatcher and production sign-writer regressions. Deadlock limits bound
-//! failures; channels and try_lock establish ordering without timing assumptions.
+//! failures; channels and `try_lock` establish ordering without timing assumptions.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
@@ -580,7 +580,7 @@ fn sign_invalid_click_command_is_preserved_on_load_and_refused_for_live_apply() 
     );
 }
 
-/// Write physical compound-list entries directly: serializing NbtTag::List would
+/// Write physical compound-list entries directly: serializing `NbtTag::List` would
 /// correctly add another wrapper around authored empty-key compounds, and would
 /// therefore not exercise the raw transport boundary being checked here.
 fn read_raw_message_compounds(entries: [NbtCompound; 4]) -> NbtCompound {
@@ -603,7 +603,7 @@ fn read_raw_message_compounds(entries: [NbtCompound; 4]) -> NbtCompound {
         }
         writer.write_u8(END_ID).unwrap();
         writer.write_u8(END_ID).unwrap();
-    }
+    };
     let mut cursor = std::io::Cursor::new(bytes);
     let mut reader = NbtReadHelperJava::new(NbtStreamReader(&mut cursor));
     pumpkin_nbt::Nbt::read_unnamed(&mut reader)

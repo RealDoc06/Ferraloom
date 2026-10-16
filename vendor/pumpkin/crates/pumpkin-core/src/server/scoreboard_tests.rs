@@ -21,11 +21,11 @@ async fn server_at(path: &Path) -> Result<Arc<Server>, WorldInfoError> {
     advanced.networking.bedrock.online_mode = false;
     // Do not load usercache/configuration files from the test runner's cwd.
     let data = VanillaData {
-        banned_ip_list: Default::default(),
-        banned_player_list: Default::default(),
-        operator_config: Default::default(),
-        user_cache: Default::default(),
-        whitelist_config: Default::default(),
+        banned_ip_list: std::sync::RwLock::default(),
+        banned_player_list: std::sync::RwLock::default(),
+        operator_config: std::sync::RwLock::default(),
+        user_cache: std::sync::RwLock::default(),
+        whitelist_config: std::sync::RwLock::default(),
     };
     Server::new(
         basic,
@@ -237,9 +237,7 @@ async fn entity_selectors_use_scoreboard_identity_and_distinguish_missing_scores
     let team = |name: &str, invert| EntitySelectorPredicate::Team(name.into(), invert);
     let scores = |objective: &str, value| {
         EntitySelectorPredicate::Scores(
-            [(objective.into(), IntBounds::new(value, value))]
-                .into_iter()
-                .collect(),
+            std::iter::once((objective.into(), IntBounds::new(value, value))).collect(),
         )
     };
     assert!(team("", false).test(&entity));
@@ -273,7 +271,7 @@ async fn entity_selectors_use_scoreboard_identity_and_distinguish_missing_scores
         );
         // A same-named holder must not stand in for this mob's UUID.
         scoreboard.set_score_value(&NoTarget, "Named pig", "parity", 12);
-    }
+    };
     assert!(team("ferraloom", false).test(&entity));
     assert!(!team("ferraloom", true).test(&entity));
     assert!(!team("", false).test(&entity));

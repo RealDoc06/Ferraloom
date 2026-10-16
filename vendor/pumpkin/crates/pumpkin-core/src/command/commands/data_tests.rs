@@ -49,7 +49,7 @@ fn compound(snbt: &str) -> NbtCompound {
     value
 }
 
-pub(crate) struct Fixture {
+pub struct Fixture {
     pub(crate) source: CommandSource,
     pub(crate) dispatcher: CommandDispatcher,
     _folder: tempfile::TempDir,
@@ -76,11 +76,11 @@ impl Fixture {
         advanced.networking.java.online_mode = false;
         advanced.networking.bedrock.online_mode = false;
         let data = VanillaData {
-            banned_ip_list: Default::default(),
-            banned_player_list: Default::default(),
-            operator_config: Default::default(),
-            user_cache: Default::default(),
-            whitelist_config: Default::default(),
+            banned_ip_list: std::sync::RwLock::default(),
+            banned_player_list: std::sync::RwLock::default(),
+            operator_config: std::sync::RwLock::default(),
+            user_cache: std::sync::RwLock::default(),
+            whitelist_config: std::sync::RwLock::default(),
         };
         let server = Server::new(
             basic,
@@ -131,7 +131,9 @@ impl Fixture {
         };
         fixture.put_storage(
             "repair:source",
-            compound("{id:'minecraft:storage',numbers:[3,4],number:42,text:abcdef,object:{key:7}}"),
+            &compound(
+                "{id:'minecraft:storage',numbers:[3,4],number:42,text:abcdef,object:{key:7}}",
+            ),
         );
         fixture
     }
@@ -140,9 +142,9 @@ impl Fixture {
         self.dispatcher.execute_input(input, &self.source)
     }
 
-    fn put_storage(&self, id: &str, data: NbtCompound) {
+    fn put_storage(&self, id: &str, data: &NbtCompound) {
         StorageDataAccessor::new(id.into(), self.source.server().clone())
-            .set_data(&data)
+            .set_data(data)
             .unwrap();
     }
 
@@ -669,7 +671,7 @@ async fn modify_from_retains_every_provider_and_copies_without_mutating_sources(
 async fn modify_insert_requires_index_before_value_from_and_string_sources() {
     let fixture = Fixture::new().await;
     let before = fixture.sources();
-    fixture.put_storage("repair:target", compound("{items:[left,right]}"));
+    fixture.put_storage("repair:target", &compound("{items:[left,right]}"));
     assert_eq!(
         fixture
             .execute("data modify storage repair:target items insert 1 value literal")
@@ -774,7 +776,7 @@ async fn modify_string_keeps_provider_siblings_and_optional_bounds() {
 async fn modify_value_modes_and_entity_target_return_affected_counts() {
     let fixture = Fixture::new().await;
     let before = fixture.sources();
-    fixture.put_storage("repair:target", compound("{items:[2],rows:[{n:0},{n:0}]}"));
+    fixture.put_storage("repair:target", &compound("{items:[2],rows:[{n:0},{n:0}]}"));
     for (suffix, expected_count) in [
         ("items append value 3", 1),
         ("items prepend value 1", 1),
@@ -825,7 +827,7 @@ async fn modify_unchanged_and_errors_preserve_nbt_through_dispatcher() {
     let fixture = Fixture::new().await;
     let before = fixture.sources();
     let target = compound("{id:'minecraft:storage',items:[1,2],scalar:7,object:{key:7}}");
-    fixture.put_storage("repair:target", target.clone());
+    fixture.put_storage("repair:target", &target);
 
     // Each target provider reaches its executor, including block and entity
     // targets, and rejects a set of its current value without a write.
@@ -879,7 +881,7 @@ async fn modify_merge_recursively_retains_siblings_and_combines_sources_in_order
     let fixture = Fixture::new().await;
     fixture.put_storage(
         "repair:source",
-        compound(
+        &compound(
             "{parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},\
              {nested:{last:5,replace:6}}]}",
         ),
@@ -887,7 +889,7 @@ async fn modify_merge_recursively_retains_siblings_and_combines_sources_in_order
     let sources = fixture.sources();
     fixture.put_storage(
         "repair:target",
-        compound(
+        &compound(
             "{untouched:99,object:{sibling:2,nested:{keep:1,replace:0},\
              list:[1],scalar:0,object:{old:1}}}",
         ),
@@ -916,12 +918,12 @@ async fn modify_merge_counts_changed_compounds_and_rejects_unchanged_results() {
     let fixture = Fixture::new().await;
     fixture.put_storage(
         "repair:source",
-        compound("{parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}"),
+        &compound("{parts:[{nested:{value:1,extra:5}},{nested:{value:2}}]}"),
     );
     let sources = fixture.sources();
     fixture.put_storage(
         "repair:target",
-        compound(
+        &compound(
             "{rows:[{kind:hit,payload:{keep:1,nested:{value:2,extra:5}}},\
              {kind:hit,payload:{keep:2,nested:{value:0}}},\
              {kind:skip,payload:{keep:3,nested:{value:0}}}]}",
@@ -978,13 +980,13 @@ async fn modify_merge_type_errors_validate_sources_before_changing_targets() {
     let fixture = Fixture::new().await;
     fixture.put_storage(
         "repair:source",
-        compound("{mixed:[{value:{added:2}},{value:7}],number:42}"),
+        &compound("{mixed:[{value:{added:2}},{value:7}],number:42}"),
     );
     let sources = fixture.sources();
     let target = compound(
         "{object:{keep:1},scalar:7,numbers:[I;3,4],bytes:[B;3b,4b],longs:[L;3L,4L],empty:[I;]}",
     );
-    fixture.put_storage("repair:target", target.clone());
+    fixture.put_storage("repair:target", &target);
 
     for (suffix, offending_tag) in [
         ("object merge from storage repair:source mixed[].value", "7"),
@@ -1057,7 +1059,7 @@ async fn modify_merge_preserves_vanilla_storage_side_effects_on_failure() {
     let sources = fixture.sources();
     fixture.put_storage(
         "repair:target",
-        compound("{rows:[{value:{keep:1}},{value:7},{}],keep:9}"),
+        &compound("{rows:[{value:{keep:1}},{value:7},{}],keep:9}"),
     );
 
     let error = fixture
@@ -1074,7 +1076,7 @@ async fn modify_merge_preserves_vanilla_storage_side_effects_on_failure() {
         compound("{rows:[{value:{keep:1,added:2}},{value:7},{value:{}}],keep:9}")
     );
 
-    fixture.put_storage("repair:target", compound("{keep:9,rows:[]}"));
+    fixture.put_storage("repair:target", &compound("{keep:9,rows:[]}"));
     for (suffix, expected) in [
         (
             "created.nested merge value {}",
@@ -1194,7 +1196,7 @@ async fn storage_namespace_rejection_precedes_any_mutation() {
 #[tokio::test]
 async fn ordinary_data_merge_recursively_preserves_nested_siblings_and_detects_no_change() {
     let fixture = Fixture::new().await;
-    fixture.put_storage("repair:nested", compound("{nested:{a:1,b:2}}"));
+    fixture.put_storage("repair:nested", &compound("{nested:{a:1,b:2}}"));
     assert_eq!(
         fixture
             .execute("data merge storage repair:nested {nested:{a:3}}")

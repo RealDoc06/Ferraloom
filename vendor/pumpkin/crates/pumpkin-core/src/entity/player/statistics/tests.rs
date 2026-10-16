@@ -1,7 +1,7 @@
 use super::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs};
+use std::{collections::BTreeMap, fmt::Write, fs};
 
 /// Mined statistics identify blocks, even when the world contains different
 /// states of one block. The distinct block is a negative control for collapsing
@@ -56,14 +56,14 @@ fn all_nine_value_registries_match_official_26_3_and_reject_invalid_ids() {
         let category = StatisticCategory::from_i32(id).unwrap();
         let name = registry::category_name(category);
         assert_eq!(registry::category(name), Some(category));
-        category_rows.push_str(&format!("{id}\0{name}\n"));
+        writeln!(category_rows, "{id}\0{name}").unwrap();
         let proof = &witness.registries[binding];
         let mut rows = String::new();
         for raw in 0..proof.count {
             let key = registry::stat_key(category, raw).unwrap();
             let name = format!("minecraft:{key}");
             assert_eq!(registry::stat_id(category, &name), Some(raw));
-            rows.push_str(&format!("{raw}\0{name}\n"));
+            writeln!(rows, "{raw}\0{name}").unwrap();
         }
         assert_eq!(
             hex::encode(Sha256::digest(rows.as_bytes())),
