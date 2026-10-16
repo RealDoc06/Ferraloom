@@ -97,11 +97,10 @@ mod tests {
         DatapackManager, dynamic_registry_loader::merge_dynamic_registry_entries,
     };
     use pumpkin_data::{
-        data_component_impl::InstrumentImpl, registry::RegistryEntryData, sound::Sound,
+        data_component::DataComponent, data_component_impl::InstrumentImpl,
+        registry::RegistryEntryData, sound::Sound,
     };
-    use pumpkin_protocol::{
-        ClientPacket, codec::data_component::DataComponentCodec, ser::NetworkReadExt,
-    };
+    use pumpkin_protocol::{ClientPacket, codec::data_component, ser::NetworkReadExt};
     use std::collections::HashMap;
 
     #[test]
@@ -148,7 +147,12 @@ mod tests {
                 Some(instrument.translation_key())
             );
             let mut wire = Vec::new();
-            InstrumentImpl { instrument }.serialize(&mut wire).unwrap();
+            data_component::serialize(
+                DataComponent::Instrument,
+                &InstrumentImpl { instrument },
+                &mut wire,
+            )
+            .unwrap();
             assert_eq!(wire, vec![index + 1]);
         }
         assert!(reader.is_empty());
