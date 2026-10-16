@@ -2,8 +2,10 @@
 """Five paired observable chat/command throttle cases on fresh offline connections.
 
 Threshold one second = 20: the first unsigned trigger/chat effect precedes typed
-disconnect.spam. Threshold zero: real effects and a subsequent positive client
-command fence without disconnect. Operator command bypass, then deop enforcement.
+disconnect.spam. Threshold zero: a 32-action burst, complete received processing
+evidence and a subsequent positive client fence without disconnect. The same
+workload must kick a fresh nonoperator under unmodified defaults. Operator command
+bypass, then deop enforcement.
 No exact 200-tick boundary, separate-budget, frozen-decay, signed-chat/command,
 signature/ack-validation, or retained-debt amount claim is made.
 """
@@ -13,6 +15,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import time
 import uuid
 
 from check_container_metadata import (Fixture, finish_rows, interaction_deadline, paired_main,
@@ -23,6 +26,7 @@ from parity.protocol import require
 
 CASES = {f"chat_throttle.{case}": "network.chat_delivery" for case in (
     "first_command", "first_chat", "zero_command", "zero_chat", "operator_deop_command")}
+BURST_ACTIONS = 32
 DEFERRED = [{"id": "chat_throttle." + name, "result": "unverified", "reason": reason} for name, reason in (
     ("separate_budgets", "Without read-only production counter/tick observations, wall-time decay cannot establish independent counters. First-action threshold tests establish only per-route enforcement."),
     ("default_200_boundary", "Ten-message bursts and sleeps do not prove an exact boundary with listener-tick decay."),
@@ -95,6 +99,95 @@ def positive_fence(fixture: Fixture, client: Client, value: int = 91) -> dict:
             "disconnect": state.get("disconnect"), "spam_overlays": spam_overlays}
 
 
+def queue_burst(client: Client, actions: list[dict]) -> dict:
+    """Queue one bounded workload without per-action round trips or server waits."""
+    require(len(actions) == BURST_ACTIONS, "Burst must use the fixed workload size")
+    require(not client.failure and client.process.stdin is not None, "Client input unavailable")
+    requests = []
+    for action in actions:
+        client.sequence += 1
+        requests.append({"id": client.sequence, **action})
+    payload = "".join(json.dumps(request) + "\n" for request in requests)
+    started = time.monotonic()
+    client.process.stdin.write(payload)
+    client.process.stdin.flush()
+    return {"actions": actions, "request_ids": [request["id"] for request in requests],
+            "workload_sha256": hashlib.sha256(json.dumps(actions, sort_keys=True).encode()).hexdigest(),
+            "queued_actions": len(actions), "queue_seconds": round(time.monotonic() - started, 6),
+            "transport_scope": "Identical action payloads across profiles; unsigned chat packet timestamps remain fresh."}
+
+
+def burst_replies(client: Client, burst: dict, *, complete: bool) -> dict:
+    """Retain actual send acknowledgments, including a control's kick cutoff."""
+    replies = []
+    for identifier, action in zip(burst["request_ids"], burst["actions"]):
+        reply = client.pending.pop(identifier, None)
+        if reply is None:
+            require(not complete, f"Missing burst send acknowledgment {identifier}")
+            continue
+        require(reply.get("ok") is True, reply)
+        result = reply.get("result")
+        expected = ({"sent_chat": action["text"]} if action["action"] == "chat" else
+                    {"sent_command": f'trigger {action["objective"]} set {action["value"]}'})
+        require(result == expected, {"expected": expected, "reply": reply})
+        replies.append(reply)
+    require(replies, "Burst produced no send acknowledgment")
+    return {"acknowledged_actions": len(replies), "complete_required": complete, "replies": replies}
+
+
+def translated_feedback(state: dict, translation: str, after: int) -> list[dict]:
+    def contains(component: object) -> bool:
+        if isinstance(component, dict):
+            return component.get("translate") == translation or any(contains(value) for value in component.values())
+        return isinstance(component, list) and any(map(contains, component))
+
+    return [entry for entry in state["chat_messages"] if entry["sequence"] > after
+            and entry.get("overlay") is False and contains(entry.get("component_nbt"))]
+
+
+def burst_chat(state: dict, actions: list[dict], after: int) -> list[dict]:
+    return [entry for action in actions
+            if (entry := delivered_chat(state, action["text"])) is not None and entry["sequence"] > after]
+
+
+def default_control(fixture: Fixture, observer: Client, route: str, actions: list[dict]) -> dict:
+    """The same bounded workload must demonstrably exceed production defaults."""
+    sender = fixture.connect("default-" + route, name="ZeroCommand" if route == "command" else "ZeroChat", metadata=False)
+    identity = membership(fixture, sender)
+    prepared = arm_trigger(fixture, sender) if route == "command" else None
+    before = sender.state()["packets"]
+    observer_before = observer.state()["packets"]
+    sender.expect_spam_disconnect()
+    burst = queue_burst(sender, actions)
+    disconnected = sender.wait_spam_disconnect()
+    replies = burst_replies(sender, burst, complete=False)
+    final = disconnected["final_state"]
+    if route == "command":
+        effect = command_effect(fixture, sender, 13)
+        success = translated_feedback(final, "commands.trigger.set.success", before)
+        failed = translated_feedback(final, "commands.trigger.failed.unprimed", before)
+        require(len(success) == 1 and failed, {"success": success, "unprimed": failed})
+        processing = {"positive_effect": effect, "received_success": success, "received_unprimed": failed}
+    else:
+        echoes = burst_chat(final, actions, before)
+        require(echoes and all(entry["sequence"] < disconnected["disconnect"]["sequence"] for entry in echoes), disconnected)
+        marker = next(action["text"] for action in actions if delivered_chat(final, action["text"]) is not None)
+        observed = observer.wait_state(lambda state: (entry := delivered_chat(state, marker)) is not None
+                                       and entry["sequence"] > observer_before)
+        processing = {"sender_echo_before_disconnect": echoes, "observer_delivery": delivered_chat(observed, marker)}
+    fixture.close(sender)
+    return {"identity": identity, "prepared": prepared, "before_sequence": before,
+            "observer_before_sequence": observer_before, "burst": burst, "send_acknowledgments": replies,
+            "processing": processing, "intentional_disconnect": disconnected,
+            "scope": "Production-default kick for a queued workload prefix; exact cutoff and listener-tick boundary are unverified."}
+
+
+def require_control(control: dict | None, burst: dict) -> dict:
+    require(control is not None and control.get("result") == "passed", {"default_control": control})
+    require(control["detail"]["burst"]["workload_sha256"] == burst["workload_sha256"], "Control used a different workload")
+    return control
+
+
 def first_command(fixture: Fixture) -> dict:
     sender = fixture.connect("first-command", name="FirstCommand", metadata=False)
     identity = membership(fixture, sender)
@@ -127,27 +220,45 @@ def first_chat(fixture: Fixture, observer: Client) -> dict:
             "scope": "Fresh offline unsigned body broadcast and first-action kick; signatures are absent and unverified."}
 
 
-def zero_command(fixture: Fixture) -> dict:
+def zero_command(fixture: Fixture, actions: list[dict], control: dict | None) -> dict:
     sender = fixture.connect("zero-command", name="ZeroCommand", metadata=False)
     identity = membership(fixture, sender)
     prepared = arm_trigger(fixture, sender)
-    sent = sender.request("trigger", objective="spamprobe", value=13)
+    before = sender.state()["packets"]
+    burst = queue_burst(sender, actions)
+    state = sender.wait_state(lambda state: len(translated_feedback(state, "commands.trigger.set.success", before)) >= 1
+                             and len(translated_feedback(state, "commands.trigger.failed.unprimed", before)) >= BURST_ACTIONS - 1)
+    success = translated_feedback(state, "commands.trigger.set.success", before)
+    failed = translated_feedback(state, "commands.trigger.failed.unprimed", before)
+    require(len(success) == 1 and len(failed) == BURST_ACTIONS - 1, {"success": success, "unprimed": failed})
+    require(state.get("disconnect") is None, state.get("disconnect"))
+    replies = burst_replies(sender, burst, complete=True)
     effect = command_effect(fixture, sender, 13)
     fence = positive_fence(fixture, sender)
     fixture.close(sender)
-    return {"identity": identity, "prepared": prepared, "first_action": sent, "positive_effect": effect, "subsequent_positive_fence": fence}
+    return {"identity": identity, "prepared": prepared, "before_sequence": before, "burst": burst,
+            "send_acknowledgments": replies, "received_success": success, "received_unprimed": failed,
+            "positive_effect": effect, "subsequent_positive_fence": fence,
+            "default_control": require_control(control, burst)}
 
 
-def zero_chat(fixture: Fixture, observer: Client) -> dict:
+def zero_chat(fixture: Fixture, observer: Client, actions: list[dict], control: dict | None) -> dict:
     sender = fixture.connect("zero-chat", name="ZeroChat", metadata=False)
     identity = membership(fixture, sender)
-    token = "ZERO_CHAT_" + uuid.uuid4().hex
-    sent = sender.request("chat", text=token)
-    observed = observer.wait_state(lambda state: delivered_chat(state, token) is not None)
+    before = sender.state()["packets"]
+    observer_before = observer.state()["packets"]
+    burst = queue_burst(sender, actions)
+    observed = observer.wait_state(lambda state: len(burst_chat(state, actions, observer_before)) == BURST_ACTIONS)
+    echoed = sender.wait_state(lambda state: len(burst_chat(state, actions, before)) == BURST_ACTIONS)
+    require(echoed.get("disconnect") is None, echoed.get("disconnect"))
+    replies = burst_replies(sender, burst, complete=True)
     fence = positive_fence(fixture, sender)
     fixture.close(sender)
-    return {"identity": identity, "first_action": sent, "second_connection_delivery": delivered_chat(observed, token),
-            "subsequent_positive_fence": fence}
+    return {"identity": identity, "before_sequence": before, "observer_before_sequence": observer_before,
+            "burst": burst, "send_acknowledgments": replies,
+            "second_connection_deliveries": burst_chat(observed, actions, observer_before),
+            "sender_echoes": burst_chat(echoed, actions, before), "subsequent_positive_fence": fence,
+            "default_control": require_control(control, burst)}
 
 
 def operator_deop(fixture: Fixture) -> dict:
@@ -178,10 +289,12 @@ def operator_deop(fixture: Fixture) -> dict:
             "scope": "Membership bypass then enforcement after deop. Threshold=20 does not measure retained operator debt."}
 
 
-def configure(fixture: Fixture, seconds: int) -> None:
+def configure(fixture: Fixture, seconds: int | None) -> None:
     server = fixture.server
     server.configure()
     (server.directory / "ops.json").write_text("[]\n")
+    if seconds is None:
+        return
     if server.kind == "vanilla":
         with (server.directory / "server.properties").open("a") as target:
             target.write(f"command-spam-threshold-seconds={seconds}\nchat-spam-threshold-seconds={seconds}\n")
@@ -196,8 +309,13 @@ def configure(fixture: Fixture, seconds: int) -> None:
 
 def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict) -> list[dict]:
     results: dict[str, dict] = {}
+    controls: dict[str, dict] = {}
+    report.setdefault("default_controls", {})[kind] = controls
+    prefix = "ZERO_CHAT_BURST_" + uuid.uuid4().hex
+    workloads = {"command": [{"action": "trigger", "objective": "spamprobe", "value": 13} for _ in range(BURST_ACTIONS)],
+                 "chat": [{"action": "chat", "text": f"{prefix}_{index:02d}"} for index in range(BURST_ACTIONS)]}
     errors = []
-    for seconds, profile in ((1, "first-threshold"), (0, "disabled-threshold")):
+    for seconds, profile in ((None, "production-defaults"), (1, "first-threshold"), (0, "disabled-threshold")):
         # Each profile gets a fresh world and listening server, sequentially.
         fixture = Fixture(kind + "/" + profile, directory / profile, args, report)
         fixture.server.kind = kind
@@ -205,23 +323,33 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
         try:
             configure(fixture, seconds)
             fixture.start(profile)
+            effective_seconds = 10 if seconds is None else seconds
             report.setdefault("effective_settings", {})[kind + "/" + profile] = {
-                "chat_threshold_seconds": seconds, "command_threshold_seconds": seconds,
-                "threshold_ticks": seconds * 20, "message_cost": 20, "decay_per_listener_tick": 1,
+                "chat_threshold_seconds": effective_seconds, "command_threshold_seconds": effective_seconds,
+                "threshold_ticks": effective_seconds * 20, "message_cost": 20, "decay_per_listener_tick": 1,
+                "threshold_overrides_written": seconds is not None,
                 "configuration_source": "official DedicatedServerProperties bytecode and pinned AntiSpamConfig; production defaults otherwise"}
             server.command("scoreboard objectives add spamprobe trigger")
             observer = fixture.connect("observer", name="SpamObserver", metadata=False)
             membership(fixture, observer)
-            actions = (("first_command", lambda: first_command(fixture)),
-                       ("first_chat", lambda: first_chat(fixture, observer)),
-                       ("operator_deop_command", lambda: operator_deop(fixture))) if seconds else (
-                       ("zero_command", lambda: zero_command(fixture)), ("zero_chat", lambda: zero_chat(fixture, observer)))
+            if seconds is None:
+                actions = tuple(("zero_" + route,
+                                 lambda route=route: default_control(fixture, observer, route, workloads[route]))
+                                for route in ("command", "chat"))
+            elif seconds:
+                actions = (("first_command", lambda: first_command(fixture)),
+                           ("first_chat", lambda: first_chat(fixture, observer)),
+                           ("operator_deop_command", lambda: operator_deop(fixture)))
+            else:
+                actions = (("zero_command", lambda: zero_command(fixture, workloads["command"], controls.get("chat_throttle.zero_command"))),
+                           ("zero_chat", lambda: zero_chat(fixture, observer, workloads["chat"], controls.get("chat_throttle.zero_chat"))))
             for suffix, action in actions:
                 identifier = "chat_throttle." + suffix
                 def guarded(action=action, identifier=identifier) -> dict:
                     with interaction_deadline(server, identifier):
                         return action()
-                results[identifier] = suite.recorded(identifier, (CASES[identifier],), guarded)
+                row = suite.recorded(identifier + (".default_control" if seconds is None else ""), (CASES[identifier],), guarded)
+                (controls if seconds is None else results)[identifier] = row
                 require(not server.broken, server.broken)
                 require(not any(client.failure for client in fixture.clients), "Unexpected client failure")
             fixture.close(observer)
