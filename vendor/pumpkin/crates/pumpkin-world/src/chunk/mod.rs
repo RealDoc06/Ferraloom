@@ -521,7 +521,11 @@ impl ChunkSections {
             if !condition(section.get(relative_x, relative_y, relative_z)) {
                 return None;
             }
-            let mut poi_changes = self.poi_changes.lock().unwrap();
+            // Recover for terrain writes without clearing the sticky poison bit.
+            let mut poi_changes = self
+                .poi_changes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let replaced_block_state_id =
                 section.set(relative_x, relative_y, relative_z, block_state_id);
             if replaced_block_state_id == block_state_id {
@@ -737,7 +741,12 @@ impl ChunkData {
             .block_sections
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut poi_changes = self.section.poi_changes.lock().unwrap();
+        // Reconciliation refuses poisoned metadata even after a writer recovers it.
+        let mut poi_changes = self
+            .section
+            .poi_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut random_tick_sections_guard = self
             .section
             .random_tick_sections

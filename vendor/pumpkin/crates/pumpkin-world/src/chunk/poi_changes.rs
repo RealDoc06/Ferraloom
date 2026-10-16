@@ -10,6 +10,8 @@ use crate::poi::{LoadedPoiRegion, PoiReconcileError};
 
 pub(super) struct PoiChanges {
     sections: Box<[PoiSectionChanges]>,
+    // Once any section exhausts its revision, no chunk stamp can certify it.
+    exhausted: bool,
 }
 
 pub(crate) struct PoiSectionChanges {
@@ -29,6 +31,7 @@ impl PoiChanges {
                     reset_tickets: None,
                 })
                 .collect(),
+            exhausted: false,
         }
     }
 
@@ -47,12 +50,12 @@ impl PoiChanges {
         }
         assert!(x < 16 && y < 16 && z < 16);
         let changes = &mut self.sections[section];
-        // Never wrap a stamp into an earlier acknowledged revision. Exhaustion
-        // poisons the metadata mutex, preventing any subsequent acknowledgment.
-        changes.revision = changes
-            .revision
-            .checked_add(1)
-            .expect("POI revision exhausted");
+        // Keep recording reset history and allow terrain writes after exhaustion,
+        // but never wrap or issue another successful preparation stamp.
+        match changes.revision.checked_add(1) {
+            Some(revision) => changes.revision = revision,
+            None => self.exhausted = true,
+        }
         if PoiType::from_state(old) != PoiType::from_state(new) {
             let index = (y * 16 + z) * 16 + x;
             let bits = changes
@@ -118,6 +121,9 @@ impl PoiTerrainRead<'_> {
         loaded: &mut LoadedPoiRegion<'_>,
     ) -> Result<PoiReconciliationStamp, PoiReconcileError> {
         let chunk = self.chunk;
+        if chunk.section.block_sections.is_poisoned() {
+            return Err(PoiReconcileError::TerrainPoisoned);
+        }
         loaded.check_chunk(ChunkPos::new(chunk.x, chunk.z))?;
         let min_y = chunk.section.min_y;
         let height = i32::try_from(self.palettes.len())
@@ -126,7 +132,14 @@ impl PoiTerrainRead<'_> {
         if min_y % 16 != 0 || height.and_then(|h| min_y.checked_add(h)).is_none() {
             return Err(PoiReconcileError::InvalidCoordinates);
         }
-        let mut changes = chunk.section.poi_changes.lock().unwrap();
+        let mut changes = chunk
+            .section
+            .poi_changes
+            .lock()
+            .map_err(|_| PoiReconcileError::MetadataPoisoned)?;
+        if changes.exhausted {
+            return Err(PoiReconcileError::RevisionExhausted);
+        }
         if changes.sections.len() != self.palettes.len() {
             return Err(PoiReconcileError::InvalidCoordinates);
         }
@@ -153,8 +166,14 @@ impl PoiTerrainRead<'_> {
     /// the stamp even if its final POI type or block state equals the old one.
     #[must_use]
     pub fn is_current(&self, stamp: &PoiReconciliationStamp) -> bool {
-        let changes = self.chunk.section.poi_changes.lock().unwrap();
-        stamp.revisions.len() == changes.sections.len()
+        if self.chunk.section.block_sections.is_poisoned() {
+            return false;
+        }
+        let Ok(changes) = self.chunk.section.poi_changes.lock() else {
+            return false;
+        };
+        !changes.exhausted
+            && stamp.revisions.len() == changes.sections.len()
             && stamp
                 .revisions
                 .iter()
@@ -162,5 +181,126 @@ impl PoiTerrainRead<'_> {
                 .all(|(revision, section)| {
                     *revision == section.revision && *revision == section.applied_revision
                 })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::poi::{PoiRegion, PoiStorage};
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    // UNRUN: inject only the otherwise unreachable failure boundary, then use
+    // actual chunk writers, loaded-region reconciliation and persisted records.
+    #[test]
+    fn failed_revision_and_poison_refuse_ack_while_actual_writers_continue() {
+        enum Failure {
+            Revision,
+            Metadata,
+            Terrain,
+        }
+
+        for failure in [Failure::Revision, Failure::Metadata, Failure::Terrain] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut storage = PoiStorage::new(directory.path().to_owned());
+            let coords = ChunkPos::new(0, 0);
+            storage.preload_poi_region(coords).unwrap();
+            let chunk = ChunkData::empty(0, 0);
+            let pos = BlockPos::new(1, 0, 1);
+            let home = Block::WHITE_BED
+                .states
+                .iter()
+                .map(|state| state.id)
+                .find(|state| PoiType::from_state(*state) == Some(PoiType::Home))
+                .unwrap();
+            chunk.set_block_absolute_y(1, 0, 1, home);
+            {
+                let mut loaded = storage.loaded_poi_region(coords).unwrap();
+                chunk.read_for_poi().reconcile(&mut loaded).unwrap();
+            };
+            storage
+                .add_with_free_tickets(pos, PoiType::Home.identifier(), 0)
+                .unwrap();
+            if matches!(failure, Failure::Revision) {
+                let _terrain = chunk.read_for_poi();
+                let mut changes = chunk.section.poi_changes.lock().unwrap();
+                changes.sections[4].revision = u64::MAX;
+                changes.sections[4].applied_revision = u64::MAX;
+            }
+            let prepared = {
+                let mut loaded = storage.loaded_poi_region(coords).unwrap();
+                let terrain = chunk.read_for_poi();
+                let stamp = terrain.reconcile(&mut loaded).unwrap();
+                assert!(terrain.is_current(&stamp));
+                stamp
+            };
+            match failure {
+                Failure::Revision => {}
+                Failure::Metadata => {
+                    assert!(
+                        catch_unwind(AssertUnwindSafe(|| {
+                            let _terrain = chunk.read_for_poi();
+                            let _changes = chunk.section.poi_changes.lock().unwrap();
+                            panic!("injected metadata poison");
+                        }))
+                        .is_err()
+                    );
+                }
+                Failure::Terrain => {
+                    assert!(
+                        catch_unwind(AssertUnwindSafe(|| {
+                            let _terrain = chunk.section.block_sections.write().unwrap();
+                            panic!("injected terrain poison");
+                        }))
+                        .is_err()
+                    );
+                }
+            }
+
+            assert_eq!(chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR), home);
+            assert_eq!(
+                chunk.set_blocks_batch([(1, 0, 1, home)]),
+                vec![(1, 0, 1, BlockStateId::AIR)]
+            );
+            {
+                let mut loaded = storage.loaded_poi_region(coords).unwrap();
+                let terrain = chunk.read_for_poi();
+                assert_eq!(terrain.palettes()[4].get(1, 0, 1), home);
+                assert!(!terrain.is_current(&prepared));
+                let error = terrain.reconcile(&mut loaded).unwrap_err();
+                assert!(match failure {
+                    Failure::Revision => matches!(error, PoiReconcileError::RevisionExhausted),
+                    Failure::Metadata => matches!(error, PoiReconcileError::MetadataPoisoned),
+                    Failure::Terrain => matches!(error, PoiReconcileError::TerrainPoisoned),
+                });
+                // No failed preparation clears the ABA mask or acknowledges a
+                // later write. Recovered locks keep their native poison flags.
+                let changes = chunk
+                    .section
+                    .poi_changes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                assert_eq!(changes.sections[4].applied_revision, prepared.revisions[4]);
+                assert!(changes.sections[4].resets_tickets(17));
+                assert_eq!(changes.exhausted, matches!(failure, Failure::Revision));
+                assert_eq!(
+                    chunk.section.poi_changes.is_poisoned(),
+                    matches!(failure, Failure::Metadata)
+                );
+                assert_eq!(
+                    chunk.section.block_sections.is_poisoned(),
+                    matches!(failure, Failure::Terrain)
+                );
+            };
+            storage.save_all().unwrap();
+            let region = PoiRegion::load(&directory.path().join("r.0.0.mca")).unwrap();
+            let entries = region.get_all();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].pos(), pos);
+            assert_eq!(entries[0].poi_type, PoiType::Home.identifier());
+            assert_eq!(entries[0].free_tickets, 0);
+        }
     }
 }

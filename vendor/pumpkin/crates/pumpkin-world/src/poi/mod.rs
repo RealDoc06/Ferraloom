@@ -60,6 +60,12 @@ pub enum PoiReconcileError {
     WrongChunk,
     #[error("POI terrain coordinates or section layout are invalid")]
     InvalidCoordinates,
+    #[error("POI section revision exhausted; chunk preparation is unavailable")]
+    RevisionExhausted,
+    #[error("POI change metadata lock is poisoned; chunk preparation is unavailable")]
+    MetadataPoisoned,
+    #[error("Terrain lock is poisoned; POI preparation is unavailable")]
+    TerrainPoisoned,
     #[error("Cannot reconcile unknown POI type {identifier} at {pos:?}")]
     UnknownType { identifier: String, pos: BlockPos },
 }
