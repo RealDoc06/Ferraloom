@@ -1,8 +1,6 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use pumpkin_util::PermissionLvl;
-use pumpkin_util::math::experience;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
@@ -15,6 +13,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::entity::player::experience::Experience;
 
 const DESCRIPTION: &str = "Add, set or query player experience.";
 const PERMISSION: &str = "minecraft:command.experience";
@@ -37,6 +36,22 @@ enum ExpType {
     Levels,
 }
 
+impl ExpType {
+    fn query(self, experience: Experience) -> i32 {
+        match self {
+            Self::Points => experience.points(),
+            Self::Levels => experience.level,
+        }
+    }
+
+    fn can_set(self, experience: Experience, amount: i32) -> bool {
+        match self {
+            Self::Points => amount < experience.points_needed(),
+            Self::Levels => true,
+        }
+    }
+}
+
 struct ExperienceExecutor {
     mode: Mode,
     exp_type: ExpType,
@@ -44,15 +59,10 @@ struct ExperienceExecutor {
 
 impl ExperienceExecutor {
     fn handle_query(&self, context: &CommandContext, target: &Player) -> i32 {
-        let (val, translation_key) = match self.exp_type {
-            ExpType::Levels => (
-                target.experience_level.load(Ordering::Relaxed),
-                "commands.experience.query.levels",
-            ),
-            ExpType::Points => (
-                target.experience_points.load(Ordering::Relaxed),
-                "commands.experience.query.points",
-            ),
+        let val = self.exp_type.query(target.experience());
+        let translation_key = match self.exp_type {
+            ExpType::Levels => "commands.experience.query.levels",
+            ExpType::Points => "commands.experience.query.points",
         };
 
         context.source.send_feedback(
@@ -73,7 +83,7 @@ impl ExperienceExecutor {
     fn get_success_message(
         &self,
         amount: i32,
-        targets: &[Arc<Player>],
+        target_count: usize,
         first_target_name: TextComponent,
     ) -> TextComponent {
         let type_str = match self.exp_type {
@@ -97,30 +107,28 @@ impl ExperienceExecutor {
             }
         };
 
-        let bedrock_amount = if amount >= 0 { amount } else { amount.abs() };
-
-        if targets.len() > 1 {
+        if target_count > 1 {
             TextComponent::translate_cross(
                 format!("commands.experience.{mode_str}.{type_str}.success.multiple"),
                 bedrock_key,
                 [
-                    TextComponent::text(bedrock_amount.to_string()),
-                    TextComponent::text(targets.len().to_string()),
+                    TextComponent::text(amount.to_string()),
+                    TextComponent::text(target_count.to_string()),
                 ],
             )
         } else {
             TextComponent::translate_cross(
                 format!("commands.experience.{mode_str}.{type_str}.success.single"),
                 bedrock_key,
-                [
-                    TextComponent::text(bedrock_amount.to_string()),
-                    first_target_name,
-                ],
+                [TextComponent::text(amount.to_string()), first_target_name],
             )
         }
     }
 
     fn handle_modify(&self, target: &Arc<Player>, amount: i32) -> bool {
+        if self.mode == Mode::Set && !self.exp_type.can_set(target.experience(), amount) {
+            return false;
+        }
         match self.exp_type {
             ExpType::Levels => {
                 if self.mode == Mode::Add {
@@ -133,10 +141,6 @@ impl ExperienceExecutor {
                 if self.mode == Mode::Add {
                     target.add_experience_points(amount);
                 } else {
-                    let current_lvl = target.experience_level.load(Ordering::Relaxed);
-                    if amount >= experience::points_in_level(current_lvl) {
-                        return false;
-                    }
                     target.set_experience_points(amount);
                 }
             }
@@ -157,21 +161,23 @@ impl CommandExecutor for ExperienceExecutor {
         let amount = IntegerArgumentType::get(context, "amount")?;
 
         let mut successes = 0;
+        let mut first_success = None;
         for target in &targets {
             if self.handle_modify(target, amount) {
                 successes += 1;
+                first_success.get_or_insert(target);
             }
         }
 
-        if self.mode == Mode::Set && successes == 0 {
+        let Some(first_success) = first_success else {
             return Err(ERROR_SET_POINTS_INVALID.create_without_context());
-        }
+        };
 
-        let first_name = targets[0].as_ref().get_display_name();
-        let msg = self.get_success_message(amount, &targets, first_name);
+        let first_name = first_success.get_display_name();
+        let msg = self.get_success_message(amount, successes, first_name);
         context.source.send_feedback(msg, true);
 
-        Ok(targets.len() as i32)
+        Ok(successes as i32)
     }
 }
 
@@ -237,4 +243,47 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         .then(query_node);
 
     dispatcher.register_with_aliases(cmd, &["xp"]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ExpType, Experience};
+
+    #[test]
+    fn query_uses_the_float_bar_instead_of_total_or_rounded_remainder() {
+        // First progress is a retained Java save; continuation/query are derived
+        // from the official bytecode and still need paired runtime verification.
+        for (total, progress_bits, expected_points) in
+            [(223, 0x3e67_39c4, 6), (227, 0x3eb5_ad66, 10)]
+        {
+            let experience = Experience {
+                level: 12,
+                progress: f32::from_bits(progress_bits),
+                total,
+            };
+            assert_eq!(ExpType::Points.query(experience), expected_points);
+            assert_eq!(ExpType::Levels.query(experience), 12);
+        }
+    }
+
+    #[test]
+    fn set_points_rejects_the_next_level_boundary_before_clamping() {
+        let mut experience = Experience {
+            level: 12,
+            progress: 0.0,
+            total: 223,
+        };
+        assert!(ExpType::Points.can_set(experience, 0));
+        assert!(ExpType::Points.can_set(experience, 30));
+        assert!(!ExpType::Points.can_set(experience, 31));
+        assert!(!ExpType::Points.can_set(experience, i32::MAX));
+        assert!(ExpType::Levels.can_set(experience, i32::MAX));
+        experience.set_points(7);
+        assert_eq!(experience.progress.to_bits(), 0x3e67_39ce);
+        assert_eq!(experience.total, 223);
+        assert_eq!(ExpType::Points.query(experience), 7);
+        experience.set_level(0);
+        assert!(!ExpType::Points.can_set(experience, 7));
+        assert!(ExpType::Points.can_set(experience, 6));
+    }
 }
