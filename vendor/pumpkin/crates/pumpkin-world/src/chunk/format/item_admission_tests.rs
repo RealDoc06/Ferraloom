@@ -3,7 +3,7 @@
 use super::*;
 use crate::chunk::io::{ChunkSerializer, FileIO, LoadedData, file_manager::ChunkFileManager};
 use pumpkin_config::chunk::AnvilChunkConfig;
-use pumpkin_data::{data_component::DataComponent, item_stack::ItemStack};
+use pumpkin_data::{data_component::DataComponent, item::Item, item_stack::ItemStack};
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
 
@@ -96,6 +96,45 @@ fn prototype_nbt(value: serde_json::Value) -> NbtTag {
     }
 }
 
+// The 21 persistent placeholder types lack writers, but not every official
+// payload reaches one: JukeboxPlayable's reader requires a compound with song.
+fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemStackAdmissionError {
+    assert!(
+        Item::from_registry_key(id).is_some(),
+        "{id} [{name}]: fixture item must exist in the pinned registry"
+    );
+    let component = DataComponent::try_from_name(name)
+        .unwrap_or_else(|| panic!("{id} [{name}]: fixture component must exist"));
+    let decoded = ItemStack::read_item_stack(item);
+    if component == DataComponent::JukeboxPlayable {
+        assert_eq!(
+            item.get_compound("components")
+                .and_then(|components| components.get_string(name)),
+            Some("minecraft:11"),
+            "{id} [{name}]: retain the official string payload"
+        );
+        assert!(
+            decoded.is_none(),
+            "{id} [{name}]: the current decoder cannot read the official string"
+        );
+        return ItemStackAdmissionError::Unreadable;
+    }
+    let stack = decoded.unwrap_or_else(|| {
+        panic!("{id} [{name}]: expected the placeholder decoder to accept the saved fixture")
+    });
+    let mut reduced = NbtCompound::new();
+    stack.write_item_stack(&mut reduced);
+    if component.is_persistent() {
+        let components = reduced.get_compound("components").unwrap_or_else(|| {
+            panic!("{id} [{name}]: persistent placeholder patch must remain present")
+        });
+        assert_eq!(components.get(name), Some(&NbtTag::End), "{id} [{name}]");
+    } else {
+        assert!(reduced.get("components").is_none(), "{id} [{name}]");
+    }
+    ItemStackAdmissionError::Lossy
+}
+
 #[test]
 fn saved_containers_refuse_all_23_placeholder_component_inputs() {
     let prototypes: Vec<Prototype> =
@@ -128,44 +167,48 @@ fn saved_containers_refuse_all_23_placeholder_component_inputs() {
     assert_eq!(inputs.len(), 23);
     for (name, id, value) in inputs {
         let item = saved_item(&id, &name, value);
-        let component = DataComponent::try_from_name(&name).unwrap();
-        let stack = ItemStack::read_item_stack(&item).unwrap();
-        let mut reduced = NbtCompound::new();
-        stack.write_item_stack(&mut reduced);
-        if component.is_persistent() {
-            assert_eq!(
-                reduced.get_compound("components").unwrap().get(&name),
-                Some(&NbtTag::End),
-                "{name}"
-            );
-        } else {
-            assert!(reduced.get("components").is_none(), "{name}");
-        }
-        assert_eq!(
-            validate_item_stack(&item),
-            Err(ItemStackAdmissionError::Lossy)
-        );
-        for id in CONTAINERS {
-            let container = saved_container(id, item.clone());
+        let expected = assert_placeholder_codec(&item, &id, &name);
+        assert_eq!(validate_item_stack(&item), Err(expected), "{id} [{name}]");
+        let expected_reason = match expected {
+            ItemStackAdmissionError::Unreadable => "ItemStack decoder rejected the saved item",
+            _ => expected.reason(),
+        };
+        for container_id in CONTAINERS {
+            let container = saved_container(container_id, item.clone());
             let source = saved_chunk(container.clone());
             // Encode the original, valid tree, never the reduced ItemStack.
-            let bytes = source.to_bytes().unwrap();
+            let bytes = source.to_bytes().unwrap_or_else(|error| {
+                panic!("{id} [{name}] in {container_id}: original chunk encoding failed: {error}")
+            });
             let Err(error) = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)) else {
-                panic!("saved placeholder must refuse the chunk");
+                panic!("{id} [{name}] in {container_id}: saved placeholder must refuse the chunk");
             };
-            assert_refused(&error, id);
+            assert_refused(&error, container_id);
+            assert!(
+                matches!(&error, ChunkReadingError::ParsingError(
+                ChunkParsingError::UnsupportedContainerItem { reason, .. }
+            ) if *reason == expected_reason),
+                "{id} [{name}] in {container_id}: wrong refusal reason"
+            );
             assert_eq!(
                 source.pending_block_entities.lock().unwrap()[&POSITION],
-                container
+                container,
+                "{id} [{name}] in {container_id}: refused source must remain unchanged"
             );
             let mut deferred = container;
             deferred.put_string("LootTable", "minecraft:chests/simple_dungeon".into());
             let source = saved_chunk(deferred.clone());
+            let bytes = source.to_bytes().unwrap_or_else(|error| {
+                panic!("{id} [{name}] in {container_id}: deferred chunk encoding failed: {error}")
+            });
             let admitted =
-                ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0)).unwrap();
+                ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).unwrap_or_else(|error| {
+                    panic!("{id} [{name}] in {container_id}: LootTable bypass failed: {error}")
+                });
             assert_eq!(
                 admitted.pending_block_entities.lock().unwrap()[&POSITION],
-                deferred
+                deferred,
+                "{id} [{name}] in {container_id}: deferred source must remain unchanged"
             );
         }
     }
