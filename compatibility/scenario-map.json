@@ -630,6 +630,24 @@
     "chat_throttle.operator_deop_command": {
       "feature_id": "network.chat_delivery",
       "scenario": "operator membership bypass permits a trigger effect and the first post-deop trigger effect precedes enforcement at a one-second threshold"
+    },
+    "player_data.same_identity": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.inventory_components": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.vitals_xp": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.advancement_import": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.saved_continuation": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.advancement_continuation": {
+      "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
     }
   }
 }
