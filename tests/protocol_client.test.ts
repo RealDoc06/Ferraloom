@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
@@ -156,6 +157,48 @@ test('horn configuration requires present complete profiles and consumes exactly
     wireString('minecraft:yearn_goat_horn'), Buffer.from([1]),
     Buffer.from('0a0300016100000000030001610000000000', 'hex')]);
   assert.throws(() => decodeHornRegistryPacket(duplicateNbt), /Duplicate horn NBT key/u);
+});
+
+test('horn registry retains generated Double widths and rejects nonfinite or truncated Double fields', () => {
+  // Actual retained source bytes, not a captured runtime packet. registry.rs:20
+  // Git blob 942994bcde0409a2558c4002e9a6c02a07ab77ae at commit 66b593ec; CRegistryData
+  // writes these entry.data bytes unchanged. Pin provenance before extracting.
+  const source = readFileSync(new URL('../vendor/pumpkin/crates/pumpkin-data/src/generated/registry.rs', import.meta.url));
+  assert.equal(createHash('sha256').update(source).digest('hex'), '32ef62fa967de9674f58105c1490c47157f305ab5740e8aede9dd6d8f705144d');
+  const matches = [...source.toString('utf8').matchAll(/name : "admire_goat_horn" , data : b"([^"\r\n]{1,1024})"/gu)];
+  assert.equal(matches.length, 1);
+  const literal = matches[0]![1]!;
+  // Only the escapes present in this retained Rust byte literal; fail on gaps.
+  const tokens = [...literal.matchAll(/\\x([0-9A-F]{2})|\\([n0t])|([^\\])/gu)];
+  assert.equal(tokens.map(([token]) => token).join(''), literal);
+  const data = Buffer.from(tokens.map(([, hex, escape, ascii]) => {
+    if (hex !== undefined) return Number.parseInt(hex, 16);
+    if (escape === 'n') return 10;
+    if (escape === '0') return 0;
+    if (escape === 't') return 9;
+    assert.ok(ascii !== undefined);
+    return ascii.charCodeAt(0);
+  }));
+  const profiles = hornProfiles();
+  const packet = Buffer.concat([Buffer.from([7]), wireString('minecraft:instrument'), Buffer.from([8]),
+    ...profiles.map((entry, index) => Buffer.concat([wireString(entry.identifier), Buffer.from([1]), index === 0 ? data : hornNbt(entry.data)]))]);
+  const registry = decodeHornRegistryPacket(packet);
+  assert.equal(registry.decoded_bytes, packet.length);
+  assert.deepEqual(registry.entries[0]!.data, profiles[0]!.data);
+  for (const [marker, expected] of [['\x06\0\x0Cuse_duration', 7], ['\x06\0\x05range', 256]] as const) {
+    const field = Buffer.from(marker, 'latin1'), start = packet.indexOf(field);
+    assert.notEqual(start, -1);
+    const offset = start + field.length;
+    assert.equal(packet.readDoubleBE(offset), expected);
+    for (let available = 0; available < 8; available++) {
+      assert.throws(() => decodeHornRegistryPacket(packet.subarray(0, offset + available)), /Truncated horn packet/u);
+    }
+    for (const value of [NaN, Infinity, -Infinity]) {
+      const broken = Buffer.from(packet);
+      broken.writeDoubleBE(value, offset);
+      assert.throws(() => decodeHornRegistryPacket(broken), /Nonfinite horn double/u);
+    }
+  }
 });
 
 test('horn slot codec binds holders and preserves removal while generic decoding stays off', () => {

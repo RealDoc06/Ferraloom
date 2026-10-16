@@ -135,6 +135,11 @@ class HornReader {
     if (type === 1) return this.take(1).readInt8();
     if (type === 3) return this.int();
     if (type === 5) return this.float();
+    if (type === 6) {
+      const value = this.take(8).readDoubleBE();
+      if (!Number.isFinite(value)) throw new Error('Nonfinite horn double');
+      return value;
+    }
     if (type === 8) return this.ascii(this.take(2).readUInt16BE());
     if (type !== 10) throw new Error(`Unsupported horn NBT type ${type}`);
     const result: Record<string, unknown> = {};
