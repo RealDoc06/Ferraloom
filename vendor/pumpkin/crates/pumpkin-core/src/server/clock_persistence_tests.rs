@@ -121,7 +121,7 @@ async fn official_game_time_survives_ticks_freeze_and_repeated_server_reloads() 
         assert_eq!(overworld.get_time_of_day(), day_time + 1);
 
         update_level_info(&server.level_info, |info| {
-            info.game_rules.advance_time = false
+            info.game_rules.advance_time = false;
         });
         server.tick_rate_manager.set_frozen(&server, true);
         tick(&server);
@@ -132,7 +132,7 @@ async fn official_game_time_survives_ticks_freeze_and_repeated_server_reloads() 
         assert_game_time(&server, game_time + 2);
         assert_eq!(overworld.get_time_of_day(), day_time + 1);
         update_level_info(&server.level_info, |info| {
-            info.game_rules.advance_time = true
+            info.game_rules.advance_time = true;
         });
 
         server.save_world_info().unwrap();
@@ -200,8 +200,8 @@ async fn large_game_time_restores_all_dimensions_and_late_world_joins_live_age()
             "game age must not become the day clock"
         );
         assert_eq!(server.level_info.load().game_time, initial.game_time);
-        server.save_world_info().unwrap();
-    }
+        server.save_world_info().unwrap()
+    };
     let reloaded = server_at(folder.path()).await;
     assert_game_time(&reloaded, initial.game_time + 1);
     assert_eq!(
@@ -228,8 +228,8 @@ impl WorldInfoWriter for MetadataEditDuringWrite {
             assert_eq!(
                 (info.game_time, info.day_time),
                 (clock.world_age, clock.time_of_day)
-            );
-        }
+            )
+        };
         update_level_info(&self.overworld.level_info, |live| {
             live.game_rules.keep_inventory = true;
             live.spawn_x = 91;
