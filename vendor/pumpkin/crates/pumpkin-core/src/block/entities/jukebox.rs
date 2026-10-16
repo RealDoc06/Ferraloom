@@ -249,6 +249,10 @@ impl JukeboxBlockEntity {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Infallible Inventory mutations must reject an absent live owner before committing state"
+    )]
     fn owner(&self) -> Arc<World> {
         let world = self
             .world
@@ -290,7 +294,10 @@ impl JukeboxBlockEntity {
     /// insertion rule and does not clamp a direct full-stack assignment.
     pub fn set_record(&self, record: ItemStack) {
         let world = self.owner();
-        validate_runtime_item_stack(&record).expect("unsupported jukebox item");
+        assert!(
+            validate_runtime_item_stack(&record).is_ok(),
+            "unsupported jukebox item"
+        );
         {
             let mut state = self
                 .state

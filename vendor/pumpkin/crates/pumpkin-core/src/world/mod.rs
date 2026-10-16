@@ -2272,6 +2272,10 @@ impl World {
         );
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Live attachment must fail before publication when the World Arc was not bound"
+    )]
     pub(crate) fn weak_self(&self) -> &Weak<Self> {
         self.self_weak
             .get()
