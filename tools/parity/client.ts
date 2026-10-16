@@ -8,6 +8,9 @@ import { parseArgs } from 'node:util';
 import { inflateSync, deflateSync } from 'node:zlib';
 import { decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySoundPacket, decodeHornLoginHeader, decodeHornRegistryPacket,
   encodeHornSelect, encodeHornSwap, encodeHornUse, type HornRegistry } from './horns.ts';
+import { decodeJukeboxBlockEntityPacket, decodeJukeboxContainerPacket, decodeJukeboxLevelEvent, decodeSongRegistryPacket,
+  encodeJukeboxSelect, encodeJukeboxSwap, encodeJukeboxUse,
+  type SongRegistry } from './jukeboxes.ts';
 
 export const VERSION = '26.3';
 export const PROTOCOL = 777;
@@ -836,6 +839,8 @@ type Command = { id: string | number } & (
   | { action: 'close_menu' }
   | { action: 'swap_hands' }
   | { action: 'horn_select'; hotbar: number }
+  | { action: 'jukebox_select'; hotbar: number }
+  | { action: 'jukebox_use'; hand: 0 | 1; x: number; y: number; z: number }
   | { action: 'horn_use'; hand: 0 | 1; other_hotbar?: number }
   | { action: 'swap'; slot: number; hotbar: number }
 );
@@ -850,6 +855,19 @@ export function parseCommand(value: unknown): Command {
   }
   if (value.action === 'close_menu') return { id, action: value.action };
   if (value.action === 'swap_hands') return { id, action: value.action };
+  if (value.action === 'jukebox_select') {
+    if (typeof value.hotbar !== 'number') throw new Error('Jukebox selection requires a hotbar slot');
+    encodeJukeboxSelect(value.hotbar);
+    return { id, action: value.action, hotbar: value.hotbar };
+  }
+  if (value.action === 'jukebox_use') {
+    const { hand, x, y, z } = value;
+    if ((hand !== 0 && hand !== 1) || typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') {
+      throw new Error('Jukebox use requires main/offhand and block coordinates');
+    }
+    encodeJukeboxUse(hand, x, y, z, 0);
+    return { id, action: value.action, hand, x, y, z };
+  }
   if (value.action === 'horn_select') {
     if (typeof value.hotbar !== 'number') throw new Error('Horn selection requires a hotbar slot');
     encodeHornSelect(value.hotbar);
@@ -921,10 +939,14 @@ function emit(value: unknown) {
 function main() {
   const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false },
     'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
-    'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false } } });
+    'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false },
+    'jukeboxes': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   if (values.horns && !values['block-data']) throw new Error('--horns requires --block-data');
+  if (values.jukeboxes && (!values['block-data'] || !values['raw-packets'] || values.horns || values['container-metadata'])) {
+    throw new Error('--jukeboxes requires --block-data --raw-packets and an exclusive fixture decoder');
+  }
   const socket = createConnection({ host: values.host, port });
   let buffer = Buffer.alloc(0);
   let phase: 'login' | 'configuration' | 'play' = 'login';
@@ -958,17 +980,22 @@ function main() {
     chunk_packets: [] as (Omit<ReturnType<typeof decodeChunkBlockEntities>, 'signs' | 'decoded_bytes'> & { sequence: number })[],
     sounds: [] as (ReturnType<typeof decodeSoundPacket> & { sequence: number; payload_base64: string })[],
     horn_registry: null as (HornRegistry & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
+    jukebox_registry: null as (SongRegistry & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
+    jukebox_events: [] as (ReturnType<typeof decodeJukeboxLevelEvent> & { sequence: number; payload_base64: string; payload_sha256: string })[],
+    jukebox_updates: [] as (NonNullable<ReturnType<typeof decodeJukeboxBlockEntityPacket>> & { sequence: number; payload_base64: string; payload_sha256: string })[],
     horn_login_header: null as (ReturnType<typeof decodeHornLoginHeader> & { sequence: number; payload_sha256: string }) | null,
     horn_cooldowns: [] as (ReturnType<typeof decodeHornCooldownPacket> & { sequence: number; payload_base64: string })[],
     horn_entity_sounds: [] as (ReturnType<typeof decodeHornEntitySoundPacket> & { sequence: number; payload_base64: string })[],
     disconnect: null as ReturnType<typeof decodeDisconnect> | null,
     block_ack: -1,
   };
+  let jukeboxEvidenceBytes = 0;
 
   function send(id: number, ...parts: Buffer[]) {
     if (quitting || socket.destroyed || socket.writableEnded || !socket.writable) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
-    const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || (values.horns && [54, 67].includes(id))) ? packet : null;
+    const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || ((values.horns || values.jukeboxes) && [54, 67].includes(id))) ? packet : null;
+    if (values.jukeboxes && raw && (jukeboxEvidenceBytes += raw.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
@@ -986,7 +1013,7 @@ function main() {
     } else socket.write(frame);
     // write() returning false means queued with backpressure, not an unsent packet.
     if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64'),
-      ...(values.horns ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+      ...(values.horns || values.jukeboxes ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
         payload_sha256: createHash('sha256').update(raw).digest('hex') } : {}) });
     return true;
   }
@@ -1005,9 +1032,11 @@ function main() {
 
   function receiveChat(observation: ChatObservation) {
     state.chats.push(observation.text);
-    if (state.chats.length > 100) state.chats.shift();
+    if (values.jukeboxes) {
+      if (state.chats.length > 4096) throw new Error('Jukebox chat evidence budget exceeded');
+    } else if (state.chats.length > 100) state.chats.shift();
     state.chat_messages.push({ ...observation, sequence: state.packets });
-    if (state.chat_messages.length > 100) state.chat_messages.shift();
+    if (!values.jukeboxes && state.chat_messages.length > 100) state.chat_messages.shift();
     emit({ event: 'chat', ...observation });
   }
 
@@ -1022,10 +1051,12 @@ function main() {
     const reader = new Reader(payload);
     const id = reader.varInt();
     state.packets++;
-    if (values['raw-packets'] && ((phase === 'play' && ([3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id) || (values.horns && [22, 50, 118].includes(id)))) ||
-        (values.horns && phase === 'configuration' && id === 7))) {
+    if (values['raw-packets'] && ((phase === 'play' && ([3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id) || (values.horns && [22, 50, 118].includes(id)) ||
+        (values.jukeboxes && [6, 8, 46, 47, 50, 118].includes(id)))) ||
+        ((values.horns || values.jukeboxes) && phase === 'configuration' && id === 7))) {
+      if (values.jukeboxes && (jukeboxEvidenceBytes += payload.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
       emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64'),
-        ...(values.horns ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+        ...(values.horns || values.jukeboxes ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
           payload_sha256: createHash('sha256').update(payload).digest('hex') } : {}) });
     }
     if (phase === 'login') {
@@ -1054,10 +1085,17 @@ function main() {
           payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
         emit({ event: 'horn_registry', ...state.horn_registry });
       }
+      if (values.jukeboxes && id === ids.config.registry && reader.string() === 'minecraft:jukebox_song') {
+        if (state.jukebox_registry !== null) throw new Error('Duplicate jukebox_song registry packet');
+        state.jukebox_registry = { ...decodeSongRegistryPacket(payload), sequence: state.packets,
+          payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
+        emit({ event: 'jukebox_registry', ...state.jukebox_registry });
+      }
       if (id === ids.config.knownPacks) send(7, varInt(0));
       if (id === ids.config.conduct) send(9);
       if (id === ids.config.finish) {
         if (values.horns && state.horn_registry === null) throw new Error('Missing instrument registry before PLAY');
+        if (values.jukeboxes && state.jukebox_registry === null) throw new Error('Missing jukebox_song registry before PLAY');
         send(3); phase = 'play'; state.phase = phase;
       }
       return;
@@ -1079,7 +1117,7 @@ function main() {
     if (id === ids.play.keepAlive) { send(28, reader.take(8)); state.keepalives++; }
     if (id === ids.play.ping) send(45, reader.take(4));
     if (id === ids.play.login) state.login = true;
-    if (values.horns && id === ids.play.login) {
+    if ((values.horns || values.jukeboxes) && id === ids.play.login) {
       if (state.horn_login_header !== null) throw new Error('Duplicate horn Login header');
       state.horn_login_header = { ...decodeHornLoginHeader(payload), sequence: state.packets,
         payload_sha256: createHash('sha256').update(payload).digest('hex') };
@@ -1114,24 +1152,45 @@ function main() {
       if (values['block-data']) {
         const { signs, decoded_bytes: _bytes, ...chunk } = decodeChunkBlockEntities(payload, 'rich');
         state.chunk_packets.push({ ...chunk, sequence: state.packets });
+        if (values.jukeboxes && state.chunk_packets.length > 128) throw new Error('Jukebox chunk evidence budget exceeded');
         if (state.chunk_packets.length > 128) state.chunk_packets.shift();
         signs.forEach(receiveSign);
       }
     }
-    if (values['block-data'] && (id === 6 || id === 61)) {
+    if (values['block-data'] && ((id === 6 && !values.jukeboxes) || id === 61)) {
       const observation = decodeSignPacket(payload, 'rich');
       if (observation) receiveSign(observation);
     }
+    if (values.jukeboxes && id === 6) {
+      const decoded = decodeJukeboxBlockEntityPacket(payload);
+      if (decoded) {
+        const observation = { ...decoded, sequence: state.packets, payload_base64: payload.toString('base64'),
+          payload_sha256: createHash('sha256').update(payload).digest('hex') };
+        state.jukebox_updates.push(observation);
+        emit({ event: 'jukebox_block_entity', ...observation });
+        if (state.jukebox_updates.length > 256) throw new Error('Jukebox BE evidence budget exceeded');
+      }
+    }
     if (id === ids.play.chunkBatch) send(11, floats(64));
+    if (values.jukeboxes && id === 47) {
+      const observation = { ...decodeJukeboxLevelEvent(payload, state.jukebox_registry!), sequence: state.packets,
+        payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
+      state.jukebox_events.push(observation);
+      emit({ event: 'jukebox_level_event', ...observation });
+      if (state.jukebox_events.length > 256) throw new Error('Jukebox level_event evidence budget exceeded');
+    }
     if (id === ids.play.inventory) state.inventory_packets++;
     if (id === ids.play.slot) state.slot_packets++;
     if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
-      const observation = { ...(values.horns && id !== 60
-        ? decodeHornContainerPacket(payload, state.horn_registry!)
+      const observation = { ...(values.jukeboxes && id !== 60
+        ? decodeJukeboxContainerPacket(payload, state.jukebox_registry!)
+        : values.horns && id !== 60 ? decodeHornContainerPacket(payload, state.horn_registry!)
         : decodeContainerPacket(payload, values['container-metadata'])), sequence: state.packets };
       state.player_inventory = observePlayerInventory(state.player_inventory, observation);
       state.menu_packets.push(observation);
-      if (values.horns) {
+      if (values.jukeboxes) {
+        if (state.menu_packets.length > 1024) throw new Error('Jukebox menu observation budget exceeded');
+      } else if (values.horns) {
         if (state.menu_packets.length > 512) throw new Error('Horn menu observation budget exceeded');
       } else if (state.menu_packets.length > 64) state.menu_packets.shift();
       if (observation.kind === 'open') {
@@ -1149,11 +1208,11 @@ function main() {
       }
       emit({ event: 'menu_packet', ...observation });
     }
-    if ((values['container-metadata'] || values.horns) && id === 119) {
+    if ((values['container-metadata'] || values.horns || values.jukeboxes) && id === 119) {
       const observation = { ...decodeSoundPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
       if (values.horns && observation.registry_id === null) throw new Error('Inline coordinate sound unsupported by horn fixture; raw packet retained');
       state.sounds.push(observation);
-      if (values.horns) {
+      if (values.horns || values.jukeboxes) {
         if (state.sounds.length > 256) throw new Error('Horn coordinate sound observation budget exceeded');
       } else if (state.sounds.length > 64) state.sounds.shift();
       emit({ event: 'sound', ...observation });
@@ -1164,7 +1223,7 @@ function main() {
       if (state.horn_cooldowns.length > 128) throw new Error('Horn cooldown observation budget exceeded');
       emit({ event: 'horn_cooldown', ...observation });
     }
-    if (values.horns && id === 118) {
+    if ((values.horns || values.jukeboxes) && id === 118) {
       const observation = { ...decodeHornEntitySoundPacket(payload), sequence: state.packets, payload_base64: payload.toString('base64') };
       state.horn_entity_sounds.push(observation);
       if (state.horn_entity_sounds.length > 128) throw new Error('Horn entity sound observation budget exceeded');
@@ -1273,6 +1332,20 @@ function main() {
           if (!send(12, varInt(1))) throw new Error('Statistics request was not queued: connection is not writable');
           emit({ id: command.id, ok: true, result: { sent_action: command.action, packet_id: 12,
             action_id: 1, written: true, after_sequence } });
+        } else if (command.action === 'jukebox_select') {
+          if (!values.jukeboxes || state.jukebox_registry === null) throw new Error('Jukebox selection requires the opt-in registry');
+          const after_sequence = state.packets;
+          if (!send(54, encodeJukeboxSelect(command.hotbar))) throw new Error('Jukebox selection was not queued');
+          emit({ id: command.id, ok: true, result: { written: true, hotbar: command.hotbar, after_sequence } });
+        } else if (command.action === 'jukebox_use') {
+          if (!values.jukeboxes || state.jukebox_registry === null) throw new Error('Jukebox use requires the opt-in registry');
+          const after_sequence = state.packets;
+          const sequence = ++interactionSequence;
+          if (!send(66, encodeJukeboxUse(command.hand, command.x, command.y, command.z, sequence))) {
+            throw new Error('Jukebox use was not queued');
+          }
+          emit({ id: command.id, ok: true, result: { written: true, hand: command.hand, after_sequence,
+            packet_id: 66, interaction_sequence: sequence } });
         } else if (command.action === 'horn_select' || command.action === 'horn_use') {
           if (!values.horns || state.horn_registry === null) throw new Error('Horn actions require --horns and the received registry');
           const after_sequence = state.packets;
@@ -1293,8 +1366,9 @@ function main() {
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
         } else if (command.action === 'swap_hands') {
-          if (!values['container-metadata'] && !values.horns) throw new Error('Swap-hands fixture requires --container-metadata or --horns');
-          send(41, encodeSwapHands(++interactionSequence));
+          if (!values['container-metadata'] && !values.horns && !values.jukeboxes) throw new Error('Swap-hands fixture requires --container-metadata, --horns or --jukeboxes');
+          const written = send(41, encodeSwapHands(++interactionSequence));
+          if (values.jukeboxes && !written) throw new Error('Jukebox hand swap was not queued');
           emit({ id: command.id, ok: true, result: { sent_action: command.action, interaction_sequence: interactionSequence } });
         } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap' || command.action === 'sign_update') {
           if (!values['block-data']) throw new Error('Block interaction actions require --block-data');
@@ -1313,10 +1387,12 @@ function main() {
             } else {
               if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
               if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');
-              const payload = values.horns
-                ? encodeHornSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots)
+              const payload = values.jukeboxes
+                ? encodeJukeboxSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots)
+                : values.horns ? encodeHornSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots)
                 : encodeContainerSwap(menu.container_id, menu.state_id, command.slot, command.hotbar, menu.slots);
-              send(18, payload);
+              const written = send(18, payload);
+              if (values.jukeboxes && !written) throw new Error('Jukebox predicted swap was not queued');
             }
           }
           emit({ id: command.id, ok: true, result: { sent_action: command.action,

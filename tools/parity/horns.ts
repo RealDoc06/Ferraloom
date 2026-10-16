@@ -82,7 +82,7 @@ export function referenceName(registry: HornRegistry, reference: number): HornNa
 
 /** Dedicated small reader: identifiers/fixture text are ASCII, NBT is limited to
  * the scalar/compound types actually used by these named instrument profiles. */
-class HornReader {
+export class HornReader {
   offset = 0;
   nodes = 0;
   readonly buffer: Buffer;

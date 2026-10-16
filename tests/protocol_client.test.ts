@@ -7,6 +7,9 @@ import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCom
 import { HORN_NAMES, crc32c, decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySoundPacket, decodeHornLoginHeader, decodeHornRegistryPacket,
   encodeHornSelect, encodeHornStackHash, encodeHornSwap, encodeHornUse, hornRegistryEntries,
   instrumentHashPreimage, referenceName } from '../tools/parity/horns.ts';
+import { SONG_PROFILES, JUKEBOX_ITEM, decodeSongRegistryPacket, decodeJukeboxContainerPacket,
+  songRegistryEntries, songName, songReference, songHashPreimage, encodeJukeboxStackHash,
+  encodeJukeboxSwap, encodeJukeboxUse, decodeJukeboxBlockEntityPacket, decodeJukeboxLevelEvent } from '../tools/parity/jukeboxes.ts';
 
 test('probe version matches the repository compatibility target', () => {
   const target: unknown = JSON.parse(readFileSync(new URL('../compatibility/target.json', import.meta.url), 'utf8'));
@@ -535,4 +538,171 @@ test('Java masking and UTF-8 replacement preserve unusual accepted values withou
     const packet = Buffer.concat([Buffer.from([2, 0, 1, 1, 1, 0]), varInt(name.length), name, varInt(0)]);
     assert.deepEqual(decodeCommandTree(packet).roots, ['\uFFFD']);
   }
+});
+
+// Synthetic codec inputs only. No numeric Java hash or actual packet golden.
+function songProfiles() {
+  return Object.entries(SONG_PROFILES).map(([name, [seconds, comparator]]) => ({
+    identifier: `minecraft:${name}`, data: { sound_event: `minecraft:music_disc.${name}`,
+      length_in_seconds: seconds, comparator_output: comparator,
+      description: { translate: `jukebox_song.minecraft.${name}` } },
+  }));
+}
+
+function songRegistryPacket() {
+  return Buffer.concat([varInt(7), wireString('minecraft:jukebox_song'), varInt(22),
+    ...songProfiles().reverse().map(entry => Buffer.concat([wireString(entry.identifier), Buffer.from([1]), hornNbt(entry.data)]))]);
+}
+
+test('jukebox registry binds all 22 identities to the received order and refuses direct holders', () => {
+  const payload = songRegistryPacket(), registry = decodeSongRegistryPacket(payload);
+  assert.equal(registry.decoded_bytes, payload.length);
+  for (const [index, profile] of songProfiles().reverse().entries()) {
+    assert.equal(songReference(registry, index + 1), profile.identifier);
+    assert.equal(registry.entries[index]?.registry_id, index);
+  }
+  for (const reference of [0, -1, 23, 1.1, Infinity, NaN]) assert.throws(() => songReference(registry, reference));
+  for (let end = 0; end < payload.length; end++) assert.throws(() => decodeSongRegistryPacket(payload.subarray(0, end)));
+  assert.throws(() => decodeSongRegistryPacket(Buffer.concat([payload, Buffer.from([0])])));
+  assert.throws(() => decodeSongRegistryPacket(Buffer.alloc(65537)));
+  const header = 1 + wireString('minecraft:jukebox_song').length;
+  for (const count of [0, 21, 23, 255]) {
+    const broken = Buffer.from(payload); broken[header] = count;
+    assert.throws(() => decodeSongRegistryPacket(broken));
+  }
+  const present = header + 1 + wireString(songProfiles().reverse()[0]!.identifier).length;
+  for (const byte of [0, 2]) {
+    const broken = Buffer.from(payload); broken[present] = byte;
+    assert.throws(() => decodeSongRegistryPacket(broken));
+  }
+});
+
+test('jukebox profiles reject custom fields, namespaces, duplicate names and nonfinite lengths', () => {
+  const profiles = songProfiles(), first = profiles[0]!;
+  assert.throws(() => songRegistryEntries(profiles.slice(1)));
+  assert.throws(() => songRegistryEntries([...profiles.slice(1), profiles[1]!]));
+  for (const identifier of ['test:11', 'minecraft:missing', '11', ':11']) {
+    assert.throws(() => songRegistryEntries([{ ...first, identifier }, ...profiles.slice(1)]));
+  }
+  for (const change of [{ length_in_seconds: NaN }, { length_in_seconds: Infinity }, { length_in_seconds: -1 },
+    { length_in_seconds: 0 }, { comparator_output: 16 }, { comparator_output: 1.1 }, { extra: 0 },
+    { sound_event: 'minecraft:music_disc.cat' }, { description: { text: 'replacement' } }]) {
+    assert.throws(() => songRegistryEntries([{ ...first, data: { ...first.data, ...change } }, ...profiles.slice(1)]));
+  }
+  const duplicate = Buffer.concat([varInt(7), wireString('minecraft:jukebox_song'), varInt(22),
+    wireString(first.identifier), Buffer.from([1]), Buffer.from('0a0300016100000000030001610000000000', 'hex')]);
+  assert.throws(() => decodeSongRegistryPacket(duplicate), /Duplicate/u);
+  const payload = songRegistryPacket(), marker = Buffer.from('\x05\0\x11length_in_seconds', 'latin1');
+  const offset = payload.indexOf(marker) + marker.length;
+  assert.ok(offset >= marker.length);
+  for (const value of [Infinity, -Infinity, NaN]) {
+    const broken = Buffer.from(payload); broken.writeFloatBE(value, offset);
+    assert.throws(() => decodeSongRegistryPacket(broken), /Nonfinite/u);
+  }
+});
+
+test('jukebox Identifier aliases hash as canonical strings, opaque controls cannot be predicted', () => {
+  const preimage = songHashPreimage('11');
+  assert.equal(preimage.toString('hex'), '0c0c0000006d0069006e006500630072006100660074003a0031003100');
+  assert.deepEqual(songHashPreimage(':11'), preimage);
+  assert.equal(songName('cat'), 'minecraft:cat');
+  for (const name of [null, { song: 'minecraft:11' }, 'test:11', 'minecraft:no', 'Minecraft:11']) {
+    assert.throws(() => songHashPreimage(name));
+  }
+  const disc = { item_id: JUKEBOX_ITEM, count: 1 };
+  assert.deepEqual(encodeJukeboxStackHash(null), Buffer.from([0]));
+  assert.deepEqual(encodeJukeboxStackHash(disc), Buffer.concat([Buffer.from([1]), varInt(JUKEBOX_ITEM), Buffer.from([1, 0, 0])]));
+  assert.throws(() => encodeJukeboxStackHash({ ...disc, components: { 'minecraft:custom_data': { jukebox_playable: 'minecraft:cat' } } }));
+  assert.throws(() => encodeJukeboxStackHash({ ...disc, components: { 'minecraft:jukebox_playable': 'minecraft:cat' }, removed_components: ['minecraft:jukebox_playable'] }));
+  for (const count of [0, 2, NaN]) assert.throws(() => encodeJukeboxStackHash({ ...disc, count }));
+});
+
+test('jukebox inventory reads reference patches, default elision and removal without a generic decoder', () => {
+  const registry = decodeSongRegistryPacket(songRegistryPacket());
+  const packet = (patch: Buffer) => Buffer.concat([Buffer.from([20, 0, 1, 0, 36, 1]), varInt(JUKEBOX_ITEM), patch]);
+  const explicit = packet(Buffer.from([1, 0, 66, 1]));
+  const decoded = decodeJukeboxContainerPacket(explicit, registry);
+  assert.equal(decoded.kind, 'slot');
+  if (decoded.kind !== 'slot') throw new Error('Expected slot');
+  assert.deepEqual(decoded.stack, { item_id: JUKEBOX_ITEM, count: 1, components: { 'minecraft:jukebox_playable': songReference(registry, 1) } });
+  for (const end of [0, 1, 6, explicit.length - 1]) assert.throws(() => decodeJukeboxContainerPacket(explicit.subarray(0, end), registry));
+  for (const patch of [Buffer.from([1, 0, 66, 0]), Buffer.from([1, 0, 66, 23]), Buffer.from([1, 0, 99]),
+    Buffer.from([2, 0, 66, 1, 66, 2]), Buffer.from([1, 1, 66, 1, 66]), Buffer.from([0, 1, 63])]) {
+    assert.throws(() => decodeJukeboxContainerPacket(packet(patch), registry));
+  }
+  assert.throws(() => decodeContainerPacket(explicit)); // Ordinary decoder remains strict.
+  const removed = decodeJukeboxContainerPacket(packet(Buffer.from([0, 1, 66])), registry);
+  assert.ok(removed.kind === 'slot' && removed.stack?.removed_components?.[0] === 'minecraft:jukebox_playable');
+  const slots = Array.from({ length: 63 }, (_, index) => index === 5 ? decoded.stack : null);
+  const before = structuredClone(slots);
+  encodeJukeboxSwap(1, 1, 5, 0, slots);
+  assert.deepEqual(slots, before);
+  for (const slot of [-1, 27, 1.5]) assert.throws(() => encodeJukeboxSwap(1, 1, slot, 0, slots));
+  assert.deepEqual(parseCommand({ id: 1, action: 'jukebox_select', hotbar: 8 }), { id: 1, action: 'jukebox_select', hotbar: 8 });
+  assert.throws(() => parseCommand({ id: 1, action: 'jukebox_select', hotbar: 9 }));
+});
+
+test('jukebox level_event uses fixed Int32 and raw song IDs, never coordinate/entity sound', () => {
+  const registry = decodeSongRegistryPacket(songRegistryPacket());
+  // Synthetic 1010, packed (-1,200,1), raw ID0, local broadcast.
+  const bytes = Buffer.from('2f000003f2ffffffc0000010c80000000000', 'hex');
+  const observation = decodeJukeboxLevelEvent(bytes, registry);
+  assert.deepEqual(observation, { packet_id: 47, event: 1010, x: -1, y: 200, z: 1,
+    data: 0, global_event: false, song: songReference(registry, 1), payload_bytes: 18, decoded_bytes: 18 });
+  for (let end = 0; end < bytes.length; end++) assert.throws(() => decodeJukeboxLevelEvent(bytes.subarray(0, end), registry));
+  for (const id of [118, 119]) {
+    const sound = Buffer.from(bytes); sound[0] = id;
+    assert.throws(() => decodeJukeboxLevelEvent(sound, registry));
+  }
+  for (const data of [-1, 22, 2147483647]) {
+    const broken = Buffer.from(bytes); broken.writeInt32BE(data, 13);
+    assert.throws(() => decodeJukeboxLevelEvent(broken, registry));
+  }
+  const boolean = Buffer.from(bytes); boolean[17] = 2;
+  assert.throws(() => decodeJukeboxLevelEvent(boolean, registry));
+  const stop = Buffer.from(bytes); stop.writeInt32BE(1011, 1);
+  assert.equal(decodeJukeboxLevelEvent(stop, registry).song, undefined);
+  assert.throws(() => decodeJukeboxLevelEvent(Buffer.concat([bytes, Buffer.from([0])]), registry));
+});
+
+test('jukebox UseItemOn encodes actual hand and bounded anonymous hit codec fields', () => {
+  // Synthetic source-derived bytes, not a captured Java packet.
+  const expected = Buffer.from('00ffffffc0000010c8013f0000003f8000003f00000000008001', 'hex');
+  assert.deepEqual(encodeJukeboxUse(0, -1, 200, 1, 128), expected);
+  const offhand = Buffer.from(expected); offhand[0] = 1;
+  assert.deepEqual(encodeJukeboxUse(1, -1, 200, 1, 128), offhand);
+  const command = { id: 1, action: 'jukebox_use', hand: 1, x: -1, y: 200, z: 1 };
+  assert.deepEqual(parseCommand(command), command);
+  for (const change of [{ hand: 2 }, { hand: '1' }, { x: 33554432 }, { x: -33554433 },
+    { y: 2048 }, { y: -2049 }, { z: NaN }, { z: Infinity }, { z: 0.5 }]) {
+    assert.throws(() => parseCommand({ ...command, ...change }));
+  }
+  for (const sequence of [-1, 1.5, Infinity, 2147483648]) {
+    assert.throws(() => encodeJukeboxUse(0, 0, 0, 0, sequence));
+  }
+});
+
+test('jukebox live BE requires compound and preserves leaked signed elapsed before privacy assertions', () => {
+  // Synthetic BEData at (-1,200,1), raw BE type4, empty unnamed compound.
+  const header = Buffer.from('06ffffffc0000010c804', 'hex');
+  const empty = Buffer.concat([header, Buffer.from([10, 0])]);
+  assert.deepEqual(decodeJukeboxBlockEntityPacket(empty), { packet_id: 6, x: -1, y: 200, z: 1,
+    block_entity_type: 4, data: {}, payload_bytes: 12, decoded_bytes: 12 });
+  for (let end = 0; end < empty.length; end++) {
+    assert.throws(() => decodeJukeboxBlockEntityPacket(empty.subarray(0, end)));
+  }
+  for (const tag of [Buffer.from([0]), Buffer.from([3, 0, 0, 0, 0]), Buffer.from([10, 0, 0])]) {
+    assert.throws(() => decodeJukeboxBlockEntityPacket(Buffer.concat([header, tag])));
+  }
+  const elapsed = Buffer.concat([Buffer.from([4, 0, 24]), Buffer.from('ticks_since_song_started'), Buffer.from('ffffffffffffffff', 'hex')]);
+  const leaked = Buffer.concat([header, Buffer.from([10]), elapsed, Buffer.from([0])]);
+  assert.deepEqual(decodeJukeboxBlockEntityPacket(leaked)?.data,
+    { ticks_since_song_started: { nbt_type: 'Long', value: '-1' } });
+  assert.throws(() => decodeJukeboxBlockEntityPacket(Buffer.concat([header, Buffer.from([10]), elapsed, elapsed, Buffer.from([0])])));
+  assert.throws(() => decodeJukeboxBlockEntityPacket(Buffer.alloc(65537)));
+  let deep = hornNbt({ hidden: 'private' });
+  for (let level = 0; level < 5; level++) deep = Buffer.concat([Buffer.from([10, 10, 0, 1, 120]), deep.subarray(1), Buffer.from([0])]);
+  assert.throws(() => decodeJukeboxBlockEntityPacket(Buffer.concat([header, deep])));
+  const other = Buffer.from(empty); other[9] = 1;
+  assert.equal(decodeJukeboxBlockEntityPacket(other), null);
 });

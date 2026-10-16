@@ -45,12 +45,13 @@ class Client:
 
     def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client",
                  name: str = NAME, container_metadata: bool = False, raw_packets: bool = False,
-                 strict_offline_chat: bool = False, horns: bool = False):
+                 strict_offline_chat: bool = False, horns: bool = False, jukeboxes: bool = False):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", log_name):
             raise ValueError("Invalid client log name")
         if not re.fullmatch(r"[A-Za-z0-9_]{1,16}", name, flags=re.ASCII):
             raise ValueError("Client name must be 1..16 ASCII username characters")
         self.name = name
+        self.jukeboxes = jukeboxes
         self.expected_disconnect: dict | None = None
         self.forced_close = False
         self.sequence = 0
@@ -64,9 +65,10 @@ class Client:
             self.process = subprocess.Popen(
                 ["node", str(ROOT / "tools/parity/client.ts"), "--host", "127.0.0.1",
                  "--port", str(server.port), "--name", name,
-                 *(["--block-data"] if block_data or container_metadata or horns else []),
+                 *(["--block-data"] if block_data or container_metadata or horns or jukeboxes else []),
                  *(["--container-metadata"] if container_metadata else []),
                  *(["--horns"] if horns else []),
+                 *(["--jukeboxes"] if jukeboxes else []),
                  *(["--strict-offline-chat"] if strict_offline_chat else []),
                  *(["--raw-packets"] if raw_packets else [])],
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
@@ -116,7 +118,10 @@ class Client:
             self.pending[message["id"]] = message
         else:
             self.events.append(message)
-            self.events = self.events[-100:]
+            if self.jukeboxes:
+                protocol.require(len(self.events) <= 16384, "Jukebox IPC evidence budget exceeded")
+            else:
+                self.events = self.events[-100:]
         return message
 
     def watch_statistic(self, category_id: int, statistic_id: int) -> None:
