@@ -9,7 +9,7 @@ use super::{
     LevelChannel,
 };
 use crate::chunk::io::Dirtiable;
-use crate::level::{Level, LoadedChunkChange, SyncChunk};
+use crate::level::{ChunkUnavailable, Level, LoadedChunkChange, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
@@ -546,10 +546,12 @@ impl GenerationSchedule {
     /// Must be called after every `receive_chunk` call.
     fn check_waiting_tasks(&mut self) {
         if self.waiting_for_chunks.is_empty() {
+            Self::notify_failed_read_dependents(&self.graph, &self.chunk_map, &self.listener);
             return;
         }
 
         Self::hold_failed_read_waiters(&mut self.graph, &self.chunk_map, &self.waiting_for_chunks);
+        Self::notify_failed_read_dependents(&self.graph, &self.chunk_map, &self.listener);
 
         let mut now_ready: Vec<NodeKey> = Vec::new();
         let mut stale: Vec<NodeKey> = Vec::new();
@@ -656,6 +658,54 @@ impl GenerationSchedule {
                     if edge.is_null() {
                         graph.add_edge(holder.occupied, task);
                     }
+                }
+            }
+        }
+    }
+
+    /// Resolve Full waiters whose actual dependency chain reaches a retained failed fence.
+    /// This only notifies clients; the DAG and its strict idle validator remain unchanged.
+    fn notify_failed_read_dependents(
+        graph: &DAG,
+        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
+        listener: &ChunkListener,
+    ) {
+        if !listener.has_failures() {
+            return;
+        }
+        let mut visited = HashSetType::default();
+        for (pos, holder) in chunk_map.iter().filter(|(_, holder)| holder.read_failed) {
+            let Some(error) = listener.failure(*pos) else {
+                continue;
+            };
+            let mut pending = vec![holder.occupied];
+            while let Some(key) = pending.pop() {
+                if !visited.insert(key) {
+                    continue;
+                }
+                let Some(node) = graph.nodes.get(key) else {
+                    continue;
+                };
+                // A pending disk read may still supply Full terrain directly,
+                // bypassing its speculative generation dependencies. Only a
+                // completed, incomplete read can be terminally blocked by them.
+                if node.stage != StagedChunkEnum::None
+                    && chunk_map.get(&node.pos).is_some_and(|holder| {
+                        !holder.read_failed
+                            && (holder.current_stage == StagedChunkEnum::None
+                                || holder.current_stage >= node.stage)
+                    })
+                {
+                    continue;
+                }
+                if node.stage == StagedChunkEnum::Full {
+                    listener.fail_chunk(node.pos, error.clone());
+                }
+                let mut edge = node.edge;
+                while !edge.is_null() {
+                    let link = &graph.edges[edge];
+                    pending.push(link.to);
+                    edge = link.next;
                 }
             }
         }
@@ -920,6 +970,8 @@ impl GenerationSchedule {
 
         self.last_level = new_level.1;
         self.queue_dirty = true;
+        // New tickets can add dependencies after the original refusal notification.
+        Self::notify_failed_read_dependents(&self.graph, &self.chunk_map, &self.listener);
         true
     }
 
@@ -1429,7 +1481,15 @@ impl GenerationSchedule {
                     .get_mut(&pos)
                     .expect("failed read holder exists");
                 Self::finish_failed_read(&mut self.graph, holder);
+                self.listener.fail_chunk(
+                    pos,
+                    ChunkUnavailable::ReadFailed {
+                        position: pos,
+                        reason: error.into(),
+                    },
+                );
                 self.check_waiting_tasks();
+                self.chunk_activation_changed.notify_waiters();
             }
             RecvChunk::GenerationFailure {
                 pos: fail_pos,

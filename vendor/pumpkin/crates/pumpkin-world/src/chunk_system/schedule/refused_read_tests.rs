@@ -152,3 +152,69 @@ fn healthy_idle_graph_still_rejects_any_leftover_task() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn failed_dependency_notifies_full_waiters_after_read_but_keeps_disk_full_possible() {
+    let (mut graph, mut chunk_map, read) = failed_read_graph();
+    let failed = ChunkPos::new(0, 0);
+    let dependent = ChunkPos::new(1, 0);
+    let healthy = ChunkPos::new(2, 0);
+    let full = graph
+        .nodes
+        .insert(Node::new(dependent, StagedChunkEnum::Full));
+    graph.add_edge(read, full);
+    let mut holder = ChunkHolder::default();
+    holder.tasks[StagedChunkEnum::Full as usize] = full;
+    chunk_map.insert(dependent, holder);
+    let healthy_full = graph
+        .nodes
+        .insert(Node::new(healthy, StagedChunkEnum::Full));
+    graph.add_edge(read, healthy_full);
+    let mut healthy_holder = ChunkHolder::default();
+    healthy_holder.tasks[StagedChunkEnum::Full as usize] = healthy_full;
+    chunk_map.insert(healthy, healthy_holder);
+    let listener = ChunkListener::new();
+    let healthy_waiter = listener.add_single_chunk_listener(healthy);
+    let error = ChunkUnavailable::ReadFailed {
+        position: failed,
+        reason: "refused dependency".into(),
+    };
+    listener.fail_chunk(failed, error.clone());
+    let early = listener.add_single_chunk_listener(dependent);
+    GenerationSchedule::notify_failed_read_dependents(&graph, &chunk_map, &listener);
+    // A Full disk read could still bypass the speculative generation chain.
+    assert!(listener.failure(dependent).is_none());
+    assert_eq!(listener.pending_count(), 2);
+    // This neighbor really arrives as Full, so its speculative dependency cannot
+    // turn a successful disk load into an unavailable-chunk notification.
+    chunk_map.get_mut(&healthy).unwrap().current_stage = StagedChunkEnum::Full;
+    let healthy_chunk = crate::chunk::ChunkData::empty_sync(healthy.x, healthy.y);
+    listener.process_new_chunk(healthy, &healthy_chunk);
+    assert!(Arc::ptr_eq(
+        &tokio::time::timeout(Duration::from_secs(1), healthy_waiter)
+            .await
+            .unwrap()
+            .unwrap(),
+        &healthy_chunk
+    ));
+    chunk_map.get_mut(&dependent).unwrap().current_stage = StagedChunkEnum::Empty;
+    GenerationSchedule::notify_failed_read_dependents(&graph, &chunk_map, &listener);
+    let late = listener.add_single_chunk_listener(dependent);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(1), early)
+            .await
+            .unwrap()
+            .err(),
+        Some(error.clone())
+    );
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(1), late)
+            .await
+            .unwrap()
+            .err(),
+        Some(error)
+    );
+    assert!(listener.failure(healthy).is_none());
+    assert!(graph.nodes.contains_key(chunk_map[&failed].occupied));
+    assert_eq!(graph.nodes[full].in_degree, 1);
+}

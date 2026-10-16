@@ -49,9 +49,38 @@ use tokio::{
 use tokio_util::task::TaskTracker;
 
 pub use crate::chunk_system::activation::ChunkActivationDemand;
+pub use crate::chunk_system::chunk_listener::ChunkUnavailable;
 
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
+
+/// Own exactly one fetch ticket, including when its waiting future is cancelled.
+struct ChunkFetchTicket<'a> {
+    loading: &'a Mutex<ChunkLoading>,
+    pos: Vector2<i32>,
+}
+
+impl<'a> ChunkFetchTicket<'a> {
+    fn new(loading: &'a Mutex<ChunkLoading>, pos: Vector2<i32>) -> Self {
+        let mut lock = loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+        lock.send_change();
+        Self { loading, pos }
+    }
+}
+
+impl Drop for ChunkFetchTicket<'_> {
+    fn drop(&mut self) {
+        let mut lock = self
+            .loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        lock.remove_ticket(self.pos, ChunkLoading::FULL_CHUNK_LEVEL);
+        lock.send_change();
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadedChunkChange {
@@ -739,45 +768,40 @@ impl Level {
         self: &Arc<Self>,
         pos: Vector2<i32>,
         f: F,
-    ) -> R {
+    ) -> Result<R, ChunkUnavailable> {
         // Check if already in memory
         if let Some(res) = self.read_chunk_sync(&pos, &f) {
-            return res;
+            return Ok(res);
         }
-        let chunk = self.fetch_chunk(pos).await;
-        f(&chunk)
+        let chunk = self.fetch_chunk(pos).await?;
+        Ok(f(&chunk))
     }
 
     pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
         std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }
 
-    async fn fetch_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
+    async fn fetch_chunk(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+    ) -> Result<SyncChunk, ChunkUnavailable> {
+        if let Some(error) = self.chunk_listener.failure(pos) {
+            return Err(error);
+        }
+        if self.cancel_token.is_cancelled() || self.shut_down_chunk_system.load(Ordering::Relaxed) {
+            return Err(ChunkUnavailable::Closed { position: pos });
+        }
+        let _ticket = ChunkFetchTicket::new(&self.chunk_loading, pos);
         let recv = self.chunk_listener.add_single_chunk_listener(pos);
-
-        {
-            let mut lock = self
-                .chunk_loading
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
-            lock.send_change();
-        };
-
-        let chunk = recv
-            .await
-            .unwrap_or_else(|_| ChunkData::empty_sync(pos.x, pos.y));
-
-        {
-            let mut lock = self
-                .chunk_loading
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
-            lock.send_change();
-        };
-
-        chunk
+        // Publication may have happened between the first lookup and registration.
+        // The fetch ticket now retains the chunk; failure races are handled by the listener lock.
+        if let Some(chunk) = self.read_chunk_sync(&pos, Clone::clone) {
+            return Ok(chunk);
+        }
+        tokio::select! {
+            result = recv => result,
+            () = self.cancel_token.cancelled() => Err(ChunkUnavailable::Closed { position: pos }),
+        }
     }
 
     async fn load_single_entity_chunk(
@@ -1282,7 +1306,7 @@ mod tests {
             .unwrap();
         drop(region);
         let before = std::fs::read(&path).unwrap();
-        let mut published = level.chunk_listener.add_single_chunk_listener(position);
+        let published = level.chunk_listener.add_single_chunk_listener(position);
         {
             let mut loading = level.chunk_loading.lock().unwrap();
             // The weakest ticket requests only this chunk, without a Full halo.
@@ -1306,6 +1330,28 @@ mod tests {
                 panic!("saved container read must report a fatal refusal: {error}");
             }
         };
+
+        let notification = refused_region_stage("existing refusal listener", published)
+            .await
+            .err()
+            .unwrap();
+        assert!(
+            matches!(&notification, ChunkUnavailable::ReadFailed { position: failed, reason }
+            if *failed == position && reason.as_ref() == failure)
+        );
+        let late = refused_region_stage(
+            "late public chunk fetch",
+            level.get_or_fetch_chunk(position, |_| {
+                panic!("refused terrain must never reach a caller callback")
+            }),
+        )
+        .await;
+        assert_eq!(late.err(), Some(notification));
+        assert_eq!(level.chunk_listener.pending_count(), 0);
+        assert_eq!(
+            level.chunk_loading.lock().unwrap().ticket[&position],
+            vec![ChunkLoading::MAX_LEVEL - 1]
+        );
 
         // Existing policy still completes independently attempted healthy writes.
         // Use another region so the refused source region can be compared whole.
@@ -1342,10 +1388,6 @@ mod tests {
         assert_eq!(shutdown, Err(failure));
         assert!(unavailable_after_flush);
         assert!(!level.loaded_chunks.contains_key(&position));
-        assert!(matches!(
-            published.try_recv(),
-            Err(oneshot::error::TryRecvError::Empty)
-        ));
         // Core receives no admitted chunk to materialize, migrate or republish.
         assert!(
             !level
@@ -1382,6 +1424,93 @@ mod tests {
             saved.section.get_block_absolute_y(3, 64, 4),
             Some(Block::DIAMOND_BLOCK.default_state.id)
         );
+    }
+
+    #[tokio::test]
+    async fn public_fetch_reports_first_and_late_refusal_without_invoking_callbacks() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        // Keep the Full request's whole halo inside this refused region.
+        let position = Vector2::new(16, 16);
+        let path = level.level_folder.region_folder.join("r.0.0.mca");
+        let source = b"refused region, preserve these exact bytes";
+        std::fs::write(&path, source).unwrap();
+        let called = AtomicBool::new(false);
+        let first = refused_region_stage(
+            "first public fetch",
+            level.get_or_fetch_chunk(position, |_| {
+                called.store(true, Ordering::Relaxed);
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(&first, ChunkUnavailable::ReadFailed { .. }));
+        let late = refused_region_stage(
+            "late public fetch",
+            level.get_or_fetch_chunk(position, |_| {
+                called.store(true, Ordering::Relaxed);
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(late, first);
+        assert!(!called.load(Ordering::Relaxed));
+        assert_eq!(level.chunk_listener.pending_count(), 0);
+        assert!(level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(!level.is_chunk_loaded(&position));
+        assert!(
+            refused_region_stage("refused fetch shutdown", level.shutdown())
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read(path).unwrap(), source);
+    }
+
+    #[tokio::test]
+    async fn cancelled_public_fetch_releases_only_its_own_ticket_and_listener() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let position = Vector2::new(0, 0);
+        {
+            let mut loading = level.chunk_loading.lock().unwrap();
+            loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
+            loading.send_change();
+        }
+        // This current-thread runtime cannot run the IO tasks before our first yield.
+        // Poll the real public fetch, then cancel it while its registration is pending.
+        let mut fetch = Box::pin(level.get_or_fetch_chunk(position, |_| ()));
+        assert!(futures::poll!(&mut fetch).is_pending());
+        assert_eq!(level.chunk_listener.pending_count(), 1);
+        assert_eq!(
+            level.chunk_loading.lock().unwrap().ticket[&position].len(),
+            2
+        );
+        drop(fetch);
+        assert_eq!(level.chunk_listener.pending_count(), 0);
+        assert_eq!(
+            level.chunk_loading.lock().unwrap().ticket[&position],
+            vec![ChunkLoading::FULL_CHUNK_LEVEL]
+        );
+        {
+            let mut loading = level.chunk_loading.lock().unwrap();
+            loading.remove_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
+            loading.send_change();
+            assert!(loading.ticket.is_empty());
+            assert!(loading.pos_level.is_empty());
+        }
+        refused_region_stage("cancelled fetch shutdown", level.shutdown())
+            .await
+            .unwrap();
     }
 
     fn entity_chunk(position: Vector2<i32>, marker: i32) -> SyncEntityChunk {
