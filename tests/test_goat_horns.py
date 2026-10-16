@@ -1,6 +1,7 @@
 """Focused source-helper tests. No server execution or Java hash observations."""
 from copy import deepcopy
 from pathlib import Path
+from unittest.mock import patch
 import sys
 import unittest
 
@@ -14,6 +15,25 @@ def inventory(*entries: dict) -> dict:
 
 
 class HornCampaignTests(unittest.TestCase):
+    def test_active_offhand_uses_current_equipment_shape_and_keeps_exact_field_checks(self):
+        value = horns.stack(horns.SING)
+        for slot, path, field_count in ((-106, "equipment.offhand", len(value)),
+                                        (3, "Inventory[{Slot:3b}]", len(value) + 1)):
+            with self.subTest(slot=slot), patch.object(horns, "typed_predicate") as predicate, \
+                    patch.object(horns, "command_result") as result:
+                observed = horns.live_active_stack(object(), slot, value)
+                self.assertEqual(observed["nbt_path"], path)
+                self.assertEqual(result.call_args_list[0].args[1:],
+                                 (f"data get entity {horns.NAME} {path}", field_count))
+                self.assertEqual(result.call_args_list[1].args[1:],
+                                 (f"data get entity {horns.NAME} {path}.components", 1))
+                query = predicate.call_args.args[1]
+                if slot == -106:
+                    self.assertIn('"equipment":{"offhand":', query)
+                    self.assertNotIn("Slot", query)
+                else:
+                    self.assertIn('"Inventory":[{"Slot":3b', query)
+
     def test_campaign_requires_exact_four_boot_order_and_no_cleanup_errors(self):
         for completed in ([], list(horns.BOOTS[:3]), list(reversed(horns.BOOTS)),
                           [*horns.BOOTS, horns.BOOTS[-1]], [horns.BOOTS[0]] * 4):

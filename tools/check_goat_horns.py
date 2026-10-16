@@ -243,15 +243,24 @@ def live(server, retained: bool) -> dict:
 
 def live_active_stack(server, slot: int, value: dict) -> dict:
     """Count fields as well as matching typed values, so expiry cannot add a patch."""
-    path = f'Inventory[{{Slot:{slot}b}}]'
-    predicate = typed_predicate(server, f'if data entity {NAME} {{Inventory:[{typed_snbt({"Slot": atom("Byte", slot), **value})}]}}')
-    fields = command_result(server, f"data get entity {NAME} {path}", len(value) + 1)
+    if slot == -106:
+        # 26.3 saves offhand equipment separately from slotted Inventory entries.
+        path, expected = "equipment.offhand", {"equipment": {"offhand": value}}
+        count = len(value)
+    else:
+        require(type(slot) is int and 0 <= slot <= 8, "Expected a hotbar slot or offhand")
+        path = f'Inventory[{{Slot:{slot}b}}]'
+        expected = {"Inventory": {"nbt_type": "List", "element_type": 10,
+                                  "value": [{"Slot": atom("Byte", slot), **value}]}}
+        count = len(value) + 1
+    predicate = typed_predicate(server, f'if data entity {NAME} {typed_snbt(expected)}')
+    fields = command_result(server, f"data get entity {NAME} {path}", count)
     components = value.get("components")
     if components:
         patch = command_result(server, f"data get entity {NAME} {path}.components", len(components))
     else:
         patch = typed_predicate(server, f"unless data entity {NAME} {path}.components")
-    return {"predicate": predicate, "field_count": fields, "patch": patch}
+    return {"predicate": predicate, "field_count": fields, "patch": patch, "nbt_path": path}
 
 
 def fence(server, clients: list[Client]) -> dict:
