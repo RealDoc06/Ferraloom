@@ -2401,12 +2401,29 @@ impl DataComponentCodec<Self> for BlockEntityDataImpl {
 
 impl DataComponentCodec<Self> for InstrumentImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        // ByteBufCodecs$33: reference holders are synced-registry ID + 1.
+        // Configuration rejects instrument profiles differing from this table.
+        seq.write_var_int(&VarInt(self.instrument.id() as i32 + 1))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let holder = seq.get_var_int()?.0;
+        if holder == 0 {
+            return Err(ReadingError::Message(
+                "Inline instrument holders are unsupported".into(),
+            ));
+        }
+        let instrument = holder
+            .checked_sub(1)
+            .and_then(|id| u32::try_from(id).ok())
+            .and_then(|id| {
+                pumpkin_data::instrument::Instrument::all()
+                    .iter()
+                    .find(|instrument| instrument.id() == id)
+            })
+            .copied()
+            .ok_or_else(|| ReadingError::Message("Unknown instrument registry reference".into()))?;
+        Ok(Self { instrument })
     }
 }
 
@@ -2824,6 +2841,126 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn instrument_item_wire_references_match_sent_registry_with_following_component() {
+        use crate::{
+            ClientPacket, codec::item_stack_seralizer::ItemStackSerializer,
+            java::client::config::CRegistryData,
+        };
+        use pumpkin_data::{
+            instrument::Instrument, item::Item, item_stack::ItemStack, registry::Registry,
+        };
+
+        let version = JavaMinecraftVersion::V_26_3;
+        let registry = Registry::get_synced(version)
+            .into_iter()
+            .find(|registry| registry.registry_id == "minecraft:instrument")
+            .unwrap();
+        let mut config = Vec::new();
+        CRegistryData::new(&registry.registry_id, &registry.registry_entries)
+            .write_packet_data(&mut config, &version)
+            .unwrap();
+        let mut reader = config.as_slice();
+        assert_eq!(reader.get_str().unwrap().as_ref(), "minecraft:instrument");
+        assert_eq!(reader.get_var_int().unwrap().0, 8);
+        let mut sent_names = Vec::new();
+        for _ in 0..8 {
+            sent_names.push(reader.get_str().unwrap());
+            assert!(reader.get_bool().unwrap());
+            assert!(reader.get_nbt_with_version(&version).unwrap().is_some());
+        }
+        assert!(reader.is_empty());
+
+        for instrument in Instrument::all() {
+            let stack = ItemStack::new_with_component(
+                1,
+                &Item::GOAT_HORN,
+                vec![
+                    (
+                        DataComponent::Instrument,
+                        Some(
+                            InstrumentImpl {
+                                instrument: *instrument,
+                            }
+                            .to_dyn(),
+                        ),
+                    ),
+                    (
+                        DataComponent::Damage,
+                        Some(DamageImpl { damage: 300 }.to_dyn()),
+                    ),
+                ],
+            );
+            let mut bytes = Vec::new();
+            ItemStackSerializer(Cow::Borrowed(&stack))
+                .write_with_version(&mut bytes, &version)
+                .unwrap();
+            let mut reader = bytes.as_slice();
+            assert_eq!(reader.get_var_int().unwrap().0, 1);
+            assert_eq!(
+                reader.get_var_int().unwrap().0,
+                i32::from(Item::GOAT_HORN.id)
+            );
+            assert_eq!(reader.get_var_int().unwrap().0, 2);
+            assert_eq!(reader.get_var_int().unwrap().0, 0);
+            assert_eq!(
+                reader.get_var_int().unwrap().0,
+                i32::from(DataComponent::Instrument.to_id())
+            );
+            // Resolve against the packet producer's actual synchronized entries,
+            // never the official bootstrap order or a guessed Ponder/Sing ID.
+            let mut reference = reader;
+            let holder = reference.get_var_int().unwrap().0;
+            assert!(holder > 0);
+            assert_eq!(
+                sent_names[usize::try_from(holder - 1).unwrap()].as_ref(),
+                instrument.asset_id()
+            );
+            let decoded = deserialize(DataComponent::Instrument, &mut reader).unwrap();
+            assert_eq!(
+                decoded.write_data(),
+                NbtTag::String(instrument.asset_id().into())
+            );
+            assert_eq!(
+                reader.get_var_int().unwrap().0,
+                i32::from(DataComponent::Damage.to_id())
+            );
+            let sentinel = deserialize(DataComponent::Damage, &mut reader).unwrap();
+            assert_eq!(sentinel.write_data(), NbtTag::Int(300));
+            assert!(reader.is_empty());
+            let mut rewritten = Vec::new();
+            serialize(DataComponent::Instrument, decoded.as_ref(), &mut rewritten).unwrap();
+            assert_eq!(rewritten, vec![u8::try_from(holder).unwrap()]);
+        }
+    }
+
+    #[test]
+    fn instrument_wire_rejects_inline_unknown_negative_and_truncated_holders() {
+        for holder in [0, 9, i32::MAX, -1, i32::MIN] {
+            let mut bytes = Vec::new();
+            bytes.write_var_int(&VarInt(holder)).unwrap();
+            let payload_end = bytes.len();
+            bytes
+                .write_var_int(&VarInt(i32::from(DataComponent::Damage.to_id())))
+                .unwrap();
+            bytes.write_var_int(&VarInt(300)).unwrap();
+            let mut reader = bytes.as_slice();
+            let Err(error) = deserialize(DataComponent::Instrument, &mut reader) else {
+                panic!("unsupported holder must fail before the next component");
+            };
+            assert!(matches!(error, ReadingError::Message(_)));
+            assert_eq!(reader, &bytes[payload_end..]);
+        }
+        for bytes in [
+            &[][..],
+            &[0x80][..],
+            &[0x80, 0x80, 0x80, 0x80, 0x80, 0x00][..],
+        ] {
+            let mut reader = bytes;
+            assert!(deserialize(DataComponent::Instrument, &mut reader).is_err());
+        }
+    }
 
     fn textured_profile() -> ProfileImpl {
         ProfileImpl {

@@ -416,14 +416,102 @@ impl DataComponentImpl for BaseColorImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct InstrumentImpl;
+pub struct InstrumentImpl {
+    /// Builtin registry references only. Inline records and custom registries
+    /// require a shared registry context before they can be represented here.
+    pub instrument: crate::instrument::Instrument,
+}
 impl InstrumentImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            instrument: crate::instrument::Instrument::from_name(data.extract_string()?)?,
+        })
     }
 }
 impl DataComponentImpl for InstrumentImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.instrument.asset_id().into())
+    }
+
+    fn get_hash(&self) -> i32 {
+        // RegistryFileCodec encodes reference keys through Identifier.CODEC,
+        // which maps Codec.STRING. All eight supported identifiers are ASCII.
+        get_str_hash(self.instrument.asset_id()) as i32
+    }
+
     default_impl!(Instrument);
+}
+
+#[cfg(test)]
+mod instrument_tests {
+    use super::*;
+    use crate::{
+        data_component::DataComponent, data_component_impl::read_data, instrument::Instrument,
+        item::Item, item_stack::ItemStack,
+    };
+
+    #[test]
+    fn builtin_instrument_references_round_trip_through_item_persistence() {
+        let mut hashes = std::collections::HashSet::new();
+        for instrument in Instrument::all() {
+            let canonical = NbtTag::String(instrument.asset_id().into());
+            let decoded = read_data(DataComponent::Instrument, &canonical).unwrap();
+            assert_eq!(decoded.write_data(), canonical);
+            assert!(hashes.insert(decoded.get_hash()));
+            let stack = ItemStack::new_with_component(
+                1,
+                &Item::GOAT_HORN,
+                vec![(DataComponent::Instrument, Some(decoded))],
+            );
+            let mut saved = NbtCompound::new();
+            stack.write_item_stack(&mut saved);
+            assert_eq!(
+                saved
+                    .get_compound("components")
+                    .unwrap()
+                    .get("minecraft:instrument"),
+                Some(&canonical)
+            );
+            let reopened = ItemStack::read_item_stack(&saved).unwrap();
+            assert_eq!(
+                reopened
+                    .get_data_component::<InstrumentImpl>()
+                    .unwrap()
+                    .instrument,
+                *instrument
+            );
+            assert!(stack.are_items_and_components_equal(&reopened));
+        }
+    }
+
+    #[test]
+    fn instrument_default_removal_and_custom_data_are_independent() {
+        let mut stack = ItemStack::new(1, &Item::GOAT_HORN);
+        assert_eq!(
+            stack
+                .get_data_component::<InstrumentImpl>()
+                .unwrap()
+                .instrument,
+            Instrument::PonderGoatHorn
+        );
+        let mut custom = NbtCompound::new();
+        custom.put_string("instrument", "minecraft:sing_goat_horn".into());
+        custom.put_string("Instrument", "minecraft:dream_goat_horn".into());
+        stack.set_data_component(CustomDataImpl::new(custom));
+        assert_eq!(
+            stack
+                .get_data_component::<InstrumentImpl>()
+                .unwrap()
+                .instrument,
+            Instrument::PonderGoatHorn
+        );
+        stack.remove_data_component(DataComponent::Instrument);
+        let mut saved = NbtCompound::new();
+        stack.write_item_stack(&mut saved);
+        let reopened = ItemStack::read_item_stack(&saved).unwrap();
+        assert!(reopened.get_data_component::<InstrumentImpl>().is_none());
+        assert!(stack.are_items_and_components_equal(&reopened));
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

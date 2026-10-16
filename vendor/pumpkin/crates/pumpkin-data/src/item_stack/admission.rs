@@ -178,6 +178,13 @@ fn normalize_item_defaults(item: &mut NbtCompound) {
     };
     for (name, data) in &mut components.child_tags {
         match name.as_ref() {
+            "minecraft:instrument" => {
+                if let NbtTag::String(name) = data
+                    && let Some(instrument) = crate::instrument::Instrument::from_name(name)
+                {
+                    *name = instrument.asset_id().into();
+                }
+            }
             "minecraft:container" => {
                 if let NbtTag::List(entries) = data {
                     for entry in entries {
@@ -290,6 +297,93 @@ mod tests {
         item::Item,
         item_stack::ItemStack,
     };
+
+    #[test]
+    fn instrument_raw_admission_normalizes_only_known_references() {
+        fn horn(value: NbtTag) -> NbtCompound {
+            let mut patch = NbtCompound::new();
+            patch.put("minecraft:instrument", value);
+            let mut item = NbtCompound::new();
+            item.put_string("id", "minecraft:goat_horn".into());
+            item.put_int("count", 1);
+            item.put_compound("components", patch);
+            item
+        }
+        for instrument in crate::instrument::Instrument::all() {
+            for name in [instrument.to_name(), instrument.asset_id()] {
+                let saved = horn(NbtTag::String(name.into()));
+                assert_eq!(validate_item_stack(&saved), Ok(()));
+                let stack = ItemStack::read_item_stack(&saved).unwrap();
+                assert_eq!(validate_runtime_item_stack(&stack), Ok(()));
+                let mut written = NbtCompound::new();
+                stack.write_item_stack(&mut written);
+                assert_eq!(
+                    written
+                        .get_compound("components")
+                        .unwrap()
+                        .get_string("minecraft:instrument"),
+                    Some(instrument.asset_id())
+                );
+                // Raw admission must not mutate its caller's saved tree.
+                assert_eq!(
+                    saved
+                        .get_compound("components")
+                        .unwrap()
+                        .get_string("minecraft:instrument"),
+                    Some(name)
+                );
+            }
+        }
+        let mut inline = NbtCompound::new();
+        inline.put_string("sound_event", "minecraft:item.goat_horn.sound.1".into());
+        inline.put_float("use_duration", 7.0);
+        inline.put_float("range", 256.0);
+        inline.put_string("description", "Sing".into());
+        for value in [
+            NbtTag::String("custom:sing_goat_horn".into()),
+            NbtTag::String("minecraft:missing_horn".into()),
+            NbtTag::String("Minecraft:sing_goat_horn".into()),
+            NbtTag::Int(6),
+            NbtTag::Compound(NbtCompound::new()),
+            NbtTag::Compound(inline),
+        ] {
+            let saved = horn(value);
+            assert!(ItemStack::read_item_stack(&saved).is_none());
+            assert_eq!(
+                validate_item_stack(&saved),
+                Err(ItemStackAdmissionError::Unreadable)
+            );
+        }
+        let mut opaque = NbtCompound::new();
+        opaque.put_string("minecraft:instrument", "sing_goat_horn".into());
+        let stack = ItemStack::new_with_component(
+            1,
+            &Item::GOAT_HORN,
+            vec![
+                (DataComponent::Instrument, None),
+                (
+                    DataComponent::CustomData,
+                    Some(CustomDataImpl::new(opaque.clone()).to_dyn()),
+                ),
+            ],
+        );
+        let mut saved = NbtCompound::new();
+        stack.write_item_stack(&mut saved);
+        assert_eq!(validate_item_stack(&saved), Ok(()));
+        assert_eq!(
+            saved
+                .get_compound("components")
+                .unwrap()
+                .get_compound("minecraft:custom_data"),
+            Some(&opaque)
+        );
+        assert!(
+            ItemStack::read_item_stack(&saved)
+                .unwrap()
+                .get_data_component::<crate::data_component_impl::InstrumentImpl>()
+                .is_none()
+        );
+    }
 
     #[test]
     fn runtime_admission_rejects_writerless_components_including_nested_stacks() {
