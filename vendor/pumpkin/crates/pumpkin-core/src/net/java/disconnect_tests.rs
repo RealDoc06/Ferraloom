@@ -22,7 +22,7 @@ async fn bounded<F: Future>(future: F) -> F::Output {
 }
 
 /// Queue 32 real, legal chat frames before allowing any server decoding. Long
-/// messages make the burst larger than the production 8192-byte BufReader: even
+/// messages make the burst larger than the production 8192-byte `BufReader`: even
 /// one canceled read cannot consume all kernel input as a side effect. This is
 /// a controlled transport boundary, not a reproduction of the runtime campaign.
 async fn tcp_pair(unread_burst: bool) -> (TcpStream, TcpStream) {
@@ -205,7 +205,7 @@ async fn actual_tcp_unread_burst_gets_prefixes_typed_disconnect_and_fin() {
     actual_client_close(true).await;
 }
 
-/// A transparent observer below the real BufWriter. Successful write/flush
+/// A transparent observer below the real `BufWriter`. Successful write/flush
 /// polls are local transport receipts, not assertions about peer delivery.
 struct ObservedTcpWriter {
     socket: Option<OwnedWriteHalf>,

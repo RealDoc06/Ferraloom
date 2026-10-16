@@ -146,14 +146,11 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
         return;
     };
     for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => {
-                if retain_invalid_definition {
-                    retain_registry_io_failure(registry_map);
-                }
-                continue;
+        let Ok(entry) = entry else {
+            if retain_invalid_definition {
+                retain_registry_io_failure(registry_map);
             }
+            continue;
         };
         let path = entry.path();
         if retain_invalid_definition && fs::metadata(&path).is_err() {

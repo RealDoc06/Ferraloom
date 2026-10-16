@@ -343,7 +343,7 @@ fn save_auxiliary_data(
 /// - Provides a central hub for interacting with the world's entities and environment.
 pub struct World {
     /// Exact allocation used by synchronous, context-free block inventories.
-    self_weak: std::sync::OnceLock<Weak<World>>,
+    self_weak: std::sync::OnceLock<Weak<Self>>,
     /// Represents the World's Unique Identifier
     pub uuid: Uuid,
     /// The underlying level, responsible for chunk management and terrain generation.
@@ -6422,6 +6422,10 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the ordered callbacks and attachment fences in one transition"
+    )]
     fn on_block_state_set(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -6437,9 +6441,7 @@ impl World {
         let new_block = Block::from_state_id(block_state_id);
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
-        let mut detached_old_entity = false;
-
-        if is_new_block
+        let detached_old_entity = if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
             && let Some(entity) = self.get_block_entity(position)
         {
@@ -6447,8 +6449,10 @@ impl World {
                 entity.clone().on_block_replaced(self, position);
             }
             self.remove_block_entity_if_current(position, Some(&entity));
-            detached_old_entity = true;
-        }
+            true
+        } else {
+            false
+        };
 
         // A retiring entity can synchronously replace this terrain and publish
         // another BE. Even the same target state must preserve that exact new

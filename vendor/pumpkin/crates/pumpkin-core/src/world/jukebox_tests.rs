@@ -1376,7 +1376,7 @@ async fn concurrent_producer_enqueues_without_waiting_for_callback_drainer() {
     observe(&mut reader, &player).await;
     let first = live.clone();
     let outer = tokio::task::spawn_blocking(move || {
-        first.set_stack(0, ItemStack::new(1, &Item::MUSIC_DISC_11))
+        first.set_stack(0, ItemStack::new(1, &Item::MUSIC_DISC_11));
     });
     bounded(move || {
         notification.recv_timeout(Duration::from_secs(5)).unwrap();
