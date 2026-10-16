@@ -1442,7 +1442,6 @@ function main() {
             if (command.action === 'close_menu') {
               if (!send(19, varInt(menu.container_id))) throw new Error('Menu close was not queued');
               state.menu = null;
-              if (values.crafting) state.crafting = closeCrafting(state.crafting!);
             } else {
               if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
               if (menu.carried !== null) throw new Error('SWAP fixture requires an empty cursor');

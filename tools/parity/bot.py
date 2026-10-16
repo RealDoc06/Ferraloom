@@ -207,7 +207,8 @@ class Client:
         protocol.require(isinstance(sent, dict) and sent.get("written") is True, "Statistics request not queued")
         state = self.wait_state(lambda value: value.get("statistics_packet") is not None
                                 and value["statistics_packet"]["sequence"] > sent["after_sequence"])
-        return {"request": sent, "response": state["statistics_packet"], "received": state["crafting"]}
+        return {"request": sent, "response": state["statistics_packet"], "received": state["crafting"],
+                "after_sequence": state["packets"], "observations": state["crafting_packets"]}
 
     def wait_spam_disconnect(self, timeout: float = 10) -> dict:
         deadline = time.monotonic() + timeout

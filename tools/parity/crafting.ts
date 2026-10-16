@@ -88,7 +88,7 @@ function projectInventory(menu: CraftMenu | null, inventory: number, stack: Plai
  * Only actual content establishes a 46-slot baseline; only a matching menu
  * packet advances its revision. Shared player slots project across baselines. */
 export function observeCrafting(current: CraftingState, packet: CraftingPacket & { sequence: number }): CraftingState {
-  let next = { ...current };
+  const next = { ...current };
   if (packet.kind === 'cursor') return { ...next, cursor: copyStack(packet.stack), cursor_sequence: packet.sequence };
   if (packet.kind === 'player_slot') return { ...next,
     player: projectInventory(next.player, packet.slot, packet.stack),
