@@ -38,6 +38,71 @@ async fn close_client(client: &Arc<crate::net::ClientPlatform>) {
         .unwrap();
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_world_saves_and_fresh_loads_but_refuses_leaf_links() {
+    let fixture = player_fixture().await;
+    let directory = tempfile::tempdir().unwrap();
+    let linked_world = directory.path().join("world");
+    std::os::unix::fs::symlink(fixture._directory.path(), &linked_world).unwrap();
+    let manager = StatisticsManager::new(linked_world.join("players"), true);
+    let uuid = fixture.player.gameprofile.id;
+    assert!(!manager.player_path(uuid).exists());
+    manager.load_player(&fixture.player).unwrap();
+    fixture
+        .player
+        .increment_custom_stat(CustomStatistic::OpenBarrel, 2);
+    manager.save_player(&fixture.player).await.unwrap();
+
+    let path = fixture.server.statistics_manager.player_path(uuid);
+    let original = fs::read(&path).unwrap();
+    assert_eq!(fs::read(manager.player_path(uuid)).unwrap(), original);
+    let saved: Value = serde_json::from_slice(&original).unwrap();
+    assert_eq!(
+        saved["stats"]["minecraft:custom"]["minecraft:open_barrel"],
+        2
+    );
+    let fresh = Arc::new(Player::new(
+        fixture.client.clone(),
+        fixture.player.gameprofile.clone(),
+        Default::default(),
+        &fixture.player.world(),
+        pumpkin_util::GameMode::Survival,
+    ));
+    assert_eq!(fresh.get_custom_stat(CustomStatistic::OpenBarrel), 0);
+    let restarted = StatisticsManager::new(linked_world.join("players"), true);
+    restarted.load_player(&fresh).unwrap();
+    assert_eq!(fresh.get_custom_stat(CustomStatistic::OpenBarrel), 2);
+
+    // Allowing a directory link must not allow either a linked or dangling
+    // final file to become a load/save-eligible default statistics history.
+    let retained = path.with_extension("json.original");
+    let missing = path.with_extension("json.missing");
+    fs::rename(&path, &retained).unwrap();
+    for target in [&retained, &missing] {
+        std::os::unix::fs::symlink(target, &path).unwrap();
+        assert!(matches!(
+            restarted.load_player(&fresh),
+            Err(StatisticsDataError::Io(_))
+        ));
+        assert!(matches!(
+            restarted.save_player(&fresh).await,
+            Err(StatisticsDataError::NotLoaded)
+        ));
+        assert_eq!(fs::read(&retained).unwrap(), original);
+        assert!(
+            fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(!missing.exists());
+        fs::remove_file(&path).unwrap();
+    }
+    fs::rename(&retained, &path).unwrap();
+    close_fixture(&fixture).await;
+}
+
 #[tokio::test]
 async fn observed_import_live_increment_save_and_actual_rejoin_preserve_unknowns() {
     let fixture = player_fixture().await;

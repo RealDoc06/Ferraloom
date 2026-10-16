@@ -139,17 +139,18 @@ pub(super) fn decode(bytes: &[u8]) -> Result<StatisticsFile, StatisticsDataError
     Ok(disk)
 }
 
-/// Only an absent leaf in real existing directories is a new statistics file.
-/// Missing parents, symlinks, directories and unreadable files are failures.
+/// Only an absent leaf in existing directories is a new statistics file.
+/// Parent directory symlinks are allowed; missing or unreadable parents,
+/// non-directory parents, and symlink or nonregular leaves remain failures.
 pub(super) fn read_file(path: &Path) -> Result<Option<StatisticsFile>, StatisticsDataError> {
     for parent in path
         .ancestors()
         .skip(1)
         .filter(|p| !p.as_os_str().is_empty())
     {
-        if !fs::symlink_metadata(parent)?.file_type().is_dir() {
+        if !fs::metadata(parent)?.file_type().is_dir() {
             return Err(io::Error::other(format!(
-                "statistics parent is not a real directory: {}",
+                "statistics parent is not a directory: {}",
                 parent.display()
             ))
             .into());
