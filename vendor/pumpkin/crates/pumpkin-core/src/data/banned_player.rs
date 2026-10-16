@@ -17,14 +17,17 @@ impl BannedPlayerList {
     #[must_use]
     pub fn get_entry(&mut self, profile: &GameProfile) -> Option<&BannedPlayerEntry> {
         self.remove_invalid_entries();
-        self.banned_players.iter().find(|entry| {
-            entry.uuid == profile.id
-                    // Retain bans under the old deterministic offline identity.
-                    // An arbitrary same-name UUID is never treated as an alias.
-                    || (entry.name == profile.name
-                        && is_legacy_offline_profile(entry.uuid, &entry.name)
-                        && offline_uuid(&entry.name).is_ok_and(|uuid| uuid == profile.id))
-        })
+        self.banned_players
+            .iter()
+            .find(|entry| matches_profile(entry, profile))
+    }
+
+    /// Remove every stored alias that would deny this same canonical profile.
+    pub(crate) fn remove_entry(&mut self, profile: &GameProfile) -> bool {
+        let before = self.banned_players.len();
+        self.banned_players
+            .retain(|entry| !matches_profile(entry, profile));
+        self.banned_players.len() != before
     }
 
     fn remove_invalid_entries(&mut self) {
@@ -40,6 +43,14 @@ impl BannedPlayerList {
             self.save();
         }
     }
+}
+
+fn matches_profile(entry: &BannedPlayerEntry, profile: &GameProfile) -> bool {
+    entry.uuid == profile.id
+        // An arbitrary same-name UUID is never an offline identity alias.
+        || (entry.name == profile.name
+            && is_legacy_offline_profile(entry.uuid, &entry.name)
+            && offline_uuid(&entry.name).is_ok_and(|uuid| uuid == profile.id))
 }
 
 impl LoadJSONConfiguration for BannedPlayerList {

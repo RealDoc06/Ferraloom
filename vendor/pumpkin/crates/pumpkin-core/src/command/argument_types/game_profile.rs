@@ -11,7 +11,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::net::authentication::lookup_profile_by_name_blocking;
-use crate::net::{GameProfile, offline_uuid};
+use crate::net::{GameProfile, is_legacy_offline_profile, offline_uuid};
 use crate::server::Server;
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
@@ -141,7 +141,9 @@ impl GameProfileResult {
             .operator_config
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(op) = ops.ops.iter().find(|op| op.name.eq_ignore_ascii_case(name)) {
+        if let Some(op) = ops.ops.iter().find(|op| {
+            op.name.eq_ignore_ascii_case(name) && !is_legacy_offline_profile(op.uuid, &op.name)
+        }) {
             return Some(Self::profile_from_uuid_name(op.uuid, op.name.clone()));
         }
 
@@ -150,11 +152,10 @@ impl GameProfileResult {
             .banned_player_list
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(entry) = banned_players
-            .banned_players
-            .iter()
-            .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        {
+        if let Some(entry) = banned_players.banned_players.iter().find(|entry| {
+            entry.name.eq_ignore_ascii_case(name)
+                && !is_legacy_offline_profile(entry.uuid, &entry.name)
+        }) {
             return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }
 
@@ -163,11 +164,10 @@ impl GameProfileResult {
             .whitelist_config
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(entry) = whitelist
-            .whitelist
-            .iter()
-            .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        {
+        if let Some(entry) = whitelist.whitelist.iter().find(|entry| {
+            entry.name.eq_ignore_ascii_case(name)
+                && !is_legacy_offline_profile(entry.uuid, &entry.name)
+        }) {
             return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }
 
@@ -299,5 +299,126 @@ impl GameProfileArgumentType {
         context
             .get_argument::<GameProfileResult>(name)?
             .resolve(context.source.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::commands::{data, op, pardon, whitelist};
+    use crate::data::banlist_serializer::BannedPlayerEntry;
+    use pumpkin_config::{op::Op, whitelist::WhitelistEntry};
+    use pumpkin_util::permission::PermissionRegistry;
+
+    #[tokio::test]
+    async fn legacy_admin_records_can_be_replaced_and_pardoned_by_name() {
+        const CHILD: &str = "FERRALOOM_LEGACY_ADMIN_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            // Administrative files use cwd. Run the real commands in a separate
+            // process so this test never changes the other tests' working dir.
+            let directory = tempfile::tempdir().unwrap();
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "command::argument_types::game_profile::tests::legacy_admin_records_can_be_replaced_and_pardoned_by_name",
+                    "--test-threads=1",
+                ])
+                .current_dir(directory.path())
+                .env(CHILD, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let mut fixture = data::tests::Fixture::new().await;
+        let server = fixture.source.server().clone();
+        let registry = PermissionRegistry::default();
+        whitelist::register(&mut fixture.dispatcher, &registry);
+        op::register(&mut fixture.dispatcher, &registry);
+        pardon::register(&mut fixture.dispatcher, &registry);
+        let name = "SpamObserver";
+        let legacy = Uuid::parse_str("14209f43-09d3-4876-d114-4c2568f51fc3").unwrap();
+        let canonical = offline_uuid(name).unwrap();
+        let original = GameProfileResult::profile_from_uuid_name(legacy, name.into());
+        server
+            .data
+            .operator_config
+            .write()
+            .unwrap()
+            .ops
+            .push(Op::new(
+                legacy,
+                name.into(),
+                server.basic_config.op_permission_level,
+                false,
+            ));
+        server
+            .data
+            .whitelist_config
+            .write()
+            .unwrap()
+            .whitelist
+            .push(WhitelistEntry::new(legacy, name.into()));
+        server
+            .data
+            .banned_player_list
+            .write()
+            .unwrap()
+            .banned_players
+            .push(BannedPlayerEntry::new(
+                &original,
+                "test".into(),
+                None,
+                "legacy".into(),
+            ));
+        assert_eq!(fixture.execute("whitelist add SpamObserver").unwrap(), 1);
+        let profile = GameProfileResult::profile_from_uuid_name(canonical, name.into());
+        assert!(
+            server
+                .data
+                .whitelist_config
+                .read()
+                .unwrap()
+                .is_whitelisted(&profile)
+        );
+        assert_eq!(fixture.execute("op SpamObserver").unwrap(), 1);
+        assert!(
+            server
+                .data
+                .operator_config
+                .read()
+                .unwrap()
+                .ops
+                .iter()
+                .any(|op| op.uuid == canonical)
+        );
+        let cached = server
+            .data
+            .user_cache
+            .write()
+            .unwrap()
+            .get_by_name(name)
+            .unwrap();
+        assert_eq!(cached.uuid, canonical);
+
+        // A canonical cache entry must not hide the legacy alias from /pardon.
+        let unrelated = GameProfileResult::profile_from_uuid_name(Uuid::from_u128(7), name.into());
+        server
+            .data
+            .banned_player_list
+            .write()
+            .unwrap()
+            .banned_players
+            .push(BannedPlayerEntry::new(
+                &unrelated,
+                "test".into(),
+                None,
+                "ordinary UUID ban".into(),
+            ));
+        assert_eq!(fixture.execute("pardon SpamObserver").unwrap(), 1);
+        let mut bans = server.data.banned_player_list.write().unwrap();
+        assert!(bans.get_entry(&profile).is_none());
+        assert_eq!(bans.banned_players.len(), 1);
+        assert_eq!(bans.banned_players[0].uuid, unrelated.id);
     }
 }

@@ -29,13 +29,7 @@ impl CommandExecutor for PardonExecutor {
         let mut successes = 0;
 
         for target in &targets {
-            let idx = lock
-                .banned_players
-                .iter()
-                .position(|entry| entry.uuid == target.id);
-
-            if let Some(idx) = idx {
-                lock.banned_players.remove(idx);
+            if lock.remove_entry(target) {
                 context.source.send_feedback(
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_PARDON_SUCCESS,
