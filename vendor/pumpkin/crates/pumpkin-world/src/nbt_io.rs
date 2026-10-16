@@ -13,6 +13,7 @@ use flate2::{Compression, write::GzEncoder};
 use pumpkin_nbt::{
     COMPOUND_ID, NbtCompound,
     serializer::{NbtWriteHelper, NbtWriteHelperJava},
+    tag::NbtTag,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +44,7 @@ pub fn encode_unnamed_compound(root: NbtCompound) -> Result<Bytes, pumpkin_nbt::
 }
 
 fn encode(root: NbtCompound, named: bool) -> Result<Bytes, pumpkin_nbt::Error> {
+    validate_end_tags(&root)?;
     let mut bytes = Vec::new();
     let mut writer = NbtWriteHelperJava::new(&mut bytes);
     writer.write_u8(COMPOUND_ID)?;
@@ -51,6 +53,26 @@ fn encode(root: NbtCompound, named: bool) -> Result<Bytes, pumpkin_nbt::Error> {
     }
     root.serialize_content(&mut writer)?;
     Ok(bytes.into())
+}
+
+// The upstream writer accepts End as a named child, which terminates the
+// compound before its name is read. Inspect the original tree before encoding;
+// an encode/decode comparison could already have discarded the offending data.
+fn validate_end_tags(root: &NbtCompound) -> Result<(), pumpkin_nbt::Error> {
+    let mut pending: Vec<_> = root.child_tags.values().collect();
+    while let Some(tag) = pending.pop() {
+        match tag {
+            NbtTag::End => {
+                return Err(pumpkin_nbt::Error::UnsupportedType(
+                    "TAG_End is only valid as a compound terminator or empty list type".into(),
+                ));
+            }
+            NbtTag::Compound(compound) => pending.extend(compound.child_tags.values()),
+            NbtTag::List(items) => pending.extend(items),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 pub fn write_compound_atomic(path: &Path, root: NbtCompound) -> Result<(), NbtFileError> {
@@ -178,6 +200,84 @@ mod tests {
     use pumpkin_nbt::{Nbt, deserializer::NbtReadHelperJava, tag::NbtTag};
 
     #[test]
+    fn durable_nbt_end_values_are_refused_inside_compounds_and_lists() {
+        let mut compound = NbtCompound::new();
+        compound.put("private-component-name", NbtTag::End);
+        for value in [
+            NbtTag::End,
+            NbtTag::Compound(compound.clone()),
+            NbtTag::List(vec![NbtTag::End]),
+            NbtTag::List(vec![NbtTag::Int(1), NbtTag::End]),
+            NbtTag::List(vec![NbtTag::List(vec![NbtTag::Compound(compound)])]),
+        ] {
+            let mut root = NbtCompound::new();
+            root.put("private-root-name", value);
+            for named in [false, true] {
+                let error = encode(root.clone(), named).unwrap_err();
+                assert!(matches!(error, pumpkin_nbt::Error::UnsupportedType(_)));
+                assert!(!error.to_string().contains("private-"));
+            }
+        }
+    }
+
+    #[test]
+    fn durable_nbt_instrument_placeholder_refuses_before_commit_or_backup() {
+        use pumpkin_data::item_stack::ItemStack;
+
+        // Java 26.3's goat_horn prototype uses a registry string holder. Use a
+        // different holder so this represents an explicit saved component patch.
+        let mut components = NbtCompound::new();
+        components.put_string("minecraft:instrument", "minecraft:sing_goat_horn".into());
+        let mut item = NbtCompound::new();
+        item.put_string("id", "minecraft:goat_horn".into());
+        item.put_int("count", 1);
+        item.put_compound("components", components);
+        let stack = ItemStack::read_item_stack(&item).unwrap();
+        let mut written = NbtCompound::new();
+        stack.write_item_stack(&mut written);
+        assert_eq!(
+            written
+                .get_compound("components")
+                .unwrap()
+                .get("minecraft:instrument"),
+            Some(&NbtTag::End)
+        );
+        let mut invalid = NbtCompound::new();
+        invalid.put_list("Items", vec![NbtTag::Compound(written)]);
+        for named in [false, true] {
+            assert!(matches!(
+                encode(invalid.clone(), named),
+                Err(pumpkin_nbt::Error::UnsupportedType(_))
+            ));
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("save.dat");
+        let backup = directory.path().join("save.dat_old");
+        let mut previous = NbtCompound::new();
+        previous.put_int("marker", 17);
+        write_gzip_compound_atomic(&path, previous.clone()).unwrap();
+        previous.put_int("marker", 16);
+        write_gzip_compound_atomic(&backup, previous).unwrap();
+        let before = fs::read(&path).unwrap();
+        let backup_before = fs::read(&backup).unwrap();
+        for result in [
+            write_compound_atomic(&path, invalid.clone()),
+            write_gzip_compound_atomic(&path, invalid.clone()),
+            write_gzip_compound_atomic_with_backup(&path, &backup, invalid.clone()),
+            write_compound_atomic(&directory.path().join("missing-parent/save.dat"), invalid),
+        ] {
+            assert!(matches!(
+                result,
+                Err(NbtFileError::Nbt(pumpkin_nbt::Error::UnsupportedType(_)))
+            ));
+        }
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::read(&backup).unwrap(), backup_before);
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
+    #[test]
     fn durable_nbt_rejects_oversized_ascii_and_java_cesu8_keys_and_values() {
         // Supplementary characters and NUL need more Java CESU-8 bytes than UTF-8.
         for (text, encoded_len) in [
@@ -212,6 +312,12 @@ mod tests {
         custom.put_string("max_length", "a".repeat(65_535));
         let mut root = NbtCompound::new();
         root.put_list("custom_data", vec![NbtTag::Compound(custom)]);
+        root.put_list("empty_end_typed_list", vec![]);
+        root.put_compound("empty_compound", NbtCompound::new());
+        root.put_list(
+            "mixed_list",
+            vec![NbtTag::Int(1), NbtTag::String("kept".into())],
+        );
         for named in [false, true] {
             let bytes = encode(root.clone(), named).unwrap();
             let expected = if named {
