@@ -22,7 +22,7 @@ import re
 import shutil
 import struct
 import sys
-from typing import Callable
+from typing import Callable, NamedTuple
 import uuid
 import zipfile
 
@@ -71,6 +71,37 @@ JDK_SHA256 = "7380ce48ed5013735d2c8414db54adb8f981e7933ff594bd36f3baccddaafba3"
 RESOURCE_HASHES = {
     STORY: "edc34899c2f765403251c355f126dbb82c27887c45cfd39e8478c48f5fae5d53",
     ADVENTURE: "f1b0ed571ee97ceda83719d0a0926c9399da4fd3b6f2a340e48dd8da4e0d611c",
+}
+
+
+class ExperienceReference(NamedTuple):
+    """Pin progress bits and query floor independently of the awarded total."""
+    level: int
+    total: int
+    progress_bits: int
+    query_points: int
+
+    @property
+    def progress(self) -> float:
+        return struct.unpack(">f", struct.pack(">I", self.progress_bits))[0]
+
+
+# Exact 26.3 f32 operation order, not an idealized within-level points / cost.
+SOURCE_XP = ExperienceReference(level=12, total=223, progress_bits=0x3E6739C4, query_points=6)
+CONTINUED_XP = ExperienceReference(level=12, total=227, progress_bits=0x3EB5AD66, query_points=10)
+XP_PRIMARY = {
+    "inner_jar_sha256": "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6",
+    "methods": ["Player.giveExperiencePoints", "ServerPlayer.giveExperiencePoints",
+                "ExperienceCommand$Type.lambda$static$1", "Mth.floor(float)"],
+    "bytecode_dumps": {
+        "/tmp/ferraloom-experience-2ddab74-primary.javap": "bf8551a7a37170c48405b8ab0b8f79aa034e9f92002112a01b39efd744e49869",
+        "/tmp/ferraloom-experience-2ddab74-support.javap": "7d6a810da51a6cc9b8adc2434b93c6bcc3aca7fef7d3c1cf640d7c784c528c7a"},
+    "initial_save_corroboration": {
+        "path": "/home/doc/code/Ferraloom/.cache/runs/player-data-bnvpygj5/vanilla/source/world/players/data/e7ee076d-be5b-31df-a414-3e907115f4a3.dat",
+        "sha256": "29642fc9a1d29e745981adde0c4c12693d042655c01cc333f73e455019a38318",
+        "commands_sha256": "5c0bb8497ff929df812cb1f0804e00231cb24cd97cab3a7458c52089f2122d9d",
+        "report_sha256": "1ecd98c660d38b1571241122b1aab022bfccfc42c14a61a7b676d8dd7ae0058e"},
+    "scope": "Both query counts and +4 continuation are bytecode-derived expectations, not prior runtime observations. Only initial XpP is corroborated by the stopped Java source; its first run failed before the post-award query or transfer.",
 }
 
 
@@ -232,6 +263,7 @@ def primary_inputs(report: dict) -> dict:
     require(NAME == "FerraloomTest", "Exact-case fixture name changed")
     md5 = hashlib.md5(("OfflinePlayer:" + NAME).encode("utf-8"), usedforsecurity=False).digest()
     require(uuid.UUID(bytes=md5, version=3) == PLAYER_ID, "Offline UUID does not match the official witness")
+    require(report["official"]["inner_sha256"] == XP_PRIMARY["inner_jar_sha256"], "Changed primary experience bytecode")
     require(re.search(r'version "25\.', report["java"]["version"]) is not None
             and report["java"]["sha256"] == JDK_SHA256 == digest(Path(report["java"]["path"])),
             "Requires the retained pinned Temurin 25.0.4.1+1 reference JDK")
@@ -249,6 +281,9 @@ def primary_inputs(report: dict) -> dict:
         "layout": "world/players/{data,advancements,stats}; actual retained official 26.3 layout",
         "item_wire_ids": {"minecraft:stick": 1060, "minecraft:gold_ingot": 1022},
         "statistics": statistics_contract(),
+        "experience": {**XP_PRIMARY, "expectations": {
+            label: {**xp._asdict(), "progress": xp.progress}
+            for label, xp in (("after_add_223", SOURCE_XP), ("after_reload_then_add_4", CONTINUED_XP))}},
         "scope": "Exact literal item_name/custom_name through the shared client codec; no rendering normalization."}
     return definitions
 
@@ -301,17 +336,17 @@ def identity_witness(server: LoggedServer, client: Client) -> dict:
             "scope": "Real same-name PLAY login plus authoritative live UUID; no additional LoginSuccess UUID decoder."}
 
 
-def vitals_witness(server: LoggedServer, client: Client, points: int, position: dict) -> dict:
+def vitals_witness(server: LoggedServer, client: Client, xp: ExperienceReference, position: dict) -> dict:
     state = client.wait_state(lambda state: state.get("health") == 14 and state.get("food") == 20
                               and state.get("server_position") == position)
-    fraction = struct.unpack(">f", struct.pack(">f", points / 31))[0]
-    predicate = (f'if data entity {NAME} {{Health:14.0f,foodLevel:20,XpLevel:12,XpP:{fraction}f,XpTotal:{216 + points},'
+    predicate = (f'if data entity {NAME} {{Health:14.0f,foodLevel:20,XpLevel:{xp.level},XpP:{xp.progress}f,XpTotal:{xp.total},'
                  f'SelectedItemSlot:0,Dimension:"minecraft:overworld",playerGameType:0,'
                  f'Pos:[{position["x"]}d,{position["y"]}d,{position["z"]}d],Rotation:[{position["yaw"]}f,{position["pitch"]}f]}}')
     return {"received_health": state["health"], "received_food": state["food"], "received_position": state["server_position"],
             "typed_entity": typed_predicate(server, predicate),
-            "levels": command_result(server, f"experience query {NAME} levels", 12),
-            "points": command_result(server, f"experience query {NAME} points", points)}
+            "expected_xp": xp._asdict(),
+            "levels": command_result(server, f"experience query {NAME} levels", xp.level),
+            "query_points": command_result(server, f"experience query {NAME} points", xp.query_points)}
 
 
 def teleport_exact(server: LoggedServer, client: Client, position: dict) -> dict:
@@ -375,15 +410,25 @@ def request_statistics(client: Client, contract: dict, opens: int) -> dict:
             "scope": "Fresh received packet after queued request; protocol has no request correlation ID. No predicted totals."}
 
 
-def validate_player(saved: dict, *, count: int, points: int, position: dict) -> dict:
+def validate_experience(data: dict, xp: ExperienceReference) -> dict:
+    """Compare independently read typed NBT to the pinned reference, without rounding."""
+    expected = {"XpLevel": {"nbt_type": "Int", "value": xp.level},
+                "XpP": {"nbt_type": "Float", "value": xp.progress},
+                "XpTotal": {"nbt_type": "Int", "value": xp.total}}
+    for key, value in expected.items():
+        require(data.get(key) == value, {"field": key, "expected": value, "actual": data.get(key)})
+    return {"typed": {key: data[key] for key in expected},
+            "progress_bits": "0x" + struct.pack(">f", data["XpP"]["value"]).hex()}
+
+
+def validate_player(saved: dict, *, count: int, xp: ExperienceReference, position: dict) -> dict:
     """Exact typed selected state; never coerce component strings into objects."""
     data = saved["typed"]
     require(data.get("Statistics", {}) == {}, "Private nonempty/malformed Statistics NBT is not canonical statistics storage")
-    fraction = struct.unpack(">f", struct.pack(">f", points / 31))[0]
+    experience = validate_experience(data, xp)
     expected = {"UUID": {"nbt_type": "IntArray", "value": list(UUID_INTS)}, "Dimension": "minecraft:overworld"}
     for key, kind, value in (("DataVersion", "Int", 5023), ("SelectedItemSlot", "Int", 0),
                              ("Health", "Float", 14.0), ("foodLevel", "Int", 20), ("playerGameType", "Int", 0),
-                             ("XpLevel", "Int", 12), ("XpP", "Float", fraction), ("XpTotal", "Int", 216 + points),
                              ("fall_distance", "Double", 0.0)):
         expected[key] = {"nbt_type": kind, "value": value}
     for key, kind, tag, axes in (("Pos", "Double", 6, ("x", "y", "z")), ("Rotation", "Float", 5, ("yaw", "pitch"))):
@@ -411,7 +456,8 @@ def validate_player(saved: dict, *, count: int, points: int, position: dict) -> 
             {"expected_inventory": wanted, "actual_inventory": entries})
     require(data.get("XpSeed", {}).get("nbt_type") == "Int", "Missing typed enchantment seed")
     return {"player_dat": saved["path"], "sha256": saved["sha256"], "independent_player_data_version": 5023,
-            "checked_fields": [*expected, "Inventory", "XpSeed"], "inventory": inventory}
+            "checked_fields": [*expected, "XpLevel", "XpP", "XpTotal", "Inventory", "XpSeed"],
+            "experience": experience, "inventory": inventory}
 
 
 def advancement_command(server: LoggedServer, action: str, identifier: str, criterion: str, expected: int) -> dict:
@@ -547,7 +593,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             command_result(server, f"damage {NAME} 6 minecraft:generic", 1, mode="success"),
             command_result(server, f"experience add {NAME} 223 points", 1, mode="success"), step_exact(server, 1)])
         stage("source_inventory", source, lambda: inventory_witness(server, client, 37))
-        stage("source_vitals", source, lambda: vitals_witness(server, client, 7, POSITION))
+        stage("source_vitals", source, lambda: vitals_witness(server, client, SOURCE_XP, POSITION))
         stage("source_advancements", source, lambda: [
             advancement_command(server, "grant", STORY, "crafting_table", 1),
             server.command(f"advancement revoke {NAME} only {ADVENTURE}"),
@@ -563,7 +609,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         detail["source_after_stop"] = immutable
         original_player = read_player(source_world)
         detail["source_player"] = write_json(directory / "source-player.json", original_player)
-        detail["source_canonical_state"] = validate_player(original_player, count=37, points=7, position=POSITION)
+        detail["source_canonical_state"] = validate_player(original_player, count=37, xp=SOURCE_XP, position=POSITION)
         original_statistics = stage("source_statistics_json", source, lambda: read_statistics(source_world), guarded=False)
         detail["source_statistics"] = write_json(directory / "source-statistics.json", original_statistics)
         stage("source_statistics_counts", source, lambda: statistics_counts(original_statistics, 3, 1), guarded=False)
@@ -595,7 +641,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         record("inventory_components", destination, lambda: {"source": detail["stages"]["source_inventory"]["detail"],
                "destination": inventory_witness(target_server, target_client, 37)})
         record("vitals_xp", destination, lambda: {"source": detail["stages"]["source_vitals"]["detail"],
-               "destination": vitals_witness(target_server, target_client, 7, POSITION)})
+               "destination": vitals_witness(target_server, target_client, SOURCE_XP, POSITION)})
         record("advancement_import", destination, lambda: {"source_json": detail["source_advancements"],
                "runtime_commands": advancement_import(target_server)})
         require(all(row["result"] == "passed" for row in results.values()), "Destination import prerequisite failed; mutation cannot pass")
@@ -612,13 +658,13 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             advancement_command(target_server, "grant", ADVENTURE, added, 1)])
         stage("destination_position", destination, lambda: teleport_exact(target_server, target_client, CONTINUED_POSITION))
         stage("destination_mutated_inventory", destination, lambda: inventory_witness(target_server, target_client, 41))
-        stage("destination_mutated_vitals", destination, lambda: vitals_witness(target_server, target_client, 11, CONTINUED_POSITION))
+        stage("destination_mutated_vitals", destination, lambda: vitals_witness(target_server, target_client, CONTINUED_XP, CONTINUED_POSITION))
         disconnect_and_stop(destination, target_client, "destination")
         final_player = read_player(destination_world)
         detail["destination_player"] = write_json(directory / "destination-player.json", final_player)
 
         def saved_continuation() -> dict:
-            selected = validate_player(final_player, count=41, points=11, position=CONTINUED_POSITION)
+            selected = validate_player(final_player, count=41, xp=CONTINUED_XP, position=CONTINUED_POSITION)
             require(final_player["typed"]["XpSeed"] == original_player["typed"]["XpSeed"], "Enchantment seed was reset")
             opaque = {field: value for field, value in original_player["typed"].items() if field in OPAQUE}
             for field, value in opaque.items():

@@ -5,6 +5,7 @@ These do not constitute paired player-continuity evidence.
 from copy import deepcopy
 import json
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
@@ -76,6 +77,59 @@ class TypedNBTTests(unittest.TestCase):
         self.assertEqual(typed["L"], {"nbt_type": "LongArray", "value": [1]})
         self.assertEqual(typed["A"], {"nbt_type": "List", "element_type": 10, "value": []})
         self.assertEqual(typed["B"], {"nbt_type": "List", "element_type": 3, "value": []})
+
+
+class ExperienceReferenceTests(unittest.TestCase):
+    def test_exact_saved_fraction_total_and_type_are_required(self):
+        # Explicit primary values, not a second implementation of XP arithmetic.
+        # Only the first fraction has prior stopped-Java-save corroboration.
+        for reference, total, progress, bits in (
+                (player_data.SOURCE_XP, 223, 0.22580629587173462, "3e6739c4"),
+                (player_data.CONTINUED_XP, 227, 0.3548385500907898, "3eb5ad66")):
+            data = {"XpLevel": {"nbt_type": "Int", "value": 12},
+                    "XpP": {"nbt_type": "Float", "value": progress},
+                    "XpTotal": {"nbt_type": "Int", "value": total}}
+            self.assertEqual(player_data.validate_experience(data, reference), {"typed": data, "progress_bits": "0x" + bits})
+            for defect in ("fraction_one_ulp", "query_floor_as_remainder", "wrong_level", "double_tag"):
+                broken = deepcopy(data)
+                if defect == "fraction_one_ulp":
+                    broken["XpP"]["value"] = struct.unpack(">f", (int(bits, 16) + 1).to_bytes(4, "big"))[0]
+                elif defect == "query_floor_as_remainder":
+                    broken["XpTotal"]["value"] = total - 1
+                elif defect == "wrong_level":
+                    broken["XpLevel"]["value"] = 13
+                else:
+                    broken["XpP"]["nbt_type"] = "Double"
+                with self.subTest(total=total, defect=defect), self.assertRaises(AssertionError):
+                    player_data.validate_experience(broken, reference)
+
+    def test_live_query_uses_pinned_floor_separately_from_exact_fraction_and_total(self):
+        for reference, total, progress, query_points in (
+                (player_data.SOURCE_XP, 223, 0.22580629587173462, 6),
+                (player_data.CONTINUED_XP, 227, 0.3548385500907898, 10)):
+            server, client = Mock(), Mock()
+            server.command.return_value = []
+            client.wait_state.return_value = {"health": 14, "food": 20, "server_position": player_data.POSITION}
+
+            def observed_predicate(_server, predicate):
+                if predicate.startswith("if data entity "):
+                    self.assertIn(f"XpLevel:12,XpP:{progress}f,XpTotal:{total},", predicate)
+                else:
+                    # Exercise the real command_result score predicate against
+                    # independent synthetic query results, never server evidence.
+                    query = server.command.call_args.args[0].rsplit(" ", 1)[-1]
+                    self.assertIn(query, ("levels", "points"))
+                    score = 12 if query == "levels" else observed_points
+                    self.assertEqual(predicate, f"if score Observation pdprobe matches {score}")
+                return {"predicate": predicate}
+
+            with patch.object(player_data, "typed_predicate", side_effect=observed_predicate):
+                observed_points = query_points
+                result = player_data.vitals_witness(server, client, reference, player_data.POSITION)
+                self.assertEqual(result["query_points"]["expected"], query_points)
+                observed_points = query_points + 1  # Ideal 7/11 is wrong even with correct XpP and XpTotal.
+                with self.subTest(total=total, observed_points=observed_points), self.assertRaises(AssertionError):
+                    player_data.vitals_witness(server, client, reference, player_data.POSITION)
 
 
 class AdvancementContinuationTests(unittest.TestCase):
