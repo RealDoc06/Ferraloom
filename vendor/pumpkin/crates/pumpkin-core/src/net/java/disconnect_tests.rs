@@ -531,6 +531,26 @@ fn decode_stream_feedback(
             "unexpected trigger score payload".into(),
         ));
     }
+    if matches!(route, StreamRoute::Command)
+        && packet.id == CSystemChatMessage::to_id(CURRENT_MC_VERSION)
+    {
+        // Literal translation arguments are valid NBT strings. The upstream
+        // TextComponentBase deserializer only accepts maps in `with`, so inspect
+        // the complete wire value with the production strict NBT reader instead.
+        let component = pumpkin_protocol::ser::NetworkReadExt::get_nbt_strict(&mut payload)?;
+        let value = pumpkin_protocol::ser::nbt_tag_to_json(&component);
+        let expected = if prefixes == 0 {
+            "commands.trigger.set.success"
+        } else {
+            "commands.trigger.failed.unprimed"
+        };
+        if !contains_translation(&value, expected) || payload.get_bool()? || !payload.is_empty() {
+            return Err(PacketDecodeError::Message(format!(
+                "unexpected command feedback: {component:?}"
+            )));
+        }
+        return Ok(StreamFeedback::Processed);
+    }
     let component = payload.get_component(&CURRENT_MC_VERSION)?;
     let feedback = if packet.id == CPlayDisconnect::to_id(CURRENT_MC_VERSION) {
         if serde_json::to_value(&component).unwrap()["translate"] != "disconnect.spam" {
@@ -539,24 +559,6 @@ fn decode_stream_feedback(
             )));
         }
         StreamFeedback::Spam
-    } else if matches!(route, StreamRoute::Command)
-        && packet.id == CSystemChatMessage::to_id(CURRENT_MC_VERSION)
-    {
-        let expected = if prefixes == 0 {
-            "commands.trigger.set.success"
-        } else {
-            "commands.trigger.failed.unprimed"
-        };
-        // CommandSource::send_error wraps the translated error in an empty
-        // red component; success and failure need not share the same root.
-        if !contains_translation(&serde_json::to_value(&component).unwrap(), expected)
-            || payload.get_bool()?
-        {
-            return Err(PacketDecodeError::Message(format!(
-                "unexpected command feedback: {component:?}"
-            )));
-        }
-        StreamFeedback::Processed
     } else if matches!(route, StreamRoute::Chat)
         && packet.id == CDisguisedChatMessage::to_id(CURRENT_MC_VERSION)
     {
@@ -586,6 +588,57 @@ fn decode_stream_feedback(
         ));
     }
     Ok(feedback)
+}
+
+#[test]
+fn stream_command_feedback_reads_literal_translation_arguments() {
+    let encoded = JavaClient::serialize_packet_for_version(
+        &CSystemChatMessage::new(
+            &TextComponent::translate(
+                "commands.trigger.set.success",
+                [TextComponent::text("spamprobe"), TextComponent::text("13")],
+            ),
+            false,
+        ),
+        CURRENT_MC_VERSION,
+    )
+    .unwrap();
+    let mut payload = &encoded[..];
+    let id = payload.get_var_int().unwrap().0;
+    let packet = RawPacket {
+        id,
+        payload: Bytes::copy_from_slice(payload),
+    };
+    assert!(matches!(
+        decode_stream_feedback(&packet, StreamRoute::Command, 0),
+        Ok(StreamFeedback::Processed)
+    ));
+    assert!(decode_stream_feedback(&packet, StreamRoute::Command, 1).is_err());
+
+    let mut trailing = packet.payload.to_vec();
+    trailing.push(0);
+    assert!(
+        decode_stream_feedback(
+            &RawPacket {
+                id,
+                payload: trailing.into(),
+            },
+            StreamRoute::Command,
+            0,
+        )
+        .is_err()
+    );
+    assert!(
+        decode_stream_feedback(
+            &RawPacket {
+                id,
+                payload: packet.payload.slice(..packet.payload.len() - 1),
+            },
+            StreamRoute::Command,
+            0,
+        )
+        .is_err()
+    );
 }
 
 #[derive(Debug, Default)]

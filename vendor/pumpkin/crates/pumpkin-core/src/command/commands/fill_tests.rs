@@ -450,16 +450,29 @@ async fn destroy_replacements_retain_new_entities_and_poi() {
     for chunk in &*world.level.loaded_chunks {
         world.level.bind_chunk_poi(chunk.value()).unwrap();
     }
-    world.level.poi_snapshot_in_square(pos, 0).unwrap();
-    let mut poi = world.portal_poi.lock().unwrap();
+    let records = world.level.poi_snapshot_in_square(pos, 0).unwrap();
     assert_eq!(
-        poi.get_in_square(pos, 0, Some("minecraft:mason")).unwrap(),
+        records
+            .iter()
+            .filter(|entry| entry.poi_type == "minecraft:mason")
+            .map(|entry| BlockPos::new(entry.x, entry.y, entry.z))
+            .collect::<Vec<_>>(),
         [pos]
     );
     assert!(
-        !poi.get_in_square(pos, 0, Some("minecraft:nether_portal"))
+        !records
+            .iter()
+            .any(|entry| entry.poi_type == "minecraft:nether_portal")
+    );
+    // Observing the replacement must not publish an unsaved terrain snapshot.
+    assert!(
+        world
+            .portal_poi
+            .lock()
             .unwrap()
-            .contains(&pos)
+            .get_in_square(pos, 0, Some("minecraft:mason"))
+            .unwrap()
+            .is_empty()
     );
 }
 
