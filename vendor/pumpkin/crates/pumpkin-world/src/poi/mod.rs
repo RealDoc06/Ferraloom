@@ -17,6 +17,12 @@ use crate::chunk_system::ChunkPos;
 use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION as DATA_VERSION;
 use pumpkin_data::poi::PoiType;
 
+pub(crate) mod query;
+pub use query::PoiQueryError;
+
+#[cfg(test)]
+mod query_tests;
+
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
 

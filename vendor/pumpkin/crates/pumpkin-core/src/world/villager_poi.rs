@@ -5,9 +5,36 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::EntityBase;
 
+/// Transient ownership only. Entity callbacks are evaluated on an owned copy,
+/// outside the storage mutex; mutation compares the same Weak and UUID again.
+#[derive(Clone)]
+pub(crate) struct JobSiteOwner {
+    id: uuid::Uuid,
+    entity: Weak<dyn EntityBase>,
+}
+
+impl JobSiteOwner {
+    pub(crate) fn new(entity: Weak<dyn EntityBase>) -> Option<Self> {
+        let id = entity.upgrade()?.get_entity().entity_uuid;
+        Some(Self { id, entity })
+    }
+
+    pub(crate) fn is_alive(&self) -> bool {
+        self.entity.upgrade().is_some_and(|entity| {
+            entity
+                .get_living_entity()
+                .is_none_or(|living| living.health.load() > 0.0)
+        })
+    }
+
+    fn same(&self, other: &Self) -> bool {
+        self.id == other.id && self.entity.ptr_eq(&other.entity)
+    }
+}
+
 struct JobSite {
     profession: VillagerProfession,
-    owner: Option<Weak<dyn EntityBase>>,
+    owner: Option<JobSiteOwner>,
 }
 
 #[derive(Default)]
@@ -16,12 +43,26 @@ pub struct VillagerPoiStorage {
 }
 
 impl VillagerPoiStorage {
-    fn live_owner(owner: &Weak<dyn EntityBase>) -> Option<std::sync::Arc<dyn EntityBase>> {
-        owner.upgrade().filter(|entity| {
-            entity
-                .get_living_entity()
-                .is_none_or(|living| living.health.load() > 0.0)
-        })
+    pub(crate) fn owners(&self) -> Vec<(BlockPos, JobSiteOwner)> {
+        self.job_sites
+            .iter()
+            .filter_map(|(position, site)| site.owner.clone().map(|owner| (*position, owner)))
+            .collect()
+    }
+
+    pub(crate) fn owner_at(&self, position: BlockPos) -> Option<JobSiteOwner> {
+        self.job_sites.get(&position)?.owner.clone()
+    }
+
+    pub(crate) fn clear_observed_owner(&mut self, position: BlockPos, observed: &JobSiteOwner) {
+        if let Some(site) = self.job_sites.get_mut(&position)
+            && site
+                .owner
+                .as_ref()
+                .is_some_and(|owner| owner.same(observed))
+        {
+            site.owner = None;
+        }
     }
 
     pub fn update_block(&mut self, position: BlockPos, block: &Block) {
@@ -41,11 +82,12 @@ impl VillagerPoiStorage {
         }
     }
 
-    pub fn claim(
+    pub(crate) fn claim(
         &mut self,
         position: BlockPos,
         block: &Block,
-        owner: Weak<dyn EntityBase>,
+        owner: JobSiteOwner,
+        observed_dead: Option<&JobSiteOwner>,
         expected_profession: Option<VillagerProfession>,
     ) -> Option<VillagerProfession> {
         self.update_block(position, block);
@@ -53,8 +95,9 @@ impl VillagerPoiStorage {
         if expected_profession.is_some_and(|profession| profession != site.profession) {
             return None;
         }
-        if let Some(current_owner) = site.owner.as_ref().and_then(Self::live_owner)
-            && current_owner.get_entity().entity_uuid != owner.upgrade()?.get_entity().entity_uuid
+        if let Some(current_owner) = site.owner.as_ref()
+            && current_owner.id != owner.id
+            && !observed_dead.is_some_and(|observed| current_owner.same(observed))
         {
             return None;
         }
@@ -69,8 +112,7 @@ impl VillagerPoiStorage {
         if site
             .owner
             .as_ref()
-            .and_then(Weak::upgrade)
-            .is_none_or(|current| current.get_entity().entity_uuid == owner)
+            .is_none_or(|current| current.entity.strong_count() == 0 || current.id == owner)
         {
             site.owner = None;
         }
@@ -89,7 +131,10 @@ impl VillagerPoiStorage {
             .iter()
             .filter(|(_, site)| {
                 expected_profession.is_none_or(|profession| profession == site.profession)
-                    && site.owner.as_ref().and_then(Self::live_owner).is_none()
+                    && site
+                        .owner
+                        .as_ref()
+                        .is_none_or(|owner| owner.entity.strong_count() == 0)
             })
             .filter_map(|(position, _)| {
                 let delta = position.0 - origin.0;

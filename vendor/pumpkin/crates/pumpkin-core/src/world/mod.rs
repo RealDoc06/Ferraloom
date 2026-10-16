@@ -37,6 +37,7 @@ pub(crate) mod level_info;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
+pub(crate) mod poi;
 pub mod portal;
 mod postprocessing;
 pub mod raid;

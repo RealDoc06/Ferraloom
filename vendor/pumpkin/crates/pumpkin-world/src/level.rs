@@ -985,6 +985,17 @@ impl Level {
         .unwrap_or(Block::VOID_AIR.default_state.id)
     }
 
+    /// Observe the stable cache after encoding changed published FULL sources.
+    /// Returned records are owned; filtering and callbacks belong after this call.
+    pub fn poi_snapshot_in_square(
+        &self,
+        center: BlockPos,
+        radius: i32,
+    ) -> Result<Vec<crate::poi::PoiEntry>, crate::poi::PoiQueryError> {
+        self.poi_runtime
+            .snapshot(crate::poi::query::PoiArea::new(center, radius)?)
+    }
+
     /// Memory-only binding before exposing a managed terrain Arc.
     pub fn bind_chunk_poi(&self, chunk: &SyncChunk) -> Result<(), crate::poi::PoiReconcileError> {
         chunk.bind_poi(&self.poi_runtime)

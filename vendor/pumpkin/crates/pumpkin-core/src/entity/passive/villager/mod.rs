@@ -1153,14 +1153,12 @@ impl VillagerEntity {
                 .squared_distance_to_vec(&self.get_entity().pos.load())
                 < 16.0f64.powi(2)
         {
-            let (block, _state) = world.get_block_and_state(&current_site);
             let expected = (profession != VillagerProfession::None).then_some(profession);
-            let valid = world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .claim(current_site, block, owner.clone(), expected)
-                .is_some();
+            let valid = match world.claim_job_site(current_site, owner.clone(), expected) {
+                crate::world::poi::JobSiteClaim::Unavailable => return,
+                crate::world::poi::JobSiteClaim::Rejected => false,
+                crate::world::poi::JobSiteClaim::Claimed => true,
+            };
 
             if !valid {
                 *self
@@ -1194,16 +1192,14 @@ impl VillagerEntity {
             let end = BlockPos::new(pos.0.x + 10, pos.0.y + 4, pos.0.z + 10);
             let mut candidates = Vec::new();
 
-            let indexed_sites = world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .available_job_sites(pos, 48, expected);
-            let saved_sites = world
-                .portal_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_in_square(pos, 48, None);
+            let indexed_sites = world.available_job_sites(pos, expected);
+            let saved_sites = world.poi_in_sphere(pos, 48).map(|entries| {
+                entries
+                    .into_iter()
+                    .filter(|entry| entry.free_tickets > 0)
+                    .map(|entry| entry.pos())
+                    .collect::<Vec<_>>()
+            });
             let saved_sites = match saved_sites {
                 Ok(sites) => sites,
                 Err(error) => {
@@ -1223,7 +1219,10 @@ impl VillagerEntity {
                 {
                     continue;
                 }
-                let (block, _state) = world.get_block_and_state(&position);
+                let Some(state) = world.get_block_state_id_if_loaded(&position) else {
+                    continue;
+                };
+                let block = Block::from_state_id(state);
                 if let Some(site_profession) = profession_for_block(block)
                     && expected.is_none_or(|profession| profession == site_profession)
                 {
@@ -1235,7 +1234,10 @@ impl VillagerEntity {
             }
 
             for position in BlockPos::iterate(start, end) {
-                let (block, _state) = world.get_block_and_state(&position);
+                let Some(state) = world.get_block_state_id_if_loaded(&position) else {
+                    continue;
+                };
+                let block = Block::from_state_id(state);
                 let Some(site_profession) = profession_for_block(block) else {
                     continue;
                 };
@@ -1255,7 +1257,7 @@ impl VillagerEntity {
 
             let mut navigator = Navigator::default();
             let mut claimed = None;
-            for (_, position, block, _) in candidates.into_iter().take(5) {
+            for (_, position, _, _) in candidates.into_iter().take(5) {
                 if !navigator.can_reach_within(
                     &self.mob_entity.living_entity,
                     position.to_centered_f64(),
@@ -1263,13 +1265,10 @@ impl VillagerEntity {
                 ) {
                     continue;
                 }
-                if world
-                    .villager_poi
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .claim(position, block, owner.clone(), expected)
-                    .is_some()
-                {
+                if matches!(
+                    world.claim_job_site(position, owner.clone(), expected),
+                    crate::world::poi::JobSiteClaim::Claimed
+                ) {
                     claimed = Some(position);
                     break;
                 }
@@ -1291,7 +1290,10 @@ impl VillagerEntity {
                 .squared_distance_to_vec(&self.get_entity().pos.load())
                 < 2.0f64.powi(2)
         {
-            let (block, _state) = world.get_block_and_state(&site);
+            let Some(state) = world.get_block_state_id_if_loaded(&site) else {
+                return;
+            };
+            let block = Block::from_state_id(state);
             if let Some(claimed_profession) = profession_for_block(block) {
                 let profession = self
                     .villager_data

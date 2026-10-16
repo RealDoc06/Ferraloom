@@ -374,19 +374,18 @@ impl CommandExecutor for LocatePoiExecutor {
         let origin = BlockPos::floored_v(context.source.position);
         let world = context.source.world().clone();
 
-        let found = {
-            let mut poi_storage = world
-                .portal_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            poi_storage.find_closest_matching(origin, POI_SEARCH_RADIUS, |poi_type| {
-                targets.contains(poi_type)
+        let found = world
+            .poi_in_sphere(origin, POI_SEARCH_RADIUS)
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .find(|entry| targets.contains(&entry.poi_type))
+                    .map(|entry| (entry.pos(), entry.poi_type))
             })
-        }
-        .map_err(|error| {
-            tracing::error!("POI locate failed: {error}");
-            POI_STORAGE_ERROR_TYPE.create_without_context()
-        })?;
+            .map_err(|error| {
+                tracing::error!("POI locate failed: {error}");
+                POI_STORAGE_ERROR_TYPE.create_without_context()
+            })?;
 
         let Some((target, poi_type)) = found else {
             return Err(POI_NOT_FOUND_ERROR_TYPE
@@ -450,6 +449,14 @@ mod tests {
     #[tokio::test]
     async fn poi_storage_failure_is_distinct_from_successful_not_found() {
         let fixture = crate::command::commands::data::tests::Fixture::new().await;
+        for chunk in &*fixture.source.world().level.loaded_chunks {
+            fixture
+                .source
+                .world()
+                .level
+                .bind_chunk_poi(chunk.value())
+                .unwrap();
+        }
         let mut dispatcher = CommandDispatcher::new();
         register(&mut dispatcher, &PermissionRegistry::default());
         let command = "locate poi minecraft:nether_portal";
@@ -458,16 +465,18 @@ mod tests {
             .unwrap_err();
         assert!(missing.is(&POI_NOT_FOUND_ERROR_TYPE));
 
-        let world = fixture.source.world();
+        let failed_fixture = crate::command::commands::data::tests::Fixture::new().await;
+        let world = failed_fixture.source.world();
+        for chunk in &*world.level.loaded_chunks {
+            world.level.bind_chunk_poi(chunk.value()).unwrap();
+        }
         let folder = &world.level.level_folder.poi_folder;
         std::fs::create_dir_all(folder).unwrap();
         let path = folder.join("r.0.0.mca");
         let corrupt = b"unreadable POI region";
         std::fs::write(&path, corrupt).unwrap();
-        *world.portal_poi.lock().unwrap() =
-            crate::world::portal::PortalPoiStorage::new(folder.clone());
         let failed = dispatcher
-            .execute_input(command, &fixture.source)
+            .execute_input(command, &failed_fixture.source)
             .unwrap_err();
         assert!(failed.is(&POI_STORAGE_ERROR_TYPE));
         assert!(!failed.is(&POI_NOT_FOUND_ERROR_TYPE));

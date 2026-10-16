@@ -150,6 +150,22 @@ impl ChunkData {
 }
 
 impl<'chunk> PoiTerrainRead<'chunk> {
+    /// Metadata-only check under the final area terrain window. A query must
+    /// prepare dirty FULL sources through the managed encoder before retrying.
+    pub(crate) fn is_reconciled(
+        &self,
+        loaded: &LoadedPoiRegion<'_>,
+    ) -> Result<bool, PoiReconcileError> {
+        if self.chunk.status != pumpkin_data::chunk::ChunkStatus::Full {
+            return Err(PoiReconcileError::IncompleteTerrain);
+        }
+        let changes = self.changes_for(loaded)?;
+        Ok(changes
+            .sections
+            .iter()
+            .all(|section| section.revision == section.applied_revision))
+    }
+
     /// Stage B's terrain root builder must consume this exact palette snapshot.
     #[must_use]
     pub fn palettes(&self) -> &[BlockPalette] {
