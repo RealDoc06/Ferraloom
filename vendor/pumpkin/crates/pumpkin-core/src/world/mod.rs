@@ -1573,7 +1573,7 @@ impl World {
                     Err(error) => {
                         error!("POI unload preparation failed at {pos:?}: {error}");
                     }
-                };
+                }
             }
             // Busy handles stay requested for the next ordinary unload pass.
             // Only successful snapshots wake the scheduler; retries never spin.

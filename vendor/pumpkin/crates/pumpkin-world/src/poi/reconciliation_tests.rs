@@ -258,6 +258,10 @@ fn initial_palettes_empty_sections_and_final_removal_are_complete() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the actual writer, refusal and retry observations in one scenario."
+)]
 fn refusals_preserve_tickets_reset_history_and_original_region_bytes() {
     let (directory, mut storage, chunk) = fixture();
     let home = home_states()[0];

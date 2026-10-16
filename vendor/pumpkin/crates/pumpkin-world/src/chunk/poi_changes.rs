@@ -319,6 +319,10 @@ mod tests {
     // UNRUN: inject only the otherwise unreachable failure boundary, then use
     // actual chunk writers, loaded-region reconciliation and persisted records.
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the actual writer, refusal and retry observations in one scenario."
+    )]
     fn failed_revision_and_poison_refuse_ack_while_actual_writers_continue() {
         enum Failure {
             Revision,

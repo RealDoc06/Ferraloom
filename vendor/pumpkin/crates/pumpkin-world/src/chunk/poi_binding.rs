@@ -96,7 +96,7 @@ impl ChunkData {
 }
 
 #[cfg(test)]
-pub(crate) struct TestRuntime {
+pub struct TestRuntime {
     pub(crate) runtime: Arc<PoiRuntime>,
     pub(crate) chunks: Arc<DashMap<ChunkPos, SyncChunk>>,
 }
