@@ -1310,7 +1310,7 @@ impl Server {
             // Generation completion remains active while simulation time is frozen.
             world.update_active_chunks();
             world.flush_block_updates();
-            world.flush_synced_block_events();
+            // World::tick runs block events on simulation ticks, including steps.
 
             let players = world.players.load();
             let player_handle = handle.clone();

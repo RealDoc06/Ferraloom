@@ -26,6 +26,9 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 #[cfg(test)]
 mod block_entity_update_tests;
+#[cfg(test)]
+mod block_event_tests;
+mod block_events;
 pub mod brightness;
 pub mod chunker;
 pub mod explosion;
@@ -361,7 +364,7 @@ pub struct World {
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
-    synced_block_event_queue: std::sync::Mutex<Vec<BlockEvent>>,
+    synced_block_event_queue: std::sync::Mutex<block_events::BlockEventQueue>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
     #[cfg(test)]
@@ -561,7 +564,9 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
-            synced_block_event_queue: std::sync::Mutex::new(Vec::new()),
+            synced_block_event_queue: std::sync::Mutex::new(
+                block_events::BlockEventQueue::default(),
+            ),
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
             #[cfg(test)]
             flushed_block_changes: std::sync::Mutex::new(Vec::new()),
@@ -1504,17 +1509,17 @@ impl World {
     }
 
     pub fn flush_synced_block_events(self: &Arc<Self>) {
-        // THIS IS IMPORTANT
-        // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
-        let events = {
-            let mut queue = self
+        loop {
+            // Vanilla removes the first event before its callback and drains until empty.
+            // Release the lock before callbacks, which can enqueue events for this flush.
+            let event = self
                 .synced_block_event_queue
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::mem::take(&mut *queue)
-        };
-
-        for event in events {
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pop();
+            let Some(event) = event else {
+                break;
+            };
             let block = self.get_block(&event.pos);
             if !self.block_registry.on_synced_block_event(
                 block,
