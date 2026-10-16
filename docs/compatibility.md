@@ -4,41 +4,51 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest selected run used Rust code from
-`5ce6ee068096c8140516b9d1e1591d64350952b1` and the isolated tripwire fixtures in
-`f6a24a10985a3e1e4feecffc78aa833e2054eb63`, with executable SHA-256
-`541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9`.
-Both servers passed 95 of 95 selected scenarios. New observations cover recursive
-data merging, missing-path conditions, namespace parsing, repeater/comparator and
-tripwire removal, and namespaced command storage across manual saves, console
-shutdown, SIGTERM and restart. World interchange passes in both directions,
-including command storage under `.` and a namespace resembling a legacy filename.
+The latest runs used clean source and harness commit
+`105758aa42d2a365a9791857f45d826e56e80e9f`, with executable SHA-256
+`5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a`.
+Both servers passed 96 of 96 selected main scenarios and a separate 34-case
+live block-data check. The latter observes retained container menus, slot swaps,
+pending loot, sign editors, literal submissions, selected structured sign commands,
+permission gates and persistence across clean restarts. It does not establish
+general inventory transactions or complete component and block-entity support.
+World interchange passes in both directions, including scoreboard state and
+command storage under `.` and a namespace resembling a legacy filename.
 The decoded command trees differ by two missing roots (`jfr`, `perf`) and 468
 missing advertised literal paths with argument names normalized. This checks
 advertised syntax, independently of command execution; some differences are
-argument representation, while others are missing behavior. All 16,384 block states
-in the selected underground chunk sample matched. An
-[earlier run](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
-on the same generation code differed at four gold-ore cells. That failure remains
-unresolved; a later matching sample does not establish deterministic generation.
+argument representation, while others are missing behavior. The latest terrain
+sample matched 16,380 of 16,384 states: Rust omitted four deepslate gold-ore blocks.
+It reproduced the exact sample hash from an
+[earlier failure](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
+on the same generation code. Other retained runs matched the
+sample; generation ordering remains unresolved.
 The immutable
-[paired report](../compatibility/results/evidence/8fd2b9ce85cad88df1936b80a14857e1c7b9fde45e6067ba1f4c08756cb89725.json)
-retains the command-tree failure. A
+[main report](../compatibility/results/evidence/33a5aae5d5cb70916239d347b269fc0f9632d29b8c20aa69940744f9c33836cf.json)
+retains both failures. The separate
+[block-data report](../compatibility/results/evidence/054cbee99d48dacba56d705d99f9da6a0f3fc44109a9e3786c1c959ea0c752b9.json)
+records all 34 paired passes and four clean server and four clean client exits. A
 [prior fixture failure](../compatibility/results/evidence/fc13bba3a3595c4f37415dca8285932dd85eceb9b1054733f4856556c2dc5e7d.json)
 is also retained: Java's hook-removal setup failed before removal in an area
 reused by other redstone tests. The latest fixtures use separate footprints with
-the same assertions. The ledger has 23 partial and 177 unverified
+the same assertions. Earlier block-data probe failures remain in immutable reports,
+including [command-rate pacing](../compatibility/results/evidence/b28649d22763cc505b6dc99d3eb724af2ee7e7f72283b79972f5c731ac616964.json)
+and [privileged filtered-text expectations](../compatibility/results/evidence/b3573255d0cf696deaf510525891eea8cd504e3ff68a6b96dfc0b9e95ac9ae96.json).
+The ledger has 27 partial and 173 unverified
 families. A separate fresh Java fixture and both runtimes' cooking continuations
 pass the selected furnace timer, speed and lava bucket checks in the
-[furnace report](../compatibility/results/evidence/222093cbe45043ccf363235b9f4b3c406154014baafd470f509d884934acd8b3.json).
+[furnace report](../compatibility/results/evidence/dafb048b8b4df8fad289cdf5e2b83e20d225e756b92d3293e40dd9a2ab91cc3b.json).
 Zero-step preservation remains visible, with codec acceptance marked skipped;
 changed chunk bytes alone cannot prove furnace decoding or encoding.
 
 Rust tests also cover ordered player snapshots, admission through final player
 and advancement saves, atomic advancement-write failures, and renewed chunk
 tickets protecting live inventories. Remaining work includes command branches,
-other redstone behavior, live block-entity data mutation, full multiplayer and
-gameplay coverage, generation ordering, and measured multicore performance.
+other redstone behavior, additional block-entity types and fields, general inventory
+transactions, dynamic sign components, full multiplayer and gameplay coverage,
+generation ordering, and measured multicore performance. Some asynchronous packet
+handlers are outside the session task drain; complete input ordering and draining
+all mutations before final saves remain unfinished.
 Duplicate-login replacement
 currently starts after configuration; vanilla begins it before configuration.
 
@@ -109,7 +119,7 @@ The complete Ferraloom feature-family gate also requires the concurrency and per
 python3 tools/validate_features.py --strict-all --check-artifacts
 ```
 
-Both strict commands intentionally fail while required families remain unverified, missing or partial. Exit code `0` means the requested ledger check passed, `1` means required feature families are incomplete, and `2` means the file, schema or evidence is invalid. `--check-artifacts` checks that referenced files exist inside the repository; it does not authenticate their contents or execute tests. A passing ledger gate is necessary but must accompany actual reference tests and complete extracted-registry coverage before claiming a working replacement.
+Both strict commands intentionally fail while required families remain unverified, missing or partial. Exit code `0` means the requested ledger check passed, `1` means required feature families are incomplete, and `2` means the file, schema or evidence is invalid. `--check-artifacts` checks referenced files and recorded SHA-256 hashes; it does not authenticate authorship or execute tests. A passing ledger gate is necessary but must accompany actual reference tests and complete extracted-registry coverage before claiming a working replacement.
 
 Run the reference and Rust servers in disposable worlds and isolated test processes. Keep ports, saves and credentials separate from existing servers. A complete acceptance run needs vanilla-client login, gameplay across all dimensions, world interchange, restart and recovery, multiplayer interaction, malicious-input isolation, and reproducible load tests. It must retain paired artifacts rather than reporting an unqualified smoke-test pass.
 

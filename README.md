@@ -32,9 +32,13 @@ python3 tools/parity/suite.py --accept-eula --java /path/to/java25/bin/java
 python3 tools/check_default_storage.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
 # Check saved furnace timers, cooking speeds and lava bucket remainders.
 python3 tools/check_furnaces.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
+# Check live menus, sign edits, command permissions and clean restarts.
+python3 tools/check_block_data.py --accept-eula --java /path/to/java25/bin/java --rust-binary target/debug/ferraloom
 ```
 
-The command writes `compatibility/results/latest.json` and fails when any selected scenario fails. The restart and world-interchange checks include unflushed blocks, a mob's UUID and health, a frozen clock and game rule, scoreboard state, and namespaced command storage. Separate cases exercise recursive data merging, redstone removal, chunk activation during freeze, and scheduled fluid ticks beyond entity-ticking range. The client also decodes the exact release's advertised command tree; syntax presence does not establish working commands. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
+The main suite writes `compatibility/results/latest.json` and fails when any selected scenario fails. Auxiliary checks write separate reports under `.cache/`. The restart and world-interchange checks include unflushed blocks, a mob's UUID and health, a frozen clock and game rule, scoreboard state, and namespaced command storage. Separate cases exercise recursive data merging, redstone removal, chunk activation during freeze, and scheduled fluid ticks beyond entity-ticking range. The client also decodes the exact release's advertised command tree; syntax presence does not establish working commands. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
+
+The [latest run](compatibility/results/latest.json) passed 96 selected main cases on both servers and both world transfers, but missed four gold-ore blocks in the terrain sample and failed command-tree comparison. A separate [34-case block-data check](compatibility/results/block-data.json) passed on both servers. These are selected observations; full vanilla compatibility remains unfinished.
 
 ```sh
 python3 tools/oracle.py inventory --java /path/to/java25/bin/java

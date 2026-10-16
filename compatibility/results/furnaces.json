@@ -2,28 +2,28 @@
   "cases": [
     {
       "argv": [
-        "$REPO/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
+        "/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
         "-Xms128M",
         "-Xmx1024M",
         "-jar",
-        "$REPO/.cache/vanilla/26.3/server.jar",
+        "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar",
         "nogui"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/commands.jsonl",
+      "commands_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main/commands.jsonl",
       "configs": {
         "eula.txt": {
           "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
           "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
         },
         "server.properties": {
-          "sha256": "9771d1a6107e2d3f54bd5140469aa2da8de736a9b66f6e8e2c63653bb8fe5a37",
-          "text": "server-ip=127.0.0.1\nserver-port=37835\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+          "sha256": "cbc8cf1ff6c7f47e5b9b71e17adffd0235420d10ba154119b7ed6ccf87e1f8ff",
+          "text": "server-ip=127.0.0.1\nserver-port=39081\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/console.log",
-      "console_sha256": "c6685795635733bb42f220dbe765b44af7c333d7cc3d3630779ebfe95155216e",
-      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
-      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main",
+      "console_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main/console.log",
+      "console_sha256": "051834047ff6ffc7f0ead0938ae736cf6f26df3c2f61de0dafdf3385d15a8732",
+      "copied_world_manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
+      "directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -31,16 +31,16 @@
         "process_reaped": true
       },
       "final_save_game_time": {
-        "after": 406,
-        "before": 406
+        "after": 411,
+        "before": 411
       },
-      "finished": "2026-10-15T21:30:37.020788+00:00",
+      "finished": "2026-10-16T00:15:34.029520+00:00",
       "fixture_loading_game_time": {
-        "after": 243,
-        "before": 243
+        "after": 248,
+        "before": 248
       },
       "load_save_errors": [],
-      "loopback_port": 37835,
+      "loopback_port": 39081,
       "mode": "main",
       "phases": [
         {
@@ -434,13 +434,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:27.013263+00:00",
+          "finished": "2026-10-16T00:15:24.023740+00:00",
           "name": "zero-step",
           "requested_advance": 0,
           "result": "passed",
           "save_game_time": {
-            "after": 243,
-            "before": 243
+            "after": 248,
+            "before": 248
           },
           "semantic_checks": [
             {
@@ -869,16 +869,16 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/zero-step-snapshot.json",
-          "snapshot_sha256": "19f188536d9253a6393bc596b0ea63da8592639548d2f3a655d9dd113b77a5f6",
-          "started": "2026-10-15T21:30:26.553761+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main/zero-step-snapshot.json",
+          "snapshot_sha256": "89a4dacdfc061363312fe84521efe9a4ddb8b1d476ead380182635ac27915af4",
+          "started": "2026-10-16T00:15:23.514403+00:00",
           "storage_observation": {
             "raw_chunk_unchanged": false,
             "scope": "Zero-step preservation only; unchanged bytes do not establish a codec round-trip. Later stepped phases exercise continuation."
           },
           "timing": {
-            "after": 243,
-            "before": 243,
+            "after": 248,
+            "before": 248,
             "delta": 0,
             "frozen_after": true
           }
@@ -1274,13 +1274,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:30.613304+00:00",
+          "finished": "2026-10-16T00:15:27.672731+00:00",
           "name": "after-63",
           "requested_advance": 63,
           "result": "passed",
           "save_game_time": {
-            "after": 306,
-            "before": 306
+            "after": 311,
+            "before": 311
           },
           "semantic_checks": [
             {
@@ -1709,12 +1709,12 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/after-63-snapshot.json",
-          "snapshot_sha256": "be8fb23a4bd3ede7e83cf8f0412f2a4622f7162d88d37029b5466ebb21fab927",
-          "started": "2026-10-15T21:30:27.013609+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main/after-63-snapshot.json",
+          "snapshot_sha256": "d93c52c8b4b3595be055adba370dddaae466d53bd87ffa579109458ca01c33d3",
+          "started": "2026-10-16T00:15:24.024100+00:00",
           "timing": {
-            "after": 306,
-            "before": 243,
+            "after": 311,
+            "before": 248,
             "delta": 63,
             "frozen_after": true
           }
@@ -2110,13 +2110,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:36.062655+00:00",
+          "finished": "2026-10-16T00:15:33.122489+00:00",
           "name": "after-163",
           "requested_advance": 100,
           "result": "passed",
           "save_game_time": {
-            "after": 406,
-            "before": 406
+            "after": 411,
+            "before": 411
           },
           "semantic_checks": [
             {
@@ -2545,66 +2545,66 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-main/after-163-snapshot.json",
-          "snapshot_sha256": "f8a0c4fe9fdc489f8cf480ad6dfcc97dce085e016c24c5e60727cc76cd277b78",
-          "started": "2026-10-15T21:30:30.613672+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-main/after-163-snapshot.json",
+          "snapshot_sha256": "b33193dbb275c8c9fea6e333af406dd2d0753056a695a20398c2219e233dd21c",
+          "started": "2026-10-16T00:15:27.673078+00:00",
           "timing": {
-            "after": 406,
-            "before": 306,
+            "after": 411,
+            "before": 311,
             "delta": 100,
             "frozen_after": true
           }
         }
       ],
-      "pid": 284090,
+      "pid": 490775,
       "result": "passed",
       "runtime": "vanilla",
       "shutdown_tail": [
-        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_8a46006781c7400f92dd182ce1fb9214",
-        "[23:30:36] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-        "[23:30:36] [Server thread/INFO]: System chat: Saved the game",
-        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_e4d4e59db201433c92c7003ce6bcceb1",
-        "[23:30:36] [Server thread/INFO]: System chat: The game is frozen",
-        "[23:30:36] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
-        "Average time per tick: 1.2ms (Target: 50.0ms)",
-        "[23:30:36] [Server thread/INFO]: System chat: Percentiles: P50: 0.6ms P95: 1.7ms P99: 33.3ms. Sample: 100",
-        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_bdf6d20861284f2cbb8d1f3013316e93",
-        "[23:30:36] [Server thread/INFO]: System chat: The game time is 406 tick(s)",
-        "[23:30:36] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_1ec981f9a0ad4d8b930aeb7327380262",
-        "[23:30:36] [Server thread/INFO]: System chat: Stopping the server",
-        "[23:30:36] [Server thread/INFO]: Stopping server",
-        "[23:30:36] [Server thread/INFO]: Saving players",
-        "[23:30:36] [Server thread/INFO]: Saving worlds",
-        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
-        "[23:30:36] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
+        "[02:15:33] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_628b461d845a4a72b68c4c8e3090f178",
+        "[02:15:33] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+        "[02:15:33] [Server thread/INFO]: System chat: Saved the game",
+        "[02:15:33] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_8f043f055ee641edb83c3c7c0c16d242",
+        "[02:15:33] [Server thread/INFO]: System chat: The game is frozen",
+        "[02:15:33] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+        "Average time per tick: 1.4ms (Target: 50.0ms)",
+        "[02:15:33] [Server thread/INFO]: System chat: Percentiles: P50: 0.7ms P95: 1.8ms P99: 32.6ms. Sample: 100",
+        "[02:15:33] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_61f696ed068f4ed2871cb70d4b0e87d0",
+        "[02:15:33] [Server thread/INFO]: System chat: The game time is 411 tick(s)",
+        "[02:15:33] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_45b477f27cf14b71bbe8b3f5562b9ee1",
+        "[02:15:33] [Server thread/INFO]: System chat: Stopping the server",
+        "[02:15:33] [Server thread/INFO]: Stopping server",
+        "[02:15:33] [Server thread/INFO]: Saving players",
+        "[02:15:33] [Server thread/INFO]: Saving worlds",
+        "[02:15:33] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+        "[02:15:33] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end",
+        "[02:15:33] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether"
       ],
-      "started": "2026-10-15T21:30:15.069007+00:00",
+      "started": "2026-10-16T00:15:11.854592+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T21:30:36.403209+00:00"
+      "stop_started": "2026-10-16T00:15:33.463927+00:00"
     },
     {
       "argv": [
-        "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
+        "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/bin/ferraloom",
         "--data-dir",
-        "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main",
+        "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main",
         "--bind",
-        "127.0.0.1:33747",
+        "127.0.0.1:60607",
         "--offline",
         "--workers",
         "2"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/commands.jsonl",
+      "commands_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main/commands.jsonl",
       "configs": {
         "pumpkin.toml": {
-          "sha256": "1727021b2653bbfa06ddbea2b8f433a8a20b11f1e673446f5fa6ea8199148912",
-          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:33747\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
+          "sha256": "75e99e95378377c6dd1b13f7524e665fb6d76e14280ffabd7c8df9236b8900eb",
+          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:60607\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/console.log",
-      "console_sha256": "4c4420ff768f8ffc10ad136ca4c3fb5dccd32bfb55e50ed33d7c810d6b943e80",
-      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
-      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main",
+      "console_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main/console.log",
+      "console_sha256": "67ece084ecd9ed06ab687d08cccdbd5ef5163d49e7a163a1cb16972e4407631e",
+      "copied_world_manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
+      "directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -2615,13 +2615,13 @@
         "after": 167,
         "before": 167
       },
-      "finished": "2026-10-15T21:30:47.724607+00:00",
+      "finished": "2026-10-16T00:15:44.631485+00:00",
       "fixture_loading_game_time": {
         "after": 4,
         "before": 4
       },
       "load_save_errors": [],
-      "loopback_port": 33747,
+      "loopback_port": 60607,
       "mode": "main",
       "phases": [
         {
@@ -3015,7 +3015,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:39.170342+00:00",
+          "finished": "2026-10-16T00:15:36.171501+00:00",
           "name": "zero-step",
           "requested_advance": 0,
           "result": "passed",
@@ -3450,9 +3450,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/zero-step-snapshot.json",
-          "snapshot_sha256": "edd96a14dab270a5d8c970c488df9276040e34d0b6a77e52f83e597a7483866a",
-          "started": "2026-10-15T21:30:39.108507+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main/zero-step-snapshot.json",
+          "snapshot_sha256": "c4724fb87e175d1931030059ae744ebad61bac06dedf2c25ad4c8055d64601ce",
+          "started": "2026-10-16T00:15:36.120084+00:00",
           "storage_observation": {
             "raw_chunk_unchanged": false,
             "scope": "Zero-step preservation only; unchanged bytes do not establish a codec round-trip. Later stepped phases exercise continuation."
@@ -3855,7 +3855,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:42.445322+00:00",
+          "finished": "2026-10-16T00:15:39.347134+00:00",
           "name": "after-63",
           "requested_advance": 63,
           "result": "passed",
@@ -4290,9 +4290,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/after-63-snapshot.json",
-          "snapshot_sha256": "3584e5856d05744b4a3ff29b00dfd029c1a41fdae9626e2b06695175fab0c37f",
-          "started": "2026-10-15T21:30:39.170833+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main/after-63-snapshot.json",
+          "snapshot_sha256": "d74ab7a42846dc023554ccb77572a608b2830e5eb731a7b1997b7488bb43453d",
+          "started": "2026-10-16T00:15:36.171867+00:00",
           "timing": {
             "after": 67,
             "before": 4,
@@ -4691,7 +4691,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:47.527358+00:00",
+          "finished": "2026-10-16T00:15:44.435154+00:00",
           "name": "after-163",
           "requested_advance": 100,
           "result": "passed",
@@ -5126,9 +5126,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-main/after-163-snapshot.json",
-          "snapshot_sha256": "61db8b2813ef362bec0b6f821d90515c67a622ac333858849fa325f291e20fa7",
-          "started": "2026-10-15T21:30:42.445668+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-main/after-163-snapshot.json",
+          "snapshot_sha256": "2e588dc5eb24995e35e42c22ccf4f5f4e9df8667e592fda5612eb1834d235dc7",
+          "started": "2026-10-16T00:15:39.347478+00:00",
           "timing": {
             "after": 167,
             "before": 67,
@@ -5137,7 +5137,7 @@
           }
         }
       ],
-      "pid": 284533,
+      "pid": 491124,
       "result": "passed",
       "runtime": "rust",
       "shutdown_tail": [
@@ -5160,34 +5160,34 @@
         " INFO Completed worlds",
         " INFO Completed save!"
       ],
-      "started": "2026-10-15T21:30:37.033978+00:00",
+      "started": "2026-10-16T00:15:34.043424+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T21:30:47.560848+00:00"
+      "stop_started": "2026-10-16T00:15:44.467753+00:00"
     },
     {
       "argv": [
-        "$REPO/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
+        "/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
         "-Xms128M",
         "-Xmx1024M",
         "-jar",
-        "$REPO/.cache/vanilla/26.3/server.jar",
+        "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar",
         "nogui"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/commands.jsonl",
+      "commands_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-lava/commands.jsonl",
       "configs": {
         "eula.txt": {
           "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
           "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
         },
         "server.properties": {
-          "sha256": "bdf59ad6c0b040f3353d0f06c16d83e25f197f320592b07612654d75e870f8e7",
-          "text": "server-ip=127.0.0.1\nserver-port=43331\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+          "sha256": "cd8c5d566b4e6141a3da48de5f01f8107e67efd5d203d7199d0c46a14a8a3121",
+          "text": "server-ip=127.0.0.1\nserver-port=35115\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/console.log",
-      "console_sha256": "84a09ab7799c04d3f179c102fb93b0139c1655bca36a6034bfbb8a09c8d78979",
-      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
-      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava",
+      "console_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-lava/console.log",
+      "console_sha256": "18d22f262e95a57465ff72c7e68adc34efa1d5b49ac5af3731bec50634e4fc67",
+      "copied_world_manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
+      "directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-lava",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -5195,16 +5195,16 @@
         "process_reaped": true
       },
       "final_save_game_time": {
-        "after": 446,
-        "before": 446
+        "after": 450,
+        "before": 450
       },
-      "finished": "2026-10-15T21:31:10.410858+00:00",
+      "finished": "2026-10-16T00:16:07.077637+00:00",
       "fixture_loading_game_time": {
-        "after": 246,
-        "before": 246
+        "after": 250,
+        "before": 250
       },
       "load_save_errors": [],
-      "loopback_port": 43331,
+      "loopback_port": 35115,
       "mode": "lava",
       "phases": [
         {
@@ -5304,13 +5304,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:30:59.100865+00:00",
+          "finished": "2026-10-16T00:15:55.722162+00:00",
           "name": "lava-after-1",
           "requested_advance": 1,
           "result": "passed",
           "save_game_time": {
-            "after": 247,
-            "before": 247
+            "after": 251,
+            "before": 251
           },
           "semantic_checks": [
             {
@@ -5418,12 +5418,12 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/lava-after-1-snapshot.json",
-          "snapshot_sha256": "2745813230640233afd8a041958359212033e54627d6e7957a540f8998991053",
-          "started": "2026-10-15T21:30:58.541872+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-lava/lava-after-1-snapshot.json",
+          "snapshot_sha256": "e18d2fbdab642b7b6113753272335927263a8dbc14c08309748f14939438b521",
+          "started": "2026-10-16T00:15:55.213327+00:00",
           "timing": {
-            "after": 247,
-            "before": 246,
+            "after": 251,
+            "before": 250,
             "delta": 1,
             "frozen_after": true
           }
@@ -5553,13 +5553,13 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:31:09.501193+00:00",
+          "finished": "2026-10-16T00:16:06.122124+00:00",
           "name": "lava-after-200",
           "requested_advance": 199,
           "result": "passed",
           "save_game_time": {
-            "after": 446,
-            "before": 446
+            "after": 450,
+            "before": 450
           },
           "semantic_checks": [
             {
@@ -5683,66 +5683,66 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/vanilla-lava/lava-after-200-snapshot.json",
-          "snapshot_sha256": "6f6d5297391ce91fad3ad5253600d558c56775a24a785af2d43f57dc619f221d",
-          "started": "2026-10-15T21:30:59.101097+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/vanilla-lava/lava-after-200-snapshot.json",
+          "snapshot_sha256": "7c7e0968477704a12531e664b663faf0d349ad6b758954485d54721aab7ffe48",
+          "started": "2026-10-16T00:15:55.722374+00:00",
           "timing": {
-            "after": 446,
-            "before": 247,
+            "after": 450,
+            "before": 251,
             "delta": 199,
             "frozen_after": true
           }
         }
       ],
-      "pid": 284725,
+      "pid": 491299,
       "result": "passed",
       "runtime": "vanilla",
       "shutdown_tail": [
-        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_95c7c026e66e4e7dbcc1f7cd6e146c89",
-        "[23:31:09] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-        "[23:31:09] [Server thread/INFO]: System chat: Saved the game",
-        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_48612e1d0dd3420f92bcd264339fc32f",
-        "[23:31:09] [Server thread/INFO]: System chat: The game is frozen",
-        "[23:31:09] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
-        "Average time per tick: 1.2ms (Target: 50.0ms)",
-        "[23:31:09] [Server thread/INFO]: System chat: Percentiles: P50: 0.6ms P95: 1.7ms P99: 31.9ms. Sample: 100",
-        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_b9abe7af731b47b8842968e05c119d07",
-        "[23:31:09] [Server thread/INFO]: System chat: The game time is 446 tick(s)",
-        "[23:31:09] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_f726a84d83b34d5a96b6cb790867ceb5",
-        "[23:31:09] [Server thread/INFO]: System chat: Stopping the server",
-        "[23:31:09] [Server thread/INFO]: Stopping server",
-        "[23:31:09] [Server thread/INFO]: Saving players",
-        "[23:31:09] [Server thread/INFO]: Saving worlds",
-        "[23:31:09] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-        "[23:31:10] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end",
-        "[23:31:10] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether"
+        "[02:16:06] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_fe39b4d3194948dba64b9c52ff383267",
+        "[02:16:06] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+        "[02:16:06] [Server thread/INFO]: System chat: Saved the game",
+        "[02:16:06] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_3b75766882ff445daf753ac6cdac6454",
+        "[02:16:06] [Server thread/INFO]: System chat: The game is frozen",
+        "[02:16:06] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+        "Average time per tick: 1.4ms (Target: 50.0ms)",
+        "[02:16:06] [Server thread/INFO]: System chat: Percentiles: P50: 0.7ms P95: 2.0ms P99: 32.3ms. Sample: 100",
+        "[02:16:06] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_9fb84985ff0342ceb189395c654a5dc9",
+        "[02:16:06] [Server thread/INFO]: System chat: The game time is 450 tick(s)",
+        "[02:16:06] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_d87a261b3098476dbbd847aa961a1d22",
+        "[02:16:06] [Server thread/INFO]: System chat: Stopping the server",
+        "[02:16:06] [Server thread/INFO]: Stopping server",
+        "[02:16:06] [Server thread/INFO]: Saving players",
+        "[02:16:06] [Server thread/INFO]: Saving worlds",
+        "[02:16:06] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+        "[02:16:06] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end",
+        "[02:16:06] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether"
       ],
-      "started": "2026-10-15T21:30:47.737559+00:00",
+      "started": "2026-10-16T00:15:44.645121+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T21:31:09.841490+00:00"
+      "stop_started": "2026-10-16T00:16:06.462828+00:00"
     },
     {
       "argv": [
-        "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
+        "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/bin/ferraloom",
         "--data-dir",
-        "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava",
+        "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava",
         "--bind",
-        "127.0.0.1:45167",
+        "127.0.0.1:38227",
         "--offline",
         "--workers",
         "2"
       ],
-      "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/commands.jsonl",
+      "commands_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava/commands.jsonl",
       "configs": {
         "pumpkin.toml": {
-          "sha256": "d17122e8d3896878231cc477d3c82b2903516291c951ea6d567b3154605b486d",
-          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:45167\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
+          "sha256": "d0733d43f1f9c6096720339bd824aac7b1abe1035b521d7bad10f07626484c4d",
+          "text": "seed = \"12345678\"\nspawn_protection = 0\n[networking.java]\naddress = \"127.0.0.1:38227\"\nonline_mode = false\nencryption = false\nview_distance = 2\nsimulation_distance = 2\nmax_players = 20\n[networking.bedrock]\nenabled = false\n[networking.lan_broadcast]\nenabled = false\n[commands]\nuse_tty = false\n[logging]\ncolor = false\nfile = \"\"\ntimestamp = false\n[telemetry]\nenabled = false\n[plugins]\nenabled = false\n[world.chunk]\ntype = \"anvil\"\n[world.chunk.compression]\nalgorithm = \"ZLib\"\nlevel = 6\n"
         }
       },
-      "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/console.log",
-      "console_sha256": "621c6937a4d01db0d3791cc42a734b17bd2f34ca48f5fe1e68d4e605460d165c",
-      "copied_world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
-      "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava",
+      "console_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava/console.log",
+      "console_sha256": "363d9a163d418fb5a119b5a2ef208cb6e558e73d395df99ce0c45c9d39847685",
+      "copied_world_manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
+      "directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava",
       "exit": {
         "code": 0,
         "forced_stop": false,
@@ -5753,13 +5753,13 @@
         "after": 204,
         "before": 204
       },
-      "finished": "2026-10-15T21:31:22.879131+00:00",
+      "finished": "2026-10-16T00:16:19.571166+00:00",
       "fixture_loading_game_time": {
         "after": 4,
         "before": 4
       },
       "load_save_errors": [],
-      "loopback_port": 45167,
+      "loopback_port": 38227,
       "mode": "lava",
       "phases": [
         {
@@ -5859,7 +5859,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:31:12.658434+00:00",
+          "finished": "2026-10-16T00:16:09.339571+00:00",
           "name": "lava-after-1",
           "requested_advance": 1,
           "result": "passed",
@@ -5973,9 +5973,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/lava-after-1-snapshot.json",
-          "snapshot_sha256": "9843bcd0bc22f5f49365f45ac3b00a973991a3b261d7e69c77033a1c119ed016",
-          "started": "2026-10-15T21:31:12.500619+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava/lava-after-1-snapshot.json",
+          "snapshot_sha256": "ffbca10519ad69bcfa7ec544fa8d71e0e5dabe7efd654b1141e9b7b959f554ff",
+          "started": "2026-10-16T00:16:09.170036+00:00",
           "timing": {
             "after": 5,
             "before": 4,
@@ -6108,7 +6108,7 @@
             }
           },
           "failures": [],
-          "finished": "2026-10-15T21:31:22.683116+00:00",
+          "finished": "2026-10-16T00:16:19.373626+00:00",
           "name": "lava-after-200",
           "requested_advance": 199,
           "result": "passed",
@@ -6238,9 +6238,9 @@
             }
           ],
           "semantic_result": "passed",
-          "snapshot_path": "$REPO/.cache/runs/furnaces-ky3i84m4/rust-lava/lava-after-200-snapshot.json",
-          "snapshot_sha256": "b4d1efd66fe0803c9660c135df6f2f505d88a09439242b51287123e899944a83",
-          "started": "2026-10-15T21:31:12.658663+00:00",
+          "snapshot_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/rust-lava/lava-after-200-snapshot.json",
+          "snapshot_sha256": "c79db30c8bddce5e9f57119ac88a23459e430d20bc4f5e822c3f62ae922a26ee",
+          "started": "2026-10-16T00:16:09.339826+00:00",
           "timing": {
             "after": 204,
             "before": 5,
@@ -6249,7 +6249,7 @@
           }
         }
       ],
-      "pid": 285096,
+      "pid": 492443,
       "result": "passed",
       "runtime": "rust",
       "shutdown_tail": [
@@ -6272,13 +6272,13 @@
         " INFO Completed worlds",
         " INFO Completed save!"
       ],
-      "started": "2026-10-15T21:31:10.424702+00:00",
+      "started": "2026-10-16T00:16:07.092244+00:00",
       "stop_command": "stop",
-      "stop_started": "2026-10-15T21:31:22.715358+00:00"
+      "stop_started": "2026-10-16T00:16:19.407376+00:00"
     }
   ],
   "comparison": "Semantic values and canonical numeric NBT types are separate. Java accepts NumericTag widths such as Short; a different canonical type alone is not a semantic failure.",
-  "duration_seconds": 99.449,
+  "duration_seconds": 99.424,
   "environment": {
     "auth": "isolated offline loopback",
     "host": "devbox",
@@ -6290,45 +6290,45 @@
     "vanilla:blocks.furnace_saved_state",
     "rust:blocks.furnace_saved_state"
   ],
-  "finished": "2026-10-15T21:31:23.091361+00:00",
+  "finished": "2026-10-16T00:16:19.790078+00:00",
   "harness_manifest": {
-    "compatibility/scenario-map.json": "a4f0bf324afc321013bbd94d0c86ac666cf4aa580788759ce7b5c6a4fa6d24b2",
+    "compatibility/scenario-map.json": "5f448a16b33a3cdb9b391d5c2006362dc37f72e67c8e520d759b1462b44543a2",
     "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
     "tools/check_furnaces.py": "5e7f179297ba639a9ada996876b0483de14c898235791a4b73e89ac04c3b3b65",
     "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
-    "tools/parity/bot.py": "6ac6716bcba71f9babe08b220a6db668668d3ae487434b2058eb1fb437c76106",
-    "tools/parity/client.ts": "6253c87bb3d2bf7d4955671e4429ee4452abc52d4c7f170fab6810d5ed73cc46",
+    "tools/parity/bot.py": "c04991a06c146d8cdb73bee3fb8f9b67d6a5dcf3be4494e566e8c395ce145e7b",
+    "tools/parity/client.ts": "b578d77437893347644de1899919605a7c3a504216c9f492a7c3bbe2993b354f",
     "tools/parity/furnaces.py": "bf792b8155c55e60652b6f2ffee3bc8ea22e2061cacd137ed99d338c04fbf727",
     "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
-    "tools/parity/suite.py": "776182cf34a23c816a80b3a571cdb10f53a4f05185ece94a7fe5ac0ff88477a4",
+    "tools/parity/suite.py": "97e1600c1469ac5609a6719ac112563c41ad18e374bf85fa3acaae6c0e0fbbd9",
     "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b"
   },
   "host": "devbox",
   "java": {
-    "path": "$REPO/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
+    "path": "/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
     "sha256": "7380ce48ed5013735d2c8414db54adb8f981e7933ff594bd36f3baccddaafba3",
     "version": "openjdk version \"25.0.4.1\" 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS, mixed mode, sharing)\n"
   },
   "kind": "furnace_continuation_diagnostic",
   "official_jar": {
     "bytes": 62294556,
-    "path": "$REPO/.cache/vanilla/26.3/server.jar",
+    "path": "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar",
     "sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
     "sha256": "d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64"
   },
   "protocol": 777,
   "publishes_compatibility_results": false,
   "result": "passed",
-  "run_directory": "$REPO/.cache/runs/furnaces-ky3i84m4",
+  "run_directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8",
   "rust_binary": {
-    "bytes": 119266616,
-    "pinned_path": "$REPO/.cache/runs/furnaces-ky3i84m4/bin/ferraloom",
-    "pinned_sha256": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
-    "source_path": "$REPO/target/debug/ferraloom",
-    "source_sha256_after": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
-    "source_sha256_before": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9"
+    "bytes": 119292504,
+    "pinned_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/bin/ferraloom",
+    "pinned_sha256": "5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a",
+    "source_path": "/home/doc/code/Ferraloom/target/debug/ferraloom",
+    "source_sha256_after": "5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a",
+    "source_sha256_before": "5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a"
   },
-  "rust_binary_sha256": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+  "rust_binary_sha256": "5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a",
   "schema_version": 1,
   "scope": "Timer/speed/fuel remainder fixtures only, not full furnace/inventory/XP/name/lock/Minecraft parity.",
   "server_sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
@@ -6447,7 +6447,7 @@
     ]
   },
   "source_code": {
-    "commit": "f6a24a10985a3e1e4feecffc78aa833e2054eb63",
+    "commit": "105758aa42d2a365a9791857f45d826e56e80e9f",
     "dirty": false,
     "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tracked_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -6455,27 +6455,27 @@
   },
   "source_fixture": {
     "argv": [
-      "$REPO/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
+      "/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1/bin/java",
       "-Xms128M",
       "-Xmx1024M",
       "-jar",
-      "$REPO/.cache/vanilla/26.3/server.jar",
+      "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar",
       "nogui"
     ],
-    "commands_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/commands.jsonl",
+    "commands_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/java-source/commands.jsonl",
     "configs": {
       "eula.txt": {
         "sha256": "bbe6610d0d1674d81a4df927f38a7f5b94f6cc5c43cf8223b338607ae351143b",
         "text": "# Explicit local test acceptance supplied via --accept-eula\neula=true\n"
       },
       "server.properties": {
-        "sha256": "2eb877e3b36a433cc622dbfc1826f9d32b43cf392c3a9e7f7e9cdffc498c862e",
-        "text": "server-ip=127.0.0.1\nserver-port=50109\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
+        "sha256": "791c26e51c504781323fd71e5e81bf1a4da73bd04b572d3adf5226ca459d174a",
+        "text": "server-ip=127.0.0.1\nserver-port=48275\nonline-mode=false\nenforce-secure-profile=false\nlevel-seed=12345678\nview-distance=2\nsimulation-distance=2\nmax-players=20\nspawn-protection=0\nnetwork-compression-threshold=256\nmax-tick-time=60000\nwhite-list=false\nallow-flight=true\npause-when-empty-seconds=-1\nmotd=Ferraloom compatibility reference\nenable-rcon=false\n"
       }
     },
-    "console_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/console.log",
-    "console_sha256": "b48c09d5cf95d0c1c43fe09293b64486993215febf3d2d79fd9ffdbbe3c61d78",
-    "directory": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source",
+    "console_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/java-source/console.log",
+    "console_sha256": "0d58cc34c4e61accb6f3ed1e50d52b214c8fafd60a58403911598e6640bcc48f",
+    "directory": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/java-source",
     "exit": {
       "code": 0,
       "forced_stop": false,
@@ -6483,17 +6483,17 @@
       "process_reaped": true
     },
     "final_save_game_time": {
-      "after": 239,
-      "before": 239
+      "after": 244,
+      "before": 244
     },
-    "finished": "2026-10-15T21:30:15.038610+00:00",
+    "finished": "2026-10-16T00:15:11.823806+00:00",
     "fixture_loading_game_time": {
-      "after": 2,
-      "before": 2
+      "after": 7,
+      "before": 7
     },
     "load_save_errors": [],
-    "loopback_port": 50109,
-    "pid": 283603,
+    "loopback_port": 48275,
+    "pid": 490024,
     "result": "passed",
     "runtime": "vanilla",
     "saved": {
@@ -6610,9 +6610,9 @@
         }
       },
       "chunk_data_version": 5023,
-      "raw_chunk_nbt_sha256": "8501d6b41f54e2c6089ca9f997aec730e6101b3fe673942fce3db1d2f84a718a",
-      "region_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/world/dimensions/minecraft/overworld/region/r.8.0.mca",
-      "region_sha256": "a40b5df4a2a9a2e5427212cb08a40d5818ba8918f1f872acfecfff028e9e89f6",
+      "raw_chunk_nbt_sha256": "061588d744cdf1c9923eedbe5489362eaf667a8512b8db3d37c1a9f5617d152b",
+      "region_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/java-source/world/dimensions/minecraft/overworld/region/r.8.0.mca",
+      "region_sha256": "2faa0725cb8d58d7e1a3b964cfea51e366448479e7042a27c6e82bac852fc99d",
       "typed_block_entities": {
         "blast_furnace": {
           "Items": [
@@ -6892,31 +6892,31 @@
       }
     },
     "shutdown_tail": [
-      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_067146f47c8a4508bf8b8f72b312a433",
-      "[23:30:13] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
-      "[23:30:13] [Server thread/INFO]: System chat: Saved the game",
-      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_62cf62df3c3645a8b454a37364e47639",
-      "[23:30:13] [Server thread/INFO]: System chat: The game is frozen",
-      "[23:30:13] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
-      "Average time per tick: 3.6ms (Target: 50.0ms)",
-      "[23:30:13] [Server thread/INFO]: System chat: Percentiles: P50: 0.5ms P95: 1.8ms P99: 253.8ms. Sample: 100",
-      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_0300d301c49341b18b38bebcedfbb323",
-      "[23:30:13] [Server thread/INFO]: System chat: The game time is 239 tick(s)",
-      "[23:30:13] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_9d9c5a8ecf2b4bb194134cbdc5454f37",
-      "[23:30:13] [Server thread/INFO]: System chat: Stopping the server",
-      "[23:30:13] [Server thread/INFO]: Stopping server",
-      "[23:30:13] [Server thread/INFO]: Saving players",
-      "[23:30:13] [Server thread/INFO]: Saving worlds",
-      "[23:30:13] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
-      "[23:30:14] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
-      "[23:30:14] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
+      "[02:15:10] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_463bb82fa4f7466b98d74bdcdb7e4b6c",
+      "[02:15:10] [Server thread/INFO]: System chat: Saving the game (this may take a moment!)",
+      "[02:15:10] [Server thread/INFO]: System chat: Saved the game",
+      "[02:15:10] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_b4cc8cb8c1fd4f9bab90a40e0da450b1",
+      "[02:15:10] [Server thread/INFO]: System chat: The game is frozen",
+      "[02:15:10] [Server thread/INFO]: System chat: Target tick rate: 20.0 per second.",
+      "Average time per tick: 4.1ms (Target: 50.0ms)",
+      "[02:15:10] [Server thread/INFO]: System chat: Percentiles: P50: 0.5ms P95: 1.6ms P99: 294.2ms. Sample: 100",
+      "[02:15:10] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_a8f36a9615aa45e0b9c1a83c43b7b075",
+      "[02:15:10] [Server thread/INFO]: System chat: The game time is 244 tick(s)",
+      "[02:15:10] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_c02bfe83792d4a10905801efbdba1af0",
+      "[02:15:10] [Server thread/INFO]: System chat: Stopping the server",
+      "[02:15:10] [Server thread/INFO]: Stopping server",
+      "[02:15:10] [Server thread/INFO]: Saving players",
+      "[02:15:10] [Server thread/INFO]: Saving worlds",
+      "[02:15:10] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld",
+      "[02:15:11] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether",
+      "[02:15:11] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end"
     ],
-    "started": "2026-10-15T21:29:44.188407+00:00",
+    "started": "2026-10-16T00:14:40.907171+00:00",
     "stop_command": "stop",
-    "stop_started": "2026-10-15T21:30:13.569315+00:00",
+    "stop_started": "2026-10-16T00:15:10.457455+00:00",
     "timing": {
-      "after": 239,
-      "before": 2,
+      "after": 244,
+      "before": 7,
       "delta": 237,
       "frozen_after": true
     },
@@ -7627,104 +7627,104 @@
       ],
       "semantic_result": "passed"
     },
-    "world_manifest_path": "$REPO/.cache/runs/furnaces-ky3i84m4/source-world-manifest.json",
-    "world_manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
-    "world_path": "$REPO/.cache/runs/furnaces-ky3i84m4/java-source/world"
+    "world_manifest_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/source-world-manifest.json",
+    "world_manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
+    "world_path": "/home/doc/code/Ferraloom/.cache/runs/furnaces-pqul2xi8/java-source/world"
   },
   "source_integrity_checks": [
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "initial verified source"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "before clone vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after clone vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after execution vanilla-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "before clone rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after clone rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after execution rust-main"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "before clone vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after clone vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after execution vanilla-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "before clone rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after clone rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "after execution rust-lava"
     },
     {
       "file_count": 36,
-      "manifest_sha256": "c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062",
+      "manifest_sha256": "2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f",
       "passed": true,
       "stage": "final verified source"
     }
   ],
   "source_state": {
-    "commit": "f6a24a10985a3e1e4feecffc78aa833e2054eb63",
+    "commit": "105758aa42d2a365a9791857f45d826e56e80e9f",
     "dirty": false,
     "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tracked_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "untracked_source_sha256": {}
   },
-  "started": "2026-10-15T21:29:43.642850+00:00",
+  "started": "2026-10-16T00:14:40.366230+00:00",
   "target": {
     "edition": "java",
     "java_major": 25,
@@ -7748,6 +7748,6 @@
     "version": "26.3"
   },
   "target_version": "26.3",
-  "test_suite_sha256": "c226c0009dc73767d73aeb805d407320d2ab072061a981fa4d51634f09bf4d43",
+  "test_suite_sha256": "3937f45e895668f89277763722f4a0f2316713739c6abeae36bbbd3ad6de80d6",
   "transport": "fresh sequential offline 127.0.0.1 processes"
 }

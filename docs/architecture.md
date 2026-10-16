@@ -17,6 +17,14 @@ matters for spectators receiving existing chunks without generation tickets.
 Ordinary terrain eviction pauses during save-off; explicit saves and shutdown
 still persist world state. Entity storage processes its unloads independently.
 
+Supported barrel, chest, trapped-chest, sign and hanging-sign data commands update
+retained live instances. Their state gate covers snapshot, edit and publication of
+complete persistence NBT; client update tags are separate. Source providers resolve
+before target locks, and world callbacks run after those locks are released. Sign
+command callbacks use a text snapshot and run after releasing sign locks. Unknown
+component forms retain their authored face on disk and refuse data edits before
+interpreting paths. Complete block-entity and component support remains unfinished.
+
 Player saves retain a previous `.dat_old`. Corrupt primary data is preserved
 before a valid backup is durably restored without rotating it into the backup.
 Primary IO errors reject admission rather than roll back to an older file.
@@ -25,11 +33,14 @@ Snapshots reserve their sequence before capture; the storage lock rejects a
 snapshot older than the last successful write before encoding or backup rotation.
 
 An owned lease reserves each UUID before loading player data and advancements.
-Replacement admission waits for the previous session's callbacks and both final
+Replacement admission waits for the previous session's leave callbacks and both final
 saves, with a bounded wait and client-close cancellation. Cleanup removes the
 exact Player instance. Advancement snapshots and atomic JSON writes currently
 share a server-wide gate; a blocking writer retains that gate after cancellation,
-and admission waits for pending writes before reading. Per-player parallel saves
+and admission waits for pending writes before reading. Some command, chat and
+respawn handlers still spawn server-owned work outside the client task tracker.
+Complete packet ordering and draining all mutations before final saves remain
+unfinished. Per-player parallel saves
 and the existing chunk-coordinator lock latency remain performance work.
 
 Fill-destroy commands release chunk guards before invoking gameplay callbacks.
@@ -48,6 +59,12 @@ versions remain unfinished.
 The official artifact is pinned by metadata URL, SHA-1, size, release, Java major, and protocol. The test tool verifies the download before launching it. Registry identifiers and datapack paths come from the exact official artifact and its built-in data generator. REA artifact/process evidence and supplementary JVM codec inspection are documented separately.
 
 Reference tests use identical scenario inputs, fixed seeds, isolated worlds, offline authentication, and loopback listeners. A scenario must pass on both servers. Tests use explicit world predicates, packet observations, and restart checks. Results identify the tested Rust binary by SHA-256. These observations cover selected behavior, not every property in a feature family. Feature completion requires paired evidence for every required scenario and the strict ledger gate.
+
+The separate live block-data check decodes menu content and slot packets, submits
+actual sign edits, and checks assigned editors, nonoperator command effects and
+fresh chunk state after restart. Supported rich-text clicks and literal submissions
+have separate assertions. Watchdogs and process-exit checks turn hangs or forced
+cleanup into failed observations.
 
 The furnace continuation check creates an official-server save after exactly
 237 stepped ticks, then uses fresh copies for both runtimes. It checks saved

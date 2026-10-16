@@ -12,7 +12,7 @@
       "pumpkin-command"
     ]
   },
-  "created_at": "2026-10-15T21:27:11.818814+00:00",
+  "created_at": "2026-10-16T00:12:06.662575+00:00",
   "environment": {
     "host": "devbox",
     "platform": "linux",
@@ -34,7 +34,7 @@
         "features": [
           "blocks.registry"
         ],
-        "duration_seconds": 0.072
+        "duration_seconds": 0.076
       },
       {
         "result": "passed",
@@ -47,7 +47,7 @@
         "features": [
           "persistence.level_data"
         ],
-        "duration_seconds": 0.042
+        "duration_seconds": 0.038
       },
       {
         "result": "passed",
@@ -59,7 +59,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.003
+        "duration_seconds": 0.013
       },
       {
         "result": "passed",
@@ -71,7 +71,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.004
+        "duration_seconds": 0.003
       },
       {
         "result": "passed",
@@ -83,7 +83,7 @@
         "features": [
           "network.handshake"
         ],
-        "duration_seconds": 0.037
+        "duration_seconds": 0.033
       },
       {
         "result": "passed",
@@ -95,7 +95,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.01
+        "duration_seconds": 0.007
       },
       {
         "result": "passed",
@@ -106,7 +106,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.007
+        "duration_seconds": 0.01
       },
       {
         "result": "passed",
@@ -117,7 +117,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.006
+        "duration_seconds": 0.002
       },
       {
         "result": "passed",
@@ -129,7 +129,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.049
+        "duration_seconds": 0.06
       },
       {
         "result": "passed",
@@ -141,7 +141,7 @@
         "features": [
           "network.framing"
         ],
-        "duration_seconds": 0.006
+        "duration_seconds": 0.007
       },
       {
         "result": "passed",
@@ -156,7 +156,7 @@
           "network.configuration",
           "network.registries"
         ],
-        "duration_seconds": 1.239
+        "duration_seconds": 1.217
       },
       {
         "result": "passed",
@@ -200,7 +200,7 @@
         "features": [
           "players.teleport"
         ],
-        "duration_seconds": 0.143
+        "duration_seconds": 0.146
       },
       {
         "result": "passed",
@@ -216,7 +216,7 @@
         "features": [
           "network.movement"
         ],
-        "duration_seconds": 0.137
+        "duration_seconds": 0.189
       },
       {
         "result": "passed",
@@ -228,7 +228,7 @@
         "features": [
           "network.login"
         ],
-        "duration_seconds": 0.304
+        "duration_seconds": 0.283
       },
       {
         "result": "passed",
@@ -1678,34 +1678,36 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.003
+        "duration_seconds": 0.001
       },
       {
         "result": "passed",
         "detail": {
           "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
           "server_to_client": {
-            "text": "FERRALOOM_CHAT_f8818d254b214f5a827c67735cabacb2",
+            "text": "FERRALOOM_CHAT_c4045c42e3c341b997134717f6d32578",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
             "signature": "not_applicable",
-            "signature_verified": false
+            "signature_verified": false,
+            "sequence": 332
           },
           "unsigned_offline_player_chat_echo": {
-            "text": "FERRALOOM_ECHO_77c1e6f5dbcc4ce183c72c80f2f46b2d",
+            "text": "FERRALOOM_ECHO_a3907e52ef6840d2a9c65f86b485574f",
             "packet_id": 66,
             "packet_type": "player_chat",
             "text_scope": "message_body",
             "signature": "absent",
-            "signature_verified": false
+            "signature_verified": false,
+            "sequence": 364
           }
         },
         "id": "network.chat_delivery",
         "features": [
           "network.chat_delivery"
         ],
-        "duration_seconds": 0.257
+        "duration_seconds": 0.258
       },
       {
         "result": "passed",
@@ -1719,7 +1721,7 @@
         "features": [
           "blocks.placement"
         ],
-        "duration_seconds": 0.216
+        "duration_seconds": 0.272
       },
       {
         "result": "passed",
@@ -1747,7 +1749,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.251
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -1762,7 +1764,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.298
+        "duration_seconds": 0.299
       },
       {
         "result": "passed",
@@ -1822,7 +1824,7 @@
         "features": [
           "blocks.redstone_power"
         ],
-        "duration_seconds": 0.65
+        "duration_seconds": 0.649
       },
       {
         "result": "passed",
@@ -1872,7 +1874,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.399
+        "duration_seconds": 0.4
       },
       {
         "result": "passed",
@@ -1937,15 +1939,15 @@
           ],
           "expected_last_feedback": "No blocks were filled",
           "last_command_output": [
-            "[23:27:40] [Server thread/INFO]: System chat: No blocks were filled",
-            "[23:27:40] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_70b6ddd17f8d4f51baf5406d727d0640"
+            "[02:12:35] [Server thread/INFO]: System chat: No blocks were filled",
+            "[02:12:35] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_abf6fae5c05e4fd38d81949bf821d578"
           ]
         },
         "id": "block.fill_destroy_same_fluid",
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.401
+        "duration_seconds": 0.35
       },
       {
         "result": "passed",
@@ -1961,7 +1963,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.353
+        "duration_seconds": 0.354
       },
       {
         "result": "passed",
@@ -1977,7 +1979,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.346
+        "duration_seconds": 0.347
       },
       {
         "result": "passed",
@@ -1996,7 +1998,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.5
+        "duration_seconds": 0.499
       },
       {
         "result": "passed",
@@ -2089,7 +2091,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.3
+        "duration_seconds": 0.299
       },
       {
         "result": "passed",
@@ -2137,6 +2139,30 @@
       {
         "result": "passed",
         "detail": {
+          "predicate": "if score MergeCommand parity matches 1 if score MergeCommandSuccess parity matches 1 if score MergeCommandLength parity matches 1 if score MergeCommandUnchanged parity matches 0 if score MergeCommandUnchangedSuccess parity matches 0 if data storage ferraloom:merge_command {keep:99,root:{sibling:2,nested:{keep:1,value:3,added:4},list:[5],scalar:{inside:7},object:2}}",
+          "commands": [
+            "data merge storage ferraloom:merge_command {keep:99,root:{sibling:2,nested:{keep:1,value:0},list:[1,2],scalar:0,object:{old:1}}}",
+            "execute store result score MergeCommand parity store success score MergeCommandSuccess parity run data merge storage ferraloom:merge_command {root:{nested:{value:3,added:4},list:[5],scalar:{inside:7},object:2}}",
+            "execute store result score MergeCommandLength parity run data get storage ferraloom:merge_command root.list",
+            "scoreboard players set MergeCommandUnchanged parity 17",
+            "scoreboard players set MergeCommandUnchangedSuccess parity 17",
+            "execute store result score MergeCommandUnchanged parity store success score MergeCommandUnchangedSuccess parity run data merge storage ferraloom:merge_command {root:{nested:{value:3,added:4},list:[5],scalar:{inside:7},object:2}}"
+          ],
+          "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+          "last_command_output": [
+            "[02:12:40] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
+            "[02:12:40] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_d1a2adcddf194ebab73b361a73028845"
+          ]
+        },
+        "id": "data.merge_recursive",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.501
+      },
+      {
+        "result": "passed",
+        "detail": {
           "predicate": "if score MergeRecursive parity matches 1 if score MergeListLength parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
           "commands": [
             "data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
@@ -2149,7 +2175,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.402
+        "duration_seconds": 0.4
       },
       {
         "result": "passed",
@@ -2164,8 +2190,8 @@
           ],
           "expected_last_feedback": "Nothing changed. The specified properties already have these values",
           "last_command_output": [
-            "[23:27:45] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
-            "[23:27:45] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_fd2f0555057a49b2a3e79009af8f5295"
+            "[02:12:41] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
+            "[02:12:41] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_e565ced1fffc4159b37a3464c9dc8fb5"
           ]
         },
         "id": "data.modify_merge_counts",
@@ -2185,15 +2211,15 @@
           ],
           "expected_last_feedback": "Expected an object: got 7",
           "last_command_output": [
-            "[23:27:45] [Server thread/INFO]: System chat: Expected an object: got 7",
-            "[23:27:45] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_c23204f6b125496a9b24d33085c093d4"
+            "[02:12:41] [Server thread/INFO]: System chat: Expected an object: got 7",
+            "[02:12:41] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_87a9e4b6f71947109b0ea8300a132cf3"
           ]
         },
         "id": "data.modify_merge_invalid_source",
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.349
+        "duration_seconds": 0.35
       },
       {
         "result": "passed",
@@ -2205,8 +2231,8 @@
           ],
           "expected_last_feedback": "Expected an object: got 7",
           "last_command_output": [
-            "[23:27:46] [Server thread/INFO]: System chat: Expected an object: got 7",
-            "[23:27:46] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_592f7a679e104a60b3946afb8bee9677"
+            "[02:12:41] [Server thread/INFO]: System chat: Expected an object: got 7",
+            "[02:12:41] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_dd90f2596ad148b1b7adcf8b3c419859"
           ]
         },
         "id": "data.modify_merge_partial_failure",
@@ -2225,8 +2251,8 @@
           ],
           "expected_last_feedback": "Nothing changed. The specified properties already have these values",
           "last_command_output": [
-            "[23:27:46] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
-            "[23:27:46] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_d6e88fbe0dc84b8e999742f2985c4c9c"
+            "[02:12:41] [Server thread/INFO]: System chat: Nothing changed. The specified properties already have these values",
+            "[02:12:41] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_bdb2ed7553384541a26b64b96164336c"
           ]
         },
         "id": "data.modify_merge_primitive_parent",
@@ -2252,7 +2278,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.501
+        "duration_seconds": 0.5
       },
       {
         "result": "passed",
@@ -2264,16 +2290,16 @@
           ],
           "expected_last_feedback": "Invalid ID",
           "last_command_output": [
-            "[23:27:47] [Server thread/INFO]: System chat: Invalid ID",
-            "[23:27:47] [Server thread/INFO]: System chat: ...y storage ..:unsafe value set value 1<--[HERE]",
-            "[23:27:47] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_6a6bc03e4027480da9783c5f1e0a1734"
+            "[02:12:42] [Server thread/INFO]: System chat: Invalid ID",
+            "[02:12:42] [Server thread/INFO]: System chat: ...y storage ..:unsafe value set value 1<--[HERE]",
+            "[02:12:42] [Server thread/INFO]: [Not Secure] [Server] FERRALOOM_END_15d4b555902f4d9dad2fb4b6ff1fc8b7"
           ]
         },
         "id": "data.storage_namespace_rejection",
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.3
+        "duration_seconds": 0.302
       },
       {
         "result": "passed",
@@ -2294,7 +2320,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.602
+        "duration_seconds": 0.551
       },
       {
         "result": "passed",
@@ -2325,7 +2351,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 1.098
+        "duration_seconds": 1.047
       },
       {
         "result": "passed",
@@ -2356,7 +2382,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 1.101
+        "duration_seconds": 1.1
       },
       {
         "result": "passed",
@@ -2384,7 +2410,7 @@
         "features": [
           "entities.combat"
         ],
-        "duration_seconds": 0.25
+        "duration_seconds": 0.251
       },
       {
         "result": "passed",
@@ -2398,7 +2424,7 @@
         "features": [
           "entities.lifecycle"
         ],
-        "duration_seconds": 1.65
+        "duration_seconds": 1.648
       },
       {
         "result": "passed",
@@ -2413,7 +2439,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.15
+        "duration_seconds": 0.151
       },
       {
         "result": "passed",
@@ -2431,7 +2457,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.45
+        "duration_seconds": 0.449
       },
       {
         "result": "passed",
@@ -2449,7 +2475,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.45
+        "duration_seconds": 0.451
       },
       {
         "result": "passed",
@@ -2467,7 +2493,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.6
+        "duration_seconds": 0.5
       },
       {
         "result": "passed",
@@ -2538,7 +2564,7 @@
         "features": [
           "world.end"
         ],
-        "duration_seconds": 1.201
+        "duration_seconds": 1.155
       },
       {
         "result": "passed",
@@ -2553,7 +2579,7 @@
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.3
+        "duration_seconds": 0.296
       },
       {
         "result": "passed",
@@ -2569,7 +2595,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.354
+        "duration_seconds": 0.35
       },
       {
         "result": "passed",
@@ -2588,7 +2614,7 @@
         "features": [
           "players.teams"
         ],
-        "duration_seconds": 0.545
+        "duration_seconds": 0.549
       },
       {
         "result": "passed",
@@ -2649,7 +2675,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 1.85
+        "duration_seconds": 1.849
       },
       {
         "result": "passed",
@@ -2697,7 +2723,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 3.152
+        "duration_seconds": 3.1
       },
       {
         "result": "passed",
@@ -2722,7 +2748,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 3.098
+        "duration_seconds": 3.1
       },
       {
         "result": "passed",
@@ -2754,7 +2780,7 @@
           "blocks.fluids",
           "world.chunk_tickets"
         ],
-        "duration_seconds": 2.903
+        "duration_seconds": 2.909
       },
       {
         "result": "passed",
@@ -2770,7 +2796,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.398
+        "duration_seconds": 0.393
       },
       {
         "result": "passed",
@@ -2784,7 +2810,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.249
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -2835,7 +2861,7 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.316
+        "duration_seconds": 0.284
       },
       {
         "result": "passed",
@@ -2858,7 +2884,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.18
+        "duration_seconds": 0.234
       },
       {
         "result": "passed",
@@ -2870,7 +2896,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.192
+        "duration_seconds": 0.164
       },
       {
         "result": "passed",
@@ -2882,7 +2908,7 @@
         "features": [
           "persistence.level_data"
         ],
-        "duration_seconds": 0.102
+        "duration_seconds": 0.1
       },
       {
         "result": "passed",
@@ -2891,7 +2917,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.048
+        "duration_seconds": 0.051
       },
       {
         "result": "passed",
@@ -2904,7 +2930,7 @@
             444
           ],
           "health": 7,
-          "predicate": "if score EntityCopies fe7679d276592d matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+          "predicate": "if score EntityCopies fed8e3bd782b57 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
         },
         "id": "persistence.entity_restart",
         "features": [
@@ -2931,7 +2957,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.174
+        "duration_seconds": 0.149
       },
       {
         "result": "passed",
@@ -2947,7 +2973,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.064
+        "duration_seconds": 0.078
       },
       {
         "result": "passed",
@@ -2998,7 +3024,7 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.102
+        "duration_seconds": 0.123
       },
       {
         "result": "passed",
@@ -3012,7 +3038,7 @@
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.251
+        "duration_seconds": 0.25
       },
       {
         "result": "passed",
@@ -3039,7 +3065,7 @@
         "features": [
           "lifecycle.shutdown"
         ],
-        "duration_seconds": 0.566
+        "duration_seconds": 0.565
       },
       {
         "result": "passed",
@@ -3051,7 +3077,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.189
+        "duration_seconds": 0.203
       },
       {
         "result": "passed",
@@ -3064,13 +3090,13 @@
             444
           ],
           "health": 5,
-          "predicate": "if score EntityCopies fedb52e9307f4d matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+          "predicate": "if score EntityCopies fe030aa09f531d matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
         },
         "id": "persistence.entity_signal_restart",
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.216
+        "duration_seconds": 0.209
       },
       {
         "result": "passed",
@@ -3121,7 +3147,7 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.086
+        "duration_seconds": 0.149
       }
     ],
     "rust": [
@@ -3136,7 +3162,7 @@
         "features": [
           "blocks.registry"
         ],
-        "duration_seconds": 0.666
+        "duration_seconds": 0.638
       },
       {
         "result": "passed",
@@ -3161,7 +3187,7 @@
         "features": [
           "network.status"
         ],
-        "duration_seconds": 0.001
+        "duration_seconds": 0.0
       },
       {
         "result": "passed",
@@ -3258,7 +3284,7 @@
           "network.configuration",
           "network.registries"
         ],
-        "duration_seconds": 0.322
+        "duration_seconds": 0.307
       },
       {
         "result": "passed",
@@ -3302,7 +3328,7 @@
         "features": [
           "players.teleport"
         ],
-        "duration_seconds": 0.002
+        "duration_seconds": 0.103
       },
       {
         "result": "passed",
@@ -3330,7 +3356,7 @@
         "features": [
           "network.login"
         ],
-        "duration_seconds": 0.104
+        "duration_seconds": 0.134
       },
       {
         "result": "passed",
@@ -4325,27 +4351,29 @@
         "detail": {
           "scope": "offline unsigned message delivery; packet/rendering/signature parity unverified",
           "server_to_client": {
-            "text": "FERRALOOM_CHAT_a6eca4f70e394be7b31e722053dbf40c",
+            "text": "FERRALOOM_CHAT_f93ad6f6161f4163809530670e4b2444",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
             "signature": "not_applicable",
-            "signature_verified": false
+            "signature_verified": false,
+            "sequence": 166
           },
           "unsigned_offline_player_chat_echo": {
-            "text": "<FerraloomTest> FERRALOOM_ECHO_fd2a3d5f79ba4d23b4899f991213ae32",
+            "text": "<FerraloomTest> FERRALOOM_ECHO_fb3c683d0b9f4972be87349188332fa9",
             "packet_id": 33,
             "packet_type": "disguised_chat",
             "text_scope": "component_text",
             "signature": "not_applicable",
-            "signature_verified": false
+            "signature_verified": false,
+            "sequence": 168
           }
         },
         "id": "network.chat_delivery",
         "features": [
           "network.chat_delivery"
         ],
-        "duration_seconds": 0.104
+        "duration_seconds": 0.105
       },
       {
         "result": "passed",
@@ -4402,7 +4430,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.152
+        "duration_seconds": 0.151
       },
       {
         "result": "passed",
@@ -4432,7 +4460,7 @@
         "features": [
           "blocks.falling"
         ],
-        "duration_seconds": 1.502
+        "duration_seconds": 1.501
       },
       {
         "result": "passed",
@@ -4447,7 +4475,7 @@
         "features": [
           "blocks.redstone_power"
         ],
-        "duration_seconds": 0.506
+        "duration_seconds": 0.504
       },
       {
         "result": "passed",
@@ -4462,7 +4490,7 @@
         "features": [
           "blocks.redstone_power"
         ],
-        "duration_seconds": 0.503
+        "duration_seconds": 0.502
       },
       {
         "result": "passed",
@@ -4545,7 +4573,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.152
+        "duration_seconds": 0.153
       },
       {
         "result": "passed",
@@ -4578,7 +4606,7 @@
           "expected_last_feedback": "No blocks were filled",
           "last_command_output": [
             "No blocks were filled",
-            " INFO [Server] FERRALOOM_END_deef7b8c22d44f0c97dfe1a215b65b40"
+            " INFO [Server] FERRALOOM_END_adaaf9b4ddc44e15a95a9c1bf7cacab1"
           ]
         },
         "id": "block.fill_destroy_same_fluid",
@@ -4636,7 +4664,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.153
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -4652,7 +4680,7 @@
         "features": [
           "players.scoreboards"
         ],
-        "duration_seconds": 0.152
+        "duration_seconds": 0.151
       },
       {
         "result": "passed",
@@ -4777,6 +4805,30 @@
       {
         "result": "passed",
         "detail": {
+          "predicate": "if score MergeCommand parity matches 1 if score MergeCommandSuccess parity matches 1 if score MergeCommandLength parity matches 1 if score MergeCommandUnchanged parity matches 0 if score MergeCommandUnchangedSuccess parity matches 0 if data storage ferraloom:merge_command {keep:99,root:{sibling:2,nested:{keep:1,value:3,added:4},list:[5],scalar:{inside:7},object:2}}",
+          "commands": [
+            "data merge storage ferraloom:merge_command {keep:99,root:{sibling:2,nested:{keep:1,value:0},list:[1,2],scalar:0,object:{old:1}}}",
+            "execute store result score MergeCommand parity store success score MergeCommandSuccess parity run data merge storage ferraloom:merge_command {root:{nested:{value:3,added:4},list:[5],scalar:{inside:7},object:2}}",
+            "execute store result score MergeCommandLength parity run data get storage ferraloom:merge_command root.list",
+            "scoreboard players set MergeCommandUnchanged parity 17",
+            "scoreboard players set MergeCommandUnchangedSuccess parity 17",
+            "execute store result score MergeCommandUnchanged parity store success score MergeCommandUnchangedSuccess parity run data merge storage ferraloom:merge_command {root:{nested:{value:3,added:4},list:[5],scalar:{inside:7},object:2}}"
+          ],
+          "expected_last_feedback": "Nothing changed. The specified properties already have these values",
+          "last_command_output": [
+            "Nothing changed. The specified properties already have these values",
+            " INFO [Server] FERRALOOM_END_3c1cdceb6695491d86a0601e78fe1e91"
+          ]
+        },
+        "id": "data.merge_recursive",
+        "features": [
+          "players.commands"
+        ],
+        "duration_seconds": 0.153
+      },
+      {
+        "result": "passed",
+        "detail": {
           "predicate": "if score MergeRecursive parity matches 1 if score MergeListLength parity matches 1 if data storage ferraloom:merge_recursive {untouched:99,object:{sibling:2,nested:{keep:1,first:3,last:5,replace:6},list:[2],scalar:{inside:7},object:2}} if data storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
           "commands": [
             "data merge storage ferraloom:merge_source {parts:[{nested:{first:3,replace:4},list:[2],scalar:{inside:7},object:2},{nested:{last:5,replace:6}}]}",
@@ -4805,7 +4857,7 @@
           "expected_last_feedback": "Nothing changed. The specified properties already have these values",
           "last_command_output": [
             "Nothing changed. The specified properties already have these values",
-            " INFO [Server] FERRALOOM_END_287c690b6f014543a8756b4c40138947"
+            " INFO [Server] FERRALOOM_END_dd58b030a95a4895a6e0dbaa9d256f92"
           ]
         },
         "id": "data.modify_merge_counts",
@@ -4826,7 +4878,7 @@
           "expected_last_feedback": "Expected an object: got 7",
           "last_command_output": [
             "Expected an object: got 7",
-            " INFO [Server] FERRALOOM_END_990800f989034a3f90eed2d7ad499f4b"
+            " INFO [Server] FERRALOOM_END_f2a75de0f72a423b9e3550c2b9bb7451"
           ]
         },
         "id": "data.modify_merge_invalid_source",
@@ -4846,14 +4898,14 @@
           "expected_last_feedback": "Expected an object: got 7",
           "last_command_output": [
             "Expected an object: got 7",
-            " INFO [Server] FERRALOOM_END_6238a937fafb4ed7a66eb11eb0a43941"
+            " INFO [Server] FERRALOOM_END_68668a35218448f5ac0ca0cb06dc9dfd"
           ]
         },
         "id": "data.modify_merge_partial_failure",
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.151
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -4866,7 +4918,7 @@
           "expected_last_feedback": "Nothing changed. The specified properties already have these values",
           "last_command_output": [
             "Nothing changed. The specified properties already have these values",
-            " INFO [Server] FERRALOOM_END_e8e0a8cf27ba4ea98502fabc838670c5"
+            " INFO [Server] FERRALOOM_END_191b728c68354e739b4dfa65b932ab72"
           ]
         },
         "id": "data.modify_merge_primitive_parent",
@@ -4892,7 +4944,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.152
+        "duration_seconds": 0.153
       },
       {
         "result": "passed",
@@ -4906,7 +4958,7 @@
           "last_command_output": [
             "Invalid ID",
             "...y storage ..:unsafe value set value 1<--[HERE]",
-            " INFO [Server] FERRALOOM_END_bd67286b748840e08793c6d85fdd19f4"
+            " INFO [Server] FERRALOOM_END_cb30c645734c4199a44595e7ee532ca8"
           ]
         },
         "id": "data.storage_namespace_rejection",
@@ -5038,7 +5090,7 @@
         "features": [
           "entities.lifecycle"
         ],
-        "duration_seconds": 1.503
+        "duration_seconds": 1.502
       },
       {
         "result": "passed",
@@ -5053,7 +5105,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.003
+        "duration_seconds": 0.001
       },
       {
         "result": "passed",
@@ -5071,7 +5123,7 @@
         "features": [
           "players.commands"
         ],
-        "duration_seconds": 0.154
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -5089,7 +5141,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.153
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -5107,7 +5159,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 0.463
+        "duration_seconds": 0.397
       },
       {
         "result": "passed",
@@ -5121,7 +5173,7 @@
         "features": [
           "world.functions"
         ],
-        "duration_seconds": 0.151
+        "duration_seconds": 0.152
       },
       {
         "result": "passed",
@@ -5135,7 +5187,7 @@
         "features": [
           "world.nether"
         ],
-        "duration_seconds": 2.675
+        "duration_seconds": 2.6
       },
       {
         "result": "passed",
@@ -5178,7 +5230,7 @@
         "features": [
           "world.end"
         ],
-        "duration_seconds": 2.417
+        "duration_seconds": 2.427
       },
       {
         "result": "passed",
@@ -5266,7 +5318,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 1.011
+        "duration_seconds": 1.013
       },
       {
         "result": "passed",
@@ -5289,7 +5341,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 1.012
+        "duration_seconds": 1.013
       },
       {
         "result": "passed",
@@ -5312,7 +5364,7 @@
         "features": [
           "blocks.redstone_logic"
         ],
-        "duration_seconds": 1.012
+        "duration_seconds": 1.011
       },
       {
         "result": "passed",
@@ -5394,7 +5446,7 @@
           "blocks.fluids",
           "world.chunk_tickets"
         ],
-        "duration_seconds": 2.222
+        "duration_seconds": 2.221
       },
       {
         "result": "passed",
@@ -5410,7 +5462,7 @@
         "features": [
           "world.chunk_tickets"
         ],
-        "duration_seconds": 1.209
+        "duration_seconds": 1.21
       },
       {
         "result": "passed",
@@ -5475,7 +5527,7 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.105
+        "duration_seconds": 0.11
       },
       {
         "result": "passed",
@@ -5498,7 +5550,7 @@
         "features": [
           "persistence.chunk_data"
         ],
-        "duration_seconds": 0.153
+        "duration_seconds": 0.151
       },
       {
         "result": "passed",
@@ -5544,7 +5596,7 @@
             444
           ],
           "health": 7,
-          "predicate": "if score EntityCopies fe33550b67b308 matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
+          "predicate": "if score EntityCopies fe6a8f84727aea matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:7.0f}]"
         },
         "id": "persistence.entity_restart",
         "features": [
@@ -5571,7 +5623,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.051
+        "duration_seconds": 0.049
       },
       {
         "result": "passed",
@@ -5587,7 +5639,7 @@
         "features": [
           "persistence.scoreboard_data"
         ],
-        "duration_seconds": 0.056
+        "duration_seconds": 0.048
       },
       {
         "result": "passed",
@@ -5638,7 +5690,7 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.059
+        "duration_seconds": 0.05
       },
       {
         "result": "passed",
@@ -5704,13 +5756,13 @@
             444
           ],
           "health": 5,
-          "predicate": "if score EntityCopies fef2e373f6751e matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
+          "predicate": "if score EntityCopies fe3175571a5fef matches 1 if entity @e[type=pig,tag=ferraloom_saved,nbt={UUID:[I;111,222,333,444],Health:5.0f}]"
         },
         "id": "persistence.entity_signal_restart",
         "features": [
           "persistence.entity_data"
         ],
-        "duration_seconds": 0.001
+        "duration_seconds": 0.002
       },
       {
         "result": "passed",
@@ -5761,27 +5813,27 @@
         "features": [
           "persistence.map_data"
         ],
-        "duration_seconds": 0.047
+        "duration_seconds": 0.048
       }
     ]
   },
   "harness_manifest": {
-    "tools/parity/bot.py": "6ac6716bcba71f9babe08b220a6db668668d3ae487434b2058eb1fb437c76106",
+    "tools/parity/bot.py": "c04991a06c146d8cdb73bee3fb8f9b67d6a5dcf3be4494e566e8c395ce145e7b",
     "tools/parity/furnaces.py": "bf792b8155c55e60652b6f2ffee3bc8ea22e2061cacd137ed99d338c04fbf727",
     "tools/parity/protocol.py": "2fb9a38c75f83e0ac62005c53c9b3cf4532878cbf7f98923e541524f3f9ada51",
-    "tools/parity/suite.py": "776182cf34a23c816a80b3a571cdb10f53a4f05185ece94a7fe5ac0ff88477a4",
+    "tools/parity/suite.py": "97e1600c1469ac5609a6719ac112563c41ad18e374bf85fa3acaae6c0e0fbbd9",
     "tools/parity/worlds.py": "dae2eeca7d5486c9d93086a3d4fec9d47c401eed96b39f56af1745863e24ed0b",
-    "tools/parity/client.ts": "6253c87bb3d2bf7d4955671e4429ee4452abc52d4c7f170fab6810d5ed73cc46",
+    "tools/parity/client.ts": "b578d77437893347644de1899919605a7c3a504216c9f492a7c3bbe2993b354f",
     "tools/oracle.py": "bd0d6c3dd953896e034ba1fa82915a20159a77795a782caf1793d10a3c767319",
     "compatibility/target.json": "008920f0d8c2fad281c0b2751a38064da445ee2c521cfade431d4e1d7d8f7aaf",
-    "compatibility/scenario-map.json": "a4f0bf324afc321013bbd94d0c86ac666cf4aa580788759ce7b5c6a4fa6d24b2"
+    "compatibility/scenario-map.json": "5f448a16b33a3cdb9b391d5c2006362dc37f72e67c8e520d759b1462b44543a2"
   },
-  "test_suite_sha256": "68e521d5521376a4f4833b1b417a98358f7c798e01ae656cc1269d7977d75079",
+  "test_suite_sha256": "5d5d2972e9d53d9645360315d21bbe611586458d20e525fb88d637e3bd71a8f2",
   "source_state": {
-    "commit": "f6a24a10985a3e1e4feecffc78aa833e2054eb63",
+    "commit": "105758aa42d2a365a9791857f45d826e56e80e9f",
     "dirty": false
   },
-  "rust_binary_sha256": "541f7521122fb2aab4daba3b50b717f54480b5a9956eb9dae28a63cff28574c9",
+  "rust_binary_sha256": "5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a",
   "cross_world": [
     {
       "result": "passed",
@@ -5811,7 +5863,7 @@
         "persistence.chunk_data",
         "persistence.level_data"
       ],
-      "duration_seconds": 2.351
+      "duration_seconds": 2.346
     },
     {
       "result": "passed",
@@ -5841,13 +5893,13 @@
         "persistence.chunk_data",
         "persistence.level_data"
       ],
-      "duration_seconds": 12.425
+      "duration_seconds": 12.813
     }
   ],
   "terrain": {
-    "result": "passed",
+    "result": "failed",
     "detail": {
-      "result": "passed",
+      "result": "failed",
       "scope": "Block states only in one same-seed underground chunk sample; seed is a fixture precondition. No claim of complete terrain, biome, structure or world-generation parity.",
       "chunk": {
         "x": 0,
@@ -5862,11 +5914,72 @@
       "y_min": -64,
       "y_max": -1,
       "blocks_compared": 16384,
-      "matching_blocks": 16384,
-      "mismatched_blocks": 0,
-      "mismatch_sample": [],
+      "matching_blocks": 16380,
+      "mismatched_blocks": 4,
+      "mismatch_sample": [
+        {
+          "x": 12,
+          "y": -47,
+          "z": 1,
+          "vanilla": {
+            "name": "minecraft:deepslate_gold_ore",
+            "properties": {}
+          },
+          "rust": {
+            "name": "minecraft:deepslate",
+            "properties": {
+              "axis": "y"
+            }
+          }
+        },
+        {
+          "x": 13,
+          "y": -47,
+          "z": 1,
+          "vanilla": {
+            "name": "minecraft:deepslate_gold_ore",
+            "properties": {}
+          },
+          "rust": {
+            "name": "minecraft:deepslate",
+            "properties": {
+              "axis": "y"
+            }
+          }
+        },
+        {
+          "x": 12,
+          "y": -47,
+          "z": 2,
+          "vanilla": {
+            "name": "minecraft:deepslate_gold_ore",
+            "properties": {}
+          },
+          "rust": {
+            "name": "minecraft:deepslate",
+            "properties": {
+              "axis": "y"
+            }
+          }
+        },
+        {
+          "x": 13,
+          "y": -47,
+          "z": 2,
+          "vanilla": {
+            "name": "minecraft:deepslate_gold_ore",
+            "properties": {}
+          },
+          "rust": {
+            "name": "minecraft:deepslate",
+            "properties": {
+              "axis": "y"
+            }
+          }
+        }
+      ],
       "vanilla_sha256": "794c69a80d31522a8e7515a06bc841323e14664dfcc0b4e92fcec625e347197a",
-      "rust_sha256": "794c69a80d31522a8e7515a06bc841323e14664dfcc0b4e92fcec625e347197a",
+      "rust_sha256": "6a530e9b503c7265da745c6d713e3754bbe5d5541de435ea4790b51516ac595f",
       "blocks_report_sha256": "7a0de8aaf7b04d00c40b8ffdc4cfe75184cff2e821d336a020573201867105a4",
       "data_versions": {
         "vanilla": 5023,
@@ -5877,7 +5990,7 @@
     "features": [
       "world.terrain"
     ],
-    "duration_seconds": 0.354
+    "duration_seconds": 0.358
   },
   "command_tree": {
     "result": "failed",
@@ -6374,7 +6487,7 @@
     "features": [
       "players.commands"
     ],
-    "duration_seconds": 0.003
+    "duration_seconds": 0.002
   },
   "comparison": [
     {
@@ -6517,6 +6630,12 @@
     },
     {
       "id": "command.store_success",
+      "vanilla": "passed",
+      "rust": "passed",
+      "result": "passed"
+    },
+    {
+      "id": "data.merge_recursive",
       "vanilla": "passed",
       "rust": "passed",
       "result": "passed"
@@ -6949,6 +7068,7 @@
     }
   ],
   "failed": [
+    "worldgen.underground_chunk",
     "commands.advertised_syntax"
   ]
 }

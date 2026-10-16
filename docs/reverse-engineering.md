@@ -175,7 +175,7 @@ evidence.
 
 The original underground sample differed in three unsupported glow-lichen
 states and four gold-ore cells. Deferred postprocessing removed the lichen
-differences. The clean `571b6ca` executable's 67-scenario paired run now matches
+differences. The clean `571b6ca` executable's 67-scenario paired run matched
 all 16,384 sampled block states, including the gold cells. That build includes
 sequential forced-chunk admission and chunk lifecycle changes. This observation
 does not isolate the earlier gold mismatch's cause or establish general
@@ -190,8 +190,14 @@ Both `5ce6ee0` runs matched Java, with no intervening generation fix. The
 [failed report](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
 is retained. Neighbor decoration order could alter ore discard draws when a
 trial chamber replaces western candidate blocks, but the failing runtime's
-interleaving has not been observed. A controlled replay is prepared; it has not
-established a fix. General deterministic generation remains unfinished.
+interleaving has not been observed. One controlled replay passed 10 of 11 explicit
+gates. West-first matched Java and center-first showed the predicted extra discard
+draws, but also added three glow-lichen cells and failed to reproduce the original
+failed hash. That diagnosis remains inconclusive and established no generation fix.
+The later uninstrumented `105758a` executable reproduced the exact four-gold failure
+and original failed hash in the
+[latest report](../compatibility/results/evidence/33a5aae5d5cb70916239d347b269fc0f9632d29b8c20aa69940744f9c33836cf.json).
+General deterministic generation remains unfinished.
 
 A separate official-server fixture captures a furnace, blast furnace and smoker
 after exactly 237 stepped ticks, with coal consumed and cooking in progress.
@@ -200,8 +206,8 @@ Modern saves use signed integer cooking and fuel timers and a floating-point
 as burn duration. Copies of that Java save retain their timers and continue
 cooking correctly in Java. The `571b6ca` Rust executable loses those timers on
 load. Independent lava-bucket copies also expose the missing bucket crafting
-remainder and wet-sponge conversion. The current executable `541f7521…`
-built from clean Rust source `5ce6ee0`, tested with harness `f6a24a1`, passes the
+remainder and wet-sponge conversion. The current executable `5b606a5d…`
+built and tested from clean source and harness `105758a` passes the
 reproducible fresh-fixture check in
 `tools/check_furnaces.py`: both runtimes preserve saved values and match the
 63/100-tick cooking continuations and independent 1/199-tick bucket sequence.
@@ -211,7 +217,16 @@ acceptance result is skipped even when chunk bytes change. The stepped phases
 establish continued cooking. The original source fixture remains
 immutable under the ignored reference cache; the latest fresh fixture's canonical file
 manifest SHA-256 is
-`c759a9184c8db82e6e0a50cb6b762c9cd33434c08d533501ac1119c44c3a3062`.
+`2955fac96dad17b93f4dabeada71ae08bb8b55afe18b96b9cdc2be8a7547ef8f`.
+
+Supplementary inspection and bounded codec probes against the exact 26.3 classes
+distinguish literal sign submissions from structured components and privileged
+click commands. Native and paired client checks cover assigned editors, wax,
+`allow_op_features`, command reentry and selected component decoding, including
+privileged raw-to-filtered copying. Unknown forms are preserved and edits refused;
+dynamic component resolution and full filtering remain unfinished. The pinned
+inventory constructor already excludes spectators from both open and close viewer
+counts. A contrary review finding was disproven; no production adapter was added.
 
 ## Boundaries and remaining work
 
