@@ -659,7 +659,7 @@ async fn drive_until<F: Future>(server: &Arc<Server>, future: F) -> F::Output {
 
 async fn settled(player: &Arc<Player>) {
     let server = player.world().server.upgrade().unwrap();
-    let result = futures::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(drive_until(
+    drive_until(
         &server,
         std::future::poll_fn(|_| {
             let state = player.packet_activity.state();
@@ -671,35 +671,8 @@ async fn settled(player: &Arc<Player>) {
                 std::task::Poll::Pending
             }
         }),
-    )))
+    )
     .await;
-    if let Err(panic) = result {
-        let world = player.world();
-        let state = player.packet_activity.state();
-        eprintln!(
-            "settled timeout: world={} epoch={} awaiting_teleport={} closed={} active={} blockers={} remaining={} inbound={}",
-            world.dimension.minecraft_name,
-            player.chunk_send_epoch.load(Ordering::Relaxed),
-            player.awaiting_teleport.lock().unwrap().is_some(),
-            player.client.closed(),
-            state.active,
-            state.dispatch_blockers,
-            state.remaining,
-            player.inbound_packets.len(),
-        );
-        drop(state);
-        let work = player.packet_activity.work.lock().unwrap();
-        for task in work.iter() {
-            eprintln!(
-                "pending task: ready={} explicit_world_stages={} cancelled={}",
-                task.ready.load(Ordering::Acquire),
-                task.explicit_world_stages,
-                task.cancelled.load(Ordering::Acquire),
-            );
-        }
-        drop(work);
-        std::panic::resume_unwind(panic);
-    }
 }
 
 struct TransportObserver {
@@ -2417,6 +2390,185 @@ async fn unticketed_spectator_respawn_preparation_uses_source_lifetime() {
         assert!(!player.client.closed());
         fixture.finish().await;
     }
+}
+
+/// Exercise the real destination receiver, leaving one noncenter activation
+/// unavailable after both the transfer and its following input have finished.
+async fn deferred_spectator_entity_activation(
+    absent: bool,
+) -> (
+    Fixture,
+    pumpkin_world::chunk_system::ChunkPos,
+    pumpkin_world::level::SyncChunk,
+) {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+
+    let fixture = bounded(Fixture::spectator_transfer(1, false)).await;
+    let player = &fixture.players[0];
+    let destination = fixture
+        .server
+        .get_world_from_dimension(&Dimension::THE_NETHER);
+    let view = Cylindrical::new(
+        Vector2::new(0, 0),
+        crate::world::chunker::get_view_distance(player),
+    );
+    let position = view
+        .all_chunks_within()
+        .find(|pos| pos.x.abs() > 1 || pos.y.abs() > 1)
+        .unwrap();
+    let terrain = destination
+        .level
+        .loaded_chunks
+        .get(&position)
+        .unwrap()
+        .clone();
+    terrain
+        .post_processing_ready
+        .store(false, Ordering::Release);
+    if absent {
+        destination.level.loaded_chunks.remove(&position).unwrap();
+    }
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "execute in minecraft:the_nether run tp @s 2 90 2",
+        },
+    );
+    enqueue(player, &SSetHeldItem { slot: 6 });
+    drive_until(
+        &fixture.server,
+        std::future::poll_fn(|_| {
+            let state = player.packet_activity.state();
+            let completed = state.active == 1 && state.dispatch_blockers == 0;
+            drop(state);
+            let waiting = player
+                .packet_activity
+                .work
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|task| task.explicit_world_stages && !task.ready.load(Ordering::Acquire));
+            if Arc::ptr_eq(&destination, &player.world())
+                && player.inventory.get_selected_slot() == 6
+                && completed
+                && waiting
+            {
+                std::task::Poll::Ready(())
+            } else {
+                std::task::Poll::Pending
+            }
+        }),
+    )
+    .await;
+    assert!(player.inbound_packets.is_empty());
+    assert!(destination.level.ready_chunk(position).is_none());
+    assert!(
+        destination
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .ticket
+            .is_empty()
+    );
+    assert!(
+        !destination
+            .level
+            .get_entity_chunk_sync(&position)
+            .unwrap()
+            .live
+            .load(Ordering::Acquire)
+    );
+    assert_eq!(
+        destination.level.loaded_chunks.contains_key(&position),
+        !absent
+    );
+    (fixture, position, terrain)
+}
+
+#[tokio::test]
+async fn unticketed_entity_activation_waits_for_real_terrain_and_drains_on_close() {
+    for (absent, close) in [(false, false), (true, false), (true, true)] {
+        let (fixture, position, terrain) = deferred_spectator_entity_activation(absent).await;
+        let player = &fixture.players[0];
+        let world = player.world();
+        let entities = world.level.get_entity_chunk_sync(&position).unwrap();
+        let saved = entities.data.lock().unwrap().clone();
+        if close {
+            drive_until(
+                &fixture.server,
+                crate::finish_player_session(&fixture.server, player),
+            )
+            .await
+            .unwrap();
+            assert_eq!(player.packet_activity.state().active, 0);
+            assert!(!entities.live.load(Ordering::Acquire));
+            assert_eq!(*entities.data.lock().unwrap(), saved);
+            assert!(!world.level.loaded_chunks.contains_key(&position));
+        } else {
+            terrain.post_processing_ready.store(true, Ordering::Release);
+            if absent {
+                world.level.loaded_chunks.insert(position, terrain);
+            }
+            // Publish the fixture's readiness change through the real retry lane.
+            fixture.server.packet_runner.retry_worlds();
+            settled(player).await;
+            assert!(entities.live.load(Ordering::Acquire));
+            assert_eq!(player.packet_activity.state().active, 0);
+            assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        }
+        assert_eq!(player.inventory.get_selected_slot(), 6);
+        fixture.finish().await;
+    }
+}
+
+#[tokio::test]
+async fn stale_entity_activation_retires_after_transfer_without_old_terrain() {
+    use pumpkin_data::dimension::Dimension;
+
+    let (fixture, position, _) = deferred_spectator_entity_activation(false).await;
+    let player = &fixture.players[0];
+    let old_world = player.world();
+    let entities = old_world.level.get_entity_chunk_sync(&position).unwrap();
+    let saved = entities.data.lock().unwrap().clone();
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "execute in minecraft:overworld run tp @s 2 90 2",
+        },
+    );
+    enqueue(player, &SSetHeldItem { slot: 7 });
+    drive_until(
+        &fixture.server,
+        std::future::poll_fn(|_| {
+            if player.world().dimension == Dimension::OVERWORLD
+                && player.inventory.get_selected_slot() == 7
+            {
+                std::task::Poll::Ready(())
+            } else {
+                std::task::Poll::Pending
+            }
+        }),
+    )
+    .await;
+    fixture.server.packet_runner.retry_worlds();
+    settled(player).await;
+    assert!(old_world.level.ready_chunk(position).is_none());
+    assert!(!entities.live.load(Ordering::Acquire));
+    assert_eq!(*entities.data.lock().unwrap(), saved);
+    assert_eq!(player.packet_activity.state().active, 0);
+    assert!(
+        old_world
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .ticket
+            .is_empty()
+    );
+    fixture.finish().await;
 }
 
 #[tokio::test]

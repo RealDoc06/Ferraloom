@@ -431,6 +431,13 @@ pub(crate) struct PacketCallbacks<'a> {
     _chunk: Option<PacketChunkTicket>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PacketTerrain {
+    RequiredTicket,
+    ExistingReady,
+    ExistingOrAbsent,
+}
+
 /// Whether respawn completed its destination mutation stage. Callers must not run
 /// respawn-only follow-up mutations after a cancelled or refused transition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -734,7 +741,7 @@ impl World {
         &self,
         chunk: Option<Vector2<i32>>,
     ) -> Option<PacketCallbacks<'_>> {
-        self.enter_packet_callbacks_inner(chunk, false)
+        self.enter_packet_callbacks_inner(chunk, PacketTerrain::ExistingOrAbsent)
     }
 
     /// A required, unready chunk cannot recover from a refused Full halo. Use
@@ -771,7 +778,7 @@ impl World {
     fn enter_packet_callbacks_inner(
         &self,
         chunk: Option<Vector2<i32>>,
-        terrain_required: bool,
+        terrain: PacketTerrain,
     ) -> Option<PacketCallbacks<'_>> {
         let callbacks = self.enter_simulation_callbacks();
         if self.packet_admission_closed.load(Ordering::SeqCst)
@@ -802,12 +809,17 @@ impl World {
             if !loading.pos_level.get(&chunk).is_some_and(|level| {
                 *level <= pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL
             }) {
-                // A weaker ticket still represents pending terrain, not an
-                // existing-only spectator over genuinely unowned space.
-                if terrain_required || owned || loading.pos_level.contains_key(&chunk) {
+                // Input cannot mistake a weaker ticket for unowned space.
+                // Cached entity activation instead requires the ready Arc below.
+                if terrain == PacketTerrain::RequiredTicket
+                    || (terrain == PacketTerrain::ExistingOrAbsent
+                        && (owned || loading.pos_level.contains_key(&chunk)))
+                {
                     return None;
                 }
-                if !self.level.loaded_chunks.contains_key(&chunk) {
+                if terrain == PacketTerrain::ExistingOrAbsent
+                    && !self.level.loaded_chunks.contains_key(&chunk)
+                {
                     return Some(PacketCallbacks {
                         _callbacks: callbacks,
                         _chunk: None,
@@ -865,6 +877,34 @@ impl World {
         chunk: Option<Vector2<i32>>,
         work: F,
     ) -> Option<F::Output> {
+        self.packet_stage_with_admission(chunk, PacketTerrain::RequiredTicket, None, work)
+            .await
+    }
+
+    /// A watched cached chunk may be ready without generation tickets. Its
+    /// activation still pins real terrain for each poll and owns session drain.
+    async fn existing_entity_stage<F: Future>(
+        &self,
+        chunk: Vector2<i32>,
+        player: &Player,
+        work: F,
+    ) -> Option<F::Output> {
+        self.packet_stage_with_admission(
+            Some(chunk),
+            PacketTerrain::ExistingReady,
+            Some(player),
+            work,
+        )
+        .await
+    }
+
+    async fn packet_stage_with_admission<F: Future>(
+        &self,
+        chunk: Option<Vector2<i32>>,
+        terrain: PacketTerrain,
+        activation: Option<&Player>,
+        work: F,
+    ) -> Option<F::Output> {
         if crate::entity::player::packet_activity::ActivityLease::current().is_none() {
             return Some(work.await);
         }
@@ -872,10 +912,16 @@ impl World {
         std::future::poll_fn(|cx| {
             if self.packet_admission_closed.load(Ordering::SeqCst)
                 || self.level.cancel_token.is_cancelled()
+                || activation.is_some_and(|player| {
+                    player.client.closed()
+                        || player.world().uuid != self.uuid
+                        || !player.chunk_watches.requests_world(self.uuid)
+                        || chunk.is_none_or(|position| !self.level.is_chunk_watched(&position))
+                })
             {
                 return std::task::Poll::Ready(None);
             }
-            let Some(_callbacks) = self.enter_packet_callbacks_inner(chunk, true) else {
+            let Some(_callbacks) = self.enter_packet_callbacks_inner(chunk, terrain) else {
                 // The runner retries world admission on readiness publication.
                 if let Some(activity) =
                     crate::entity::player::packet_activity::ActivityLease::current()
@@ -5408,8 +5454,9 @@ impl World {
                     let owned = player.clone();
                     let activation = async move {
                         world
-                            .packet_stage(
-                                Some(position),
+                            .existing_entity_stage(
+                                position,
+                                &owned,
                                 world.activate_entity_chunk(&chunk, Some(&owned)),
                             )
                             .await;
