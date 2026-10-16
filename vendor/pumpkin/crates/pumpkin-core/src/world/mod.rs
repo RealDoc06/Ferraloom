@@ -33,6 +33,8 @@ pub mod brightness;
 pub mod chunker;
 pub mod explosion;
 pub mod generation_cache;
+#[cfg(test)]
+mod jukebox_tests;
 pub(crate) mod level_info;
 pub mod loot;
 pub mod map;

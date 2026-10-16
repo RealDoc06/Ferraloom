@@ -104,8 +104,7 @@ fn prototype_nbt(value: serde_json::Value) -> NbtTag {
     }
 }
 
-// The remaining persistent placeholder types lack writers, but not every official
-// payload reaches one: JukeboxPlayable's reader requires a compound with song.
+// The remaining persistent placeholder types lack writers.
 fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemStackAdmissionError {
     assert!(
         Item::from_registry_key(id).is_some(),
@@ -114,19 +113,6 @@ fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemSta
     let component = DataComponent::try_from_name(name)
         .unwrap_or_else(|| panic!("{id} [{name}]: fixture component must exist"));
     let decoded = ItemStack::read_item_stack(item);
-    if component == DataComponent::JukeboxPlayable {
-        assert_eq!(
-            item.get_compound("components")
-                .and_then(|components| components.get_string(name)),
-            Some("minecraft:11"),
-            "{id} [{name}]: retain the official string payload"
-        );
-        assert!(
-            decoded.is_none(),
-            "{id} [{name}]: the current decoder cannot read the official string"
-        );
-        return ItemStackAdmissionError::Unreadable;
-    }
     let stack = decoded.unwrap_or_else(|| {
         panic!("{id} [{name}]: expected the placeholder decoder to accept the saved fixture")
     });
@@ -144,7 +130,7 @@ fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemSta
 }
 
 #[test]
-fn saved_containers_admit_instrument_and_refuse_remaining_22_placeholder_inputs() {
+fn saved_containers_admit_instrument_and_jukebox_and_refuse_remaining_21_placeholder_inputs() {
     let prototypes: Vec<Prototype> =
         serde_json::from_str(include_str!("item_component_prototypes_26_3.json")).unwrap();
     assert_eq!(prototypes.len(), 19);
@@ -175,16 +161,29 @@ fn saved_containers_admit_instrument_and_refuse_remaining_22_placeholder_inputs(
     assert_eq!(inputs.len(), 23);
     for (name, id, value) in inputs {
         let item = saved_item(&id, &name, value);
-        if name == "minecraft:instrument" {
+        if name == "minecraft:instrument" || name == "minecraft:jukebox_playable" {
             assert_eq!(validate_item_stack(&item), Ok(()));
             let decoded = ItemStack::read_item_stack(&item).unwrap();
-            assert_eq!(
-                decoded
-                    .get_data_component::<pumpkin_data::data_component_impl::InstrumentImpl>()
-                    .unwrap()
-                    .instrument,
-                pumpkin_data::instrument::Instrument::PonderGoatHorn,
-            );
+            if name == "minecraft:instrument" {
+                assert_eq!(
+                    decoded
+                        .get_data_component::<pumpkin_data::data_component_impl::InstrumentImpl>()
+                        .unwrap()
+                        .instrument,
+                    pumpkin_data::instrument::Instrument::PonderGoatHorn,
+                );
+            } else {
+                assert_eq!(
+                    item.get_compound("components")
+                        .and_then(|components| components.get_string(&name)),
+                    Some("minecraft:11"),
+                    "{id} [{name}]: retain the official string payload"
+                );
+                assert_eq!(
+                    decoded.get_data_component::<pumpkin_data::data_component_impl::JukeboxPlayableImpl>().unwrap().song,
+                    pumpkin_data::jukebox_song::JukeboxSong::Id11
+                );
+            }
             for container_id in CONTAINERS {
                 let container = saved_container(container_id, item.clone());
                 let source = saved_chunk(container.clone());
@@ -472,4 +471,257 @@ async fn refused_horn_and_unknown_chests_keep_mca_bytes_while_healthy_regions_wr
         assert_refused(&error, "minecraft:chest");
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
+}
+
+// R26 Jukebox tests below are ALL UNRUN: source-only, not paired Java acceptance.
+fn saved_jukebox(item: NbtCompound) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", "minecraft:jukebox".into());
+    nbt.put_int("x", POSITION.0.x);
+    nbt.put_int("y", POSITION.0.y);
+    nbt.put_int("z", POSITION.0.z);
+    nbt.put_compound("RecordItem", item);
+    nbt.put_long("ticks_since_song_started", 0);
+    nbt
+}
+
+fn jukebox_chunk(nbt: NbtCompound) -> Arc<ChunkData> {
+    let chunk = saved_chunk(nbt);
+    chunk.set_block_absolute_y(1, 64, 2, Block::JUKEBOX.default_state.id);
+    chunk
+}
+
+fn assert_jukebox_refused(error: &ChunkReadingError) {
+    assert!(!error.to_string().contains("private-"));
+    assert!(matches!(error, ChunkReadingError::ParsingError(
+        ChunkParsingError::UnsupportedContainerItem { block_entity, position, slot: Some(0), .. }
+    ) if *block_entity == "minecraft:jukebox" && *position == POSITION));
+}
+
+fn jukebox_folder(root: &std::path::Path) -> LevelFolder {
+    LevelFolder {
+        root_folder: root.to_path_buf(),
+        dim_folder: root.to_path_buf(),
+        region_folder: root.join("region"),
+        entities_folder: root.join("entities"),
+        poi_folder: root.join("poi"),
+    }
+}
+
+#[test]
+fn jukebox_record_admission_uses_exact_lossless_guard_even_with_loot_table() {
+    for item in [
+        saved_item(
+            "minecraft:music_disc_11",
+            "minecraft:jukebox_playable",
+            NbtTag::String("custom:private-song".into()),
+        ),
+        saved_item(
+            "minecraft:music_disc_11",
+            "minecraft:jukebox_playable",
+            NbtTag::Compound(NbtCompound::new()),
+        ),
+        saved_item(
+            "minecraft:music_disc_11",
+            "minecraft:break_sound",
+            NbtTag::String("minecraft:entity.item.break".into()),
+        ),
+        saved_item(
+            "minecraft:music_disc_11",
+            "unknown:private-component",
+            NbtTag::String("private-value".into()),
+        ),
+    ] {
+        assert!(validate_item_stack(&item).is_err());
+        for loot in [false, true] {
+            let mut nbt = saved_jukebox(item.clone());
+            if loot {
+                nbt.put_string("LootTable", "minecraft:chests/simple_dungeon".into());
+            }
+            let source = jukebox_chunk(nbt.clone());
+            let Err(error) = ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0))
+            else {
+                panic!("unsupported RecordItem cannot reach infallible BE load");
+            };
+            assert_jukebox_refused(&error);
+            assert_eq!(
+                source.pending_block_entities.lock().unwrap()[&POSITION],
+                nbt
+            );
+        }
+    }
+    let mut wrong_record = saved_jukebox(sing_horn());
+    wrong_record.put_string("RecordItem", "private-wrong-type".into());
+    let source = jukebox_chunk(wrong_record);
+    let Err(error) = ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0)) else {
+        panic!("noncompound RecordItem must refuse");
+    };
+    assert_jukebox_refused(&error);
+    for reference in ["minecraft:11", ":11", "minecraft:cat"] {
+        let item = saved_item(
+            "minecraft:music_disc_11",
+            "minecraft:jukebox_playable",
+            NbtTag::String(reference.into()),
+        );
+        assert_eq!(validate_item_stack(&item), Ok(()));
+        let nbt = saved_jukebox(item);
+        let source = jukebox_chunk(nbt.clone());
+        let admitted =
+            ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0)).unwrap();
+        assert_eq!(
+            admitted.pending_block_entities.lock().unwrap()[&POSITION],
+            nbt,
+            "raw admission is lossless; canonicalization occurs at modeled ItemStack persistence"
+        );
+    }
+}
+
+#[tokio::test]
+async fn selected_jukebox_record_survives_actual_mca_item_save_and_fresh_reopen() {
+    use pumpkin_data::{data_component_impl::JukeboxPlayableImpl, jukebox_song::JukeboxSong};
+    for (reference, expected_song) in [
+        ("minecraft:11", JukeboxSong::Id11),
+        ("minecraft:cat", JukeboxSong::Cat),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = jukebox_folder(directory.path());
+        std::fs::create_dir_all(&folder.region_folder).unwrap();
+        let item = saved_item(
+            "minecraft:music_disc_11",
+            "minecraft:jukebox_playable",
+            NbtTag::String(reference.into()),
+        );
+        let nbt = saved_jukebox(item.clone());
+        let source = jukebox_chunk(nbt.clone());
+        let runtime = crate::chunk::poi_binding::TestRuntime::new(folder.poi_folder.clone());
+        source.bind_poi(&runtime.runtime).unwrap();
+        let path = folder.region_folder.join("r.0.0.mca");
+        let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
+        region
+            .update_chunk(source, &AnvilChunkConfig::default())
+            .await
+            .unwrap();
+        region.write(&path).await.unwrap();
+        drop(region);
+        let reader =
+            ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+        let LoadedData::Loaded(loaded) = fetch(&reader, &folder, Vector2::new(0, 0)).await else {
+            panic!("selected jukebox must load");
+        };
+        let saved = loaded.pending_block_entities.lock().unwrap()[&POSITION].clone();
+        assert_eq!(saved, nbt);
+        let stack = ItemStack::read_item_stack(saved.get_compound("RecordItem").unwrap()).unwrap();
+        assert_eq!(stack.item.id, Item::MUSIC_DISC_11.id);
+        assert_eq!(
+            stack
+                .get_data_component::<JukeboxPlayableImpl>()
+                .unwrap()
+                .song,
+            expected_song
+        );
+        let mut written = NbtCompound::new();
+        stack.write_item_stack(&mut written);
+        assert_eq!(written, item);
+        loaded.bind_poi(&runtime.runtime).unwrap();
+        loaded
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(POSITION, saved_jukebox(written));
+        loaded.mark_dirty(true);
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            reader.save_chunks(&folder, vec![(Vector2::new(0, 0), loaded)]),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(10), reader.flush())
+            .await
+            .unwrap()
+            .unwrap();
+        drop(reader);
+        let reopened =
+            ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+        let LoadedData::Loaded(loaded) = fetch(&reopened, &folder, Vector2::new(0, 0)).await else {
+            panic!("persisted jukebox must reopen");
+        };
+        assert_eq!(
+            loaded.pending_block_entities.lock().unwrap()[&POSITION],
+            nbt
+        );
+    }
+}
+
+#[tokio::test]
+async fn refused_jukebox_keeps_original_mca_bytes_across_retry_and_healthy_save() {
+    let directory = tempfile::tempdir().unwrap();
+    let folder = jukebox_folder(directory.path());
+    std::fs::create_dir_all(&folder.region_folder).unwrap();
+    let item = saved_item(
+        "minecraft:music_disc_11",
+        "minecraft:break_sound",
+        NbtTag::String("minecraft:entity.item.break".into()),
+    );
+    let mut nbt = saved_jukebox(item);
+    nbt.put_string("LootTable", "minecraft:chests/simple_dungeon".into());
+    let source = jukebox_chunk(nbt.clone());
+    let runtime = crate::chunk::poi_binding::TestRuntime::new(folder.poi_folder.clone());
+    source.bind_poi(&runtime.runtime).unwrap();
+    let path = folder.region_folder.join("r.0.0.mca");
+    let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
+    region
+        .update_chunk(source.clone(), &AnvilChunkConfig::default())
+        .await
+        .unwrap();
+    region.write(&path).await.unwrap();
+    drop(region);
+    let before = std::fs::read(&path).unwrap();
+    let reader =
+        ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+    for _ in 0..2 {
+        let LoadedData::Error((position, error)) =
+            fetch(&reader, &folder, Vector2::new(0, 0)).await
+        else {
+            panic!("refused jukebox cannot publish as loaded or missing");
+        };
+        assert_eq!(position, Vector2::new(0, 0));
+        assert_jukebox_refused(&error);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    let healthy = ChunkData::empty_sync(32, 0);
+    healthy.bind_poi(&runtime.runtime).unwrap();
+    healthy.set_block_absolute_y(3, 64, 4, Block::DIAMOND_BLOCK.default_state.id);
+    healthy.mark_dirty(true);
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        reader.save_chunks(&folder, vec![(Vector2::new(32, 0), healthy)]),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), reader.flush())
+        .await
+        .unwrap()
+        .unwrap();
+    drop(reader);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert_eq!(
+        source.pending_block_entities.lock().unwrap()[&POSITION],
+        nbt
+    );
+    let fresh =
+        ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+    let LoadedData::Loaded(healthy) = fetch(&fresh, &folder, Vector2::new(32, 0)).await else {
+        panic!("healthy independent region must remain readable");
+    };
+    assert_eq!(
+        healthy.section.get_block_absolute_y(3, 64, 4),
+        Some(Block::DIAMOND_BLOCK.default_state.id)
+    );
+    let LoadedData::Error((_, error)) = fetch(&fresh, &folder, Vector2::new(0, 0)).await else {
+        panic!("fresh reader must still refuse unsupported jukebox");
+    };
+    assert_jukebox_refused(&error);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
 }

@@ -303,7 +303,7 @@ pub fn write_chunk_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::entities::block_entity_from_nbt;
+    use crate::block::entities::{BlockEntity, block_entity_from_nbt};
     use crate::command::commands::data::tests::Fixture;
     use crate::net::java::chunk_data::CChunkData;
     use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
@@ -488,6 +488,38 @@ mod tests {
             assert!(live.has_loot_table(), "encoding must not unpack loot");
             assert_eq!(fixture.pending_data(), published);
             assert!(Arc::ptr_eq(&world.get_block_entity(&POS).unwrap(), &live));
+        }
+    }
+
+    #[test]
+    // UNRUN. Exact 26.3 Jukebox has no update override; JukeboxBase.javap.txt
+    // (SHA256 aa7cc017055b15ba2a8eb783db10d433eebece0268a0c5c64af3b2676731c162)
+    // lines 1686/1703 return null packet/empty tag; BlockEntityInfo.create at
+    // 2634 turns the empty tag into Optional.empty. Persistent data stays private.
+    fn chunk_jukebox_entries_omit_private_record_and_elapsed() {
+        let chunk = ChunkData::empty(0, 0);
+        for id in ["minecraft:jukebox", "jukebox"] {
+            let mut nbt = compound(
+                "{RecordItem:{id:'minecraft:music_disc_11',count:1,components:{'minecraft:jukebox_playable':'minecraft:cat','minecraft:custom_data':{secret:'Private disc'}}},ticks_since_song_started:0L,future_private_field:'Private jukebox'}",
+            );
+            nbt.put_string("id", id.into());
+            nbt.put_int("x", POS.0.x);
+            nbt.put_int("y", POS.0.y);
+            nbt.put_int("z", POS.0.z);
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap()
+                .insert(POS, nbt.clone());
+            assert_container_entry(&chunk, POS, id);
+            assert_eq!(chunk.pending_block_entities.lock().unwrap()[&POS], nbt);
+            let live = crate::block::entities::jukebox::JukeboxBlockEntity::from_nbt(&nbt, POS);
+            assert!(live.is_playing());
+            assert_eq!(live.chunk_data_nbt(), None);
+            let mut persisted = NbtCompound::new();
+            live.write_nbt(&mut persisted);
+            assert_eq!(persisted.get("RecordItem"), nbt.get("RecordItem"));
+            assert_eq!(persisted.get_long("ticks_since_song_started"), Some(0));
         }
     }
 

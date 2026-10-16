@@ -48,6 +48,23 @@ fn validate_saved_container_items(
     nbt: &NbtCompound,
     position: BlockPos,
 ) -> Result<(), ChunkParsingError> {
+    // Jukebox's infallible BE constructor must never turn an unsupported
+    // RecordItem patch into EMPTY. It has no deferred LootTable bypass.
+    if nbt.get_string("id") == Some("minecraft:jukebox") {
+        let refusal = |reason| ChunkParsingError::UnsupportedContainerItem {
+            block_entity: "minecraft:jukebox",
+            position,
+            slot: Some(0),
+            reason,
+        };
+        if let Some(record) = nbt.get("RecordItem") {
+            let NbtTag::Compound(record) = record else {
+                return Err(refusal("RecordItem is not a compound"));
+            };
+            validate_item_stack(record).map_err(|error| refusal(error.reason()))?;
+        }
+        return Ok(());
+    }
     let block_entity = match nbt.get_string("id") {
         Some("minecraft:chest") => "minecraft:chest",
         Some("minecraft:trapped_chest") => "minecraft:trapped_chest",
