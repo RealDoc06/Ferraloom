@@ -8,6 +8,8 @@ Generic PLAY probes deliberately do not decode component-bearing inventory
 packets. Evidence is authoritative live item NBT plus independent typed stopped
 player.dat readback, not item wire/rendering/use/equipment or full-component parity.
 Fixtures below are codec-derived expectations; actual Java execution is required.
+An explicitly supplied forensic bundle adds audit provenance only; omitting it
+reads no bundle and still requires the pinned reference and actual runtime checks.
 No downloads, builds, synthetic save writes, UUID conversion or legacy migration.
 Importing this module does not start any processes.
 """
@@ -47,7 +49,6 @@ BASE = "5bf65bd2846bcf8199a1dbbbb68513f1d8446eb2"
 INNER_JAR_SHA256 = "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6"
 POTION_MAPPING = "vendor/pumpkin/crates/pumpkin-data/src/generated/potion.rs"
 POTION_MAPPING_SHA256 = "8406368beaa93ccf5c73a088f302d17d26e251b3c6757d4416c0ea1245a40f82"
-PRIMARY_DIRECTORY = Path("/home/doc/code/Ferraloom/.cache/reviews/item-components-primary")
 PRIMARY_HASHES = {
     "handoff.txt": "6718498fc8936b7146fabc93d6c9f92851325663a9135685179abc0fa3d13212",
     "manifest.json": "9ceb4e7efbae94d72840d00fc4e52fc5a34baa626ef425af0bae3f63d55ef5e4",
@@ -457,7 +458,8 @@ def main() -> int:
     parser.add_argument("--reference-cache", required=True, type=Path)
     parser.add_argument("--rust-binary", required=True, type=Path)
     parser.add_argument("--rust-source-commit", required=True, help="Full source commit used to build the supplied binary; caller attestation")
-    parser.add_argument("--primary-evidence", type=Path, default=PRIMARY_DIRECTORY)
+    parser.add_argument("--primary-evidence", type=Path,
+                        help="Optional forensic audit bundle matching PRIMARY_HASHES; no bundle is read when omitted")
     parser.add_argument("--workers", type=int, choices=(2,), default=2)
     parser.add_argument("--startup-timeout", type=float, default=180)
     parser.add_argument("--output", type=Path, default=oracle.ROOT / f".cache/item-interchange-{uuid.uuid4().hex}.json")
@@ -478,6 +480,8 @@ def main() -> int:
     report = {"schema_version": 1, "kind": "item-interchange", "created_at": now(), "result": "failed",
               "target_version": "26.3", "protocol": 777, "data_version": 5023, "fixture": str(run),
               "scope": __doc__, "deferred": DEFERRED, "servers": {}, "transfers": {}, "processes": {}, "failed": [],
+              "primary_evidence": {"status": "NOT_SUPPLIED" if args.primary_evidence is None else "SUPPLIED_UNVERIFIED",
+                                   "role": "Optional forensic audit provenance, not actual Java save evidence"},
               "environment": {"host": socket.gethostname(), "platform": sys.platform, "auth": "offline isolated 127.0.0.1",
                               "workers": 2, "seed": "12345678", "ordinary_watchdog_seconds": 20,
                               "initial_chunks": 49, "chunk_timeout_seconds": 60},
@@ -491,8 +495,10 @@ def main() -> int:
             ("OfflinePlayer:" + NAME).encode(), usedforsecurity=False).digest(), version=3) == PLAYER_ID, "Changed offline identity")
         report["harness_manifest"] = harness_manifest()
         require(report["harness_manifest"][POTION_MAPPING] == POTION_MAPPING_SHA256, "Changed potion name table")
-        report["primary_artifacts"] = verify_artifacts(args.primary_evidence, PRIMARY_HASHES)
-        report["primary_contracts"] = {"scope": "Codec-derived, not pre-existing actual Java runtime fixtures",
+        if args.primary_evidence is not None:
+            report["primary_artifacts"] = verify_artifacts(args.primary_evidence, PRIMARY_HASHES)
+            report["primary_evidence"]["status"] = "VERIFIED_BEFORE_RUN"
+        report["primary_contracts"] = {"scope": "Codec-derived expectations, not pre-existing actual Java fixtures. Runtime evidence requires actual source-authored saves, typed readback and the pinned official Java reference, independently of the optional forensic bundle.",
             "origin_commit": "25854145f3eaf4858ae64943c9fad5166d0d2bf3", "integrated_item_revision": "ae38e82",
             "harness_base": BASE, "types": "ItemStack Int count; template count defaults1; empty components optional. Effects amplifier UNSIGNED_BYTE, duration INT, ambient=false, particles=true, icon defaults to particles. Fireworks UNSIGNED_BYTE flight defaults0, explosions defaults[].",
             "equivalences": "Player Inventory entries are keyed by unique Byte Slot. Only known stack count/components, effect defaults, empty effect/explosion lists and flight0 compare semantically. Nested list order, unknown fields and opaque typed trees remain exact; raw NBT is never rewritten.",
@@ -519,7 +525,10 @@ def main() -> int:
             print(f"Running item interchange {kind} source on {socket.gethostname()} loopback: {run / kind}", flush=True)
             run_direction(kind, run / kind, args, report)
         require(harness_manifest() == report["harness_manifest"] and suite.git_state() == report["source_state"], "Harness/source changed during run")
-        require(verify_artifacts(args.primary_evidence, PRIMARY_HASHES) == report["primary_artifacts"], "Primary evidence changed")
+        if args.primary_evidence is not None:
+            report["primary_artifacts_after"] = verify_artifacts(args.primary_evidence, PRIMARY_HASHES)
+            require(report["primary_artifacts_after"] == report["primary_artifacts"], "Primary evidence changed")
+            report["primary_evidence"]["status"] = "VERIFIED_BEFORE_AND_AFTER_RUN"
         require(digest(original) == digest(args.rust_binary) == binary_hash, "Target binary changed")
         require(digest(official) == report["official"]["sha256"]
                 and digest(oracle.CACHE / "minecraft.jar") == INNER_JAR_SHA256
