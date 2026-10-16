@@ -82,6 +82,7 @@ impl PumpkinError for PlayerDataError {
         match self {
             Self::Io(err) => Some(format!("Failed to load player data: {err}")),
             Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
+            Self::Unsupported { .. } => Some(self.to_string()),
             Self::Load { .. } => Some(format!("Failed to load player data or backup: {self}")),
         }
     }
