@@ -32,6 +32,14 @@ fn sing_horn() -> NbtCompound {
     )
 }
 
+fn unsupported_horn() -> NbtCompound {
+    saved_item(
+        "minecraft:goat_horn",
+        "minecraft:break_sound",
+        NbtTag::String("minecraft:entity.item.break".into()),
+    )
+}
+
 fn saved_container(id: &str, mut item: NbtCompound) -> NbtCompound {
     item.put_byte("Slot", 6);
     let mut container = NbtCompound::new();
@@ -73,7 +81,7 @@ struct Prototype {
 // These are exact JSON component payloads from official 26.3 prototype reports,
 // with per-report provenance in the fixture. JSON does not carry NBT widths;
 // booleans become bytes, integers ints and fractional fields floats here. This
-// tests refusal of real component shapes, not an observed Java saved-chest run.
+// tests admission/refusal of real component shapes, not a Java saved-chest run.
 fn prototype_nbt(value: serde_json::Value) -> NbtTag {
     match value {
         serde_json::Value::Bool(value) => NbtTag::Byte(i8::from(value)),
@@ -96,7 +104,7 @@ fn prototype_nbt(value: serde_json::Value) -> NbtTag {
     }
 }
 
-// The 21 persistent placeholder types lack writers, but not every official
+// The remaining persistent placeholder types lack writers, but not every official
 // payload reaches one: JukeboxPlayable's reader requires a compound with song.
 fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemStackAdmissionError {
     assert!(
@@ -136,7 +144,7 @@ fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemSta
 }
 
 #[test]
-fn saved_containers_refuse_all_23_placeholder_component_inputs() {
+fn saved_containers_admit_instrument_and_refuse_remaining_22_placeholder_inputs() {
     let prototypes: Vec<Prototype> =
         serde_json::from_str(include_str!("item_component_prototypes_26_3.json")).unwrap();
     assert_eq!(prototypes.len(), 19);
@@ -167,6 +175,28 @@ fn saved_containers_refuse_all_23_placeholder_component_inputs() {
     assert_eq!(inputs.len(), 23);
     for (name, id, value) in inputs {
         let item = saved_item(&id, &name, value);
+        if name == "minecraft:instrument" {
+            assert_eq!(validate_item_stack(&item), Ok(()));
+            let decoded = ItemStack::read_item_stack(&item).unwrap();
+            assert_eq!(
+                decoded
+                    .get_data_component::<pumpkin_data::data_component_impl::InstrumentImpl>()
+                    .unwrap()
+                    .instrument,
+                pumpkin_data::instrument::Instrument::PonderGoatHorn,
+            );
+            for container_id in CONTAINERS {
+                let container = saved_container(container_id, item.clone());
+                let source = saved_chunk(container.clone());
+                let admitted =
+                    ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0)).unwrap();
+                assert_eq!(
+                    admitted.pending_block_entities.lock().unwrap()[&POSITION],
+                    container
+                );
+            }
+            continue;
+        }
         let expected = assert_placeholder_codec(&item, &id, &name);
         assert_eq!(validate_item_stack(&item), Err(expected), "{id} [{name}]");
         let expected_reason = match expected {
@@ -224,10 +254,10 @@ fn saved_container_guard_checks_nested_items_but_keeps_opaque_data_and_removals(
         let nested = if name == "minecraft:container" {
             let mut entry = NbtCompound::new();
             entry.put_int("slot", 0);
-            entry.put_compound("item", sing_horn());
+            entry.put_compound("item", unsupported_horn());
             entry
         } else {
-            sing_horn()
+            unsupported_horn()
         };
         let item = saved_item(
             "minecraft:crossbow",
@@ -290,9 +320,79 @@ async fn fetch(
 }
 
 #[tokio::test]
+async fn selected_sing_reference_survives_container_region_save_and_reopen() {
+    use pumpkin_data::{data_component_impl::InstrumentImpl, instrument::Instrument};
+    for id in CONTAINERS {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().to_path_buf();
+        let folder = LevelFolder {
+            root_folder: root.clone(),
+            dim_folder: root.clone(),
+            region_folder: root.join("region"),
+            entities_folder: root.join("entities"),
+            poi_folder: root.join("poi"),
+        };
+        std::fs::create_dir_all(&folder.region_folder).unwrap();
+        let container = saved_container(id, sing_horn());
+        let source = saved_chunk(container.clone());
+        let path = folder.region_folder.join("r.0.0.mca");
+        let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
+        region
+            .update_chunk(source, &AnvilChunkConfig::default())
+            .await
+            .unwrap();
+        region.write(&path).await.unwrap();
+        drop(region);
+        let reader =
+            ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+        let LoadedData::Loaded(loaded) = fetch(&reader, &folder, Vector2::new(0, 0)).await else {
+            panic!("supported Sing reference must load from the saved region");
+        };
+        let saved = loaded.pending_block_entities.lock().unwrap()[&POSITION].clone();
+        assert_eq!(saved, container);
+        let item = saved.get_list("Items").unwrap()[0]
+            .extract_compound()
+            .unwrap();
+        let stack = ItemStack::read_item_stack(item).unwrap();
+        assert_eq!(
+            stack
+                .get_data_component::<InstrumentImpl>()
+                .unwrap()
+                .instrument,
+            Instrument::SingGoatHorn
+        );
+        let mut written = NbtCompound::new();
+        stack.write_item_stack(&mut written);
+        assert_eq!(written, sing_horn());
+        // Model actual ItemStack persistence, then save and use a fresh reader.
+        loaded
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(POSITION, saved_container(id, written));
+        loaded.mark_dirty(true);
+        reader
+            .save_chunks(&folder, vec![(Vector2::new(0, 0), loaded)])
+            .await
+            .unwrap();
+        reader.flush().await.unwrap();
+        drop(reader);
+        let reopened =
+            ChunkFileManager::<anvil::AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+        let LoadedData::Loaded(loaded) = fetch(&reopened, &folder, Vector2::new(0, 0)).await else {
+            panic!("persisted Sing reference must reopen");
+        };
+        assert_eq!(
+            loaded.pending_block_entities.lock().unwrap()[&POSITION],
+            container
+        );
+    }
+}
+
+#[tokio::test]
 async fn refused_horn_and_unknown_chests_keep_mca_bytes_while_healthy_regions_write() {
     for item in [
-        sing_horn(),
+        unsupported_horn(),
         saved_item(
             "minecraft:stone",
             "unknown:private-component",

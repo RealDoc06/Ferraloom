@@ -221,13 +221,16 @@ mod tests {
     }
 
     #[test]
-    fn durable_nbt_instrument_placeholder_refuses_before_commit_or_backup() {
+    fn durable_nbt_break_sound_placeholder_refuses_before_commit_or_backup() {
         use pumpkin_data::item_stack::ItemStack;
 
-        // Java 26.3's goat_horn prototype uses a registry string holder. Use a
-        // different holder so this represents an explicit saved component patch.
+        // BreakSound still lacks a writer. Preserve the whole-file refusal
+        // control now that builtin instrument references are implemented.
         let mut components = NbtCompound::new();
-        components.put_string("minecraft:instrument", "minecraft:sing_goat_horn".into());
+        components.put_string(
+            "minecraft:break_sound",
+            "minecraft:entity.item.break".into(),
+        );
         let mut item = NbtCompound::new();
         item.put_string("id", "minecraft:goat_horn".into());
         item.put_int("count", 1);
@@ -239,7 +242,7 @@ mod tests {
             written
                 .get_compound("components")
                 .unwrap()
-                .get("minecraft:instrument"),
+                .get("minecraft:break_sound"),
             Some(&NbtTag::End)
         );
         let mut invalid = NbtCompound::new();
