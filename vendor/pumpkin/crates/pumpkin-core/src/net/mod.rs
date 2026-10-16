@@ -23,8 +23,6 @@ use pumpkin_util::{
     version::{BedrockMinecraftVersion, JavaMinecraftVersion},
 };
 use serde::{Deserialize, Deserializer};
-use sha1::Digest;
-use sha2::Sha256;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
@@ -72,7 +70,9 @@ where
 }
 
 pub fn offline_uuid(username: &str) -> Result<Uuid, uuid::Error> {
-    Uuid::from_slice(&Sha256::digest(username)[..16])
+    // Java nameUUIDFromBytes hashes this exact UTF-8 prefix and sets UUID v3 bits.
+    let digest = md5::compute(format!("OfflinePlayer:{username}"));
+    Ok(uuid::Builder::from_md5_bytes(digest.0).into_uuid())
 }
 
 /// Represents a player's configuration settings.
@@ -594,7 +594,19 @@ pub enum DisconnectReason {
 
 #[cfg(test)]
 mod tests {
-    use crate::net::is_valid_player_name;
+    use crate::net::{is_valid_player_name, offline_uuid};
+
+    #[test]
+    fn offline_identity_matches_java_name_uuids() {
+        for (name, expected) in [
+            ("SpamObserver", "5ca80a0b-8eef-3f88-b66e-9e42a75e119a"),
+            ("FerraloomTest", "e7ee076d-be5b-31df-a414-3e907115f4a3"),
+            ("Notch", "b50ad385-829d-3141-a216-7e7d7539ba7f"),
+            ("notch", "42653081-a90e-3475-b3d6-3550cdb43f8e"),
+        ] {
+            assert_eq!(offline_uuid(name).unwrap().to_string(), expected);
+        }
+    }
 
     /// Test case for a standard, valid English name at max length.
     #[test]
