@@ -1260,7 +1260,7 @@ mod tests {
         let source_tree = || {
             let bytes = source.to_bytes().unwrap();
             pumpkin_nbt::Nbt::read(&mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(
-                std::io::Cursor::new(bytes),
+                std::io::Cursor::new(bytes.as_ref()),
             ))
             .unwrap()
             .root_tag
