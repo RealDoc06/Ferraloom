@@ -124,7 +124,7 @@ fn parked_read_only_neighbor_gets_one_fence_while_healthy_work_stays_ready() {
         GenerationSchedule::restore_ready_tasks(
             &mut graph,
             &mut queue,
-            &chunk_map,
+            &mut chunk_map,
             &ChunkLevel::default(),
             &[],
             &waiting,
@@ -151,6 +151,68 @@ fn healthy_idle_graph_still_rejects_any_leftover_task() {
         std::panic::catch_unwind(|| { GenerationSchedule::blocked_read_nodes(&graph, &chunk_map) })
             .is_err()
     );
+}
+
+#[test]
+fn recovery_clears_retired_task_slots_without_erasing_replacement_owners() {
+    let (mut graph, mut chunk_map, read) = failed_read_graph();
+    let pos = ChunkPos::new(0, 0);
+    let fence = chunk_map[&pos].occupied;
+    chunk_map.get_mut(&pos).unwrap().target_stage = StagedChunkEnum::None;
+    let mut queue = BinaryHeap::new();
+    let waiting = HashSetType::default();
+    assert_eq!(
+        GenerationSchedule::restore_ready_tasks(
+            &mut graph,
+            &mut queue,
+            &mut chunk_map,
+            &ChunkLevel::default(),
+            &[],
+            &waiting,
+        ),
+        0,
+    );
+    assert!(!graph.nodes.contains_key(read));
+    assert!(chunk_map[&pos].tasks.iter().all(Key::is_null));
+    assert_eq!(chunk_map[&pos].occupied, fence);
+    assert!(chunk_map[&pos].read_failed);
+    assert_eq!(
+        GenerationSchedule::blocked_read_nodes(&graph, &chunk_map),
+        HashSetType::from_iter([fence]),
+    );
+
+    let healthy = ChunkPos::new(32, 0);
+    let obsolete = graph
+        .nodes
+        .insert(Node::new(healthy, StagedChunkEnum::Surface));
+    let replacement = graph
+        .nodes
+        .insert(Node::new(healthy, StagedChunkEnum::Surface));
+    let mut holder = ChunkHolder {
+        target_stage: StagedChunkEnum::Surface,
+        current_stage: StagedChunkEnum::Noise,
+        ..ChunkHolder::default()
+    };
+    holder.tasks[StagedChunkEnum::Surface as usize] = replacement;
+    chunk_map.insert(healthy, holder);
+    assert_eq!(
+        GenerationSchedule::restore_ready_tasks(
+            &mut graph,
+            &mut queue,
+            &mut chunk_map,
+            &ChunkLevel::default(),
+            &[],
+            &waiting,
+        ),
+        1,
+    );
+    assert!(!graph.nodes.contains_key(obsolete));
+    assert_eq!(
+        chunk_map[&healthy].tasks[StagedChunkEnum::Surface as usize],
+        replacement
+    );
+    assert_eq!(queue.pop().unwrap().node_key(), replacement);
+    assert!(queue.is_empty());
 }
 
 #[tokio::test]

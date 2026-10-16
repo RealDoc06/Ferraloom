@@ -335,7 +335,7 @@ impl GenerationSchedule {
     pub(crate) fn restore_ready_tasks(
         graph: &mut DAG,
         queue: &mut BinaryHeap<TaskHeapNode>,
-        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
+        chunk_map: &mut HashMap<ChunkPos, ChunkHolder>,
         last_level: &ChunkLevel,
         last_high_priority: &[ChunkPos],
         _waiting_for_chunks: &HashSetType<NodeKey>,
@@ -373,6 +373,11 @@ impl GenerationSchedule {
             let Some(old) = graph.nodes.remove(key) else {
                 continue;
             };
+            if let Some(holder) = chunk_map.get_mut(&old.pos)
+                && holder.tasks[old.stage as usize] == key
+            {
+                holder.tasks[old.stage as usize] = NodeKey::null();
+            }
             let mut edge = old.edge;
             while !edge.is_null() {
                 let Some(cur) = graph.edges.remove(edge) else {
@@ -1268,6 +1273,13 @@ impl GenerationSchedule {
         let Some(old) = self.graph.nodes.remove(node) else {
             return;
         };
+        // Recovery can retire a task while its holder is still in the map.
+        // Never clear a replacement task that now owns the same stage slot.
+        if let Some(holder) = self.chunk_map.get_mut(&old.pos)
+            && holder.tasks[old.stage as usize] == node
+        {
+            holder.tasks[old.stage as usize] = NodeKey::null();
+        }
         let mut edge = old.edge;
         while !edge.is_null() {
             let cur = self.graph.edges.remove(edge).expect("edge exists");
@@ -1935,7 +1947,7 @@ impl GenerationSchedule {
                     let restored = Self::restore_ready_tasks(
                         &mut self.graph,
                         &mut self.queue,
-                        &self.chunk_map,
+                        &mut self.chunk_map,
                         &self.last_level,
                         &self.last_high_priority,
                         &self.waiting_for_chunks,
