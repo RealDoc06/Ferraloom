@@ -2050,7 +2050,7 @@ async fn unticketed_spectator_self_transfer_keeps_following_input_ordered() {
         enqueue(
             player,
             &SChatCommand {
-                command: "execute in minecraft:the_nether run tp @s 2 90 2",
+                command: "execute in minecraft:the_nether run tp @s 2.0 90 2.0",
             },
         );
         enqueue(player, &SSetHeldItem { slot: 6 });
@@ -2119,7 +2119,7 @@ async fn unticketed_spectator_cross_player_transfer_releases_parent() {
         enqueue(
             parent,
             &SChatCommand {
-                command: "execute in minecraft:the_nether run tp PacketPlayer1 2 90 2",
+                command: "execute in minecraft:the_nether run tp PacketPlayer1 2.0 90 2.0",
             },
         );
         enqueue(parent, &SSetHeldItem { slot: 6 });
