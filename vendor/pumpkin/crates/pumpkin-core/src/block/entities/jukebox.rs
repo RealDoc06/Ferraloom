@@ -376,22 +376,19 @@ impl JukeboxBlockEntity {
                 continue;
             };
             for action in effects.actions {
-                if let Action::Drop(record) = action {
-                    let position = Vector3::new(
-                        f64::from(self.position.0.x) + 0.5 + rng().random_range(-0.35..0.35),
-                        f64::from(self.position.0.y) + 1.01,
-                        f64::from(self.position.0.z) + 0.5 + rng().random_range(-0.35..0.35),
-                    );
-                    world.spawn_entity(Arc::new(ItemEntity::new(
-                        Entity::new(world.clone(), position, &EntityType::ITEM),
-                        record,
-                    )));
-                    continue;
-                }
-                if !self.is_current(&world, &effects.revision) {
-                    continue;
-                }
                 match action {
+                    Action::Drop(record) => {
+                        let position = Vector3::new(
+                            f64::from(self.position.0.x) + 0.5 + rng().random_range(-0.35..0.35),
+                            f64::from(self.position.0.y) + 1.01,
+                            f64::from(self.position.0.z) + 0.5 + rng().random_range(-0.35..0.35),
+                        );
+                        world.spawn_entity(Arc::new(ItemEntity::new(
+                            Entity::new(world.clone(), position, &EntityType::ITEM),
+                            record,
+                        )));
+                    }
+                    _ if !self.is_current(&world, &effects.revision) => continue,
                     Action::RecordPresence(has_record) => {
                         let current = world.get_block_state_id(&self.position);
                         if current.to_block() == &Block::JUKEBOX {
@@ -431,7 +428,6 @@ impl JukeboxBlockEntity {
                         }
                     }
                     Action::Dirty => self.mark_changed(),
-                    Action::Drop(_) => unreachable!(),
                 }
             }
         }
