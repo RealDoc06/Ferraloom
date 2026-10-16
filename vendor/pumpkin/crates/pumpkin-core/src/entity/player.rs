@@ -1,5 +1,6 @@
 pub mod advancement;
 pub(crate) mod chunk_watches;
+mod persistence;
 mod spam;
 pub mod statistics;
 
@@ -366,8 +367,6 @@ fn read_root_vehicle(nbt: &NbtCompound) -> Option<Uuid> {
     ))
 }
 
-pub const DATA_VERSION: i32 = 4903; // 26.2
-
 /// Food exhaustion applied for every block a player mines.
 ///
 /// Vanilla: `Block#playerDestroy` calls `player.causeFoodExhaustion(0.005F)`.
@@ -408,6 +407,8 @@ pub enum SpamType {
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
+    /// Disk-only remainder, captured on load and copied only when taking a snapshot.
+    preserved_data: Mutex<persistence::PreservedPlayerData>,
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
@@ -735,6 +736,7 @@ impl Player {
 
         Self {
             living_entity,
+            preserved_data: Mutex::new(persistence::PreservedPlayerData::default()),
             config: ArcSwap::new(Arc::new(config)),
             advancements: Arc::new(Mutex::new(
                 server
@@ -6862,6 +6864,45 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        // Start with current modeled state. Optional fields absent here must stay absent.
+        let mut modeled = NbtCompound::new();
+        self.living_entity.entity.write_nbt(&mut modeled);
+        self.living_entity.write_living_nbt(&mut modeled);
+        self.write_custom_nbt(&mut modeled);
+        if let Some(NbtTag::Float(distance)) = modeled.child_tags.remove("FallDistance") {
+            modeled.put_double("fall_distance", f64::from(distance));
+        }
+        self.preserved_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .merge_into(&mut modeled);
+        *nbt = modeled;
+    }
+
+    fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.living_entity.entity.read_nbt_non_mut(nbt);
+        self.living_entity.read_living_nbt_non_mut(nbt);
+        // 26.3 uses a double. LivingEntity still accepts the older float spelling.
+        if let Some(distance) = persistence::fall_distance(nbt) {
+            self.living_entity.fall_distance.store(
+                if self.living_entity.dead.load(Ordering::Relaxed) {
+                    0.0
+                } else {
+                    distance as f32
+                },
+            );
+        }
+        self.read_custom_nbt(nbt);
+        let mut entity_data = NbtCompound::new();
+        self.living_entity.entity.write_nbt(&mut entity_data);
+        *self
+            .preserved_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            persistence::PreservedPlayerData::capture(nbt, &entity_data);
+    }
+
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
@@ -6993,7 +7034,10 @@ impl EntityBase for Player {
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_int("DataVersion", DATA_VERSION);
+        nbt.put_int(
+            "DataVersion",
+            pumpkin_world::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+        );
         self.inventory.write_nbt(nbt);
         self.ender_chest_inventory.write_nbt(nbt);
 
@@ -7062,15 +7106,6 @@ impl EntityBase for Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
         {
-            nbt.put_int("SpawnX", respawn.position.0.x);
-            nbt.put_int("SpawnY", respawn.position.0.y);
-            nbt.put_int("SpawnZ", respawn.position.0.z);
-            nbt.put_string(
-                "SpawnDimension",
-                respawn.dimension.minecraft_name.to_owned(),
-            );
-            nbt.put_bool("SpawnForced", respawn.force);
-
             let mut respawn_compound = NbtCompound::new();
             respawn_compound.put_string("dimension", respawn.dimension.minecraft_name.to_string());
             respawn_compound.put(
@@ -7081,7 +7116,9 @@ impl EntityBase for Player {
                     respawn.position.0.z,
                 ]),
             );
-            respawn_compound.put_float("angle", respawn.yaw);
+            respawn_compound.put_float("yaw", respawn.yaw);
+            // Nonzero imported pitch is refused at the storage boundary until modeled.
+            respawn_compound.put_float("pitch", 0.0);
             respawn_compound.put_bool("forced", respawn.force);
             nbt.put_compound("respawn", respawn_compound);
         }
@@ -7241,7 +7278,10 @@ impl EntityBase for Player {
             } else {
                 BlockPos(Vector3::new(0, 0, 0))
             };
-            let yaw = respawn_compound.get_float("angle").unwrap_or(0.0);
+            let yaw = respawn_compound
+                .get_float("yaw")
+                .or_else(|| respawn_compound.get_float("angle"))
+                .unwrap_or(0.0);
             let force = respawn_compound.get_bool("forced").unwrap_or(false);
             *self
                 .respawn_point
@@ -7268,7 +7308,7 @@ impl EntityBase for Player {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(RespawnPoint {
                 dimension: dim,
                 position: BlockPos(Vector3::new(x, y, z)),
-                yaw: 0.0,
+                yaw: nbt.get_float("SpawnAngle").unwrap_or(0.0),
                 force,
             });
         }

@@ -1,4 +1,4 @@
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions, create_dir_all};
 use std::io::{self, Cursor, Write};
@@ -41,6 +41,8 @@ pub enum PlayerDataError {
     Io(#[from] io::Error),
     #[error("NBT error: {0}")]
     Nbt(String),
+    #[error("Unsupported player data at {field}: {reason}")]
+    Unsupported { field: String, reason: &'static str },
     #[error("Primary player data failed: {primary}; backup player data failed: {backup}")]
     Load {
         primary: Box<Self>,
@@ -282,7 +284,270 @@ fn read_player_file(path: &Path) -> Result<Option<(NbtCompound, Vec<u8>)>, Playe
     let bytes = fs::read(path)?;
     let data = pumpkin_nbt::nbt_compress::read_gzip_compound_tag(Cursor::new(&bytes))
         .map_err(|error| PlayerDataError::Nbt(error.to_string()))?;
+    validate_player_data(&data)?;
     Ok(Some((data, bytes)))
+}
+
+fn unsupported(field: impl Into<String>, reason: &'static str) -> PlayerDataError {
+    PlayerDataError::Unsupported {
+        field: field.into(),
+        reason,
+    }
+}
+
+/// Refuse shapes the current player model would partly consume and then erase.
+/// This is admission validation, not a datafixer. An unsupported primary must not
+/// fall back to an older backup; both files remain untouched for a compatible server.
+fn validate_player_data(data: &NbtCompound) -> Result<(), PlayerDataError> {
+    use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
+    if let Some(version) = data.get("DataVersion") {
+        let legacy_pumpkin = matches!(version, NbtTag::Int(4903))
+            && data.get_bool("HasPlayedBefore").is_some()
+            && data.get_int("AirSupply").is_some()
+            && data.get_int("DrowningTick").is_some();
+        if !matches!(version, NbtTag::Int(value) if *value == MAXIMUM_SUPPORTED_WORLD_DATA_VERSION)
+            && !legacy_pumpkin
+        {
+            return Err(unsupported(
+                "DataVersion",
+                "expected pinned 26.3 or the recognized legacy Pumpkin shape",
+            ));
+        }
+    }
+    for key in [
+        "abilities",
+        "warden_spawn_tracker",
+        "respawn",
+        "equipment",
+        "RootVehicle",
+        "Statistics",
+        "PumpkinCustomData",
+        "BukkitValues",
+    ] {
+        if data
+            .get(key)
+            .is_some_and(|tag| !matches!(tag, NbtTag::Compound(_)))
+        {
+            return Err(unsupported(key, "expected a compound"));
+        }
+    }
+    if let (Some(current), Some(alias)) = (data.get("PumpkinCustomData"), data.get("BukkitValues"))
+        && current != alias
+    {
+        return Err(unsupported(
+            "BukkitValues",
+            "conflicts with PumpkinCustomData",
+        ));
+    }
+    for alias in ["ActiveEffects", "ArmorItems", "HandItems", "Riding"] {
+        if data.get(alias).is_some() {
+            return Err(unsupported(alias, "unimplemented legacy player field"));
+        }
+    }
+    if let Some(abilities) = data.get_compound("abilities") {
+        for (key, value) in &abilities.child_tags {
+            let supported = match key.as_ref() {
+                "invulnerable" | "flying" | "mayfly" | "instabuild" | "mayBuild" => {
+                    matches!(value, NbtTag::Byte(0 | 1))
+                }
+                "flySpeed" | "walkSpeed" => matches!(value, NbtTag::Float(v) if v.is_finite()),
+                _ => true, // Opaque children are retained by Player's persistence remainder.
+            };
+            if !supported {
+                return Err(unsupported(
+                    format!("abilities.{key}"),
+                    "unsupported modeled value",
+                ));
+            }
+        }
+    }
+    if let Some(tracker) = data.get_compound("warden_spawn_tracker") {
+        for key in [
+            "ticks_since_last_warning",
+            "warning_level",
+            "cooldown_ticks",
+        ] {
+            if tracker.get(key).is_some() && !tracker.get_int(key).is_some_and(|v| v >= 0) {
+                return Err(unsupported(
+                    format!("warden_spawn_tracker.{key}"),
+                    "requires a nonnegative int",
+                ));
+            }
+        }
+    }
+    if let Some(respawn) = data.get_compound("respawn") {
+        if respawn
+            .get_string("dimension")
+            .and_then(pumpkin_data::dimension::Dimension::from_name)
+            .is_none()
+            || !matches!(respawn.get_int_array("pos"), Some([_, _, _]))
+        {
+            return Err(unsupported(
+                "respawn",
+                "requires a known dimension and three-int position",
+            ));
+        }
+        for key in ["yaw", "angle"] {
+            if respawn.get(key).is_some()
+                && !respawn
+                    .get_float(key)
+                    .is_some_and(|v| v.is_finite() && (-180.0..=180.0).contains(&v))
+            {
+                return Err(unsupported(
+                    format!("respawn.{key}"),
+                    "requires finite yaw in [-180, 180]",
+                ));
+            }
+        }
+        if respawn.get("pitch").is_some() && respawn.get_float("pitch") != Some(0.0) {
+            return Err(unsupported(
+                "respawn.pitch",
+                "nonzero respawn pitch is not modeled",
+            ));
+        }
+        if respawn
+            .get("forced")
+            .is_some_and(|tag| !matches!(tag, NbtTag::Byte(0 | 1)))
+        {
+            return Err(unsupported("respawn.forced", "requires a boolean byte"));
+        }
+    }
+    if let Some(root) = data.get_compound("RootVehicle") {
+        if root.child_tags.keys().any(|key| key.as_ref() != "Attach") {
+            return Err(unsupported(
+                "RootVehicle",
+                "embedded vehicle entities and extensions are not modeled",
+            ));
+        }
+        let attach_valid = matches!(root.get_int_array("Attach"), Some([_, _, _, _]))
+            || root.get_list("Attach").is_some_and(|list| {
+                list.len() == 4 && list.iter().all(|tag| matches!(tag, NbtTag::Int(_)))
+            });
+        if !attach_valid {
+            return Err(unsupported(
+                "RootVehicle.Attach",
+                "requires a four-int UUID",
+            ));
+        }
+    }
+    for key in ["Inventory", "EnderItems"] {
+        if let Some(tag) = data.get(key) {
+            let NbtTag::List(items) = tag else {
+                return Err(unsupported(key, "expected an item list"));
+            };
+            let mut slots = std::collections::HashSet::new();
+            for tag in items {
+                let NbtTag::Compound(item) = tag else {
+                    return Err(unsupported(key, "expected compound items"));
+                };
+                let Some(slot) = item.get_byte("Slot") else {
+                    return Err(unsupported(key, "requires byte Slot"));
+                };
+                let valid = if key == "Inventory" {
+                    (0..=40).contains(&slot) || (100..=103).contains(&slot) || slot == -106
+                } else {
+                    (0..27).contains(&slot)
+                };
+                let normalized_slot = match slot {
+                    100..=103 => slot - 64,
+                    -106 => 40,
+                    _ => slot,
+                };
+                if !valid || !slots.insert(normalized_slot) {
+                    return Err(unsupported(key, "unmodeled or duplicate inventory slot"));
+                }
+                validate_player_item(item, key)?;
+            }
+        }
+    }
+    if let Some(equipment) = data.get_compound("equipment") {
+        for (key, value) in &equipment.child_tags {
+            match key.as_ref() {
+                "mainhand" | "body" | "saddle" => {
+                    return Err(unsupported(
+                        format!("equipment.{key}"),
+                        "slot is not serialized by the player inventory",
+                    ));
+                }
+                "offhand" | "head" | "chest" | "legs" | "feet" => {
+                    let NbtTag::Compound(item) = value else {
+                        return Err(unsupported(
+                            format!("equipment.{key}"),
+                            "expected an item compound",
+                        ));
+                    };
+                    validate_player_item(item, "equipment")?;
+                }
+                _ => {} // Unrecognized slots are opaque remainder, never runtime equipment.
+            }
+        }
+    }
+    if let Some(tag) = data.get("active_effects") {
+        let NbtTag::List(effects) = tag else {
+            return Err(unsupported("active_effects", "expected an effect list"));
+        };
+        let mut ids = std::collections::HashSet::new();
+        for tag in effects {
+            let NbtTag::Compound(effect) = tag else {
+                return Err(unsupported("active_effects", "expected compound effects"));
+            };
+            for (key, value) in &effect.child_tags {
+                let supported = match key.as_ref() {
+                    "id" => matches!(value, NbtTag::String(_)),
+                    "amplifier" => matches!(value, NbtTag::Int(0..=255)),
+                    "duration" => matches!(value, NbtTag::Int(_)),
+                    "ambient" | "show_particles" | "show_icon" => {
+                        matches!(value, NbtTag::Byte(0 | 1))
+                    }
+                    _ => false,
+                };
+                if !supported {
+                    return Err(unsupported(
+                        format!("active_effects.{key}"),
+                        "effect extension or value is not modeled",
+                    ));
+                }
+            }
+            let id = effect
+                .get_string("id")
+                .filter(|id| pumpkin_data::effect::StatusEffect::from_minecraft_name(id).is_some());
+            if !id.is_some_and(|id| ids.insert(id)) || effect.get_bool("show_icon").is_none() {
+                return Err(unsupported(
+                    "active_effects",
+                    "requires unique known ids and explicit show_icon for the current reader",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_player_item(item: &NbtCompound, field: &str) -> Result<(), PlayerDataError> {
+    if item
+        .child_tags
+        .keys()
+        .any(|key| !matches!(key.as_ref(), "id" | "count" | "components" | "Slot"))
+    {
+        return Err(unsupported(
+            field,
+            "item envelope extensions are not modeled; components use the central item codec",
+        ));
+    }
+    if !item
+        .get_int("count")
+        .is_some_and(|count| (1..=255).contains(&count))
+        || item
+            .get("components")
+            .is_some_and(|tag| !matches!(tag, NbtTag::Compound(_)))
+        || !pumpkin_data::item_stack::ItemStack::read_item_stack(item)
+            .is_some_and(|stack| !stack.is_empty())
+    {
+        return Err(unsupported(
+            field,
+            "item cannot be read by the current item codec",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
