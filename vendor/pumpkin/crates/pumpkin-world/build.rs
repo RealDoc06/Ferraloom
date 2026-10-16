@@ -1,7 +1,7 @@
 use std::{
     env, fs,
     io::{Cursor, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use sha1::{Digest, Sha1};
@@ -14,9 +14,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ancestors()
         .nth(4)
         .ok_or("Cannot locate Ferraloom root")?;
-    let jar = env::var_os("PUMPKIN_MINECRAFT_SERVER_JAR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join(".cache/vanilla/26.3/server.jar"));
+    let jar = env::var_os("PUMPKIN_MINECRAFT_SERVER_JAR").map_or_else(
+        || root.join(".cache/vanilla/26.3/server.jar"),
+        PathBuf::from,
+    );
     println!("cargo:rerun-if-changed={}", jar.display());
     let bytes = fs::read(&jar).map_err(|error| {
         format!(
@@ -52,7 +53,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !name.starts_with("world_preset/") && !name.starts_with("flat_level_generator_preset/") {
             continue;
         }
-        if !name.ends_with(".json") || name.contains("..") {
+        if Path::new(name)
+            .extension()
+            .is_none_or(|extension| extension != "json")
+            || name.contains("..")
+        {
             continue;
         }
         let destination = output.join(name);

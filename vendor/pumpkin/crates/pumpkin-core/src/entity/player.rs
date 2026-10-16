@@ -8135,6 +8135,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn new_player_starts_with_zero_seed_and_preserves_a_loaded_nonzero_seed() {
         use crate::data::player_server::test::{close_fixture, player_fixture};
+        use crate::entity::EntityBase;
         use std::sync::atomic::Ordering;
 
         let fixture = player_fixture().await;
