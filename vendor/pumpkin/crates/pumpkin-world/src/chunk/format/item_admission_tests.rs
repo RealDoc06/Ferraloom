@@ -335,6 +335,8 @@ async fn selected_sing_reference_survives_container_region_save_and_reopen() {
         std::fs::create_dir_all(&folder.region_folder).unwrap();
         let container = saved_container(id, sing_horn());
         let source = saved_chunk(container.clone());
+        let runtime = crate::chunk::poi_binding::TestRuntime::new(folder.poi_folder.clone());
+        source.bind_poi(&runtime.runtime).unwrap();
         let path = folder.region_folder.join("r.0.0.mca");
         let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
         region
@@ -365,6 +367,7 @@ async fn selected_sing_reference_survives_container_region_save_and_reopen() {
         stack.write_item_stack(&mut written);
         assert_eq!(written, sing_horn());
         // Model actual ItemStack persistence, then save and use a fresh reader.
+        loaded.bind_poi(&runtime.runtime).unwrap();
         loaded
             .pending_block_entities
             .lock()

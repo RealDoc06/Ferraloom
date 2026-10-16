@@ -287,7 +287,7 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
         .plugin_manager
         .register::<GenericGameEvent, _>(events.clone(), EventPriority::Normal, true);
     let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
-    let (remote, _write) = fixture._remote.split();
+    let (remote, _write) = fixture.remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
     let mut observer = SoundObserver::new(&server, &player.world()).await;
     observe(&mut reader, &player).await;
@@ -570,7 +570,7 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
         true,
     );
     let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
-    let (remote, _write) = fixture._remote.split();
+    let (remote, _write) = fixture.remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
     let mut observer = SoundObserver::new(&server, &player.world()).await;
     observe(&mut reader, &player).await;
@@ -822,7 +822,7 @@ async fn horn_entity_sound_recipients_exclude_performer_and_strict_range_boundar
         .inventory()
         .set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::GOAT_HORN));
     let mut observer = SoundObserver::new(&server, &player.world()).await;
-    let (remote, _write) = fixture._remote.split();
+    let (remote, _write) = fixture.remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
     observe(&mut reader, &player).await;
     observe(&mut observer.reader, &observer.player).await;
