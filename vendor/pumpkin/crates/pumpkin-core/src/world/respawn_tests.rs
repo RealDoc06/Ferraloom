@@ -2,7 +2,9 @@
 //! stops chunk workers; only the loopback client's outgoing packet task runs.
 
 use super::World;
-use crate::data::player_server::test::{close_fixture, player_fixture, stop_chunk_workers};
+use crate::data::player_server::test::{
+    close_fixture, drive_packet_future, player_fixture, stop_chunk_workers,
+};
 use crate::entity::{EntityBase, player::Player};
 use crate::net::{
     ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
@@ -18,30 +20,6 @@ use tokio::net::{TcpListener, TcpStream};
 use uuid::Uuid;
 
 const VANILLA_223_BITS: u32 = 0x3e67_39c4;
-
-/// Drive admitted packet tasks without adding a gameplay tick or receiving input.
-async fn drive_packet_future<F: Future>(
-    server: &Arc<crate::server::Server>,
-    future: F,
-) -> F::Output {
-    tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::pin!(future);
-        loop {
-            if let Poll::Ready(value) =
-                std::future::poll_fn(|cx| Poll::Ready(future.as_mut().poll(cx))).await
-            {
-                return value;
-            }
-            let server = server.clone();
-            tokio::task::spawn_blocking(move || server.packet_runner.run_ready(&server, None))
-                .await
-                .unwrap();
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap()
-}
 
 struct ConnectedPlayer {
     player: Arc<Player>,

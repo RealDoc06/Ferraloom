@@ -303,6 +303,31 @@ pub(crate) mod test {
         storage.save_player_data(snapshot)
     }
 
+    /// Drive admitted packet tasks without adding a gameplay tick or receiving input.
+    pub(crate) async fn drive_packet_future<F: std::future::Future>(
+        server: &Arc<crate::server::Server>,
+        future: F,
+    ) -> F::Output {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::pin!(future);
+            loop {
+                if let std::task::Poll::Ready(value) =
+                    std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx)))
+                        .await
+                {
+                    return value;
+                }
+                let server = server.clone();
+                tokio::task::spawn_blocking(move || server.packet_runner.run_ready(&server, None))
+                    .await
+                    .unwrap();
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap()
+    }
+
     pub struct PlayerFixture {
         pub(crate) directory: tempfile::TempDir,
         pub(crate) server: Arc<Server>,

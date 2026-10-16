@@ -1635,8 +1635,8 @@ mod player_data_tests {
         .await
         .unwrap();
         let exit_status = std::sync::atomic::AtomicI32::new(0);
-        tokio::time::timeout(
-            Duration::from_secs(10),
+        crate::data::player_server::test::drive_packet_future(
+            &fixture.server,
             crate::finish_player_session_with_status(
                 &fixture.server,
                 &fixture.player,
@@ -1644,7 +1644,6 @@ mod player_data_tests {
             ),
         )
         .await
-        .unwrap()
         .unwrap();
         assert_eq!(exit_status.load(Ordering::Relaxed), 0);
         assert!(fixture.player.session.lock().unwrap().is_none());
