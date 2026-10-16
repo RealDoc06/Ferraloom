@@ -5,21 +5,35 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
 The most recent targeted runs used source and harness commit
-`88ddcc0724b1b5a290b76d67340690515cda0407`, with executable SHA-256
-`6273ad0e2f0cf264051756480d7a96d5da155879632a3c0651bc70a0c95a7ad9`.
-The [container-metadata report](../compatibility/results/evidence/1dd72736a7e38a7ebdfb32eef0372222a11b681bb50fa952c914b4772448bc7e.json)
-records 26 paired passes; the
-[chat-throttle report](../compatibility/results/evidence/24a898372a7b35320aca192609769cd480d22b8f450f352f864b0b57a6e921b3.json)
-records five. The
-[player-interchange report](../compatibility/results/evidence/1f9b92e541587555c3f7af4cc21943a268d6193da3937a499f4a5b77774163f9.json)
-records six of seven passing composites from Java to Rust, and seven failures
-from Rust to Java after Java rejected Ferraloom's POI coordinate layout.
-The remaining forward failure used an invalid setup assumption: Java saves a new
-player's enchantment seed as zero, then randomizes zero when loading it. The
-revised setup uses a real source reconnect before testing exact seed retention.
-The POI codec and test setup are corrected in source; fresh executable validation
-is pending. All four servers and four clients in that retained player run exited
-cleanly. These observations do not promote any complete feature family.
+`a868ebcf565e4566718c68e2b3fae845cd7f61b3`, with executable SHA-256
+`68bc35698bea128fa88aae227aa7075c268f55d253ca23c8a144b6809db4de27`.
+
+| Suite | Passing observations |
+| --- | --- |
+| [Player interchange](../compatibility/results/evidence/59715fad4953c845a79a087abfe18c1553eb86564a136073ef0a036a2b71a8b7.json) | Seven composites in each direction |
+| [Item persistence](../compatibility/results/evidence/67718558b980d83535d81edd97b521aa520e2b259bb203c620d211b82c13f3c4.json) | Five composites in each direction, including destination reload |
+| [Container metadata](../compatibility/results/evidence/95937a2cdb7a9ee5f294061b96cad355c3f323c5248ad7907558e97b5577938e.json) | 26 cases on each server |
+| [Chat throttling](../compatibility/results/evidence/febd5269439e784cb43dcd43cff200cde5fec22f6640dd509a2d81113a31c0b5.json) | Five cases on each server |
+
+All 20 server boots and 36 client sessions exited cleanly. The same source passed
+1,460 Rust tests, 76 Python tests, both formatting checks, Clippy across all five
+vendored crates and the executable wrapper, and the executable build. These are
+targeted observations; no complete feature family is promoted.
+
+Player interchange covers identity, selected inventory components, vitals and XP,
+advancements, statistics, and continued saves. The item composites cover selected
+potion, nested-container, custom-data and firework components through authoring,
+transfer, mutation and reload. They do not establish general item use, rendering,
+equipment synchronization or complete component support. Player and item cases
+combine both runtimes in each direction and are archived separately from the
+per-engine feature observations. The metadata and chat runs add 31 selected
+observations to four existing partial families.
+
+The [earlier player run](../compatibility/results/evidence/1f9b92e541587555c3f7af4cc21943a268d6193da3937a499f4a5b77774163f9.json)
+retains Ferraloom's incompatible POI coordinate layout and an invalid zero-seed
+test precondition. The latest run exercises the corrected POI codec and a real
+source reconnect before transferring the observed nonzero enchantment seed.
+Earlier failed reports remain unchanged.
 
 The retained broad main-suite and block-data runs used clean source and harness commit
 `105758aa42d2a365a9791857f45d826e56e80e9f`, with executable SHA-256

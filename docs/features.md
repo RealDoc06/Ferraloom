@@ -24,7 +24,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `network.registries` | Send the target version's synchronized registries and identifiers | 0/0/0 | 0/0/0 | unverified |
 | `network.keepalive` | Match keepalive timing, IDs and timeout behavior | 0/0/0 | 0/0/0 | unverified |
 | `network.signed_chat` | Enforce target chat signing and acknowledgement rules | 0/0/0 | 0/0/0 | unverified |
-| `network.chat_delivery` | Match chat visibility, message decoration and system messages | 1/0/0 | 1/0/0 | partial |
+| `network.chat_delivery` | Match chat visibility, message decoration and system messages | 6/0/0 | 6/0/0 | partial |
 | `network.secure_profile` | Honor secure-profile settings and certificate validation | 0/0/0 | 0/0/0 | unverified |
 | `network.transfer` | Match target transfer packets and accepted-transfer policy | 0/0/0 | 0/0/0 | unverified |
 | `network.movement` | Apply vanilla movement limits and correction packets | 2/0/0 | 2/0/0 | partial |
@@ -34,7 +34,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `network.cookies` | Match target cookie request, storage and transfer use where present | 0/0/0 | 0/0/0 | unverified |
 | `network.chunk_stream` | Send vanilla chunk, light, batch and unload messages | 1/0/0 | 1/0/0 | partial |
 | `network.entity_stream` | Synchronize spawn, metadata, movement and removal per viewer | 0/0/0 | 0/0/0 | unverified |
-| `network.inventory_stream` | Match slot, cursor, state ID and transaction recovery messages | 6/0/0 | 6/0/0 | partial |
+| `network.inventory_stream` | Match slot, cursor, state ID and transaction recovery messages | 9/0/0 | 9/0/0 | partial |
 | `network.disconnect` | Deliver appropriate reasons and release connection-owned state | 0/0/0 | 0/0/0 | unverified |
 
 ## World generation and data packs
@@ -70,7 +70,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `persistence.region` | Read and write target region storage and compression formats | 0/0/0 | 0/0/0 | unverified |
 | `persistence.chunk_data` | Persist section palettes, biomes, heightmaps and block states | 1/0/0 | 1/0/0 | partial |
 | `persistence.entity_data` | Persist entity types, UUIDs, components and relationships | 2/0/0 | 2/0/0 | partial |
-| `persistence.block_entities` | Persist container, command and other block entity state | 7/0/0 | 7/0/0 | partial |
+| `persistence.block_entities` | Persist container, command and other block entity state | 10/0/0 | 10/0/0 | partial |
 | `persistence.player_data` | Persist inventory, position, abilities and dimension | 0/0/0 | 0/0/0 | unverified |
 | `persistence.level_data` | Maintain level.dat settings, seed and world metadata | 1/0/0 | 1/0/0 | partial |
 | `persistence.poi` | Persist and reload village and portal points of interest | 0/0/0 | 0/0/0 | unverified |
@@ -105,7 +105,7 @@ Regenerate with `python3 tools/report_features.py`.
 | `blocks.sculk` | Match sculk growth, vibration propagation and shrieker behavior | 0/0/0 | 0/0/0 | unverified |
 | `blocks.portals` | Match portal shape validation and block-side interactions | 0/0/0 | 0/0/0 | unverified |
 | `blocks.rails` | Match rail placement, slopes, power and detector behavior | 0/0/0 | 0/0/0 | unverified |
-| `blocks.containers` | Match hopper transfer, sided access, locks and container rules | 5/0/0 | 5/0/0 | partial |
+| `blocks.containers` | Match hopper transfer, sided access, locks and container rules | 25/0/0 | 25/0/0 | partial |
 | `blocks.processing` | Match furnaces, brewing, campfires and other timed processors | 2/0/1 | 2/0/1 | partial |
 | `blocks.signals` | Match buttons, plates, levers, tripwire and sensors | 0/0/0 | 0/0/0 | unverified |
 | `blocks.interactives` | Match doors, beds, respawn anchors, bells and utility interactions | 16/0/0 | 16/0/0 | partial |
