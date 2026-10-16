@@ -32,6 +32,25 @@ pub trait Phase: Send + Sync {
     fn is_sitting(&self) -> bool {
         self.get_type().is_sitting()
     }
+    fn on_hurt(&self, direct: Option<&dyn crate::entity::EntityBase>, amount: f32) -> f32 {
+        use crate::entity::projectile::{
+            arrow::ArrowEntity, trident::TridentEntity, wind_charge::WindChargeEntity,
+        };
+        if self.get_type().rejects_sitting_projectile()
+            && let Some(direct) = direct
+            && (direct.cast_any().is::<ArrowEntity>()
+                || direct.cast_any().is::<TridentEntity>()
+                || direct
+                    .cast_any()
+                    .downcast_ref::<WindChargeEntity>()
+                    .is_some_and(WindChargeEntity::is_player_wind_charge))
+        {
+            direct.set_on_fire_for_ticks(20);
+            direct.get_entity().set_frozen_ticks(0);
+            return 0.0;
+        }
+        amount
+    }
     fn get_fly_speed(&self) -> f32 {
         0.6
     }

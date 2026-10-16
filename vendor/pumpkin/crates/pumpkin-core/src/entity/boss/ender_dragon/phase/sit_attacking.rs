@@ -44,15 +44,5 @@ impl super::Phase for SitAttackingPhase {
         } else {
             drop(timer);
         }
-
-        let mut dmg = dragon
-            .sitting_damage_received
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if *dmg > 150.0 {
-            *dmg = 0.0;
-            drop(dmg);
-            dragon.set_phase(EnderDragonPhase::TakingOff);
-        }
     }
 }

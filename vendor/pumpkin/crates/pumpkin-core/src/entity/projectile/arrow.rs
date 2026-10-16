@@ -927,8 +927,8 @@ impl EntityBase for ArrowEntity {
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
+                    Some(self),
                     owner_entity.as_deref(),
-                    None,
                 );
 
                 if let Some(living) = target.get_living_entity() {

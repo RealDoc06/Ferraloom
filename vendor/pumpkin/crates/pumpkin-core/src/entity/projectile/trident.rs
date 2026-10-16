@@ -366,7 +366,11 @@ impl EntityBase for TridentEntity {
                 }
 
                 let damage_val = damage as f32;
-                target.damage(&*target, damage_val, DamageType::TRIDENT);
+                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
+                target.damage_with_context(
+                    target.as_ref(), damage_val, DamageType::TRIDENT, Some(hit_pos),
+                    Some(self), Some(owner.as_deref().unwrap_or(self)),
+                );
 
                 // Play hit sound
                 let sound_packet = CSoundEffect::new(

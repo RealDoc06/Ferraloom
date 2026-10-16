@@ -56,6 +56,11 @@ pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
 });
 
 impl WindChargeEntity {
+    /// Java WindCharge, distinct from its sibling BreezeWindCharge class.
+    pub const fn is_player_wind_charge(&self) -> bool {
+        matches!(self.kind, WindChargeKind::Normal { .. })
+    }
+
     #[must_use]
     pub const fn new_normal(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
@@ -154,7 +159,7 @@ impl EntityBase for WindChargeEntity {
                 1.0,
                 DamageType::WIND_CHARGE,
                 Some(hit_pos),
-                Some(self.get_entity()),
+                Some(self),
                 owner.as_deref(),
             );
         }

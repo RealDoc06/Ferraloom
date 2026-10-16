@@ -234,14 +234,7 @@ impl EntityBase for EnderDragonPart {
         let Some(parent) = self.current_parent() else {
             return false;
         };
-        parent.damage_with_context(
-            parent.as_ref(),
-            amount,
-            damage_type,
-            position,
-            source,
-            cause,
-        )
+        parent.hurt_part(self.kind, amount, damage_type, position, source, cause)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -978,21 +971,89 @@ impl EnderDragonEntity {
         self.tick_parts();
     }
 
-    pub fn hurt(&self, damage: f32) {
-        let phase_type: EnderDragonPhase = *self
-            .phase
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if phase_type.is_sitting() {
-            *self
-                .sitting_damage_received
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) += damage;
+    /// Exact26.3 parent hurt policy. Only the accepted health path enters the
+    /// ordinary LivingEntity pipeline, with the real parent as victim/caller.
+    /// No part, registry or phase guard spans that pipeline's plugin callbacks.
+    pub fn hurt_part(
+        &self,
+        kind: DragonPartKind,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if !self.get_entity().world.load_full().is_current_entity(self) {
+            return false;
         }
+        let phase_type = self.current_phase();
+        if phase_type == EnderDragonPhase::Dying {
+            return false;
+        }
+        let amount = self
+            .phase_manager
+            .get_phase(phase_type)
+            .on_hurt(source, amount);
+        let amount = if matches!(kind, DragonPartKind::Head | DragonPartKind::Neck) {
+            amount
+        } else {
+            amount / 4.0 + amount.min(1.0)
+        };
+        if amount < 0.01 {
+            return false;
+        }
+        if cause.or(source).and_then(EntityBase::get_player).is_some()
+            || damage_type
+                .has_tag(&pumpkin_data::tag::DamageType::MINECRAFT_ALWAYS_HURTS_ENDER_DRAGONS)
+        {
+            let living = &self.mob_entity.living_entity;
+            let before = living.health.load();
+            living.damage_with_context(self, amount, damage_type, position, source, cause);
+            if self.current_phase().is_sitting() {
+                let take_off = {
+                    let mut received = self
+                        .sitting_damage_received
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    *received += before - living.health.load();
+                    if *received > living.get_max_health() * 0.25 {
+                        *received = 0.0;
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if take_off {
+                    self.set_phase(EnderDragonPhase::TakingOff);
+                }
+            }
+        }
+        // Vanilla returns true even when the responsible-source gate declines
+        // health damage, or the ordinary health pipeline rejects/cancels it.
+        true
     }
 }
 
 impl Mob for EnderDragonEntity {
+    fn mob_damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.hurt_part(
+            DragonPartKind::Body,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        )
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("DragonPhase", self.current_phase().network_id());
         nbt.put_int(

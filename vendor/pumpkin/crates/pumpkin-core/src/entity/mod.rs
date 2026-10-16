@@ -455,6 +455,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
+    /// `caller` is the victim's virtual owner. `source` is the direct object
+    /// (including the actual projectile); `cause` is its responsible attacker.
+    /// Without a separate cause, the direct source also supplies attribution.
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
