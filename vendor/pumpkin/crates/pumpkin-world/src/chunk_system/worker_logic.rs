@@ -84,10 +84,19 @@ async fn read_reserved_poi(
     }
     // This request owns only a tag. It never waits on its own read reservation,
     // and has no storage, publication or terrain guard across disk IO.
+    if request.reply.is_closed() {
+        return Err(PoiQueryError::Closed);
+    }
     let (send, mut receive) = tokio::sync::mpsc::channel(request.positions.len().max(1));
-    tokio::select! {
-        () = level.chunk_saver.fetch_chunks(&level.level_folder, &request.positions, send) => {},
-        () = request.reply.closed() => return Err(PoiQueryError::Closed),
+    // Fetch can flush pending writes during eviction. Once started, let it
+    // finish restoring failed sources or publishing successful serialization;
+    // dropping that future could leave a pending source incorrectly clean.
+    level
+        .chunk_saver
+        .fetch_chunks(&level.level_folder, &request.positions, send)
+        .await;
+    if request.reply.is_closed() {
+        return Err(PoiQueryError::Closed);
     }
     let mut overlays = Vec::with_capacity(request.positions.len());
     while let Some(data) = receive.recv().await {

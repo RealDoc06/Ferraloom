@@ -522,3 +522,130 @@ async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_foo
     generated.set_block_state(1, 0, 1, &Block::BELL.default_state);
     assert!(PoiTerrainOverlay::resident(&generated).sections.is_empty());
 }
+
+// C2 cancellation follow-up: actual pending-write failure and retry, UNRUN.
+async fn pending_failed_poi_write(schedule: &mut GenerationSchedule, level: &Level) -> SyncChunk {
+    use crate::chunk::io::FileIO;
+    let pos = ChunkPos::new(0, 0);
+    let source = publish(schedule, level, pos);
+    source.set_block_absolute_y(0, 0, 0, home());
+    level
+        .chunk_saver
+        .save_chunks(&level.level_folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    source.set_block_absolute_y(0, 0, 0, Block::BELL.default_state.id);
+    source.set_custom_data("test", "end", pumpkin_nbt::tag::NbtTag::End);
+    assert!(
+        level
+            .chunk_saver
+            .save_chunks(&level.level_folder, vec![(pos, source.clone())])
+            .await
+            .is_err()
+    );
+    assert!(source.is_dirty());
+    source
+}
+
+async fn assert_cancelled_pending_retry(
+    level: &Level,
+    source: &SyncChunk,
+    terrain_before: &[u8],
+    poi_before: &[u8],
+) {
+    use crate::chunk::{
+        format::anvil::AnvilChunkFile,
+        io::{FileIO, LoadedData, file_manager::ChunkFileManager},
+    };
+    let terrain_path = level.level_folder.region_folder.join("r.0.0.mca");
+    let poi_path = level.level_folder.poi_folder.join("r.0.0.mca");
+    assert!(source.is_dirty());
+    assert!(level.chunk_saver.flush().await.is_err());
+    level.poi_storage.lock().unwrap().save_all().unwrap();
+    assert_eq!(std::fs::read(&terrain_path).unwrap(), terrain_before);
+    assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+    source.set_custom_data("test", "end", pumpkin_nbt::tag::NbtTag::Int(1));
+    // Retry only retained pending work: never re-submit this source with save_chunks.
+    level.chunk_saver.flush().await.unwrap();
+    let fresh = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    fresh
+        .fetch_chunks(&level.level_folder, &[ChunkPos::new(0, 0)], send)
+        .await;
+    let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+        panic!("retained source did not reach fresh terrain disk");
+    };
+    assert_eq!(
+        saved.section.get_block_absolute_y(0, 0, 0),
+        Some(Block::BELL.default_state.id)
+    );
+    let saved_poi = PoiRegion::load(&poi_path).unwrap();
+    let records = saved_poi.get_all();
+    assert!(
+        records.iter().any(
+            |entry| entry.poi_type == PoiType::Meeting.identifier() && entry.free_tickets == 32
+        )
+    );
+    assert!(!source.is_dirty());
+}
+
+#[tokio::test]
+async fn cancelled_empty_fetch_drains_pending_failure_before_normal_io_and_retry() {
+    let (_directory, level, mut schedule, workers) = fixture().await;
+    schedule.send_level = Arc::new(LevelChannel::new());
+    let source = pending_failed_poi_write(&mut schedule, &level).await;
+    let terrain_before = std::fs::read(level.level_folder.region_folder.join("r.0.0.mca")).unwrap();
+    let poi_before = std::fs::read(level.level_folder.poi_folder.join("r.0.0.mca")).unwrap();
+    let (held, ready) = tokio::sync::oneshot::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let blocked = source.clone();
+    let blocker = std::thread::spawn(move || {
+        let _light = blocked.light_engine.lock().unwrap();
+        held.send(()).unwrap();
+        released.recv_timeout(Duration::from_secs(10)).unwrap();
+    });
+    ready.await.unwrap();
+    // Read sibling B: fetch's eviction must attempt pending A's real encoder.
+    let queried = ChunkPos::new(1, 0);
+    let result = request_area(&schedule, &level, queried);
+    let mut active = None;
+    schedule.poll_poi_requests(&level, &mut active);
+    let reader = start_reader(&schedule, &level, workers.read);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while source.is_dirty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    // apply_pending cleared dirty before awaiting the light-blocked encoder.
+    drop(result);
+    schedule.poll_poi_requests(&level, &mut active);
+    assert!(active.is_none());
+    assert!(!schedule.io_lock.0.lock().unwrap().contains_key(&queried));
+    let following = ChunkPos::new(32, 0);
+    schedule
+        .io_read
+        .send(ReadRequest::Chunks(vec![following]))
+        .await
+        .unwrap();
+    let receive = schedule.recv_chunk.clone();
+    assert!(matches!(
+        tokio::task::spawn_blocking(move || receive.recv_timeout(Duration::from_millis(50)))
+            .await
+            .unwrap(),
+        Err(crossbeam::channel::RecvTimeoutError::Timeout)
+    ));
+    release.send(()).unwrap();
+    blocker.join().unwrap();
+    let (received_pos, received) = ordinary_read_result(&schedule).await;
+    assert_eq!(received_pos, following);
+    assert!(matches!(received, RecvChunk::IO(Chunk::Proto(_))));
+    assert!(schedule.io_lock.0.lock().unwrap().is_empty());
+    assert_cancelled_pending_retry(&level, &source, &terrain_before, &poi_before).await;
+    drop(schedule);
+    tokio::time::timeout(Duration::from_secs(5), reader)
+        .await
+        .unwrap()
+        .unwrap();
+}
