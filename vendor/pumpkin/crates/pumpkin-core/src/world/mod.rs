@@ -37,6 +37,8 @@ pub mod portal;
 mod postprocessing;
 pub mod raid;
 pub mod random_sequences;
+#[cfg(test)]
+mod respawn_tests;
 pub mod stopwatches;
 pub mod time;
 #[cfg(test)]
@@ -4756,8 +4758,10 @@ impl World {
 
         player.hunger_manager.restart();
 
-        if !keep_inventory {
+        // Vanilla restoreFrom retains inventory, XP and Score for keep-all or spectators.
+        if !alive && !keep_inventory && !player.is_spectator() {
             player.set_experience(0, 0.0, 0);
+            player.score.store(0, Ordering::Relaxed);
             player.inventory.clear();
         }
 
