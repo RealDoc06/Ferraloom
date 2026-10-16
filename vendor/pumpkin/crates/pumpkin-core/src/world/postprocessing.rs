@@ -122,8 +122,21 @@ mod tests {
             0,
             Dimension::OVERWORLD,
         );
-        // Use controlled FULL chunks, with no asynchronous terrain generation.
-        level.shutdown().await.unwrap();
+        // Stop generation without cancelling the level. Scheduled commands and
+        // entity IO still require its ordinary lifetime to remain open.
+        level.shut_down_chunk_system.store(true, Ordering::Relaxed);
+        level.level_channel.notify();
+        let handles = std::mem::take(&mut *level.thread_tracker.lock().unwrap());
+        tokio::task::spawn_blocking(move || {
+            for handle in handles {
+                handle.join().unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        level.chunk_system_tasks.close();
+        level.chunk_system_tasks.wait().await;
+        assert!(!level.cancel_token.is_cancelled());
         let world = Arc::new(World::load(
             level,
             Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),

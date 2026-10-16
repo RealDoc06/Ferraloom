@@ -421,8 +421,13 @@ pub(crate) mod test {
             &world,
             pumpkin_util::GameMode::Survival,
         ));
-        // This fixture bypasses admission, which loads progress before publication.
-        player.advancements.lock().unwrap().load().unwrap();
+        // This fixture bypasses admission, which loads progress and binds the
+        // advancement owner before publication.
+        {
+            let mut advancements = player.advancements.lock().unwrap();
+            advancements.load().unwrap();
+            advancements.set_player(&player);
+        };
         server.statistics_manager.load_player(&player).unwrap();
         player
             .screen_handler_sync_handler
