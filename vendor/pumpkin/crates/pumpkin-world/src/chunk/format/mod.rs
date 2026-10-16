@@ -1227,14 +1227,20 @@ mod tests {
                 .unwrap();
             backend.write(&terrain_path).await.unwrap();
             complete_poi_batch(std::iter::once(&mut baseline)).unwrap();
-            let mut storage = runtime.runtime.storage.lock().unwrap();
-            for x in [1, 2] {
-                storage
-                    .add_with_free_tickets(BlockPos::new(x, 0, 1), PoiType::Home.identifier(), 0)
-                    .unwrap();
-            }
-            storage.save_all().unwrap();
-            drop(storage);
+            {
+                let mut storage = runtime.runtime.storage.lock().unwrap();
+                for x in [1, 2] {
+                    storage
+                        .add_with_free_tickets(
+                            BlockPos::new(x, 0, 1),
+                            PoiType::Home.identifier(),
+                            0,
+                        )
+                        .unwrap();
+                }
+                storage.save_all().unwrap();
+                drop(storage);
+            };
             let path = directory.path().join("poi/r.0.0.mca");
             let before = std::fs::read(&path).unwrap();
             chunk.set_block_absolute_y(1, 0, 1, BlockStateId::AIR);

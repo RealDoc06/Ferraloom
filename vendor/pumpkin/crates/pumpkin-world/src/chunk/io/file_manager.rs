@@ -1047,10 +1047,12 @@ mod tests {
         // One explicit poll submits completion to the occupied blocking pool.
         assert!(futures::poll!(tokio::task::unconstrained(flush.as_mut())).is_pending());
         drop(flush); // Cancel while its blocking completion has not started.
-        let mut drain = Box::pin(writer.block_and_await_ongoing_tasks());
-        assert!(futures::poll!(tokio::task::unconstrained(drain.as_mut())).is_pending());
-        // Cancelling a guard waiter must also release pending/cache locks.
-        drop(drain);
+        {
+            let mut drain = Box::pin(writer.block_and_await_ongoing_tasks());
+            assert!(futures::poll!(tokio::task::unconstrained(drain.as_mut())).is_pending());
+            // Cancelling a guard waiter must also release pending/cache locks.
+            drop(drain);
+        };
 
         // The same published Arc changes after A's terrain write. Its later ABA
         // must survive A's completion and remain private until B's terrain write.
@@ -1062,12 +1064,14 @@ mod tests {
         assert!(futures::poll!(tokio::task::unconstrained(save_b.as_mut())).is_pending());
         assert!(original_b.upgrade().unwrap().is_dirty());
         drop(save_b); // Cancellation while waiting leaves B admitted and dirty.
-        let pending = loader.unapplied.lock().await;
-        assert!(Arc::ptr_eq(
-            pending.get(&(pos.x, pos.y)).unwrap(),
-            &original_b.upgrade().unwrap()
-        ));
-        drop(pending);
+        {
+            let pending = loader.unapplied.lock().await;
+            assert!(Arc::ptr_eq(
+                pending.get(&(pos.x, pos.y)).unwrap(),
+                &original_b.upgrade().unwrap()
+            ));
+            drop(pending);
+        };
         // Resume the retained submission through the same apply_pending path
         // used by watched saves, without resubmitting B or writing its terrain.
         let mut apply_b = Box::pin(loader.apply_pending(&writer.chunk_config));
@@ -1088,14 +1092,16 @@ mod tests {
             PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
             0
         );
-        let region = cached.read().await;
-        assert!(region.needs_write);
-        let receipts = region.receipts.lock().await;
-        let (source, receipt) = receipts.get(&(pos.x, pos.y)).unwrap();
-        assert!(Arc::ptr_eq(source, &original_b.upgrade().unwrap()));
-        assert!(!receipt.is_complete());
-        drop(receipts);
-        drop(region);
+        {
+            let region = cached.read().await;
+            assert!(region.needs_write);
+            let receipts = region.receipts.lock().await;
+            let (source, receipt) = receipts.get(&(pos.x, pos.y)).unwrap();
+            assert!(Arc::ptr_eq(source, &original_b.upgrade().unwrap()));
+            assert!(!receipt.is_complete());
+            drop(receipts);
+            drop(region);
+        };
         writer.flush().await.unwrap();
         let reader = ChunkFileManager::<S>::new(config);
         let (send, mut receive) = mpsc::channel(1);
@@ -1203,18 +1209,20 @@ mod tests {
         flush.abort();
         assert!(flush.await.unwrap_err().is_cancelled());
         assert!(original.upgrade().is_some());
-        // Store access remains available during IO; changing current tickets
-        // after snapshot capture must survive both failed and later writes.
-        let mut storage = runtime.runtime.storage.lock().unwrap();
-        storage
-            .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), -7)
-            .unwrap();
-        assert_eq!(
-            storage.save_all().unwrap_err().kind(),
-            std::io::ErrorKind::WouldBlock
-        );
-        assert!(storage.region_is_dirty(pos));
-        drop(storage);
+        {
+            // Store access remains available during IO; changing current tickets
+            // after snapshot capture must survive both failed and later writes.
+            let mut storage = runtime.runtime.storage.lock().unwrap();
+            storage
+                .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), -7)
+                .unwrap();
+            assert_eq!(
+                storage.save_all().unwrap_err().kind(),
+                std::io::ErrorKind::WouldBlock
+            );
+            assert!(storage.region_is_dirty(pos));
+            drop(storage);
+        };
         let healthy = bound_home(&runtime, 32);
         writer
             .save_chunks(&folder, vec![(Vector2::new(32, 0), healthy)])
@@ -1395,12 +1403,14 @@ mod tests {
             .save_chunks(&folder, vec![(pos, source.clone())])
             .await
             .unwrap();
-        let mut storage = runtime.runtime.storage.lock().unwrap();
-        storage
-            .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
-            .unwrap();
-        storage.save_all().unwrap();
-        drop(storage);
+        {
+            let mut storage = runtime.runtime.storage.lock().unwrap();
+            storage
+                .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
+                .unwrap();
+            storage.save_all().unwrap();
+            drop(storage);
+        };
         writer.watch_chunks(&folder, &[pos]).await;
         source.set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
         writer
@@ -1420,12 +1430,14 @@ mod tests {
             PoiRegion::load(&path).unwrap().get_all()[0].free_tickets,
             -7
         );
-        let mut storage = runtime.runtime.storage.lock().unwrap();
-        storage
-            .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
-            .unwrap();
-        storage.save_all().unwrap();
-        drop(storage);
+        {
+            let mut storage = runtime.runtime.storage.lock().unwrap();
+            storage
+                .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
+                .unwrap();
+            storage.save_all().unwrap();
+            drop(storage);
+        };
         source.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
         writer
             .save_chunks(&folder, vec![(pos, source.clone())])
@@ -1458,9 +1470,11 @@ mod tests {
             .unwrap();
         let replacement = bound_home(&runtime, 0);
         replacement.set_block_absolute_y(1, 0, 1, Block::LECTERN.default_state.id);
-        let lifecycle = runtime.runtime.lifecycle.write().unwrap();
-        runtime.chunks.insert(pos, replacement.clone());
-        drop(lifecycle);
+        {
+            let lifecycle = runtime.runtime.lifecycle.write().unwrap();
+            runtime.chunks.insert(pos, replacement.clone());
+            drop(lifecycle);
+        };
         assert!(writer.flush().await.is_err());
         assert_eq!(
             PoiRegion::load(&poi_path).unwrap().get_all()[0].poi_type,
@@ -1600,13 +1614,15 @@ mod tests {
             }
             let path = folder.poi_folder.join("r.0.0.mca");
             assert_eq!(PoiRegion::load(&path).unwrap().get_all()[0].free_tickets, 1);
-            let mut storage = runtime.runtime.storage.lock().unwrap();
-            assert!(storage.region_is_dirty(pos));
-            // Also proves successful completion released its reservation.
-            storage.save_all().unwrap();
-            assert!(!storage.region_is_dirty(pos));
-            assert_eq!(storage.completed_region_writes(pos), 2);
-            drop(storage);
+            {
+                let mut storage = runtime.runtime.storage.lock().unwrap();
+                assert!(storage.region_is_dirty(pos));
+                // Also proves successful completion released its reservation.
+                storage.save_all().unwrap();
+                assert!(!storage.region_is_dirty(pos));
+                assert_eq!(storage.completed_region_writes(pos), 2);
+                drop(storage);
+            };
             assert_eq!(
                 PoiRegion::load(&path).unwrap().get_all()[0].free_tickets,
                 -9
