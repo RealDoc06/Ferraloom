@@ -7,6 +7,7 @@ members = [
     "crates/pumpkin-data",
     "crates/pumpkin-protocol",
     "crates/pumpkin-gametest",
+    "crates/pumpkin-inventory",
 ]
 
 # [workspace.lints.rust]
@@ -198,7 +199,7 @@ pumpkin-command = { path = "crates/pumpkin-command", default-features = false }
 pumpkin-config = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", default-features = false }
 pumpkin-core = { path = "crates/pumpkin-core", default-features = false }
 pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
-pumpkin-inventory = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", default-features = false }
+pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
 pumpkin-macros = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", default-features = false }
 pumpkin-nbt = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", default-features = false }
 pumpkin-plugin-api = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", default-features = false }
@@ -272,3 +273,4 @@ pumpkin-command = { path = "crates/pumpkin-command" }
 pumpkin-data = { path = "crates/pumpkin-data" }
 pumpkin-protocol = { path = "crates/pumpkin-protocol" }
 pumpkin-gametest = { path = "crates/pumpkin-gametest" }
+pumpkin-inventory = { path = "crates/pumpkin-inventory" }

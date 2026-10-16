@@ -911,19 +911,24 @@ pub trait ScreenHandler: Send + Sync {
                 let prev_stack = slot.get_cloned_stack();
                 if !prev_stack.is_empty() {
                     if button == 1 {
-                        // Throw all
-                        while slot
-                            .get_cloned_stack()
-                            .are_items_and_components_equal(&prev_stack)
-                        {
+                        // Keep the initial request count; each successful take refreshes the
+                        // result. Java repeats by item identity, not component equality.
+                        loop {
                             let drop_stack = slot.safe_take(prev_stack.item_count, u8::MAX, player);
+                            if drop_stack.is_empty() {
+                                break;
+                            }
+                            let item = drop_stack.item;
                             player.drop_item(drop_stack, true);
                             // player.handleCreativeModeItemDrop(itemStack);
+                            let next = slot.get_cloned_stack();
+                            if next.is_empty() || next.item != item {
+                                break;
+                            }
                         }
                     } else {
                         let drop_stack = slot.safe_take(1, u8::MAX, player);
                         if !drop_stack.is_empty() {
-                            slot.on_take_item(player, &drop_stack);
                             player.drop_item(drop_stack, true);
                         }
                     }
@@ -981,12 +986,7 @@ pub trait ScreenHandler: Send + Sync {
 
                 let mut moved_stack = self.quick_move(player, slot_index);
 
-                while !moved_stack.is_empty()
-                    && ItemStack::are_items_and_components_equal(
-                        &slot.get_cloned_stack(),
-                        &moved_stack,
-                    )
-                {
+                while !moved_stack.is_empty() && slot.get_cloned_stack().item == moved_stack.item {
                     moved_stack = self.quick_move(player, slot_index);
                 }
             } else {

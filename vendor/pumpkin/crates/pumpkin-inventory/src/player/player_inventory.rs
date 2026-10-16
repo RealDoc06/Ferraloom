@@ -210,11 +210,10 @@ impl PlayerInventory {
                     .entity_equipment
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let current = equipment.get(slot_type);
-                if current.is_empty() {
-                    equipment.put(slot_type, stack);
-                    return 0;
-                }
+                let mut current = equipment.get(slot_type);
+                let remaining = Self::add_to_stack(&mut current, &stack);
+                equipment.put(slot_type, current);
+                return remaining;
             }
             return stack.item_count as usize;
         }
@@ -223,21 +222,23 @@ impl PlayerInventory {
             .main_inventory
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut stack_count = stack.item_count;
-        let self_stack = &mut inv[slot];
+        Self::add_to_stack(&mut inv[slot], &stack)
+    }
 
-        if self_stack.is_empty() {
-            *self_stack = stack.copy_with_count(0);
+    /// Shared by main and equipment storage; equipment reads return a clone to write back.
+    fn add_to_stack(current: &mut ItemStack, stack: &ItemStack) -> usize {
+        if current.is_empty() {
+            *current = stack.copy_with_count(0);
+        } else if !Self::can_stack_add_more(current, stack) {
+            return usize::from(stack.item_count);
         }
 
-        let count_left = self_stack.get_max_stack_size() - self_stack.item_count;
-        let count_min = stack_count.min(count_left);
-
-        if count_min != 0 {
-            stack_count -= count_min;
-            self_stack.increment(count_min);
-        }
-        stack_count as usize
+        let room = current
+            .get_max_stack_size()
+            .saturating_sub(current.item_count);
+        let inserted = stack.item_count.min(room);
+        current.increment(inserted);
+        usize::from(stack.item_count - inserted)
     }
 
     /// Finds an empty slot in the inventory.
@@ -450,26 +451,48 @@ impl PlayerInventory {
     /// - `player` - The player to give the stack to
     pub fn offer(&self, stack: ItemStack, notify_client: bool, player: &dyn InventoryPlayer) {
         let mut stack = stack;
+        if !self.insert_stack_for_player(&mut stack, notify_client, player) && !stack.is_empty() {
+            player.drop_item(stack, false);
+        }
+    }
+
+    /// Add the original mutable stack, notifying each changed slot. Survival retains any
+    /// leftover and returns false; creative discards the leftover when no progress is possible.
+    pub fn insert_stack_for_player(
+        &self,
+        stack: &mut ItemStack,
+        notify_client: bool,
+        player: &dyn InventoryPlayer,
+    ) -> bool {
+        if stack.is_empty() {
+            return false;
+        }
         while !stack.is_empty() {
-            let mut room_for_stack = self.get_occupied_slot_with_room_for_stack(&stack);
+            let mut room_for_stack = self.get_occupied_slot_with_room_for_stack(stack);
             if room_for_stack == -1 {
                 room_for_stack = self.get_empty_slot();
             }
 
             if room_for_stack == -1 {
-                player.drop_item(stack, false);
                 break;
             }
 
-            let items_fit =
-                stack.get_max_stack_size() - self.get_stack(room_for_stack as usize).item_count;
-            if self.insert_stack(room_for_stack, &mut stack.split(items_fit)) && notify_client {
+            let before = stack.item_count;
+            self.insert_stack(room_for_stack, stack);
+            if stack.item_count == before {
+                break;
+            }
+            if notify_client {
                 player.enqueue_slot_set_packet(&CSetPlayerInventory::new(
                     i32::from(room_for_stack).into(),
                     &self.get_stack(room_for_stack as usize).into(),
                 ));
             }
         }
+        if !stack.is_empty() && player.has_infinite_materials() {
+            stack.set_count(0);
+        }
+        stack.is_empty()
     }
 }
 

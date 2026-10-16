@@ -28,6 +28,7 @@ use crate::screen_handler::{
 use crate::slot::{NormalSlot, Slot};
 
 use crate::inventory::Inventory;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
 use pumpkin_data::screen::WindowType;
@@ -51,6 +52,58 @@ pub struct ResultSlot {
 pub struct RecipeResult {
     pub item_id: String,
     pub count: u8,
+    /// Only ordinary shaped/shapeless recipes inherit the item-property remainder rule.
+    ordinary_remainders: bool,
+}
+
+impl RecipeResult {
+    fn stack(&self) -> ItemStack {
+        let key = self
+            .item_id
+            .strip_prefix("minecraft:")
+            .unwrap_or(&self.item_id);
+        ItemStack::new(
+            self.count,
+            Item::from_registry_key(key).unwrap_or(&Item::AIR),
+        )
+    }
+}
+
+/// The five builtin crafting properties in Java 26.3. UseRemainder is a separate rule.
+fn crafting_remainder(input: &ItemStack) -> ItemStack {
+    let item = if input.is_empty() {
+        return ItemStack::EMPTY.clone();
+    } else if [
+        Item::WATER_BUCKET.id,
+        Item::LAVA_BUCKET.id,
+        Item::MILK_BUCKET.id,
+    ]
+    .contains(&input.item.id)
+    {
+        &Item::BUCKET
+    } else if [Item::DRAGON_BREATH.id, Item::HONEY_BOTTLE.id].contains(&input.item.id) {
+        &Item::GLASS_BOTTLE
+    } else {
+        return ItemStack::EMPTY.clone();
+    };
+    ItemStack::new(1, item)
+}
+
+/// Reconcile a precomputed remainder with the surviving input, returning any inventory spill.
+fn reconcile_remainder(survivor: &mut ItemStack, mut remainder: ItemStack) -> ItemStack {
+    if remainder.is_empty() {
+        return remainder;
+    }
+    if survivor.is_empty() {
+        *survivor = remainder;
+    } else if survivor.are_items_and_components_equal(&remainder) {
+        // The crafting merge has no stack-size cap; it restores the surviving input count.
+        remainder.increment(survivor.item_count);
+        *survivor = remainder;
+    } else {
+        return remainder;
+    }
+    ItemStack::EMPTY.clone()
 }
 
 /// Checks if a recipe pattern is symmetrical horizontally.
@@ -171,6 +224,7 @@ fn recipe_matches(
             matched.then_some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                ordinary_remainders: true,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingShapeless {
@@ -198,6 +252,7 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                ordinary_remainders: true,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingTransmute {
@@ -221,6 +276,7 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                ordinary_remainders: false,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingDecoratedPot { .. }) => {
@@ -240,6 +296,7 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: "minecraft:decorated_pot".to_string(),
                 count: 1,
+                ordinary_remainders: false,
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
@@ -291,6 +348,7 @@ fn recipe_matches(
             matched.then_some(RecipeResult {
                 item_id: result.item_id.clone(),
                 count: result.count,
+                ordinary_remainders: true,
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shapeless {
@@ -318,6 +376,7 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.item_id.clone(),
                 count: result.count,
+                ordinary_remainders: true,
             })
         }
         _ => None,
@@ -408,13 +467,7 @@ impl ResultSlot {
 
     fn refill_output(&self) -> ItemStack {
         let result = if let Some(matched) = self.match_recipe() {
-            let key = matched
-                .item_id
-                .strip_prefix("minecraft:")
-                .unwrap_or(&matched.item_id);
-            let item = pumpkin_data::item::Item::from_registry_key(key)
-                .unwrap_or(&pumpkin_data::item::Item::AIR);
-            ItemStack::new(matched.count, item)
+            matched.stack()
         } else {
             ItemStack::EMPTY.clone()
         };
@@ -440,18 +493,58 @@ impl Slot for ResultSlot {
         self.refill_output();
     }
     fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        let Some(matched) = self.match_recipe().filter(|matched| {
+            !stack.is_empty() && matched.stack().are_items_and_components_equal(stack)
+        }) else {
+            self.refill_output();
+            return;
+        };
+        // Snapshot every remainder before consuming any input. Full-grid indices preserve the
+        // positioned recipe's original slots, including offset shaped/shapeless inputs.
+        let remainders: Vec<_> = (0..self.inventory.size())
+            .map(|i| {
+                if matched.ordinary_remainders {
+                    crafting_remainder(&self.inventory.get_stack(i))
+                } else {
+                    ItemStack::EMPTY.clone()
+                }
+            })
+            .collect();
         player.increment_stat(
             StatisticCategory::Crafted,
             stack.item.id as i32,
             stack.item_count as i32,
         );
-        for i in 0..self.inventory.size() {
+        for (i, remainder) in remainders.into_iter().enumerate() {
             self.inventory.remove_stack_specific(i, 1);
+            if remainder.is_empty() {
+                continue;
+            }
+            let mut survivor = self.inventory.get_stack(i);
+            let spill = reconcile_remainder(&mut survivor, remainder);
+            if spill.is_empty() {
+                self.inventory.set_stack(i, survivor);
+            } else {
+                // No crafting-grid lock is held while inserting or dropping the leftover.
+                player.get_inventory().offer_or_drop_stack(spill, player);
+            }
         }
         self.mark_dirty();
+        // Repeated extraction must observe the completed transaction, even before listeners
+        // send the next content update (notably Throw1, which repeats inside one click).
+        self.refill_output();
     }
     fn can_insert(&self, _stack: &ItemStack) -> bool {
         false
+    }
+    fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
+        self.match_recipe().is_some_and(|matched| {
+            let current = self.get_stack();
+            let expected = matched.stack();
+            !current.is_empty()
+                && current.item_count == expected.item_count
+                && current.are_items_and_components_equal(&expected)
+        })
     }
     fn get_stack(&self) -> ItemStack {
         self.result
@@ -472,11 +565,14 @@ impl Slot for ResultSlot {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_empty()
     }
-    fn set_stack(&self, _stack: ItemStack) {
-        self.refill_output();
+    fn set_stack(&self, stack: ItemStack) {
+        *self
+            .result
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
     }
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-        self.refill_output();
+    fn set_stack_prev(&self, stack: ItemStack, _previous_stack: ItemStack) {
+        self.set_stack(stack);
     }
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
@@ -492,14 +588,14 @@ impl Slot for ResultSlot {
         count
     }
     fn take_stack(&self, _amount: u8) -> ItemStack {
-        if self.has_stack() {
-            self.result
+        // ResultContainer.removeItem removes the whole output, even for a right-click half.
+        std::mem::replace(
+            &mut *self
+                .result
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone()
-        } else {
-            ItemStack::EMPTY.clone()
-        }
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            ItemStack::EMPTY.clone(),
+        )
     }
 }
 
