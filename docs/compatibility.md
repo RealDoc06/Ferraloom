@@ -16,7 +16,7 @@ The most recent targeted runs used source and harness commit
 | [Chat throttling](../compatibility/results/evidence/febd5269439e784cb43dcd43cff200cde5fec22f6640dd509a2d81113a31c0b5.json) | Five cases on each server |
 
 All 20 server boots and 36 client sessions exited cleanly. The same source passed
-1,460 Rust tests, 76 Python tests, both formatting checks, Clippy across all five
+1,360 Rust tests, 76 Python tests, both formatting checks, Clippy across all five
 vendored crates and the executable wrapper, and the executable build. These are
 targeted observations; no complete feature family is promoted.
 

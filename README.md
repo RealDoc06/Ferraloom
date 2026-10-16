@@ -62,6 +62,7 @@ cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-data --
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-protocol --lib --tests --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib --target-dir target -- --test-threads=2
+cargo check --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-gametest --all-targets --target-dir target
 cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --manifest-path vendor/pumpkin/Cargo.toml --locked --workspace --all-targets --target-dir target -- -D warnings
 npm ci

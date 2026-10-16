@@ -1572,7 +1572,7 @@ mod player_data_tests {
         let fixture = crate::data::player_server::test::player_fixture().await;
         let world = fixture.player.world();
         let java = fixture.client.java().unwrap();
-        java.set_player(fixture.player.clone());
+        java.set_player(&fixture.player);
         fixture
             .player
             .has_played_before

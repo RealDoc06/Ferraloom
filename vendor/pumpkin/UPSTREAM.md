@@ -4,7 +4,9 @@ Source: https://github.com/Pumpkin-MC/Pumpkin.git
 
 Base commit: `5b53f064af8708ba33fcaa533b81ca29a53a3310`.
 
-`pumpkin-core`, `pumpkin-world`, `pumpkin-command`, `pumpkin-data`, and `pumpkin-protocol` are vendored. Cargo patches the pinned Git dependency with these modules. Other engine crates keep their original pinned Git source and shared type identities. The nested workspace inherits upstream package, lint, and dependency settings, with unvendored Pumpkin paths redirected to that exact revision.
+`pumpkin-core`, `pumpkin-world`, `pumpkin-command`, `pumpkin-data`, `pumpkin-protocol`, and `pumpkin-gametest` are vendored. Cargo patches the pinned Git dependency with these modules. Other engine crates keep their original pinned Git source and shared type identities. The nested workspace inherits upstream package, lint, and dependency settings, with unvendored Pumpkin paths redirected to that exact revision.
+
+The GameTest fork retains all 14 source and manifest files from the base revision. Three source files adapt world reads to propagate unavailable-chunk errors through the existing GameTest result type. This crate has no standalone tests; its CI check compiles the adapters, while the full vendored Clippy check includes it.
 
 The world's two generated feature-definition includes are copied from the same base revision's `pumpkin-data` sources so the world crate can compile independently. Referenced upstream test fixtures, the status icon, and management schema are retained with the asset notices.
 

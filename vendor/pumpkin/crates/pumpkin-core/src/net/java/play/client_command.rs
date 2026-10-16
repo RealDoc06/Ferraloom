@@ -225,7 +225,7 @@ mod tests {
             Some(GameMode::Survival as i32)
         );
         let java = fixture.client.java().unwrap();
-        java.set_player(player.clone());
+        java.set_player(player);
         assert!(world.enter_packet_callbacks(Some(source)).is_some());
         let activity = player.packet_activity.enter_mutation().unwrap();
         let deferred = activity
