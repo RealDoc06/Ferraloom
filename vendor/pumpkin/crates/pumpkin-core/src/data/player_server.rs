@@ -338,7 +338,7 @@ pub(crate) mod test {
         player_fixture_with_hardcore(false).await
     }
 
-    pub(crate) async fn player_fixture_with_hardcore(hardcore: bool) -> PlayerFixture {
+    pub async fn player_fixture_with_hardcore(hardcore: bool) -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -420,7 +420,7 @@ pub(crate) mod test {
     }
 
     /// Stop terrain workers while leaving world callback admission open for packet tests.
-    pub(crate) async fn stop_chunk_workers(fixture: &PlayerFixture) {
+    pub async fn stop_chunk_workers(fixture: &PlayerFixture) {
         for world in fixture.server.worlds.load().iter() {
             world
                 .level

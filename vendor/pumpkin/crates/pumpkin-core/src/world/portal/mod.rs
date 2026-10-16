@@ -212,41 +212,31 @@ impl PortalType {
                             return None;
                         }
                     };
-                let exit_portal = match exit_portal {
-                    Some(portal) => Some(portal),
-                    None => {
-                        if let Err(error) = load_portal_chunks(
-                            &dest_world,
-                            approximate_exit_pos.chunk_position(),
-                            1,
-                        ) {
-                            tracing::error!(
-                                "Aborting portal creation after chunk load failure: {error}"
-                            );
-                            return None;
-                        }
-                        if let Some((build_pos, axis, is_fallback)) =
-                            NetherPortal::find_safe_location(
-                                &dest_world,
-                                approximate_exit_pos,
-                                source_portal_axis,
-                            )
-                        {
-                            NetherPortal::build_portal_frame(
-                                &dest_world,
-                                build_pos,
-                                axis,
-                                is_fallback,
-                            );
-                            Some(PortalSearchResult {
-                                lower_corner: build_pos,
-                                axis,
-                                width: 2,
-                                height: 3,
-                            })
-                        } else {
-                            None
-                        }
+                let exit_portal = if let Some(portal) = exit_portal {
+                    Some(portal)
+                } else {
+                    if let Err(error) =
+                        load_portal_chunks(&dest_world, approximate_exit_pos.chunk_position(), 1)
+                    {
+                        tracing::error!(
+                            "Aborting portal creation after chunk load failure: {error}"
+                        );
+                        return None;
+                    }
+                    if let Some((build_pos, axis, is_fallback)) = NetherPortal::find_safe_location(
+                        &dest_world,
+                        approximate_exit_pos,
+                        source_portal_axis,
+                    ) {
+                        NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback);
+                        Some(PortalSearchResult {
+                            lower_corner: build_pos,
+                            axis,
+                            width: 2,
+                            height: 3,
+                        })
+                    } else {
+                        None
                     }
                 };
 

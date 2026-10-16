@@ -1481,11 +1481,10 @@ mod tests {
             Dimension::OVERWORLD,
         );
         let position = Vector2::new(0, 0);
-        {
-            let mut loading = level.chunk_loading.lock().unwrap();
-            loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
-            loading.send_change();
-        }
+        let mut loading = level.chunk_loading.lock().unwrap();
+        loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
+        loading.send_change();
+        drop(loading);
         // This current-thread runtime cannot run the IO tasks before our first yield.
         // Poll the real public fetch, then cancel it while its registration is pending.
         let mut fetch = Box::pin(level.get_or_fetch_chunk(position, |_| ()));
@@ -1501,13 +1500,12 @@ mod tests {
             level.chunk_loading.lock().unwrap().ticket[&position],
             vec![ChunkLoading::FULL_CHUNK_LEVEL]
         );
-        {
-            let mut loading = level.chunk_loading.lock().unwrap();
-            loading.remove_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
-            loading.send_change();
-            assert!(loading.ticket.is_empty());
-            assert!(loading.pos_level.is_empty());
-        }
+        let mut loading = level.chunk_loading.lock().unwrap();
+        loading.remove_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
+        loading.send_change();
+        assert!(loading.ticket.is_empty());
+        assert!(loading.pos_level.is_empty());
+        drop(loading);
         refused_region_stage("cancelled fetch shutdown", level.shutdown())
             .await
             .unwrap();
