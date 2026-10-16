@@ -1666,7 +1666,7 @@ mod player_data_tests {
         crate::data::player_server::test::close_fixture(&fixture).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ready_spawn_admits_first_and_returning_players_beside_a_refused_neighbor() {
         for returning in [false, true] {
             spawn_halo_admission_control(true, returning).await;

@@ -623,6 +623,16 @@ pub(crate) mod test {
             &fixture.player,
         ));
         assert!(futures::poll!(&mut leave).is_pending());
+        // Transport drain precedes the leave event. Observe the real paused
+        // callback before cancelling, rather than assuming one poll reaches it.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !handler.observed.load(Ordering::Relaxed) {
+                tokio::task::yield_now().await;
+                assert!(futures::poll!(&mut leave).is_pending());
+            }
+        })
+        .await
+        .expect("leave callback must reach its cancellation barrier");
         assert!(handler.observed.load(Ordering::Relaxed));
         drop(leave);
         assert_eq!(
