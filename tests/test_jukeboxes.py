@@ -79,6 +79,84 @@ def restore_snapshot(ticks, time=0):
 
 
 class JukeboxCampaignTests(unittest.TestCase):
+    def test_snapshot_dirties_real_chunk_before_flush_and_keeps_exact_elapsed(self):
+        # Synthetic action witnesses test sequencing, not a captured Java result.
+        trace = []
+        server = SimpleNamespace(directory=Path('/SYNTHETIC'),
+            command=Mock(side_effect=lambda command: trace.append(('live', command)) or ['SYNTHETIC live data']),
+            save_flush=Mock(side_effect=lambda: trace.append(('flush',))))
+        fixture = SimpleNamespace(server=server, report={'active_boot': 'java_source'})
+        chunk = {'typed': {'jukebox': {'RecordItem': discs.stack(),
+                                      'ticks_since_song_started': discs.atom('Long', 1440)}}}
+
+        def predicate(_server, command):
+            trace.append(('predicate', command))
+            return {'predicate': command}
+
+        def change(_server, command, expected, *, mode):
+            trace.append(('change', command, expected, mode))
+            return {'command': command, 'expected': expected, 'mode': mode}
+
+        def read(*_args):
+            trace.append(('read',))
+            return chunk
+
+        with patch.object(discs.suite, 'game_time', side_effect=[1457, 1457]), \
+                patch.object(discs, 'require_frozen', side_effect=lambda _: trace.append(('frozen',))), \
+                patch.object(discs, 'typed_predicate', side_effect=predicate), \
+                patch.object(discs, 'command_result', side_effect=change), \
+                patch.object(discs, 'read_fixture', side_effect=read), \
+                patch.object(discs, 'retained_player', return_value={}), patch.object(discs, 'write_json'):
+            result = discs.snapshot.__wrapped__(fixture, 'disc11_tick1440')
+        marker = discs.pos(discs.SNAPSHOT_MARKER)
+        self.assertEqual(trace, [
+            ('live', f'data get block {discs.pos(discs.JUKEBOX)}'),
+            ('live', f'data get block {discs.pos(discs.COMPARATOR)}'),
+            ('frozen',), ('predicate', f'if loaded {marker}'),
+            ('predicate', f'if block {marker} minecraft:air'),
+            ('change', f'setblock {marker} minecraft:stone', 1, 'success'),
+            ('change', f'setblock {marker} minecraft:air', 1, 'success'),
+            ('predicate', f'if block {marker} minecraft:air'), ('flush',), ('read',)])
+        self.assertEqual(discs.record_state(result['chunk']['typed']['jukebox']),
+                         {'record': discs.stack(), 'elapsed': 1440})
+        self.assertEqual(result['terrain_checkpoint']['world_time_after'], result['world_time'])
+        self.assertEqual(len(result['terrain_checkpoint']['changes']), 2)
+        self.assertIs(result, fixture.report['observations'][0])
+        self.assertEqual(discs.SNAPSHOT_MARKER[0] // 16, discs.JUKEBOX[0] // 16)
+        self.assertEqual(discs.SNAPSHOT_MARKER[2] // 16, discs.JUKEBOX[2] // 16)
+
+    def test_failed_terrain_checkpoint_never_flushes_or_reads_a_stale_snapshot(self):
+        for failure in ('frozen', 'unloaded', 'initial_air', 'stone', 'air', 'final_air', 'time'):
+            server = SimpleNamespace(directory=Path('/SYNTHETIC'), command=Mock(return_value=[]), save_flush=Mock())
+            fixture = SimpleNamespace(server=server, report={'active_boot': 'java_source'})
+            predicates = []
+
+            def predicate(_server, command):
+                predicates.append(command)
+                stage = ('unloaded', 'initial_air', 'final_air')[len(predicates) - 1]
+                if failure == stage:
+                    raise AssertionError('SYNTHETIC failed predicate')
+                return {'predicate': command}
+
+            def change(_server, command, expected, *, mode):
+                self.assertEqual((expected, mode), (1, 'success'))
+                if command.endswith('minecraft:' + failure):
+                    raise AssertionError('SYNTHETIC real command returned zero')
+                return {'command': command}
+
+            with self.subTest(failure=failure), \
+                    patch.object(discs.suite, 'game_time', side_effect=[1457, 1458 if failure == 'time' else 1457]), \
+                    patch.object(discs, 'require_frozen', side_effect=AssertionError('SYNTHETIC unfrozen') if failure == 'frozen' else None), \
+                    patch.object(discs, 'typed_predicate', side_effect=predicate), \
+                    patch.object(discs, 'command_result', side_effect=change) as writes, \
+                    patch.object(discs, 'read_fixture') as read:
+                with self.assertRaises(AssertionError):
+                    discs.snapshot.__wrapped__(fixture, 'disc11_tick1440')
+                server.save_flush.assert_not_called()
+                read.assert_not_called()
+                self.assertEqual(writes.call_count, 0 if failure in ('frozen', 'unloaded', 'initial_air')
+                                 else 1 if failure == 'stone' else 2)
+
     def test_unpadded_terrain_and_entity_records_keep_strict_payload_bounds(self):
         # Synthetic NBT boundaries, not runtime goldens. Java RegionFile pads on
         # close, while the campaign reads the still-open file after save-all flush.

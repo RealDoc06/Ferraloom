@@ -55,6 +55,7 @@ ITEM, ITEM_ID = 'minecraft:music_disc_11', 1474
 OBSERVER = 'DiscObserver'
 CHEST, JUKEBOX = (4097, 200, 1), (4100, 200, 1)
 COMPARATOR, WIRE = (4100, 200, 2), (4101, 200, 1)
+SNAPSHOT_MARKER = (4110, 250, 14)
 POS = {'x': 4098.5, 'y': 200.0, 'z': 3.5, 'yaw': 90.0, 'pitch': 0.0}
 # These distinct Java-authored fixture intents are inspected before any transfer.
 # Java may omit finished elapsed when serializing. Never relabel that as a saved
@@ -79,6 +80,7 @@ GAPS = [
     'Missing block-entity insertion is not reachable through this vanilla command/wire setup without an artificial hook; native source tests do not establish paired runtime acceptance.',
     'Recipient checks cover the owner and one nearby observer in the current overworld; no radius boundary or other-dimension exclusion claim.',
     'Finished/absent elapsed fixture intents retain actual Java serialization. If a tag is omitted by Java, no saved-finished-Long transfer claim is made.',
+    'Snapshots deliberately dirty the same loaded chunk with a normal stone/air round trip before flushing. Natural clean-chunk playback/autosave timing is not established.',
     'The executable is hash-pinned; its source-commit association is supplied by the caller, not embedded in or independently recovered from the binary.',
 ]
 PRIMARY = {**HORN_PRIMARY,
@@ -426,12 +428,27 @@ def retain(fixture: Fixture, kind: str, value: dict) -> dict:
     return rows[-1]
 
 
+def prepare_snapshot_chunk(server, expected_time: int) -> dict:
+    """Force a real chunk change: vanilla skips serializing a clean chunk."""
+    checkpoint = {'kind': 'explicit_terrain_dirty_checkpoint', 'position': list(SNAPSHOT_MARKER), 'changes': []}
+    require_frozen(server)
+    checkpoint['loaded'] = typed_predicate(server, f'if loaded {pos(SNAPSHOT_MARKER)}')
+    checkpoint['initial_air'] = typed_predicate(server, f'if block {pos(SNAPSHOT_MARKER)} minecraft:air')
+    for block in ('stone', 'air'):
+        checkpoint['changes'].append(command_result(server, f'setblock {pos(SNAPSHOT_MARKER)} minecraft:{block}', 1, mode='success'))
+    checkpoint['final_air'] = typed_predicate(server, f'if block {pos(SNAPSHOT_MARKER)} minecraft:air')
+    checkpoint['world_time_after'] = suite.game_time(server)
+    require(checkpoint['world_time_after'] == expected_time, 'World time changed during terrain checkpoint')
+    return checkpoint
+
+
 @bounded
 def snapshot(fixture: Fixture, label: str) -> dict:
     server = fixture.server
     evidence = retain(fixture, label, {'commands': [], 'world_time': suite.game_time(server)})
     for target in (JUKEBOX, COMPARATOR):
         evidence['commands'].append({'command': f'data get block {pos(target)}', 'output': server.command(f'data get block {pos(target)}')})
+    evidence['terrain_checkpoint'] = prepare_snapshot_chunk(server, evidence['world_time'])
     server.save_flush()
     stem = f"{fixture.report['active_boot']}-{len(fixture.report['observations']):04d}"
     evidence['chunk'] = read_fixture(server.directory / 'world', server.directory / (stem + '.nbt'))
