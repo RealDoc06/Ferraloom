@@ -17,6 +17,15 @@ pub struct JukeboxBlock;
 
 impl BlockBehaviour for JukeboxBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
+        // The registry creates the BE before calling placed. Replacing that
+        // fresh allocation would manufacture a terminal stop on empty placement.
+        if args
+            .world
+            .published_block_entity(args.position)
+            .is_some_and(|entity| entity.as_any().is::<JukeboxBlockEntity>())
+        {
+            return;
+        }
         args.world
             .add_block_entity(Arc::new(JukeboxBlockEntity::new(*args.position)));
     }

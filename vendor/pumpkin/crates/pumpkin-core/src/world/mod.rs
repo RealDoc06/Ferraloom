@@ -6431,6 +6431,7 @@ impl World {
         let new_block = Block::from_state_id(block_state_id);
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
+        let mut detached_old_entity = false;
 
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
@@ -6440,6 +6441,18 @@ impl World {
                 entity.clone().on_block_replaced(self, position);
             }
             self.remove_block_entity_if_current(position, Some(&entity));
+            detached_old_entity = true;
+        }
+
+        // A retiring entity can synchronously replace this terrain and publish
+        // another BE. Even the same target state must preserve that exact new
+        // attachment instead of running the outer placement hook over it.
+        let continuation_is_current = || {
+            self.get_block_state_id(position) == block_state_id
+                && (!detached_old_entity || self.published_block_entity(position).is_none())
+        };
+        if !continuation_is_current() {
+            return self.get_block_state_id(position);
         }
 
         if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
@@ -6450,6 +6463,10 @@ impl World {
                 replaced_block_state_id,
                 block_moved,
             );
+        }
+
+        if !continuation_is_current() {
+            return self.get_block_state_id(position);
         }
 
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
