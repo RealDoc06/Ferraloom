@@ -943,6 +943,13 @@ mod tests {
         );
     }
 
+    // Poll the real operation once using this task's waker, returning Pending as
+    // a value rather than yielding. No optional futures macro feature is needed.
+    async fn poll_once<F: Future>(future: F) -> std::task::Poll<F::Output> {
+        let mut future = std::pin::pin!(future);
+        std::future::poll_fn(|context| std::task::Poll::Ready(future.as_mut().poll(context))).await
+    }
+
     fn bound_home(runtime: &crate::chunk::poi_binding::TestRuntime, x: i32) -> Arc<ChunkData> {
         let chunk = ChunkData::empty_sync(x, 0);
         chunk.bind_poi(&runtime.runtime).unwrap();
@@ -1045,11 +1052,19 @@ mod tests {
         resume.send(()).unwrap();
         // Ignore cooperative budget so Pending means awaited work, not a yield.
         // One explicit poll submits completion to the occupied blocking pool.
-        assert!(futures::poll!(tokio::task::unconstrained(flush.as_mut())).is_pending());
+        assert!(
+            poll_once(tokio::task::unconstrained(flush.as_mut()))
+                .await
+                .is_pending()
+        );
         drop(flush); // Cancel while its blocking completion has not started.
         {
             let mut drain = Box::pin(writer.block_and_await_ongoing_tasks());
-            assert!(futures::poll!(tokio::task::unconstrained(drain.as_mut())).is_pending());
+            assert!(
+                poll_once(tokio::task::unconstrained(drain.as_mut()))
+                    .await
+                    .is_pending()
+            );
             // Cancelling a guard waiter must also release pending/cache locks.
             drop(drain);
         };
@@ -1061,7 +1076,11 @@ mod tests {
         b.set_block_absolute_y(2, 0, 1, Block::DIRT.default_state.id);
         let original_b = Arc::downgrade(&b);
         let mut save_b = Box::pin(writer.save_chunks(&folder, vec![(pos, b)]));
-        assert!(futures::poll!(tokio::task::unconstrained(save_b.as_mut())).is_pending());
+        assert!(
+            poll_once(tokio::task::unconstrained(save_b.as_mut()))
+                .await
+                .is_pending()
+        );
         assert!(original_b.upgrade().unwrap().is_dirty());
         drop(save_b); // Cancellation while waiting leaves B admitted and dirty.
         {
@@ -1075,7 +1094,11 @@ mod tests {
         // Resume the retained submission through the same apply_pending path
         // used by watched saves, without resubmitting B or writing its terrain.
         let mut apply_b = Box::pin(loader.apply_pending(&writer.chunk_config));
-        assert!(futures::poll!(tokio::task::unconstrained(apply_b.as_mut())).is_pending());
+        assert!(
+            poll_once(tokio::task::unconstrained(apply_b.as_mut()))
+                .await
+                .is_pending()
+        );
         assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
         assert_eq!(std::fs::read(&path).unwrap(), terrain_a);
         release.send(()).unwrap();
