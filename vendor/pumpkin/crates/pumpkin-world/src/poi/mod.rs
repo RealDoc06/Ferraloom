@@ -1095,7 +1095,7 @@ impl PoiStorage {
     /// Deterministic actual IO boundary for completion/cancellation fixtures.
     #[cfg(test)]
     pub(crate) fn pause_region_write(
-        &mut self,
+        &self,
         chunk: ChunkPos,
     ) -> (
         tokio::sync::oneshot::Receiver<()>,

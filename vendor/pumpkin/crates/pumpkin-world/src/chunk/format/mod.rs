@@ -1239,6 +1239,7 @@ mod tests {
                         .unwrap();
                 }
                 storage.save_all().unwrap();
+                drop(storage);
             }
             let path = directory.path().join("poi/r.0.0.mca");
             let before = std::fs::read(&path).unwrap();

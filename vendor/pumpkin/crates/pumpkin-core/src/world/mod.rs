@@ -1534,7 +1534,7 @@ impl World {
         &self,
         pos: Vector2<i32>,
         requested: Option<&SyncChunk>,
-        stamp: Option<pumpkin_world::chunk::PoiReconciliationStamp>,
+        stamp: Option<pumpkin_world::chunk::PoiCaptureStamp>,
         retired: &mut Vec<Arc<dyn BlockEntity>>,
     ) -> bool {
         // Check live tickets before taking the coordinator, matching scheduler

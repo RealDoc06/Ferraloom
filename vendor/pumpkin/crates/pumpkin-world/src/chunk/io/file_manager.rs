@@ -1051,6 +1051,7 @@ mod tests {
             let mut drain = Box::pin(writer.block_and_await_ongoing_tasks());
             assert!(futures::poll!(tokio::task::unconstrained(drain.as_mut())).is_pending());
             // Cancelling a guard waiter must also release pending/cache locks.
+            drop(drain);
         }
 
         // The same published Arc changes after A's terrain write. Its later ABA
@@ -1069,6 +1070,7 @@ mod tests {
                 pending.get(&(pos.x, pos.y)).unwrap(),
                 &original_b.upgrade().unwrap()
             ));
+            drop(pending);
         }
         // Resume the retained submission through the same apply_pending path
         // used by watched saves, without resubmitting B or writing its terrain.
@@ -1097,6 +1099,8 @@ mod tests {
             let (source, receipt) = receipts.get(&(pos.x, pos.y)).unwrap();
             assert!(Arc::ptr_eq(source, &original_b.upgrade().unwrap()));
             assert!(!receipt.is_complete());
+            drop(receipts);
+            drop(region);
         }
         writer.flush().await.unwrap();
         let reader = ChunkFileManager::<S>::new(config);
@@ -1217,6 +1221,7 @@ mod tests {
                 std::io::ErrorKind::WouldBlock
             );
             assert!(storage.region_is_dirty(pos));
+            drop(storage);
         }
         let healthy = bound_home(&runtime, 32);
         writer
@@ -1404,6 +1409,7 @@ mod tests {
                 .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
                 .unwrap();
             storage.save_all().unwrap();
+            drop(storage);
         }
         writer.watch_chunks(&folder, &[pos]).await;
         source.set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
@@ -1430,6 +1436,7 @@ mod tests {
                 .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), 0)
                 .unwrap();
             storage.save_all().unwrap();
+            drop(storage);
         }
         source.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
         writer
@@ -1464,8 +1471,9 @@ mod tests {
         let replacement = bound_home(&runtime, 0);
         replacement.set_block_absolute_y(1, 0, 1, Block::LECTERN.default_state.id);
         {
-            let _lifecycle = runtime.runtime.lifecycle.write().unwrap();
+            let lifecycle = runtime.runtime.lifecycle.write().unwrap();
             runtime.chunks.insert(pos, replacement.clone());
+            drop(lifecycle);
         }
         assert!(writer.flush().await.is_err());
         assert_eq!(
@@ -1613,6 +1621,7 @@ mod tests {
                 storage.save_all().unwrap();
                 assert!(!storage.region_is_dirty(pos));
                 assert_eq!(storage.completed_region_writes(pos), 2);
+                drop(storage);
             }
             assert_eq!(
                 PoiRegion::load(&path).unwrap().get_all()[0].free_tickets,
