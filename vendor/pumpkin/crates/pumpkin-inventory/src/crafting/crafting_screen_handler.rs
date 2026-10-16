@@ -521,12 +521,15 @@ impl Slot for ResultSlot {
                 continue;
             }
             let mut survivor = self.inventory.get_stack(i);
-            let spill = reconcile_remainder(&mut survivor, remainder);
+            let mut spill = reconcile_remainder(&mut survivor, remainder);
+            // No crafting-grid lock is held while inserting or dropping the leftover.
             if spill.is_empty() {
                 self.inventory.set_stack(i, survivor);
-            } else {
-                // No crafting-grid lock is held while inserting or dropping the leftover.
-                player.get_inventory().offer_or_drop_stack(spill, player);
+            } else if !player
+                .get_inventory()
+                .insert_stack_for_player(&mut spill, true, player)
+            {
+                player.drop_item(spill, false);
             }
         }
         self.mark_dirty();

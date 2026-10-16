@@ -635,3 +635,72 @@ async fn ordinary_inventory_throw_zero_removes_only_one_item() {
     case.assert_crafted(0);
     close_fixture(&fixture).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn menu_close_returns_cursor_and_grid_without_creative_item_loss() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        for gamemode in [GameMode::Survival, GameMode::Creative] {
+            for offhand_room in [0, 1] {
+                let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+                fixture.player.gamemode.store(gamemode);
+                let mut inventory = full_inventory();
+                inventory[40] = tagged(&Item::GLASS_BOTTLE, 64 - offhand_room);
+                case.inventory(&inventory);
+                case.cursor(tagged(&Item::GLASS_BOTTLE, 3));
+                case.input(width * width - 1, tagged(&Item::HONEY_BOTTLE, 2));
+                case.sync();
+                case.assert_result(&stack(&Item::SUGAR, 3));
+
+                case.menu.lock().unwrap().on_closed(fixture.player.as_ref());
+
+                inventory[40] = tagged(&Item::GLASS_BOTTLE, 64);
+                case.assert_inventory(&inventory);
+                case.assert_cursor(ItemStack::EMPTY);
+                case.assert_grid(&[]);
+                // Closing returns original items, including their components. It must not
+                // consume inputs, drop the recipe preview, or discard leftovers in creative.
+                case.assert_drops(&[
+                    tagged(&Item::GLASS_BOTTLE, 3 - offhand_room),
+                    tagged(&Item::HONEY_BOTTLE, 2),
+                ]);
+                case.assert_crafted(0);
+                case.sync();
+                case.assert_result(ItemStack::EMPTY);
+            }
+        }
+    }
+    fixture.player.gamemode.store(GameMode::Survival);
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn crafting_add_discards_only_creative_remainder_when_inventory_is_full() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        for gamemode in [GameMode::Survival, GameMode::Creative] {
+            let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+            fixture.player.gamemode.store(gamemode);
+            let mut inventory = full_inventory();
+            inventory[40] = stack(&Item::STONE, 64);
+            case.inventory(&inventory);
+            let index = width * width - 1;
+            case.input(index, tagged(&Item::HONEY_BOTTLE, 2));
+            case.sync();
+            case.click(0, SlotActionType::Pickup);
+
+            case.assert_cursor(&stack(&Item::SUGAR, 3));
+            case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 1))]);
+            case.assert_result(&stack(&Item::SUGAR, 3));
+            case.assert_inventory(&inventory);
+            if gamemode == GameMode::Creative {
+                case.assert_drops(&[]);
+            } else {
+                case.assert_drops(&[stack(&Item::GLASS_BOTTLE, 1)]);
+            }
+            case.assert_crafted(3);
+        }
+    }
+    fixture.player.gamemode.store(GameMode::Survival);
+    close_fixture(&fixture).await;
+}

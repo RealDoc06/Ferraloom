@@ -451,13 +451,14 @@ impl PlayerInventory {
     /// - `player` - The player to give the stack to
     pub fn offer(&self, stack: ItemStack, notify_client: bool, player: &dyn InventoryPlayer) {
         let mut stack = stack;
-        if !self.insert_stack_for_player(&mut stack, notify_client, player) && !stack.is_empty() {
+        self.insert_stack_notifying(&mut stack, notify_client, player);
+        if !stack.is_empty() {
             player.drop_item(stack, false);
         }
     }
 
-    /// Add the original mutable stack, notifying each changed slot. Survival retains any
-    /// leftover and returns false; creative discards the leftover when no progress is possible.
+    /// Crafting-remainder add: survival retains any leftover and returns false; creative
+    /// discards the leftover when no progress is possible. Menu returns must use `offer`.
     pub fn insert_stack_for_player(
         &self,
         stack: &mut ItemStack,
@@ -467,6 +468,20 @@ impl PlayerInventory {
         if stack.is_empty() {
             return false;
         }
+        self.insert_stack_notifying(stack, notify_client, player);
+        if !stack.is_empty() && player.has_infinite_materials() {
+            stack.set_count(0);
+        }
+        stack.is_empty()
+    }
+
+    /// Share insertion and slot notifications while leaving leftover policy to the caller.
+    fn insert_stack_notifying(
+        &self,
+        stack: &mut ItemStack,
+        notify_client: bool,
+        player: &dyn InventoryPlayer,
+    ) {
         while !stack.is_empty() {
             let mut room_for_stack = self.get_occupied_slot_with_room_for_stack(stack);
             if room_for_stack == -1 {
@@ -489,10 +504,6 @@ impl PlayerInventory {
                 ));
             }
         }
-        if !stack.is_empty() && player.has_infinite_materials() {
-            stack.set_count(0);
-        }
-        stack.is_empty()
     }
 }
 
