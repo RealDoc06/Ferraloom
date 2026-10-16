@@ -1484,7 +1484,7 @@ mod tests {
         {
             let mut loading = level.chunk_loading.lock().unwrap();
             loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
-            loading.send_change()
+            loading.send_change();
         };
         // This current-thread runtime cannot run the IO tasks before our first yield.
         // Poll the real public fetch, then cancel it while its registration is pending.
@@ -1506,7 +1506,7 @@ mod tests {
             loading.remove_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
             loading.send_change();
             assert!(loading.ticket.is_empty());
-            assert!(loading.pos_level.is_empty())
+            assert!(loading.pos_level.is_empty());
         };
         refused_region_stage("cancelled fetch shutdown", level.shutdown())
             .await

@@ -181,7 +181,7 @@ mod tests {
         {
             let mut loading = world.level.chunk_loading.lock().unwrap();
             loading.add_ticket(source, ChunkLoading::FULL_CHUNK_LEVEL);
-            loading.send_change()
+            loading.send_change();
         };
         world.level_info.rcu(|current| {
             let mut info = (**current).clone();

@@ -1727,7 +1727,7 @@ mod player_data_tests {
             let mut loading = world.level.chunk_loading.lock().unwrap();
             // A read-only request isolates this refusal from the healthy center.
             loading.add_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
-            loading.send_change()
+            loading.send_change();
         };
         let refusal = tokio::time::timeout(Duration::from_secs(10), failed)
             .await
@@ -1740,7 +1740,7 @@ mod player_data_tests {
         {
             let mut loading = world.level.chunk_loading.lock().unwrap();
             loading.remove_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
-            loading.send_change()
+            loading.send_change();
         };
         stop_chunk_workers(&fixture).await;
         let terrain = ChunkData::empty_sync(0, 0);

@@ -313,7 +313,7 @@ impl Fixture {
                         {
                             let mut loading = world.level.chunk_loading.lock().unwrap();
                             loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
-                            loading.send_change()
+                            loading.send_change();
                         };
                         world.level.get_entity_chunk(position).await.unwrap();
                     }
