@@ -16,7 +16,9 @@
     "local_modules": [
       "pumpkin-core",
       "pumpkin-world",
-      "pumpkin-command"
+      "pumpkin-command",
+      "pumpkin-data",
+      "pumpkin-protocol"
     ]
   }
 }
