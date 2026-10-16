@@ -23,6 +23,10 @@ impl JavaClient {
         self.update_sequence(use_item.sequence.0);
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
+        let is_horn = item_in_hand.item.id == Item::GOAT_HORN.id;
+        if is_horn && player.is_spectator() {
+            return;
+        }
 
         let mut consume_event =
             crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
@@ -37,7 +41,9 @@ impl JavaClient {
         }
 
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        if !is_horn {
+            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        }
 
         let hit = player.world().clip(&pumpkin_world::clip::ClipContext::new(
             player.eye_position(),
@@ -66,7 +72,9 @@ impl JavaClient {
         } else {
             player.rotation()
         };
-        Self::prepare_hand_item_for_use(player, hand, &mut item_in_hand);
+        if !is_horn {
+            Self::prepare_hand_item_for_use(player, hand, &mut item_in_hand);
+        }
 
         if !Self::should_continue_use_after_fish_event(server, player, hand, item_for_use) {
             return;

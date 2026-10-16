@@ -46,6 +46,14 @@ impl ItemRegistry {
         hand: Hand,
     ) {
         let item = stack.item;
+        if item.id == Item::GOAT_HORN.id {
+            // Horns resolve their actual hand and own the instrument duration,
+            // cooldown group and successful-use statistic.
+            if let Some(behaviour) = self.get_pumpkin_item(item.id) {
+                behaviour.normal_use_with_hand(item, player, yaw, pitch, hand);
+            }
+            return;
+        }
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
             .and_then(|c| c.cooldown_group.clone())
