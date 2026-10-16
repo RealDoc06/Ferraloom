@@ -732,3 +732,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+#[path = "remainder_tests.rs"]
+mod remainder_tests;

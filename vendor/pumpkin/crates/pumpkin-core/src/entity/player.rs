@@ -8279,6 +8279,9 @@ impl InventoryPlayer for Player {
 }
 
 #[cfg(test)]
+mod crafting_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
