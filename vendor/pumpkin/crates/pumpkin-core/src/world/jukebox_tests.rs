@@ -740,14 +740,22 @@ async fn world_jukebox_comparator_disc11_insert_and_eject_complete_after_two_tic
     .unwrap()
     .unwrap();
     entities.live.store(true, Relaxed);
-    world.block_ticking_chunks.write().unwrap().insert(chunk_pos);
+    world
+        .block_ticking_chunks
+        .write()
+        .unwrap()
+        .insert(chunk_pos);
     assert!(world.level.is_chunk_ready(&chunk_pos));
     player
         .get_entity()
         .set_pos(Vector3::new(4098.5, 200.0, 3.5));
     for x in 4096..=4111 {
         for z in 0..=15 {
-            set_state(&world, BlockPos::new(x, 199, z), Block::STONE.default_state.id);
+            set_state(
+                &world,
+                BlockPos::new(x, 199, z),
+                Block::STONE.default_state.id,
+            );
         }
     }
     world.set_block_state(
@@ -783,8 +791,7 @@ async fn world_jukebox_comparator_disc11_insert_and_eject_complete_after_two_tic
             Some(expected)
         );
         assert_eq!(
-            ComparatorLikeProperties::from_state_id(world.get_block_state_id(&COMPARATOR))
-                .powered,
+            ComparatorLikeProperties::from_state_id(world.get_block_state_id(&COMPARATOR)).powered,
             expected != 0
         );
     };
