@@ -64,7 +64,7 @@ def now() -> str:
 
 
 def manifest() -> dict:
-    files = ("tools/check_container_metadata.py", "tools/check_chat_throttle.py", "tools/check_block_data.py",
+    files = ("tools/check_container_metadata.py", "tools/check_player_data.py", "tools/check_chat_throttle.py", "tools/check_block_data.py",
              "tests/block_data_protocol.test.ts")
     return {**suite.harness_manifest(), **{path: digest(ROOT / path) for path in files}}
 
