@@ -1,3 +1,4 @@
+mod persistence;
 pub mod trigger;
 mod visibility_evaluator;
 
@@ -5,6 +6,7 @@ use crate::data::advancement_data::{AdvancementManager, write_advancement_snapsh
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
+use persistence::{AdvancementFile, LoadState};
 use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
 };
@@ -15,18 +17,14 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
-use serde::ser::SerializeMap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::to_string_pretty;
+use serde::{Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
-use std::fs::read;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::warn;
 use uuid::Uuid;
 
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CriterionProgress(pub Option<SystemTime>);
 
 impl CriterionProgress {
@@ -129,33 +127,6 @@ impl AdvancementProgress {
     }
 }
 
-impl Serialize for AdvancementProgress {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let map: HashMap<&Arc<str>, &CriterionProgress> = self
-            .criteria
-            .iter()
-            .filter(|(_key, criteria)| criteria.is_done())
-            .collect();
-        map.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for AdvancementProgress {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let criteria = HashMap::<Arc<str>, CriterionProgress>::deserialize(deserializer)?;
-        Ok(Self {
-            criteria,
-            requirements: AdvancementRequirement::default(),
-        })
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct AdvancementProgressMap {
     pub map: IndexMap<&'static Advancement, AdvancementProgress>,
@@ -212,6 +183,9 @@ pub struct PlayerAdvancement {
     pub last_selected_tab: Option<&'static Advancement>,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
+    // Retain disk-only progress independently of the engine's static registry.
+    disk: Option<AdvancementFile>,
+    load_state: LoadState,
 }
 
 /// The state changes produced by awarding an advancement criterion.
@@ -246,6 +220,18 @@ pub enum AdvancementDataError {
     Io(std::io::Error),
     #[error("JSON error: {0}")]
     Json(serde_json::Error),
+    #[error("unsupported advancement DataVersion {0}; no advancement data fixer is available")]
+    UnsupportedVersion(i32),
+    #[error("unsupported advancement schema: {0}")]
+    Schema(String),
+    #[error(
+        "legacy Rust advancement data requires explicit migration with an original-file backup"
+    )]
+    LegacyRustFormat,
+    #[error("invalid advancement timestamp: {0}")]
+    Timestamp(String),
+    #[error("advancement saves require a successful load or confirmed new-player absence")]
+    NotLoaded,
 }
 
 impl PlayerAdvancement {
@@ -255,6 +241,12 @@ impl PlayerAdvancement {
         Self {
             progress: AdvancementProgressMap::default(),
             path: manager.advancement_path.join(format!("{uuid}.json")),
+            load_state: if manager.save_enabled {
+                LoadState::Unloaded
+            } else {
+                LoadState::Disabled
+            },
+            disk: None,
             manager,
             player: Weak::new(),
             is_first_packet: true,
@@ -277,56 +269,78 @@ impl PlayerAdvancement {
         self.manager.save_enabled
     }
 
-    ///reload the advancements from the file
+    /// Replace runtime state only after the entire file has been validated.
     pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
         //self.stopListening(); TODO
-        self.progress.clear();
-        self.visible.clear();
-        self.roots_to_update.clear();
-        self.progress_changed.clear();
-        self.is_first_packet = true;
-        self.last_selected_tab = None;
         self.load()
     }
 
     /// Saves the player's advancement progress to disk as JSON.
     /// Callers coordinate standalone saves; the manager orders live-player saves.
     pub async fn save(&self) -> Result<(), AdvancementDataError> {
-        if !self.is_save_enabled() {
+        let Some(snapshot) = self.snapshot()? else {
             return Ok(());
-        }
-        let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
-        let path = self.path.clone();
-        tokio::task::spawn_blocking(move || write_advancement_snapshots(vec![(path, json)]))
+        };
+        tokio::task::spawn_blocking(move || write_advancement_snapshots(vec![snapshot]))
             .await
             .map_err(|error| AdvancementDataError::Io(std::io::Error::other(error)))?
             .map_err(AdvancementDataError::Io)
     }
 
+    /// The manager and standalone writer share this eligibility check.
+    pub(crate) fn snapshot(&self) -> Result<Option<(PathBuf, String)>, AdvancementDataError> {
+        if !self.is_save_enabled() {
+            return Ok(None);
+        }
+        let disk = self.disk_snapshot()?;
+        let json = serde_json::to_string_pretty(&disk).map_err(AdvancementDataError::Json)?;
+        Ok(Some((self.path.clone(), json)))
+    }
+
+    fn disk_snapshot(&self) -> Result<AdvancementFile, AdvancementDataError> {
+        if !matches!(self.load_state, LoadState::New | LoadState::Loaded) {
+            return Err(AdvancementDataError::NotLoaded);
+        }
+        let mut disk = self.disk.clone().unwrap_or_default();
+        disk.merge_runtime(&self.progress)?;
+        Ok(disk)
+    }
+
     /// Loads the player's advancement progress from disk.
     pub fn load(&mut self) -> Result<(), AdvancementDataError> {
-        if !self.path.exists() || !self.is_save_enabled() {
+        if !self.is_save_enabled() {
+            self.load_state = LoadState::Disabled;
             return Ok(());
         }
-
-        let json = read(&self.path).map_err(AdvancementDataError::Io)?;
-
-        let loaded_data: HashMap<String, AdvancementProgress> =
-            serde_json::from_slice(&json).map_err(AdvancementDataError::Json)?;
-
-        self.progress.clear();
-        for (advancement_id, mut progress) in loaded_data {
-            if let Some(advancement_ref) = Advancement::from_minecraft_name(&advancement_id) {
-                progress.update(AdvancementRequirement::from_const(
-                    advancement_ref.requirements,
-                ));
-                self.progress.insert(advancement_ref, progress);
-                self.progress_changed.insert(advancement_ref);
-                self.mark_for_visibility_update(advancement_ref);
-            } else {
-                warn!("The Advancement name {} is invalid", advancement_id);
-            }
+        // Failure blocks every save path, but preserves the last runtime and disk
+        // state for inspection or a subsequent successful reload.
+        let first_load = matches!(self.load_state, LoadState::Unloaded);
+        self.load_state = LoadState::Failed;
+        let disk = persistence::read_file(&self.path)?;
+        if disk.is_none() && !first_load {
+            return Err(AdvancementDataError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "advancement file missing on reload; refusing to discard current progress",
+            )));
         }
+        let progress = disk
+            .as_ref()
+            .map_or_else(AdvancementProgressMap::default, AdvancementFile::runtime);
+        self.progress = progress;
+        self.visible.clear();
+        self.roots_to_update.clear();
+        self.progress_changed = self.progress.map.keys().copied().collect();
+        self.is_first_packet = true;
+        self.last_selected_tab = None;
+        for advancement in self.progress_changed.clone() {
+            self.mark_for_visibility_update(advancement);
+        }
+        self.load_state = if disk.is_some() {
+            LoadState::Loaded
+        } else {
+            LoadState::New
+        };
+        self.disk = disk;
         Ok(())
     }
 
@@ -538,19 +552,9 @@ impl Serialize for PlayerAdvancement {
     where
         S: Serializer,
     {
-        let filtered_map: HashMap<&'static Advancement, &AdvancementProgress> = self
-            .progress
-            .map
-            .iter()
-            .filter(|(_key, value)| value.has_progress())
-            .map(|(&key, val)| (key, val))
-            .collect();
-        let mut map = serializer.serialize_map(Some(filtered_map.len()))?;
-
-        for (advancement, progress) in &filtered_map {
-            map.serialize_entry(&advancement.id, &progress.criteria)?;
-        }
-        map.end()
+        self.disk_snapshot()
+            .map_err(serde::ser::Error::custom)?
+            .serialize(serializer)
     }
 }
 
@@ -634,6 +638,7 @@ mod tests {
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
         let mut pa = PlayerAdvancement::new(manager, id);
+        pa.load().unwrap();
 
         // Add some advancement progress
         let adv = Advancement::STORY_ROOT;
@@ -651,8 +656,7 @@ mod tests {
         // Content should be valid JSON
         let content = std::fs::read_to_string(&pa.path).unwrap();
         assert!(!content.is_empty(), "Saved file should not be empty");
-        let _: HashMap<String, AdvancementProgress> =
-            serde_json::from_str(&content).expect("Saved content should be valid JSON");
+        persistence::decode(content.as_bytes()).expect("Saved content should be canonical JSON");
     }
 
     #[tokio::test]
@@ -704,10 +708,13 @@ mod tests {
         let mut pa = PlayerAdvancement::new(manager, id);
         // Create a JSON file with advancement data
         let adv = Advancement::STORY_ROOT;
-        let mut progress = AdvancementProgress::default();
-        progress.update(AdvancementRequirement::from_const(adv.requirements));
-        progress.grant_progress("crafting_table");
-        let data = serde_json::json!({ adv.id.to_string():progress });
+        let data = serde_json::json!({
+            "DataVersion": pumpkin_world::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+            adv.id.to_string(): {
+                "criteria": {"crafting_table": "2026-10-16 03:33:08 +0200"},
+                "done": true
+            }
+        });
         std::fs::write(&pa.path, data.to_string()).unwrap();
 
         // Load the file
@@ -729,6 +736,7 @@ mod tests {
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
         let mut pa = PlayerAdvancement::new(manager.clone(), id);
+        pa.load().unwrap();
 
         let adv = Advancement::STORY_ROOT;
         {
@@ -756,36 +764,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_invalid_advancement_id() {
+    async fn preserve_unknown_advancement_id() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
-        // Create a JSON file with invalid advancement ID
-        let mut criteria = HashMap::new();
-        criteria.insert(Arc::from("testCriteria"), CriterionProgress::default());
-        let requirements = AdvancementRequirement {
-            requirements: vec![vec![Arc::from("testCriteria")]],
-        };
-        let progress = AdvancementProgress {
-            criteria,
-            requirements,
-        };
         let data = serde_json::json!({
-            "invalid_advancement_id_12345": progress
+            "DataVersion": pumpkin_world::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+            "custom:unknown": {"criteria": {"testCriteria": "2026-10-16 03:33:08 +0200"}, "done": false}
         });
         let id = Uuid::new_v4();
         let mut pa = PlayerAdvancement::new(manager, id);
         std::fs::write(&pa.path, data.to_string()).unwrap();
 
-        // Load should still succeed but skip the invalid entry
-
-        assert!(
-            pa.load().is_ok(),
-            "Load should succeed even with invalid IDs"
-        );
+        pa.load().unwrap();
         assert!(
             pa.progress.is_empty(),
-            "Invalid advancements should be skipped"
+            "Unknown definitions have no runtime triggers"
+        );
+        pa.save().await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&std::fs::read(&pa.path).unwrap()).unwrap(),
+            data
         );
     }
 
@@ -795,6 +794,7 @@ mod tests {
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
         let mut pa = PlayerAdvancement::new(manager, id);
+        pa.load().unwrap();
 
         // Add multiple advancements
         let adv1 = Advancement::STORY_ROOT;
@@ -813,9 +813,12 @@ mod tests {
 
         // Verify both were saved
         let content = std::fs::read_to_string(&pa.path).unwrap();
-        let saved_data: HashMap<String, AdvancementProgress> =
-            serde_json::from_str(&content).unwrap();
-        assert_eq!(saved_data.len(), 2, "Should have saved both advancements");
+        let saved_data = persistence::decode(content.as_bytes()).unwrap();
+        assert_eq!(
+            saved_data.runtime().len(),
+            2,
+            "Should have saved both advancements"
+        );
     }
 
     #[tokio::test]

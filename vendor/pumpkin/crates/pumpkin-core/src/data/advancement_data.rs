@@ -83,8 +83,9 @@ impl AdvancementManager {
                 .advancements
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let json = serde_json::to_string_pretty(&*guard).map_err(AdvancementDataError::Json)?;
-            to_write.push((guard.path.clone(), json));
+            if let Some(snapshot) = guard.snapshot()? {
+                to_write.push(snapshot);
+            }
         }
 
         tokio::task::spawn_blocking(move || {
@@ -132,6 +133,7 @@ mod tests {
         let manager = Arc::new(AdvancementManager::new(directory.path(), true));
         let uuid = Uuid::new_v4();
         let mut progress = PlayerAdvancement::new(manager.clone(), uuid);
+        progress.load().unwrap();
         progress.save().await.unwrap();
         let previous = std::fs::read(&progress.path).unwrap();
         let advancement = Advancement::STORY_ROOT;
@@ -229,6 +231,7 @@ mod tests {
                     let directory = PathBuf::from(directory);
                     let manager = Arc::new(AdvancementManager::new(directory.clone(), true));
                     let mut progress = PlayerAdvancement::new(manager.clone(), Uuid::new_v4());
+                    progress.load().unwrap();
                     progress
                         .progress
                         .get_mut_or_start_progress(Advancement::STORY_ROOT)

@@ -759,19 +759,36 @@ impl Server {
             player.has_played_before.store(true, Ordering::Relaxed);
         }
 
-        // Wrap in Arc after data is loaded
-        let player = Arc::new(player);
-        session.publish(&player);
+        // Advancement load failures must reject before session publication,
+        // login callbacks, world insertion or final-save eligibility.
         {
             let mut advancements = player
                 .advancements
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Err(e) = advancements.load() {
-                warn!("Error loading player {}: {e}", player.gameprofile.id);
+            if let Err(error) = advancements.load() {
+                error!(
+                    "Refusing login for {}: failed to load advancements: {error}",
+                    player.gameprofile.id
+                );
+                player.client.try_kick(
+                    DisconnectReason::Kicked,
+                    &TextComponent::text("Your advancement data could not be loaded. Please contact the server administrator."),
+                );
+                return None;
             }
+        }
+
+        // Wrap in Arc after both persistence families are loaded.
+        let player = Arc::new(player);
+        {
+            let mut advancements = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             advancements.player = Arc::downgrade(&player);
         };
+        session.publish(&player);
 
         send_cancellable_blocking! {{
             self;
@@ -1432,11 +1449,37 @@ mod player_data_tests {
     use super::*;
     use crate::net::PacketRateLimiter;
     use crate::net::java::{JavaClient, pending::PendingConnection};
+    use crate::plugin::EventHandler;
+    use crate::plugin::api::events::EventPriority;
+    use futures::future::BoxFuture;
     use pumpkin_protocol::ConnectionState;
     use pumpkin_util::world_seed::Seed;
 
     #[tokio::test]
     async fn player_data_failure_rejects_login_before_player_publication_or_save() {
+        failed_persistence_rejects_login(false).await;
+    }
+
+    #[tokio::test]
+    async fn advancement_failure_rejects_before_session_login_event_or_save() {
+        failed_persistence_rejects_login(true).await;
+    }
+
+    struct ObserveLogin(AtomicBool);
+
+    impl EventHandler<PlayerLoginEvent> for ObserveLogin {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a PlayerLoginEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.0.store(true, Ordering::Relaxed);
+            })
+        }
+    }
+
+    async fn failed_persistence_rejects_login(advancement_failure: bool) {
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -1472,8 +1515,22 @@ mod player_data_tests {
             .join("players/data")
             .join(format!("{uuid}.dat"));
         let backup = path.with_extension("dat_old");
-        fs::write(&path, b"corrupt primary").unwrap();
-        fs::write(&backup, b"corrupt backup").unwrap();
+        let advancement_path = server
+            .advancement_manager
+            .advancement_path
+            .join(format!("{uuid}.json"));
+        if advancement_failure {
+            fs::write(&advancement_path, b"corrupt advancement").unwrap();
+        } else {
+            fs::write(&path, b"corrupt primary").unwrap();
+            fs::write(&backup, b"corrupt backup").unwrap();
+        }
+        let login = Arc::new(ObserveLogin(AtomicBool::new(false)));
+        server.plugin_manager.register::<PlayerLoginEvent, _>(
+            login.clone(),
+            EventPriority::Normal,
+            false,
+        );
         let profile = GameProfile {
             id: uuid,
             name: "BrokenPlayer".into(),
@@ -1504,7 +1561,7 @@ mod player_data_tests {
 
         assert!(
             server
-                .add_player(client.clone(), profile, None)
+                .add_player(client.clone(), profile.clone(), None)
                 .await
                 .is_none()
         );
@@ -1519,6 +1576,7 @@ mod player_data_tests {
         let java = client.java().unwrap();
         assert!(java.is_closed());
         assert!(java.player.load().is_none());
+        assert!(!login.0.load(Ordering::Relaxed));
         assert!(
             server
                 .worlds
@@ -1530,12 +1588,51 @@ mod player_data_tests {
             .player_data_storage
             .save_all_players(&server)
             .unwrap();
+        server
+            .advancement_manager
+            .save_all_players(&[])
+            .await
+            .unwrap();
+        if advancement_failure {
+            // Even callers bypassing admission cannot turn an unloaded or failed
+            // advancement instance into a manager snapshot and overwrite the file.
+            let world = server.worlds.load().first().cloned().unwrap();
+            let unpublished = Arc::new(Player::new(
+                client.clone(),
+                profile,
+                PlayerConfig::default(),
+                &world,
+                pumpkin_util::GameMode::Survival,
+            ));
+            assert!(matches!(
+                server.advancement_manager.save_player(&unpublished).await,
+                Err(crate::entity::player::advancement::AdvancementDataError::NotLoaded)
+            ));
+            assert!(unpublished.advancements.lock().unwrap().load().is_err());
+            assert!(matches!(
+                server.advancement_manager.save_player(&unpublished).await,
+                Err(crate::entity::player::advancement::AdvancementDataError::NotLoaded)
+            ));
+            assert!(unpublished.session.lock().unwrap().is_none());
+        }
         tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
             .await
             .unwrap();
         server.shutdown().await;
-        assert_eq!(fs::read(&path).unwrap(), b"corrupt primary");
-        assert_eq!(fs::read(&backup).unwrap(), b"corrupt backup");
-        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
+        if advancement_failure {
+            assert_eq!(fs::read(&advancement_path).unwrap(), b"corrupt advancement");
+            assert!(!path.exists());
+            assert!(!backup.exists());
+            assert_eq!(
+                fs::read_dir(advancement_path.parent().unwrap())
+                    .unwrap()
+                    .count(),
+                1
+            );
+        } else {
+            assert_eq!(fs::read(&path).unwrap(), b"corrupt primary");
+            assert_eq!(fs::read(&backup).unwrap(), b"corrupt backup");
+            assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
+        }
     }
 }
