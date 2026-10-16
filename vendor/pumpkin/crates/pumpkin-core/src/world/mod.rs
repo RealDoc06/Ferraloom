@@ -599,18 +599,32 @@ impl World {
                 }
             };
 
-        // level.dat's Time is shared by all dimensions. The overworld's separate
-        // day clock comes from world_clocks.dat; restore both before any ticks.
+        // Initial dimensions share level.dat's Time; a later world joins the
+        // live overworld's age. Neither changes the separate day clock.
         let mut level_time = LevelTime::new();
-        {
+        let (day_time, saved_game_time) = {
             let saved = level_info.load();
             let day_time = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
                 saved.day_time
             } else {
                 0
             };
-            level_time.load_from(day_time, saved.game_time);
-        }
+            (day_time, saved.game_time)
+        };
+        let game_time = server
+            .upgrade()
+            .and_then(|server| {
+                server
+                    .worlds
+                    .load()
+                    .iter()
+                    .find(|world| {
+                        world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+                    })
+                    .map(|world| world.get_world_age())
+            })
+            .unwrap_or(saved_game_time);
+        level_time.load_from(day_time, game_time);
 
         Self {
             uuid: Uuid::new_v4(),
