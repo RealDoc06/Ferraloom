@@ -74,7 +74,7 @@ async fn creative_wire_placeholder_refuses_before_publication_resyncs_and_player
     let original = ItemStack::new(3, &Item::DIAMOND);
     player.inventory().set_stack(9, original.clone());
     player.on_screen_handler_opened(&player.player_screen_handler);
-    let mut reader = TCPNetworkDecoder::new(BufReader::new(&mut fixture._remote));
+    let mut reader = TCPNetworkDecoder::new(BufReader::new(&mut fixture.remote));
     packets(java, &mut reader).await;
     let entity_count = player.world().entities.load().len();
     let storage = &fixture.server.player_data_storage;

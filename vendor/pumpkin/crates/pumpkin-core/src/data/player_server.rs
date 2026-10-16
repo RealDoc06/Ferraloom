@@ -308,7 +308,7 @@ pub(crate) mod test {
         pub(crate) server: Arc<Server>,
         pub(crate) player: Arc<Player>,
         pub(crate) client: Arc<ClientPlatform>,
-        pub(crate) _remote: tokio::net::TcpStream,
+        pub(crate) remote: tokio::net::TcpStream,
     }
 
     pub async fn java_client(
@@ -415,7 +415,7 @@ pub(crate) mod test {
             server,
             player,
             client,
-            _remote: remote,
+            remote,
         }
     }
 

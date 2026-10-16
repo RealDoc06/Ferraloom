@@ -707,7 +707,7 @@ mod tests {
             assert_eq!(loading.ticket, tickets_before);
             assert_eq!(loading.pos_level, levels_before);
             assert_eq!(loading.high_priority, priority_before);
-        }
+        };
         assert!(!world.level.is_chunk_loaded(&refused));
         assert!(matches!(
             world.level.chunk_listener.failure(refused),
@@ -748,7 +748,7 @@ mod tests {
                 );
             }
             assert!(!loading.high_priority.contains(&refused));
-        }
+        };
         close_fixture(&fixture).await;
         assert_eq!(std::fs::read(&path).unwrap(), original);
     }

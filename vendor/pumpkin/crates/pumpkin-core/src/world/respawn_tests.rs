@@ -230,7 +230,7 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
         let mut loading = world.level.chunk_loading.lock().unwrap();
         loading.add_ticket(source, ChunkLoading::FULL_CHUNK_LEVEL);
         loading.send_change();
-    }
+    };
     let bed_chunk = Vector2::new(4, 4);
     bed_level
         .loaded_chunks
@@ -276,7 +276,7 @@ async fn cancelled_bed_world_wait_preserves_respawn_data_and_sends_no_invalid_be
                 .unwrap(),
             super::RespawnOutcome::Aborted,
         );
-    }
+    };
     assert!(!java.is_closed());
     assert!(world.enter_packet_callbacks(Some(source)).is_some());
     assert_eq!(

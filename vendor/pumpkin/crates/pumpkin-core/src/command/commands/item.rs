@@ -525,8 +525,7 @@ mod tests {
         ] {
             let error = fixture
                 .execute(command)
-                .err()
-                .expect("writerless command item must refuse");
+                .expect_err("writerless command item must refuse");
             assert!(error.is(&ERROR_UNPERSISTABLE_ITEM), "{command}");
             assert!(fixture.player.inventory().get_stack(0).are_equal(&original));
             assert_eq!(fixture.world.block_data(), block_before);
@@ -571,7 +570,7 @@ mod tests {
         let inventory = fixture.player.inventory();
         inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
         let before: Vec<_> = (0..inventory.size())
-            .map(|slot| inventory.get_stack(slot).clone())
+            .map(|slot| inventory.get_stack(slot))
             .collect();
         let entities_before = fixture.player.world().entities.load_full();
         for command in [

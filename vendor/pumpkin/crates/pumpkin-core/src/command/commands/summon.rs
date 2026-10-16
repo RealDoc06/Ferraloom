@@ -182,6 +182,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep refused entity publication and the healthy disk-save control together."
+    )]
     async fn summon_item_preflight_refuses_before_spawn_and_healthy_entity_saves() {
         use crate::{
             plugin::{
