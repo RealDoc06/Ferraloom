@@ -139,6 +139,15 @@ impl UserCache {
     }
 
     fn safe_add(&mut self, mut entry: UserCacheEntry) {
+        // A legacy cache hit must not select an obsolete UUID for /ban or /op.
+        // Keep the original on-disk profile files for explicit migration.
+        if crate::net::is_legacy_offline_profile(entry.uuid, &entry.name) {
+            warn!(
+                "Ignoring legacy offline identity in user cache for {}",
+                entry.name
+            );
+            return;
+        }
         entry.last_access = self.next_operation();
         self.profiles_by_name
             .insert(entry.name.to_ascii_lowercase(), entry.clone());
@@ -219,4 +228,38 @@ fn is_expired(expiration_date: OffsetDateTime) -> bool {
 
 fn one_month_from_now() -> OffsetDateTime {
     OffsetDateTime::now_utc() + Duration::days(30)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loaded_legacy_lookup_is_dropped_while_canonical_and_other_ids_remain() {
+        let mut cache = UserCache::default();
+        let legacy = Uuid::parse_str("14209f43-09d3-4876-d114-4c2568f51fc3").unwrap();
+        cache.safe_add(UserCacheEntry {
+            uuid: legacy,
+            name: "SpamObserver".into(),
+            expiration_date: one_month_from_now(),
+            last_access: 0,
+        });
+        assert!(cache.get_by_name("SpamObserver").is_none());
+        assert!(cache.get_by_uuid(legacy).is_none());
+
+        let canonical = crate::net::offline_uuid("SpamObserver").unwrap();
+        for (uuid, name) in [
+            (canonical, "SpamObserver"),
+            (Uuid::from_u128(7), "OtherName"),
+        ] {
+            cache.safe_add(UserCacheEntry {
+                uuid,
+                name: name.into(),
+                expiration_date: one_month_from_now(),
+                last_access: 0,
+            });
+            assert_eq!(cache.get_by_name(name).unwrap().uuid, uuid);
+            assert_eq!(cache.get_by_uuid(uuid).unwrap().name, name);
+        }
+    }
 }

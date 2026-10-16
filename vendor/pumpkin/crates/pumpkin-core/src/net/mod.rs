@@ -75,6 +75,15 @@ pub fn offline_uuid(username: &str) -> Result<Uuid, uuid::Error> {
     Ok(uuid::Builder::from_md5_bytes(digest.0).into_uuid())
 }
 
+/// Recognize the exact offline algorithm used before the Java UUID correction.
+/// This identifies stale lookup records; it does not authorize moving player data.
+pub(crate) fn is_legacy_offline_profile(uuid: Uuid, username: &str) -> bool {
+    use sha2::{Digest, Sha256};
+
+    let digest = Sha256::digest(username.as_bytes());
+    uuid.as_bytes().as_slice() == &digest[..16]
+}
+
 /// Represents a player's configuration settings.
 ///
 /// This struct contains various options that can be customized by the player, affecting their gameplay experience.
