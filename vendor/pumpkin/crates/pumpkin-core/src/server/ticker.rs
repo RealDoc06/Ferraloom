@@ -46,6 +46,16 @@ impl TickSchedule {
 pub struct Ticker;
 
 impl Ticker {
+    /// STOP has sealed sessions; keep only accepted continuations pumpable.
+    pub(crate) fn drain_sessions(server: &Arc<Server>) {
+        server.packet_runner.attach();
+        while !server.packet_runner.is_finished() {
+            if !server.packet_runner.run_ready(server, None) {
+                std::thread::park();
+            }
+        }
+    }
+
     /// Runs the main server tick loop on a dedicated thread.
     pub fn run(server: &Arc<Server>) {
         let _guard = server.runtime.enter();
@@ -54,6 +64,7 @@ impl Ticker {
         let mut schedule = TickSchedule::new();
         let mut game_test_runner = GameTestRunner::new();
 
+        server.packet_runner.attach();
         let park_thread = std::thread::current();
         let stop = STOP_INTERRUPT.clone();
         server.runtime.spawn(async move {
@@ -61,7 +72,12 @@ impl Ticker {
             park_thread.unpark();
         });
 
-        'ticker: loop {
+        loop {
+            if STOP_INTERRUPT.is_cancelled() || server.packet_runner.is_draining() {
+                server.packet_runner.begin_drain();
+                Self::drain_sessions(server);
+                break;
+            }
             // Doubles as the tick-duration start, so the loop reads the clock twice.
             let tick_start_nanos = elapsed_nanos(base);
             let manager = &server.tick_rate_manager;
@@ -130,15 +146,7 @@ impl Ticker {
 
             server.update_tick_times(tick_duration_nanos);
 
-            if STOP_INTERRUPT.is_cancelled() {
-                break 'ticker;
-            }
-
-            wait_until_next_tick(base, schedule.next_tick_nanos);
-
-            if STOP_INTERRUPT.is_cancelled() {
-                break 'ticker;
-            }
+            wait_until_next_tick(server, base, schedule.next_tick_nanos);
         }
 
         debug!("Ticker stopped");
@@ -194,11 +202,11 @@ const fn apply_overload_skip(
 
 /// Vanilla `waitUntilNextTick` / `LockSupport.parkNanos`.
 ///
-/// Vanilla drains its server-thread queue here (`pollTask`). there is no such queue:
-/// that work runs on the runtime and keeps going while this thread parks.
-fn wait_until_next_tick(base: Instant, next_tick_nanos: i64) {
+/// Drain finite packet waves between execution phases, prioritizing the next
+/// gameplay deadline. Pending futures retain ownership without holding a phase.
+fn wait_until_next_tick(server: &Arc<Server>, base: Instant, next_tick_nanos: i64) {
     loop {
-        if STOP_INTERRUPT.is_cancelled() {
+        if STOP_INTERRUPT.is_cancelled() || server.packet_runner.is_draining() {
             return;
         }
 
@@ -207,7 +215,13 @@ fn wait_until_next_tick(base: Instant, next_tick_nanos: i64) {
             return;
         }
 
-        std::thread::park_timeout(Duration::from_nanos(remaining as u64));
+        let deadline = base + Duration::from_nanos(next_tick_nanos.max(0) as u64);
+        if !server.packet_runner.run_ready(server, Some(deadline)) {
+            let remaining = next_tick_nanos - elapsed_nanos(base);
+            if remaining > 0 {
+                std::thread::park_timeout(Duration::from_nanos(remaining as u64));
+            }
+        }
     }
 }
 

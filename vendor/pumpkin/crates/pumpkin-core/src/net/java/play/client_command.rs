@@ -4,20 +4,24 @@ use pumpkin_data::game_rules::GameRule;
 use pumpkin_protocol::java::client::play::CGameRuleValues;
 
 impl JavaClient {
-    pub fn handle_client_status(&self, player: &Arc<Player>, client_status: &SClientCommand) {
+    pub(crate) fn handle_client_status(
+        &self,
+        player: &Arc<Player>,
+        client_status: &SClientCommand,
+    ) -> Option<crate::net::java::DeferredPacket> {
         player.update_last_action_time();
         match client_status.action_id.0 {
             SClientCommand::PERFORM_RESPAWN => {
                 // Perform respawn
                 if player.living_entity.health.load() > 0.0 {
-                    return;
+                    return None;
                 }
                 let player_c = player.clone();
                 let Some(server) = player.world().server.upgrade() else {
-                    return;
+                    return None;
                 };
                 let hardcore = server.basic_config.hardcore;
-                server.spawn_task(async move {
+                return Some(Box::pin(async move {
                     player_c
                         .world()
                         .clone()
@@ -47,7 +51,7 @@ impl JavaClient {
                         abilities.set_for_gamemode(player_c.gamemode.load());
                     };
                     player_c.send_abilities_update();
-                });
+                }));
             }
             SClientCommand::REQUEST_STATS => {
                 // Request stats
@@ -60,6 +64,7 @@ impl JavaClient {
                 self.try_kick(&TextComponent::text("Invalid client status"));
             }
         }
+        None
     }
 
     pub fn send_game_rule_values(&self, player: &Player) {

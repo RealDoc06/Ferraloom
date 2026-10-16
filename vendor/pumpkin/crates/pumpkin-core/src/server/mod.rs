@@ -158,6 +158,7 @@ pub struct Server {
     /// Manages scheduled datapack functions (`/schedule`)
     pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
+    pub(crate) packet_runner: Arc<crate::entity::player::packet_activity::PacketRunner>,
     saving: saving::SaveCoordinator,
     pub runtime: tokio::runtime::Handle,
     pub management_hub: Arc<crate::net::management::hub::ManagementHub>,
@@ -339,6 +340,7 @@ impl Server {
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
+            packet_runner: Arc::default(),
             saving: saving::SaveCoordinator::default(),
             runtime: tokio::runtime::Handle::current(),
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
@@ -474,7 +476,28 @@ impl Server {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.tasks.spawn_on(task, &self.runtime)
+        if let Some(activity) = crate::entity::player::packet_activity::ActivityLease::current() {
+            activity.submit(task).spawn_on(&self.tasks, &self.runtime)
+        } else {
+            self.tasks.spawn_on(task, &self.runtime)
+        }
+    }
+
+    /// Reconciliation withdraws readiness and waits for callback retirement
+    /// itself. It must not wait behind that same readiness or count itself as
+    /// a callback. Packet descendants still poll inside the execution phase.
+    pub(crate) fn spawn_chunk_reconcile<F>(&self, task: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        if let Some(activity) = crate::entity::player::packet_activity::ActivityLease::current() {
+            activity
+                .submit_world_stages(task)
+                .spawn_on(&self.tasks, &self.runtime)
+        } else {
+            self.tasks.spawn_on(task, &self.runtime)
+        }
     }
 
     /// Close the task tracker and drain accepted work before saving worlds.
@@ -560,6 +583,12 @@ impl Server {
             ));
         }
 
+        world_to_unload.withdraw_packet_admission().await;
+        // A transfer admitted before withdrawal may have published its player.
+        if !world_to_unload.players.load().is_empty() {
+            world_to_unload.restore_packet_admission();
+            return Err(format!("Cannot unload world '{name}': a player arrived"));
+        }
         let save_result = world_to_unload.shutdown().await;
         world_to_unload.unload().await;
 
@@ -1283,6 +1312,15 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
+        let _phase = self
+            .packet_runner
+            .phase
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if crate::STOP_INTERRUPT.is_cancelled() || self.packet_runner.is_draining() {
+            return;
+        }
+        self.packet_runner.retry_worlds();
         // Do not flush mid-tick; `Flush` is `flushChannel`.
         let suspended = self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
@@ -1305,7 +1343,7 @@ impl Server {
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
-    pub fn tick_players_and_network(self: &Arc<Self>) {
+    fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
 
@@ -1315,6 +1353,7 @@ impl Server {
             world.flush_block_updates();
             // World::tick runs block events on simulation ticks, including steps.
 
+            let _callbacks = world.enter_simulation_callbacks();
             let players = world.players.load();
             let player_handle = handle.clone();
             players.par_iter().for_each(|player| {
@@ -1325,7 +1364,7 @@ impl Server {
     }
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
-    pub fn tick_worlds(self: &Arc<Self>) {
+    fn tick_worlds(self: &Arc<Self>) {
         let source = crate::command::CommandSender::Console
             .into_source(self)
             .with_silent();

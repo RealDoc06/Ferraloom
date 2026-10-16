@@ -506,6 +506,23 @@ impl PumpkinServer {
 
         info!("Stopped accepting incoming connections");
 
+        self.server.packet_runner.begin_drain();
+        let kick_message = TextComponent::text("Server stopped");
+        for player in self.server.get_all_players() {
+            player.kick(DisconnectReason::Shutdown, &kick_message);
+        }
+
+        info!("Ending player tasks");
+
+        tasks.close();
+        tasks.wait().await;
+
+        // Sessions retain UUID ownership through packet descendants and all
+        // final writers. The ticker remains available for their continuations.
+        self.server.plugin_manager.stop_watcher().await;
+        self.server.finish_tasks().await;
+        self.server.packet_runner.finish_drain();
+
         if let Err(e) = self
             .server
             .player_data_storage
@@ -534,16 +551,6 @@ impl PumpkinServer {
             error!("Error saving all players statistics during shutdown: {e}");
             SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
-
-        let kick_message = TextComponent::text("Server stopped");
-        for player in self.server.get_all_players() {
-            player.kick(DisconnectReason::Shutdown, &kick_message);
-        }
-
-        info!("Ending player tasks");
-
-        tasks.close();
-        tasks.wait().await;
 
         self.unload_plugins().await;
 
@@ -761,6 +768,19 @@ pub(crate) async fn finish_player_session(
     server: &Server,
     player: &Arc<entity::player::Player>,
 ) -> Result<(), PlayerSessionSaveError> {
+    finish_player_session_with_status(server, player, &SERVER_EXIT_CODE).await
+}
+
+async fn finish_player_session_with_status(
+    server: &Server,
+    player: &Arc<entity::player::Player>,
+    exit_status: &std::sync::atomic::AtomicI32,
+) -> Result<(), PlayerSessionSaveError> {
+    if let ClientPlatform::Java(client) = player.client.as_ref() {
+        client.close();
+        player.packet_activity.drain().await;
+        client.await_tasks().await;
+    }
     let session = player
         .session
         .lock()
@@ -787,14 +807,18 @@ pub(crate) async fn finish_player_session(
             advancements,
         }),
     };
-    match (previous, statistics) {
+    let result = match (previous, statistics) {
         (result, Ok(())) => result,
         (Ok(()), Err(error)) => Err(PlayerSessionSaveError::Statistics(error)),
         (Err(previous), Err(statistics)) => Err(PlayerSessionSaveError::WithStatistics {
             previous: Box::new(previous),
             statistics,
         }),
+    };
+    if result.is_err() {
+        exit_status.store(1, Ordering::Release);
     }
+    result
 }
 
 fn setup_stdin_console(server: &Arc<Server>) {

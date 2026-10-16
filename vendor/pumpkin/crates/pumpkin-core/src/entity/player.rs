@@ -1,6 +1,7 @@
 pub mod advancement;
 pub(crate) mod chunk_watches;
 pub(crate) mod experience;
+pub(crate) mod packet_activity;
 mod persistence;
 mod spam;
 pub mod statistics;
@@ -548,8 +549,9 @@ pub struct Player {
     pub score: AtomicI32,
     pub spawn_extra_particles_on_fall: AtomicBool,
     pub post_effects: std::sync::Mutex<Vec<String>>,
-    /// Inbound packets waiting to be processed during player tick.
+    /// Inbound packets waiting for the player's bounded execution batch.
     pub inbound_packets: SegQueue<RawPacket>,
+    pub(crate) packet_activity: Arc<packet_activity::PacketActivity>,
 }
 
 use base64::prelude::*;
@@ -855,6 +857,7 @@ impl Player {
             spawn_extra_particles_on_fall: AtomicBool::new(false),
             post_effects: std::sync::Mutex::new(Vec::new()),
             inbound_packets: SegQueue::new(),
+            packet_activity: Arc::default(),
         }
     }
 
@@ -1907,96 +1910,116 @@ impl Player {
         let max_chunk_z = (pos.0.z + 2) >> 4;
         for cx in min_chunk_x..=max_chunk_x {
             for cz in min_chunk_z..=max_chunk_z {
-                world
-                    .level
-                    .get_or_fetch_chunk(Vector2::new(cx, cz), |_| ())
-                    .await;
+                let fetch = world.level.get_or_fetch_chunk(Vector2::new(cx, cz), |_| ());
+                if let ClientPlatform::Java(client) = self.client.as_ref() {
+                    tokio::select! {
+                        biased;
+                        () = client.await_close_interrupt() => return None,
+                        () = fetch => {},
+                    }
+                } else {
+                    fetch.await;
+                }
             }
         }
 
-        let (block, state_id) = world.get_block_and_state_id(pos);
-
-        // If force is set (from /spawnpoint command), validate position is safe
-        if respawn_point.force {
-            // For forced spawn, check if both the block and block above allow mob spawn
-            let block_state = world.get_block_state(pos);
-            let above_state = world.get_block_state(&pos.up());
-
-            // Check if blocks are passable (non-solid or air)
-            let block_safe = block_state.is_air() || !block_state.is_solid();
-            let above_safe = above_state.is_air() || !above_state.is_solid();
-
-            if block_safe && above_safe {
-                let position = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.1,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                debug!(
-                    "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position, respawn_point.dimension
-                );
-                return Some(CalculatedRespawnPoint {
-                    position,
-                    yaw: respawn_point.yaw,
-                    pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
-                });
-            }
+        let _terrain = world.hold_packet_chunk(pos.chunk_position());
+        let mut demand = world.level.activation_demand();
+        demand.replace([pos.chunk_position()]);
+        if !world
+            .prepare_packet_destination(pos.chunk_position(), self)
+            .await
+        {
             return None;
         }
+        world
+            .packet_stage(Some(pos.chunk_position()), async {
+                let (block, state_id) = world.get_block_and_state_id(pos);
 
-        // Handle bed respawn
-        if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
-            let bed_props = BedProperties::from_state_id(state_id);
-            let facing = bed_props.facing;
+                // If force is set (from /spawnpoint command), validate position is safe
+                if respawn_point.force {
+                    // For forced spawn, check if both the block and block above allow mob spawn
+                    let block_state = world.get_block_state(pos);
+                    let above_state = world.get_block_state(&pos.up());
 
-            // Try positions around the bed based on facing direction
-            // Vanilla tries multiple offset patterns; we use a simplified version
-            if let Some(spawn_pos) = Self::find_bed_spawn_position(&world, pos, facing) {
-                return Some(CalculatedRespawnPoint {
-                    position: spawn_pos,
-                    yaw: respawn_point.yaw,
-                    pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
-                });
-            }
-            return None;
-        }
+                    // Check if blocks are passable (non-solid or air)
+                    let block_safe = block_state.is_air() || !block_state.is_solid();
+                    let above_safe = above_state.is_air() || !above_state.is_solid();
 
-        // Handle respawn anchor (Nether)
-        if block == &Block::RESPAWN_ANCHOR {
-            let anchor_props = AnchorProperties::from_state_id(state_id);
-            let charges = anchor_props.charges;
+                    if block_safe && above_safe {
+                        let position = Vector3::new(
+                            f64::from(pos.0.x) + 0.5,
+                            f64::from(pos.0.y) + 0.1,
+                            f64::from(pos.0.z) + 0.5,
+                        );
+                        debug!(
+                            "Returning forced spawn point at {:?}, dimension: {:?}",
+                            position, respawn_point.dimension
+                        );
+                        return Some(CalculatedRespawnPoint {
+                            position,
+                            yaw: respawn_point.yaw,
+                            pitch: 0.0,
+                            dimension: respawn_point.dimension.clone(),
+                        });
+                    }
+                    return None;
+                }
 
-            // Anchor needs at least 1 charge to work
-            if charges == 0 {
-                return None;
-            }
+                // Handle bed respawn
+                if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
+                    let bed_props = BedProperties::from_state_id(state_id);
+                    let facing = bed_props.facing;
 
-            // Try positions around the anchor
-            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
-                // Decrement charges after successful respawn position found
-                let new_charges = charges - 1;
-                let mut new_props = anchor_props;
-                new_props.charges = new_charges;
-                world.set_block_state(
-                    pos,
-                    new_props.to_state_id(block),
-                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                );
+                    // Try positions around the bed based on facing direction
+                    // Vanilla tries multiple offset patterns; we use a simplified version
+                    if let Some(spawn_pos) = Self::find_bed_spawn_position(&world, pos, facing) {
+                        return Some(CalculatedRespawnPoint {
+                            position: spawn_pos,
+                            yaw: respawn_point.yaw,
+                            pitch: 0.0,
+                            dimension: respawn_point.dimension.clone(),
+                        });
+                    }
+                    return None;
+                }
 
-                return Some(CalculatedRespawnPoint {
-                    position: spawn_pos,
-                    yaw: respawn_point.yaw,
-                    pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
-                });
-            }
-            return None;
-        }
+                // Handle respawn anchor (Nether)
+                if block == &Block::RESPAWN_ANCHOR {
+                    let anchor_props = AnchorProperties::from_state_id(state_id);
+                    let charges = anchor_props.charges;
 
-        None
+                    // Anchor needs at least 1 charge to work
+                    if charges == 0 {
+                        return None;
+                    }
+
+                    // Try positions around the anchor
+                    if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
+                        // Decrement charges after successful respawn position found
+                        let new_charges = charges - 1;
+                        let mut new_props = anchor_props;
+                        new_props.charges = new_charges;
+                        world.set_block_state(
+                            pos,
+                            new_props.to_state_id(block),
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+
+                        return Some(CalculatedRespawnPoint {
+                            position: spawn_pos,
+                            yaw: respawn_point.yaw,
+                            pitch: 0.0,
+                            dimension: respawn_point.dimension.clone(),
+                        });
+                    }
+                    return None;
+                }
+
+                None
+            })
+            .await
+            .flatten()
     }
 
     /// Find a valid spawn position around a bed.
@@ -2629,9 +2652,7 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
-    pub fn process_inbound_packets(&self) {
-        const MAX_PACKETS_PER_TICK: usize = 64;
-
+    fn process_inbound_packets(&self) {
         // Player::tick runs after the world's block-update flush. Acknowledge the previous tick's
         // predictions here so Java clients receive the authoritative block states before resolving
         // those predictions. Sending the ACK from the packet loop would make doors and other
@@ -2643,6 +2664,17 @@ impl Player {
             }
         }
 
+        self.packet_activity.begin_epoch();
+        self.run_packet_slice();
+    }
+
+    /// Only called inside the server execution phase. Completion tails do not
+    /// ACK predictions or advance gameplay/spam counters.
+    pub(crate) fn run_packet_slice(&self) {
+        const MAX_PACKETS_PER_SLICE: usize = 64;
+        let Some(_consumer) = self.packet_activity.begin_consumer() else {
+            return;
+        };
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -2650,35 +2682,66 @@ impl Player {
             return;
         };
 
-        let mut count = 0;
-
-        while let Some(packet) = self.inbound_packets.pop() {
+        for _ in 0..MAX_PACKETS_PER_SLICE {
             if self.client.closed() {
                 break;
             }
 
+            let world = self.world();
+            let _callbacks = if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
+                let Some(callbacks) =
+                    world.enter_packet_callbacks(Some(self.living_entity.entity.chunk_pos.load()))
+                else {
+                    self.packet_activity.park();
+                    return;
+                };
+                Some(callbacks)
+            } else {
+                None
+            };
             match self.client.as_ref() {
                 ClientPlatform::Java(client) => {
-                    if let Err(e) = client.handle_play_packet(&player_arc, &server_arc, &packet) {
-                        if e.is_kick() {
-                            if let Some(kick_reason) = e.client_kick_reason() {
-                                client.try_kick(&TextComponent::text(kick_reason));
-                            } else {
-                                client.try_kick(&TextComponent::text(format!(
-                                    "Error while handling incoming packet {e}"
-                                )));
-                            }
+                    let Some((activity, packet)) =
+                        self.packet_activity.next_packet(&self.inbound_packets)
+                    else {
+                        break;
+                    };
+                    let result = activity.clone().sync_scope(|| {
+                        client.handle_play_packet(&player_arc, &server_arc, &packet)
+                    });
+                    match result {
+                        Ok(Some(deferred)) => {
+                            // The final descendant schedules the remaining epoch budget.
+                            client.spawn_activity_task(activity, deferred);
+                            break;
                         }
-                        log_at_level!(
-                            e.severity(),
-                            "Failed to handle play packet id {} (payload {} bytes): {}",
-                            packet.id,
-                            packet.payload.len(),
-                            e
-                        );
+                        Ok(None) => {}
+                        Err(e) => {
+                            if e.is_kick() {
+                                if let Some(kick_reason) = e.client_kick_reason() {
+                                    client.try_kick(&TextComponent::text(kick_reason));
+                                } else {
+                                    client.try_kick(&TextComponent::text(format!(
+                                        "Error while handling incoming packet {e}"
+                                    )));
+                                }
+                            }
+                            log_at_level!(
+                                e.severity(),
+                                "Failed to handle play packet id {} (payload {} bytes): {}",
+                                packet.id,
+                                packet.payload.len(),
+                                e
+                            );
+                        }
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
+                    // Bedrock retains its existing scheduling; its asynchronous packet
+                    // handlers do not yet participate in the Java completion lane.
+                    let Some(packet) = self.inbound_packets.pop() else {
+                        break;
+                    };
                     let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
                         player_arc.clone(),
                         packet.id,
@@ -2695,16 +2758,14 @@ impl Player {
                     }
                 }
             }
-
-            count += 1;
-            if count >= MAX_PACKETS_PER_TICK {
-                break;
-            }
         }
     }
 
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
+        let Some(_tick_activity) = self.packet_activity.enter_non_packet() else {
+            return;
+        };
         self.process_inbound_packets();
 
         if self.is_spectator() {
@@ -4017,8 +4078,36 @@ impl Player {
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
-    #[expect(clippy::too_many_lines)]
     pub async fn teleport_world(
+        self: &Arc<Self>,
+        new_world: Arc<World>,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+    ) {
+        if let ClientPlatform::Java(client) = self.client.as_ref()
+            && self.packet_activity.is_bound()
+        {
+            let Some(activity) = self.packet_activity.enter_mutation() else {
+                return;
+            };
+            let player = self.clone();
+            client
+                .spawn_world_activity_task(activity, async move {
+                    player
+                        .teleport_world_stages(new_world, position, yaw, pitch)
+                        .await;
+                })
+                .await
+                .ok();
+        } else {
+            self.teleport_world_stages(new_world, position, yaw, pitch)
+                .await;
+        }
+    }
+
+    #[expect(clippy::too_many_lines)]
+    async fn teleport_world_stages(
         self: &Arc<Self>,
         new_world: Arc<World>,
         position: Vector3<f64>,
@@ -4029,66 +4118,95 @@ impl Player {
         if self.client.closed() {
             return;
         }
-        let current_world = self.living_entity.entity.world.load_full();
+        let current_world = self.world();
+        let source_chunk = self.get_entity().chunk_pos.load();
         if Arc::ptr_eq(&current_world, &new_world) {
-            self.request_teleport(
-                position,
-                yaw.unwrap_or_else(|| self.get_entity().yaw.load()),
-                pitch.unwrap_or_else(|| self.get_entity().pitch.load()),
-            );
-            crate::world::chunker::update_position(self);
+            current_world
+                .packet_stage(Some(source_chunk), async {
+                    self.request_teleport(
+                        position,
+                        yaw.unwrap_or_else(|| self.get_entity().yaw.load()),
+                        pitch.unwrap_or_else(|| self.get_entity().pitch.load()),
+                    );
+                    crate::world::chunker::update_position(self);
+                })
+                .await;
             return;
         }
-        let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
-        let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
-
-        let Some(server) = new_world.server.upgrade() else {
+        let Some(server) = current_world.server.upgrade() else {
             return;
         };
-
-        send_cancellable! {{
-            server;
-            PlayerChangeWorldEvent {
-                player: self.clone(),
-                previous_world: current_world.clone(),
-                new_world: new_world.clone(),
-                position,
-                yaw,
-                pitch,
-                cancelled: false,
-            };
-
-            'after: {
-                // TODO: this is duplicate code from world
-                let position = event.position;
-                let yaw = event.yaw;
-                let pitch = event.pitch;
-                let new_world = event.new_world;
-
-                if self.client.closed() {
-                    return;
-                }
-                // Plugins may redirect a dimension change to the current world.
-                if Arc::ptr_eq(&current_world, &new_world) {
+        let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
+        let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
+        let mut event = PlayerChangeWorldEvent {
+            player: self.clone(),
+            previous_world: current_world.clone(),
+            new_world,
+            position,
+            yaw,
+            pitch,
+            cancelled: false,
+        };
+        if current_world
+            .packet_stage(
+                Some(source_chunk),
+                server.plugin_manager.fire(&server, &mut event),
+            )
+            .await
+            .is_none()
+            || event.cancelled
+            || self.client.closed()
+        {
+            return;
+        }
+        let new_world = event.new_world;
+        let position = event.position;
+        let yaw = event.yaw;
+        let pitch = event.pitch;
+        if Arc::ptr_eq(&current_world, &new_world) {
+            current_world
+                .packet_stage(Some(source_chunk), async {
                     self.request_teleport(position, yaw, pitch);
                     crate::world::chunker::update_position(self);
-                    return;
-                }
-
+                })
+                .await;
+            return;
+        }
+        // Keep destination activation demand through publication and chunk send.
+        let destination_chunk = Vector2::new(
+            (position.x.floor() as i32) >> 4,
+            (position.z.floor() as i32) >> 4,
+        );
+        let _terrain = new_world.hold_packet_chunk(destination_chunk);
+        let mut demand = new_world.level.activation_demand();
+        demand.replace([destination_chunk]);
+        if !new_world
+            .prepare_packet_destination(destination_chunk, self)
+            .await
+        {
+            return;
+        }
+        let Some(Some(player)) = current_world
+            .packet_stage(Some(source_chunk), async {
                 self.set_client_loaded(false);
-                let Some(player) = current_world.remove_player(self, false).await else {
-                    return;
-                };
-               new_world.players.rcu(|current_list| {
-                    let mut new_list = (**current_list).clone();
-                    new_list.push(player.clone());
-                    new_list
-                });
-                self.unload_watched_chunks(&current_world).await;
-
-                self.change_world_chunks(&current_world.level, &new_world);
-                self.living_entity.entity.set_world(new_world.clone());
-
+                current_world.remove_player(self, false).await
+            })
+            .await
+        else {
+            return;
+        };
+        // Cleanup can wait on callbacks/reconciliation. The poll wrapper holds
+        // the execution phase, but never a source callback guard across this wait.
+        self.unload_watched_chunks(&current_world).await;
+        let committed = new_world.packet_stage(Some(destination_chunk), async {
+            self.change_world_chunks(&current_world.level, &new_world);
+            self.living_entity.entity.set_world(new_world.clone());
+            player.get_entity().set_pos(position);
+            new_world.players.rcu(|current_list| {
+                let mut new_list = (**current_list).clone();
+                new_list.push(player.clone());
+                new_list
+            });
                 if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
                     self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
                         dimension: "the_nether".to_string(),
@@ -4176,13 +4294,18 @@ impl Player {
 
                 let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
                     player: player.clone(),
-                    from_world: current_world,
-                    to_world: new_world,
+                    from_world: current_world.clone(),
+                    to_world: new_world.clone(),
                     cancelled: false,
                 };
                 server.plugin_manager.fire(&server, &mut changed_world_event).await;
-            }
-        }}
+        }).await;
+        if committed.is_none() {
+            self.kick(
+                DisconnectReason::Kicked,
+                &TextComponent::text("Transfer destination unavailable"),
+            );
+        }
     }
 
     /// `yaw` and `pitch` are in degrees.
@@ -6935,9 +7058,19 @@ impl EntityBase for Player {
                 ),
             );
         } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
-            self.spawn_task(async move {
-                player_arc.teleport_world(world, position, yaw, pitch).await;
-            });
+            if let ClientPlatform::Java(client) = self.client.as_ref()
+                && self.packet_activity.is_bound()
+            {
+                if let Some(activity) = self.packet_activity.enter_mutation() {
+                    client.spawn_activity_task(activity, async move {
+                        player_arc.teleport_world(world, position, yaw, pitch).await;
+                    });
+                }
+            } else {
+                self.spawn_task(async move {
+                    player_arc.teleport_world(world, position, yaw, pitch).await;
+                });
+            }
         }
     }
 

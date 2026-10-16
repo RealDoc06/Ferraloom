@@ -2,7 +2,6 @@ use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPl
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -16,8 +15,8 @@ use pumpkin_protocol::java::server::play::{
     SConfigurationAcknowledged, SConfirmTeleport, SContainerButtonClick,
     SContainerSlotStateChanged, SCookieResponse as SPCookieResponse, SCustomPayload,
     SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook, SEntityTagQuery, SInteract,
-    SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe,
-    SPlayPingRequest, SPlayPong, SPlayResourcePack, SPlayerAbilities, SPlayerAction,
+    SJigsawGenerate, SKeepAlive, SLockDifficulty, SMoveVehicle, SPaddleBoat, SPickItemFromBlock,
+    SPlaceRecipe, SPlayPingRequest, SPlayPong, SPlayResourcePack, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
     SSeenAdvancement, SSelectTrade, SSetBeacon, SSetCommandBlock, SSetCommandMinecart,
@@ -42,6 +41,7 @@ use tokio::{
     io::{BufReader, BufWriter},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     sync::oneshot,
+    time::Instant,
 };
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -67,6 +67,7 @@ use arc_swap::ArcSwap;
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
+use crate::entity::player::packet_activity::{ActivityLease, AdmissionError};
 use crate::net::{
     ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
     decrement_pending_bytes,
@@ -75,6 +76,34 @@ use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
+
+/// An owned continuation; the FIFO caller transfers its activity lease to the client task.
+pub(crate) type DeferredPacket = std::pin::Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// A timer may run many times while a single frame is incomplete. Keep the same
+/// decode future pinned: the upstream decoder stores partial framing in it.
+async fn read_with_keep_alive<T, F, K, KF>(
+    read: F,
+    interval: &mut tokio::time::Interval,
+    mut keep_alive: K,
+) -> Option<T>
+where
+    F: Future<Output = Option<T>>,
+    K: FnMut() -> KF,
+    KF: Future<Output = bool>,
+{
+    tokio::pin!(read);
+    loop {
+        tokio::select! {
+            packet = &mut read => return packet,
+            _ = interval.tick() => {
+                if !keep_alive().await {
+                    return None;
+                }
+            }
+        }
+    }
+}
 
 pub struct JavaClient {
     pub id: u64,
@@ -202,7 +231,13 @@ impl JavaClient {
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
-        self.player.store(Arc::new(Some(player)));
+        if let Some(server) = player.world().server.upgrade() {
+            player.packet_activity.bind(&player, &server.packet_runner);
+        }
+        self.player.store(Arc::new(Some(player.clone())));
+        if self.is_closed() {
+            player.packet_activity.seal();
+        }
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
@@ -224,87 +259,146 @@ impl JavaClient {
         // Skip the immediate first tick so we don't send a keep-alive the exact millisecond they join
         keep_alive_interval.tick().await;
 
-        loop {
-            tokio::select! {
-                // KEEP-ALIVE TIMER
-                _ = keep_alive_interval.tick() => {
-                    // Check if the client has timed out on keep-alive responses or no packet activity
-                    let has_timed_out = {
-                        let pending = self
-                            .pending_keep_alives
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        pending.iter().any(|(_, send_time)| send_time.elapsed() > timeout_duration)
-                    } || (self.wait_for_keep_alive.load(Ordering::Relaxed) && self.last_keep_alive_time.load().elapsed() > timeout_duration)
-                      || (self.last_packet_time.load().elapsed() > timeout_duration);
-
-                    if has_timed_out {
-                        self.kick(pumpkin_macros::translate_cross!(translation::java::DISCONNECT_TIMEOUT, translation::bedrock::DISCONNECT_TIMEOUT)).await;
-                        break;
-                    }
-
-                    let keep_alive_id = i64::from(
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as i32,
-                    );
-
-                    self.keep_alive_id.store(keep_alive_id);
-                    self.wait_for_keep_alive.store(true, Ordering::Relaxed);
-                    self.last_keep_alive_time.store(Instant::now());
-                    {
-                        let mut pending = self
-                            .pending_keep_alives
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        pending.push((keep_alive_id, Instant::now()));
-                        if pending.len() > 16 {
-                            pending.remove(0);
-                        }
-                    }
-                    let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
-                    self.enqueue_client_packet(&packet).await;
-                }
-
-                () = self.close_token.cancelled() => {
-                    break;
-                }
-
-                // INCOMING PACKETS
-                packet_opt = self.get_packet_with_reader(&mut network_reader) => {
-                    let Some(packet) = packet_opt else {
-                        break;
-                    };
-                    self.last_packet_time.store(Instant::now());
-
-                    if !self.packet_limiter.check_packet() {
-                        warn!(
-                            "Client {} ({}) exceeded packet rate limit (rate: {}/s)",
-                            self.id,
-                            self.gameprofile.name,
-                            self.packet_limiter.max_rate()
-                        );
-                        self.kick(TextComponent::text(
-                            server
-                                .advanced_config
-                                .networking
-                                .java
-                                .packet_limiter
-                                .kick_message
-                                .clone(),
-                        ))
+        while let Some(packet) = read_with_keep_alive(
+            self.get_packet_with_reader(&mut network_reader),
+            &mut keep_alive_interval,
+            || self.send_keep_alive_or_timeout(timeout_duration),
+        )
+        .await
+        {
+            if !self.packet_limiter.check_packet() {
+                warn!(
+                    "Client {} ({}) exceeded packet rate limit (rate: {}/s)",
+                    self.id,
+                    self.gameprofile.name,
+                    self.packet_limiter.max_rate()
+                );
+                self.kick(TextComponent::text(
+                    server
+                        .advanced_config
+                        .networking
+                        .java
+                        .packet_limiter
+                        .kick_message
+                        .clone(),
+                ))
+                .await;
+                break;
+            }
+            match self.receive_play_packet(player, packet) {
+                Ok(()) => {}
+                Err(AdmissionError::Closed) => break,
+                Err(AdmissionError::Full) => {
+                    self.kick(TextComponent::text("Too many pending packets"))
                         .await;
-                        break;
-                    }
-
-                    player.inbound_packets.push(packet);
+                    break;
                 }
             }
         }
     }
 
+    /// Admit the original wire packet before interpreting transport liveness.
+    /// The event stays in the ordered queue; no plugin callback runs here. Its
+    /// later cancellation/rewrite cannot undo an acknowledged transport reply.
+    pub(crate) fn receive_play_packet(
+        &self,
+        player: &Player,
+        packet: RawPacket,
+    ) -> Result<(), AdmissionError> {
+        let _activity = player
+            .packet_activity
+            .enter_non_packet()
+            .ok_or(AdmissionError::Closed)?;
+        if self.is_closed() {
+            return Err(AdmissionError::Closed);
+        }
+        let keep_alive = if packet.id == SKeepAlive::to_id(CURRENT_MC_VERSION) {
+            let mut payload = &packet.payload[..];
+            SKeepAlive::read(&mut payload, &CURRENT_MC_VERSION)
+                .ok()
+                .filter(|_| payload.is_empty())
+        } else {
+            None
+        };
+        // Keep the same packet-count/byte limits even for transport events. A
+        // rejected admission must not update liveness or the player's latency.
+        player
+            .packet_activity
+            .enqueue(&player.inbound_packets, packet)?;
+        player.packet_activity.schedule();
+        self.last_packet_time.store(Instant::now());
+        if let Some(keep_alive) = keep_alive {
+            let mut pending = self
+                .pending_keep_alives
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Only a challenge still outstanding on THIS connection counts.
+            // In particular there is no last-ID fallback for duplicates/replays.
+            if let Some(index) = pending
+                .iter()
+                .position(|(id, _)| *id == keep_alive.keep_alive_id)
+            {
+                let (_, sent) = pending.swap_remove(index);
+                let ping = sent.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
+                let smoothed =
+                    (u64::from(player.ping.load(Ordering::Relaxed)) * 3 + u64::from(ping)) / 4;
+                player.ping.store(smoothed as u32, Ordering::Relaxed);
+                self.wait_for_keep_alive
+                    .store(!pending.is_empty(), Ordering::Relaxed);
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn send_keep_alive_or_timeout(&self, timeout: std::time::Duration) -> bool {
+        if self.is_closed() {
+            return false;
+        }
+        let has_timed_out = {
+            let pending = self
+                .pending_keep_alives
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            pending.iter().any(|(_, sent)| sent.elapsed() > timeout)
+        } || self.last_packet_time.load().elapsed() > timeout;
+        if has_timed_out {
+            self.kick(pumpkin_macros::translate_cross!(
+                translation::java::DISCONNECT_TIMEOUT,
+                translation::bedrock::DISCONNECT_TIMEOUT
+            ))
+            .await;
+            return false;
+        }
+        let id = {
+            let mut pending = self
+                .pending_keep_alives
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Unique per connection until integer wrap, even if multiple timer
+            // ticks happen in one wall-clock millisecond or the clock goes back.
+            if pending.len() >= 16 {
+                return true;
+            }
+            let id = self.keep_alive_id.load().wrapping_add(1);
+            let now = Instant::now();
+            self.keep_alive_id.store(id);
+            self.wait_for_keep_alive.store(true, Ordering::Relaxed);
+            self.last_keep_alive_time.store(now);
+            pending.push((id, now));
+            id
+        };
+        self.enqueue_client_packet(&pumpkin_protocol::java::client::play::CKeepAlive::new(id))
+            .await;
+        !self.is_closed()
+    }
+
     pub async fn await_tasks(&self) {
+        // Only the outer lifecycle may drain. An active callback can call close
+        // without self-joining; descendants can still register before idle.
+        self.close();
+        if let Some(player) = self.player.load_full().as_ref() {
+            player.packet_activity.drain().await;
+        }
         self.tasks.close();
         self.tasks.wait().await;
     }
@@ -319,12 +413,48 @@ impl JavaClient {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
+        let player = self.player.load_full();
+        // Register under a drain-only admission lease so a close racing the
+        // token check cannot observe an empty tracker before this spawn.
+        let _registration = if let Some(player) = player.as_ref() {
+            Some(player.packet_activity.enter_non_packet()?)
+        } else {
+            None
+        };
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
+    }
+
+    /// A lease proves this operation was admitted before close (or by an owned
+    /// ancestor). Do not reject it merely because its socket has since closed.
+    pub(crate) fn spawn_activity_task<F>(
+        &self,
+        activity: ActivityLease,
+        work: F,
+    ) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        activity.submit(work).spawn_on(&self.tasks, &self.rt_handle)
+    }
+
+    /// Transfer/respawn select explicit guarded source and destination stages.
+    pub(crate) fn spawn_world_activity_task<F>(
+        &self,
+        activity: ActivityLease,
+        work: F,
+    ) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        activity
+            .submit_world_stages(work)
+            .spawn_on(&self.tasks, &self.rt_handle)
     }
 
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
@@ -494,9 +624,9 @@ impl JavaClient {
         self.close_token.cancelled().await;
     }
 
-    pub async fn get_packet_with_reader(
+    pub async fn get_packet_with_reader<R: tokio::io::AsyncRead + Unpin>(
         &self,
-        network_reader: &mut TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
+        network_reader: &mut TCPNetworkDecoder<R>,
     ) -> Option<RawPacket> {
         tokio::select! {
             () = self.await_close_interrupt() => {
@@ -543,6 +673,7 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
+        self.seal_activity();
         if let Some(data) = self
             .serialize_disconnect(reason)
             .and_then(|data| self.translate_outgoing(data))
@@ -573,6 +704,7 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        self.seal_activity();
         if send_packet && let Some(data) = self.serialize_disconnect(reason) {
             // Stalled peer: never flushes -> Close anyway.
             let _ = tokio::time::timeout(
@@ -701,6 +833,12 @@ impl JavaClient {
         });
     }
 
+    fn seal_activity(&self) {
+        if let Some(player) = self.player.load_full().as_ref() {
+            player.packet_activity.seal();
+        }
+    }
+
     /// Closes the connection to the client.
     ///
     /// This function marks the connection as closed using an atomic flag. It's generally preferable
@@ -712,6 +850,7 @@ impl JavaClient {
     /// This function does not attempt to send any disconnect packets to the client.
     /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
+        self.seal_activity();
         self.close_token.cancel();
     }
 
@@ -720,12 +859,12 @@ impl JavaClient {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn handle_play_packet(
+    pub(crate) fn handle_play_packet(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
         packet: &RawPacket,
-    ) -> Result<(), Box<dyn PumpkinError>> {
+    ) -> Result<Option<DeferredPacket>, Box<dyn PumpkinError>> {
         // The multiversion plugin has converted older clients' packets to 26.3 by now.
         let version = CURRENT_MC_VERSION;
 
@@ -736,7 +875,14 @@ impl JavaClient {
         );
         server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled {
-            return Ok(());
+            return Ok(None);
+        }
+        if packet.id == SKeepAlive::to_id(version) {
+            // Liveness was handled at wire admission. Keep its event ordered,
+            // but never replay it or promote a rewritten transport event into
+            // gameplay. Preserve normal decode errors for malformed replies.
+            SKeepAlive::read(&mut &packet.payload[..], &version)?;
+            return Ok(None);
         }
 
         let mut payload = &event.payload[..];
@@ -763,16 +909,18 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                server.spawn_task(async move {
+                return Ok(Some(Box::pin(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         let packet = SChatCommand { command: &cmd };
                         client
                             .handle_chat_command(&player_c, &server_c, &packet)
                             .await;
                     }
-                });
+                })));
             }
             id if id == SChatCommandSigned::to_id(version) => {
+                // Existing unsigned fallback/signature handling remains a separate
+                // security gap. Serial completion does not validate this envelope.
                 let mut signed_payload = payload;
                 let cmd =
                     if let Ok(signed) = SChatCommandSigned::read(&mut signed_payload, &version) {
@@ -785,14 +933,14 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                server.spawn_task(async move {
+                return Ok(Some(Box::pin(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         let packet = SChatCommand { command: &cmd };
                         client
                             .handle_chat_command(&player_c, &server_c, &packet)
                             .await;
                     }
-                });
+                })));
             }
             id if id == SChatMessage::to_id(version) => {
                 let packet = SChatMessage::read(&mut payload, &version)?;
@@ -806,7 +954,7 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                server.spawn_task(async move {
+                return Ok(Some(Box::pin(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         let packet = SChatMessage {
                             message: &msg,
@@ -821,7 +969,7 @@ impl JavaClient {
                             .handle_chat_message(&server_c, &player_c, packet)
                             .await;
                     }
-                });
+                })));
             }
             id if id == SClientInformationPlay::to_id(version) => {
                 self.handle_client_information(
@@ -831,7 +979,8 @@ impl JavaClient {
                 );
             }
             id if id == SClientCommand::to_id(version) => {
-                self.handle_client_status(player, &SClientCommand::read(&mut payload, &version)?);
+                return Ok(self
+                    .handle_client_status(player, &SClientCommand::read(&mut payload, &version)?));
             }
             id if id == SPlayerInput::to_id(version) => {
                 self.handle_player_input(
@@ -865,14 +1014,9 @@ impl JavaClient {
                     server,
                 );
             }
-            id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
-                self.handle_keep_alive(
-                    player,
-                    &pumpkin_protocol::java::server::play::SKeepAlive::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                );
+            id if id == SKeepAlive::to_id(version) => {
+                // A gameplay event rewritten to keepalive cannot authenticate a
+                // transport reply. Only original wire packets reach that path.
             }
             id if id == SClientTickEnd::to_id(version) => {
                 self.handle_client_tick_end(player);
@@ -1043,13 +1187,13 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                server.spawn_task(async move {
+                return Ok(Some(Box::pin(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         client
                             .handle_chat_session_update(&player_c, &server_c, session)
                             .await;
                     }
-                });
+                })));
             }
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
@@ -1212,6 +1356,129 @@ impl JavaClient {
                 warn!("Failed to handle player packet id {}", event.packet_id);
             }
         }
-        Ok(())
+        Ok(None)
+    }
+}
+
+// UNRUN in the isolated implementation worktree. Root owns compilation/execution.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod frame_timer_tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Use the production encoder, including its persistent cipher state for
+    /// both frames. No synthetic parser or encryption implementation is tested.
+    async fn frames(compressed: bool, encrypted: bool, data: &[u8]) -> (Vec<u8>, usize) {
+        let (writer, mut reader) = tokio::io::duplex(8192);
+        let mut encoder = TCPNetworkEncoder::new(writer);
+        if compressed {
+            encoder.set_compression((0, 6));
+        }
+        if encrypted {
+            encoder.set_encryption(&[7; 16]).unwrap();
+        }
+        encoder
+            .write_packet(Bytes::copy_from_slice(data))
+            .await
+            .unwrap();
+        encoder.flush().await.unwrap();
+        // Duplex reads the bytes already buffered, without waiting for EOF.
+        let mut first = vec![0; 8192];
+        let length = reader.read(&mut first).await.unwrap();
+        first.truncate(length);
+        encoder
+            .write_packet(Bytes::from_static(&[5, 11, 12]))
+            .await
+            .unwrap();
+        encoder.flush().await.unwrap();
+        drop(encoder);
+        reader.read_to_end(&mut first).await.unwrap();
+        (first, length)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn actual_decoder_retains_fragmented_frames_across_repeated_keep_alive_ticks() {
+        // Multi-byte frame length and ID in plain mode, compression header and
+        // stream boundaries in compressed mode, and persistent CFB8 state too.
+        let mut data = vec![0xac, 0x02]; // packet ID 300
+        data.extend((0..384).map(|value| (value % 251) as u8));
+        for (compressed, encrypted) in [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let (wire, first_len) = frames(compressed, encrypted, &data).await;
+            // All plain length/ID/payload boundaries; representative compressed
+            // headers/body boundaries. Zlib trailer validation is a separate
+            // upstream decoder concern, not this timer-cancellation test.
+            let splits: Vec<_> = if compressed {
+                vec![1, 2, 3, first_len / 2]
+            } else {
+                (1..first_len).collect()
+            };
+            for split in splits {
+                let (mut writer, reader) = tokio::io::duplex(8192);
+                let mut decoder = TCPNetworkDecoder::new(reader);
+                if compressed {
+                    decoder.set_compression(0);
+                }
+                if encrypted {
+                    decoder.set_encryption(&[7; 16]).unwrap();
+                }
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                interval.tick().await;
+                let timer_calls = AtomicUsize::new(0);
+                writer.write_all(&wire[..split]).await.unwrap();
+                {
+                    let read = async { Some(decoder.get_raw_packet().await.unwrap()) };
+                    let mut pending =
+                        Box::pin(read_with_keep_alive(read, &mut interval, || async {
+                            timer_calls.fetch_add(1, Ordering::Relaxed);
+                            true
+                        }));
+                    // Poll first so the actual decoder consumes the fragment.
+                    assert!(futures::poll!(&mut pending).is_pending());
+                    for tick in 1..=2 {
+                        tokio::time::advance(Duration::from_secs(1)).await;
+                        // advance changes time; poll the production reader until
+                        // its timer branch actually runs, without scheduler races.
+                        tokio::time::timeout(
+                            Duration::from_secs(1),
+                            std::future::poll_fn(|cx| {
+                                assert!(pending.as_mut().poll(cx).is_pending());
+                                if timer_calls.load(Ordering::Relaxed) == tick {
+                                    std::task::Poll::Ready(())
+                                } else {
+                                    std::task::Poll::Pending
+                                }
+                            }),
+                        )
+                        .await
+                        .unwrap();
+                    }
+                    writer.write_all(&wire[split..]).await.unwrap();
+                    let packet = tokio::time::timeout(Duration::from_secs(1), pending)
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(
+                        packet.id, 300,
+                        "split={split}, compressed={compressed}, encrypted={encrypted}"
+                    );
+                    assert_eq!(packet.payload.as_ref(), &data[2..]);
+                }
+                let second = tokio::time::timeout(Duration::from_secs(1), decoder.get_raw_packet())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(second.id, 5);
+                assert_eq!(second.payload.as_ref(), &[11, 12]);
+                drop(writer);
+                assert!(matches!(
+                    decoder.get_raw_packet().await,
+                    Err(PacketDecodeError::ConnectionClosed)
+                ));
+            }
+        }
     }
 }
