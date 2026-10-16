@@ -1,6 +1,10 @@
 //! Preservation gates before a modeled inventory consumes an item.
 //! This does not implement unsupported component gameplay or network codecs.
 
+use crate::{
+    data_component::DataComponent,
+    data_component_impl::{BundleContentsImpl, ContainerImpl},
+};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,16 +40,38 @@ pub fn validate_runtime_item_stack(
     if stack.is_empty() && stack.patch.is_empty() {
         return Ok(());
     }
-    // A compound writer would overwrite duplicate patch keys before the NBT gate
-    // could see them. Reject that ambiguity, including add/remove collisions.
-    let mut seen = std::collections::HashSet::new();
-    for (id, value) in &stack.patch {
-        if !seen.insert(*id)
-            || value
-                .as_ref()
-                .is_some_and(|value| value.get_self_enum() != *id)
-        {
-            return Err(ItemStackAdmissionError::Lossy);
+    // Check every actual typed stack before any writer can overwrite duplicate
+    // patch keys. Only these components hold ItemStacks; arbitrary authored NBT
+    // (including custom_data) must not be interpreted as another inventory.
+    let mut pending_stacks = vec![stack];
+    while let Some(current) = pending_stacks.pop() {
+        let mut seen = std::collections::HashSet::new();
+        for (id, value) in &current.patch {
+            if !seen.insert(*id)
+                || value
+                    .as_ref()
+                    .is_some_and(|value| value.get_self_enum() != *id)
+            {
+                return Err(ItemStackAdmissionError::Lossy);
+            }
+            let Some(value) = value else { continue };
+            match id {
+                DataComponent::BundleContents => {
+                    let bundle = value
+                        .as_any()
+                        .downcast_ref::<BundleContentsImpl>()
+                        .ok_or(ItemStackAdmissionError::Lossy)?;
+                    pending_stacks.extend(&bundle.items);
+                }
+                DataComponent::Container => {
+                    let container = value
+                        .as_any()
+                        .downcast_ref::<ContainerImpl>()
+                        .ok_or(ItemStackAdmissionError::Lossy)?;
+                    pending_stacks.extend(container.items.iter().map(|(_, nested)| nested));
+                }
+                _ => {}
+            }
         }
     }
     let mut written = NbtCompound::new();
@@ -375,6 +401,96 @@ mod tests {
         assert_eq!(
             validate_runtime_item_stack(&stack),
             Err(ItemStackAdmissionError::Lossy)
+        );
+    }
+
+    #[test]
+    fn nested_runtime_type_checks_preserve_transients_removals_and_opaque_data() {
+        use crate::data_component_impl::CreativeSlotLockImpl;
+
+        fn nested(stack: ItemStack) -> ItemStack {
+            let bundle = ItemStack::new_with_component(
+                1,
+                &Item::BUNDLE,
+                vec![(
+                    DataComponent::BundleContents,
+                    Some(BundleContentsImpl { items: vec![stack] }.to_dyn()),
+                )],
+            );
+            ItemStack::new_with_component(
+                1,
+                &Item::SHULKER_BOX,
+                vec![(
+                    DataComponent::Container,
+                    Some(
+                        ContainerImpl {
+                            items: vec![(0, bundle)],
+                        }
+                        .to_dyn(),
+                    ),
+                )],
+            )
+        }
+
+        // Wire decoding chooses matching types; this protects runtime producers
+        // too, without claiming a wrong-type wire exploit.
+        let wrong_type = ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![(
+                DataComponent::CustomName,
+                Some(CustomDataImpl::new(NbtCompound::new()).to_dyn()),
+            )],
+        );
+        assert_eq!(
+            validate_runtime_item_stack(&nested(wrong_type)),
+            Err(ItemStackAdmissionError::Lossy)
+        );
+
+        let mut aliases = NbtCompound::new();
+        aliases.put_string("custom_name", "A");
+        aliases.put_string("minecraft:custom_name", "B");
+        let mut authored_item = NbtCompound::new();
+        authored_item.put_string("id", "minecraft:stick");
+        authored_item.put_compound("components", aliases);
+        let mut authored = NbtCompound::new();
+        authored.put_list(
+            "minecraft:bundle_contents",
+            vec![NbtTag::Compound(authored_item)],
+        );
+        let healthy = ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![
+                (
+                    DataComponent::CustomData,
+                    Some(CustomDataImpl::new(authored.clone()).to_dyn()),
+                ),
+                (DataComponent::TooltipDisplay, None),
+                (
+                    DataComponent::CreativeSlotLock,
+                    Some(CreativeSlotLockImpl.to_dyn()),
+                ),
+            ],
+        );
+        assert_eq!(
+            validate_runtime_item_stack(&nested(healthy.clone())),
+            Ok(())
+        );
+        assert_eq!(
+            healthy.get_data_component::<CustomDataImpl>().unwrap().data,
+            authored
+        );
+        assert!(
+            healthy
+                .get_data_component::<CreativeSlotLockImpl>()
+                .is_some()
+        );
+        assert!(
+            healthy
+                .patch
+                .iter()
+                .any(|(id, data)| *id == DataComponent::TooltipDisplay && data.is_none())
         );
     }
 }

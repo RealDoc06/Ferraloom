@@ -559,6 +559,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn give_rejects_nested_component_alias_collisions_before_inventory_publication() {
+        use pumpkin_data::data_component_impl::{
+            BundleContentsImpl, ContainerImpl, CustomDataImpl, CustomNameImpl,
+        };
+        let mut fixture = Fixture::new().await;
+        crate::command::commands::give::register(
+            &mut fixture.world.dispatcher,
+            &PermissionRegistry::default(),
+        );
+        let inventory = fixture.player.inventory();
+        inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+        let before: Vec<_> = (0..inventory.size())
+            .map(|slot| inventory.get_stack(slot).clone())
+            .collect();
+        let entities_before = fixture.player.world().entities.load_full();
+        for command in [
+            "give @s bundle[bundle_contents=[{id:stick,components:{custom_name:'A','minecraft:custom_name':'B'}}]]",
+            "give @s shulker_box[container=[{slot:0,item:{id:stick,components:{custom_name:'A','minecraft:custom_name':'B'}}}]]",
+            "give @s bundle[bundle_contents=[{id:shulker_box,components:{container:[{slot:0,item:{id:stick,components:{custom_name:'A','minecraft:custom_name':'B'}}}]}}]]",
+        ] {
+            let error = fixture
+                .execute(command)
+                .expect_err("nested duplicate patches must refuse");
+            assert!(error.is(&ERROR_UNPERSISTABLE_ITEM), "{command}");
+            for (slot, stack) in before.iter().enumerate() {
+                assert!(
+                    inventory.get_stack(slot).are_equal(stack),
+                    "{command}: slot {slot}"
+                );
+            }
+            let entities = fixture.player.world().entities.load_full();
+            assert_eq!(entities.len(), entities_before.len());
+            assert!(
+                entities
+                    .iter()
+                    .zip(entities_before.iter())
+                    .all(|(a, b)| Arc::ptr_eq(a, b))
+            );
+        }
+        for (slot, command) in [
+            (
+                1,
+                "give @s bundle[bundle_contents=[{id:stick,components:{custom_name:'A','!tooltip_display':{},custom_data:{components:{custom_name:'opaque A','minecraft:custom_name':'opaque B'}}}}]]",
+            ),
+            (
+                2,
+                "give @s shulker_box[container=[{slot:0,item:{id:stick,components:{'minecraft:custom_name':'A','!tooltip_display':{},custom_data:{components:{custom_name:'opaque A','minecraft:custom_name':'opaque B'}}}}}]]",
+            ),
+        ] {
+            assert_eq!(fixture.execute(command).unwrap(), 1);
+            let stack = inventory.get_stack(slot);
+            let child = if slot == 1 {
+                &stack
+                    .get_data_component::<BundleContentsImpl>()
+                    .unwrap()
+                    .items[0]
+            } else {
+                &stack.get_data_component::<ContainerImpl>().unwrap().items[0].1
+            };
+            assert_eq!(
+                child
+                    .get_data_component::<CustomNameImpl>()
+                    .unwrap()
+                    .name
+                    .get_text(),
+                "A"
+            );
+            assert!(
+                !child.has_data_component(
+                    pumpkin_data::data_component::DataComponent::TooltipDisplay
+                )
+            );
+            let opaque = child
+                .get_data_component::<CustomDataImpl>()
+                .unwrap()
+                .data
+                .get_compound("components")
+                .unwrap();
+            assert_eq!(opaque.get_string("custom_name"), Some("opaque A"));
+            assert_eq!(opaque.get_string("minecraft:custom_name"), Some("opaque B"));
+        }
+    }
+
+    #[tokio::test]
     async fn replace_player_items_sends_menu_slots_and_live_revisions() {
         let mut fixture = Fixture::new().await;
         let mut state = initial_state(&fixture.packets().await, 0);
