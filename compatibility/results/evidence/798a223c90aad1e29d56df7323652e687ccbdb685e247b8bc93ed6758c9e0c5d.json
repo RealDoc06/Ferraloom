@@ -1,0 +1,626 @@
+{
+  "schema_version": 1,
+  "kind": "container-metadata",
+  "created_at": "2026-10-16T04:08:37.006933+00:00",
+  "target_version": "26.3",
+  "protocol": 777,
+  "data_version": 5023,
+  "fixture": "/home/doc/code/Ferraloom/.cache/runs/container-metadata-5ukdopjf",
+  "result": "failed",
+  "servers": {
+    "vanilla": [
+      {
+        "id": "container_metadata.barrel_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_double",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_double",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      }
+    ],
+    "rust": [
+      {
+        "id": "container_metadata.barrel_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.barrel_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_title_recursive",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_mainhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_offhand",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_creative",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_spectator",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_pending_loot",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_deposit",
+        "features": [
+          "network.inventory_stream"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_restart",
+        "features": [
+          "persistence.block_entities"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.chest_double",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      },
+      {
+        "id": "container_metadata.trapped_chest_double",
+        "features": [
+          "blocks.containers"
+        ],
+        "result": "failed",
+        "error": "Case was not reached",
+        "runtime_errors": [
+          "AssertionError: Commit harness changes before running paired acceptance"
+        ]
+      }
+    ]
+  },
+  "processes": {},
+  "failed": [
+    "harness.global"
+  ],
+  "deferred": [
+    {
+      "id": "container_metadata.unsupported_loaded_predicate",
+      "result": "unverified",
+      "reason": "Needs a valid Java-created world copied into Rust, semantic readback, and matching-key interaction. Rust live edits intentionally refuse unsupported predicates; loaded matching keys currently deny, a known compatibility gap."
+    }
+  ],
+  "scope": "26 focused paired 26.3/protocol-777 container metadata observations.\n\nFresh sequential loopback servers, actual menus/locks/SWAP, and clean restart.\nLiteral/basic-style titles and exact plain custom-name predicates only. Base\ncustom_data persistence is opaque metadata evidence, never component gameplay.\nUnsupported loaded predicates and other rich titles remain explicitly unverified.\nNo servers run without --accept-eula and an already cached official reference.\n",
+  "primary_contracts": {
+    "inner_jar_sha256": "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6",
+    "contracts": [
+      "DataComponents lambda$static$6/$9: ComponentSerialization.STREAM_CODEC; IDs 6/9",
+      "DataComponents.CUSTOM_DATA: persistent CustomData.CODEC; BlockEntity components: DataComponentMap.CODEC",
+      "ChestBlock.getBlockType: RIGHT=FIRST; getConnectedDirection: RIGHT counterclockwise / LEFT clockwise",
+      "ClientboundSoundPacket + SoundEvent.STREAM_CODEC; sound=119; block.chest.locked registry ID=348",
+      "DedicatedServerProperties: command-spam-threshold-seconds/chat-spam-threshold-seconds; defaults=10",
+      "ServerboundChatPacket.STREAM_CODEC + LastSeenMessages.Update: offset, fixed20BitSet, checksum byte",
+      "ServerboundPlayerActionPacket: SWAP_ITEM_WITH_OFFHAND ordinal=7; packet ID=41"
+    ]
+  },
+  "environment": {
+    "host": "devbox",
+    "platform": "linux",
+    "auth": "offline isolated 127.0.0.1",
+    "workers": 2,
+    "seed": "12345678"
+  },
+  "source_state": {
+    "commit": "12de2299e06acd406c05eb7c540dea964bf8910c",
+    "dirty": true
+  },
+  "error": "AssertionError: Commit harness changes before running paired acceptance",
+  "finished": "2026-10-16T04:08:37.017424+00:00",
+  "duration_seconds": 0.01
+}
