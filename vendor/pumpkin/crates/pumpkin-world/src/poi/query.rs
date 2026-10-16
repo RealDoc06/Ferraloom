@@ -18,7 +18,7 @@ pub enum PoiQueryError {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct PoiArea {
+pub struct PoiArea {
     min_x: i32,
     max_x: i32,
     min_z: i32,
@@ -26,7 +26,7 @@ pub(crate) struct PoiArea {
 }
 
 impl PoiArea {
-    pub(crate) fn new(center: BlockPos, radius: i32) -> Result<Self, PoiQueryError> {
+    pub fn new(center: BlockPos, radius: i32) -> Result<Self, PoiQueryError> {
         if !(0..=256).contains(&radius) {
             return Err(PoiQueryError::InvalidRadius);
         }
@@ -47,7 +47,7 @@ impl PoiArea {
         })
     }
 
-    pub(crate) fn chunks(self) -> impl Iterator<Item = ChunkPos> {
+    pub fn chunks(self) -> impl Iterator<Item = ChunkPos> {
         (self.min_x >> 4..=self.max_x >> 4).flat_map(move |x| {
             (self.min_z >> 4..=self.max_z >> 4).map(move |z| ChunkPos::new(x, z))
         })
@@ -58,14 +58,14 @@ impl PoiArea {
     }
 }
 
-pub(crate) enum AreaCapture {
+pub enum AreaCapture {
     Ready(Vec<PoiEntry>),
     NeedsPreparation(Vec<SyncChunk>),
 }
 
 impl PoiStorage {
     /// Disk phase, before any publication or terrain guard is acquired.
-    pub(crate) fn preload_area(&mut self, area: PoiArea) -> Result<(), PoiQueryError> {
+    pub fn preload_area(&mut self, area: PoiArea) -> Result<(), PoiQueryError> {
         for x in area.min_x >> 9..=area.max_x >> 9 {
             for z in area.min_z >> 9..=area.max_z >> 9 {
                 self.get_or_load_region(x, z)
@@ -97,7 +97,7 @@ impl PoiStorage {
 }
 
 impl PoiRuntime {
-    pub(crate) fn snapshot(
+    pub fn snapshot(
         self: &Arc<Self>,
         area: PoiArea,
     ) -> Result<Vec<PoiEntry>, PoiQueryError> {
@@ -121,7 +121,7 @@ impl PoiRuntime {
         }
     }
 
-    pub(crate) fn capture_area(
+    pub fn capture_area(
         self: &Arc<Self>,
         area: PoiArea,
     ) -> Result<AreaCapture, PoiQueryError> {

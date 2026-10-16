@@ -10,13 +10,13 @@ use pumpkin_world::poi::{PoiEntry, PoiQueryError};
 use super::{World, villager_poi::JobSiteOwner};
 use crate::entity::EntityBase;
 
-pub(crate) enum JobSiteClaim {
+pub enum JobSiteClaim {
     Unavailable,
     Rejected,
     Claimed,
 }
 
-pub(crate) fn distance_squared(origin: BlockPos, position: BlockPos) -> i128 {
+pub fn distance_squared(origin: BlockPos, position: BlockPos) -> i128 {
     let delta = |a: i32, b: i32| i128::from(a) - i128::from(b);
     delta(origin.0.x, position.0.x).pow(2)
         + delta(origin.0.y, position.0.y).pow(2)
