@@ -38,7 +38,7 @@ python3 tools/check_block_data.py --accept-eula --java /path/to/java25/bin/java 
 
 The main suite writes `compatibility/results/latest.json` and fails when any selected scenario fails. Auxiliary checks write separate reports under `.cache/`. The restart and world-interchange checks include unflushed blocks, a mob's UUID and health, a frozen clock and game rule, scoreboard state, and namespaced command storage. Separate cases exercise recursive data merging, redstone removal, chunk activation during freeze, and scheduled fluid ticks beyond entity-ticking range. The client also decodes the exact release's advertised command tree; syntax presence does not establish working commands. `--record` preserves failures in the report while allowing a development recording run to exit successfully. Neither mode declares full compatibility. Raw logs and test worlds stay in `.cache/runs/`.
 
-The [latest run](compatibility/results/latest.json) passed 96 selected main cases on both servers and both world transfers, but missed four gold-ore blocks in the terrain sample and failed command-tree comparison. A separate [34-case block-data check](compatibility/results/block-data.json) passed on both servers. These are selected observations; full vanilla compatibility remains unfinished.
+The retained [main-suite run](compatibility/results/latest.json) passed 96 selected cases on both servers and both world transfers, but missed four gold-ore blocks in the terrain sample and failed command-tree comparison. A separate [34-case block-data check](compatibility/results/block-data.json) passed on both servers. Newer targeted runs passed 26 container-metadata cases and five chat-throttle cases on both servers, but player interchange exposed an incompatible POI coordinate format and an invalid zero-seed test precondition. Fixes need fresh executable validation. The [compatibility contract](docs/compatibility.md) links those immutable outcomes. No complete feature family is verified.
 
 ```sh
 python3 tools/oracle.py inventory --java /path/to/java25/bin/java
@@ -63,6 +63,7 @@ cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-protoco
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib --target-dir target -- --test-threads=2
 cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --manifest-path vendor/pumpkin/Cargo.toml --locked --workspace --all-targets --target-dir target -- -D warnings
 npm ci
 npm run test:protocol
 npm run check:protocol
@@ -71,4 +72,4 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 
 Keep `Cargo.lock`: the pinned RSA prerelease requires the compatible `pkcs1` prerelease recorded there. Dependency changes must pass a build and the reference suite. Debug builds are optimized lightly for development; use release builds for performance measurements. Worker counts alone do not establish a speedup.
 
-GPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for engine attribution and separate upstream asset notices. Official server downloads, worlds, and decompiled artifacts are excluded from Git.
+GPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for engine attribution and separate upstream asset notices. Official server downloads, worlds, and full disassembly dumps are excluded from Git. Small, attributed bytecode excerpts used as test witnesses are retained with their provenance.

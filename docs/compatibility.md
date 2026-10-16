@@ -4,7 +4,24 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest runs used clean source and harness commit
+The most recent targeted runs used source and harness commit
+`88ddcc0724b1b5a290b76d67340690515cda0407`, with executable SHA-256
+`6273ad0e2f0cf264051756480d7a96d5da155879632a3c0651bc70a0c95a7ad9`.
+The [container-metadata report](../compatibility/results/evidence/1dd72736a7e38a7ebdfb32eef0372222a11b681bb50fa952c914b4772448bc7e.json)
+records 26 paired passes; the
+[chat-throttle report](../compatibility/results/evidence/24a898372a7b35320aca192609769cd480d22b8f450f352f864b0b57a6e921b3.json)
+records five. The
+[player-interchange report](../compatibility/results/evidence/1f9b92e541587555c3f7af4cc21943a268d6193da3937a499f4a5b77774163f9.json)
+records six of seven passing composites from Java to Rust, and seven failures
+from Rust to Java after Java rejected Ferraloom's POI coordinate layout.
+The remaining forward failure used an invalid setup assumption: Java saves a new
+player's enchantment seed as zero, then randomizes zero when loading it. The
+revised setup uses a real source reconnect before testing exact seed retention.
+The POI codec and test setup are corrected in source; fresh executable validation
+is pending. All four servers and four clients in that retained player run exited
+cleanly. These observations do not promote any complete feature family.
+
+The retained broad main-suite and block-data runs used clean source and harness commit
 `105758aa42d2a365a9791857f45d826e56e80e9f`, with executable SHA-256
 `5b606a5db4dfdac82865b0dd256d6d5ef6dc8e5ba7f87b995b19dc296bcfa13a`.
 Both servers passed 96 of 96 selected main scenarios and a separate 34-case
@@ -14,10 +31,11 @@ permission gates and persistence across clean restarts. It does not establish
 general inventory transactions or complete component and block-entity support.
 World interchange passes in both directions, including scoreboard state and
 command storage under `.` and a namespace resembling a legacy filename.
-The decoded command trees differ by two missing roots (`jfr`, `perf`) and 468
+In that older run, the decoded command trees differ by two missing roots (`jfr`, `perf`) and 468
 missing advertised literal paths with argument names normalized. This checks
 advertised syntax, independently of command execution; some differences are
-argument representation, while others are missing behavior. The latest terrain
+argument representation, while others are missing behavior. Subsequent command
+aliases need a fresh command-tree comparison. That run's terrain
 sample matched 16,380 of 16,384 states: Rust omitted four deepslate gold-ore blocks.
 It reproduced the exact sample hash from an
 [earlier failure](../compatibility/results/evidence/a96922864956b30c0a286e089affa721f3ec0b578cf72348de1fc9b35f52ecdf.json)
@@ -41,8 +59,8 @@ pass the selected furnace timer, speed and lava bucket checks in the
 Zero-step preservation remains visible, with codec acceptance marked skipped;
 changed chunk bytes alone cannot prove furnace decoding or encoding.
 
-Rust tests also cover ordered player snapshots, admission through final player
-and advancement saves, atomic advancement-write failures, and renewed chunk
+Rust tests also cover ordered player snapshots, admission through final player,
+advancement and statistics saves, atomic persistence-write failures, and renewed chunk
 tickets protecting live inventories. Remaining work includes command branches,
 other redstone behavior, additional block-entity types and fields, general inventory
 transactions, dynamic sign components, full multiplayer and gameplay coverage,
