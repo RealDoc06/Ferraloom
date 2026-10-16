@@ -94,6 +94,14 @@ pub trait BlockEntity: Any + Send + Sync {
     fn load_nbt(&self, _nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
         Err(BlockEntityLoadError::Unsupported(self.resource_location()))
     }
+
+    /// Drain effects only after a successful guarded NBT commit has published
+    /// and every world/state/cache guard has been released.
+    fn after_nbt_commit(&self, _world: &Arc<World>) {}
+
+    /// Terminal notification for this exact detached allocation. Called outside
+    /// all map, unload, publication and entity-lifecycle guards; never saves state.
+    fn on_removed(&self, _world: &World) {}
     /// Edits and publishes canonical NBT under the entity's persisted-state lock.
     /// The editor is pure NBT work; the sink only updates an already-resolved
     /// pending cache. Neither callback may access world, inventory or gameplay.
@@ -117,7 +125,8 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
-    /// Binds the owning world's weak loot source without running world callbacks.
+    /// Binds weak owner context without gameplay callbacks. Called under map and
+    /// unload guards; jukebox binding must not acquire its playback state lock.
     fn bind_world(&self, _world: &World) {}
 
     /// Uses the same lazy unpack operation as direct inventory access.

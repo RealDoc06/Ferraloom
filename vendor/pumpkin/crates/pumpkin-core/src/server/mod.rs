@@ -430,6 +430,7 @@ impl Server {
                 Arc::downgrade(&server),
                 server.scoreboard.clone(),
             ));
+            world.bind_self();
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));
             worlds_vec.push(world);
@@ -549,6 +550,7 @@ impl Server {
             self.scoreboard.clone(),
         );
         let world = Arc::new(world);
+        world.bind_self();
         let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
         level.world_portal.store(Arc::new(Some(portal)));
         self.worlds.rcu(|worlds| {

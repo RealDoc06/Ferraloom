@@ -340,6 +340,8 @@ fn save_auxiliary_data(
 /// - Stores and tracks active `Player` entities within the world.
 /// - Provides a central hub for interacting with the world's entities and environment.
 pub struct World {
+    /// Exact allocation used by synchronous, context-free block inventories.
+    self_weak: std::sync::OnceLock<Weak<World>>,
     /// Represents the World's Unique Identifier
     pub uuid: Uuid,
     /// The underlying level, responsible for chunk management and terrain generation.
@@ -604,6 +606,7 @@ impl World {
 
         Self {
             uuid: Uuid::new_v4(),
+            self_weak: std::sync::OnceLock::new(),
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
@@ -1071,11 +1074,16 @@ impl World {
             }
             self.update_chunk_watches(&added, &removed).await;
             if !abandoned.is_empty() {
-                let _lifecycle = self.entity_lifecycle.lock().await;
+                let lifecycle = self.entity_lifecycle.lock().await;
+                let mut retired = Vec::new();
                 for pos in &abandoned {
                     if !self.level.is_chunk_watched(pos) {
-                        self.retire_block_entities(*pos, None);
+                        self.retire_block_entities(*pos, None, &mut retired);
                     }
+                }
+                drop(lifecycle);
+                for entity in retired {
+                    entity.on_removed(self);
                 }
             }
 
@@ -1491,8 +1499,13 @@ impl World {
     /// clones. Uniqueness also excludes Weak upgrades and inventory handles, so
     /// an in-flight command cannot mutate a detached BE after its final snapshot.
     /// The caller holds `entity_lifecycle`. No publication write lock is held here.
-    fn retire_block_entities(&self, pos: Vector2<i32>, requested: Option<&SyncChunk>) -> bool {
-        self.retire_prepared_block_entities(pos, requested, None)
+    fn retire_block_entities(
+        &self,
+        pos: Vector2<i32>,
+        requested: Option<&SyncChunk>,
+        retired: &mut Vec<Arc<dyn BlockEntity>>,
+    ) -> bool {
+        self.retire_prepared_block_entities(pos, requested, None, retired)
     }
 
     fn retire_prepared_block_entities(
@@ -1500,6 +1513,7 @@ impl World {
         pos: Vector2<i32>,
         requested: Option<&SyncChunk>,
         stamp: Option<pumpkin_world::chunk::PoiReconciliationStamp>,
+        retired: &mut Vec<Arc<dyn BlockEntity>>,
     ) -> bool {
         // Check live tickets before taking the coordinator, matching scheduler
         // order. A ticket may have returned before its scheduler change arrives.
@@ -1583,7 +1597,9 @@ impl World {
         }
         // Keep the shard write lock through removal: tick vectors clone handles
         // directly from this map without going through get_block_entity.
-        entities.remove();
+        // Capture only after the uniqueness proof and final snapshot. The caller
+        // owns entity_lifecycle, so it also owns the post-unlock notifications.
+        retired.extend(entities.remove().into_values());
         if let Some(stamp) = stamp {
             unload.mark_prepared_poi(pos, &chunk, stamp);
         } else {
@@ -1613,9 +1629,18 @@ impl World {
                     .await;
                 match stamp {
                     Ok(stamp) => {
-                        let _lifecycle = world.entity_lifecycle.lock().await;
-                        prepared |=
-                            world.retire_prepared_block_entities(pos, Some(&chunk), Some(stamp));
+                        let lifecycle = world.entity_lifecycle.lock().await;
+                        let mut retired = Vec::new();
+                        prepared |= world.retire_prepared_block_entities(
+                            pos,
+                            Some(&chunk),
+                            Some(stamp),
+                            &mut retired,
+                        );
+                        drop(lifecycle);
+                        for entity in retired {
+                            entity.on_removed(&world);
+                        }
                     }
                     Err(error) => {
                         error!("POI unload preparation failed at {pos:?}: {error}");
@@ -2233,6 +2258,100 @@ impl World {
                 .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
         );
         Self::broadcast_java_grouped(packet, recipients_by_version);
+    }
+
+    /// Bind immediately after constructing the Arc, before publishing the world.
+    pub(crate) fn bind_self(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        let bound = self.self_weak.get_or_init(|| weak.clone());
+        assert!(
+            Weak::ptr_eq(bound, &weak),
+            "World bound to a foreign allocation"
+        );
+    }
+
+    pub(crate) fn weak_self(&self) -> &Weak<Self> {
+        self.self_weak
+            .get()
+            .expect("World must be bound before live jukebox attachment")
+    }
+
+    /// Reads only the current live map, without lazy loading or attachment hooks.
+    pub(crate) fn published_block_entity(
+        &self,
+        position: &BlockPos,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        self.block_entities
+            .get(&position.chunk_position())
+            .and_then(|entities| entities.get(position).cloned())
+    }
+
+    pub(crate) fn is_current_block_entity<T: BlockEntity>(&self, expected: &T) -> bool {
+        self.published_block_entity(&expected.get_position())
+            .is_some_and(|entity| {
+                entity
+                    .as_any()
+                    .downcast_ref::<T>()
+                    .is_some_and(|live| std::ptr::eq(live, expected))
+            })
+    }
+
+    /// Jukebox level events include the owner, with vanilla's strict XYZ radius.
+    pub(crate) fn jukebox_level_event(
+        &self,
+        position: BlockPos,
+        song: Option<pumpkin_data::jukebox_song::JukeboxSong>,
+    ) {
+        let origin = Vector3::new(
+            f64::from(position.0.x),
+            f64::from(position.0.y),
+            f64::from(position.0.z),
+        );
+        let (event, data) = song.map_or((1011, 0), |song| (1010, song.get_id() as i32));
+        let packet = CWorldEvent::new(event, position, data, false);
+        let players = self.players.load();
+        let recipients = players.iter().filter(|player| {
+            player.world().dimension.minecraft_name == self.dimension.minecraft_name
+                && player.position().squared_distance_to_vec(&origin) < 64.0 * 64.0
+        });
+        Self::broadcast_java_grouped(
+            &packet,
+            Self::collect_java_recipients_by_version(recipients),
+        );
+    }
+
+    /// Nonforced NOTE uses the player's block center and a bounded 32-block range.
+    pub(crate) fn jukebox_note(&self, position: BlockPos) {
+        let origin = Vector3::new(
+            f64::from(position.0.x) + 0.5,
+            f64::from(position.0.y) + 1.200_000_047_683_715_8,
+            f64::from(position.0.z) + 0.5,
+        );
+        let packet = CParticle::new(
+            false,
+            false,
+            origin,
+            Vector3::new(rng().random_range(0..4) as f32 / 24.0, 0.0, 0.0),
+            1.0,
+            0,
+            (pumpkin_data::particle::Particle::Note.to_id() as i32).into(),
+            &[],
+        );
+        let players = self.players.load();
+        let recipients = players.iter().filter(|player| {
+            let position = player.position();
+            let center = Vector3::new(
+                position.x.floor() + 0.5,
+                position.y.floor() + 0.5,
+                position.z.floor() + 0.5,
+            );
+            std::ptr::eq(player.world().as_ref(), self)
+                && center.squared_distance_to_vec(&origin) < 32.0 * 32.0
+        });
+        Self::broadcast_java_grouped(
+            &packet,
+            Self::collect_java_recipients_by_version(recipients),
+        );
     }
 
     pub fn spawn_particle(
@@ -6096,38 +6215,51 @@ impl World {
         added: &[Vector2<i32>],
         removed: &[Vector2<i32>],
     ) -> Vec<Vector2<i32>> {
-        let _lifecycle = self.entity_lifecycle.lock().await;
+        let lifecycle = self.entity_lifecycle.lock().await;
         self.level.mark_chunks_as_newly_watched(added).await;
         let clean = self.level.release_chunk_watchers(removed);
-        if let Err(error) = self.remove_entities_in_chunks(&clean).await {
-            error!("Failed to snapshot entity chunks before cleanup: {error}");
-        } else {
-            self.level.clean_entity_chunks(&clean);
-        }
+        let retired = match self.remove_entities_in_chunks(&clean).await {
+            Err(error) => {
+                error!("Failed to snapshot entity chunks before cleanup: {error}");
+                Vec::new()
+            }
+            Ok(retired) => {
+                self.level.clean_entity_chunks(&clean);
+                retired
+            }
+        };
         self.level.finish_entity_chunk_unwatch(removed).await;
+        drop(lifecycle);
+        for entity in retired {
+            entity.on_removed(self);
+        }
         clean
     }
 
     /// Periodic memory cleanup uses the same boundary as watcher transitions.
     pub async fn clean_entity_chunks(&self, chunks: &[Vector2<i32>]) -> Result<(), WorldSaveError> {
-        let _lifecycle = self.entity_lifecycle.lock().await;
+        let lifecycle = self.entity_lifecycle.lock().await;
         let clean: Vec<_> = chunks
             .iter()
             .copied()
             .filter(|pos| !self.level.is_chunk_watched(pos))
             .collect();
-        self.remove_entities_in_chunks(&clean).await?;
+        let retired = self.remove_entities_in_chunks(&clean).await?;
         self.level.clean_entity_chunks(&clean);
+        drop(lifecycle);
+        for entity in retired {
+            entity.on_removed(self);
+        }
         Ok(())
     }
 
     async fn remove_entities_in_chunks(
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
-    ) -> Result<(), WorldSaveError> {
+    ) -> Result<Vec<Arc<dyn BlockEntity>>, WorldSaveError> {
         let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
         if chunks_set.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let entities_to_remove: Vec<_> = self
             .entities
@@ -6159,10 +6291,11 @@ impl World {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
+        let mut retired = Vec::new();
         for chunk_pos in &chunks_set {
-            self.retire_block_entities(*chunk_pos, None);
+            self.retire_block_entities(*chunk_pos, None, &mut retired);
         }
-        Ok(())
+        Ok(retired)
     }
 
     pub(crate) fn set_block_breaking(
@@ -7473,14 +7606,22 @@ impl World {
         };
         unload.mark_live(chunk_pos);
         let mut published = self.block_entities.entry(chunk_pos).or_default();
-        published.insert(position, block_entity.clone());
+        let replaced = published.insert(position, block_entity.clone());
         // Full canonical state is staged before another lookup can see this Arc.
         block_entity.snapshot_nbt(&mut |nbt| {
             Self::stage_block_entity_snapshot(&chunk, position, custom_data.as_ref(), nbt);
         });
         drop(published);
         drop(unload);
-        self.notify_block_entity(&block_entity);
+        if let Some(old) = replaced.filter(|old| !Arc::ptr_eq(old, &block_entity)) {
+            old.on_removed(self);
+        }
+        if self
+            .published_block_entity(&position)
+            .is_some_and(|live| Arc::ptr_eq(&live, &block_entity))
+        {
+            self.notify_block_entity(&block_entity);
+        }
     }
 
     pub fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
@@ -7601,9 +7742,21 @@ impl World {
         })?;
         drop(published);
         if committed {
+            expected.after_nbt_commit(self);
+            if !self
+                .published_block_entity(&position)
+                .is_some_and(|live| Arc::ptr_eq(&live, expected))
+            {
+                return Ok(true);
+            }
             expected.clear_comparator_dirty();
-            self.update_neighbour_for_output_signal(&position, state_id.to_block());
-            self.register_block_change(position, state_id);
+            self.update_neighbour_for_output_signal(&position, self.get_block(&position));
+            if self
+                .published_block_entity(&position)
+                .is_some_and(|live| Arc::ptr_eq(&live, expected))
+            {
+                self.register_block_change(position, self.get_block_state_id(&position));
+            }
         }
         Ok(committed)
     }
@@ -7645,13 +7798,11 @@ impl World {
                 removed
             })
             .unwrap_or(false);
-        let removed =
-            self.block_entities
-                .get_mut(&chunk_pos)
-                .is_some_and(|mut chunk_block_entities| {
-                    chunk_block_entities.remove(block_pos).is_some()
-                });
-        if removed || removed_pending {
+        let removed = self
+            .block_entities
+            .get_mut(&chunk_pos)
+            .and_then(|mut chunk_block_entities| chunk_block_entities.remove(block_pos));
+        if removed.is_some() || removed_pending {
             unload.mark_live(chunk_pos);
             self.custom_block_entity_data.remove(block_pos);
             // Drop the chunk's map once its last block entity is gone.
@@ -7660,6 +7811,10 @@ impl World {
             self.level.read_chunk_sync(&chunk_pos, |chunk| {
                 chunk.mark_dirty(true);
             });
+        }
+        drop(unload);
+        if let Some(removed) = removed {
+            removed.on_removed(self);
         }
     }
 

@@ -201,7 +201,7 @@ pub fn write_chunk_data(
         write.write_var_int(&VarInt(id as i32))?;
 
         let mut client_nbt = match pumpkin_data::block_properties::BLOCK_ENTITY_TYPES[id] {
-            "chest" | "trapped_chest" | "barrel" => {
+            "chest" | "trapped_chest" | "barrel" | "jukebox" => {
                 // These types inherit Java's empty BlockEntity.getUpdateTag.
                 // BlockEntityInfo.create encodes it as absent NBT, never a save
                 // snapshot. The pending map retains private state for live BEs too.

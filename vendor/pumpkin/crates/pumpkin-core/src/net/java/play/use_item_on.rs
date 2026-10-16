@@ -76,13 +76,26 @@ impl JavaClient {
 
         let mut item = inventory.get_stack_in_hand(hand);
         let item_id = item.item.id;
-        if item_id != Item::GOAT_HORN.id {
-            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-        }
-
         let entity = &player.get_entity();
         let world = entity.world.load_full();
         let block = world.get_block(&position);
+        // Builtin discs have a PASS item fallback. Jukebox insertion/ejection
+        // consumes a block action, which does not award the Used item statistic.
+        let builtin_disc = item
+            .item
+            .registry_key
+            .strip_prefix("music_disc_")
+            .and_then(pumpkin_data::jukebox_song::JukeboxSong::from_name)
+            .is_some();
+        if item_id != Item::GOAT_HORN.id && !builtin_disc && block.id != Block::JUKEBOX.id {
+            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        }
+        let original_hand_item = item.clone();
+        let original_slot = if matches!(hand, Hand::Right) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
 
         let event = PlayerInteractEvent::new(
             player,
@@ -127,6 +140,20 @@ impl JavaClient {
             );
             if result.consumes_action() {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
+                // This block path returns before the generic item fallback's
+                // writeback. Preserve a reentrant hook's hand/selection change.
+                if block.id == Block::JUKEBOX.id && !item.are_equal(&original_hand_item) {
+                    let same_slot = matches!(hand, Hand::Left)
+                        || inventory.get_selected_slot() as usize == original_slot;
+                    if same_slot
+                        && inventory
+                            .get_stack_in_hand(hand)
+                            .are_equal(&original_hand_item)
+                    {
+                        inventory.set_stack_in_hand(hand, item.clone());
+                        player.sync_hand_slot(original_slot, item.clone());
+                    }
+                }
 
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
@@ -233,7 +260,9 @@ impl JavaClient {
             return result;
         }
 
-        if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+        if matches!(result, BlockActionResult::PassToDefaultBlockAction)
+            && (block.id != Block::JUKEBOX.id || *equipment_slot == EquipmentSlot::MAIN_HAND)
+        {
             let result = server.block_registry.on_use(
                 block,
                 player,

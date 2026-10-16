@@ -310,7 +310,7 @@ async fn snapshot_worker_refuses_pending_request_when_full_ticket_already_return
             assert!(!unload.prepare_or_defer(pos, &chunk));
             assert!(unload.is_requested(pos, &chunk));
         };
-        assert!(!world.retire_block_entities(pos, Some(&chunk)));
+        assert!(!world.retire_block_entities(pos, Some(&chunk), &mut Vec::new()));
         assert!(world.block_entities.contains_key(&pos));
         assert!(!world.level.chunk_unload.access().is_requested(pos, &chunk));
         drop(lifecycle);
