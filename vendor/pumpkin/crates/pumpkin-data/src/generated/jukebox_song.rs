@@ -92,7 +92,11 @@ impl JukeboxSong {
     #[doc = r" Returns the `JukeboxSong` from the string name (e.g., 'pigstep')."]
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        // Identifier.bySeparator uses the default namespace for an empty prefix.
+        let name = name
+            .strip_prefix("minecraft:")
+            .or_else(|| name.strip_prefix(':'))
+            .unwrap_or(name);
         match name {
             "11" => Some(Self::Id11),
             "13" => Some(Self::Id13),

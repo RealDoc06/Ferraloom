@@ -181,3 +181,35 @@ fn actual_datapack_song_definitions_cannot_bypass_configuration_profile() {
         Err(RegistryProfileError::UnsupportedEntries)
     ));
 }
+
+#[test]
+fn song_directory_io_failure_reaches_real_loader_and_configuration_gate() {
+    let world = tempfile::tempdir().unwrap();
+    let pack = world.path().join("datapacks/broken-song");
+    let namespace = pack.join("data/minecraft");
+    std::fs::create_dir_all(&namespace).unwrap();
+    std::fs::write(
+        pack.join("pack.mcmeta"),
+        r#"{"pack":{"description":"broken song directory","pack_format":94}}"#,
+    )
+    .unwrap();
+    // A file at the directory boundary deterministically makes read_dir fail,
+    // including privileged test runners where chmod would not deny traversal.
+    std::fs::write(namespace.join("jukebox_song"), "{}").unwrap();
+    let datapacks = DatapackManager::new();
+    datapacks.load_all(
+        world.path(),
+        &["file/broken-song".into()],
+        &RecipeManager::new(),
+    );
+    assert_eq!(
+        datapacks
+            .get_custom_registry_entries("minecraft:jukebox_song")
+            .len(),
+        1
+    );
+    assert!(matches!(
+        registry_snapshot(&datapacks),
+        Err(RegistryProfileError::UnsupportedJukeboxEntries)
+    ));
+}

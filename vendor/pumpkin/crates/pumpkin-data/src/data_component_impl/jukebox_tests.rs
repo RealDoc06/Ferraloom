@@ -31,7 +31,8 @@ fn all_builtin_references_survive_component_item_and_admission_paths() {
         assert!(hashes.insert(decoded.get_hash()));
         // Bytecode-derived HashOps Identifier contract, not an executed Java golden.
         assert_eq!(decoded.get_hash(), get_str_hash(song.asset_id()) as i32);
-        for name in [song.to_name(), song.asset_id()] {
+        let empty_namespace = format!(":{}", song.to_name());
+        for name in [song.to_name(), song.asset_id(), empty_namespace.as_str()] {
             let saved = saved_disc(NbtTag::String(name.into()));
             assert_eq!(validate_item_stack(&saved), Ok(()));
             let stack = ItemStack::read_item_stack(&saved).unwrap();
@@ -167,6 +168,8 @@ fn unsupported_references_and_non_string_persistent_values_refuse_without_defaul
         NbtTag::String("custom:11".into()),
         NbtTag::String("minecraft:missing".into()),
         NbtTag::String("Minecraft:11".into()),
+        NbtTag::String("::11".into()),
+        NbtTag::String("minecraft::11".into()),
         NbtTag::String("".into()),
         NbtTag::Int(1),
         NbtTag::Compound(old_wrapper),

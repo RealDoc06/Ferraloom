@@ -117,6 +117,21 @@ pub fn json_to_registry_nbt_bytes(val: &Value) -> Box<[u8]> {
 }
 
 /// Recursively loads JSON files from `current_dir` and inserts them into `registry_map`.
+fn retain_registry_io_failure<S: std::hash::BuildHasher>(
+    registry_map: &mut HashMap<String, RegistryEntryData, S>,
+) {
+    // This cannot match a builtin entry. It carries no authored path/content;
+    // the exact configuration profile gate rejects the incomplete snapshot.
+    let entry_id = "pumpkin:unreadable_jukebox_song_directory".to_string();
+    registry_map.insert(
+        entry_id.clone(),
+        RegistryEntryData {
+            entry_id,
+            data: None,
+        },
+    );
+}
+
 fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     namespace: &str,
     base_dir: &Path,
@@ -125,10 +140,26 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     retain_invalid_definition: bool,
 ) {
     let Ok(entries) = fs::read_dir(current_dir) else {
+        if retain_invalid_definition {
+            retain_registry_io_failure(registry_map);
+        }
         return;
     };
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                if retain_invalid_definition {
+                    retain_registry_io_failure(registry_map);
+                }
+                continue;
+            }
+        };
         let path = entry.path();
+        if retain_invalid_definition && fs::metadata(&path).is_err() {
+            retain_registry_io_failure(registry_map);
+            continue;
+        }
         if path.is_dir() {
             load_registry_dir_recursive(
                 namespace,
@@ -177,6 +208,22 @@ pub fn load_dynamic_registries_from_ns<
         let registry_map = registries.entry(registry_id.to_string()).or_default();
         for &dir_name in dir_names {
             let reg_dir = ns_path.join(dir_name);
+            if registry_id == "minecraft:jukebox_song" {
+                match fs::metadata(&reg_dir) {
+                    Ok(metadata) if !metadata.is_dir() => {
+                        retain_registry_io_failure(registry_map);
+                        continue;
+                    }
+                    Err(error)
+                        if error.kind() != std::io::ErrorKind::NotFound
+                            || fs::symlink_metadata(&reg_dir).is_ok() =>
+                    {
+                        retain_registry_io_failure(registry_map);
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
             if reg_dir.is_dir() {
                 let before = registry_map.len();
                 load_registry_dir_recursive(
@@ -263,6 +310,26 @@ pub fn merge_dynamic_registry_entries<S: std::hash::BuildHasher>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jukebox_directory_io_failure_is_retained_but_other_registries_keep_existing_behavior() {
+        // Deterministic read_dir failure: the directory was replaced by a file.
+        // Exercise the real recursive helper used after namespace discovery.
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("jukebox_song");
+        fs::write(&path, "{}").unwrap();
+        let mut songs = HashMap::new();
+        load_registry_dir_recursive("minecraft", &path, &path, &mut songs, true);
+        assert_eq!(songs.len(), 1);
+        assert!(
+            songs["pumpkin:unreadable_jukebox_song_directory"]
+                .data
+                .is_none()
+        );
+        let mut other = HashMap::new();
+        load_registry_dir_recursive("minecraft", &path, &path, &mut other, false);
+        assert!(other.is_empty());
+    }
 
     #[test]
     fn json_to_nbt_roundtrip() {
