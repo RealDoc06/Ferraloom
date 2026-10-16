@@ -182,7 +182,7 @@ where
 async fn refused_query_cannot_leak_through_same_region_sibling_in_all_three_formats() {
     use crate::chunk::format::{anvil::AnvilChunkFile, linear::LinearV2File, pump::PumpFile};
     Box::pin(refused_query_sibling::<AnvilChunkFile<ChunkData>>(
-        Default::default(),
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
     ))
     .await;
     Box::pin(refused_query_sibling::<LinearV2File<ChunkData>>(())).await;

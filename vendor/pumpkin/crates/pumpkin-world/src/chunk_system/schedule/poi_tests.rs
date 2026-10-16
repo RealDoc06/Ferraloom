@@ -486,7 +486,7 @@ async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_foo
         receive.try_recv(),
         Err(tokio::sync::oneshot::error::TryRecvError::Empty)
     ));
-    cache.set_block_state(&Vector3::new(1, 0, 1), &Block::BELL.default_state);
+    cache.set_block_state(&Vector3::new(1, 0, 1), Block::BELL.default_state);
     let holder = schedule.chunk_map.get_mut(&pos).unwrap();
     holder.chunk = cache.chunks.pop();
     holder.occupied = NodeKey::null();
@@ -519,7 +519,7 @@ async fn occupied_proto_query_uses_latest_returned_terrain_and_original_read_foo
     level.poi_storage.lock().unwrap().save_all().unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let mut generated = crate::ProtoChunk::new(0, 0, &level.world_gen.load());
-    generated.set_block_state(1, 0, 1, &Block::BELL.default_state);
+    generated.set_block_state(1, 0, 1, Block::BELL.default_state);
     assert!(PoiTerrainOverlay::resident(&generated).sections.is_empty());
 }
 
@@ -567,7 +567,9 @@ async fn assert_cancelled_pending_retry(
     source.set_custom_data("test", "end", pumpkin_nbt::tag::NbtTag::Int(1));
     // Retry only retained pending work: never re-submit this source with save_chunks.
     level.chunk_saver.flush().await.unwrap();
-    let fresh = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+    let fresh = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
+    );
     let (send, mut receive) = tokio::sync::mpsc::channel(1);
     fresh
         .fetch_chunks(&level.level_folder, &[ChunkPos::new(0, 0)], send)

@@ -185,6 +185,10 @@ fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> C
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep read dispatch, result delivery and the owned fetch drain in one worker loop."
+)]
 pub(crate) async fn io_read_work(
     recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<ReadRequest>>>,
     send: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
