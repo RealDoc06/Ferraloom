@@ -15,6 +15,7 @@ def client() -> Client:
     observed.pending = {}
     observed.events = []
     observed.statistics_values = {}
+    observed.jukeboxes = False
     return observed
 
 

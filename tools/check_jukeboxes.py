@@ -166,6 +166,16 @@ def item_slots(value: object, minimum: int, maximum: int) -> dict[int, dict]:
     return result
 
 
+def player_items(player: dict) -> dict[int, dict]:
+    """Compare current slotted inventory plus separately saved offhand equipment."""
+    result = item_slots(player['Inventory'], 0, 35)
+    equipment = player.get('equipment', {})
+    require(isinstance(equipment, dict) and set(equipment) <= {'offhand'}, 'Unexpected fixture equipment')
+    if 'offhand' in equipment:
+        result[-106] = semantic_stack(equipment['offhand'])
+    return result
+
+
 def expected() -> tuple[dict[int, dict], dict[int, dict]]:
     return ({**{slot: stack(name) for slot, name in enumerate(BUILTINS)}, 22: stack()},
             {1: stack(opaque=True), 2: stack(removed=True)})
@@ -427,15 +437,20 @@ def snapshot(fixture: Fixture, label: str) -> dict:
 
 
 def statistics(client: Client, contract: dict) -> dict:
+    counters = {'used': (contract['used_category'], ITEM_ID),
+                'play_record': (contract['custom_category'], contract['play_record'])}
+    for pair in counters.values():
+        client.watch_statistic(*pair)
     request = client.request('request_stats')
     state = client.wait_state(lambda s: s.get('statistics_packet') is not None and s['statistics_packet']['sequence'] > request['after_sequence'])
     packet = state['statistics_packet']
     values = {}
-    for name, pair in {'used': (contract['used_category'], ITEM_ID), 'play_record': (contract['custom_category'], contract['play_record'])}.items():
-        matches = [e['value'] for e in packet['entries'] if (e['category_id'], e['statistic_id']) == pair]
-        require(len(matches) <= 1, 'Duplicate statistic')
-        values[name] = matches[0] if matches else 0
-    return {'request': request, 'packet': packet, **values}
+    observations = {}
+    for name, pair in counters.items():
+        observation = client.statistics_values[pair]
+        observations[name] = observation
+        values[name] = observation['entry']['value'] if observation else 0
+    return {'request': request, 'packet': packet, 'value_observations': observations, **values}
 
 
 def fence(server, clients: list[Client]) -> dict:
@@ -591,7 +606,7 @@ def cycle(fixture: Fixture, clients: list[Client], song: str, *, hand: int, crea
     interact(fixture, clients, hand, song=song, events=[1010], awards=1)
     inserted = snapshot(fixture, 'inserted')
     held_slot = -106 if hand else (1 if opaque else 0)
-    inventory = item_slots(inserted['player']['typed']['Inventory'], -106, 35)
+    inventory = player_items(inserted['player']['typed'])
     expected_disc = stack(opaque=True) if opaque else stack(song)
     require(inventory.get(held_slot) == (expected_disc if creative else None), 'Wrong survival consumption/creative retention')
     require(record_state(inserted['chunk']['typed']['jukebox']) == {'record': expected_disc, 'elapsed': 0}, 'Insertion record/elapsed differs')
@@ -624,7 +639,7 @@ def cycle(fixture: Fixture, clients: list[Client], song: str, *, hand: int, crea
     advance(fixture, clients, 2)
     check_block(fixture, song=None, ticks=None, playing=False)
     recovered = snapshot(fixture, 'recovered')
-    slots = item_slots(recovered['player']['typed']['Inventory'], -106, 35)
+    slots = player_items(recovered['player']['typed'])
     require(slots.get(1 if opaque else 0) == expected_disc and -106 not in slots, 'Ejected item/hand did not recover')
     if not opaque:
         transfer(fixture, owner, BUILTINS.index(song))
@@ -725,7 +740,7 @@ def saved(fixture: Fixture, role: str, before_stop: dict, expected_play_record: 
     require(player.get('SelectedItemSlot') == atom('Int', 0), 'Wrong saved selected slot')
     chest, inventory = expected()
     require(item_slots(evidence['chunk']['typed']['chest']['Items'], 0, 26) == chest, 'Saved chest changed')
-    require(item_slots(player['Inventory'], -106, 35) == inventory, 'Saved player items changed')
+    require(player_items(player) == inventory, 'Saved player items changed')
     require(record_state(evidence['chunk']['typed']['jukebox']) == {'record': None, 'elapsed': None}, 'Used jukebox did not save empty')
     stats = evidence['statistics']['data']['stats']
     require(stats.get('minecraft:used', {}).get(ITEM, 0) == 0 and

@@ -13,6 +13,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import check_jukeboxes as discs
 
 
+class CurrentPlayerEquipmentTests(unittest.TestCase):
+    def test_offhand_participates_in_exact_item_comparison_and_legacy_duplicates_refuse(self):
+        disc = discs.stack(discs.CAT)
+        player = {'Inventory': inventory(), 'equipment': {'offhand': disc}}
+        original = deepcopy(player)
+        self.assertEqual(discs.player_items(player), {-106: disc})
+        self.assertEqual(player, original)
+        self.assertEqual(discs.player_items({'Inventory': inventory()}), {})
+        with self.assertRaises(AssertionError):
+            discs.player_items({'Inventory': inventory({'Slot': discs.atom('Byte', -106), **disc}),
+                                'equipment': {'offhand': disc}})
+        with self.assertRaises(AssertionError):
+            discs.player_items({'Inventory': inventory(), 'equipment': {'offhand': {}}})
+
+
 def inventory(*entries):
     return {'nbt_type': 'List', 'element_type': 10, 'value': list(entries)}
 

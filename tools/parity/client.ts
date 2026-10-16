@@ -955,6 +955,8 @@ function main() {
   let transportWriteSequence = 0;
   let ready = false;
   let quitting = false;
+  let peerEof = false;
+  let localDisconnectClose = false;
   let expectedDisconnect: 'disconnect.spam' | null = null;
   let firstPosition = true;
   const chunks = new Set<string>();
@@ -1107,7 +1109,10 @@ function main() {
       emit({ event: 'disconnect', expected, ...observation, sequence: state.packets });
       if (!expected) throw new Error(`Unexpected PLAY disconnect: ${JSON.stringify(observation)}`);
       quitting = true;
-      socket.end();
+      localDisconnectClose = true;
+      // A matching terminal packet ends the probe. Close both socket halves;
+      // later peer resets are transport teardown, not additional protocol data.
+      socket.destroy();
       return;
     }
     if (id === 4) {
@@ -1176,7 +1181,7 @@ function main() {
       const observation = { ...decodeJukeboxLevelEvent(payload, state.jukebox_registry!), sequence: state.packets,
         payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
       state.jukebox_events.push(observation);
-      emit({ event: 'jukebox_level_event', ...observation });
+      emit({ event: 'jukebox_level_event', observation });
       if (state.jukebox_events.length > 256) throw new Error('Jukebox level_event evidence budget exceeded');
     }
     if (id === ids.play.inventory) state.inventory_packets++;
@@ -1299,6 +1304,7 @@ function main() {
     }
   });
   socket.on('error', error => { emit({ event: 'error', message: error.message }); process.exitCode = 1; });
+  socket.on('end', () => { peerEof = true; });
   const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
   const tick = setInterval(() => { if (phase === 'play' && state.position) send(13); }, 50);
   const timeout = setTimeout(() => {
@@ -1306,7 +1312,7 @@ function main() {
   }, 60000);
   socket.on('close', () => {
     clearInterval(tick); clearTimeout(timeout); input.close();
-    emit({ event: 'end', expected: quitting, state });
+    emit({ event: 'end', expected: quitting, closure: { peer_eof: peerEof, local_after_typed_disconnect: localDisconnectClose }, state });
     if (!quitting) process.exitCode = 1;
     process.stdin.destroy();
   });
