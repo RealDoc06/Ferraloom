@@ -107,10 +107,11 @@ async fn read_reserved_poi(
                 sections: Vec::new(),
             }),
             LoadedData::Error((pos, error)) => {
-                return Err(PoiQueryError::NeedsTerrain {
-                    pos,
-                    reason: error.to_string(),
-                });
+                let reason = error.to_string();
+                level.record_fatal_save_failure(format!(
+                    "Could not read saved chunk {pos:?}: {reason}"
+                ));
+                return Err(PoiQueryError::NeedsTerrain { pos, reason });
             }
         }
     }
