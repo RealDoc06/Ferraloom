@@ -87,7 +87,7 @@ impl ChunkRectangle {
     }
 }
 
-/// Complete each newly admitted chunk before admitting the next, as ServerLevel.setChunkForced does.
+/// Complete each load in rectangle order; membership is committed only after all loads succeed.
 async fn add_chunks_in_order<F, Fut>(
     positions: Vec<Vector2<i32>>,
     mut add_and_load: F,
@@ -169,7 +169,7 @@ fn change_force_load(context: &CommandContext, add: bool) -> CommandExecutorResu
             .server
             .upgrade()
             .ok_or_else(|| ERROR_LOADING.create_without_context())?;
-        wait_for_loading(
+        let prepared = wait_for_loading(
             &server.runtime,
             add_chunks_in_order(rectangle.positions(), |pos| {
                 let world = world.clone();
@@ -177,19 +177,10 @@ fn change_force_load(context: &CommandContext, add: bool) -> CommandExecutorResu
                     if crate::STOP_INTERRUPT.is_cancelled() {
                         return Err(ERROR_LOADING.create_without_context());
                     }
-                    let added = world
-                        .forced_chunks
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .insert(pos);
-                    if !added {
-                        return Ok(false);
-                    }
-                    world.update_active_chunks();
-                    world.refresh_forced_chunk_tickets();
                     tokio::select! {
                         biased;
                         () = crate::STOP_INTERRUPT.cancelled() => Err(ERROR_LOADING.create_without_context()),
+                        () = world.level.cancel_token.cancelled() => Err(ERROR_LOADING.create_without_context()),
                         result = world.level.get_or_fetch_chunk(pos, |_| ()) => {
                             result.map(|()| true).map_err(|error| {
                                 tracing::error!("Cannot force-load chunk: {error}");
@@ -199,7 +190,27 @@ fn change_force_load(context: &CommandContext, add: bool) -> CommandExecutorResu
                     }
                 }
             }),
-        )?
+        )?;
+        // A refused member must leave the entire persistent rectangle unchanged,
+        // including any entries/tickets that were already forced before this command.
+        if crate::STOP_INTERRUPT.is_cancelled() || world.level.cancel_token.is_cancelled() {
+            return Err(ERROR_LOADING.create_without_context());
+        }
+        let changed = {
+            let mut forced = world
+                .forced_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            prepared
+                .into_iter()
+                .filter(|pos| forced.insert(*pos))
+                .collect::<Vec<_>>()
+        };
+        if !changed.is_empty() {
+            world.update_active_chunks();
+            world.refresh_forced_chunk_tickets();
+        }
+        changed
     } else {
         let changed = {
             let mut forced = world
@@ -584,5 +595,161 @@ mod tests {
         });
         assert!(result.is_err());
         assert!(!polled.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    async fn dispatch_forceload(
+        dispatcher: &CommandDispatcher,
+        source: &crate::command::CommandSource,
+        input: &'static str,
+    ) -> CommandExecutorResult {
+        let dispatcher = dispatcher.clone();
+        let source = source.clone();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            tokio::task::spawn_blocking(move || dispatcher.execute_input(input, &source)),
+        )
+        .await
+        .expect("actual forceload dispatcher must finish within the bound")
+        .unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep refused rectangle and healthy dispatcher control with the original membership/ticket snapshots."
+    )]
+    async fn refused_rectangle_preserves_forced_membership_and_tickets_then_healthy_add_commits() {
+        use crate::command::CommandSource;
+        use crate::data::player_server::test::{close_fixture, player_fixture, stop_chunk_workers};
+        use pumpkin_util::GameMode;
+        use pumpkin_world::{
+            chunk::ChunkData, chunk_system::ChunkLoading, level::ChunkUnavailable,
+        };
+        use std::{sync::atomic::Ordering, time::Duration};
+
+        let fixture = player_fixture().await;
+        let world = fixture.player.world();
+        let refused = Vector2::new(32, 0);
+        let path = world.level.level_folder.region_folder.join("r.1.0.mca");
+        let original = b"refused forceload rectangle region";
+        std::fs::write(&path, original).unwrap();
+        let error = tokio::time::timeout(
+            Duration::from_secs(10),
+            world.level.get_or_fetch_chunk(refused, |_| ()),
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+        assert!(matches!(error, ChunkUnavailable::ReadFailed { .. }));
+        stop_chunk_workers(&fixture).await;
+        // Keep simulation limited to the forced entries. These healthy, ready
+        // chunks are in the preceding region; none replaces the refused member.
+        fixture.player.gamemode.store(GameMode::Spectator);
+        world.level_info.rcu(|current| {
+            let mut info = (**current).clone();
+            info.game_rules.spectators_generate_chunks = false;
+            info
+        });
+        for x in 27..=31 {
+            for z in -1..=1 {
+                let chunk = ChunkData::empty_sync(x, z);
+                chunk.post_processing_ready.store(true, Ordering::Release);
+                world.level.loaded_chunks.insert(Vector2::new(x, z), chunk);
+            }
+        }
+        let source = CommandSource {
+            server: Some(fixture.server.clone()),
+            ..CommandSource::dummy().with_world(world.clone())
+        };
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        // One preexisting entry is inside the later rectangle, one is outside.
+        for input in ["forceload add 448 8", "forceload add 480 8"] {
+            assert_eq!(
+                dispatch_forceload(&dispatcher, &source, input)
+                    .await
+                    .unwrap(),
+                1
+            );
+        }
+        tokio::time::timeout(Duration::from_secs(10), fixture.server.finish_tasks())
+            .await
+            .unwrap();
+        let forced_before = world.forced_chunks.lock().unwrap().clone();
+        assert_eq!(forced_before.len(), 2);
+        let (tickets_before, levels_before, priority_before) = {
+            let loading = world.level.chunk_loading.lock().unwrap();
+            (
+                loading.ticket.clone(),
+                loading.pos_level.clone(),
+                loading.high_priority.clone(),
+            )
+        };
+        for pos in [Vector2::new(28, 0), Vector2::new(30, 0)] {
+            assert!(forced_before.contains(&pos));
+            assert!(tickets_before[&pos].contains(&(ChunkLoading::FULL_CHUNK_LEVEL - 2)));
+        }
+        let active_before = world.active_chunks.read().unwrap().clone();
+        let error = dispatch_forceload(&dispatcher, &source, "forceload add 480 8 512 8")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error.message).unwrap()["translate"],
+            "ferraloom.forceload.storage"
+        );
+        tokio::time::timeout(Duration::from_secs(10), fixture.server.finish_tasks())
+            .await
+            .unwrap();
+        assert_eq!(*world.forced_chunks.lock().unwrap(), forced_before);
+        assert_eq!(*world.active_chunks.read().unwrap(), active_before);
+        {
+            let loading = world.level.chunk_loading.lock().unwrap();
+            assert_eq!(loading.ticket, tickets_before);
+            assert_eq!(loading.pos_level, levels_before);
+            assert_eq!(loading.high_priority, priority_before);
+        }
+        assert!(!world.level.is_chunk_loaded(&refused));
+        assert!(matches!(
+            world.level.chunk_listener.failure(refused),
+            Some(ChunkUnavailable::ReadFailed { .. })
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+
+        // The two existing entries are retained and counted once; the healthy
+        // middle entry is the only new force owner, with one force ticket.
+        assert_eq!(
+            dispatch_forceload(&dispatcher, &source, "forceload add 448 8 480 8")
+                .await
+                .unwrap(),
+            1
+        );
+        tokio::time::timeout(Duration::from_secs(10), fixture.server.finish_tasks())
+            .await
+            .unwrap();
+        {
+            let forced = world.forced_chunks.lock().unwrap();
+            assert_eq!(forced.len(), 3);
+            assert!(forced_before.is_subset(&forced));
+            assert!(forced.contains(&Vector2::new(29, 0)));
+            assert!(!forced.contains(&Vector2::new(31, 0)));
+            assert!(!forced.contains(&refused));
+            let loading = world.level.chunk_loading.lock().unwrap();
+            for pos in [
+                Vector2::new(28, 0),
+                Vector2::new(29, 0),
+                Vector2::new(30, 0),
+            ] {
+                assert_eq!(
+                    loading.ticket[&pos]
+                        .iter()
+                        .filter(|&&level| level == ChunkLoading::FULL_CHUNK_LEVEL - 2)
+                        .count(),
+                    1
+                );
+            }
+            assert!(!loading.high_priority.contains(&refused));
+        }
+        close_fixture(&fixture).await;
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 }
