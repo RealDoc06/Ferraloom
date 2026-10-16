@@ -689,7 +689,7 @@ async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
                         let cooldowns = player.item_cooldowns.lock().unwrap();
                         let cooldown = cooldowns.get(group).unwrap();
                         assert_eq!(cooldown.start_tick, started);
-                        assert_eq!(cooldown.duration, 140)
+                        assert_eq!(cooldown.duration, 140);
                     };
                     assert_eq!(used(), before + 1);
                     assert_eq!(
