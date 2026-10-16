@@ -12,7 +12,10 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 
+use crate::chunk::{palette::BlockPalette, poi_changes::PoiSectionChanges};
+use crate::chunk_system::ChunkPos;
 use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION as DATA_VERSION;
+use pumpkin_data::poi::PoiType;
 
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -32,6 +35,123 @@ const LEGACY_XYZ_DATA_VERSION: i32 = 3955;
 
 fn invalid_data(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+/// The typed codec has no raw remainder storage. Refuse extensions before a
+/// loaded region can be published or rewritten with those fields missing.
+fn reject_extensions(compound: &NbtCompound, allowed: &[&str], scope: &str) -> io::Result<()> {
+    for field in compound.child_tags.keys() {
+        if !allowed.contains(&field.as_ref()) {
+            return Err(invalid_data(format!(
+                "Unsupported POI {scope} field {field}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PoiReconcileError {
+    #[error("POI region {x},{z} must be preloaded before taking a terrain guard")]
+    RegionNotLoaded { x: i32, z: i32 },
+    #[error("POI region is unavailable: {0}")]
+    RegionUnavailable(#[source] io::Error),
+    #[error("Loaded POI handle belongs to a different chunk")]
+    WrongChunk,
+    #[error("POI terrain coordinates or section layout are invalid")]
+    InvalidCoordinates,
+    #[error("Cannot reconcile unknown POI type {identifier} at {pos:?}")]
+    UnknownType { identifier: String, pos: BlockPos },
+}
+
+/// A narrow exclusive borrow of already-loaded memory. It cannot load or save.
+/// Keep the owning `PoiStorage` mutex held from ticket lookup through replacement.
+pub struct LoadedPoiRegion<'a> {
+    chunk: ChunkPos,
+    region: &'a mut PoiRegion,
+}
+
+impl LoadedPoiRegion<'_> {
+    pub(crate) fn check_chunk(&self, chunk: ChunkPos) -> Result<(), PoiReconcileError> {
+        if self.chunk == chunk {
+            Ok(())
+        } else {
+            Err(PoiReconcileError::WrongChunk)
+        }
+    }
+
+    /// Complete, bounded section replacement under the caller's terrain guard.
+    /// Unknown typed records remain usable by the existing storage API, but a
+    /// section containing one cannot be safely declared reconciled with terrain.
+    pub(crate) fn reconcile_section(
+        &mut self,
+        section_y: i32,
+        palette: &BlockPalette,
+        changes: &PoiSectionChanges,
+    ) -> Result<(), PoiReconcileError> {
+        let origin = (
+            self.chunk.x.checked_mul(16),
+            section_y.checked_mul(16),
+            self.chunk.y.checked_mul(16),
+        );
+        let (Some(x), Some(y), Some(z)) = origin else {
+            return Err(PoiReconcileError::InvalidCoordinates);
+        };
+        // Multiples of 16 in i32 leave room for all local coordinates 0..15.
+        let position = |index: usize| {
+            (
+                x + (index % 16) as i32,
+                y + (index / 256) as i32,
+                z + (index / 16 % 16) as i32,
+            )
+        };
+        let mut replacement = Vec::new();
+        for (index, state) in palette.iter().enumerate() {
+            let key = position(index);
+            let old = self.region.entries.get(&key);
+            if let Some(old) = old
+                && !PoiType::ALL
+                    .iter()
+                    .any(|kind| kind.identifier() == old.poi_type)
+            {
+                return Err(PoiReconcileError::UnknownType {
+                    identifier: old.poi_type.clone(),
+                    pos: old.pos(),
+                });
+            }
+            if let Some(kind) = PoiType::from_state(state) {
+                let free_tickets = old
+                    .filter(|old| {
+                        old.poi_type == kind.identifier() && !changes.resets_tickets(index)
+                    })
+                    .map_or(kind.max_tickets(), |old| old.free_tickets);
+                replacement.push(PoiEntry {
+                    x: key.0,
+                    y: key.1,
+                    z: key.2,
+                    poi_type: kind.identifier().to_owned(),
+                    free_tickets,
+                });
+            }
+        }
+        // All validation precedes mutation, including removal of stale records.
+        for index in 0..BlockPalette::VOLUME {
+            self.region.entries.remove(&position(index));
+        }
+        for entry in replacement {
+            self.region
+                .entries
+                .insert((entry.x, entry.y, entry.z), entry);
+        }
+        self.region
+            .section_validity
+            .insert((self.chunk.x, self.chunk.y, section_y), 1);
+        self.region
+            .dirty_chunks
+            .insert((self.chunk.x, self.chunk.y));
+        self.region.dirty = true;
+        Ok(())
+    }
 }
 
 fn region_coords_from_path(path: &Path) -> io::Result<(i32, i32)> {
@@ -67,6 +187,12 @@ impl PoiEntry {
     /// Accept the current typed position or the exact previous private layout.
     /// Never fall back from a malformed `pos`, combine layouts, or invent axes.
     fn from_nbt(record: &NbtCompound, data_version: i32) -> io::Result<Self> {
+        let fields: &[&str] = if data_version == LEGACY_XYZ_DATA_VERSION {
+            &["x", "y", "z", "type", "free_tickets"]
+        } else {
+            &["pos", "type", "free_tickets"]
+        };
+        reject_extensions(record, fields, "record")?;
         let has_xyz = ["x", "y", "z"]
             .iter()
             .any(|axis| record.get(axis).is_some());
@@ -310,6 +436,7 @@ impl PoiRegion {
                 "Unsupported POI DataVersion {data_version}; no DFU is applied"
             )));
         }
+        reject_extensions(&nbt.root_tag, &["DataVersion", "Sections"], "root")?;
         let mut sections = FxHashMap::default();
         let sec_tag = nbt
             .get_compound("Sections")
@@ -324,6 +451,7 @@ impl PoiRegion {
             let NbtTag::Compound(sec_comp) = tag else {
                 return Err(invalid_data("POI section must be a compound"));
             };
+            reject_extensions(sec_comp, &["Valid", "Records"], "section")?;
             // The official codec defaults absent Valid to false. Reject malformed
             // tags rather than claiming equivalence to its lenient decoding.
             let valid = match sec_comp.get("Valid") {
@@ -619,6 +747,36 @@ impl PoiStorage {
         }
     }
 
+    /// IO phase: hold only the shared storage mutex, with no terrain/lifecycle
+    /// guard. Failures retain the existing sticky unavailable-region behavior.
+    pub fn preload_poi_region(&mut self, chunk: ChunkPos) -> io::Result<()> {
+        self.get_or_load_region(chunk.x >> 5, chunk.y >> 5)
+            .map(|_| ())
+    }
+
+    /// Memory phase: never falls back to loading. Keep the storage mutex through
+    /// the terrain read guard and reconciliation so ticket changes cannot race.
+    pub fn loaded_poi_region(
+        &mut self,
+        chunk: ChunkPos,
+    ) -> Result<LoadedPoiRegion<'_>, PoiReconcileError> {
+        let coords = (chunk.x >> 5, chunk.y >> 5);
+        if let Some(error) = self.load_errors.get(&coords) {
+            return Err(PoiReconcileError::RegionUnavailable(io::Error::new(
+                error.kind(),
+                error.to_string(),
+            )));
+        }
+        let region = self
+            .regions
+            .get_mut(&coords)
+            .ok_or(PoiReconcileError::RegionNotLoaded {
+                x: coords.0,
+                z: coords.1,
+            })?;
+        Ok(LoadedPoiRegion { chunk, region })
+    }
+
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) -> io::Result<()> {
         self.add_with_free_tickets(pos, poi_type, 0)
     }
@@ -783,6 +941,9 @@ impl PoiStorage {
 
 #[cfg(test)]
 mod persistence_tests;
+
+#[cfg(test)]
+mod reconciliation_tests;
 
 #[cfg(test)]
 mod tests {

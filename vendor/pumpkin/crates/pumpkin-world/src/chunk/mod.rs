@@ -18,7 +18,10 @@ use thiserror::Error;
 pub mod format;
 pub mod io;
 pub mod palette;
+pub(crate) mod poi_changes;
 pub mod postprocessing;
+
+pub use poi_changes::{PoiReconciliationStamp, PoiTerrainRead};
 
 // TODO
 pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
@@ -111,6 +114,8 @@ pub struct ChunkEntityData {
 pub struct ChunkSections {
     pub count: usize,
     pub block_sections: RwLock<Box<[BlockPalette]>>,
+    // Always acquire block_sections before this runtime-only metadata.
+    poi_changes: std::sync::Mutex<poi_changes::PoiChanges>,
     pub random_tick_sections: RwLock<Option<Box<[RandomTickSectionCache]>>>,
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
@@ -351,6 +356,7 @@ impl ChunkSections {
         Self {
             count: num_sections,
             block_sections: RwLock::new(block_sections),
+            poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(num_sections)),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
@@ -376,6 +382,7 @@ impl ChunkSections {
         Self {
             count,
             block_sections: RwLock::new(block_sections),
+            poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(count)),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
@@ -505,25 +512,34 @@ impl ChunkSections {
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
 
-        // Keep lock order consistent to avoid deadlocks: block sections first, then random-tick cache.
+        // Terrain excludes scans and writers; metadata precedes the random-tick cache.
         let mut sections = self
             .block_sections
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut random_tick_sections_guard = self
-            .random_tick_sections
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
         if let Some(section) = sections.get_mut(section_index) {
             if !condition(section.get(relative_x, relative_y, relative_z)) {
                 return None;
             }
+            let mut poi_changes = self.poi_changes.lock().unwrap();
             let replaced_block_state_id =
                 section.set(relative_x, relative_y, relative_z, block_state_id);
             if replaced_block_state_id == block_state_id {
                 return Some(replaced_block_state_id);
             }
+            poi_changes.record(
+                section_index,
+                relative_x,
+                relative_y,
+                relative_z,
+                replaced_block_state_id,
+                block_state_id,
+            );
+
+            let mut random_tick_sections_guard = self
+                .random_tick_sections
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             if (has_random_ticks(block_state_id) || has_random_ticking_fluid(block_state_id))
                 && random_tick_sections_guard.is_none()
@@ -721,6 +737,7 @@ impl ChunkData {
             .block_sections
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut poi_changes = self.section.poi_changes.lock().unwrap();
         let mut random_tick_sections_guard = self
             .section
             .random_tick_sections
@@ -742,6 +759,14 @@ impl ChunkData {
             if let Some(section) = sections.get_mut(section_index) {
                 let replaced_id = section.set(rel_x, sub_y, rel_z, new_state_id);
                 if replaced_id != new_state_id {
+                    poi_changes.record(
+                        section_index,
+                        rel_x,
+                        sub_y,
+                        rel_z,
+                        replaced_id,
+                        new_state_id,
+                    );
                     modified = true;
                     changed_columns.insert((rel_x, rel_z));
                     if (has_random_ticks(new_state_id) || has_random_ticking_fluid(new_state_id))
@@ -797,6 +822,7 @@ impl ChunkData {
             self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
+        drop(poi_changes);
         drop(sections);
         drop(random_tick_sections_guard);
 

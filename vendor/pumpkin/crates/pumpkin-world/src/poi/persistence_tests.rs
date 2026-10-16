@@ -32,7 +32,7 @@ const LEGACY_CHUNK: &[u8] = &[
 ];
 
 // Build actual MCA framing independently of PoiRegion's writer.
-fn write_mca(path: &Path, chunks: &[(usize, &[u8])]) {
+pub(super) fn write_mca(path: &Path, chunks: &[(usize, &[u8])]) {
     let mut bytes = vec![0; HEADER_SIZE];
     for &(slot, compressed) in chunks {
         let sector = bytes.len() / SECTOR_SIZE;
@@ -47,7 +47,7 @@ fn write_mca(path: &Path, chunks: &[(usize, &[u8])]) {
     std::fs::write(path, bytes).unwrap();
 }
 
-fn compress_fixture(root: NbtCompound) -> Vec<u8> {
+pub(super) fn compress_fixture(root: NbtCompound) -> Vec<u8> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
     encoder
         .write_all(&crate::nbt_io::encode_compound(root).unwrap())
@@ -55,7 +55,7 @@ fn compress_fixture(root: NbtCompound) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn read_mca_chunk(path: &Path, slot: usize) -> NbtCompound {
+pub(super) fn read_mca_chunk(path: &Path, slot: usize) -> NbtCompound {
     let bytes = std::fs::read(path).unwrap();
     let location = u32::from_be_bytes(bytes[slot * 4..slot * 4 + 4].try_into().unwrap());
     let offset = (location >> 8) as usize * SECTOR_SIZE;
@@ -76,7 +76,7 @@ fn read_mca_chunk(path: &Path, slot: usize) -> NbtCompound {
     nbt.root_tag
 }
 
-fn record(pos: [i32; 3], poi_type: &str, tickets: Option<i32>) -> NbtCompound {
+pub(super) fn record(pos: [i32; 3], poi_type: &str, tickets: Option<i32>) -> NbtCompound {
     let mut record = NbtCompound::new();
     record.put("pos", NbtTag::IntArray(pos.to_vec()));
     record.put_string("type", poi_type.to_owned());
@@ -86,7 +86,7 @@ fn record(pos: [i32; 3], poi_type: &str, tickets: Option<i32>) -> NbtCompound {
     record
 }
 
-fn section(valid: Option<i8>, records: Vec<NbtCompound>) -> NbtCompound {
+pub(super) fn section(valid: Option<i8>, records: Vec<NbtCompound>) -> NbtCompound {
     let mut section = NbtCompound::new();
     if let Some(valid) = valid {
         section.put_byte("Valid", valid);
@@ -98,7 +98,7 @@ fn section(valid: Option<i8>, records: Vec<NbtCompound>) -> NbtCompound {
     section
 }
 
-fn chunk(sections: &[(&str, NbtCompound)]) -> NbtCompound {
+pub(super) fn chunk(sections: &[(&str, NbtCompound)]) -> NbtCompound {
     let mut root = NbtCompound::new();
     root.put_int("DataVersion", 5023);
     let mut compound = NbtCompound::new();
