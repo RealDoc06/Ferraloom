@@ -1,5 +1,8 @@
 use super::*;
-use crate::{block::entities::chest::ChestBlockEntity, world::World};
+use crate::{
+    block::entities::{block_entity_from_nbt, chest::ChestBlockEntity},
+    world::World,
+};
 use arc_swap::ArcSwap;
 use pumpkin_config::world::LevelConfig;
 use pumpkin_data::{dimension::Dimension, item::Item, item_stack::ItemStack};
@@ -370,7 +373,6 @@ async fn destroy_deferred_removal_preserves_lever_notifications() {
 }
 
 async fn destroy_replacements_retain_new_entities_and_poi() {
-    use crate::block::entities::block_entity_from_nbt;
     use pumpkin_nbt::compound::NbtCompound;
 
     let (_folder, world) = world().await;
