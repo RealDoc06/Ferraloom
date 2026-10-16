@@ -1766,3 +1766,281 @@ async fn respawn_is_owned_before_first_poll_and_close_discards_later_input() {
     assert!(player.inbound_packets.is_empty());
     fixture.finish().await;
 }
+
+/// A real command hook that stays runnable across several ticker epochs. A
+/// self-wake must not turn the mandatory opportunity into an unbounded drain.
+struct TickerCommandPolls {
+    player: Uuid,
+    polls: std::sync::atomic::AtomicUsize,
+    finish_on: usize,
+}
+
+impl EventHandler<PlayerCommandSendEvent> for TickerCommandPolls {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PlayerCommandSendEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if event.player.gameprofile.id != self.player {
+                return;
+            }
+            std::future::poll_fn(|cx| {
+                assert!(server.packet_runner.phase.try_lock().is_err());
+                let poll = self.polls.fetch_add(1, Ordering::Relaxed) + 1;
+                assert_eq!(
+                    server.tick_count.load(Ordering::Relaxed),
+                    poll as i32,
+                    "the ready poll follows the completed gameplay epoch"
+                );
+                if poll < self.finish_on {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+            .await;
+        })
+    }
+}
+
+const fn overdue_schedule() -> crate::server::ticker::TickSchedule {
+    // The deadline stays negative throughout these short controls. The recent
+    // warning prevents overload skip from granting slack, independent of speed.
+    crate::server::ticker::TickSchedule {
+        next_tick_nanos: -60_000_000_000,
+        last_overload_warning_nanos: 0,
+    }
+}
+
+#[tokio::test]
+async fn ticker_sprint_completes_command_chat_and_menu_before_sprint_ends() {
+    use crate::{
+        entity::player::SpamType,
+        server::ticker::{TickSchedule, Ticker},
+    };
+    use pumpkin_gametest::GameTestRunner;
+    use pumpkin_protocol::java::server::play::{SChatMessage, SCloseContainer};
+
+    let fixture = Fixture::new(1).await;
+    let player = fixture.players[0].clone();
+    let server = fixture.server.clone();
+    bounded(tokio::task::spawn_blocking(move || {
+        let _runtime = server.runtime.enter();
+        server.packet_runner.attach();
+        let window = player.open_ender_chest().unwrap();
+        let normal: Arc<Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>> =
+            player.player_screen_handler.clone();
+        assert!(!Arc::ptr_eq(
+            &player.current_screen_handler.lock().unwrap(),
+            &normal
+        ));
+        for _ in 0..5 {
+            player.check_chat_spam(&server, SpamType::Command);
+            player.check_chat_spam(&server, SpamType::Chat);
+        }
+        let hook = Arc::new(TickerCommandPolls {
+            player: player.gameprofile.id,
+            polls: std::sync::atomic::AtomicUsize::new(0),
+            finish_on: 3,
+        });
+        server
+            .plugin_manager
+            .register(hook.clone(), EventPriority::Normal, true);
+        enqueue(
+            &player,
+            &SChatCommand {
+                command: "experience add @s 1 levels",
+            },
+        );
+        enqueue(
+            &player,
+            &SChatMessage {
+                message: "sprint continuation",
+                timestamp: 0,
+                salt: 0,
+                signature: None,
+                message_count: 0.into(),
+                acknowledged: &[0, 0, 0],
+                checksum: 0,
+            },
+        );
+        enqueue(
+            &player,
+            &SCloseContainer {
+                window_id: i32::from(window).into(),
+            },
+        );
+        server
+            .tick_rate_manager
+            .request_game_to_sprint(&server, 1_000);
+        let base = Instant::now();
+        let mut schedule = TickSchedule::new();
+        let mut game_tests = GameTestRunner::new();
+        let ticks = player.tick_counter.load(Ordering::Relaxed);
+        let server_ticks = server.tick_count.load(Ordering::Relaxed);
+        let mut chat_debt = 100;
+        for epoch in 1..=16 {
+            // Exactly the production loop body, including its real deadline and
+            // ready phase. No direct pump or extra Player::tick in this harness.
+            Ticker::run_epoch(&server, base, &mut schedule, &mut game_tests);
+            assert!(server.tick_rate_manager.is_sprinting());
+            assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks + epoch);
+            assert_eq!(
+                server.tick_count.load(Ordering::Relaxed),
+                server_ticks + epoch
+            );
+            assert!(schedule.next_tick_nanos <= base.elapsed().as_nanos() as i64);
+            assert_eq!(hook.polls.load(Ordering::Relaxed), (epoch as usize).min(3));
+            let command_charge = if epoch >= 3 { 20 } else { 0 };
+            assert_eq!(
+                spam_debt(&player, SpamType::Command),
+                100 + command_charge - epoch as u32
+            );
+            let next_chat_debt = spam_debt(&player, SpamType::Chat);
+            assert!(next_chat_debt == chat_debt - 1 || next_chat_debt == chat_debt + 19);
+            chat_debt = next_chat_debt;
+            let menu_closed = Arc::ptr_eq(&player.current_screen_handler.lock().unwrap(), &normal);
+            if menu_closed {
+                assert_eq!(player.experience_level.load(Ordering::Relaxed), 1);
+                assert_eq!(chat_debt, 120 - epoch as u32);
+                assert!(player.inbound_packets.is_empty());
+                assert_eq!(player.packet_activity.state().active, 0);
+                assert!(!player.client.closed());
+                return;
+            }
+        }
+        panic!("command, chat and menu must complete while the long sprint is still active");
+    }))
+    .await
+    .unwrap();
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn ticker_continuously_overdue_epochs_poll_once_and_other_player_progresses() {
+    use crate::{entity::player::SpamType, server::ticker::Ticker};
+    use pumpkin_gametest::GameTestRunner;
+
+    let fixture = Fixture::new(2).await;
+    let player = fixture.players[0].clone();
+    let other = fixture.players[1].clone();
+    let server = fixture.server.clone();
+    bounded(tokio::task::spawn_blocking(move || {
+        let _runtime = server.runtime.enter();
+        server.packet_runner.attach();
+        let hook = Arc::new(TickerCommandPolls {
+            player: player.gameprofile.id,
+            polls: std::sync::atomic::AtomicUsize::new(0),
+            finish_on: 4,
+        });
+        server
+            .plugin_manager
+            .register(hook.clone(), EventPriority::Normal, true);
+        for _ in 0..5 {
+            player.check_chat_spam(&server, SpamType::Command);
+            player.check_chat_spam(&server, SpamType::Chat);
+        }
+        enqueue(
+            &player,
+            &SChatCommand {
+                command: "experience add @s 1 levels",
+            },
+        );
+        enqueue(&player, &SSetHeldItem { slot: 6 });
+        enqueue(
+            &other,
+            &SChatCommand {
+                command: "experience add @s 2 levels",
+            },
+        );
+        let base = Instant::now();
+        let mut schedule = overdue_schedule();
+        let mut game_tests = GameTestRunner::new();
+        let ticks = player.tick_counter.load(Ordering::Relaxed);
+        let other_ticks = other.tick_counter.load(Ordering::Relaxed);
+        let server_ticks = server.tick_count.load(Ordering::Relaxed);
+        for epoch in 1..=5 {
+            Ticker::run_epoch(&server, base, &mut schedule, &mut game_tests);
+            assert!(schedule.next_tick_nanos < 0, "there was no slack wave");
+            assert_eq!(schedule.last_overload_warning_nanos, 0);
+            assert_eq!(hook.polls.load(Ordering::Relaxed), (epoch as usize).min(4));
+            assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks + epoch);
+            assert_eq!(
+                other.tick_counter.load(Ordering::Relaxed),
+                other_ticks + epoch
+            );
+            assert_eq!(
+                server.tick_count.load(Ordering::Relaxed),
+                server_ticks + epoch
+            );
+            assert_eq!(other.experience_level.load(Ordering::Relaxed), 2);
+            assert_eq!(spam_debt(&player, SpamType::Chat), 100 - epoch as u32);
+            let completed = epoch >= 4;
+            assert_eq!(
+                player.experience_level.load(Ordering::Relaxed),
+                i32::from(completed)
+            );
+            assert_eq!(
+                spam_debt(&player, SpamType::Command),
+                100 + if completed { 20 } else { 0 } - epoch as u32
+            );
+            assert_eq!(
+                player.inventory.get_selected_slot(),
+                if epoch == 5 { 6 } else { 0 }
+            );
+            if epoch < 4 {
+                assert_eq!(player.packet_activity.state().remaining, 63);
+                assert_eq!(player.inbound_packets.len(), 1);
+            }
+        }
+        assert!(player.inbound_packets.is_empty());
+        assert_eq!(player.packet_activity.state().active, 0);
+        assert!(!player.client.closed());
+    }))
+    .await
+    .unwrap();
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn ticker_overdue_without_ready_work_ticks_and_decays_once_normal_or_frozen() {
+    use crate::{entity::player::SpamType, server::ticker::Ticker};
+    use pumpkin_gametest::GameTestRunner;
+
+    let fixture = Fixture::new(1).await;
+    let player = fixture.players[0].clone();
+    let server = fixture.server.clone();
+    bounded(tokio::task::spawn_blocking(move || {
+        let _runtime = server.runtime.enter();
+        server.packet_runner.attach();
+        player.check_chat_spam(&server, SpamType::Command);
+        player.check_chat_spam(&server, SpamType::Chat);
+        assert!(server.packet_runner.ready.is_empty());
+        let base = Instant::now();
+        let mut schedule = overdue_schedule();
+        let mut game_tests = GameTestRunner::new();
+        let ticks = player.tick_counter.load(Ordering::Relaxed);
+        let server_ticks = server.tick_count.load(Ordering::Relaxed);
+        for epoch in 1..=4 {
+            server.tick_rate_manager.set_frozen(&server, epoch % 2 == 0);
+            Ticker::run_epoch(&server, base, &mut schedule, &mut game_tests);
+            assert!(schedule.next_tick_nanos < 0);
+            assert_eq!(schedule.last_overload_warning_nanos, 0);
+            assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks + epoch);
+            assert_eq!(
+                server.tick_count.load(Ordering::Relaxed),
+                server_ticks + epoch
+            );
+            assert_eq!(spam_debt(&player, SpamType::Command), 20 - epoch as u32);
+            assert_eq!(spam_debt(&player, SpamType::Chat), 20 - epoch as u32);
+            assert!(server.packet_runner.ready.is_empty());
+            assert!(player.inbound_packets.is_empty());
+            assert_eq!(player.packet_activity.state().active, 0);
+        }
+    }))
+    .await
+    .unwrap();
+    fixture.finish().await;
+}

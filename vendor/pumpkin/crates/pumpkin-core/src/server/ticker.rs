@@ -29,13 +29,13 @@ const NEVER_WARNED: i64 = i64::MIN / 2;
 
 /// Tick deadline and overload-warning clock, in nanoseconds since the loop base.
 #[derive(Clone, Copy)]
-struct TickSchedule {
-    next_tick_nanos: i64,
-    last_overload_warning_nanos: i64,
+pub(crate) struct TickSchedule {
+    pub(crate) next_tick_nanos: i64,
+    pub(crate) last_overload_warning_nanos: i64,
 }
 
 impl TickSchedule {
-    const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             next_tick_nanos: 0,
             last_overload_warning_nanos: NEVER_WARNED,
@@ -78,78 +78,88 @@ impl Ticker {
                 Self::drain_sessions(server);
                 break;
             }
-            // Doubles as the tick-duration start, so the loop reads the clock twice.
-            let tick_start_nanos = elapsed_nanos(base);
-            let manager = &server.tick_rate_manager;
-            let sprinting = manager.is_sprinting();
-            let this_tick_nanos = if sprinting {
-                0
-            } else {
-                manager.nanoseconds_per_tick()
-            };
-
-            // Vanilla `MinecraftServer.runServer`: skip ticks when more than
-            // `OVERLOADED_THRESHOLD + 20 * nanosecondsPerTick` behind (~2s at 20 TPS).
-            let (updated, skipped) =
-                apply_overload_skip(schedule, tick_start_nanos, this_tick_nanos);
-            schedule = updated;
-            if let Some((behind_ms, ticks)) = skipped {
-                warn!(
-                    "Can't keep up! Is the server overloaded? Running {behind_ms}ms or {ticks} ticks behind"
-                );
-            }
-
-            // Deadline for the next wait. Work below may finish late; then the
-            // following iteration catch-up-runs with no park.
-            schedule.next_tick_nanos += this_tick_nanos;
-
-            manager.tick();
-
-            let tick_number = server.tick_count.load(Ordering::Relaxed);
-            if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
-                server.runtime.block_on(
-                    server
-                        .plugin_manager
-                        .fire(server, &mut ServerTickStartEvent::new(tick_number)),
-                );
-            }
-
-            let should_tick_game_tests = manager.runs_normally() || sprinting;
-
-            if sprinting {
-                manager.start_sprint_tick_work();
-                server.tick();
-
-                if manager.end_sprint_tick_work() {
-                    manager.finish_tick_sprint(server);
-                }
-            } else {
-                server.tick();
-            }
-
-            if should_tick_game_tests {
-                server.runtime.block_on(async {
-                    drain_game_test_queue(server, &mut game_test_runner).await;
-                    game_test_runner.tick().await;
-                });
-            }
-
-            let tick_duration_nanos = elapsed_nanos(base) - tick_start_nanos;
-
-            let tick_number = server.tick_count.load(Ordering::Relaxed);
-            if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
-                server.runtime.block_on(server.plugin_manager.fire(
-                    server,
-                    &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
-                ));
-            }
-
-            server.update_tick_times(tick_duration_nanos);
-
-            wait_until_next_tick(server, base, schedule.next_tick_nanos);
+            Self::run_epoch(server, base, &mut schedule, &mut game_test_runner);
         }
 
         debug!("Ticker stopped");
+    }
+
+    /// One production iteration, including the bounded ready opportunity after
+    /// `Server::tick` releases its execution phase. The outer loop owns STOP/drain.
+    pub(crate) fn run_epoch(
+        server: &Arc<Server>,
+        base: Instant,
+        schedule: &mut TickSchedule,
+        game_test_runner: &mut GameTestRunner,
+    ) {
+        // Use the same clock for overload scheduling and gameplay duration.
+        let tick_start_nanos = elapsed_nanos(base);
+        let manager = &server.tick_rate_manager;
+        let sprinting = manager.is_sprinting();
+        let this_tick_nanos = if sprinting {
+            0
+        } else {
+            manager.nanoseconds_per_tick()
+        };
+
+        // Vanilla `MinecraftServer.runServer`: skip ticks when more than
+        // `OVERLOADED_THRESHOLD + 20 * nanosecondsPerTick` behind (~2s at 20 TPS).
+        let (updated, skipped) = apply_overload_skip(*schedule, tick_start_nanos, this_tick_nanos);
+        *schedule = updated;
+        if let Some((behind_ms, ticks)) = skipped {
+            warn!(
+                "Can't keep up! Is the server overloaded? Running {behind_ms}ms or {ticks} ticks behind"
+            );
+        }
+
+        // Deadline for the next wait. Work below may finish late; then the
+        // following iteration catch-up-runs with no park.
+        schedule.next_tick_nanos += this_tick_nanos;
+
+        manager.tick();
+
+        let tick_number = server.tick_count.load(Ordering::Relaxed);
+        if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
+            server.runtime.block_on(
+                server
+                    .plugin_manager
+                    .fire(server, &mut ServerTickStartEvent::new(tick_number)),
+            );
+        }
+
+        let should_tick_game_tests = manager.runs_normally() || sprinting;
+
+        if sprinting {
+            manager.start_sprint_tick_work();
+            server.tick();
+
+            if manager.end_sprint_tick_work() {
+                manager.finish_tick_sprint(server);
+            }
+        } else {
+            server.tick();
+        }
+
+        if should_tick_game_tests {
+            server.runtime.block_on(async {
+                drain_game_test_queue(server, game_test_runner).await;
+                game_test_runner.tick().await;
+            });
+        }
+
+        let tick_duration_nanos = elapsed_nanos(base) - tick_start_nanos;
+
+        let tick_number = server.tick_count.load(Ordering::Relaxed);
+        if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
+            server.runtime.block_on(server.plugin_manager.fire(
+                server,
+                &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
+            ));
+        }
+
+        server.update_tick_times(tick_duration_nanos);
+
+        wait_until_next_tick(server, base, schedule.next_tick_nanos);
     }
 }
 
@@ -202,9 +212,17 @@ const fn apply_overload_skip(
 
 /// Vanilla `waitUntilNextTick` / `LockSupport.parkNanos`.
 ///
-/// Drain finite packet waves between execution phases, prioritizing the next
-/// gameplay deadline. Pending futures retain ownership without holding a phase.
+/// Every real epoch gives ready sessions one finite wave (at most 64 sessions),
+/// even during sprint or overload. Further waves require gameplay slack. Each
+/// wave joins the execution phase. Callbacks must return; this is no time bound.
 fn wait_until_next_tick(server: &Arc<Server>, base: Instant, next_tick_nanos: i64) {
+    if STOP_INTERRUPT.is_cancelled() || server.packet_runner.is_draining() {
+        return;
+    }
+    // No deadline on this one wave: an expired deadline must not starve owned
+    // continuations. It neither replenishes packet budgets nor ticks players.
+    server.packet_runner.run_ready(server, None);
+
     loop {
         if STOP_INTERRUPT.is_cancelled() || server.packet_runner.is_draining() {
             return;
