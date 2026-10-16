@@ -18,6 +18,7 @@ use crate::{
 };
 use futures::future::BoxFuture;
 use pumpkin_data::{
+    Block,
     data_component::DataComponent,
     data_component_impl::{CustomDataImpl, UseCooldownImpl},
     item_stack::ItemStack,
@@ -30,12 +31,15 @@ use pumpkin_protocol::{
     java::{
         client::play::{CItemCooldown, CKeepAlive, CSoundEffect},
         packet_decoder::TCPNetworkDecoder,
-        server::play::SUseItem,
+        server::play::{SUseItem, SUseItemOn},
     },
     packet::MultiVersionJavaPacket,
     ser::NetworkReadExt,
 };
-use pumpkin_util::{GameMode, math::vector3::Vector3};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+};
 use std::{
     sync::{
         Arc,
@@ -358,6 +362,78 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
         assert_no_effect_packets(&observe(&mut reader, &player).await);
     }
     player.gamemode.store(GameMode::Survival);
+    events.cancel_consume.store(false, Ordering::Relaxed);
+    events.cancel_interact.store(false, Ordering::Relaxed);
+    let world = player.world();
+    world
+        .level
+        .loaded_chunks
+        .get(&Vector2::new(0, 0))
+        .unwrap()
+        .set_block_absolute_y(0, 64, 0, Block::STONE.default_state.id);
+    for hand in [Hand::Right, Hand::Left] {
+        for on_block in [true, false] {
+            player.tick_counter.fetch_add(140, Ordering::Relaxed);
+            player.living_entity.clear_active_hand();
+            player.inventory().set_stack_in_hand(hand, stack.clone());
+            observe(&mut reader, &player).await;
+            let before = used();
+            let event_count = events.instrument_events.load(Ordering::Relaxed);
+            if on_block {
+                player
+                    .client
+                    .java()
+                    .unwrap()
+                    .handle_use_item_on(
+                        &player,
+                        &SUseItemOn {
+                            hand: VarInt(if hand == Hand::Right { 0 } else { 1 }),
+                            position: BlockPos::new(0, 64, 0),
+                            face: VarInt(1),
+                            cursor_pos: Vector3::new(0.5, 1.0, 0.5),
+                            inside_block: false,
+                            is_against_world_border: false,
+                            sequence: VarInt(2),
+                        },
+                        &server,
+                    )
+                    .unwrap();
+            } else {
+                let mut candidate = player.inventory().get_stack_in_hand(hand);
+                server
+                    .item_registry
+                    .use_on_entity(&mut candidate, &player, player.clone());
+                assert!(candidate.are_items_and_components_equal(&stack));
+            }
+            assert_eq!(used(), before);
+            assert_eq!(
+                events.instrument_events.load(Ordering::Relaxed),
+                event_count
+            );
+            assert!(!player.is_on_cooldown("test:horns"));
+            assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
+            assert_no_effect_packets(&observe(&mut reader, &player).await);
+            use_packet(&player, &server, hand);
+            assert_eq!(used(), before + 1);
+            assert_eq!(
+                events.instrument_events.load(Ordering::Relaxed),
+                event_count + 1
+            );
+            assert_eq!(
+                *player.living_entity.active_hand.lock().unwrap(),
+                Some(hand)
+            );
+            assert_eq!(
+                player.living_entity.item_use_time.load(Ordering::Relaxed),
+                140
+            );
+            assert_effect_packets(
+                &observe(&mut reader, &player).await,
+                Sound::ItemGoatHornSound1,
+                "test:horns",
+            );
+        }
+    }
     drop(reader);
     close_fixture(&fixture).await;
 }

@@ -111,6 +111,9 @@ impl ItemRegistry {
         block: &Block,
         server: &Server,
     ) -> BlockActionResult {
+        if stack.item.id == Item::GOAT_HORN.id {
+            return BlockActionResult::Pass;
+        }
         let cooldown = stack.get_use_cooldown().cloned();
         let cooldown_group = cooldown
             .as_ref()
@@ -139,6 +142,9 @@ impl ItemRegistry {
         player: &Player,
         entity: Arc<dyn EntityBase>,
     ) {
+        if stack.item.id == Item::GOAT_HORN.id {
+            return;
+        }
         let cooldown = stack.get_use_cooldown().cloned();
         let cooldown_group = cooldown
             .as_ref()

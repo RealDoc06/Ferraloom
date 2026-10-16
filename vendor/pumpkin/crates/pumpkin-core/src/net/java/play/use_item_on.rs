@@ -76,7 +76,9 @@ impl JavaClient {
 
         let mut item = inventory.get_stack_in_hand(hand);
         let item_id = item.item.id;
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        if item_id != Item::GOAT_HORN.id {
+            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        }
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
