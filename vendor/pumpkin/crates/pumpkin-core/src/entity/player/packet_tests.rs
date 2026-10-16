@@ -124,11 +124,21 @@ impl Fixture {
         Self::with_nether(count, false).await
     }
 
+    async fn with_nether(count: usize, allow_nether: bool) -> Self {
+        Self::build(count, allow_nether, false).await
+    }
+
+    async fn connected(count: usize, allow_nether: bool) -> Self {
+        let fixture = Self::build(count, allow_nether, true).await;
+        fixture.prepare_connected_worlds().await;
+        fixture
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "Keep server, terrain, transport and session admission setup in one fixture."
     )]
-    async fn with_nether(count: usize, allow_nether: bool) -> Self {
+    async fn build(count: usize, allow_nether: bool, controlled_terrain: bool) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -164,6 +174,9 @@ impl Fixture {
         )
         .await
         .unwrap();
+        if controlled_terrain {
+            Self::stop_terrain_schedulers(&server).await;
+        }
         for world in server.worlds.load().iter() {
             world.level_info.rcu(|current| {
                 let mut info = (**current).clone();
@@ -243,6 +256,119 @@ impl Fixture {
             server,
             players,
             peers,
+        }
+    }
+
+    /// Stop terrain publication before installing synthetic FULL chunks. Keep
+    /// the level's cancellation token live so packet admission and entity I/O
+    /// retain their normal lifetimes; ordinary fixture shutdown still owns them.
+    async fn stop_terrain_schedulers(server: &Server) {
+        let mut threads = Vec::new();
+        for world in server.worlds.load_full().iter() {
+            world
+                .level
+                .shut_down_chunk_system
+                .store(true, Ordering::Relaxed);
+            world.level.level_channel.notify();
+            threads.extend(world.level.thread_tracker.lock().unwrap().drain(..));
+        }
+        bounded(tokio::task::spawn_blocking(move || {
+            for thread in threads {
+                thread.join().unwrap();
+            }
+        }))
+        .await
+        .unwrap();
+        for world in server.worlds.load_full().iter() {
+            world.level.chunk_system_tasks.close();
+            bounded(world.level.chunk_system_tasks.wait()).await;
+            assert!(!world.level.cancel_token.is_cancelled());
+        }
+    }
+
+    /// Prepare already-connected viewers before testing packet progress. The
+    /// minimal fixture otherwise has only one FULL chunk and an uninitialized
+    /// client view, unlike a player whose login chunk setup has completed.
+    async fn prepare_connected_worlds(&self) {
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{chunk_system::ChunkLoading, cylindrical_chunk_iterator::Cylindrical};
+
+        let network = &self.server.advanced_config.networking.java;
+        // Simulation needs its block-ticking ring and FULL postprocessing halo;
+        // the cylindrical view extends one chunk beyond its configured distance.
+        let radius = (i32::from(network.simulation_distance.get()) + 2)
+            .max(i32::from(network.view_distance.get()) + 1);
+        bounded(async {
+            for world in self.server.worlds.load_full().iter() {
+                for x in -radius..=radius {
+                    for z in -radius..=radius {
+                        let position = Vector2::new(x, z);
+                        let chunk = world
+                            .level
+                            .loaded_chunks
+                            .entry(position)
+                            .or_insert_with(|| pumpkin_world::chunk::ChunkData::empty_sync(x, z))
+                            .clone();
+                        chunk.post_processing_ready.store(true, Ordering::Release);
+                        {
+                            let mut loading = world.level.chunk_loading.lock().unwrap();
+                            loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
+                            loading.send_change();
+                        }
+                        world.level.get_entity_chunk(position).await.unwrap();
+                    }
+                }
+            }
+            for player in &self.players {
+                let world = player.world();
+                let center = player.get_entity().chunk_pos.load();
+                let view =
+                    Cylindrical::new(center, crate::world::chunker::get_view_distance(player));
+                // Model a delivered view through the real watch coordinator;
+                // this fixture does not exercise login or initial chunk delivery.
+                // Then update_position installs the normal player tickets without
+                // starting a second asynchronous entity receiver for that view.
+                let revision = player.chunk_watches.request().publish(&world, view);
+                player.chunk_watches.apply(revision).await.unwrap();
+                crate::world::chunker::update_position(player);
+                assert!(
+                    player
+                        .watched_section
+                        .load()
+                        .is_within_distance(center.x, center.y)
+                );
+            }
+            for world in self.server.worlds.load_full().iter() {
+                world.update_active_chunks();
+            }
+            // Reconciliation is a login prerequisite, not an acceptance tick.
+            // Do not advance gameplay or poll the packet runner during setup.
+            loop {
+                let ready = self.players.iter().all(|player| {
+                    let world = player.world();
+                    let center = player.get_entity().chunk_pos.load();
+                    world.enter_packet_callbacks(Some(center)).is_some()
+                        && player
+                            .watched_section
+                            .load()
+                            .all_chunks_within()
+                            .all(|pos| {
+                                world
+                                    .level
+                                    .get_entity_chunk_sync(&pos)
+                                    .is_some_and(|chunk| chunk.live.load(Ordering::Acquire))
+                            })
+                });
+                if ready {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        assert!(self.server.packet_runner.ready.is_empty());
+        for player in &self.players {
+            assert_eq!(player.packet_activity.state().active, 0);
         }
     }
 
@@ -418,7 +544,7 @@ impl EventHandler<PacketReceivedEvent> for TransportObserver {
 
 #[tokio::test]
 async fn received_keep_alive_stays_live_behind_real_command_and_ordered_hooks() {
-    let fixture = bounded(Fixture::new(2)).await;
+    let fixture = bounded(Fixture::connected(2, false)).await;
     let player = &fixture.players[0];
     let other = &fixture.players[1];
     let client = player.client.java().unwrap();
@@ -1258,7 +1384,7 @@ async fn sixty_fifth_command_waits_for_the_next_epoch_not_one_tick_per_command()
 #[tokio::test]
 async fn held_command_orders_a_real_menu_close_while_another_player_progresses() {
     use pumpkin_protocol::java::server::play::SCloseContainer;
-    let fixture = Fixture::new(2).await;
+    let fixture = Fixture::connected(2, false).await;
     let player = &fixture.players[0];
     let menu_player = player.clone();
     let window = bounded(tokio::task::spawn_blocking(move || {
@@ -1428,7 +1554,7 @@ async fn stopped_runner_still_completes_a_late_native_child_before_finals() {
 
 #[tokio::test]
 async fn connected_transfer_and_respawn_finish_before_following_input() {
-    let fixture = Fixture::with_nether(1, true).await;
+    let fixture = Fixture::connected(1, true).await;
     let player = &fixture.players[0];
     player.set_client_loaded(true);
     let source = player.world();
@@ -1651,6 +1777,7 @@ async fn actual_socket_ingress_accepts_a_command_burst_and_exact_keepalive() {
     reason = "Keep the real block mutation, racing tick and outgoing ACK ordering assertions together."
 )]
 async fn actual_block_update_precedes_covering_ack_when_completion_races_a_tick() {
+    use pumpkin_data::block_properties::{AttachFace, LeverLikeProperties};
     use pumpkin_protocol::{
         ServerPacket,
         java::{
@@ -1660,19 +1787,34 @@ async fn actual_block_update_precedes_covering_ack_when_completion_races_a_tick(
         ser::NetworkReadExt,
     };
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-    let mut fixture = Fixture::new(1).await;
+    let mut fixture = Fixture::connected(1, false).await;
     let player = fixture.players[0].clone();
     let world = player.world();
     let position = BlockPos::new(1, 65, 1);
+    let chunk_position = position.chunk_position();
+    assert!(
+        player
+            .watched_section
+            .load()
+            .is_within_distance(chunk_position.x, chunk_position.y),
+        "the client must be eligible for the lever's authoritative block update"
+    );
+    let terrain = world.level.ready_chunk(chunk_position).unwrap();
+    let mut lever = LeverLikeProperties::default(&pumpkin_data::Block::LEVER);
+    // The fixture's stone support is below the lever; the default face is Wall.
+    lever.face = AttachFace::Floor;
     world
         .level
         .read_chunk_sync(&position.chunk_position(), |chunk| {
             chunk.set_block_absolute_y(1, 64, 1, pumpkin_data::Block::STONE.default_state.id);
-            chunk.set_block_absolute_y(1, 65, 1, pumpkin_data::Block::LEVER.default_state.id);
+            chunk.set_block_absolute_y(1, 65, 1, lever.to_state_id(&pumpkin_data::Block::LEVER));
         })
         .unwrap();
     player.set_client_loaded(true);
     let before = world.get_block_state_id(&position);
+    let mut toggled = LeverLikeProperties::from_state_id(before);
+    toggled.powered = !toggled.powered;
+    let expected = toggled.to_state_id(&pumpkin_data::Block::LEVER);
     let barrier = Arc::new(Barrier::default());
     fixture.server.plugin_manager.register(
         Arc::new(CommandBarrier {
@@ -1712,6 +1854,11 @@ async fn actual_block_update_precedes_covering_ack_when_completion_races_a_tick(
     barrier.release.notify_one();
     settled(&player).await;
     bounded(racing_tick).await.unwrap();
+    assert!(Arc::ptr_eq(
+        &terrain,
+        &world.level.ready_chunk(chunk_position).unwrap()
+    ));
+    assert_eq!(world.get_block_state_id(&position), expected);
     assert_ne!(
         world.get_block_state_id(&position),
         before,
@@ -1840,7 +1987,7 @@ async fn ticker_sprint_completes_command_chat_and_menu_before_sprint_ends() {
     use pumpkin_gametest::GameTestRunner;
     use pumpkin_protocol::java::server::play::{SChatMessage, SCloseContainer};
 
-    let fixture = Fixture::new(1).await;
+    let fixture = Fixture::connected(1, false).await;
     let player = fixture.players[0].clone();
     let server = fixture.server.clone();
     bounded(tokio::task::spawn_blocking(move || {
