@@ -1038,7 +1038,7 @@ async fn consumable_horn_expiry_consumes_only_the_active_hand() {
                         cooldown.start_tick,
                         started + if consumed { 140 } else { 0 }
                     );
-                    assert_eq!(cooldown.duration, if consumed { 20 } else { 140 })
+                    assert_eq!(cooldown.duration, if consumed { 20 } else { 140 });
                 };
                 let packets = observe(&mut reader, &player).await;
                 let cooldowns: Vec<_> = packets

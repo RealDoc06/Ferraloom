@@ -305,7 +305,7 @@ impl JukeboxBlockEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut actions = Vec::new();
             state.replace(record, &mut actions);
-            state.enqueue(&Arc::downgrade(&world), actions)
+            state.enqueue(&Arc::downgrade(&world), actions);
         };
         self.drain();
     }
@@ -363,7 +363,7 @@ impl JukeboxBlockEntity {
             if state.draining || state.pending.is_empty() {
                 return;
             }
-            state.draining = true
+            state.draining = true;
         };
         let mut release = DrainGuard(Some(&self.state));
         loop {
@@ -542,7 +542,7 @@ impl BlockEntity for JukeboxBlockEntity {
                 return;
             }
             state.detached = true;
-            state.revision = Arc::new(())
+            state.revision = Arc::new(());
         };
         // Official setRemoved is unconditional and separate from player.stop.
         // Preserve active elapsed for the final saved snapshot and fresh restore.
@@ -597,7 +597,7 @@ impl BlockEntity for JukeboxBlockEntity {
                 // Its plugin/vibration timing is not a vanilla parity claim.
                 state.elapsed += 1;
             }
-            state.enqueue(&Arc::downgrade(world), actions)
+            state.enqueue(&Arc::downgrade(world), actions);
         };
         self.drain();
     }

@@ -3535,14 +3535,12 @@ impl EntityBase for LivingEntity {
                     // 1) selected hotbar (held_item)
                     // 2) off-hand
                     // 3) fallback to active_hand if the above didn't match
-                    let mut handled = if let Some(hand) = horn_hand {
+                    let mut handled = horn_hand.is_some_and(|hand| {
                         let mut stack = player.inventory.get_stack_in_hand(hand);
                         stack.decrement_unless_creative(player.gamemode.load(), 1);
                         player.inventory.set_stack_in_hand(hand, stack);
                         true
-                    } else {
-                        false
-                    };
+                    });
 
                     // Check main hand (hotbar selected)
                     let mut held = player.inventory.held_item();
