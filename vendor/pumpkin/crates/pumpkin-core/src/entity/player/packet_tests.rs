@@ -321,6 +321,73 @@ impl Fixture {
         fixture
     }
 
+    /// Both dimensions have controlled ready terrain and entity data, but no
+    /// fixture terrain tickets. Source watches are real existing-only watches.
+    async fn spectator_transfer(count: usize, absent_source: bool) -> Self {
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+
+        let fixture = Self::build_for_mode(count, true, true, GameMode::Spectator).await;
+        let radius = i32::from(
+            fixture
+                .server
+                .advanced_config
+                .networking
+                .java
+                .view_distance
+                .get(),
+        ) + 1;
+        for world in fixture.server.worlds.load_full().iter() {
+            for x in -radius..=radius {
+                for z in -radius..=radius {
+                    let position = Vector2::new(x, z);
+                    let chunk = pumpkin_world::chunk::ChunkData::empty_sync(x, z);
+                    chunk.post_processing_ready.store(true, Ordering::Release);
+                    world.level.loaded_chunks.insert(position, chunk);
+                    world.level.get_entity_chunk(position).await.unwrap();
+                }
+            }
+        }
+        for player in &fixture.players {
+            let source = player.world();
+            let view = Cylindrical::new(
+                player.get_entity().chunk_pos.load(),
+                crate::world::chunker::get_view_distance(player),
+            );
+            let revision = player.chunk_watches.request().publish(&source, view);
+            player.chunk_watches.apply(revision).await.unwrap();
+            crate::world::chunker::update_position(player);
+            player.set_client_loaded(true);
+        }
+        for world in fixture.server.worlds.load_full().iter() {
+            world.update_active_chunks();
+            assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+            assert!(
+                world
+                    .level
+                    .chunk_loading
+                    .lock()
+                    .unwrap()
+                    .pos_level
+                    .is_empty()
+            );
+            assert!(
+                !world
+                    .level_info
+                    .load()
+                    .game_rules
+                    .spectators_generate_chunks
+            );
+        }
+        let source = fixture.players[0].world();
+        let position = fixture.players[0].get_entity().chunk_pos.load();
+        if absent_source {
+            source.level.loaded_chunks.remove(&position).unwrap();
+        }
+        assert_eq!(source.level.ready_chunk(position).is_none(), absent_source);
+        fixture
+    }
+
     /// Populate the real terminal failure cache through the region reader and
     /// scheduler before controlling readiness; never inject a synthetic error.
     async fn refused_packet_halo(count: usize) -> Self {
@@ -1957,6 +2024,372 @@ async fn refused_halo_retires_generic_child_and_releases_cross_player_parent() {
     assert_eq!(saved.get_int("SelectedItemSlot"), Some(0));
     drop(required);
     fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unticketed_spectator_self_transfer_keeps_following_input_ordered() {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector3::Vector3;
+
+    for absent_source in [false, true] {
+        let fixture = bounded(Fixture::spectator_transfer(1, absent_source)).await;
+        let player = &fixture.players[0];
+        let source = player.world();
+        let source_chunk = player.get_entity().chunk_pos.load();
+        let destination = fixture
+            .server
+            .get_world_from_dimension(&Dimension::THE_NETHER);
+        let epoch = player.chunk_send_epoch.load(Ordering::Relaxed);
+        let ticks = player.tick_counter.load(Ordering::Relaxed);
+        let barrier = Arc::new(Barrier::default());
+        fixture.server.plugin_manager.register(
+            Arc::new(TransferBarrier(barrier.clone())),
+            EventPriority::Normal,
+            true,
+        );
+        enqueue(
+            player,
+            &SChatCommand {
+                command: "execute in minecraft:the_nether run tp @s 2 90 2",
+            },
+        );
+        enqueue(player, &SSetHeldItem { slot: 6 });
+        dispatch(player).await;
+        bounded(barrier.entered.notified()).await;
+        assert!(Arc::ptr_eq(&source, &player.world()));
+        assert_eq!(player.chunk_send_epoch.load(Ordering::Relaxed), epoch);
+        assert_eq!(player.inventory.get_selected_slot(), 0);
+        assert_eq!(player.inbound_packets.len(), 1);
+        assert!(player.packet_activity.state().active > 0);
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        barrier.release.notify_one();
+        settled(player).await;
+        assert!(Arc::ptr_eq(&destination, &player.world()));
+        assert!(source.get_player_by_uuid(player.gameprofile.id).is_none());
+        assert!(
+            destination
+                .get_player_by_uuid(player.gameprofile.id)
+                .is_some()
+        );
+        assert_eq!(player.get_entity().pos.load(), Vector3::new(2.0, 90.0, 2.0));
+        assert!(
+            destination
+                .level
+                .ready_chunk(player.get_entity().chunk_pos.load())
+                .is_some()
+        );
+        assert!(player.chunk_send_epoch.load(Ordering::Relaxed) > epoch);
+        assert_eq!(player.inventory.get_selected_slot(), 6);
+        assert_eq!(player.packet_activity.state().active, 0);
+        assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks);
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_eq!(
+            source.level.loaded_chunks.contains_key(&source_chunk),
+            !absent_source
+        );
+        assert!(!player.client.closed());
+        fixture.finish().await;
+    }
+}
+
+#[tokio::test]
+async fn unticketed_spectator_cross_player_transfer_releases_parent() {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector3::Vector3;
+
+    for absent_source in [false, true] {
+        let fixture = bounded(Fixture::spectator_transfer(2, absent_source)).await;
+        let parent = &fixture.players[0];
+        let target = &fixture.players[1];
+        let source = target.world();
+        let source_chunk = target.get_entity().chunk_pos.load();
+        let destination = fixture
+            .server
+            .get_world_from_dimension(&Dimension::THE_NETHER);
+        let epoch = target.chunk_send_epoch.load(Ordering::Relaxed);
+        let parent_epoch = parent.chunk_send_epoch.load(Ordering::Relaxed);
+        let parent_ticks = parent.tick_counter.load(Ordering::Relaxed);
+        let ticks = target.tick_counter.load(Ordering::Relaxed);
+        let barrier = Arc::new(Barrier::default());
+        fixture.server.plugin_manager.register(
+            Arc::new(TransferBarrier(barrier.clone())),
+            EventPriority::Normal,
+            true,
+        );
+        enqueue(
+            parent,
+            &SChatCommand {
+                command: "execute in minecraft:the_nether run tp PacketPlayer1 2 90 2",
+            },
+        );
+        enqueue(parent, &SSetHeldItem { slot: 6 });
+        dispatch(parent).await;
+        bounded(barrier.entered.notified()).await;
+        // Queue the target's following input only after the real command has
+        // acquired its cross-player child. No racing producer decides this order.
+        enqueue(target, &SSetHeldItem { slot: 7 });
+        dispatch(target).await;
+        assert!(parent.packet_activity.state().active > 0);
+        assert!(target.packet_activity.state().active > 0);
+        assert_eq!(parent.inventory.get_selected_slot(), 0);
+        assert_eq!(target.inventory.get_selected_slot(), 0);
+        assert!(Arc::ptr_eq(&source, &target.world()));
+        assert_eq!(target.chunk_send_epoch.load(Ordering::Relaxed), epoch);
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        barrier.release.notify_one();
+        settled(parent).await;
+        settled(target).await;
+        assert!(Arc::ptr_eq(&source, &parent.world()));
+        assert!(Arc::ptr_eq(&destination, &target.world()));
+        assert!(source.get_player_by_uuid(target.gameprofile.id).is_none());
+        assert!(
+            destination
+                .get_player_by_uuid(target.gameprofile.id)
+                .is_some()
+        );
+        assert_eq!(target.get_entity().pos.load(), Vector3::new(2.0, 90.0, 2.0));
+        assert_eq!(
+            parent.chunk_send_epoch.load(Ordering::Relaxed),
+            parent_epoch
+        );
+        assert!(target.chunk_send_epoch.load(Ordering::Relaxed) > epoch);
+        assert_eq!(parent.inventory.get_selected_slot(), 6);
+        assert_eq!(target.inventory.get_selected_slot(), 7);
+        assert_eq!(parent.packet_activity.state().active, 0);
+        assert_eq!(target.packet_activity.state().active, 0);
+        assert_eq!(parent.tick_counter.load(Ordering::Relaxed), parent_ticks);
+        assert_eq!(target.tick_counter.load(Ordering::Relaxed), ticks);
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_eq!(
+            source.level.loaded_chunks.contains_key(&source_chunk),
+            !absent_source
+        );
+        assert!(!parent.client.closed());
+        assert!(!target.client.closed());
+        fixture.finish().await;
+    }
+}
+
+#[tokio::test]
+async fn unticketed_spectator_transfer_waits_for_destination_readiness() {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+
+    let fixture = bounded(Fixture::spectator_transfer(1, true)).await;
+    let player = &fixture.players[0];
+    let source = player.world();
+    let destination = fixture
+        .server
+        .get_world_from_dimension(&Dimension::THE_NETHER);
+    let center = Vector2::new(0, 0);
+    let terrain = destination.level.ready_chunk(center).unwrap();
+    let (neighbor, halo) = destination
+        .level
+        .loaded_chunks
+        .remove(&Vector2::new(1, 0))
+        .unwrap();
+    terrain
+        .post_processing_ready
+        .store(false, Ordering::Release);
+    let epoch = player.chunk_send_epoch.load(Ordering::Relaxed);
+    let ticks = player.tick_counter.load(Ordering::Relaxed);
+    enqueue(
+        player,
+        &SChatCommand {
+            command: "execute in minecraft:the_nether run tp @s 2 90 2",
+        },
+    );
+    enqueue(player, &SSetHeldItem { slot: 6 });
+    dispatch(player).await;
+    assert!(Arc::ptr_eq(&source, &player.world()));
+    assert!(source.get_player_by_uuid(player.gameprofile.id).is_some());
+    assert!(
+        destination
+            .get_player_by_uuid(player.gameprofile.id)
+            .is_none()
+    );
+    assert!(destination.level.ready_chunk(center).is_none());
+    assert!(
+        !destination
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .ticket
+            .is_empty()
+    );
+    assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    assert!(player.packet_activity.state().active > 0);
+    assert_eq!(player.inventory.get_selected_slot(), 0);
+    assert_eq!(player.chunk_send_epoch.load(Ordering::Relaxed), epoch);
+    assert!(!player.client.closed());
+
+    // Publish the missing Full halo member. The actual destination preparation
+    // must perform postprocessing before it can remove the source registration.
+    destination.level.loaded_chunks.insert(neighbor, halo);
+    destination.level.chunk_activation_changed.notify_waiters();
+    settled(player).await;
+    assert!(destination.level.ready_chunk(center).is_some());
+    assert!(Arc::ptr_eq(&destination, &player.world()));
+    assert_eq!(player.inventory.get_selected_slot(), 6);
+    assert_eq!(player.packet_activity.state().active, 0);
+    assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks);
+    assert!(!source.level.loaded_chunks.contains_key(&center));
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unticketed_spectator_close_during_destination_wait_drains_parent() {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+
+    let fixture = bounded(Fixture::spectator_transfer(2, true)).await;
+    let parent = &fixture.players[0];
+    let target = &fixture.players[1];
+    let source = target.world();
+    let destination = fixture
+        .server
+        .get_world_from_dimension(&Dimension::THE_NETHER);
+    let center = Vector2::new(0, 0);
+    destination
+        .level
+        .loaded_chunks
+        .remove(&Vector2::new(1, 0))
+        .unwrap();
+    destination
+        .level
+        .ready_chunk(center)
+        .unwrap()
+        .post_processing_ready
+        .store(false, Ordering::Release);
+    let epoch = target.chunk_send_epoch.load(Ordering::Relaxed);
+    enqueue(
+        parent,
+        &SChatCommand {
+            command: "execute in minecraft:the_nether run tp PacketPlayer1 2 90 2",
+        },
+    );
+    enqueue(parent, &SSetHeldItem { slot: 6 });
+    dispatch(parent).await;
+    assert!(parent.packet_activity.state().active > 0);
+    assert!(target.packet_activity.state().active > 0);
+    assert!(
+        !destination
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .ticket
+            .is_empty()
+    );
+    assert!(Arc::ptr_eq(&source, &target.world()));
+    enqueue(target, &SSetHeldItem { slot: 7 });
+    target.client.java().unwrap().close();
+    drive_until(
+        &fixture.server,
+        crate::finish_player_session(&fixture.server, target),
+    )
+    .await
+    .unwrap();
+    settled(parent).await;
+    assert!(Arc::ptr_eq(&source, &target.world()));
+    assert_eq!(target.chunk_send_epoch.load(Ordering::Relaxed), epoch);
+    assert!(
+        destination
+            .get_player_by_uuid(target.gameprofile.id)
+            .is_none()
+    );
+    assert!(
+        fixture
+            .server
+            .get_player_by_uuid(target.gameprofile.id)
+            .is_none()
+    );
+    assert_eq!(target.inventory.get_selected_slot(), 0);
+    assert!(target.inbound_packets.is_empty());
+    assert_eq!(target.packet_activity.state().active, 0);
+    assert_eq!(parent.packet_activity.state().active, 0);
+    assert_eq!(parent.inventory.get_selected_slot(), 6);
+    assert!(!parent.client.closed());
+    assert!(
+        destination
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .ticket
+            .is_empty()
+    );
+    assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+    assert!(!source.level.loaded_chunks.contains_key(&center));
+    let saved = fixture
+        .server
+        .player_data_storage
+        .load_data(&target.gameprofile.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        saved.get_string("Dimension").unwrap(),
+        "minecraft:overworld"
+    );
+    assert_eq!(saved.get_int("SelectedItemSlot"), Some(0));
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn unticketed_spectator_respawn_preparation_uses_source_lifetime() {
+    use pumpkin_data::dimension::Dimension;
+
+    for absent_source in [false, true] {
+        let fixture = bounded(Fixture::spectator_transfer(1, false)).await;
+        let player = &fixture.players[0];
+        let destination = player.world();
+        enqueue(
+            player,
+            &SChatCommand {
+                command: "execute in minecraft:the_nether run tp @s 2 90 2",
+            },
+        );
+        settled(player).await;
+        let source = player.world();
+        assert_eq!(source.dimension, Dimension::THE_NETHER);
+        let source_chunk = player.get_entity().chunk_pos.load();
+        if absent_source {
+            source.level.loaded_chunks.remove(&source_chunk).unwrap();
+        }
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_eq!(
+            source.level.ready_chunk(source_chunk).is_none(),
+            absent_source
+        );
+        let ticks = player.tick_counter.load(Ordering::Relaxed);
+        player.living_entity.health.store(0.0);
+        enqueue(
+            player,
+            &SClientCommand::new(SClientCommand::PERFORM_RESPAWN.into()),
+        );
+        enqueue(player, &SSetHeldItem { slot: 3 });
+        settled(player).await;
+        assert!(Arc::ptr_eq(&destination, &player.world()));
+        assert!(source.get_player_by_uuid(player.gameprofile.id).is_none());
+        assert!(
+            destination
+                .get_player_by_uuid(player.gameprofile.id)
+                .is_some()
+        );
+        assert!(player.living_entity.health.load() > 0.0);
+        assert!(player.is_spectator());
+        assert_eq!(player.inventory.get_selected_slot(), 3);
+        assert_eq!(player.packet_activity.state().active, 0);
+        assert_eq!(player.tick_counter.load(Ordering::Relaxed), ticks);
+        assert!(source.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert_eq!(
+            source.level.loaded_chunks.contains_key(&source_chunk),
+            !absent_source
+        );
+        assert!(!player.client.closed());
+        fixture.finish().await;
+    }
 }
 
 #[tokio::test]

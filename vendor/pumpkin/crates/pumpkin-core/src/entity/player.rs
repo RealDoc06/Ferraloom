@@ -4133,10 +4133,12 @@ impl Player {
             return;
         }
         let current_world = self.world();
-        let source_chunk = self.get_entity().chunk_pos.load();
+        // Source stages change player/session state, not source terrain. Keep
+        // their world lifetime even when an existing-only spectator has no
+        // source chunk; destination terrain is pinned and checked below.
         if Arc::ptr_eq(&current_world, &new_world) {
             current_world
-                .packet_stage(Some(source_chunk), async {
+                .packet_stage(None, async {
                     self.request_teleport(
                         position,
                         yaw.unwrap_or_else(|| self.get_entity().yaw.load()),
@@ -4162,10 +4164,7 @@ impl Player {
             cancelled: false,
         };
         if current_world
-            .packet_stage(
-                Some(source_chunk),
-                server.plugin_manager.fire(&server, &mut event),
-            )
+            .packet_stage(None, server.plugin_manager.fire(&server, &mut event))
             .await
             .is_none()
             || event.cancelled
@@ -4179,7 +4178,7 @@ impl Player {
         let pitch = event.pitch;
         if Arc::ptr_eq(&current_world, &new_world) {
             current_world
-                .packet_stage(Some(source_chunk), async {
+                .packet_stage(None, async {
                     self.request_teleport(position, yaw, pitch);
                     crate::world::chunker::update_position(self);
                 })
@@ -4206,7 +4205,7 @@ impl Player {
             }
         }
         let Some(Some(player)) = current_world
-            .packet_stage(Some(source_chunk), async {
+            .packet_stage(None, async {
                 self.set_client_loaded(false);
                 current_world.remove_player(self, false).await
             })

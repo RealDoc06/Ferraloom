@@ -4834,7 +4834,6 @@ impl World {
             return RespawnOutcome::Aborted;
         }
         let current_world = player.world();
-        let source_chunk = player.get_entity().chunk_pos.load();
         let last_pos = player.get_entity().last_pos.load();
         let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
@@ -4864,6 +4863,9 @@ impl World {
             )
         };
 
+        // Preparation resolves destination terrain under its own guards. Its
+        // source wrapper, hooks and registry removal need only this captured
+        // world's lifetime, including for spectators over absent terrain.
         let prepare = async {
             // Get respawn position and dimension
             let respawn = match player.calculate_respawn_point().await {
@@ -4932,9 +4934,8 @@ impl World {
             let position = spawn_loc_event.spawn_pos;
             Some((position, yaw, pitch, respawn_dimension, invalid_respawn))
         };
-        let Some(Some((position, yaw, pitch, respawn_dimension, invalid_respawn))) = current_world
-            .packet_stage(Some(source_chunk), prepare)
-            .await
+        let Some(Some((position, yaw, pitch, respawn_dimension, invalid_respawn))) =
+            current_world.packet_stage(None, prepare).await
         else {
             return RespawnOutcome::Aborted;
         };
@@ -4972,7 +4973,7 @@ impl World {
                     cancelled: false,
                 };
                 if current_world
-                    .packet_stage(Some(source_chunk), s.plugin_manager.fire(s, &mut event))
+                    .packet_stage(None, s.plugin_manager.fire(s, &mut event))
                     .await
                     .is_none()
                 {
@@ -5030,10 +5031,7 @@ impl World {
         }
         if target_world.uuid != current_world.uuid {
             if current_world
-                .packet_stage(
-                    Some(source_chunk),
-                    current_world.remove_player(player, false),
-                )
+                .packet_stage(None, current_world.remove_player(player, false))
                 .await
                 .flatten()
                 .is_none()
