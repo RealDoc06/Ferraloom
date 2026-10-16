@@ -146,7 +146,7 @@ fn saved_data_payload(root: &NbtCompound) -> NbtCompound {
     root.get_compound("data").cloned().unwrap_or_default()
 }
 
-/// 26.3 saved-data codecs keep DataVersion beside data, never inside its map.
+/// 26.3 saved-data codecs keep `DataVersion` beside data, never inside its map.
 fn write_data_root(
     path: &Path,
     mut root: NbtCompound,
@@ -467,9 +467,7 @@ pub fn write_world_gen_settings(
     write_data_root(&path, root, inner, data_version)
 }
 
-#[must_use]
-pub fn game_rules_to_nbt(rules: &GameRuleRegistry, data_version: i32) -> NbtCompound {
-    let mut inner = NbtCompound::new();
+fn write_game_rule_values(inner: &mut NbtCompound, rules: &GameRuleRegistry) {
     for rule in GameRule::all() {
         let key = format!("minecraft:{rule}");
         match rules.get(rule) {
@@ -477,6 +475,12 @@ pub fn game_rules_to_nbt(rules: &GameRuleRegistry, data_version: i32) -> NbtComp
             GameRuleValue::Int(i) => inner.put(&key, NbtTag::Int(*i as i32)),
         }
     }
+}
+
+#[must_use]
+pub fn game_rules_to_nbt(rules: &GameRuleRegistry, data_version: i32) -> NbtCompound {
+    let mut inner = NbtCompound::new();
+    write_game_rule_values(&mut inner, rules);
     let mut root = NbtCompound::new();
     root.put_int("DataVersion", data_version);
     root.put_compound("data", inner);
@@ -541,14 +545,7 @@ pub fn write_game_rules(
 
     let root = existing_data_root(&path)?;
     let mut inner = saved_data_payload(&root);
-    let encoded = game_rules_to_nbt(rules, data_version);
-    for (key, value) in &encoded
-        .get_compound("data")
-        .expect("encoded rule payload")
-        .child_tags
-    {
-        inner.put(key, value.clone());
-    }
+    write_game_rule_values(&mut inner, rules);
     write_data_root(&path, root, inner, data_version)
 }
 

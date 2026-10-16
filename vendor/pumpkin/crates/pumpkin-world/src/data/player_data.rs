@@ -298,6 +298,10 @@ fn unsupported(field: impl Into<String>, reason: &'static str) -> PlayerDataErro
 /// Refuse shapes the current player model would partly consume and then erase.
 /// This is admission validation, not a datafixer. An unsupported primary must not
 /// fall back to an older backup; both files remain untouched for a compatible server.
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the complete fail-closed player admission validation together."
+)]
 fn validate_player_data(data: &NbtCompound) -> Result<(), PlayerDataError> {
     use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
     if let Some(version) = data.get("DataVersion") {
@@ -367,7 +371,7 @@ fn validate_player_data(data: &NbtCompound) -> Result<(), PlayerDataError> {
             "warning_level",
             "cooldown_ticks",
         ] {
-            if tracker.get(key).is_some() && !tracker.get_int(key).is_some_and(|v| v >= 0) {
+            if tracker.get(key).is_some() && tracker.get_int(key).is_none_or(|v| v < 0) {
                 return Err(unsupported(
                     format!("warden_spawn_tracker.{key}"),
                     "requires a nonnegative int",
@@ -637,7 +641,7 @@ fn normalize_item_defaults(item: &mut NbtCompound) {
                     normalize_unsigned_byte(fireworks, "flight_duration");
                     if fireworks
                         .get_list("explosions")
-                        .is_some_and(|list| list.is_empty())
+                        .is_some_and(<[NbtTag]>::is_empty)
                     {
                         fireworks.child_tags.remove("explosions");
                     }
@@ -685,7 +689,7 @@ fn normalize_potion_defaults(data: &mut NbtTag) {
     }
     if contents
         .get_list("custom_effects")
-        .is_some_and(|list| list.is_empty())
+        .is_some_and(<[NbtTag]>::is_empty)
     {
         contents.child_tags.remove("custom_effects");
     }

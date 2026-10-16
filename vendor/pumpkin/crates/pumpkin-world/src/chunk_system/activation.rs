@@ -12,12 +12,13 @@ struct ActivationState {
 }
 
 #[derive(Default)]
-pub(crate) struct ChunkActivation {
+pub struct ChunkActivation {
     state: Mutex<ActivationState>,
     consumer: Mutex<()>,
 }
 
 /// One simulation, pending-delivery, or direct-wait owner's activation requests.
+///
 /// Completed chunks hold no activation ticket; dropping an owner cancels its
 /// remaining requests without affecting other owners of the same position.
 pub struct ChunkActivationDemand {
@@ -212,8 +213,8 @@ impl Level {
                     removed.push(pos);
                 }
             }
-            self.update_activation_tickets(&removed, &[]);
-        }
+            self.update_activation_tickets(&removed, &[])
+        };
         drop(consumer);
         // Requests/publications can arrive while another consumer owns the pass.
         if self.chunk_activation_revision.load(Ordering::Acquire) != observed_revision {

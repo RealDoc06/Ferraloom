@@ -63,7 +63,7 @@ pub fn write_gzip_compound_atomic(path: &Path, root: NbtCompound) -> Result<(), 
     write_gzip(path, None, root)
 }
 
-/// Save the previous level.dat as level.dat_old before replacing the main file.
+/// Save the previous `level.dat` as `level.dat_old` before replacing the main file.
 pub(crate) fn write_gzip_compound_atomic_with_backup(
     path: &Path,
     backup: &Path,
@@ -111,8 +111,8 @@ fn write_atomic_with_backup(
     {
         let mut writer = BufWriter::new(&stage.file);
         write(&mut writer)?;
-        writer.flush()?;
-    }
+        writer.flush()?
+    };
     stage.file.sync_all()?;
 
     if let Some(backup) = backup {

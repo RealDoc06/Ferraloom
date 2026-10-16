@@ -63,6 +63,7 @@ impl ChunkUnloadAccess<'_> {
         false
     }
 
+    #[must_use]
     pub fn requests(&self) -> Vec<(ChunkPos, SyncChunk)> {
         self.0
             .iter()

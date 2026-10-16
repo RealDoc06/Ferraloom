@@ -93,6 +93,10 @@ impl OreFeature {
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
             // Mth.sin returns f32; vanilla then keeps the random scale and radius in f64.
+            #[expect(
+                clippy::manual_midpoint,
+                reason = "Match Java's exact floating-point operation order for terrain generation."
+            )]
             let l = (f64::from(sin(f32::consts::PI * f) + 1.0) * h + 1.0) / 2.0;
 
             ds[k as usize * 4] = d;

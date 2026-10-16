@@ -170,8 +170,8 @@ mod tests {
         {
             let mut pending = chunk.post_processing.lock().unwrap();
             pending.resize_with(chunk.section.count + 2, Vec::new);
-            pending[chunk.section.count + 1].push(pack_position(&valid));
-        }
+            pending[chunk.section.count + 1].push(pack_position(&valid))
+        };
         chunk.dirty.store(false, Ordering::Relaxed);
         assert!(!chunk.process_post_processing(|pos| {
             assert_eq!(pos, valid);

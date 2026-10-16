@@ -1134,15 +1134,23 @@ mod tests {
 
     #[tokio::test]
     async fn durable_nbt_anvil_failed_encoding_keeps_chunk_and_entity_cache() {
-        assert_chunk_encode_failure::<anvil::AnvilChunkFile<ChunkData>>(Default::default()).await;
-        assert_entity_encode_failure::<anvil::AnvilChunkFile<ChunkEntityData>>(Default::default())
-            .await;
+        Box::pin(assert_chunk_encode_failure::<
+            anvil::AnvilChunkFile<ChunkData>,
+        >(pumpkin_config::chunk::AnvilChunkConfig::default()))
+        .await;
+        Box::pin(assert_entity_encode_failure::<
+            anvil::AnvilChunkFile<ChunkEntityData>,
+        >(pumpkin_config::chunk::AnvilChunkConfig::default()))
+        .await;
     }
 
     #[tokio::test]
     async fn durable_nbt_linear_failed_encoding_keeps_chunk_and_entity_cache() {
-        assert_chunk_encode_failure::<linear::LinearV2File<ChunkData>>(()).await;
-        assert_entity_encode_failure::<linear::LinearV2File<ChunkEntityData>>(()).await;
+        Box::pin(assert_chunk_encode_failure::<linear::LinearV2File<ChunkData>>(())).await;
+        Box::pin(assert_entity_encode_failure::<
+            linear::LinearV2File<ChunkEntityData>,
+        >(()))
+        .await;
     }
 
     #[tokio::test]

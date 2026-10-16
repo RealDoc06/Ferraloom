@@ -105,7 +105,7 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemStackArgumentType 
                     let value_start = reader.cursor();
                     let nbt_tag = SnbtParser::parse_for_commands(reader)?;
                     let parsed = if data_comp == DataComponent::ItemName {
-                        ItemNameImpl::parse(&nbt_tag).map(|name| name.to_dyn())
+                        ItemNameImpl::parse(&nbt_tag).map(DataComponentImpl::to_dyn)
                     } else {
                         pumpkin_data::data_component_impl::read_data(data_comp, &nbt_tag)
                             .ok_or("Invalid or unsupported component value")

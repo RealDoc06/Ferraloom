@@ -1408,8 +1408,10 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         for in_place in [true, false] {
             let path = directory.path().join(format!("region-{in_place}.mca"));
-            let mut config = pumpkin_config::chunk::AnvilChunkConfig::default();
-            config.write_in_place = in_place;
+            let mut config = pumpkin_config::chunk::AnvilChunkConfig {
+                write_in_place: in_place,
+                ..pumpkin_config::chunk::AnvilChunkConfig::default()
+            };
             config.compression.algorithm = pumpkin_config::chunk::Compression::ZLib;
             config.compression.level = 0;
             let mut region = AnvilChunkFile::<RawChunk>::default();

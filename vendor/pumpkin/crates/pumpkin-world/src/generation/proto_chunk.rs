@@ -293,11 +293,12 @@ impl ProtoChunk {
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
-        proto_chunk.post_processing = chunk_data
-            .post_processing
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        proto_chunk.post_processing.clone_from(
+            &chunk_data
+                .post_processing
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
 
         proto_chunk.light = chunk_data
             .light_engine

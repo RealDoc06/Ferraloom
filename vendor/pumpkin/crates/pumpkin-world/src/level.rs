@@ -561,20 +561,20 @@ impl Level {
         })
     }
 
-    fn cached_entity_chunk(&self, position: &Vector2<i32>) -> Option<SyncEntityChunk> {
+    fn cached_entity_chunk(&self, position: Vector2<i32>) -> Option<SyncEntityChunk> {
         let _guard = self
             .entity_lifecycle
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(chunk) = self.loaded_entity_chunks.get(position) {
+        if let Some(chunk) = self.loaded_entity_chunks.get(&position) {
             return Some(chunk.clone());
         }
-        let snapshot = self.pending_entity_saves.get(position)?.clone();
+        let snapshot = self.pending_entity_saves.get(&position)?.clone();
         // Activation consumes NBT, so reads must not share the immutable snapshot
         // whose write is still queued (or waiting for a failed IO retry).
         let chunk = Self::entity_snapshot(&snapshot);
         chunk.mark_dirty(false);
-        self.loaded_entity_chunks.insert(*position, chunk.clone());
+        self.loaded_entity_chunks.insert(position, chunk.clone());
         Some(chunk)
     }
 
@@ -810,7 +810,7 @@ impl Level {
                 let to_fetch: Vec<_> = chunks
                     .iter()
                     .filter(|pos| {
-                        level.cached_entity_chunk(pos).is_none_or(|chunk| {
+                        level.cached_entity_chunk(**pos).is_none_or(|chunk| {
                             let first_load = !chunk.live.load(Ordering::Relaxed);
                             let _ = sender.try_send((Arc::downgrade(&chunk), first_load));
                             false // Don't fetch
@@ -879,7 +879,7 @@ impl Level {
         self: &Arc<Self>,
         pos: Vector2<i32>,
     ) -> Result<SyncEntityChunk, ChunkReadingError> {
-        if let Some(chunk) = self.cached_entity_chunk(&pos) {
+        if let Some(chunk) = self.cached_entity_chunk(pos) {
             return Ok(chunk);
         }
 
@@ -1220,7 +1220,9 @@ mod tests {
     }
 
     async fn saved_entity_marker(level: &Level, position: Vector2<i32>) -> i32 {
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let (send, mut receive) = mpsc::channel(1);
         reader
             .fetch_chunks(&level.level_folder, &[position], send)
@@ -1475,7 +1477,9 @@ mod tests {
             level.save_and_flush().await.unwrap();
             previous_file = Some(std::fs::read(&region).unwrap());
 
-            let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+            let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+                pumpkin_config::chunk::AnvilChunkConfig::default(),
+            );
             let (send, mut receive) = mpsc::channel(1);
             reader
                 .fetch_chunks(&level.level_folder, &[position], send)
@@ -1549,7 +1553,7 @@ mod tests {
         );
         drop(send);
         let io_lock = Arc::new((
-            Mutex::new([(position, 1)].into_iter().collect()),
+            Mutex::new(std::iter::once((position, 1)).collect()),
             tokio::sync::Notify::new(),
         ));
         io_write_work(receive, level.clone(), io_lock).await;
@@ -1558,7 +1562,9 @@ mod tests {
         assert!(level.shutdown().await.is_err());
         std::fs::remove_dir(&region).unwrap();
         level.shutdown().await.unwrap();
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let (send, mut receive) = mpsc::channel(1);
         reader
             .fetch_chunks(&level.level_folder, &[position], send)

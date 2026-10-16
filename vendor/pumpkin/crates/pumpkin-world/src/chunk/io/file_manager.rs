@@ -51,10 +51,12 @@ pub(crate) trait PathFromLevelFolder {
     fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf;
 }
 
+type PendingChunks<T> = BTreeMap<(i32, i32), Arc<T>>;
+
 struct ChunkSerializerLazyLoader<S: ChunkSerializer<WriteBackend = PathBuf>> {
     path: PathBuf,
     // Retain the newest source chunk even when opening the region fails.
-    unapplied: Mutex<BTreeMap<(i32, i32), Arc<S::Data>>>,
+    unapplied: Mutex<PendingChunks<S::Data>>,
     /// Initialised at most once; subsequent calls reuse the same Arc.
     internal: OnceCell<Arc<RwLock<CachedRegion<S>>>>,
 }
@@ -471,14 +473,14 @@ where
                     watchers.get(&path).is_some_and(|&c| c > 0)
                 };
 
-                if !is_watched {
+                if is_watched {
+                    applied?;
+                } else {
                     debug!("Flushing {} to disk", path.display());
                     let written = loader.flush_serialized().await;
                     applied.and(written)?;
                     drop(loader);
                     self.maybe_evict(&path).await;
-                } else {
-                    applied?;
                 }
 
                 Ok(())
@@ -518,6 +520,10 @@ where
     }
 
     async fn flush(&self) -> Result<(), ChunkWritingError> {
+        #[expect(
+            clippy::needless_collect,
+            reason = "Release file_locks before awaiting region locks and disk IO."
+        )]
         let loaders: Vec<_> = self.file_locks.read().await.values().cloned().collect();
         let writes = loaders
             .into_iter()
@@ -649,7 +655,9 @@ mod tests {
     }
 
     async fn disk_marker(folder: &LevelFolder, x: i32) -> BlockStateId {
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let (send, mut receive) = mpsc::channel(1);
         reader
             .fetch_chunks(folder, &[Vector2::new(x, 0)], send)
@@ -666,7 +674,9 @@ mod tests {
         let folder = folder(&directory);
         let region = folder.region_folder.join("r.0.0.mca");
         std::fs::create_dir(&region).unwrap();
-        let writer = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let writer = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let position = Vector2::new(0, 0);
         let chunk = marked_chunk(0, &Block::DIAMOND_BLOCK);
         let original = Arc::downgrade(&chunk);
@@ -702,7 +712,9 @@ mod tests {
         let directory = TempDir::new().unwrap();
         let folder = folder(&directory);
         std::fs::create_dir(folder.region_folder.join("r.0.0.mca")).unwrap();
-        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let positions = [Vector2::new(0, 0), Vector2::new(1, 0), Vector2::new(2, 0)];
         let (send, mut receive) = mpsc::channel(positions.len());
         reader.fetch_chunks(&folder, &positions, send).await;
@@ -758,7 +770,9 @@ mod tests {
     async fn one_unserializable_chunk_does_not_block_good_chunks_in_the_same_region() {
         let directory = TempDir::new().unwrap();
         let folder = folder(&directory);
-        let writer = ChunkFileManager::<AnvilChunkFile<FallibleChunk>>::new(Default::default());
+        let writer = ChunkFileManager::<AnvilChunkFile<FallibleChunk>>::new(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        );
         let bad = Arc::new(FallibleChunk {
             chunk: marked_chunk(0, &Block::DIAMOND_BLOCK),
             reject: AtomicBool::new(true),

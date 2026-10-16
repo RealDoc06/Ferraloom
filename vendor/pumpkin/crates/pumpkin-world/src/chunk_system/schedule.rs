@@ -129,7 +129,7 @@ impl GenerationSchedule {
         Ok(())
     }
 
-    fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
+    fn publish_chunk(&self, pos: ChunkPos, chunk: &SyncChunk) -> Option<SyncChunk> {
         let _lifecycle = self
             .chunk_lifecycle
             .write()
@@ -140,10 +140,7 @@ impl GenerationSchedule {
         self.chunk_activation_revision
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         self.chunk_activation_changed.notify_waiters();
-        if previous
-            .as_ref()
-            .is_none_or(|old| !Arc::ptr_eq(old, &chunk))
-        {
+        if previous.as_ref().is_none_or(|old| !Arc::ptr_eq(old, chunk)) {
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Loaded(pos));
         }
@@ -679,7 +676,7 @@ impl GenerationSchedule {
                         match holder.chunk.as_ref().expect("chunk exists") {
                             Chunk::Level(chunk) => {
                                 self.apply_lighting_override(chunk);
-                                self.publish_chunk(pos, chunk.clone());
+                                self.publish_chunk(pos, chunk);
                                 self.listener.process_new_chunk(pos, chunk);
                             }
                             Chunk::Proto(_) => panic!(),
@@ -1140,7 +1137,7 @@ impl GenerationSchedule {
                 match &chunk {
                     Chunk::Level(data) => {
                         self.apply_lighting_override(data);
-                        let result = self.publish_chunk(pos, data.clone());
+                        let result = self.publish_chunk(pos, data);
                         if result.is_some() {
                             warn!(
                                 "receive_chunk(IO): replacing existing public chunk at {:?}",
@@ -1201,7 +1198,7 @@ impl GenerationSchedule {
                                 self.apply_lighting_override(&chunk);
                                 let public_chunk = chunk.clone();
                                 if was_public {
-                                    self.publish_chunk(new_pos, public_chunk);
+                                    self.publish_chunk(new_pos, &public_chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
@@ -1210,7 +1207,7 @@ impl GenerationSchedule {
                                     holder.chunk = Some(Chunk::Level(chunk));
                                 } else {
                                     holder.chunk = Some(Chunk::Level(chunk));
-                                    let result = self.publish_chunk(new_pos, public_chunk);
+                                    let result = self.publish_chunk(new_pos, &public_chunk);
                                     holder.public = true;
                                     if result.is_some() {
                                         warn!(
