@@ -331,6 +331,10 @@ mod tests {
         }
         let fixture = data::tests::Fixture::new().await;
         let server = fixture.source.server().clone();
+        let source = fixture
+            .source
+            .clone()
+            .with_output(crate::command::CommandSender::Console);
         let name = "SpamObserver";
         let legacy = Uuid::parse_str("14209f43-09d3-4876-d114-4c2568f51fc3").unwrap();
         let canonical = offline_uuid(name).unwrap();
@@ -370,7 +374,7 @@ mod tests {
             server
                 .command_dispatcher
                 .load()
-                .execute_input("whitelist add SpamObserver", &fixture.source)
+                .execute_input("whitelist add SpamObserver", &source)
                 .unwrap(),
             1
         );
@@ -387,7 +391,7 @@ mod tests {
             server
                 .command_dispatcher
                 .load()
-                .execute_input("op SpamObserver", &fixture.source)
+                .execute_input("op SpamObserver", &source)
                 .unwrap(),
             1
         );
@@ -428,7 +432,7 @@ mod tests {
             server
                 .command_dispatcher
                 .load()
-                .execute_input("pardon SpamObserver", &fixture.source)
+                .execute_input("pardon SpamObserver", &source)
                 .unwrap(),
             1
         );
