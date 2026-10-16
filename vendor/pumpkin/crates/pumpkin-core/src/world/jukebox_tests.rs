@@ -915,15 +915,17 @@ async fn inventory_and_real_hopper_share_synchronous_transitions_and_predicates(
     assert!(world.is_current_block_entity(destination.as_ref()));
     assert!(world.is_current_block_entity(live.as_ref()));
     assert!(inventory.get_stack(0).are_equal(&disc(JukeboxSong::Cat, 1)));
-    destination.tick(&world);
-    assert!(inventory.is_empty());
-    assert_eq!(destination.get_stack(4).item.id, Item::MUSIC_DISC_11.id);
-    assert_eq!(destination.get_stack(4).item_count, 1);
-    // Natural completion emitted one stop; extracting the stopped record adds none.
     assert_eq!(
         level_events(&observe(&mut reader, &player).await),
         vec![(1011, 0)]
     );
+    destination.tick(&world);
+    assert!(inventory.is_empty());
+    assert_eq!(destination.get_stack(4).item.id, Item::MUSIC_DISC_11.id);
+    assert_eq!(destination.get_stack(4).item_count, 1);
+    // Primary SongPlayer.stop returns immediately without an active song.
+    // Drain natural completion above so it cannot count as an extraction event.
+    assert!(level_events(&observe(&mut reader, &player).await).is_empty());
     // Actual pushing hopper uses the same live setter and immediately starts song.
     world.remove_block_entity(&below);
     set_state(&world, below, Block::AIR.default_state.id);
