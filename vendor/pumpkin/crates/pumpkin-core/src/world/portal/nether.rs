@@ -1,6 +1,6 @@
 use super::poi;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{HorizontalAxis, NetherPortalLikeProperties},
     tag,
     tag::Taggable,
@@ -540,77 +540,165 @@ impl NetherPortal {
         for pos in portal_positions {
             // Official candidate block validation requests FULL after the owned
             // square observation. No whole-area FULL request or fixed halo.
-            super::load_portal_chunks(world, pos.chunk_position(), 0)?;
-            let (block, state) = world.get_block_and_state(&pos);
-            if block != &Block::NETHER_PORTAL {
+            let Some(state) = Self::read_candidate_state(world, pos)? else {
+                continue;
+            };
+            // The broader HORIZONTAL_AXIS property predicate remains a separate
+            // gap; retain the current actual portal-block admission here.
+            if Block::from_state_id(state) != &Block::NETHER_PORTAL {
                 continue;
             }
-            let axis = NetherPortalLikeProperties::from_state_id(state.id).axis;
-            Self::load_candidate_axis(world, pos, axis)?;
-            // Existing rectangle/frame validation is retained. Its stronger
-            // obsidian-frame requirement is not proven by PortalForcer's POI
-            // selection primary and remains a separate destination parity gap.
-            if let Some(portal) = Self::get_on_axis(world, &pos, axis)
-                && portal.was_already_valid()
-            {
-                return Ok(Some(PortalSearchResult {
-                    lower_corner: portal.lower_conor,
-                    axis: portal.axis,
-                    width: portal.width,
-                    height: portal.height,
-                }));
-            }
+            let axis = NetherPortalLikeProperties::from_state_id(state).axis;
+            return Self::existing_rectangle(world, pos, state, axis).map(Some);
         }
         Ok(None)
     }
 
-    /// Prepare the columns actually visited by the retained frame validator.
-    /// Its downward scan stays in the candidate column; width scans may cross
-    /// chunk edges through air as well as portal blocks. No fixed halo is loaded.
-    fn load_candidate_axis(
+    /// Copy from the admitted chunk itself, without a second map lookup that
+    /// could turn an unavailable in-range source into AIR. No guard crosses IO.
+    fn read_candidate_state(
         world: &Arc<World>,
-        mut pos: BlockPos,
-        axis: HorizontalAxis,
-    ) -> std::io::Result<()> {
-        let direction = match axis {
-            HorizontalAxis::X => BlockDirection::East,
-            HorizontalAxis::Z => BlockDirection::South,
-        };
-        let original = pos;
-        let limit_y = pos.0.y - Self::MAX_HEIGHT as i32;
-        while pos.0.y > limit_y {
-            let (block, state) = world.get_block_and_state(&pos.down());
-            if !Self::valid_state_inside_portal(block, state, axis) {
-                break;
-            }
-            pos = pos.down();
+        pos: BlockPos,
+    ) -> std::io::Result<Option<BlockStateId>> {
+        if !world.is_in_build_limit(pos) {
+            return Ok(None);
         }
-        Self::load_candidate_width(world, pos, direction.opposite(), axis)?;
-        if let Some(corner) = Self::get_lower_cornor(world, direction, &original, axis) {
-            Self::load_candidate_width(world, corner, direction, axis)?;
-        }
-        Ok(())
+        let (column, relative) = pos.chunk_and_chunk_relative_position();
+        let handle = tokio::runtime::Handle::try_current().map_err(std::io::Error::other)?;
+        let state = tokio::task::block_in_place(|| {
+            handle.block_on(world.level.get_or_fetch_chunk(column, |chunk| {
+                chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )
+            }))
+        })
+        .map_err(std::io::Error::other)?
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Admitted portal chunk has no in-range state at {pos:?}"),
+            )
+        })?;
+        Ok(Some(state))
     }
 
-    fn load_candidate_width(
+    fn matching_extent(
         world: &Arc<World>,
         pos: BlockPos,
         direction: BlockDirection,
-        axis: HorizontalAxis,
-    ) -> std::io::Result<()> {
-        for distance in 0..=Self::MAX_WIDTH {
+        state: BlockStateId,
+        limit: usize,
+    ) -> std::io::Result<usize> {
+        for distance in 1..=limit {
             let probe = pos.offset_dir(direction.to_offset(), distance as i32);
-            if !world.is_loaded(&probe) {
-                super::load_portal_chunks(world, probe.chunk_position(), 0)?;
-            }
-            let (block, state) = world.get_block_and_state(&probe);
-            if !Self::valid_state_inside_portal(block, state, axis)
-                || world.get_block(&probe.down()) != &Self::FRAME_BLOCK
-            {
-                break;
+            if Self::read_candidate_state(world, probe)? != Some(state) {
+                return Ok(distance - 1);
             }
         }
-        Ok(())
+        Ok(limit)
+    }
+
+    fn vertical_extents(
+        world: &Arc<World>,
+        pos: BlockPos,
+        state: BlockStateId,
+        limits: (usize, usize),
+    ) -> std::io::Result<(usize, usize)> {
+        Ok((
+            Self::matching_extent(world, pos, BlockDirection::Down, state, limits.0)?,
+            Self::matching_extent(world, pos, BlockDirection::Up, state, limits.1)?,
+        ))
+    }
+
+    /// BlockUtil's existing-portal scan: each direction is capped at 21, and
+    /// outward columns inherit the preceding vertical bounds. No frame test.
+    fn existing_rectangle(
+        world: &Arc<World>,
+        pos: BlockPos,
+        state: BlockStateId,
+        axis: HorizontalAxis,
+    ) -> std::io::Result<PortalSearchResult> {
+        const LIMIT: usize = 21;
+        let positive = match axis {
+            HorizontalAxis::X => BlockDirection::East,
+            HorizontalAxis::Z => BlockDirection::South,
+        };
+        let negative = positive.opposite();
+        let left = Self::matching_extent(world, pos, negative, state, LIMIT)?;
+        let right = Self::matching_extent(world, pos, positive, state, LIMIT)?;
+        let mut bounds = vec![(0, 0); left + 1 + right];
+        bounds[left] = Self::vertical_extents(world, pos, state, (LIMIT, LIMIT))?;
+        for distance in 1..=left {
+            bounds[left - distance] = Self::vertical_extents(
+                world,
+                pos.offset_dir(negative.to_offset(), distance as i32),
+                state,
+                bounds[left - distance + 1],
+            )?;
+        }
+        for distance in 1..=right {
+            bounds[left + distance] = Self::vertical_extents(
+                world,
+                pos.offset_dir(positive.to_offset(), distance as i32),
+                state,
+                bounds[left + distance - 1],
+            )?;
+        }
+
+        let down = bounds[left].0;
+        let mut heights = vec![0; bounds.len()];
+        let mut best = PortalSearchResult {
+            lower_corner: pos,
+            axis,
+            width: 0,
+            height: 0,
+        };
+        // Start at the center row, then lower the bottom. Equal area retains
+        // the first rectangle, including the histogram solver's own tie order.
+        for bottom in (0..=down).rev() {
+            for (height, &(below, above)) in heights.iter_mut().zip(&bounds) {
+                *height = if bottom >= down - below {
+                    down + above + 1 - bottom
+                } else {
+                    0
+                };
+            }
+            let (start, width, height) = Self::largest_histogram_rectangle(&heights);
+            if width * height > (best.width * best.height) as usize {
+                best.lower_corner = pos
+                    .offset_dir(positive.to_offset(), start as i32 - left as i32)
+                    .offset_dir(BlockDirection::Down.to_offset(), (down - bottom) as i32);
+                best.width = width as u32;
+                best.height = height as u32;
+            }
+        }
+        Ok(best)
+    }
+
+    /// Left-to-right monotone stack, retaining equal heights and first-area
+    /// ties exactly as BlockUtil.getMaxRectangleLocation does.
+    fn largest_histogram_rectangle(heights: &[usize]) -> (usize, usize, usize) {
+        let mut stack = Vec::with_capacity(heights.len() + 1);
+        let mut best = (0, 0, 0);
+        for index in 0..=heights.len() {
+            let height = heights.get(index).copied().unwrap_or(0);
+            while let Some(&previous) = stack.last() {
+                if height >= heights[previous] {
+                    break;
+                }
+                let _ = stack.pop();
+                let start = stack.last().map_or(0, |previous| previous + 1);
+                let width = index - start;
+                let previous_height = heights[previous];
+                if width * previous_height > best.1 * best.2 {
+                    best = (start, width, previous_height);
+                }
+            }
+            stack.push(index);
+        }
+        best
     }
 
     #[allow(clippy::too_many_lines)]
