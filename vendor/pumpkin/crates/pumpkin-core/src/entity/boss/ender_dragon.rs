@@ -5,7 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 use crate::entity::{
     Entity, EntityBase,
@@ -141,17 +141,74 @@ pub fn find_path(
     path
 }
 
+/// Array order is also the vanilla client's spawn-ID offset order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragonPartKind {
+    Head,
+    Neck,
+    Body,
+    Tail1,
+    Tail2,
+    Tail3,
+    Wing1,
+    Wing2,
+}
+
+impl DragonPartKind {
+    pub const ALL: [Self; 8] = [
+        Self::Head,
+        Self::Neck,
+        Self::Body,
+        Self::Tail1,
+        Self::Tail2,
+        Self::Tail3,
+        Self::Wing1,
+        Self::Wing2,
+    ];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Head => "head",
+            Self::Neck => "neck",
+            Self::Body => "body",
+            Self::Tail1 | Self::Tail2 | Self::Tail3 => "tail",
+            Self::Wing1 | Self::Wing2 => "wing",
+        }
+    }
+
+    pub const fn size(self) -> (f32, f32) {
+        match self {
+            Self::Head => (1.0, 1.0),
+            Self::Neck => (3.0, 3.0),
+            Self::Body => (5.0, 3.0),
+            Self::Tail1 | Self::Tail2 | Self::Tail3 => (2.0, 2.0),
+            Self::Wing1 | Self::Wing2 => (4.0, 2.0),
+        }
+    }
+}
+
 pub struct EnderDragonPart {
     pub entity: Entity,
-    pub dragon_uuid: uuid::Uuid,
+    pub kind: DragonPartKind,
+    parent: Weak<EnderDragonEntity>,
 }
 
 impl EnderDragonPart {
-    pub const fn new(entity: Entity, dragon_uuid: uuid::Uuid) -> Self {
-        Self {
-            entity,
-            dragon_uuid,
+    /// Retained targets may only forward to their original, still resident owner.
+    /// The snapshot is released before any damage or plugin callback runs.
+    pub fn current_parent(&self) -> Option<Arc<EnderDragonEntity>> {
+        let parent = self.parent.upgrade()?;
+        let world = self.entity.world.load_full();
+        if self.entity.is_removed()
+            || !world.is_current_entity(parent.as_ref())
+            || !parent
+                .parts
+                .iter()
+                .any(|part| std::ptr::eq(part.as_ref(), self))
+        {
+            return None;
         }
+        Some(parent)
     }
 }
 
@@ -160,17 +217,29 @@ impl EntityBase for EnderDragonPart {
         &self.entity
     }
 
-    fn damage(&self, source: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
-        let world = self.entity.world.load();
-        if let Some(dragon_base) = world
-            .entities
-            .load()
-            .iter()
-            .find(|e| e.get_entity().entity_uuid == self.dragon_uuid)
-        {
-            return dragon_base.damage(source, amount, damage_type);
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
+            return false;
         }
-        false
+        let Some(parent) = self.current_parent() else {
+            return false;
+        };
+        parent.damage_with_context(
+            parent.as_ref(),
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        )
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -187,7 +256,7 @@ impl EntityBase for EnderDragonPart {
 
 pub struct EnderDragonEntity {
     pub mob_entity: MobEntity,
-    pub parts: Vec<Arc<EnderDragonPart>>,
+    parts: [Arc<EnderDragonPart>; 8],
 
     pub flight_history: Mutex<DragonFlightHistory>,
     pub flap_time: Mutex<f32>,
@@ -221,55 +290,87 @@ pub struct EnderDragonEntity {
 }
 
 impl EnderDragonEntity {
-    pub fn new(entity: Entity) -> Arc<Self> {
+    /// Consumes an unpublished entity. Its early ID is abandoned, never reused:
+    /// a fresh atomic reservation owns both the parent and all eight client IDs.
+    pub fn new(mut entity: Entity) -> Arc<Self> {
         entity.no_physics.store(true, Ordering::Relaxed);
+        entity.entity_id = Entity::reserve_ids(9);
         let base_id = entity.entity_id;
-        let dragon_uuid = entity.entity_uuid;
-        let world = entity.world.load();
+        let world = entity.world.load_full();
+        let pos = entity.pos.load();
 
-        let _ = Entity::reserve_ids(8);
-
-        let mut parts = Vec::new();
-        for i in 1..=8 {
-            let part_entity = Entity::from_uuid_with_id(
-                base_id + i,
-                uuid::Uuid::new_v4(),
-                world.clone(),
-                entity.pos.load(),
-                &EntityType::ENDER_DRAGON,
-            );
-            let part = Arc::new(EnderDragonPart::new(part_entity, dragon_uuid));
-            // TODO: world.add_entity_silent(part.clone() as Arc<dyn EntityBase>);
-            parts.push(part);
-        }
-
-        Arc::new(Self {
-            mob_entity: MobEntity::new(entity),
-            parts,
-            flight_history: Mutex::new(DragonFlightHistory::default()),
-            flap_time: Mutex::new(0.0),
-            o_flap_time: Mutex::new(0.0),
-            in_wall: Mutex::new(false),
-            dragon_death_time: Mutex::new(0),
-            sitting_damage_received: Mutex::new(0.0),
-            nodes_initialized: Mutex::new(false),
-            fight_origin: Mutex::new(BlockPos::new(0, 128, 0)),
-            phase_manager: PhaseManager::new(),
-            phase: Mutex::new(EnderDragonPhase::Circling),
-            growl_time: Mutex::new(GROWL_COOLDOWN_BASE),
-            yaw_rot_accel: Mutex::new(0.0),
-            holding_pattern_clockwise: Mutex::new(true),
-            target_location: Mutex::new(None),
-            fireball_charge: Mutex::new(0),
-            nodes: Mutex::new([None; NODE_COUNT]),
-            path: Mutex::new(Vec::new()),
-            target_node: Mutex::new(0),
-            strafe_target: Mutex::new(None),
-            target_player: Mutex::new(None),
-            ticks_sitting: Mutex::new(0),
-            sit_attack_timer: Mutex::new(0),
-            breathing_timer: Mutex::new(0),
+        Arc::new_cyclic(|parent| {
+            let parts = std::array::from_fn(|index| {
+                let kind = DragonPartKind::ALL[index];
+                let part_entity = Entity::from_uuid_with_id(
+                    base_id.wrapping_add(index as i32 + 1),
+                    uuid::Uuid::new_v4(),
+                    world.clone(),
+                    pos,
+                    &EntityType::ENDER_DRAGON,
+                );
+                let (width, height) = kind.size();
+                part_entity.entity_dimension.store(
+                    pumpkin_util::math::boundingbox::EntityDimensions::new(
+                        width,
+                        height,
+                        height * 0.85,
+                    ),
+                );
+                part_entity.bounding_box.store(
+                    pumpkin_util::math::boundingbox::BoundingBox::new_from_pos(
+                        pos.x,
+                        pos.y,
+                        pos.z,
+                        &part_entity.entity_dimension.load(),
+                    ),
+                );
+                Arc::new(EnderDragonPart {
+                    entity: part_entity,
+                    kind,
+                    parent: parent.clone(),
+                })
+            });
+            Self {
+                mob_entity: MobEntity::new(entity),
+                parts,
+                flight_history: Mutex::new(DragonFlightHistory::default()),
+                flap_time: Mutex::new(0.0),
+                o_flap_time: Mutex::new(0.0),
+                in_wall: Mutex::new(false),
+                dragon_death_time: Mutex::new(0),
+                sitting_damage_received: Mutex::new(0.0),
+                nodes_initialized: Mutex::new(false),
+                fight_origin: Mutex::new(BlockPos::new(0, 128, 0)),
+                phase_manager: PhaseManager::new(),
+                phase: Mutex::new(EnderDragonPhase::Circling),
+                growl_time: Mutex::new(GROWL_COOLDOWN_BASE),
+                yaw_rot_accel: Mutex::new(0.0),
+                holding_pattern_clockwise: Mutex::new(true),
+                target_location: Mutex::new(None),
+                fireball_charge: Mutex::new(0),
+                nodes: Mutex::new([None; NODE_COUNT]),
+                path: Mutex::new(Vec::new()),
+                target_node: Mutex::new(0),
+                strafe_target: Mutex::new(None),
+                target_player: Mutex::new(None),
+                ticks_sitting: Mutex::new(0),
+                sit_attack_timer: Mutex::new(0),
+                breathing_timer: Mutex::new(0),
+            }
         })
+    }
+
+    pub fn parts(&self) -> &[Arc<EnderDragonPart>; 8] {
+        &self.parts
+    }
+
+    pub(crate) fn owns_part(&self, part: &EnderDragonPart) -> bool {
+        std::ptr::eq(part.parent.as_ptr(), self)
+            && self
+                .parts
+                .iter()
+                .any(|owned| std::ptr::eq(owned.as_ref(), part))
     }
 
     pub fn set_fight_origin(&self, pos: BlockPos) {
@@ -846,6 +947,10 @@ impl EnderDragonEntity {
 }
 
 impl Mob for EnderDragonEntity {
+    fn mob_can_hit(&self) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -5643,6 +5643,85 @@ impl World {
         None
     }
 
+    /// Exact-object residency, including unload (which need not mark removed).
+    /// No registry guard survives this call into a caller's callbacks.
+    pub(crate) fn is_current_entity(&self, expected: &dyn EntityBase) -> bool {
+        let entity = expected.get_entity();
+        !entity.is_removed()
+            && std::ptr::eq(entity.world.load_full().as_ref(), self)
+            && self.entities.load().iter().any(|resident| {
+                std::ptr::eq(resident.get_entity(), entity)
+            })
+    }
+
+    /// Multipart lookup is derived from one ordinary resident snapshot. Parts
+    /// have no independent tracker, save row, ticking or removal lifecycle.
+    pub fn get_entity_or_part(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
+        use crate::entity::boss::ender_dragon::EnderDragonEntity;
+        let residents = self.entities.load_full();
+        if let Some(entity) = residents.iter().find(|entity| {
+            let entity = entity.get_entity();
+            entity.entity_id == id && !entity.is_removed()
+                && std::ptr::eq(entity.world.load_full().as_ref(), self)
+        }) {
+            return Some(entity.clone());
+        }
+        if let Some(player) = self.get_player_by_id(id) {
+            return Some(player);
+        }
+        for resident in residents.iter() {
+            let entity = resident.get_entity();
+            if entity.is_removed() || !std::ptr::eq(entity.world.load_full().as_ref(), self) {
+                continue;
+            }
+            if let Some(dragon) = resident.cast_any().downcast_ref::<EnderDragonEntity>()
+                && let Some(part) = dragon.parts().iter().find(|part| {
+                    part.entity.entity_id == id && !part.entity.is_removed()
+                        && dragon.owns_part(part)
+                        && std::ptr::eq(part.entity.world.load_full().as_ref(), self)
+                })
+            {
+                return Some(part.clone());
+            }
+        }
+        None
+    }
+
+    /// Projectile-only multipart expansion. Ordinary candidates keep the
+    /// existing order and filters; the non-pickable dragon parent is replaced
+    /// by its actual part boxes. `except` follows the caller's owner grace window.
+    pub(crate) fn get_projectile_entities_at_box(
+        &self,
+        aabb: &BoundingBox,
+        except: Option<i32>,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        use crate::entity::boss::ender_dragon::EnderDragonEntity;
+        let residents = self.entities.load_full();
+        let mut candidates = Vec::new();
+        for resident in residents.iter() {
+            if let Some(dragon) = resident.cast_any().downcast_ref::<EnderDragonEntity>() {
+                let entity = resident.get_entity();
+                if entity.is_removed() || Some(entity.entity_id) == except
+                    || !std::ptr::eq(entity.world.load_full().as_ref(), self)
+                {
+                    continue;
+                }
+                for part in dragon.parts() {
+                    if !part.entity.is_removed() && Some(part.entity.entity_id) != except
+                        && dragon.owns_part(part)
+                        && std::ptr::eq(part.entity.world.load_full().as_ref(), self)
+                        && part.entity.bounding_box.load().intersects(aabb)
+                    {
+                        candidates.push(part.clone() as Arc<dyn EntityBase>);
+                    }
+                }
+            } else if resident.get_entity().bounding_box.load().intersects(aabb) {
+                candidates.push(resident.clone());
+            }
+        }
+        candidates
+    }
+
     /// Gets a `Player` by a username
     pub fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for player in self.players.load().iter() {

@@ -980,7 +980,10 @@ impl Entity {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
     }
 
+    /// Reserve one contiguous range. Atomic addition and client ID offsets both
+    /// wrap in the signed i32 domain, matching Java's entity-ID arithmetic.
     pub fn reserve_ids(count: i32) -> i32 {
+        assert!(count > 0);
         CURRENT_ID.fetch_add(count, Relaxed)
     }
 

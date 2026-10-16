@@ -31,7 +31,7 @@ impl JavaClient {
         let target: Option<Arc<dyn EntityBase>> = player_target
             .as_ref()
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
-            .or_else(|| world.get_entity_by_id(entity_id.0));
+            .or_else(|| world.get_entity_or_part(entity_id.0));
 
         if let Some(target) = target {
             if player.gamemode.load() == GameMode::Spectator {
@@ -134,16 +134,7 @@ impl JavaClient {
                 server;
                 PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
 
-                'after: {
-                    if event.action == ActionType::Attack {
-                        error!(
-                            "Player id {} interacted with entity id {}, which was not found.",
-                            player.entity_id(),
-                            event.entity_id
-                        );
-                        self.try_kick(&TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, []));
-                    }
-                }
+                'after: {}
             }}
         }
     }

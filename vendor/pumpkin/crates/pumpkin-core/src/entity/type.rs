@@ -230,6 +230,8 @@ pub fn from_type(
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity),
 
         id if id == EntityType::WITHER.id => WitherEntity::new(entity),
+        // Consuming constructor reserves parent + parts before this factory
+        // returns any Arc that a caller could publish.
         id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity),
 
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {

@@ -785,6 +785,10 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    fn mob_can_hit(&self) -> bool {
+        true
+    }
+
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
     }
@@ -1432,7 +1436,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn can_hit(&self) -> bool {
-        true
+        self.mob_can_hit()
     }
 
     fn damage_with_context(
