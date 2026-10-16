@@ -2386,9 +2386,13 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
         assert_viewer_effects(kind, world, live.as_ref(), 0);
         world.flush_synced_block_events();
         assert!(observed.take_events().is_empty());
-        assert!(Arc::ptr_eq(
-            &inventory,
-            &spectator_menu.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        // Menu adapters expose the retained entity through Any. Its address is
+        // stable even when coercions produce different trait metadata.
+        assert!(std::ptr::addr_eq(
+            inventory.as_any(),
+            spectator_menu.lock().unwrap().get_behaviour().slots[0]
+                .get_inventory()
+                .as_any()
         ));
         assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:3}]" ).unwrap(), 1);
         assert_eq!(
@@ -2521,9 +2525,11 @@ async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
             "normal menu survives recount"
         );
         let inventory = live.clone().get_inventory().unwrap();
-        assert!(Arc::ptr_eq(
-            &inventory,
-            &retained.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        assert!(std::ptr::addr_eq(
+            inventory.as_any(),
+            retained.lock().unwrap().get_behaviour().slots[0]
+                .get_inventory()
+                .as_any()
         ));
 
         player.gamemode.store(GameMode::Spectator);
