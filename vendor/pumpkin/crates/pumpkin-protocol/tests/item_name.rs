@@ -494,7 +494,7 @@ fn saved_stack(tag: NbtTag) -> NbtCompound {
     saved
 }
 
-/// Exercise real boundaries, including direct native construction that skips read_data.
+/// Exercise real boundaries, including direct native construction that skips `read_data`.
 fn assert_refused_at_boundaries(input: &str) {
     use pumpkin_command::argument_types::item::ERROR_INVALID_COMPONENT;
 

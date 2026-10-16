@@ -268,7 +268,7 @@ fn malformed_positions_and_mixed_legacy_layouts_are_refused() {
             NbtTag::Int(200),
             NbtTag::Int(3),
         ])),
-        Some(NbtTag::ByteArray(vec![1, 2, 3])),
+        Some(NbtTag::ByteArray(vec![1, 2, 3].into())),
         Some(NbtTag::LongArray(vec![4098, 200, 3])),
         Some(NbtTag::IntArray(vec![])),
         Some(NbtTag::IntArray(vec![4098, 200])),
@@ -417,12 +417,12 @@ fn corrupt_region_refuses_mutation_but_healthy_region_still_saves() {
     write_mca(&path, &[(0, OFFICIAL_CHUNK)]);
     let base = std::fs::read(&path).unwrap();
     let mut corruptions = vec![base[..HEADER_SIZE - 1].to_vec()];
-    for location in [1_u32, 0x101, 0x200, 0x301] {
+    for location in [1u32, 0x101, 0x200, 0x301] {
         let mut bytes = base.clone();
         bytes[..4].copy_from_slice(&location.to_be_bytes());
         corruptions.push(bytes);
     }
-    for length in [0_u32, 1, 4093] {
+    for length in [0u32, 1, 4093] {
         let mut bytes = base.clone();
         bytes[8192..8196].copy_from_slice(&length.to_be_bytes());
         corruptions.push(bytes);
@@ -434,7 +434,7 @@ fn corrupt_region_refuses_mutation_but_healthy_region_still_saves() {
     bad_zlib[8197] = 0;
     corruptions.push(bad_zlib);
     let mut overlap = base;
-    overlap[4..8].copy_from_slice(&0x201_u32.to_be_bytes());
+    overlap[4..8].copy_from_slice(&0x201u32.to_be_bytes());
     corruptions.push(overlap);
     // A healthy first chunk must not hide a malformed second chunk.
     let bad = compress_fixture(chunk(&[("12", section(Some(1), vec![NbtCompound::new()]))]));
