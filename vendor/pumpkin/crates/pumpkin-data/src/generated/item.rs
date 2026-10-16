@@ -91808,20 +91808,24 @@ impl Item {
     #[must_use]
     #[allow(deprecated)]
     pub fn translated_name(&self) -> TextComponent {
-        let name = self
-            .components
+        self.components
             .iter()
             .find_map(|(id, data)| {
                 if id == &ItemName {
                     data.as_any()
                         .downcast_ref::<ItemNameImpl>()
-                        .map(|name| name.name.as_ref())
+                        .map(|name| match name {
+                            ItemNameImpl::Literal { name } => TextComponent::text(name.to_string()),
+                            ItemNameImpl::Translated { name } => {
+                                TextComponent::translate(name.as_ref(), &[])
+                            }
+                            ItemNameImpl::Component(tag) => TextComponent::from_nbt(tag),
+                        })
                 } else {
                     None
                 }
             })
-            .unwrap_or(self.registry_key);
-        TextComponent::translate(name, &[])
+            .unwrap_or_else(|| TextComponent::translate(self.registry_key, &[]))
     }
     #[doc = "Try to parse an item from a resource location string."]
     #[must_use]

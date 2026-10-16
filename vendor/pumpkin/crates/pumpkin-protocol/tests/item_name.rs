@@ -254,6 +254,14 @@ fn literal_witness_has_string_nbt_on_wire_and_both_inputs() {
 
 #[test]
 fn generated_and_intentional_map_names_remain_translated() {
+    assert_eq!(
+        Item::STICK
+            .translated_name()
+            .0
+            .to_nbt_compound()
+            .get_string("translate"),
+        Some("item.minecraft.stick")
+    );
     let mut stick = ItemStack::new(1, &Item::STICK);
     let default_name = stick.get_data_component::<ItemNameImpl>().unwrap().clone();
     assert!(matches!(
