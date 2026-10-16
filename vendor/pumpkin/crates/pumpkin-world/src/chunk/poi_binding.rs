@@ -12,7 +12,7 @@ use crate::{
     poi::{PoiReconcileError, PoiStorage},
 };
 
-pub(crate) struct PoiRuntime {
+pub struct PoiRuntime {
     pub(crate) storage: Arc<Mutex<PoiStorage>>,
     pub(crate) lifecycle: Arc<RwLock<()>>,
     pub(crate) chunks: Weak<DashMap<ChunkPos, SyncChunk>>,

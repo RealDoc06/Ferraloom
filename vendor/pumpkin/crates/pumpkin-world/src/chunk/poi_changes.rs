@@ -15,7 +15,7 @@ pub(super) struct PoiChanges {
     store: Option<Arc<()>>,
 }
 
-pub(crate) struct PoiSectionChanges {
+pub struct PoiSectionChanges {
     revision: u64,
     applied_revision: u64,
     // One bit per y/z/x palette index, allocated only after a type transition.
@@ -93,7 +93,7 @@ pub struct PoiTerrainRead<'a> {
 
 /// An unpublished save plan, tied to its exact source and exclusive storage
 /// borrow. Dropping it after encode failure changes neither POI nor reset history.
-pub(crate) struct PoiSavePlan<'a> {
+pub struct PoiSavePlan<'a> {
     source: &'a ChunkData,
     loaded: LoadedPoiRegion<'a>,
     revisions: Box<[u64]>,

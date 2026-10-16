@@ -734,6 +734,10 @@ impl ChunkData {
     /// significantly speeding up bulk block modifications.
     ///
     /// Returns a list of `(relative_x, y, relative_z, replaced_block_state_id)`.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Palette writes and POI revisions share one locked batch."
+    )]
     pub fn set_blocks_batch(
         &self,
         updates: impl IntoIterator<Item = (usize, i32, usize, BlockStateId)>,

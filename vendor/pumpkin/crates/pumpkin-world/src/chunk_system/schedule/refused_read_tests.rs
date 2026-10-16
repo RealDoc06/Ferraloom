@@ -59,8 +59,10 @@ fn failed_read_blocks_pending_chain_but_unrelated_idle_nodes_are_rejected() {
         .nodes
         .insert(Node::new(ChunkPos::new(100, 100), StagedChunkEnum::Biomes));
     assert!(
-        std::panic::catch_unwind(|| { GenerationSchedule::blocked_read_nodes(&graph, &chunk_map) })
-            .is_err()
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            GenerationSchedule::blocked_read_nodes(&graph, &chunk_map)
+        }))
+        .is_err()
     );
     graph.nodes.remove(stray);
     assert_eq!(
@@ -70,14 +72,18 @@ fn failed_read_blocks_pending_chain_but_unrelated_idle_nodes_are_rejected() {
 
     graph.nodes[dependent].in_degree += 1;
     assert!(
-        std::panic::catch_unwind(|| { GenerationSchedule::blocked_read_nodes(&graph, &chunk_map) })
-            .is_err()
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            GenerationSchedule::blocked_read_nodes(&graph, &chunk_map)
+        }))
+        .is_err()
     );
     graph.nodes[dependent].in_degree -= 1;
     graph.add_edge(dependent, read);
     assert!(
-        std::panic::catch_unwind(|| { GenerationSchedule::blocked_read_nodes(&graph, &chunk_map) })
-            .is_err()
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            GenerationSchedule::blocked_read_nodes(&graph, &chunk_map)
+        }))
+        .is_err()
     );
 }
 
@@ -148,8 +154,10 @@ fn healthy_idle_graph_still_rejects_any_leftover_task() {
         .nodes
         .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::Empty));
     assert!(
-        std::panic::catch_unwind(|| { GenerationSchedule::blocked_read_nodes(&graph, &chunk_map) })
-            .is_err()
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            GenerationSchedule::blocked_read_nodes(&graph, &chunk_map)
+        }))
+        .is_err()
     );
 }
 
