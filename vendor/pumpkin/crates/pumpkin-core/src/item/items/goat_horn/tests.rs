@@ -905,7 +905,7 @@ async fn consumable_horn_expiry_consumes_only_the_active_hand() {
         EventPriority::Normal,
         true,
     );
-    let (remote, _write) = fixture._remote.split();
+    let (remote, _write) = fixture.remote.split();
     let mut reader = TCPNetworkDecoder::new(remote);
     let mut observer = SoundObserver::new(&server, &player.world()).await;
     observe(&mut reader, &player).await;

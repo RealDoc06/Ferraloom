@@ -130,6 +130,10 @@ fn assert_placeholder_codec(item: &NbtCompound, id: &str, name: &str) -> ItemSta
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the complete supported/refused parser matrix together"
+)]
 fn saved_containers_admit_instrument_and_jukebox_and_refuse_remaining_21_placeholder_inputs() {
     let prototypes: Vec<Prototype> =
         serde_json::from_str(include_str!("item_component_prototypes_26_3.json")).unwrap();

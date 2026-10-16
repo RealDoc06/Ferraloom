@@ -90,7 +90,7 @@ fn direct_unknown_negative_and_truncated_holders_error_without_synthetic_song() 
     direct
         .write_nbt(NbtTag::String("Direct song".into()))
         .unwrap();
-    direct.extend_from_slice(&71.0_f32.to_be_bytes());
+    direct.extend_from_slice(&71.0f32.to_be_bytes());
     direct.write_var_int(&VarInt(11)).unwrap();
     let mut reader = direct.as_slice();
     assert!(deserialize(DataComponent::JukeboxPlayable, &mut reader).is_err());

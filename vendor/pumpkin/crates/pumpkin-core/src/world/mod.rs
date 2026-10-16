@@ -1085,7 +1085,7 @@ impl World {
                 }
                 drop(lifecycle);
                 for entity in retired {
-                    entity.on_removed(self);
+                    entity.on_removed(&self);
                 }
             }
 

@@ -29,10 +29,10 @@ use crate::{
 };
 use futures::future::BoxFuture;
 use pumpkin_data::{
-    Item,
     block_properties::{FacingHopper, HopperLikeProperties, JukeboxLikeProperties},
     data_component::DataComponent,
     data_component_impl::JukeboxPlayableImpl,
+    item::Item,
     jukebox_song::JukeboxSong,
     statistic::{CustomStatistic, StatisticCategory},
 };
