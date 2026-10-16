@@ -179,29 +179,30 @@ async fn large_game_time_restores_all_dimensions_and_late_world_joins_live_age()
     AnvilLevelInfo
         .write_world_info(&initial, folder.path())
         .unwrap();
-    {
-        let server = server_at(folder.path()).await;
-        assert_game_time(&server, initial.game_time);
-        tick(&server);
-        assert_game_time(&server, initial.game_time + 1);
-        let nether = server.get_world_from_dimension(&Dimension::THE_NETHER);
-        let late = World::load(
-            nether.level.clone(),
-            server.level_info.clone(),
-            Dimension::THE_NETHER,
-            nether.block_registry.clone(),
-            Arc::downgrade(&server),
-            server.scoreboard.clone(),
-        );
-        assert_eq!(late.get_world_age(), initial.game_time + 1);
-        assert_eq!(
-            late.get_time_of_day(),
-            0,
-            "game age must not become the day clock"
-        );
-        assert_eq!(server.level_info.load().game_time, initial.game_time);
-        server.save_world_info().unwrap()
-    };
+    let server = server_at(folder.path()).await;
+    assert_game_time(&server, initial.game_time);
+    tick(&server);
+    assert_game_time(&server, initial.game_time + 1);
+    let nether = server.get_world_from_dimension(&Dimension::THE_NETHER);
+    let late = World::load(
+        nether.level.clone(),
+        server.level_info.clone(),
+        Dimension::THE_NETHER,
+        nether.block_registry.clone(),
+        Arc::downgrade(&server),
+        server.scoreboard.clone(),
+    );
+    assert_eq!(late.get_world_age(), initial.game_time + 1);
+    assert_eq!(
+        late.get_time_of_day(),
+        0,
+        "game age must not become the day clock"
+    );
+    assert_eq!(server.level_info.load().game_time, initial.game_time);
+    server.save_world_info().unwrap();
+    drop(late);
+    drop(nether);
+    drop(server);
     let reloaded = server_at(folder.path()).await;
     assert_game_time(&reloaded, initial.game_time + 1);
     assert_eq!(
@@ -219,17 +220,16 @@ struct MetadataEditDuringWrite {
 impl WorldInfoWriter for MetadataEditDuringWrite {
     fn write_world_info(&self, info: &LevelData, path: &Path) -> Result<(), WorldInfoError> {
         // A writer must never be called with the live clock locked.
-        {
-            let clock = self
-                .overworld
-                .level_time
-                .try_lock()
-                .expect("clock held across IO");
-            assert_eq!(
-                (info.game_time, info.day_time),
-                (clock.world_age, clock.time_of_day)
-            )
-        };
+        let clock = self
+            .overworld
+            .level_time
+            .try_lock()
+            .expect("clock held across IO");
+        assert_eq!(
+            (info.game_time, info.day_time),
+            (clock.world_age, clock.time_of_day)
+        );
+        drop(clock);
         update_level_info(&self.overworld.level_info, |live| {
             live.game_rules.keep_inventory = true;
             live.spawn_x = 91;
