@@ -431,6 +431,15 @@ pub(crate) struct PacketCallbacks<'a> {
     _chunk: Option<PacketChunkTicket>,
 }
 
+/// Whether respawn completed its destination mutation stage. Callers must not run
+/// respawn-only follow-up mutations after a cancelled or refused transition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use]
+pub enum RespawnOutcome {
+    Committed,
+    Aborted,
+}
+
 /// Terrain ownership, not a callback guard. A destination can keep its chunk
 /// loaded while source cleanup waits for reconciliation.
 pub(crate) struct PacketChunkTicket {
@@ -4726,31 +4735,39 @@ impl World {
         }
     }
 
-    pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
+    pub async fn respawn_player(
+        self: &Arc<Self>,
+        player: &Arc<Player>,
+        alive: bool,
+    ) -> RespawnOutcome {
         if let ClientPlatform::Java(client) = player.client.as_ref()
             && player.packet_activity.is_bound()
         {
             let Some(activity) = player.packet_activity.enter_mutation() else {
-                return;
+                return RespawnOutcome::Aborted;
             };
             let world = self.clone();
             let owned = player.clone();
             client
                 .spawn_world_activity_task(activity, async move {
-                    world.respawn_player_stages(&owned, alive).await;
+                    world.respawn_player_stages(&owned, alive).await
                 })
                 .await
-                .ok();
+                .unwrap_or(RespawnOutcome::Aborted)
         } else {
-            self.respawn_player_stages(player, alive).await;
+            self.respawn_player_stages(player, alive).await
         }
     }
 
     #[expect(clippy::too_many_lines)]
-    async fn respawn_player_stages(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
+    async fn respawn_player_stages(
+        self: &Arc<Self>,
+        player: &Arc<Player>,
+        alive: bool,
+    ) -> RespawnOutcome {
         let _transfer = player.world_transfer.lock().await;
         if player.client.closed() || (!alive && player.living_entity.health.load() > 0.0) {
-            return;
+            return RespawnOutcome::Aborted;
         }
         let current_world = player.world();
         let source_chunk = player.get_entity().chunk_pos.load();
@@ -4874,7 +4891,7 @@ impl World {
             .packet_stage(Some(source_chunk), prepare)
             .await
         else {
-            return;
+            return RespawnOutcome::Aborted;
         };
 
         // Candidate destination world for a cross-dimension respawn.
@@ -4914,7 +4931,7 @@ impl World {
                     .await
                     .is_none()
                 {
-                    return;
+                    return RespawnOutcome::Aborted;
                 }
 
                 if event.cancelled {
@@ -4959,7 +4976,7 @@ impl World {
             .prepare_packet_destination(destination_chunk, player)
             .await
         {
-            return;
+            return RespawnOutcome::Aborted;
         }
         if target_world.uuid != current_world.uuid {
             if current_world
@@ -4971,7 +4988,7 @@ impl World {
                 .flatten()
                 .is_none()
             {
-                return;
+                return RespawnOutcome::Aborted;
             }
             player.unload_watched_chunks(&current_world).await;
         }
@@ -5107,7 +5124,9 @@ impl World {
                 crate::net::DisconnectReason::Kicked,
                 &TextComponent::text("Respawn destination unavailable"),
             );
+            return RespawnOutcome::Aborted;
         }
+        RespawnOutcome::Committed
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.

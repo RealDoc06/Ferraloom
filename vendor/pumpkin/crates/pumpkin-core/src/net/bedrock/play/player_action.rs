@@ -236,7 +236,8 @@ impl BedrockClient {
             {
                 let player_c = player.clone();
                 player.spawn_task(async move {
-                    player_c.world().respawn_player(&player_c, false).await;
+                    // Bedrock has no post-respawn mutation tail; the transition owns abort handling.
+                    let _outcome = player_c.world().respawn_player(&player_c, false).await;
                 });
             }
             // TODO

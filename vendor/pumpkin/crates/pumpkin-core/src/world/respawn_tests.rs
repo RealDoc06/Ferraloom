@@ -101,9 +101,12 @@ async fn respawned_player_data(mode: GameMode, keep_inventory: bool, alive: bool
         player.living_entity.health.store(0.0);
     }
 
-    tokio::time::timeout(Duration::from_secs(10), world.respawn_player(player, alive))
-        .await
-        .expect("real respawn transition must complete with stopped chunk workers");
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(10), world.respawn_player(player, alive))
+            .await
+            .expect("real respawn transition must complete with stopped chunk workers"),
+        super::RespawnOutcome::Committed,
+    );
     assert!(player.living_entity.health.load() > 0.0);
     assert_eq!(player.get_entity().pos.load(), Vector3::new(8.5, 64.0, 8.5));
 

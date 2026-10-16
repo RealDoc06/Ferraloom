@@ -335,10 +335,15 @@ pub(crate) mod test {
     }
 
     pub async fn player_fixture() -> PlayerFixture {
+        player_fixture_with_hardcore(false).await
+    }
+
+    pub(crate) async fn player_fixture_with_hardcore(hardcore: bool) -> PlayerFixture {
         let directory = tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
             seed: Seed(0),
+            hardcore,
             allow_nether: false,
             allow_end: false,
             allow_chat_reports: false,
@@ -411,6 +416,37 @@ pub(crate) mod test {
             player,
             client,
             _remote: remote,
+        }
+    }
+
+    /// Stop terrain workers while leaving world callback admission open for packet tests.
+    pub(crate) async fn stop_chunk_workers(fixture: &PlayerFixture) {
+        for world in fixture.server.worlds.load().iter() {
+            world
+                .level
+                .shut_down_chunk_system
+                .store(true, Ordering::Relaxed);
+            world.level.level_channel.notify();
+            let handles = std::mem::take(&mut *world.level.thread_tracker.lock().unwrap());
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                tokio::task::spawn_blocking(move || {
+                    for handle in handles {
+                        handle.join().unwrap();
+                    }
+                }),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            world.level.chunk_system_tasks.close();
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                world.level.chunk_system_tasks.wait(),
+            )
+            .await
+            .unwrap();
+            assert!(!world.level.cancel_token.is_cancelled());
         }
     }
 
