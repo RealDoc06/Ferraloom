@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -35,6 +36,7 @@ from parity.protocol import require
 from check_block_data import LoggedServer, WORLD_ERRORS, interaction_deadline, pos_text, teleport, close_menu
 
 POSITIONS = {"barrel": (4097, 200, 1), "chest": (4101, 200, 1), "trapped_chest": (4105, 200, 1)}
+BLOCK_ENTITY_TYPES = {"barrel": 26, "chest": 1, "trapped_chest": 2}
 CASES = {f"container_metadata.{kind}_{case}": feature for kind in POSITIONS for case, feature in (
     ("title_recursive", "blocks.containers"), ("mainhand", "blocks.containers"),
     ("offhand", "blocks.containers"), ("creative", "blocks.containers"),
@@ -46,6 +48,7 @@ DEFERRED = [{"id": "container_metadata.unsupported_loaded_predicate", "result": 
 KEY = "Ferraloom key"
 LOCK = '{components:{"minecraft:custom_name":"' + KEY + '"}}'
 GOLD = {"item_id": 1022, "count": 5}
+STICK = 1060
 PRIMARY = {"inner_jar_sha256": "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6",
            "contracts": ["DataComponents lambda$static$6/$9: ComponentSerialization.STREAM_CODEC; IDs 6/9",
                          "DataComponents.CUSTOM_DATA: persistent CustomData.CODEC; BlockEntity components: DataComponentMap.CODEC",
@@ -95,11 +98,22 @@ def snbt(value: object) -> str:
     raise TypeError(f"Unsupported fixture NBT {value!r}")
 
 
-def set_hand(server: LoggedServer, item: str = "air", *, offhand: bool = False) -> dict:
+def set_hand(server: LoggedServer, client: Client, item: str = "air", *, offhand: bool = False) -> dict:
     slot = "weapon.offhand" if offhand else "weapon.mainhand"
     output = server.command(f"item replace entity {NAME} {slot} with minecraft:{item}")
-    predicate = f"if items entity {NAME} {slot} minecraft:{item}" if item != "air" else f"unless items entity {NAME} {slot} *"
-    return {"output": output, **typed_predicate(server, predicate)}
+    if item == "air":
+        expected = None
+    elif item == "stick":
+        expected = {"item_id": STICK, "count": 1}
+    else:
+        match = re.fullmatch(r'stick\[(minecraft:(?:custom_name|item_name))=("(?:[^"\\]|\\.)*")\]', item)
+        require(match is not None, f"Item outside the exact hand fixture: {item}")
+        expected = {"item_id": STICK, "count": 1, "components": {match[1]: json.loads(match[2])}}
+    index = 45 if offhand else 36
+    state = client.wait_state(lambda state: state.get("player_inventory") is not None
+                              and state["player_inventory"]["slots"][index] == expected)
+    return {"output": output, "slot": slot, "inventory_slot": index, "expected_stack": expected,
+            "received_inventory": state["player_inventory"]}
 
 
 def key_item() -> str:
@@ -164,7 +178,33 @@ def boundary(server: LoggedServer, client: Client, before: int) -> dict:
             "received_marker": delivered_chat(state, marker)}
 
 
-def denied(server: LoggedServer, client: Client, pos: tuple[int, int, int], *, pending_spectator: bool = False) -> dict:
+def private_chunk(server: LoggedServer, client: Client, kind: str) -> dict:
+    """Require the container's actual entry, with absent NBT, in a fresh chunk."""
+    pos = POSITIONS[kind]
+    close_menu(client)
+    before = client.state()["packets"]
+    teleport(server, client, (0, 200, 0))
+    client.wait_state(lambda state: any(chunk["sequence"] > before and chunk["x"] == 0 and chunk["z"] == 0
+                                        for chunk in state["chunk_packets"]))
+    fence = boundary(server, client, before)
+    before_return = client.state()["packets"]
+    teleport(server, client, pos)
+    state = client.wait_state(lambda state: any(chunk["sequence"] > before_return
+                              and chunk["x"] == pos[0] // 16 and chunk["z"] == pos[2] // 16
+                              for chunk in state["chunk_packets"]))
+    chunks = [chunk for chunk in state["chunk_packets"] if chunk["sequence"] > before_return
+              and chunk["x"] == pos[0] // 16 and chunk["z"] == pos[2] // 16]
+    entries = [entry for chunk in chunks for entry in chunk["block_entities"]
+               if (entry["x"], entry["y"], entry["z"]) == pos]
+    require(bool(entries), {"missing_container_entry": pos, "chunks": chunks})
+    require(all(entry["block_entity_type"] == BLOCK_ENTITY_TYPES[kind] and entry["data"] is None
+                for entry in entries), {"private_container_nbt_exposed": entries})
+    return {"away_boundary": fence, "before_return_sequence": before_return, "received_entries": entries,
+            "chunk_sequences": [chunk["sequence"] for chunk in chunks]}
+
+
+def denied(server: LoggedServer, client: Client, pos: tuple[int, int, int], *, pending_spectator: bool = False,
+           expected_name: str | None = None) -> dict:
     close_menu(client)
     before = client.state()["packets"]
     sent = client.request("use_item_on", **dict(zip(("x", "y", "z"), pos)))
@@ -174,7 +214,9 @@ def denied(server: LoggedServer, client: Client, pos: tuple[int, int, int], *, p
         overlay = any(entry["sequence"] > before and entry.get("overlay") is True
                       and isinstance(entry.get("component_nbt"), dict)
                       and entry["component_nbt"].get("translate") == translation
-                      and (pending_spectator or entry["component_nbt"].get("color") == "red") for entry in state["chat_messages"])
+                      and (expected_name is None or entry["component_nbt"].get("with") == [expected_name])
+                      and (entry["component_nbt"].get("color") == "red" if pending_spectator
+                           else "color" not in entry["component_nbt"]) for entry in state["chat_messages"])
         sound = pending_spectator or any(entry["sequence"] > before
                                         and (entry["registry_id"] == 348 or entry["sound_id"] == "minecraft:block.chest.locked")
                                         and entry["volume"] == 1 and entry["pitch"] == 1 for entry in state["sounds"])
@@ -192,7 +234,8 @@ def denied(server: LoggedServer, client: Client, pos: tuple[int, int, int], *, p
 
 def title_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = fresh(server, client, kind)
-    hand = set_hand(server, key_item())
+    initial_chunk = private_chunk(server, client, kind)
+    hand = set_hand(server, client, key_item())
     plain = opened(client, pos, {"text": kind + " box"})
     close_menu(client)
     server.command(f"data merge block {pos_text(pos)} " + snbt({"CustomName": title_for(kind)}))
@@ -205,20 +248,23 @@ def title_case(server: LoggedServer, client: Client, kind: str) -> dict:
     typed = typed_predicate(server, f"if data block {pos_text(pos)} " + snbt({"CustomName": root_style}))
     edited = opened(client, pos, title_for(kind, True))
     close_menu(client)
-    return {"hand": hand, "plain": plain, "styled": styled, "recursive_merge": typed, "edited_reopen": edited}
+    edited_chunk = private_chunk(server, client, kind)
+    return {"hand": hand, "plain": plain, "styled": styled, "recursive_merge": typed, "edited_reopen": edited,
+            "initial_private_chunk": initial_chunk, "edited_private_chunk": edited_chunk}
 
 
 def mainhand_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = fresh(server, client, kind)
     observations = []
     for item in ("air", 'stick[minecraft:custom_name="wrong"]', 'stick[minecraft:item_name="' + KEY + '"]'):
-        observations.append({"hand": set_hand(server, item), "denied": denied(server, client, pos)})
-    correct = set_hand(server, key_item())
+        observations.append({"hand": set_hand(server, client, item),
+                             "denied": denied(server, client, pos, expected_name=kind + " box")})
+    correct = set_hand(server, client, key_item())
     positive = opened(client, pos, {"text": kind + " box"})
     close_menu(client)
     # Empty ItemPredicate matches any stack (including the empty main hand).
     server.command(f"data modify block {pos_text(pos)} lock set value {{}}")
-    empty_hand = set_hand(server)
+    empty_hand = set_hand(server, client)
     empty_predicate = opened(client, pos, {"text": kind + " box"})
     close_menu(client)
     return {"negatives": observations, "correct_mainhand": correct, "positive": positive,
@@ -227,12 +273,15 @@ def mainhand_case(server: LoggedServer, client: Client, kind: str) -> dict:
 
 def offhand_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = fresh(server, client, kind)
-    offhand = set_hand(server, key_item(), offhand=True)
-    mainhand = set_hand(server, "stick")
-    negative = denied(server, client, pos)
+    offhand = set_hand(server, client, key_item(), offhand=True)
+    mainhand = set_hand(server, client, "stick")
+    negative = denied(server, client, pos, expected_name=kind + " box")
     # Actual player-inventory hotbar/offhand SWAP, not a console replacement.
     sent = client.request("swap_hands")
-    mainhand_key = wait_predicate(server, f'if items entity {NAME} weapon.mainhand minecraft:{key_item()}')
+    state = client.wait_state(lambda state: state.get("player_inventory") is not None
+                              and state["player_inventory"]["slots"][36] == {
+                                  "item_id": STICK, "count": 1, "components": {"minecraft:custom_name": KEY}})
+    mainhand_key = state["player_inventory"]
     positive = opened(client, pos, {"text": kind + " box"})
     close_menu(client)
     return {"offhand": offhand, "wrong_mainhand": mainhand, "denied": negative,
@@ -242,8 +291,8 @@ def offhand_case(server: LoggedServer, client: Client, kind: str) -> dict:
 def creative_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = fresh(server, client, kind)
     server.command(f"gamemode creative {NAME}")
-    negative = denied(server, client, pos)
-    correct = set_hand(server, key_item())
+    negative = denied(server, client, pos, expected_name=kind + " box")
+    correct = set_hand(server, client, key_item())
     positive = opened(client, pos, {"text": kind + " box"})
     close_menu(client)
     server.command(f"gamemode survival {NAME}")
@@ -264,19 +313,20 @@ def loot_case(server: LoggedServer, client: Client, kind: str) -> dict:
     # Vanilla built-in empty table: unpacking is observable without random loot.
     loot = '{LootTable:"minecraft:empty",LootTableSeed:73L}'
     server.command(f"data merge block {pos_text(pos)} {loot}")
-    negative = denied(server, client, pos)
+    pending_chunk = private_chunk(server, client, kind)
+    negative = denied(server, client, pos, expected_name=kind + " box")
     retained = typed_predicate(server, f"if data block {pos_text(pos)} {loot}")
     server.command(f"gamemode spectator {NAME}")
     spectator = denied(server, client, pos, pending_spectator=True)
     spectator_retained = typed_predicate(server, f"if data block {pos_text(pos)} {loot}")
     server.command(f"gamemode survival {NAME}")
-    correct = set_hand(server, key_item())
+    correct = set_hand(server, client, key_item())
     positive = opened(client, pos, {"text": kind + " box"}, expected=[None] * 27)
     unpacked = typed_predicate(server, f"unless data block {pos_text(pos)} LootTable unless data block {pos_text(pos)} LootTableSeed")
     close_menu(client)
     return {"wrong_key": negative, "retained_loot_and_long_seed": retained, "spectator_pending": spectator,
             "spectator_retained_loot_and_long_seed": spectator_retained, "correct_key": correct,
-            "unpacked_menu": positive, "unpacked_fields": unpacked}
+            "unpacked_menu": positive, "unpacked_fields": unpacked, "pending_private_chunk": pending_chunk}
 
 
 def metadata_predicate(server: LoggedServer, kind: str) -> dict:
@@ -290,7 +340,7 @@ def metadata_predicate(server: LoggedServer, kind: str) -> dict:
 
 def deposit_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = fresh(server, client, kind)
-    set_hand(server, key_item())
+    set_hand(server, client, key_item())
     server.command(f"data merge block {pos_text(pos)} " + snbt({"CustomName": title_for(kind),
         "components": {"minecraft:custom_data": {"keep": 7, "nested": {"left": 1}}}}))
     server.command(f"data merge block {pos_text(pos)} " + snbt({"CustomName": {"text": "Edited " + kind},
@@ -298,30 +348,35 @@ def deposit_case(server: LoggedServer, client: Client, kind: str) -> dict:
     server.command(f"item replace entity {NAME} hotbar.1 with minecraft:gold_ingot 5")
     initial = opened(client, pos, title_for(kind, True), expected=[None] * 27)
     require(initial["menu"]["slots"][55] == GOLD, initial)
-    before = client.state()["packets"]
     sent = client.request("swap", slot=2, hotbar=1)
-    step_exact(server, 2)
-    state = client.wait_state(lambda state: state["menu"]["slots"][2] == GOLD and state["menu"]["slots"][55] is None
-                              and any(entry["sequence"] > before and entry["kind"] in ("slot", "content") for entry in state["menu_packets"]))
+    # Matching client predictions can suppress slot updates. A fresh menu must
+    # independently report the committed deposit and the emptied player slot.
+    expected = [None] * 27
+    expected[2] = GOLD
+    reopened = opened(client, pos, title_for(kind, True), expected=expected)
+    require(reopened["menu"]["slots"][55] is None, reopened)
     close_menu(client)
     preserved = metadata_predicate(server, kind)
-    return {"initial": initial, "actual_swap": sent, "received_updates": [entry for entry in state["menu_packets"] if entry["sequence"] > before],
-            "preserved": preserved, "scope": "Opaque custom_data survives recursive merge and a real plain-stack deposit; no component gameplay claim."}
+    edited_chunk = private_chunk(server, client, kind)
+    return {"initial": initial, "actual_swap": sent, "fresh_menu_after_swap": reopened,
+            "preserved": preserved, "private_chunk_after_deposit": edited_chunk,
+            "scope": "Opaque custom_data survives recursive merge and a real plain-stack deposit; no component gameplay claim."}
 
 
 def restart_case(server: LoggedServer, client: Client, kind: str) -> dict:
     pos = POSITIONS[kind]
     teleport(server, client, pos)
     server.command(f"clear {NAME}")
-    wrong_key = set_hand(server, 'stick[minecraft:custom_name="restart wrong key"]')
+    wrong_key = set_hand(server, client, 'stick[minecraft:custom_name="restart wrong key"]')
     negative = denied(server, client, pos)
-    set_hand(server, key_item())
+    set_hand(server, client, key_item())
     expected = [None] * 27
     expected[2] = GOLD
     positive = opened(client, pos, title_for(kind, True), expected=expected)
     close_menu(client)
+    restarted_chunk = private_chunk(server, client, kind)
     return {"wrong_mainhand": wrong_key, "after_clean_restart_wrong_key": negative, "correct_key_menu": positive,
-            "semantic_metadata_readback": metadata_predicate(server, kind)}
+            "semantic_metadata_readback": metadata_predicate(server, kind), "private_chunk_after_restart": restarted_chunk}
 
 
 def double_case(server: LoggedServer, client: Client, kind: str) -> dict:
@@ -341,7 +396,7 @@ def double_case(server: LoggedServer, client: Client, kind: str) -> dict:
         server.command(f'data merge block {pos_text(pos)} {{CustomName:"{title}",lock:{LOCK}}}')
     negatives = []
     # A correct key for one half must not bypass the OTHER half, from either side.
-    set_hand(server, key_item())
+    set_hand(server, client, key_item())
     for locked, other in ((first, second), (second, first)):
         server.command(f'data modify block {pos_text(locked)} lock.components."minecraft:custom_name" set value "wrong"')
         for clicked in (first, second):

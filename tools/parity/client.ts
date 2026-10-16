@@ -70,6 +70,23 @@ export type ContainerPacket =
   | { kind: 'content'; packet_id: 18; container_id: number; state_id: number; slots: PlainStack[]; carried: PlainStack }
   | { kind: 'slot'; packet_id: 20; container_id: number; state_id: number; slot: number; stack: PlainStack };
 
+export type PlayerInventoryObservation = { state_id: number; sequence: number; slots: PlainStack[] };
+
+/** Keep received player slots separate from container slots and local predictions. */
+export function observePlayerInventory(current: PlayerInventoryObservation | null,
+  packet: ContainerPacket & { sequence: number }): PlayerInventoryObservation | null {
+  if (packet.container_id !== 0 || packet.kind === 'open') return current;
+  if (packet.kind === 'content') {
+    if (packet.slots.length !== 46) throw new Error('Expected 46 player inventory slots');
+    return { state_id: packet.state_id, sequence: packet.sequence, slots: packet.slots.slice() };
+  }
+  if (current === null) return null; // A delta cannot establish the other slots.
+  if (packet.slot >= current.slots.length) throw new Error('Update outside player inventory');
+  const slots = current.slots.slice();
+  slots[packet.slot] = packet.stack;
+  return { state_id: packet.state_id, sequence: packet.sequence, slots };
+}
+
 function plainStack(reader: Reader, metadata = false): PlainStack {
   const count = reader.varInt();
   if (count === 0) return null;
@@ -313,14 +330,16 @@ export function decodeChunkBlockEntities(payload: Buffer, mode: 'plain' | 'rich'
   reader.take(section_bytes);
   const block_entity_count = boundedCount(reader, 4096, 'chunk block entity count');
   const signs: SignObservation[] = [];
+  const block_entities: (BlockPosition & { block_entity_type: number; data: unknown })[] = [];
   for (let index = 0; index < block_entity_count; index++) {
     const local = reader.byte(), y = reader.take(2).readInt16BE();
     const block_entity_type = boundedCount(reader, 65535, 'block entity type');
     const tag = reader.byte();
     if (tag !== 0 && tag !== 10) throw new Error('Chunk BE requires optional compound NBT');
     const data = tag === 0 ? null : nbt(reader, 10);
+    const position = { x: x * 16 + (local >> 4), y, z: z * 16 + (local & 15) };
+    block_entities.push({ ...position, block_entity_type, data });
     if (block_entity_type === 7 || block_entity_type === 8) {
-      const position = { x: x * 16 + (local >> 4), y, z: z * 16 + (local & 15) };
       signs.push({ kind: 'chunk', packet_id: 46, ...position, block_entity_type, ...signObservationData(data, mode, position) });
     }
   }
@@ -332,7 +351,7 @@ export function decodeChunkBlockEntities(payload: Buffer, mode: 'plain' | 'rich'
     for (let index = 0; index < count; index++) reader.take(boundedCount(reader, 2048, 'light array bytes'));
   }
   if (reader.offset !== payload.length) throw new Error('Trailing chunk bytes outside supported metadata/light schema');
-  return { x, z, section_bytes, block_entity_count, signs, decoded_bytes: reader.offset };
+  return { x, z, section_bytes, block_entity_count, block_entities, signs, decoded_bytes: reader.offset };
 }
 
 function plainStackHash(stack: PlainStack): Buffer {
@@ -874,14 +893,16 @@ function main() {
     menu: null as { container_id: number; menu_type: number; opened_sequence: number; state_id: number;
       slots: PlainStack[]; carried: PlainStack } | null,
     menu_packets: [] as (ContainerPacket & { sequence: number })[],
+    player_inventory: null as PlayerInventoryObservation | null,
     sign_packets: [] as (SignObservation & { sequence: number })[],
-    chunk_packets: [] as { x: number; z: number; sequence: number; block_entity_count: number; section_bytes: number }[],
+    chunk_packets: [] as (Omit<ReturnType<typeof decodeChunkBlockEntities>, 'signs' | 'decoded_bytes'> & { sequence: number })[],
     sounds: [] as (ReturnType<typeof decodeSoundPacket> & { sequence: number; payload_base64: string })[],
     disconnect: null as ReturnType<typeof decodeDisconnect> | null,
     block_ack: -1,
   };
 
   function send(id: number, ...parts: Buffer[]) {
+    if (quitting) return;
     let packet = Buffer.concat([varInt(id), ...parts]);
     if (values['raw-packets'] && phase === 'play' && [7, 9, 18, 19, 41, 66].includes(id)) {
       emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: packet.toString('base64') });
@@ -1003,6 +1024,7 @@ function main() {
     if (id === ids.play.slot) state.slot_packets++;
     if (values['block-data'] && (id === 60 || id === ids.play.inventory || id === ids.play.slot)) {
       const observation = { ...decodeContainerPacket(payload, values['container-metadata']), sequence: state.packets };
+      state.player_inventory = observePlayerInventory(state.player_inventory, observation);
       state.menu_packets.push(observation);
       if (state.menu_packets.length > 64) state.menu_packets.shift();
       if (observation.kind === 'open') {

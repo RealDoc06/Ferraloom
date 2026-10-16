@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { decodeChunkBlockEntities, decodeContainerPacket, decodeSignData, decodeSignPacket, decodeRichSignData, decodeSystemChat,
   encodeContainerSwap, encodeSignUpdate, encodeUseItemOn, encodeTrigger, parseCommand, varInt,
-  type PlainStack } from '../tools/parity/client.ts';
+  observePlayerInventory, type PlainStack } from '../tools/parity/client.ts';
 import { decodeContainerTitle, decodeDisconnect, decodeOfflineChatPacket, decodeSoundPacket, encodeSwapHands, encodeUnsignedChat } from '../tools/parity/client.ts';
 
 const plain = (item: number, count: number) => Buffer.concat([varInt(count), varInt(item), Buffer.from([0, 0])]);
@@ -125,6 +125,26 @@ test('metadata item patch decodes only pinned custom_name=6/item_name=9 NBT and 
   assert.throws(() => encodeContainerSwap(3, 1, 2, 0, slots), /hashed components/);
 });
 
+test('received player inventory keeps exact hand components and ignores unrelated menu contents', () => {
+  const content = decodeContainerPacket(Buffer.concat([Buffer.from([18, 0, 1, 46]), Buffer.alloc(47)]), true);
+  const initial = observePlayerInventory(null, { ...content, sequence: 10 });
+  assert.ok(initial);
+  const named = decodeContainerPacket(Buffer.concat([Buffer.from([20, 0, 2, 0, 36, 1]), varInt(1060),
+    Buffer.from([1, 0, 6, 8]), utf('Ferraloom key')]), true);
+  assert.equal(observePlayerInventory(null, { ...named, sequence: 11 }), null);
+  const mainhand = observePlayerInventory(initial, { ...named, sequence: 11 });
+  assert.ok(mainhand);
+  assert.deepEqual(mainhand.slots[36], { item_id: 1060, count: 1, components: { 'minecraft:custom_name': 'Ferraloom key' } });
+  assert.equal(initial.slots[36], null);
+  const offhand = decodeContainerPacket(Buffer.concat([Buffer.from([20, 0, 3, 0, 45]), plain(1060, 1)]), true);
+  const both = observePlayerInventory(mainhand, { ...offhand, sequence: 12 });
+  assert.ok(both);
+  assert.deepEqual(both.slots[36], mainhand.slots[36]);
+  assert.deepEqual(both.slots[45], { item_id: 1060, count: 1 });
+  const menu = decodeContainerPacket(Buffer.concat([Buffer.from([18, 3, 4, 63]), Buffer.alloc(64)]), true);
+  assert.equal(observePlayerInventory(both, { ...menu, sequence: 13 }), both);
+});
+
 test('26.3 locked sound observes ID+1 holder, fixed positions, source, volume/pitch and exact boundary', () => {
   const float = (value: number) => { const bytes = Buffer.alloc(4); bytes.writeFloatBE(value); return bytes; };
   const tail = Buffer.concat([varInt(4), i32(4097 * 8 + 4), i32(200 * 8 + 4), i32(12), float(1), float(1), Buffer.alloc(8)]);
@@ -244,6 +264,11 @@ test('chunk BE metadata decodes packed local XZ, signed Y and optional compound 
   assert.equal(decoded.z, 3);
   assert.equal(decoded.section_bytes, 3);
   assert.equal(decoded.block_entity_count, 3);
+  assert.deepEqual(decoded.block_entities[0], { x: -22, y: -64, z: 53, block_entity_type: 1, data: null });
+  assert.deepEqual(decoded.block_entities[1]?.data, {
+    front_text: { messages, color: 'red', has_glowing_text: 1 },
+    back_text: { messages: ['back', 'north', 'other', 'face'], color: 'blue', has_glowing_text: 0 }, is_waxed: 1,
+  });
   assert.equal(decoded.decoded_bytes, packet.length);
   assert.deepEqual(decoded.signs, [7, 8].map(block_entity_type => ({ kind: 'chunk', packet_id: 46,
     x: -22, y: -64, z: 53, block_entity_type, data: expectedSign })));
