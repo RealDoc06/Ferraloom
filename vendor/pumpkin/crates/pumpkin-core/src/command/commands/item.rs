@@ -1,4 +1,5 @@
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::item_stack::{ItemStack, admission::validate_runtime_item_stack};
 use pumpkin_data::translation;
 use pumpkin_inventory::Inventory;
 use pumpkin_util::PermissionLvl;
@@ -15,12 +16,25 @@ use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::item::ItemStackArgumentType;
 use crate::command::argument_types::slot::SlotArgumentType;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Modifies items in block or entity inventories.";
 const PERMISSION: &str = "minecraft:command.item";
+
+const ERROR_UNPERSISTABLE_ITEM: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("This item cannot currently be persisted without data loss.");
+
+/// /give and both /item replace targets share the same component parser, whose
+/// placeholder readers can succeed even when the resulting stack has no writer.
+pub(super) fn persistable_item(context: &CommandContext) -> Result<ItemStack, CommandSyntaxError> {
+    let stack = ItemStackArgumentType::get(context, "item")?;
+    validate_runtime_item_stack(&stack)
+        .map_err(|_| ERROR_UNPERSISTABLE_ITEM.create_without_context())?;
+    Ok(stack)
+}
 
 const ERROR_NOT_CONTAINER: CommandErrorType<3> = CommandErrorType::new(
     translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
@@ -41,7 +55,7 @@ impl CommandExecutor for BlockReplaceExecutor {
         let world = context.source.world();
         let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
         let slot = SlotArgumentType::get(context, "slot")?;
-        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
+        let parsed_stack = persistable_item(context)?;
         let item = parsed_stack.item;
         let count = if self.has_count {
             IntegerArgumentType::get(context, "count")?
@@ -107,7 +121,7 @@ impl CommandExecutor for EntityReplaceExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = EntityArgumentType::get_entities(context, "targets")?;
         let mojang_slot = SlotArgumentType::get(context, "slot")?;
-        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
+        let parsed_stack = persistable_item(context)?;
         let item = parsed_stack.item;
         let count = if self.has_count {
             IntegerArgumentType::get(context, "count")?
@@ -490,6 +504,58 @@ mod tests {
         }
         // Exact packet equality also rejects an extra update to crafting slot 0.
         assert_eq!(updates, expected);
+    }
+
+    #[tokio::test]
+    async fn give_and_replace_refuse_writerless_components_before_mutation() {
+        let mut fixture = Fixture::new().await;
+        crate::command::commands::give::register(
+            &mut fixture.world.dispatcher,
+            &PermissionRegistry::default(),
+        );
+        let original = ItemStack::new(3, &Item::DIAMOND);
+        fixture.player.inventory().set_stack(0, original.clone());
+        let block_before = fixture.world.block_data();
+        let entities_before = fixture.player.world().entities.load().len();
+        for command in [
+            "give @s stick[tooltip_display={hide_tooltip:true}]",
+            "item replace entity @s hotbar.0 with stick[tooltip_display={hide_tooltip:true}]",
+            "item replace block 0 64 0 container.0 with stick[tooltip_display={hide_tooltip:true}]",
+            "give @s bundle[bundle_contents=[{id:'minecraft:stick',components:{'minecraft:tooltip_display':{hide_tooltip:true}}}]]",
+        ] {
+            let error = fixture
+                .execute(command)
+                .err()
+                .expect("writerless command item must refuse");
+            assert!(error.is(&ERROR_UNPERSISTABLE_ITEM), "{command}");
+            assert!(fixture.player.inventory().get_stack(0).are_equal(&original));
+            assert_eq!(fixture.world.block_data(), block_before);
+            assert_eq!(
+                fixture.player.world().entities.load().len(),
+                entities_before
+            );
+        }
+        assert_eq!(
+            fixture
+                .execute("item replace entity @s hotbar.0 with gold_ingot[!tooltip_display] 37")
+                .unwrap(),
+            1
+        );
+        let healthy = ItemStack::new_with_component(
+            37,
+            &Item::GOLD_INGOT,
+            vec![(
+                pumpkin_data::data_component::DataComponent::TooltipDisplay,
+                None,
+            )],
+        );
+        assert!(fixture.player.inventory().get_stack(0).are_equal(&healthy));
+        assert_eq!(
+            fixture
+                .execute("give @s stick[!tooltip_display] 2")
+                .unwrap(),
+            1
+        );
     }
 
     #[tokio::test]

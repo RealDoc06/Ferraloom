@@ -184,6 +184,14 @@ impl CommandExecutor for CloneExecutor {
                             nbt
                         });
 
+                        // An already contaminated source must not spread a
+                        // writerless item to another chunk. Check every source
+                        // before any destination or move-source mutation.
+                        if let Some(nbt) = &block_entity_nbt {
+                            pumpkin_world::nbt_io::encode_compound(nbt.clone())
+                                .map_err(|_| FAILED_ERROR.create_without_context())?;
+                        }
+
                         blocks_to_clone.push(ClonedBlock {
                             src_pos,
                             dest_pos,

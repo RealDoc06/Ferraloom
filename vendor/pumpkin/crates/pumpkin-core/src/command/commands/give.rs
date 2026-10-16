@@ -22,7 +22,7 @@ struct GiveExecutor {
 impl CommandExecutor for GiveExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = EntityArgumentType::get_players(context, "targets")?;
-        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
+        let parsed_stack = super::item::persistable_item(context)?;
         let item = parsed_stack.item;
 
         let item_count = if self.has_count {

@@ -45,6 +45,9 @@ use crate::world::World;
 const DESCRIPTION: &str = "Queries or modifies NBT data of entities, blocks, and storages.";
 const PERMISSION: &str = "minecraft:command.data";
 
+#[path = "data_item_admission.rs"]
+mod item_admission;
+
 pub const ERROR_MERGE_UNCHANGED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_DATA_MERGE_FAILED,
     translation::java::COMMANDS_DATA_MERGE_FAILED,
@@ -252,6 +255,7 @@ impl DataAccessor for EntityDataAccessor {
         if self.entity.get_player().is_some() {
             return Err(ERROR_ENTITY_INVALID.create_without_context());
         }
+        item_admission::entity(self.entity.as_ref(), tag)?;
         self.entity.read_nbt_non_mut(tag);
         Ok(())
     }
@@ -319,17 +323,33 @@ impl DataAccessor for BlockDataAccessor {
         &self,
         edit: &mut dyn FnMut(&mut NbtCompound) -> NbtEditDecision,
     ) -> Result<bool, CommandSyntaxError> {
-        self.world
-            .edit_block_entity_nbt(&self.block_entity, edit)
+        let mut admission_error = None;
+        let result = self
+            .world
+            .edit_block_entity_nbt(&self.block_entity, &mut |candidate| {
+                let decision = edit(candidate);
+                if decision == NbtEditDecision::Commit
+                    && let Err(error) = item_admission::block(self.block_entity.as_ref(), candidate)
+                {
+                    admission_error = Some(error);
+                    return NbtEditDecision::Abort;
+                }
+                decision
+            })
             .map_err(|error| match error {
                 BlockEntityLoadError::Unsupported(_) => {
                     ERROR_BLOCK_DATA_UNSUPPORTED.create_without_context()
                 }
                 BlockEntityLoadError::NotPublished => ERROR_BLOCK_INVALID.create_without_context(),
-            })
+            });
+        if let Some(error) = admission_error {
+            return Err(error);
+        }
+        result
     }
 
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
+        item_admission::block(self.block_entity.as_ref(), tag)?;
         self.world
             .apply_block_entity_nbt(&self.block_entity, tag)
             .map_err(|error| match error {

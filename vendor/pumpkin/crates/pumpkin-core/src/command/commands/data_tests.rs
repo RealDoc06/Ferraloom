@@ -1371,3 +1371,109 @@ async fn invalid_and_unsupported_block_targets_refuse_before_invoking_editor() {
     assert!(!invoked);
     assert_eq!(fixture.pending_data(), pending);
 }
+
+#[tokio::test]
+async fn data_item_ingress_refuses_writerless_stacks_without_mutating_live_or_pending_state() {
+    let fixture = Fixture::new().await;
+    let before = fixture.sources();
+    let pending = fixture.pending_data();
+    for command in [
+        "data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:stick',count:1,components:{'minecraft:tooltip_display':{hide_tooltip:true}}}]",
+        "data merge block 0 64 0 {Items:[{Slot:0b,id:'minecraft:stick',count:1,components:{'minecraft:tooltip_display':{hide_tooltip:true}}}]}",
+        "data merge entity @s {Health:1f,equipment:{mainhand:{id:'minecraft:stick',count:1,components:{'minecraft:tooltip_display':{hide_tooltip:true}}}}}",
+    ] {
+        assert!(fixture.execute(command).is_err(), "{command}");
+        assert_eq!(fixture.sources(), before, "{command}");
+        assert_eq!(fixture.pending_data(), pending, "{command}");
+    }
+    // The arrow consumer normalizes a zero-count payload to one before saving.
+    let arrow = from_type(
+        &EntityType::ARROW,
+        Vector3::new(2.0, 64.0, 0.0),
+        fixture.source.world(),
+        uuid::Uuid::from_u128(909),
+    );
+    let accessor = EntityDataAccessor::new(arrow);
+    let arrow_before = accessor.get_data().unwrap();
+    assert!(accessor.set_data(&compound("{item:{id:'minecraft:stick',count:0,components:{'minecraft:tooltip_display':{hide_tooltip:true}}}}")).is_err());
+    assert_eq!(accessor.get_data().unwrap(), arrow_before);
+    assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:gold_ingot,count:37,components:{'!tooltip_display':{}}}]").unwrap(), 1);
+    assert_eq!(fixture.execute("data merge entity @s {equipment:{mainhand:{id:stick,count:2,components:{'!tooltip_display':{}}}}}").unwrap(), 1);
+    assert_eq!(fixture.execute("data merge storage repair:opaque {Item:{id:'minecraft:stick',components:{'minecraft:tooltip_display':{hide_tooltip:true}}}}").unwrap(), 1);
+    for nbt in fixture.sources() {
+        pumpkin_world::nbt_io::encode_compound(nbt).unwrap();
+    }
+    assert_eq!(
+        fixture
+            .storage("repair:opaque")
+            .get_compound("Item")
+            .unwrap()
+            .get_compound("components")
+            .unwrap()
+            .get_compound("minecraft:tooltip_display")
+            .unwrap()
+            .get_byte("hide_tooltip"),
+        Some(1)
+    );
+}
+
+#[tokio::test]
+async fn clone_refuses_contaminated_source_before_any_destination_or_move_mutation() {
+    use pumpkin_data::{
+        data_component::DataComponent,
+        data_component_impl::{DataComponentImpl, TooltipDisplayImpl},
+    };
+    let mut fixture = Fixture::new().await;
+    crate::command::commands::clone::register(
+        &mut fixture.dispatcher,
+        &PermissionRegistry::default(),
+    );
+    let world = fixture.source.world();
+    let source = world.get_block_entity(&BLOCK_POS).unwrap();
+    source.get_inventory().unwrap().set_stack(
+        0,
+        ItemStack::new_with_component(
+            1,
+            &Item::STICK,
+            vec![(
+                DataComponent::TooltipDisplay,
+                Some(TooltipDisplayImpl.to_dyn()),
+            )],
+        ),
+    );
+    let source_before = fixture.block_data();
+    let destination = BlockPos::new(4, 64, 0);
+    let destination_before = world.get_block_state_id(&destination);
+    for mode in ["normal", "move"] {
+        assert!(
+            fixture
+                .execute(&format!("clone 0 64 0 0 64 0 4 64 0 replace {mode}"))
+                .is_err()
+        );
+        assert_eq!(fixture.block_data(), source_before);
+        assert_eq!(world.get_block_state_id(&destination), destination_before);
+        assert!(world.get_block_entity(&destination).is_none());
+    }
+    source.get_inventory().unwrap().set_stack(
+        0,
+        ItemStack::new_with_component(
+            37,
+            &Item::GOLD_INGOT,
+            vec![(DataComponent::TooltipDisplay, None)],
+        ),
+    );
+    assert_eq!(
+        fixture
+            .execute("clone 0 64 0 0 64 0 4 64 0 replace normal")
+            .unwrap(),
+        1
+    );
+    let cloned = world.get_block_entity(&destination).unwrap();
+    assert!(
+        cloned
+            .get_inventory()
+            .unwrap()
+            .get_stack(0)
+            .are_equal(&source.get_inventory().unwrap().get_stack(0))
+    );
+}
