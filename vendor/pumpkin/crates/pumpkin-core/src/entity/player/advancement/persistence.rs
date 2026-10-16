@@ -260,18 +260,18 @@ pub(super) fn decode(bytes: &[u8]) -> Result<AdvancementFile, AdvancementDataErr
     Ok(disk)
 }
 
-/// Only a missing leaf in an existing real directory represents a new player.
-/// Symlinks, missing ancestors, directories and read failures are not absence.
+/// Only a missing leaf in an existing directory represents a new player.
+/// Parent directory symlinks are allowed; a symlinked leaf is never overwritten.
 pub(super) fn read_file(path: &Path) -> Result<Option<AdvancementFile>, AdvancementDataError> {
     for parent in path
         .ancestors()
         .skip(1)
         .filter(|parent| !parent.as_os_str().is_empty())
     {
-        let metadata = fs::symlink_metadata(parent).map_err(AdvancementDataError::Io)?;
+        let metadata = fs::metadata(parent).map_err(AdvancementDataError::Io)?;
         if !metadata.file_type().is_dir() {
             return Err(AdvancementDataError::Io(io::Error::other(format!(
-                "advancement parent is not a real directory: {}",
+                "advancement parent is not a directory: {}",
                 parent.display()
             ))));
         }

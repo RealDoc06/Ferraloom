@@ -321,14 +321,37 @@ async fn dangling_and_readable_symlinks_never_become_writable_new_players() {
         Err(AdvancementDataError::NotLoaded)
     ));
     assert_eq!(fs::read_to_string(&target).unwrap(), OFFICIAL);
-    let alias = directory.path().join("alias");
-    symlink(player.path.parent().unwrap(), &alias).unwrap();
-    player.path = alias.join("absent.json");
-    assert!(matches!(player.load(), Err(AdvancementDataError::Io(_))));
-    assert!(matches!(
-        player.snapshot(),
-        Err(AdvancementDataError::NotLoaded)
-    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_world_directory_supports_new_and_existing_advancements() {
+    use std::os::unix::fs::symlink;
+    let directory = tempfile::tempdir().unwrap();
+    let world = directory.path().join("ssd-world");
+    fs::create_dir(&world).unwrap();
+    let alias = directory.path().join("world");
+    symlink(&world, &alias).unwrap();
+    let mut progress = player(&alias.join("players"), true);
+    progress.load().unwrap();
+    assert!(
+        progress
+            .award(Advancement::STORY_ROOT, "crafting_table")
+            .awarded
+    );
+    progress.save().await.unwrap();
+    let actual = world
+        .join("players/advancements")
+        .join(progress.path.file_name().unwrap());
+    assert!(actual.is_file());
+    let bytes = fs::read(&actual).unwrap();
+    progress.load().unwrap();
+    assert!(progress.progress.map[Advancement::STORY_ROOT].is_done());
+    assert_eq!(
+        saved(&progress),
+        serde_json::from_slice::<Value>(&bytes).unwrap()
+    );
+    assert_eq!(fs::read_link(alias).unwrap(), world);
 }
 
 #[test]
