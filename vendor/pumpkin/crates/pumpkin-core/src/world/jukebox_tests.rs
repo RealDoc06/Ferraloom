@@ -697,6 +697,193 @@ async fn enable_tick_phase(world: &Arc<World>) {
     assert!(world.level.is_chunk_ready(&position));
 }
 
+/// Reproduces the differential circuit through neighbor admission, the real
+/// scheduled-block phase and the attached comparator BE.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn world_jukebox_comparator_disc11_insert_and_eject_complete_after_two_ticks() {
+    use crate::block::entities::comparator::ComparatorBlockEntity;
+    use pumpkin_data::block_properties::{
+        ComparatorLikeProperties, HorizontalFacing, RedstoneWireLikeProperties,
+    };
+    use pumpkin_world::chunk::ChunkData;
+
+    const JUKEBOX: BlockPos = BlockPos::new(4100, 200, 1);
+    const COMPARATOR: BlockPos = BlockPos::new(4100, 200, 2);
+    const WIRE: BlockPos = BlockPos::new(4101, 200, 1);
+
+    let fixture = fixture().await;
+    let player = fixture.player.clone();
+    let world = player.world();
+    let chunk_pos = JUKEBOX.chunk_position();
+    assert!(
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y))
+            .is_none()
+    );
+    world
+        .level
+        .read_chunk_sync(&chunk_pos, |chunk| {
+            assert!(
+                chunk.process_post_processing(|_| panic!("empty fixture has no postprocessing"))
+            );
+        })
+        .unwrap();
+    let entities = tokio::time::timeout(
+        Duration::from_secs(5),
+        world
+            .level
+            .get_or_fetch_entity_chunk(chunk_pos, Clone::clone),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    entities.live.store(true, Relaxed);
+    world.block_ticking_chunks.write().unwrap().insert(chunk_pos);
+    assert!(world.level.is_chunk_ready(&chunk_pos));
+    player
+        .get_entity()
+        .set_pos(Vector3::new(4098.5, 200.0, 3.5));
+    for x in 4096..=4111 {
+        for z in 0..=15 {
+            set_state(&world, BlockPos::new(x, 199, z), Block::STONE.default_state.id);
+        }
+    }
+    world.set_block_state(
+        &JUKEBOX,
+        Block::JUKEBOX.default_state.id,
+        BlockFlags::NOTIFY_ALL,
+    );
+    let mut comparator_props = ComparatorLikeProperties::default(&Block::COMPARATOR);
+    comparator_props.facing = HorizontalFacing::North;
+    world.set_block_state(
+        &COMPARATOR,
+        comparator_props.to_state_id(&Block::COMPARATOR),
+        BlockFlags::NOTIFY_ALL,
+    );
+    world.set_block_state(
+        &WIRE,
+        Block::REDSTONE_WIRE.default_state.id,
+        BlockFlags::NOTIFY_ALL,
+    );
+
+    let jukebox_entity = world.get_block_entity(&JUKEBOX).unwrap();
+    let jukebox = jukebox_entity
+        .as_any()
+        .downcast_ref::<JukeboxBlockEntity>()
+        .unwrap();
+    let comparator_entity = world.get_block_entity(&COMPARATOR).unwrap();
+    assert!(comparator_entity.as_any().is::<ComparatorBlockEntity>());
+    let assert_comparator = |expected| {
+        let attached = world.get_block_entity(&COMPARATOR).unwrap();
+        assert!(Arc::ptr_eq(&attached, &comparator_entity));
+        assert_eq!(
+            persisted(attached.as_ref()).get_int("OutputSignal"),
+            Some(expected)
+        );
+        assert_eq!(
+            ComparatorLikeProperties::from_state_id(world.get_block_state_id(&COMPARATOR))
+                .powered,
+            expected != 0
+        );
+    };
+    let wire_power = || {
+        assert_eq!(world.get_block(&WIRE), &Block::REDSTONE_WIRE);
+        RedstoneWireLikeProperties::from_state_id(world.get_block_state_id(&WIRE)).power
+    };
+    let use_jukebox = || {
+        player
+            .client
+            .java()
+            .unwrap()
+            .handle_use_item_on(
+                &player,
+                &SUseItemOn {
+                    hand: VarInt(0),
+                    position: JUKEBOX,
+                    face: VarInt(1),
+                    cursor_pos: Vector3::new(0.5, 1.0, 0.5),
+                    inside_block: false,
+                    is_against_world_border: false,
+                    sequence: VarInt(41),
+                },
+                &fixture.server,
+            )
+            .unwrap();
+    };
+
+    assert_comparator(0);
+    assert_eq!(wire_power(), 0);
+    assert!(!world.is_block_tick_scheduled(&COMPARATOR, &Block::COMPARATOR));
+    assert!(
+        world
+            .entities
+            .load()
+            .iter()
+            .all(|entity| entity.get_item_entity().is_none())
+    );
+    let record = ItemStack::new(1, &Item::MUSIC_DISC_11);
+    player
+        .inventory()
+        .set_stack_in_hand(Hand::Right, record.clone());
+    use_jukebox();
+    assert!(player.inventory().get_stack_in_hand(Hand::Right).is_empty());
+    assert!(jukebox.get_record().are_equal(&record));
+    assert!(JukeboxLikeProperties::from_state_id(world.get_block_state_id(&JUKEBOX)).has_record);
+    assert_eq!(persisted(jukebox).get_long(ELAPSED), Some(0));
+    assert_eq!(wire_power(), 15);
+    assert_comparator(0);
+    assert!(world.is_block_tick_scheduled(&COMPARATOR, &Block::COMPARATOR));
+
+    for (elapsed, output) in [(1, 0), (2, 11)] {
+        world.tick_chunks(&fixture.server);
+        assert_eq!(
+            world.tick_block_entities(&tokio::runtime::Handle::current()),
+            2
+        );
+        assert_comparator(output);
+        assert_eq!(persisted(jukebox).get_long(ELAPSED), Some(elapsed));
+        assert_eq!(wire_power(), 15);
+    }
+
+    use_jukebox();
+    assert!(jukebox.get_record().is_empty());
+    assert!(!jukebox.is_playing());
+    assert!(!JukeboxLikeProperties::from_state_id(world.get_block_state_id(&JUKEBOX)).has_record);
+    assert_eq!(persisted(jukebox).get_long(ELAPSED), None);
+    assert_eq!(wire_power(), 0);
+    assert_comparator(11);
+    assert!(world.is_block_tick_scheduled(&COMPARATOR, &Block::COMPARATOR));
+    let drops: Vec<_> = world
+        .entities
+        .load()
+        .iter()
+        .filter(|entity| entity.get_item_entity().is_some())
+        .cloned()
+        .collect();
+    assert_eq!(drops.len(), 1);
+    let mut drop_nbt = NbtCompound::new();
+    drops[0].write_nbt(&mut drop_nbt);
+    let mut record_nbt = NbtCompound::new();
+    record.write_item_stack(&mut record_nbt);
+    assert_eq!(drop_nbt.get_compound("Item"), Some(&record_nbt));
+    assert_eq!(drops[0].get_item_entity().unwrap().get_pickup_delay(), 10);
+
+    for output in [11, 0] {
+        world.tick_chunks(&fixture.server);
+        assert_eq!(
+            world.tick_block_entities(&tokio::runtime::Handle::current()),
+            2
+        );
+        assert_comparator(output);
+        assert_eq!(wire_power(), 0);
+        assert!(jukebox.get_record().is_empty());
+    }
+    assert!(!world.is_block_tick_scheduled(&COMPARATOR, &Block::COMPARATOR));
+    close_fixture(&fixture).await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn world_tick_disc11_full_padded_lifetime_neighbors_and_scoped_wire() {
     let mut fixture = fixture().await;
