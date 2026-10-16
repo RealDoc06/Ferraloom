@@ -125,6 +125,17 @@ impl JavaClient {
 
         let sneaking = player.get_entity().is_sneaking();
 
+        // The cancellable interaction hook may change hands before the block
+        // route. Never use a stale jukebox item/slot snapshot after that hook.
+        if block.id == Block::JUKEBOX.id
+            && ((hand == Hand::Right && inventory.get_selected_slot() as usize != original_slot)
+                || !inventory
+                    .get_stack_in_hand(hand)
+                    .are_equal(&original_hand_item))
+        {
+            return Ok(());
+        }
+
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
             let result = Self::call_use_item_on(
@@ -140,20 +151,8 @@ impl JavaClient {
             );
             if result.consumes_action() {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
-                // This block path returns before the generic item fallback's
-                // writeback. Preserve a reentrant hook's hand/selection change.
-                if block.id == Block::JUKEBOX.id && !item.are_equal(&original_hand_item) {
-                    let same_slot = matches!(hand, Hand::Left)
-                        || inventory.get_selected_slot() as usize == original_slot;
-                    if same_slot
-                        && inventory
-                            .get_stack_in_hand(hand)
-                            .are_equal(&original_hand_item)
-                    {
-                        inventory.set_stack_in_hand(hand, item.clone());
-                        player.sync_hand_slot(original_slot, item.clone());
-                    }
-                }
+                // Jukebox insertion already consumed/synced its original slot
+                // before effects. Do not write back after reentrant callbacks.
 
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
@@ -175,6 +174,12 @@ impl JavaClient {
         }
 
         let before = item.clone();
+
+        // Only consuming jukebox actions defer this award. Preserve the prior
+        // non-disc item fallback behavior (including sneaking block placement).
+        if block.id == Block::JUKEBOX.id && !builtin_disc && item_id != Item::GOAT_HORN.id {
+            player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        }
 
         let item_result = server
             .item_registry

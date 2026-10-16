@@ -6437,9 +6437,9 @@ impl World {
             && let Some(entity) = self.get_block_entity(position)
         {
             if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
-                entity.on_block_replaced(self, position);
+                entity.clone().on_block_replaced(self, position);
             }
-            self.remove_block_entity(position);
+            self.remove_block_entity_if_current(position, Some(&entity));
         }
 
         if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
@@ -7780,8 +7780,31 @@ impl World {
     }
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
+        self.remove_block_entity_if_current(block_pos, None);
+    }
+
+    fn remove_block_entity_if_current(
+        &self,
+        block_pos: &BlockPos,
+        expected: Option<&Arc<dyn BlockEntity>>,
+    ) {
         let chunk_pos = block_pos.chunk_position();
         let mut unload = self.level.chunk_unload.access();
+        let removed = {
+            let mut published = self.block_entities.get_mut(&chunk_pos);
+            if let Some(expected) = expected
+                && !published.as_ref().is_some_and(|entities| {
+                    entities
+                        .get(block_pos)
+                        .is_some_and(|live| Arc::ptr_eq(live, expected))
+                })
+            {
+                return;
+            }
+            published
+                .as_mut()
+                .and_then(|entities| entities.remove(block_pos))
+        };
         // The NBT copy also serves lazy loading; leaving it revives removed entities.
         let removed_pending = self
             .level
@@ -7798,10 +7821,6 @@ impl World {
                 removed
             })
             .unwrap_or(false);
-        let removed = self
-            .block_entities
-            .get_mut(&chunk_pos)
-            .and_then(|mut chunk_block_entities| chunk_block_entities.remove(block_pos));
         if removed.is_some() || removed_pending {
             unload.mark_live(chunk_pos);
             self.custom_block_entity_data.remove(block_pos);

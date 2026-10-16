@@ -6,8 +6,10 @@ use crate::block::{
     registry::BlockActionResult,
 };
 use pumpkin_data::{
-    block_properties::JukeboxLikeProperties, data_component_impl::JukeboxPlayableImpl,
+    block_properties::JukeboxLikeProperties,
+    data_component_impl::{EquipmentSlot, JukeboxPlayableImpl},
 };
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::pumpkin_block;
 
 #[pumpkin_block("minecraft:jukebox")]
@@ -34,6 +36,7 @@ impl BlockBehaviour for JukeboxBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if JukeboxLikeProperties::from_state_id(args.world.get_block_state_id(args.position))
             .has_record
+            || args.item_stack.is_empty()
             || args
                 .item_stack
                 .get_data_component::<JukeboxPlayableImpl>()
@@ -43,9 +46,40 @@ impl BlockBehaviour for JukeboxBlock {
         }
         // Official consumesAndReturn(1, player) precedes the BE lookup. The
         // missing-BE case consumes and awards PlayRecord but creates no effects.
-        let record = args
-            .item_stack
-            .split_unless_creative(args.player.gamemode.load(), 1);
+        let inventory = args.player.inventory();
+        let original = args.item_stack.clone();
+        let mode = args.player.gamemode.load();
+        let (slot, record) = if *args.equipment_slot == EquipmentSlot::MAIN_HAND {
+            let slot = inventory.get_selected_slot() as usize;
+            let mut items = inventory
+                .main_inventory
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !items[slot].are_equal(&original) {
+                return BlockActionResult::Success;
+            }
+            let record = items[slot].split_unless_creative(mode, 1);
+            *args.item_stack = items[slot].clone();
+            (slot, record)
+        } else {
+            let mut equipment = inventory
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut actual = equipment.get(&EquipmentSlot::OFF_HAND);
+            if !actual.are_equal(&original) {
+                return BlockActionResult::Success;
+            }
+            let record = actual.split_unless_creative(mode, 1);
+            equipment.put(&EquipmentSlot::OFF_HAND, actual.clone());
+            *args.item_stack = actual;
+            (PlayerInventory::OFF_HAND_SLOT, record)
+        };
+        // Commit and synchronize the original slot before any gameplay callback
+        // can change the selected slot or replace the hand's contents.
+        if !args.item_stack.are_equal(&original) {
+            args.player.sync_hand_slot(slot, args.item_stack.clone());
+        }
         if let Some(entity) = args.world.get_block_entity(args.position)
             && let Some(jukebox) = entity.as_any().downcast_ref::<JukeboxBlockEntity>()
         {

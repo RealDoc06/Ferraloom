@@ -195,7 +195,9 @@ impl JukeboxState {
     }
 
     fn load(&mut self, record: ItemStack, elapsed: Option<i64>, actions: &mut Vec<Action>) {
-        self.revision = Arc::new(());
+        let same_record = same_item_components(&record, &self.record)
+            && record.item_count == self.record.item_count;
+        let previous_playback = (self.song, self.elapsed);
         if !self.record.is_empty() && !same_item_components(&record, &self.record) {
             self.stop(actions);
         }
@@ -208,6 +210,13 @@ impl JukeboxState {
         {
             self.song = Some(song);
             self.elapsed = elapsed;
+        }
+        // A no-op guarded edit during block_change must not cancel the queued
+        // Start/Changed belonging to this exact transition. A timing-only edit
+        // still invalidates old periodic work; its reentrant audio timing is not
+        // covered by the no-op guarantee.
+        if !same_record || previous_playback != (self.song, self.elapsed) {
+            self.revision = Arc::new(());
         }
     }
 }
