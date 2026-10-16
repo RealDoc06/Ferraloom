@@ -200,13 +200,16 @@ pub fn write_chunk_data(
         });
         write.write_var_int(&VarInt(id as i32))?;
 
-        let mut client_nbt = if matches!(
-            nbt.get_string("id"),
-            Some("minecraft:sign" | "minecraft:hanging_sign")
-        ) {
-            crate::block::entities::sign::client_nbt_from_persisted(nbt)
-        } else {
-            nbt.clone()
+        let mut client_nbt = match pumpkin_data::block_properties::BLOCK_ENTITY_TYPES[id] {
+            "chest" | "trapped_chest" | "barrel" => {
+                // These types inherit Java's empty BlockEntity.getUpdateTag.
+                // BlockEntityInfo.create encodes it as absent NBT, never a save
+                // snapshot. The pending map retains private state for live BEs too.
+                write.write_compound_nbt_with_version(None, version)?;
+                continue;
+            }
+            "sign" | "hanging_sign" => crate::block::entities::sign::client_nbt_from_persisted(nbt),
+            _ => nbt.clone(),
         };
         client_nbt.child_tags.remove("id");
         client_nbt.child_tags.remove("x");
@@ -295,4 +298,238 @@ pub fn write_chunk_data(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::entities::block_entity_from_nbt;
+    use crate::command::commands::data::tests::Fixture;
+    use crate::net::java::chunk_data::CChunkData;
+    use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
+    use pumpkin_data::Block;
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use pumpkin_protocol::{ClientPacket, ser::NetworkReadExt};
+    use pumpkin_util::math::position::BlockPos;
+    use std::sync::Arc;
+
+    const POS: BlockPos = BlockPos::new(0, 64, 0);
+    const CONTAINERS: [(&str, &Block); 3] = [
+        ("minecraft:chest", &Block::CHEST),
+        ("minecraft:trapped_chest", &Block::TRAPPED_CHEST),
+        ("minecraft:barrel", &Block::BARREL),
+    ];
+
+    struct ChunkBlockEntity {
+        packed_xz: u8,
+        y: i16,
+        type_id: i32,
+        tag: Option<NbtTag>,
+    }
+
+    fn compound(snbt: &str) -> NbtCompound {
+        let NbtTag::Compound(nbt) =
+            SnbtParser::parse_for_commands(&mut StringReader::new(snbt)).unwrap()
+        else {
+            panic!("expected compound fixture");
+        };
+        nbt
+    }
+
+    fn private_container_nbt(id: &str, pos: BlockPos) -> NbtCompound {
+        let mut nbt = compound(
+            "{CustomName:'Private vault',lock:{components:{'minecraft:custom_name':'Vault key'}},components:{'minecraft:custom_data':{secret:'Map secret'}},Items:[{Slot:0b,id:'minecraft:diamond',count:3,components:{'minecraft:custom_data':{secret:'Item secret'}}}],LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:42L,PumpkinCustomData:{secret:'Plugin secret'},BukkitValues:{secret:'Legacy plugin secret'},future_private_field:'Do not publish'}",
+        );
+        nbt.put_string("id", id.to_owned());
+        nbt.put_int("x", pos.0.x);
+        nbt.put_int("y", pos.0.y);
+        nbt.put_int("z", pos.0.z);
+        nbt
+    }
+
+    /// Decode the actual packet body, including the trailing light payload, so
+    /// absent NBT must preserve the next entry and the packet's field boundaries.
+    fn encoded_block_entities(chunk: &ChunkData) -> Vec<ChunkBlockEntity> {
+        let version = JavaMinecraftVersion::V_26_3;
+        let mut bytes = Vec::new();
+        CChunkData::new(chunk)
+            .write_packet_data(&mut bytes, &version)
+            .unwrap();
+        let mut reader = bytes.as_slice();
+        assert_eq!(reader.get_i32_be().unwrap(), chunk.x);
+        assert_eq!(reader.get_i32_be().unwrap(), chunk.z);
+        let heightmaps = reader.get_var_int().unwrap().0;
+        for _ in 0..heightmaps {
+            reader.get_var_int().unwrap();
+            reader.get_list(NetworkReadExt::get_i64_be).unwrap();
+        }
+        let section_bytes = reader.get_var_int().unwrap().0 as usize;
+        reader = &reader[section_bytes..];
+        let entities = reader
+            .get_list(|reader| {
+                Ok(ChunkBlockEntity {
+                    packed_xz: reader.get_u8()?,
+                    y: reader.get_i16_be()?,
+                    type_id: reader.get_var_int()?.0,
+                    tag: reader.get_nbt_with_version(&version)?,
+                })
+            })
+            .unwrap();
+        for _ in 0..4 {
+            reader.get_list(NetworkReadExt::get_i64_be).unwrap();
+        }
+        for _ in 0..2 {
+            reader
+                .get_list(|reader| reader.get_list(NetworkReadExt::get_u8))
+                .unwrap();
+        }
+        assert!(reader.is_empty(), "entire chunk packet must decode");
+        entities
+    }
+
+    fn assert_container_entry(chunk: &ChunkData, pos: BlockPos, id: &str) {
+        let entities = encoded_block_entities(chunk);
+        let packed_xz = (((pos.0.x & 15) << 4) | (pos.0.z & 15)) as u8;
+        let entry = entities
+            .iter()
+            .find(|entry| entry.packed_xz == packed_xz && entry.y == pos.0.y as i16)
+            .unwrap();
+        let name = id.strip_prefix("minecraft:").unwrap_or(id);
+        let type_id = pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
+            .iter()
+            .position(|&candidate| candidate == name)
+            .unwrap();
+        assert_eq!(entry.type_id, type_id as i32);
+        assert_eq!(entry.tag, None, "{id} must have Java's absent update tag");
+    }
+
+    #[test]
+    fn chunk_container_entries_omit_private_pending_nbt() {
+        let chunk = ChunkData::empty(-2, 3);
+        for (index, (id, _)) in CONTAINERS.iter().enumerate() {
+            let pos = BlockPos::new(-30 + index as i32, -32, 51);
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap()
+                .insert(pos, private_container_nbt(id, pos));
+        }
+        let before = chunk.pending_block_entities.lock().unwrap().clone();
+        assert_eq!(encoded_block_entities(&chunk).len(), CONTAINERS.len());
+        for (pos, nbt) in &before {
+            assert_container_entry(&chunk, *pos, nbt.get_string("id").unwrap());
+        }
+        assert_eq!(*chunk.pending_block_entities.lock().unwrap(), before);
+
+        // The registry lookup also accepts unqualified vanilla IDs. Its client
+        // projection must be the same as the type ID actually sent on the wire.
+        for (id, _) in CONTAINERS {
+            let id = id.strip_prefix("minecraft:").unwrap();
+            let pos = BlockPos::new(-32, 64, 48);
+            chunk.pending_block_entities.lock().unwrap().clear();
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap()
+                .insert(pos, private_container_nbt(id, pos));
+            assert_container_entry(&chunk, pos, id);
+        }
+    }
+
+    #[tokio::test]
+    async fn chunk_container_entries_omit_private_nbt_after_live_data_edits() {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        for (id, block) in CONTAINERS {
+            let mut nbt = private_container_nbt(id, POS);
+            nbt.child_tags.remove("LootTable");
+            nbt.child_tags.remove("LootTableSeed");
+            let live = block_entity_from_nbt(&nbt).unwrap();
+            fixture.install(block, live.clone());
+
+            let edit = "{CustomName:'Edited vault',lock:{components:{'minecraft:custom_name':'Edited key'}},components:{'minecraft:custom_data':{secret:'Edited secret'}},Items:[{Slot:0b,id:'minecraft:diamond',count:7,components:{'minecraft:custom_data':{secret:'Edited item secret'}}}]}";
+            fixture
+                .execute(&format!("data merge block 0 64 0 {edit}"))
+                .unwrap();
+            let published = fixture.pending_data();
+            let edited = compound(edit);
+            for field in ["CustomName", "lock", "components", "Items"] {
+                assert_eq!(published.get(field), edited.get(field));
+            }
+            world
+                .level
+                .read_chunk_sync(&POS.chunk_position(), |chunk| {
+                    assert_container_entry(chunk, POS, id);
+                })
+                .unwrap();
+            assert_eq!(fixture.pending_data(), published);
+
+            fixture.execute("data merge block 0 64 0 {LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:84L}").unwrap();
+            let published = fixture.pending_data();
+            assert_eq!(
+                published.get_string("LootTable"),
+                Some("minecraft:chests/simple_dungeon")
+            );
+            assert_eq!(published.get_long("LootTableSeed"), Some(84));
+            assert!(live.has_loot_table());
+            world
+                .level
+                .read_chunk_sync(&POS.chunk_position(), |chunk| {
+                    assert_container_entry(chunk, POS, id);
+                })
+                .unwrap();
+            assert!(live.has_loot_table(), "encoding must not unpack loot");
+            assert_eq!(fixture.pending_data(), published);
+            assert!(Arc::ptr_eq(&world.get_block_entity(&POS).unwrap(), &live));
+        }
+    }
+
+    #[test]
+    fn chunk_sign_entries_keep_modeled_client_projection() {
+        let chunk = ChunkData::empty(0, 0);
+        for (index, id) in ["minecraft:sign", "minecraft:hanging_sign"]
+            .into_iter()
+            .enumerate()
+        {
+            let pos = BlockPos::new(index as i32, 64, 0);
+            let mut nbt = compound(
+                "{front_text:{messages:[{text:'Visible',color:'red',bold:1b},{selector:'@a'},'third','fourth'],color:'blue',has_glowing_text:1b},back_text:{messages:['Back','','','']},is_waxed:1b,allow_op_features:1b,PumpkinCustomData:{secret:1b},BukkitValues:{secret:1b}}",
+            );
+            nbt.put_string("id", id.to_owned());
+            nbt.put_int("x", pos.0.x);
+            nbt.put_int("y", pos.0.y);
+            nbt.put_int("z", pos.0.z);
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap()
+                .insert(pos, nbt);
+        }
+        let before = chunk.pending_block_entities.lock().unwrap().clone();
+        let entries = encoded_block_entities(&chunk);
+        assert_eq!(entries.len(), 2);
+        for entry in entries {
+            let tag = entry.tag.unwrap();
+            let nbt = tag.extract_compound().unwrap();
+            let front = nbt.get_compound("front_text").unwrap();
+            let messages = front.get_list("messages").unwrap();
+            let first = messages[0].extract_compound().unwrap();
+            assert_eq!(first.get_string("text"), Some("Visible"));
+            assert_eq!(first.get_string("color"), Some("red"));
+            assert_eq!(first.get_bool("bold"), Some(true));
+            assert_eq!(
+                messages[1].extract_string(),
+                Some("[Unsupported sign text]")
+            );
+            assert_eq!(messages[2].extract_string(), Some("third"));
+            assert_eq!(front.get_string("color"), Some("blue"));
+            assert_eq!(front.get_bool("has_glowing_text"), Some(true));
+            assert_eq!(nbt.get_bool("is_waxed"), Some(true));
+            assert_eq!(nbt.get_bool("allow_op_features"), Some(true));
+            for field in ["id", "x", "y", "z", "PumpkinCustomData", "BukkitValues"] {
+                assert_eq!(nbt.get(field), None);
+            }
+        }
+        assert_eq!(*chunk.pending_block_entities.lock().unwrap(), before);
+    }
 }
