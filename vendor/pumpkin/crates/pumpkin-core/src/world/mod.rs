@@ -3505,12 +3505,16 @@ impl World {
         };
         let _terrain = self.hold_packet_chunk(chunk_pos);
         self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await?;
-        for dx in -1..=1 {
-            for dz in -1..=1 {
-                if dx != 0 || dz != 0 {
-                    self.level
-                        .get_or_fetch_chunk(chunk_pos.add_raw(dx, dz), |_| ())
-                        .await?;
+        // Direct readiness accepts an already processed center without reloading
+        // its halo. Only an unready center still requires those Full neighbors.
+        if !self.level.is_chunk_ready(&chunk_pos) {
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    if dx != 0 || dz != 0 {
+                        self.level
+                            .get_or_fetch_chunk(chunk_pos.add_raw(dx, dz), |_| ())
+                            .await?;
+                    }
                 }
             }
         }

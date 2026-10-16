@@ -1670,6 +1670,197 @@ mod player_data_tests {
         crate::data::player_server::test::close_fixture(&fixture).await;
     }
 
+    #[tokio::test]
+    async fn ready_spawn_admits_first_and_returning_players_beside_a_refused_neighbor() {
+        for returning in [false, true] {
+            spawn_halo_admission_control(true, returning).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn unready_spawn_refuses_required_halo_before_first_or_returning_publication() {
+        for returning in [false, true] {
+            spawn_halo_admission_control(false, returning).await;
+        }
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep real refusal, first/returning admission and publication/persistence controls together."
+    )]
+    async fn spawn_halo_admission_control(center_ready: bool, returning: bool) {
+        use crate::data::player_server::test::{
+            close_fixture, java_client, player_fixture, stop_chunk_workers,
+        };
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{
+            chunk::ChunkData, chunk_system::ChunkLoading, level::ChunkUnavailable,
+        };
+
+        let fixture = player_fixture().await;
+        let server = &fixture.server;
+        let world = fixture.player.world();
+        // Use the real final writer to seed the returning player's existing data.
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            crate::finish_player_session(server, &fixture.player),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let profile = GameProfile {
+            id: if returning {
+                fixture.player.gameprofile.id
+            } else {
+                uuid::Uuid::from_u128(103)
+            },
+            name: "SpawnHalo".into(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let center = Vector2::new(0, 0);
+        let neighbor = Vector2::new(-1, 0);
+        world.level.loaded_chunks.remove(&neighbor);
+        let path = world.level.level_folder.region_folder.join("r.-1.0.mca");
+        fs::write(&path, b"refused spawn neighbor region").unwrap();
+        let failed = world
+            .level
+            .chunk_listener
+            .add_single_chunk_listener(neighbor);
+        {
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            // A read-only request isolates this refusal from the healthy center.
+            loading.add_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
+            loading.send_change();
+        }
+        let refusal = tokio::time::timeout(Duration::from_secs(10), failed)
+            .await
+            .unwrap()
+            .err()
+            .expect("stored neighbor must be refused");
+        assert!(
+            matches!(refusal, ChunkUnavailable::ReadFailed { position, .. } if position == neighbor)
+        );
+        {
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            loading.remove_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
+            loading.send_change();
+        }
+        stop_chunk_workers(&fixture).await;
+        let terrain = ChunkData::empty_sync(0, 0);
+        terrain
+            .post_processing_ready
+            .store(center_ready, Ordering::Release);
+        world.level.loaded_chunks.insert(center, terrain);
+        for x in -1..=1 {
+            for z in -1..=1 {
+                let position = Vector2::new(x, z);
+                if position != neighbor {
+                    assert!(world.level.is_chunk_loaded(&position));
+                }
+            }
+        }
+        assert!(world.level.chunk_listener.failure(center).is_none());
+        assert!(world.level.chunk_listener.failure(neighbor).is_some());
+        assert!(!world.level.is_chunk_loaded(&neighbor));
+        world.level_info.rcu(|current| {
+            let mut info = (**current).clone();
+            info.spawn_x = 0;
+            info.spawn_z = 0;
+            info.spawn_y = 65;
+            info
+        });
+        let uuid = profile.id;
+        let player_path = fixture
+            .directory
+            .path()
+            .join("players/data")
+            .join(format!("{uuid}.dat"));
+        let family_paths = [
+            player_path,
+            server
+                .advancement_manager
+                .advancement_path
+                .join(format!("{uuid}.json")),
+            server.statistics_manager.player_path(uuid),
+        ];
+        let family_bytes_before = family_paths
+            .each_ref()
+            .map(|path| path.exists().then(|| fs::read(path).unwrap()));
+        assert_eq!(family_bytes_before[0].is_some(), returning);
+        let login = Arc::new(ObserveLogin(AtomicBool::new(false)));
+        server.plugin_manager.register::<PlayerLoginEvent, _>(
+            login.clone(),
+            EventPriority::Normal,
+            false,
+        );
+        let (client, _peer) = java_client(server, &profile).await;
+        let admitted = tokio::time::timeout(
+            Duration::from_secs(5),
+            server.add_player(client.clone(), profile, None),
+        )
+        .await
+        .unwrap();
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(!world.level.is_chunk_loaded(&neighbor));
+        if center_ready {
+            let (player, admitted_world) =
+                admitted.expect("a ready center does not require the refused halo");
+            assert!(!client.closed());
+            assert!(login.0.load(Ordering::Relaxed));
+            assert_eq!(player.has_played_before.load(Ordering::Relaxed), returning);
+            assert!(Arc::ptr_eq(&admitted_world, &world));
+            assert!(player.session.lock().unwrap().is_some());
+            assert!(
+                server
+                    .get_player_by_uuid(uuid)
+                    .is_some_and(|published| Arc::ptr_eq(&published, &player))
+            );
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                crate::finish_player_session(server, &player),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        } else {
+            assert!(admitted.is_none());
+            assert!(client.closed());
+            assert!(!login.0.load(Ordering::Relaxed));
+            assert!(server.get_player_by_uuid(uuid).is_none());
+            drop(
+                tokio::time::timeout(
+                    Duration::from_secs(1),
+                    server.player_data_storage.reserve_player_session(uuid),
+                )
+                .await
+                .unwrap(),
+            );
+            server.player_data_storage.save_all_players(server).unwrap();
+            server
+                .advancement_manager
+                .save_all_players(&[])
+                .await
+                .unwrap();
+            server
+                .statistics_manager
+                .save_all_players(&[])
+                .await
+                .unwrap();
+        }
+        tokio::time::timeout(Duration::from_secs(5), client.java().unwrap().await_tasks())
+            .await
+            .unwrap();
+        close_fixture(&fixture).await;
+        if !center_ready {
+            let family_bytes_after = family_paths
+                .each_ref()
+                .map(|path| path.exists().then(|| fs::read(path).unwrap()));
+            assert_eq!(family_bytes_after, family_bytes_before);
+        }
+        assert_eq!(fs::read(&path).unwrap(), b"refused spawn neighbor region");
+    }
+
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum AdmissionFailure {
         Player,
