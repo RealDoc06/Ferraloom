@@ -156,7 +156,7 @@ fn execute_at_modifier(context: &CommandContext) -> crate::command::node::Redire
         let entity = target.get_entity();
         let mut source = context.source.as_ref().clone();
         source.position = entity.pos.load();
-        source.rotation = Vector2::new(entity.yaw.load(), entity.pitch.load());
+        source.rotation = Vector2::new(entity.pitch.load(), entity.yaw.load());
         source.world = Some(entity.world.load().clone());
         sources.push(Arc::new(source));
     }
@@ -242,7 +242,7 @@ fn execute_rotated_as_modifier(
     for target in targets {
         let entity = target.get_entity();
         let mut source = context.source.as_ref().clone();
-        source.rotation = Vector2::new(entity.yaw.load(), entity.pitch.load());
+        source.rotation = Vector2::new(entity.pitch.load(), entity.yaw.load());
         sources.push(Arc::new(source));
     }
     Ok(sources)
@@ -304,7 +304,7 @@ fn execute_facing_modifier(
     let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
     let pitch = -(dy.atan2(xz_dist).to_degrees() as f32);
 
-    source.rotation = Vector2::new(yaw, pitch);
+    source.rotation = Vector2::new(pitch, yaw);
     Ok(vec![Arc::new(source)])
 }
 
@@ -327,7 +327,7 @@ fn execute_facing_entity_modifier(
         let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
         let pitch = -(dy.atan2(xz_dist).to_degrees() as f32);
 
-        source.rotation = Vector2::new(yaw, pitch);
+        source.rotation = Vector2::new(pitch, yaw);
         sources.push(Arc::new(source));
     }
     Ok(sources)
@@ -1660,6 +1660,37 @@ mod tests {
     use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn rotation_modifiers_use_registered_players_pitch_then_yaw() {
+        use crate::command::{CommandSender, test::CommandFixture};
+
+        let fixture = CommandFixture::new().await;
+        let entity = fixture.player.get_entity();
+        for (modifier, expected_x) in [
+            ("rotated 0 0 at @s", 1.0),
+            ("rotated 0 0 rotated as @s", 1.0),
+            ("rotated 0 0 facing 5 64 0", 1.0),
+            ("positioned -5 64 0 rotated 0 0 facing entity @s feet", -4.0),
+        ] {
+            entity.set_pos(Vector3::new(0.0, 64.0, 0.0));
+            entity.set_rotation(-90.0, 0.0);
+            assert_eq!(
+                fixture.execute(
+                    CommandSender::Player(fixture.player.clone()),
+                    &format!("execute {modifier} run tp @s ^ ^ ^1")
+                ),
+                1,
+                "{modifier}"
+            );
+            assert_eq!(
+                entity.pos.load(),
+                Vector3::new(expected_x, 64.0, 0.0),
+                "{modifier}"
+            );
+        }
+        fixture.close().await;
+    }
 
     #[test]
     fn stores_redirect_to_execute_then_the_nested_command() {

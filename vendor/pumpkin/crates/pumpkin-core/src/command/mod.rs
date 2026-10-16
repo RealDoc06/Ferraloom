@@ -369,7 +369,10 @@ impl CommandSender {
                 player.world(),
                 Some(player.clone()),
                 player.position(),
-                player.rotation().into(),
+                {
+                    let (yaw, pitch) = player.rotation();
+                    Vector2::new(pitch, yaw)
+                },
                 player.get_display_name().get_text(),
                 player.get_display_name(),
                 server.clone(),
@@ -444,3 +447,133 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
 pub use context::command_context::CommandContext;
 pub use node::dispatcher::CommandDispatcher;
 pub use node::{Command, CommandExecutor, CommandExecutorResult};
+
+#[cfg(test)]
+pub(crate) mod test {
+    use super::*;
+    use crate::data::VanillaData;
+    use crate::net::java::{JavaClient, pending::PendingConnection};
+    use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
+    use arc_swap::ArcSwap;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_util::{GameMode, world_seed::Seed};
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    /// A registered player and the production dispatcher, using the same setup
+    /// as `player_server`'s private fixture. No game loop or admission runs.
+    pub(crate) struct CommandFixture {
+        pub(crate) server: Arc<Server>,
+        pub(crate) player: Arc<Player>,
+        client: Arc<ClientPlatform>,
+        _remote: tokio::net::TcpStream,
+        _directory: tempfile::TempDir,
+    }
+
+    impl CommandFixture {
+        pub(crate) async fn new() -> Self {
+            let directory = tempfile::tempdir().unwrap();
+            let basic = BasicConfiguration {
+                default_level_name: directory.path().to_string_lossy().into_owned(),
+                seed: Seed(0),
+                allow_nether: false,
+                allow_end: false,
+                allow_chat_reports: false,
+                use_favicon: false,
+                ..BasicConfiguration::default()
+            };
+            let mut advanced = AdvancedConfiguration::default();
+            advanced.networking.java.online_mode = false;
+            advanced.networking.bedrock.online_mode = false;
+            let data = VanillaData {
+                banned_ip_list: Default::default(),
+                banned_player_list: Default::default(),
+                operator_config: Default::default(),
+                user_cache: Default::default(),
+                whitelist_config: Default::default(),
+            };
+            let server = Server::new(
+                basic,
+                advanced,
+                TelemetryConfig::default(),
+                data,
+                Vec::new(),
+            )
+            .await
+            .unwrap();
+            let profile = GameProfile {
+                id: Uuid::from_u128(103),
+                name: "RotationPlayer".into(),
+                properties: ArcSwap::from_pointee(Vec::new()),
+                profile_actions: None,
+            };
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let (remote, accepted) =
+                tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
+            let (stream, address) = accepted.unwrap();
+            let pending = PendingConnection::new(
+                stream,
+                address,
+                0,
+                PacketRateLimiter::new(false, 0.0, 0.0),
+                Arc::downgrade(&server),
+            );
+            pending.connection_state.store(ConnectionState::Play);
+            let mut java =
+                JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+            java.start_outgoing_packet_task();
+            let client = Arc::new(ClientPlatform::Java(java));
+            let world = server.worlds.load()[0].clone();
+            let player = Arc::new(Player::new(
+                client.clone(),
+                profile,
+                PlayerConfig::default(),
+                &world,
+                GameMode::Survival,
+            ));
+            player.permission_lvl.store(PermissionLvl::Four);
+            player.advancements.lock().unwrap().load().unwrap();
+            server.statistics_manager.load_player(&player).unwrap();
+            player
+                .screen_handler_sync_handler
+                .store_player(player.clone());
+            let session = server
+                .player_data_storage
+                .reserve_player_session(player.gameprofile.id)
+                .await;
+            session.publish(&player);
+            *player.session.lock().unwrap() = Some(session);
+            world.add_player(&player).unwrap();
+            Self {
+                server,
+                player,
+                client,
+                _remote: remote.unwrap(),
+                _directory: directory,
+            }
+        }
+
+        pub(crate) fn execute(&self, sender: CommandSender, input: &str) -> i32 {
+            let source = sender.into_source(&self.server);
+            self.server
+                .command_dispatcher
+                .load()
+                .execute_input(input, &source)
+                .unwrap()
+        }
+
+        pub(crate) async fn close(&self) {
+            crate::finish_player_session(&self.server, &self.player)
+                .await
+                .unwrap();
+            let java = self.client.java().unwrap();
+            java.close();
+            tokio::time::timeout(Duration::from_secs(5), java.await_tasks())
+                .await
+                .unwrap();
+            self.server.shutdown().await;
+        }
+    }
+}

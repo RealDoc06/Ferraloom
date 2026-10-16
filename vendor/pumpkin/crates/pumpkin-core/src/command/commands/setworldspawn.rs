@@ -26,7 +26,7 @@ struct SetWorldSpawnExecutor(SetWorldSpawnMode);
 
 impl CommandExecutor for SetWorldSpawnExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let (pos, (pitch, yaw)) = match self.0 {
+        let (pos, (yaw, pitch)) = match self.0 {
             SetWorldSpawnMode::SelfPos => {
                 let block_pos = BlockPos::floored_v(context.source.position);
                 (block_pos, (0.0, 0.0))
@@ -38,7 +38,7 @@ impl CommandExecutor for SetWorldSpawnExecutor {
             SetWorldSpawnMode::PosAndRotation => {
                 let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
                 let rot = RotationArgumentType::get(context, "rotation")?.rotation(&context.source);
-                (block_pos, (rot.x, rot.y))
+                (block_pos, (rot.y, rot.x))
             }
         };
 
@@ -118,4 +118,30 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     ),
             ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::{CommandSender, test::CommandFixture};
+    use crate::entity::EntityBase;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn world_spawn_preserves_yaw_pitch_order_for_player_source() {
+        let fixture = CommandFixture::new().await;
+        fixture.player.get_entity().set_rotation(170.0, 15.0);
+        for (rotation, yaw, pitch) in [("90 10", 90.0, 10.0), ("~10 ~-5", 180.0, 10.0)] {
+            assert_eq!(
+                fixture.execute(
+                    CommandSender::Player(fixture.player.clone()),
+                    &format!("setworldspawn 1 64 2 {rotation}")
+                ),
+                1
+            );
+            let info = fixture.server.level_info.load();
+            assert_eq!((info.spawn_x, info.spawn_y, info.spawn_z), (1, 64, 2));
+            assert_eq!((info.spawn_yaw, info.spawn_pitch), (yaw, pitch));
+        }
+        fixture.close().await;
+    }
 }
