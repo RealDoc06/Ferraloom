@@ -305,10 +305,9 @@ impl GameProfileArgumentType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::commands::{data, op, pardon, whitelist};
+    use crate::command::commands::data;
     use crate::data::banlist_serializer::BannedPlayerEntry;
     use pumpkin_config::{op::Op, whitelist::WhitelistEntry};
-    use pumpkin_util::permission::PermissionRegistry;
 
     #[tokio::test]
     async fn legacy_admin_records_can_be_replaced_and_pardoned_by_name() {
@@ -330,12 +329,8 @@ mod tests {
             assert!(status.success());
             return;
         }
-        let mut fixture = data::tests::Fixture::new().await;
+        let fixture = data::tests::Fixture::new().await;
         let server = fixture.source.server().clone();
-        let registry = PermissionRegistry::default();
-        whitelist::register(&mut fixture.dispatcher, &registry);
-        op::register(&mut fixture.dispatcher, &registry);
-        pardon::register(&mut fixture.dispatcher, &registry);
         let name = "SpamObserver";
         let legacy = Uuid::parse_str("14209f43-09d3-4876-d114-4c2568f51fc3").unwrap();
         let canonical = offline_uuid(name).unwrap();
@@ -371,7 +366,14 @@ mod tests {
                 None,
                 "legacy".into(),
             ));
-        assert_eq!(fixture.execute("whitelist add SpamObserver").unwrap(), 1);
+        assert_eq!(
+            server
+                .command_dispatcher
+                .load()
+                .execute_input("whitelist add SpamObserver", &fixture.source)
+                .unwrap(),
+            1
+        );
         let profile = GameProfileResult::profile_from_uuid_name(canonical, name.into());
         assert!(
             server
@@ -381,7 +383,14 @@ mod tests {
                 .unwrap()
                 .is_whitelisted(&profile)
         );
-        assert_eq!(fixture.execute("op SpamObserver").unwrap(), 1);
+        assert_eq!(
+            server
+                .command_dispatcher
+                .load()
+                .execute_input("op SpamObserver", &fixture.source)
+                .unwrap(),
+            1
+        );
         assert!(
             server
                 .data
@@ -415,7 +424,14 @@ mod tests {
                 None,
                 "ordinary UUID ban".into(),
             ));
-        assert_eq!(fixture.execute("pardon SpamObserver").unwrap(), 1);
+        assert_eq!(
+            server
+                .command_dispatcher
+                .load()
+                .execute_input("pardon SpamObserver", &fixture.source)
+                .unwrap(),
+            1
+        );
         let mut bans = server.data.banned_player_list.write().unwrap();
         assert!(bans.get_entry(&profile).is_none());
         assert_eq!(bans.banned_players.len(), 1);
