@@ -604,8 +604,8 @@ impl Server {
     }
 
     pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
-        // Commands and ticking update the world's live clock independently of
-        // level_info. Overlay it only on this save, preserving concurrent rules
+        // Commands and ticking update the world's live clocks independently of
+        // level_info. Overlay them only on this save, preserving concurrent rules
         // or other metadata updates rather than storing a stale clone back.
         let mut level_data = (**self.level_info.load()).clone();
         if let Some(overworld) = self
@@ -614,7 +614,13 @@ impl Server {
             .iter()
             .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
         {
-            level_data.day_time = overworld.get_time_of_day();
+            // Capture a coherent pair and release the clock before writer IO.
+            let clock = overworld
+                .level_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            level_data.day_time = clock.time_of_day;
+            level_data.game_time = clock.world_age;
         }
         self.world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())

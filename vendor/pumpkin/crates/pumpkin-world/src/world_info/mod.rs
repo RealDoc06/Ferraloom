@@ -78,6 +78,11 @@ pub struct LevelData {
     #[serde(rename = "map_id", default)]
     pub map_id: i32,
 
+    /// Elapsed simulation ticks shared by dimensions, persisted as `Time` in level.dat.
+    /// Missing legacy values start at zero, independently of the day clock.
+    #[serde(rename = "Time", default)]
+    pub game_time: i64,
+
     // These are NOT serialized to level.dat, but are still deserialized from it if present.
     // They are loaded and saved by AnvilLevelInfo via the data_files module.
     /// Game rules – persisted to `data/minecraft/game_rules.dat`.
@@ -568,6 +573,7 @@ impl LevelData {
             world_version: WorldVersion::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
             map_id: 0,
+            game_time: 0,
             // fields now in data/minecraft/*.dat
             game_rules: GameRuleRegistry::default(),
             world_gen_settings: WorldGenSettings::new(seed),

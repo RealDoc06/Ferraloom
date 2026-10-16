@@ -599,11 +599,17 @@ impl World {
                 }
             };
 
-        // The overworld clock was loaded from world_clocks.dat into LevelData.
-        // Restore it before ticking or saving so restarts cannot replace it with 0.
+        // level.dat's Time is shared by all dimensions. The overworld's separate
+        // day clock comes from world_clocks.dat; restore both before any ticks.
         let mut level_time = LevelTime::new();
-        if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
-            level_time.set_time(level_info.load().day_time);
+        {
+            let saved = level_info.load();
+            let day_time = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
+                saved.day_time
+            } else {
+                0
+            };
+            level_time.load_from(day_time, saved.game_time);
         }
 
         Self {

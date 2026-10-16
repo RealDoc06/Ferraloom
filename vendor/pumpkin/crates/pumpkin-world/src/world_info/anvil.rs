@@ -275,6 +275,9 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(map_id) = data.get_int("map_id") {
         level_data.map_id = map_id;
     }
+    if let Some(game_time) = data.get_long("Time") {
+        level_data.game_time = game_time;
+    }
     if let Some(day_time) = data.get_long("DayTime") {
         level_data.day_time = day_time;
     }
@@ -336,6 +339,7 @@ fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
     data.put_compound("Version", world_version_to_nbt(&info.world_version));
     data.put_int("version", info.level_version);
     data.put_int("map_id", info.map_id);
+    data.put_long("Time", info.game_time);
     put_world_gen_settings_seed(data, info.world_gen_settings.seed);
 }
 
@@ -1005,6 +1009,7 @@ mod test {
             },
             data_version: 4189,
             day_time: 1727,
+            game_time: 0,
             difficulty: Difficulty::Normal,
             difficulty_locked: false,
             game_rules: GameRuleRegistry {
