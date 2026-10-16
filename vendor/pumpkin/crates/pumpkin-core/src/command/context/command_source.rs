@@ -517,6 +517,42 @@ impl pumpkin_command::source::CommandSource for CommandSource {
         let pos = self.position;
         self.entity
             .as_ref()
-            .map_or_else(|| pos, |e| anchor.position_at_entity(e.get_entity()))
+            .map_or_else(|| pos, |e| anchor.transform_position(pos, e.get_entity()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::test::CommandFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn entity_anchors_transform_source_position_instead_of_entity_position() {
+        let fixture = CommandFixture::new().await;
+        let entity = fixture.player.get_entity();
+        let entity_position = Vector3::new(11.0, 64.0, 13.0);
+        entity.set_pos(entity_position);
+        let origin = Vector3::new(-5.0, 80.0, 7.0);
+        let source = CommandSender::Player(fixture.player.clone())
+            .into_source(&fixture.server)
+            .with_position(origin);
+        let eye_height = entity.get_eye_height();
+        assert!(eye_height > 0.0);
+        assert_eq!(EntityAnchor::Feet.position_at_source(&source), origin);
+        assert_eq!(
+            EntityAnchor::Eyes.position_at_source(&source),
+            Vector3::new(origin.x, origin.y + eye_height, origin.z)
+        );
+        assert_eq!(entity.pos.load(), entity_position);
+        fixture.close().await;
+    }
+
+    #[test]
+    fn entityless_source_anchors_keep_the_command_position() {
+        let origin = Vector3::new(-5.0, 80.0, 7.0);
+        let source = CommandSource::dummy().with_position(origin);
+        for anchor in [EntityAnchor::Feet, EntityAnchor::Eyes] {
+            assert_eq!(anchor.position_at_source(&source), origin);
+        }
     }
 }

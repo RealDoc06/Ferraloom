@@ -1697,6 +1697,27 @@ mod tests {
         fixture.close().await;
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn positioned_eyes_anchor_offsets_local_teleport_from_command_position() {
+        use crate::command::{CommandSender, test::CommandFixture};
+
+        let fixture = CommandFixture::new().await;
+        let entity = fixture.player.get_entity();
+        entity.set_pos(Vector3::new(0.0, 64.0, 0.0));
+        entity.set_rotation(-90.0, 0.0);
+        let eye_height = entity.get_eye_height();
+        assert!(eye_height > 0.0);
+        assert_eq!(
+            fixture.execute(
+                CommandSender::Player(fixture.player.clone()),
+                "execute positioned 5.0 80.0 7.0 anchored eyes run tp @s ^ ^ ^1"
+            ),
+            1
+        );
+        assert_eq!(entity.pos.load(), Vector3::new(6.0, 80.0 + eye_height, 7.0));
+        fixture.close().await;
+    }
+
     #[test]
     fn stores_redirect_to_execute_then_the_nested_command() {
         let mut dispatcher = CommandDispatcher::new();
