@@ -3,8 +3,11 @@ use pumpkin_data::data_component_impl::{DataComponentImpl, ItemNameImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
+use std::collections::HashSet;
 
+use crate::argument_types::FromStringReader;
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::context::command_context::CommandContext;
 use crate::errors::command_syntax_error::CommandSyntaxError;
@@ -21,6 +24,21 @@ pub const ERROR_UNKNOWN_ITEM: CommandErrorType<1> = CommandErrorType::new(
 pub const ERROR_INVALID_COMPONENT: CommandErrorType<2> = CommandErrorType::new(
     translation::java::ARGUMENTS_ITEM_COMPONENT_MALFORMED,
     translation::java::ARGUMENTS_ITEM_COMPONENT_MALFORMED,
+);
+
+pub const ERROR_UNKNOWN_COMPONENT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENTS_ITEM_COMPONENT_UNKNOWN,
+    translation::java::ARGUMENTS_ITEM_COMPONENT_UNKNOWN,
+);
+
+pub const ERROR_EXPECTED_COMPONENT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENTS_ITEM_COMPONENT_EXPECTED,
+    translation::java::ARGUMENTS_ITEM_COMPONENT_EXPECTED,
+);
+
+pub const ERROR_REPEATED_COMPONENT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENTS_ITEM_COMPONENT_REPEATED,
+    translation::java::ARGUMENTS_ITEM_COMPONENT_REPEATED,
 );
 
 #[derive(Clone, Copy)]
@@ -54,38 +72,46 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemStackArgumentType 
         if reader.peek() == Some('[') {
             reader.skip();
             let mut patch = Vec::new();
+            let mut seen = HashSet::new();
             while reader.can_read_char() && reader.peek() != Some(']') {
-                let key_start = reader.cursor();
-                while let Some(c) = reader.peek() {
-                    if c.is_alphanumeric() || c == '_' || c == ':' || c == '.' || c == '-' {
-                        reader.skip();
-                    } else {
-                        break;
-                    }
-                }
-                let key_str = reader.string()[key_start..reader.cursor()]
-                    .trim()
-                    .to_string();
-
                 reader.skip_whitespace();
-                if reader.peek() == Some('=') {
+                let removed = reader.peek() == Some('!');
+                if removed {
                     reader.skip();
+                }
+                if !reader.can_read_char() {
+                    return Err(ERROR_EXPECTED_COMPONENT.create(reader));
+                }
+                let key_start = reader.cursor();
+                let key = Identifier::from_reader(reader)?;
+                let key_str = key.to_string();
+                let data_comp = DataComponent::try_from_name(&key_str)
+                    .filter(|component| component.is_persistent())
+                    .ok_or_else(|| {
+                        reader.set_cursor(key_start);
+                        ERROR_UNKNOWN_COMPONENT.create(reader, TextComponent::text(key_str.clone()))
+                    })?;
+                if !seen.insert(data_comp) {
+                    return Err(ERROR_REPEATED_COMPONENT
+                        .create_without_context(TextComponent::text(key_str)));
+                }
+
+                if removed {
+                    patch.push((data_comp, None));
+                } else {
+                    reader.skip_whitespace();
+                    reader.expect('=')?;
                     reader.skip_whitespace();
                     let value_start = reader.cursor();
                     let nbt_tag = SnbtParser::parse_for_commands(reader)?;
-                    let parsed = DataComponent::try_from_name(&key_str)
-                        .ok_or("Unknown data component")
-                        .and_then(|data_comp| {
-                            let component = if data_comp == DataComponent::ItemName {
-                                ItemNameImpl::parse(&nbt_tag).map(|name| name.to_dyn())
-                            } else {
-                                pumpkin_data::data_component_impl::read_data(data_comp, &nbt_tag)
-                                    .ok_or("Invalid or unsupported component value")
-                            }?;
-                            Ok((data_comp, Some(component)))
-                        });
+                    let parsed = if data_comp == DataComponent::ItemName {
+                        ItemNameImpl::parse(&nbt_tag).map(|name| name.to_dyn())
+                    } else {
+                        pumpkin_data::data_component_impl::read_data(data_comp, &nbt_tag)
+                            .ok_or("Invalid or unsupported component value")
+                    };
                     match parsed {
-                        Ok(component) => patch.push(component),
+                        Ok(component) => patch.push((data_comp, Some(component))),
                         Err(reason) => {
                             // Point at the rejected value, not after its closing bracket.
                             // No partially parsed stack is returned to /give.
@@ -99,17 +125,17 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemStackArgumentType 
                     }
                 }
                 reader.skip_whitespace();
-                if reader.peek() == Some(',') {
-                    reader.skip();
-                    reader.skip_whitespace();
+                if reader.peek() != Some(',') {
+                    break;
+                }
+                reader.skip();
+                reader.skip_whitespace();
+                if !reader.can_read_char() {
+                    return Err(ERROR_EXPECTED_COMPONENT.create(reader));
                 }
             }
-            if reader.peek() == Some(']') {
-                reader.skip();
-            }
-            if !patch.is_empty() {
-                stack.patch = patch;
-            }
+            reader.expect(']')?;
+            stack.patch = patch;
         }
 
         Ok(stack)
@@ -140,6 +166,98 @@ impl ItemStackArgumentType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn component_removal_and_nested_values_leave_the_next_argument_unread() {
+        let mut reader = StringReader::new(
+            "stick[!item_name,custom_data={nested:[1,2],label:'a,b]c'},damage=1,] 4",
+        );
+        let stack =
+            <ItemStackArgumentType as ArgumentType<()>>::parse(&ItemStackArgumentType, &mut reader)
+                .expect("removals, nested SNBT and a trailing comma are valid");
+        assert_eq!(reader.remaining_part(), " 4");
+        assert_eq!(stack.patch.len(), 3);
+        assert_eq!(stack.patch[0].0, DataComponent::ItemName);
+        assert!(stack.patch[0].1.is_none());
+        assert!(!stack.has_data_component(DataComponent::ItemName));
+        let data = stack.patch[1].1.as_ref().unwrap().write_data();
+        let compound = data.extract_compound().unwrap();
+        assert_eq!(compound.get_string("label"), Some("a,b]c"));
+        assert_eq!(compound.get_list("nested").unwrap().len(), 2);
+        assert_eq!(stack.patch[2].0, DataComponent::Damage);
+
+        for input in ["stick[]", "stick[ !item_name ]", "stick[!item_name, ]"] {
+            let mut reader = StringReader::new(input);
+            assert!(
+                <ItemStackArgumentType as ArgumentType<()>>::parse(
+                    &ItemStackArgumentType,
+                    &mut reader,
+                )
+                .is_ok(),
+                "{input}"
+            );
+            assert_eq!(reader.remaining_part(), "");
+        }
+    }
+
+    #[test]
+    fn malformed_component_lists_refuse_instead_of_looping_or_returning_partial_stacks() {
+        for input in [
+            "stick[",
+            "stick[ ]",
+            "stick[!",
+            "stick[?]",
+            "stick[damage]",
+            "stick[damage=1",
+            "stick[damage=1,",
+            "stick[damage=1 item_name='x']",
+            "stick[!item_name='x']",
+            "stick[item_name='x',,damage=1]",
+        ] {
+            let mut reader = StringReader::new(input);
+            assert!(
+                <ItemStackArgumentType as ArgumentType<()>>::parse(
+                    &ItemStackArgumentType,
+                    &mut reader,
+                )
+                .is_err(),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn aliases_share_duplicate_detection_and_transient_components_are_unknown() {
+        for input in [
+            "stick[item_name='x',minecraft:item_name='y']",
+            "stick[!item_name,minecraft:item_name='y']",
+            "stick[item_name='x',!minecraft:item_name]",
+            "stick[!item_name,!minecraft:item_name]",
+        ] {
+            let mut reader = StringReader::new(input);
+            let error = <ItemStackArgumentType as ArgumentType<()>>::parse(
+                &ItemStackArgumentType,
+                &mut reader,
+            )
+            .err()
+            .expect("each component may occur only once, including removals");
+            assert!(error.is(&ERROR_REPEATED_COMPONENT), "{input}");
+        }
+        for key in ["missing", "other:item_name", "creative_slot_lock"] {
+            for prefix in ["!", ""] {
+                let input = format!("stick[{prefix}{key}]");
+                let mut reader = StringReader::new(&input);
+                let error = <ItemStackArgumentType as ArgumentType<()>>::parse(
+                    &ItemStackArgumentType,
+                    &mut reader,
+                )
+                .err()
+                .expect("unknown and transient components must not enter the patch");
+                assert!(error.is(&ERROR_UNKNOWN_COMPONENT), "{input}");
+                assert_eq!(error.context.unwrap().cursor, "stick[".len() + prefix.len());
+            }
+        }
+    }
 
     #[test]
     fn rejected_component_returns_typed_error_at_value_start() {
