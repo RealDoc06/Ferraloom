@@ -59,6 +59,23 @@ struct ViewerUpdate {
     current: u16,
 }
 
+/// Release ownership on callback unwind so a later transition can drain the
+/// remaining queue. A partially published update is not replayed.
+struct ViewerDrainGuard<'a> {
+    state: Option<&'a Mutex<ContainerViewers>>,
+}
+
+impl Drop for ViewerDrainGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(state) = self.state {
+            state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .publishing = false;
+        }
+    }
+}
+
 impl ContainerViewers {
     /// Claim the synchronous drain while holding only the counter lock. Nested
     /// or concurrent callbacks append in count order; they never wait on a
@@ -137,9 +154,8 @@ impl ContainerViewerCount {
         world.is_some_and(|world| state.enqueue(world, false))
     }
 
-    /// Actual menu Inventory callbacks publish before returning, without a BE
-    /// tick. If another callback is already publishing, its synchronous drain
-    /// owns the queued transition; no waiter, task or tick fallback is needed.
+    /// The callback claiming the drain publishes without a BE tick. Nested or
+    /// concurrent callers can return before its drain reaches their updates.
     pub(crate) fn change_in_world<T>(&self, entity: &T, world: &Arc<World>, opening: bool)
     where
         T: BlockEntity + ViewerCountListener + 'static,
@@ -153,6 +169,9 @@ impl ContainerViewerCount {
     where
         T: BlockEntity + ViewerCountListener + 'static,
     {
+        let mut release = ViewerDrainGuard {
+            state: Some(&self.state),
+        };
         loop {
             let update = {
                 let mut state = self
@@ -161,6 +180,9 @@ impl ContainerViewerCount {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let Some(update) = state.pending.pop_front() else {
                     state.publishing = false;
+                    // Empty check, release and disarm share the producer lock:
+                    // no lost wakeup, and Drop cannot clear a new owner's flag.
+                    release.state = None;
                     return;
                 };
                 update

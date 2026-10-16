@@ -2,6 +2,7 @@
 //! Container locks cover a bounded predicate subset; opaque tags are retained.
 
 use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex, Weak, mpsc},
     time::Duration,
 };
@@ -12,7 +13,7 @@ use pumpkin_config::{CommandsConfig, world::LevelConfig};
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId,
     block_properties::{
-        BarrelLikeProperties, ChestLikeProperties, ChestType, ComparatorLikeProperties,
+        BarrelLikeProperties, ChestLikeProperties, ChestType, ComparatorLikeProperties, Facing,
         HorizontalFacing,
     },
     dimension::Dimension,
@@ -2892,6 +2893,151 @@ async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
             assert_viewer_effects(kind, &world, replacement.as_ref(), 0);
         }
     }
+}
+
+#[tokio::test]
+async fn barrel_menu_callbacks_preserve_facing_without_a_tick() {
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let kind = ChestKind::Barrel;
+    let live = kind.new(BLOCK_POS);
+    fixture.install(kind.block(), live.clone());
+    let mut properties = BarrelLikeProperties::from_state_id(Block::BARREL.default_state.id);
+    properties.facing = Facing::East;
+    properties.open = false;
+    let closed = properties.to_state_id(&Block::BARREL);
+    fixture.set_state(BLOCK_POS, closed);
+    let player = registered_menu_player(&world, GameMode::Survival).await;
+    let factory = kind.factory(&world, &BLOCK_POS);
+
+    open_menu(&player, factory.as_ref(), BLOCK_POS);
+    properties.open = true;
+    assert_eq!(
+        world.get_block_state_id(&BLOCK_POS),
+        properties.to_state_id(&Block::BARREL)
+    );
+    assert_eq!(kind.viewers(live.as_ref()), 1);
+    player.on_handled_screen_closed();
+    assert_eq!(world.get_block_state_id(&BLOCK_POS), closed);
+    assert_eq!(kind.viewers(live.as_ref()), 0);
+    assert!(Arc::ptr_eq(
+        &live,
+        &world.get_block_entity(&BLOCK_POS).unwrap()
+    ));
+}
+
+#[tokio::test]
+async fn barrel_menu_callbacks_do_not_restore_replaced_blocks() {
+    for replacement in [&Block::STONE, &Block::AIR] {
+        for opening in [false, true] {
+            let fixture = MenuFixture::new().await;
+            let world = fixture.source.world();
+            let kind = ChestKind::Barrel;
+            let live = kind.new(BLOCK_POS);
+            fixture.install(kind.block(), live.clone());
+            let player = registered_menu_player(&world, GameMode::Survival).await;
+            // Retain the actual factory/menu before the replacement starts.
+            let factory = kind.factory(&world, &BLOCK_POS);
+            if !opening {
+                open_menu(&player, factory.as_ref(), BLOCK_POS);
+                assert_viewer_effects(kind, &world, live.as_ref(), 1);
+            }
+
+            // Deterministically stop in the replacement window: the chunk has
+            // changed, but on_block_replaced/removal has not detached the BE.
+            fixture.set_state(BLOCK_POS, replacement.default_state.id);
+            assert!(Arc::ptr_eq(
+                &live,
+                &world.get_block_entity(&BLOCK_POS).unwrap()
+            ));
+            if opening {
+                open_menu(&player, factory.as_ref(), BLOCK_POS);
+            } else {
+                player.on_handled_screen_closed();
+            }
+            assert_eq!(kind.viewers(live.as_ref()), u16::from(opening));
+            assert_eq!(
+                world.get_block_state_id(&BLOCK_POS),
+                replacement.default_state.id
+            );
+            assert!(
+                Arc::ptr_eq(&live, &world.get_block_entity(&BLOCK_POS).unwrap()),
+                "the callback must not install a replacement block entity"
+            );
+
+            if opening {
+                player.on_handled_screen_closed();
+                assert_eq!(kind.viewers(live.as_ref()), 0);
+                assert!(Arc::ptr_eq(
+                    &live,
+                    &world.get_block_entity(&BLOCK_POS).unwrap()
+                ));
+            }
+            world.remove_block_entity(&BLOCK_POS);
+            assert!(world.get_block_entity(&BLOCK_POS).is_none());
+            assert_eq!(
+                world.get_block_state_id(&BLOCK_POS),
+                replacement.default_state.id
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn viewer_drain_recovers_after_neighbor_panic_and_preserves_queued_order() {
+    let kind = ChestKind::Trapped;
+    let observed = Arc::new(Observed::default());
+    let fixture = Fixture::with_registry(observed.registry(kind)).await;
+    let world = fixture.source.world();
+    let live = kind.new(BLOCK_POS);
+    fixture.install(kind.block(), live.clone());
+    for position in [OTHER_POS, OTHER_POS.down()] {
+        fixture.set_state(position, Block::COMPARATOR.default_state.id);
+    }
+    // Use the actual menu inventory adapter without holding a menu mutex
+    // across the injected panic. This isolates publisher unwind recovery.
+    let inventory = live.clone().get_menu_inventory(&world).unwrap();
+    let nested = inventory.clone();
+    *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |_| {
+        nested.on_open();
+        nested.on_close();
+        panic!("injected viewer neighbor panic");
+    }));
+    let panic = catch_unwind(AssertUnwindSafe(|| inventory.on_open())).unwrap_err();
+    assert_eq!(
+        panic.downcast_ref::<&str>(),
+        Some(&"injected viewer neighbor panic")
+    );
+    assert_eq!(kind.viewers(live.as_ref()), 1);
+    assert_eq!(observed.take_neighbors(), [OTHER_POS]);
+    world.flush_synced_block_events();
+    assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 1)]);
+
+    // The next callback must claim the abandoned drain and publish the older
+    // queued transitions first, without a tick or replaying the partial update.
+    inventory.on_close();
+    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_eq!(
+        observed.take_neighbors(),
+        [OTHER_POS, OTHER_POS.down()].repeat(3)
+    );
+    world.flush_synced_block_events();
+    assert_eq!(
+        observed.take_events(),
+        [(BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1), (BLOCK_POS, 1, 0)]
+    );
+
+    // Both directions still publish immediately after normal drain release.
+    inventory.on_open();
+    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    assert_eq!(observed.take_neighbors(), [OTHER_POS, OTHER_POS.down()]);
+    world.flush_synced_block_events();
+    assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 1)]);
+    inventory.on_close();
+    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    assert_eq!(observed.take_neighbors(), [OTHER_POS, OTHER_POS.down()]);
+    world.flush_synced_block_events();
+    assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 0)]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

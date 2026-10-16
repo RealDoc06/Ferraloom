@@ -44,14 +44,22 @@ impl BarrelBlockEntity {
 
     fn set_open(&self, world: &Arc<World>, open: bool) {
         let state = world.get_block_state(&self.position);
+        // Replacement writes the block before detaching its old entity. A
+        // retained menu must not turn that replacement back into a barrel.
+        if state.id.to_block() != &Block::BARREL {
+            return;
+        }
         let mut properties = BarrelLikeProperties::from_state_id(state.id);
 
         properties.open = open;
 
-        world.set_block_state(
+        // This fences state changes, not same-state entity replacement (ABA)
+        // or the world's callbacks after the write.
+        world.set_block_state_if(
             &self.position,
             properties.to_state_id(&Block::BARREL),
             BlockFlags::NOTIFY_ALL,
+            |current| current == state.id,
         );
     }
 
