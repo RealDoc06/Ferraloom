@@ -8,7 +8,12 @@ use std::{
 };
 
 use bytes::Bytes;
-use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid, item_stack::ItemStack};
+use pumpkin_data::{
+    Block, BlockStateId,
+    chunk::ChunkStatus,
+    fluid::Fluid,
+    item_stack::admission::{ItemStackAdmissionError, validate_item_stack},
+};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
@@ -34,6 +39,9 @@ use super::{
 pub mod anvil;
 pub mod linear;
 pub mod pump;
+
+#[cfg(test)]
+mod item_admission_tests;
 
 /// Refuse saved inventories that the infallible container reader would reduce.
 /// This is admission protection, not support for unmodeled item components.
@@ -82,12 +90,15 @@ fn validate_saved_container_items(
             return Err(refusal(Some(slot), "Slot occurs more than once"));
         }
         *used = true;
-        if ItemStack::read_item_stack(item).is_none() {
-            return Err(refusal(
-                Some(slot),
-                "ItemStack decoder rejected the saved item",
-            ));
-        }
+        let mut stack = item.clone();
+        stack.child_tags.remove("Slot");
+        validate_item_stack(&stack).map_err(|error| {
+            let reason = match error {
+                ItemStackAdmissionError::Unreadable => "ItemStack decoder rejected the saved item",
+                _ => error.reason(),
+            };
+            refusal(Some(slot), reason)
+        })?;
     }
     Ok(())
 }
@@ -1085,7 +1096,7 @@ impl Default for LightContainer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::Block;
+    use pumpkin_data::{Block, item_stack::ItemStack};
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
 

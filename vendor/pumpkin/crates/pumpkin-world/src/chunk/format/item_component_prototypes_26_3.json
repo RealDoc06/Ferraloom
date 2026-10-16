@@ -1,0 +1,206 @@
+[
+  {
+    "component": "minecraft:attribute_modifiers",
+    "item": "minecraft:diamond_sword",
+    "prototype_report": "minecraft/components/item/diamond_sword.json",
+    "report_sha256": "27149af3eab74cf4323603c0f2717ad827206a5048d90421b1de1975fabd313a",
+    "value": [
+      {
+        "type": "minecraft:attack_damage",
+        "amount": 6.0,
+        "id": "minecraft:base_attack_damage",
+        "operation": "add_value",
+        "slot": "mainhand"
+      },
+      {
+        "type": "minecraft:attack_speed",
+        "amount": -2.4000000953674316,
+        "id": "minecraft:base_attack_speed",
+        "operation": "add_value",
+        "slot": "mainhand"
+      }
+    ]
+  },
+  {
+    "component": "minecraft:bees",
+    "item": "minecraft:bee_nest",
+    "prototype_report": "minecraft/components/item/bee_nest.json",
+    "report_sha256": "9184dbc78153685fb7070d065a916c4832f3a74ff9b1e3d43655d8c3bdb13534",
+    "value": []
+  },
+  {
+    "component": "minecraft:blocks_attacks",
+    "item": "minecraft:shield",
+    "prototype_report": "minecraft/components/item/shield.json",
+    "report_sha256": "b4306c689ed42ca3a18d67d2161460bc396cdf1081ec1f5e42fe7f2aa432c23b",
+    "value": {
+      "block_delay_seconds": 0.25,
+      "block_sound": "minecraft:item.shield.block",
+      "bypassed_by": "#minecraft:bypasses_shield",
+      "disabled_sound": "minecraft:item.shield.break",
+      "item_damage": {
+        "base": 1.0,
+        "factor": 1.0,
+        "threshold": 3.0
+      }
+    }
+  },
+  {
+    "component": "minecraft:break_sound",
+    "item": "minecraft:goat_horn",
+    "prototype_report": "minecraft/components/item/goat_horn.json",
+    "report_sha256": "ec8f69d7d58d91f3e12206fd42d69b834628bffa96ad80b50d5cebc296be88ef",
+    "value": "minecraft:entity.item.break"
+  },
+  {
+    "component": "minecraft:brewing_fuel",
+    "item": "minecraft:blaze_powder",
+    "prototype_report": "minecraft/components/item/blaze_powder.json",
+    "report_sha256": "1e77828665c37fabefc29bdefa1e29f55f3f3e7c81245595fa70a606ec2638d6",
+    "value": {
+      "speed_multiplier": "minecraft:brewing/speed_default",
+      "uses": "minecraft:brewing/uses_default"
+    }
+  },
+  {
+    "component": "minecraft:bucket_entity_data",
+    "item": "minecraft:axolotl_bucket",
+    "prototype_report": "minecraft/components/item/axolotl_bucket.json",
+    "report_sha256": "6e5a92539a2bfeb7ca67d977a606ddcff60a11bc9099b4068bd9eff00a459416",
+    "value": {}
+  },
+  {
+    "component": "minecraft:death_protection",
+    "item": "minecraft:totem_of_undying",
+    "prototype_report": "minecraft/components/item/totem_of_undying.json",
+    "report_sha256": "7652ee7168eb94ca5994ad1537e196f69f4389d6de615e47d8aa710a83df2313",
+    "value": {
+      "death_effects": [
+        {
+          "type": "minecraft:clear_all_effects"
+        },
+        {
+          "type": "minecraft:apply_effects",
+          "effects": [
+            {
+              "amplifier": 1,
+              "duration": 900,
+              "id": "minecraft:regeneration",
+              "show_icon": true
+            },
+            {
+              "amplifier": 1,
+              "duration": 100,
+              "id": "minecraft:absorption",
+              "show_icon": true
+            },
+            {
+              "duration": 800,
+              "id": "minecraft:fire_resistance",
+              "show_icon": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "component": "minecraft:debug_stick_state",
+    "item": "minecraft:debug_stick",
+    "prototype_report": "minecraft/components/item/debug_stick.json",
+    "report_sha256": "60babf35049b1c0933067802dbf8b52c72371064b7d230ee40fbe6b8b99823d6",
+    "value": {}
+  },
+  {
+    "component": "minecraft:dye",
+    "item": "minecraft:black_dye",
+    "prototype_report": "minecraft/components/item/black_dye.json",
+    "report_sha256": "422af79d0ef68ae73d48c1f05558cc5fcd7616c65d34bbd57caa709742e83803",
+    "value": "black"
+  },
+  {
+    "component": "minecraft:enchantment_glint_override",
+    "item": "minecraft:debug_stick",
+    "prototype_report": "minecraft/components/item/debug_stick.json",
+    "report_sha256": "60babf35049b1c0933067802dbf8b52c72371064b7d230ee40fbe6b8b99823d6",
+    "value": true
+  },
+  {
+    "component": "minecraft:instrument",
+    "item": "minecraft:goat_horn",
+    "prototype_report": "minecraft/components/item/goat_horn.json",
+    "report_sha256": "ec8f69d7d58d91f3e12206fd42d69b834628bffa96ad80b50d5cebc296be88ef",
+    "value": "minecraft:ponder_goat_horn"
+  },
+  {
+    "component": "minecraft:jukebox_playable",
+    "item": "minecraft:music_disc_11",
+    "prototype_report": "minecraft/components/item/music_disc_11.json",
+    "report_sha256": "db68e2c3528184184bd362ee3425999c3c6aaaa915bfb2bddbca26bf2662f979",
+    "value": "minecraft:11"
+  },
+  {
+    "component": "minecraft:pot_decorations",
+    "item": "minecraft:decorated_pot",
+    "prototype_report": "minecraft/components/item/decorated_pot.json",
+    "report_sha256": "6bfc7653b0644676a80ee7d335a3b7602a320e49a233309b78c0e688e6383399",
+    "value": {
+      "back": {
+        "id": "minecraft:brick"
+      },
+      "front": {
+        "id": "minecraft:brick"
+      },
+      "left": {
+        "id": "minecraft:brick"
+      },
+      "right": {
+        "id": "minecraft:brick"
+      }
+    }
+  },
+  {
+    "component": "minecraft:provides_banner_patterns",
+    "item": "minecraft:bordure_indented_banner_pattern",
+    "prototype_report": "minecraft/components/item/bordure_indented_banner_pattern.json",
+    "report_sha256": "b77fb03b7575d9de34073bf43000cf107784d44f1f82c27af00f7e4b2ad6e536",
+    "value": "#minecraft:pattern_item/bordure_indented"
+  },
+  {
+    "component": "minecraft:provides_trim_material",
+    "item": "minecraft:amethyst_shard",
+    "prototype_report": "minecraft/components/item/amethyst_shard.json",
+    "report_sha256": "d1d912ba7e3cf88f9103fc25abe2842b12272e165fbee4844cc1d3a9eea3e4d2",
+    "value": "minecraft:amethyst"
+  },
+  {
+    "component": "minecraft:recipes",
+    "item": "minecraft:knowledge_book",
+    "prototype_report": "minecraft/components/item/knowledge_book.json",
+    "report_sha256": "2187d5b0776ff9d7e13aa9d78644c01205e777a5c9460f0301b0e77bf9e17760",
+    "value": []
+  },
+  {
+    "component": "minecraft:tooltip_display",
+    "item": "minecraft:goat_horn",
+    "prototype_report": "minecraft/components/item/goat_horn.json",
+    "report_sha256": "ec8f69d7d58d91f3e12206fd42d69b834628bffa96ad80b50d5cebc296be88ef",
+    "value": {}
+  },
+  {
+    "component": "minecraft:use_effects",
+    "item": "minecraft:goat_horn",
+    "prototype_report": "minecraft/components/item/goat_horn.json",
+    "report_sha256": "ec8f69d7d58d91f3e12206fd42d69b834628bffa96ad80b50d5cebc296be88ef",
+    "value": {}
+  },
+  {
+    "component": "minecraft:use_remainder",
+    "item": "minecraft:beetroot_soup",
+    "prototype_report": "minecraft/components/item/beetroot_soup.json",
+    "report_sha256": "c19944ca320816d79ef096a67e5b43469e7edc381986d028c4c29e76a7098c51",
+    "value": {
+      "id": "minecraft:bowl"
+    }
+  }
+]
