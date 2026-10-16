@@ -15,6 +15,18 @@ def inventory(*entries: dict) -> dict:
 
 
 class HornCampaignTests(unittest.TestCase):
+    def test_expiry_checks_explicit_finish_cooldown_without_inventing_default_restart(self):
+        horns.validate_expiry_cooldowns([], "minecraft:goat_horn")
+        horns.validate_expiry_cooldowns([{"group": "minecraft:goat_horn", "ticks": 0}], "minecraft:goat_horn")
+        horns.validate_expiry_cooldowns([{"group": horns.GROUP, "ticks": 20}], horns.GROUP)
+        for entries, group in (([], horns.GROUP),
+                               ([{"group": horns.GROUP, "ticks": 140}], horns.GROUP),
+                               ([{"group": horns.GROUP, "ticks": 20}] * 2, horns.GROUP),
+                               ([{"group": "minecraft:goat_horn", "ticks": 20}], "minecraft:goat_horn"),
+                               ([{"group": "test:other", "ticks": 20}], horns.GROUP)):
+            with self.subTest(entries=entries, group=group), self.assertRaises(AssertionError):
+                horns.validate_expiry_cooldowns(entries, group)
+
     def test_active_offhand_uses_current_equipment_shape_and_keeps_exact_field_checks(self):
         value = horns.stack(horns.SING)
         for slot, path, field_count in ((-106, "equipment.offhand", len(value)),

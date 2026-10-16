@@ -378,8 +378,16 @@ def effects(fixture: Fixture, owner: Client, observer: Client, *, hand: int, ins
     return observation
 
 
+def validate_expiry_cooldowns(cooldowns: list[dict], group: str) -> None:
+    expected = 20 if group == GROUP else 0
+    require(all(p["group"] == group and p["ticks"] >= 0 for p in cooldowns), cooldowns)
+    applied = [p["ticks"] for p in cooldowns if p["ticks"] != 0]
+    require(applied == ([expected] if expected else []), {"expiry_component_cooldown": cooldowns})
+
+
 @bounded
-def expire(fixture: Fixture, owner: Client, observer: Client, used: int) -> dict:
+def expire(fixture: Fixture, owner: Client, observer: Client, used: int,
+           group: str = "minecraft:goat_horn") -> dict:
     """Keep the active hand/slot untouched through actual game ticks, then check expiry."""
     mark, sound_mark = owner.state()["packets"], observer.state()["packets"]
     ticks = step_exact(fixture.server, 141)
@@ -387,7 +395,7 @@ def expire(fixture: Fixture, owner: Client, observer: Client, used: int) -> dict
     boundary = fence(fixture.server, [owner, observer])
     require(after["used"] == used, "Expiry awarded duplicate Used")
     cooldowns = [p for p in owner.state()["horn_cooldowns"] if p["sequence"] > mark]
-    require(all(p["ticks"] == 0 for p in cooldowns), {"expiry_restarted_cooldown": cooldowns})
+    validate_expiry_cooldowns(cooldowns, group)
     sounds = horn_sounds(observer.state(), sound_mark, fixture.report["contract"])
     sounds += horn_sounds(owner.state(), mark, fixture.report["contract"])
     require(not sounds, {"expiry_duplicate_sound": sounds})
@@ -414,11 +422,19 @@ def exercise(fixture: Fixture, owner: Client, observer: Client, *, full: bool, r
     def use(name: str, hand: int = 0, group: str = "minecraft:goat_horn"):
         result = effects(fixture, owner, observer, hand=hand, instrument=name, group=group)
         actions.append(result)
-        actions.append(expire(fixture, owner, observer, result["after"]["used"]))
+        actions.append(expire(fixture, owner, observer, result["after"]["used"], group))
         # Authoritative live item/count/component immediately after active expiry.
         selected = -106 if hand else (3 if group == GROUP else 0)
         expected_stack = stack(name, cooldown=group == GROUP)
         actions.append(live_active_stack(server, selected, expected_stack))
+        if group == GROUP:
+            # Vanilla applies the explicit seconds component after finishUsingItem,
+            # in addition to the instrument's 140-tick cooldown at use start.
+            cooldown_ticks = step_exact(server, 20)
+            after_cooldown = statistics(owner, fixture.report["contract"])
+            require(after_cooldown["used"] == result["after"]["used"], "Cooldown wait changed Used")
+            actions.append({"finish_component_cooldown_wait": cooldown_ticks,
+                            "statistics": after_cooldown, "boundary": fence(server, [owner, observer])})
     if full:
         # Each distinct reference crosses actual predicted clicks in both engines.
         for slot, name in enumerate(BUILTINS):
