@@ -456,13 +456,13 @@ mod tests {
             assert_eq!(
                 fixture.execute(
                     CommandSender::Console,
-                    &format!("tp RotationPlayer 0 64 0 {requested} -10")
+                    &format!("tp QueuedPlayer 0 64 0 {requested} -10")
                 ),
                 1
             );
             assert_rotation(fixture.player.as_ref(), expected, -10.0);
         }
-        fixture.execute(CommandSender::Console, "tp RotationPlayer 0 64 0 0 200");
+        fixture.execute(CommandSender::Console, "tp QueuedPlayer 0 64 0 0 200");
         assert_rotation(fixture.player.as_ref(), 0.0, -90.0);
         fixture.close().await;
     }
