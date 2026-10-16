@@ -71,6 +71,7 @@ impl CommandExecutor for SummonExecutor {
 
         let entity = from_type(entity_type, pos, world, uuid);
         if let Some(nbt) = nbt {
+            super::data::validate_entity_items(entity.as_ref(), nbt)?;
             entity.read_nbt_non_mut(nbt);
             entity.get_entity().set_pos(pos);
         }
@@ -178,5 +179,137 @@ mod tests {
         let nbt =
             NbtCompoundArgumentType::get(&context, "nbt").expect("Should resolve NBT argument");
         assert_eq!(nbt.get_byte("NoAI"), Some(1));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn summon_item_preflight_refuses_before_spawn_and_healthy_entity_saves() {
+        use crate::{
+            plugin::{
+                EventHandler, EventPriority, api::events::entity::entity_spawn::EntitySpawnEvent,
+            },
+            server::Server,
+        };
+        use futures::future::BoxFuture;
+        use pumpkin_data::{
+            data_component_impl::{BundleContentsImpl, CustomNameImpl},
+            item_stack::ItemStack,
+        };
+        use pumpkin_nbt::compound::NbtCompound;
+        use pumpkin_world::chunk::{
+            ChunkEntityData,
+            format::anvil::AnvilChunkFile,
+            io::{FileIO, LoadedData, file_manager::ChunkFileManager},
+        };
+        use std::{
+            sync::atomic::{AtomicUsize, Ordering},
+            time::Duration,
+        };
+
+        struct SpawnWitness(AtomicUsize);
+        impl EventHandler<EntitySpawnEvent> for SpawnWitness {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                _event: &'a mut EntitySpawnEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                })
+            }
+        }
+
+        let mut fixture = crate::command::commands::data::tests::Fixture::new().await;
+        register(&mut fixture.dispatcher, &PermissionRegistry::default());
+        let world = fixture.source.world().clone();
+        assert!(world.entities.load().is_empty());
+        let witness = Arc::new(SpawnWitness(AtomicUsize::new(0)));
+        fixture
+            .source
+            .server()
+            .plugin_manager
+            .register::<EntitySpawnEvent, _>(witness.clone(), EventPriority::Normal, true);
+        let mut source_before = NbtCompound::new();
+        fixture
+            .source
+            .entity
+            .as_ref()
+            .unwrap()
+            .write_nbt(&mut source_before);
+        let block_before = fixture.block_data();
+        let pending_before = fixture.pending_data();
+        for command in [
+            "summon item 3 64 3 {Item:{id:stick,count:1,components:{tooltip_display:{hide_tooltip:true}}}}",
+            "summon pig 3 64 3 {Health:1f,equipment:{mainhand:{id:stick,components:{tooltip_display:{hide_tooltip:true}}}}}",
+            "summon item 3 64 3 {Item:{id:bundle,components:{bundle_contents:[{id:stick,components:{custom_name:'A','minecraft:custom_name':'B'}}]}}}",
+        ] {
+            let error = fixture
+                .execute(command)
+                .expect_err("unsafe entity item must refuse before spawn");
+            assert_eq!(
+                error.message.get_text(),
+                "This item cannot currently be persisted without data loss.",
+                "{command}"
+            );
+            assert!(world.entities.load().is_empty(), "{command}");
+            assert_eq!(witness.0.load(Ordering::Relaxed), 0, "{command}");
+            let mut source_after = NbtCompound::new();
+            fixture
+                .source
+                .entity
+                .as_ref()
+                .unwrap()
+                .write_nbt(&mut source_after);
+            assert_eq!(source_after, source_before, "{command}");
+            assert_eq!(fixture.block_data(), block_before, "{command}");
+            assert_eq!(fixture.pending_data(), pending_before, "{command}");
+        }
+
+        assert_eq!(fixture.execute("summon item 3 64 3 {Item:{id:bundle,count:1,components:{bundle_contents:[{id:stick,count:2,components:{custom_name:'A','!tooltip_display':{},custom_data:{components:{custom_name:'opaque A','minecraft:custom_name':'opaque B'}}}}]}}}").unwrap(), 1);
+        assert_eq!(witness.0.load(Ordering::Relaxed), 1);
+        let entities = world.entities.load_full();
+        assert_eq!(entities.len(), 1);
+        let entity = &entities[0];
+        let uuid = entity.get_entity().entity_uuid;
+        let position = entity.get_entity().chunk_pos.load();
+        let mut snapshot = NbtCompound::new();
+        entity.write_nbt(&mut snapshot);
+        let expected_item = snapshot.get_compound("Item").unwrap();
+        let stack = ItemStack::read_item_stack(expected_item).unwrap();
+        let child = &stack
+            .get_data_component::<BundleContentsImpl>()
+            .unwrap()
+            .items[0];
+        assert_eq!(child.item_count, 2);
+        assert_eq!(
+            child
+                .get_data_component::<CustomNameImpl>()
+                .unwrap()
+                .name
+                .get_text(),
+            "A"
+        );
+
+        // The stopped-worker fixture still uses World::shutdown's real entity
+        // snapshot and region flush. Read a fresh region cache to witness disk IO.
+        let saved = tokio::time::timeout(Duration::from_secs(10), async {
+            world.shutdown().await.unwrap();
+            let reader = ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::new(
+                pumpkin_config::chunk::AnvilChunkConfig::default(),
+            );
+            let (send, mut receive) = tokio::sync::mpsc::channel(1);
+            reader
+                .fetch_chunks(&world.level.level_folder, &[position], send)
+                .await;
+            let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+                panic!("healthy summon must save a readable entity region");
+            };
+            saved
+        })
+        .await
+        .expect("summoned entity save and fresh region read must finish");
+        let records = saved.data.lock().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].get_uuid("UUID"), Some(uuid));
+        assert_eq!(records[0].get_compound("Item"), Some(expected_item));
     }
 }

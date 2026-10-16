@@ -1,4 +1,4 @@
-//! Only the item fields actually consumed by /data's live loaders belong here.
+//! Item fields consumed by /data's live loaders and /summon's entity loader.
 //! Command storage and arbitrary compounds inside custom data remain opaque.
 
 use crate::{
@@ -58,7 +58,10 @@ pub(super) fn block(block: &dyn BlockEntity, nbt: &NbtCompound) -> Result<(), Co
     Ok(())
 }
 
-pub(super) fn entity(entity: &dyn EntityBase, nbt: &NbtCompound) -> Result<(), CommandSyntaxError> {
+pub(in crate::command::commands) fn entity(
+    entity: &dyn EntityBase,
+    nbt: &NbtCompound,
+) -> Result<(), CommandSyntaxError> {
     if entity.get_living_entity().is_some()
         && let Some(equipment) = nbt.get_compound("equipment")
     {

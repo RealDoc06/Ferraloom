@@ -47,6 +47,7 @@ const PERMISSION: &str = "minecraft:command.data";
 
 #[path = "data_item_admission.rs"]
 mod item_admission;
+pub(super) use item_admission::entity as validate_entity_items;
 
 pub const ERROR_MERGE_UNCHANGED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_DATA_MERGE_FAILED,
