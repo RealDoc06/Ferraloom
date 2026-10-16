@@ -1,4 +1,4 @@
-//! Ordinary crafting contract checks through real menus and the registered PlayerFixture.
+//! Ordinary crafting contract checks through real menus and the registered `PlayerFixture`.
 //! These assert bounded local behavior, not complete Java crafting/statistics parity.
 
 use crate::data::player_server::test::{PlayerFixture, close_fixture, player_fixture};

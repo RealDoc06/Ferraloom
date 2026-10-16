@@ -69,7 +69,7 @@ impl RecipeResult {
     }
 }
 
-/// The five builtin crafting properties in Java 26.3. UseRemainder is a separate rule.
+/// The five builtin crafting properties in Java 26.3. `UseRemainder` is a separate rule.
 fn crafting_remainder(input: &ItemStack) -> ItemStack {
     let item = if input.is_empty() {
         return ItemStack::EMPTY.clone();
