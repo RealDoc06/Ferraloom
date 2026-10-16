@@ -1429,7 +1429,7 @@ mod frame_timer_tests {
                 interval.tick().await;
                 let timer_calls = AtomicUsize::new(0);
                 writer.write_all(&wire[..split]).await.unwrap();
-                {
+                let packet = {
                     let read = async { Some(decoder.get_raw_packet().await.unwrap()) };
                     let mut pending =
                         Box::pin(read_with_keep_alive(read, &mut interval, || async {
@@ -1457,16 +1457,16 @@ mod frame_timer_tests {
                         .unwrap();
                     }
                     writer.write_all(&wire[split..]).await.unwrap();
-                    let packet = tokio::time::timeout(Duration::from_secs(1), pending)
+                    tokio::time::timeout(Duration::from_secs(1), pending)
                         .await
                         .unwrap()
-                        .unwrap();
-                    assert_eq!(
-                        packet.id, 300,
-                        "split={split}, compressed={compressed}, encrypted={encrypted}"
-                    );
-                    assert_eq!(packet.payload.as_ref(), &data[2..])
+                        .unwrap()
                 };
+                assert_eq!(
+                    packet.id, 300,
+                    "split={split}, compressed={compressed}, encrypted={encrypted}"
+                );
+                assert_eq!(packet.payload.as_ref(), &data[2..]);
                 let second = tokio::time::timeout(Duration::from_secs(1), decoder.get_raw_packet())
                     .await
                     .unwrap()
