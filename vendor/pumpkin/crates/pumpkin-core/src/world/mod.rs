@@ -810,11 +810,11 @@ impl World {
             if !loading.pos_level.get(&chunk).is_some_and(|level| {
                 *level <= pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL
             }) {
-                // Input cannot mistake a weaker ticket for unowned space.
-                // Cached entity activation instead requires the ready Arc below.
+                // Existing-only input may use unticketed space even when a
+                // neighboring ticket requests only an unfinished chunk stage.
+                // Owned terrain and explicit mutations still require FULL.
                 if terrain == PacketTerrain::RequiredTicket
-                    || (terrain == PacketTerrain::ExistingOrAbsent
-                        && (owned || loading.pos_level.contains_key(&chunk)))
+                    || (terrain == PacketTerrain::ExistingOrAbsent && owned)
                 {
                     return None;
                 }

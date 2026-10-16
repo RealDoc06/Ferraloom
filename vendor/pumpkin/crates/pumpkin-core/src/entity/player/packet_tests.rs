@@ -3192,3 +3192,68 @@ async fn ticker_overdue_without_ready_work_ticks_and_decays_once_normal_or_froze
     .unwrap();
     fixture.finish().await;
 }
+
+#[tokio::test]
+async fn weak_force_ticket_halos_do_not_park_existing_only_spectator_input() {
+    use pumpkin_world::chunk_system::ChunkLoading;
+
+    let fixture = bounded(Fixture::unticketed_spectators(1)).await;
+    let player = &fixture.players[0];
+    let world = player.world();
+    let position = player.get_entity().chunk_pos.load();
+    let (_, terrain) = world.level.loaded_chunks.remove(&position).unwrap();
+    for cached in [false, true] {
+        if cached {
+            world.level.loaded_chunks.insert(position, terrain.clone());
+        }
+        for distance in 3..=7 {
+            let origin = position.add_raw(distance, 0);
+            let (tickets, levels) = {
+                let mut loading = world.level.chunk_loading.lock().unwrap();
+                loading.add_force_ticket(origin);
+                loading.send_change();
+                assert_eq!(
+                    loading.pos_level[&position],
+                    ChunkLoading::FULL_CHUNK_LEVEL - 2 + distance as i8
+                );
+                (loading.ticket.clone(), loading.pos_level.clone())
+            };
+            // A weak halo is still insufficient for explicit terrain mutation,
+            // including when an old ready chunk is present in the cache.
+            let activity = player.packet_activity.enter_mutation().unwrap();
+            let mut mutation =
+                Box::pin(activity.scope(world.packet_stage(Some(position), async {})));
+            assert!(futures::poll!(&mut mutation).is_pending());
+            drop(mutation);
+
+            let before = player.experience_level.load(Ordering::Relaxed);
+            enqueue(
+                player,
+                &SChatCommand {
+                    command: "experience add @s 1 levels",
+                },
+            );
+            enqueue(
+                player,
+                &SSetHeldItem {
+                    slot: distance as i16,
+                },
+            );
+            settled(player).await;
+            assert_eq!(player.experience_level.load(Ordering::Relaxed), before + 1);
+            assert_eq!(player.inventory.get_selected_slot(), distance as u8);
+            assert!(player.inbound_packets.is_empty());
+            assert_eq!(player.packet_activity.state().active, 0);
+            assert!(!player.client.closed());
+            assert_eq!(world.level.loaded_chunks.contains_key(&position), cached);
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            assert_eq!(loading.ticket, tickets);
+            assert_eq!(loading.pos_level, levels);
+            loading.remove_force_ticket(origin);
+            loading.send_change();
+            assert!(loading.ticket.is_empty());
+            assert!(loading.pos_level.is_empty());
+        }
+    }
+    fixture.finish().await;
+}
