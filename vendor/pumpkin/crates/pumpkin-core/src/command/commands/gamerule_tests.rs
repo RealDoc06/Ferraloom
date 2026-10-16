@@ -1,6 +1,12 @@
 use super::*;
 use crate::command::commands::data::tests::Fixture;
+use pumpkin_util::Difficulty;
 use std::collections::BTreeSet;
+use std::{
+    sync::{Arc, mpsc},
+    thread,
+    time::Duration,
+};
 
 // Independent spelling witness: review17-parity.json, servers.vanilla's
 // network.command_tree.detail.literal_paths, official 26.3 / protocol 777.
@@ -172,6 +178,121 @@ async fn integer_set_and_query_share_live_state_and_results_across_spellings() {
     assert_eq!(fixture.execute("gamerule random_tick_speed").unwrap(), 5);
     assert_eq!(server.level_info.load().game_rules.random_tick_speed, 5);
     assert_eq!(world.level_info.load().game_rules.random_tick_speed, 5);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_command_and_world_updates_preserve_every_round() {
+    const ROUNDS: i32 = 64;
+    const WAIT: Duration = Duration::from_secs(10);
+
+    let fixture = fixture().await;
+    let server = fixture.source.server();
+    let world = fixture.source.world();
+    assert!(Arc::ptr_eq(&server.level_info, &world.level_info));
+    update_level_info(&server.level_info, |info| {
+        info.spawn_x = -47;
+        info.day_time = 12345;
+        info.map_id = 99;
+        info.difficulty_locked = true;
+    });
+
+    thread::scope(|scope| {
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let mut starters = Vec::new();
+        let mut workers = Vec::new();
+        for writer in 0..4 {
+            let (start_tx, start_rx) = mpsc::channel();
+            starters.push(start_tx);
+            let finished = finished_tx.clone();
+            let fixture = &fixture;
+            workers.push(scope.spawn(move || {
+                for round in 0..ROUNDS {
+                    assert_eq!(start_rx.recv_timeout(WAIT).unwrap(), round);
+                    let enabled = round % 2 == 0;
+                    match writer {
+                        0 => assert_eq!(
+                            fixture
+                                .execute(&format!("gamerule keep_inventory {enabled}"))
+                                .unwrap(),
+                            i32::from(enabled)
+                        ),
+                        1 => assert_eq!(
+                            fixture
+                                .execute(&format!(
+                                    "gamerule minecraft:random_tick_speed {}",
+                                    100 + round
+                                ))
+                                .unwrap(),
+                            100 + round
+                        ),
+                        2 => {
+                            let world = fixture.source.world();
+                            // Exercise both value variants and the existing
+                            // AdvanceTime broadcast, always after the commit.
+                            world.set_game_rule(
+                                &GameRule::AdvanceTime,
+                                GameRuleValue::Bool(enabled),
+                            );
+                            world.set_game_rule(
+                                &GameRule::RespawnRadius,
+                                GameRuleValue::Int(i64::from(200 + round)),
+                            );
+                        }
+                        3 => fixture.source.world().set_difficulty(if enabled {
+                            Difficulty::Hard
+                        } else {
+                            Difficulty::Easy
+                        }),
+                        _ => unreachable!(),
+                    }
+                    finished.send(writer).unwrap();
+                }
+            }));
+        }
+        drop(finished_tx);
+
+        for round in 0..ROUNDS {
+            // Release all four writers before waiting. Do not start another
+            // round until this snapshot is checked; every expected value changes.
+            for start in &starters {
+                start.send(round).unwrap();
+            }
+            let mut completed = BTreeSet::new();
+            for _ in 0..4 {
+                assert!(completed.insert(finished_rx.recv_timeout(WAIT).unwrap()));
+            }
+
+            let info = server.level_info.load();
+            let enabled = round % 2 == 0;
+            assert_eq!(info.game_rules.keep_inventory, enabled, "round {round}");
+            assert_eq!(
+                info.game_rules.random_tick_speed,
+                i64::from(100 + round),
+                "round {round}"
+            );
+            assert_eq!(info.game_rules.advance_time, enabled, "round {round}");
+            assert_eq!(
+                info.game_rules.respawn_radius,
+                i64::from(200 + round),
+                "round {round}"
+            );
+            assert_eq!(
+                info.difficulty,
+                if enabled {
+                    Difficulty::Hard
+                } else {
+                    Difficulty::Easy
+                },
+                "round {round}"
+            );
+            assert!(info.difficulty_locked);
+            assert_eq!((info.spawn_x, info.day_time, info.map_id), (-47, 12345, 99));
+            assert_eq!(world.level_info.load().game_rules, info.game_rules);
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+    });
 }
 
 #[tokio::test]

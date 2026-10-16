@@ -30,6 +30,7 @@ pub mod brightness;
 pub mod chunker;
 pub mod explosion;
 pub mod generation_cache;
+pub(crate) mod level_info;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
@@ -1459,10 +1460,9 @@ impl World {
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
-        let current_info = self.level_info.load();
-        let mut new_info = (**current_info).clone();
-        new_info.difficulty = difficulty;
-        self.level_info.store(Arc::new(new_info));
+        level_info::update_level_info(&self.level_info, |info| {
+            info.difficulty = difficulty;
+        });
     }
 
     pub fn get_game_rule(&self, rule: &GameRule) -> GameRuleValue<i64, bool> {
@@ -1474,18 +1474,17 @@ impl World {
     }
 
     pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
-        let current_info = self.level_info.load();
-        let mut new_info = (**current_info).clone();
-        match (new_info.game_rules.get_mut(rule), value) {
-            (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
-                *target = val;
+        level_info::update_level_info(&self.level_info, |info| {
+            match (info.game_rules.get_mut(rule), &value) {
+                (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
+                    *target = *val;
+                }
+                (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
+                    *target = *val;
+                }
+                _ => {}
             }
-            (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
-                *target = val;
-            }
-            _ => {}
-        }
-        self.level_info.store(Arc::new(new_info));
+        });
         if *rule == GameRule::AdvanceTime {
             let level_time = self
                 .level_time
