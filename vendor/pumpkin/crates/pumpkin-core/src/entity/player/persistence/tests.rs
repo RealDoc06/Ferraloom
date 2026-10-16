@@ -896,18 +896,7 @@ async fn player_dat_literal_names_and_lossless_containers_survive_actual_player_
     }"#,
     );
     seed(&storage, uuid, original.clone());
-    let mut expected = original.clone();
-    let Some(NbtTag::List(inventory)) = expected.child_tags.get_mut("Inventory") else {
-        panic!("expected inventory");
-    };
-    let mut offhand = original
-        .get_compound("equipment")
-        .unwrap()
-        .get_compound("offhand")
-        .unwrap()
-        .clone();
-    offhand.put_byte("Slot", -106);
-    inventory.push(NbtTag::Compound(offhand));
+    let expected = original;
     for _ in 0..2 {
         let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
         let mut current = player(fixture.source.world(), uuid).await;
@@ -916,5 +905,96 @@ async fn player_dat_literal_names_and_lossless_containers_survive_actual_player_
         for key in ["Inventory", "EnderItems", "equipment"] {
             assert_eq!(saved.get(key), expected.get(key), "{key}");
         }
+    }
+}
+
+#[tokio::test]
+async fn player_dat_equipment_uses_current_schema_after_legacy_and_mixed_imports() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    // Inventory.save visits only the 36 main slots in the exact 26.3 primary;
+    // LivingEntity writes equipment separately. Keep legacy input compatibility.
+    let expected = compound(
+        r#"{
+        Inventory:[{Slot:0b,id:"minecraft:stone",count:37},{Slot:35b,id:"minecraft:gold_ingot",count:9}],
+        equipment:{
+            feet:{id:"minecraft:diamond_boots",count:1},
+            legs:{id:"minecraft:diamond_leggings",count:1},
+            chest:{id:"minecraft:diamond_chestplate",count:1},
+            head:{id:"minecraft:diamond_helmet",count:1},
+            offhand:{id:"minecraft:shield",count:1,components:{"minecraft:custom_name":"Saved shield"}},
+            future_slot:{keep:[I;7,8]}
+        }}"#,
+    );
+    let mappings = [
+        (100, "feet"),
+        (101, "legs"),
+        (102, "chest"),
+        (103, "head"),
+        (-106, "offhand"),
+    ];
+    for (index, mode) in ["current", "legacy", "mixed"].into_iter().enumerate() {
+        let uuid = Uuid::from_u128(540 + index as u128);
+        let mut input = expected.clone();
+        if mode != "current" {
+            let mut inventory = expected.get_list("Inventory").unwrap().clone();
+            for (slot, key) in mappings {
+                let mut item = if mode == "legacy" {
+                    expected
+                        .get_compound("equipment")
+                        .unwrap()
+                        .get_compound(key)
+                        .unwrap()
+                        .clone()
+                } else {
+                    // Current named equipment must win over an older duplicate.
+                    compound(r#"{id:"minecraft:stick",count:2}"#)
+                };
+                item.put_byte("Slot", slot);
+                inventory.push(NbtTag::Compound(item));
+            }
+            input.put_list("Inventory", inventory);
+            if mode == "legacy" {
+                input.put_compound("equipment", compound("{future_slot:{keep:[I;7,8]}}"));
+            }
+        }
+        seed(&storage, uuid, input);
+        for _ in 0..2 {
+            let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+            let mut current = player(fixture.source.world(), uuid).await;
+            NBTStorage::read_nbt(&mut current, &mut loaded);
+            assert_eq!(
+                current
+                    .living_entity
+                    .entity_equipment
+                    .lock()
+                    .unwrap()
+                    .equipment
+                    .len(),
+                5,
+                "{mode}"
+            );
+            let saved = save(&storage, &current);
+            for key in ["Inventory", "equipment"] {
+                assert_eq!(saved.get(key), expected.get(key), "{mode}: {key}");
+            }
+        }
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        current
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap()
+            .clear();
+        let saved = save(&storage, &current);
+        assert_eq!(saved.get("Inventory"), expected.get("Inventory"), "{mode}");
+        assert_eq!(
+            saved.get_compound("equipment"),
+            Some(&compound("{future_slot:{keep:[I;7,8]}}")),
+            "{mode}"
+        );
     }
 }
