@@ -216,10 +216,12 @@ fn command_item_names_keep_literal_translation_and_rich_nbt() {
         ),
         (
             "['Ferraloom',{text:' key',bold:true}]",
-            NbtTag::List(vec![
-                NbtTag::String("Ferraloom".into()),
-                nbt_compound_tag! { "text": NbtTag::String(" key".into()), "bold": NbtTag::Byte(1) },
-            ]),
+            nbt_compound_tag! {
+                "text": NbtTag::String("Ferraloom".into()),
+                "extra": NbtTag::List(vec![nbt_compound_tag! {
+                    "text": NbtTag::String(" key".into()), "bold": NbtTag::Byte(1)
+                }]),
+            },
         ),
     ];
     for (input, expected) in cases {
@@ -236,6 +238,7 @@ fn literal_witness_has_string_nbt_on_wire_and_both_inputs() {
         "'Ferraloom key'",
         "{text:'Ferraloom key'}",
         "{type:'text',text:'Ferraloom key'}",
+        "['Ferraloom key']",
     ] {
         let stack = command_stack(input);
         for length_prefixed in [false, true] {
@@ -264,6 +267,46 @@ fn literal_witness_has_string_nbt_on_wire_and_both_inputs() {
         assert_eq!(name(&decoded), NbtTag::String("Ferraloom key".into()));
         assert_eq!(cursor.position(), bytes.len() as u64);
     }
+}
+
+#[test]
+fn component_lists_append_after_existing_extras_and_normalize_nested_components() {
+    let nested = nbt_compound_tag! {
+        "text": NbtTag::String("next".into()),
+        "extra": NbtTag::List(vec![nbt_compound_tag! {
+            "text": NbtTag::String("last".into()), "italic": NbtTag::Byte(1)
+        }]),
+    };
+    let expected = nbt_compound_tag! {
+        "text": NbtTag::String("root".into()),
+        "bold": NbtTag::Byte(1),
+        "extra": NbtTag::List(vec![NbtTag::String("old".into()), nested]),
+    };
+    let stack =
+        command_stack("[{text:'root',bold:true,extra:['old']},['next',{text:'last',italic:true}]]");
+    assert_persistent_and_wire(stack.clone(), &expected);
+    let equivalent = command_stack(
+        "{text:'root',bold:true,extra:['old',{text:'next',extra:[{text:'last',italic:true}]}]}",
+    );
+    assert!(stack.are_items_and_components_equal(&equivalent));
+    assert_eq!(
+        stack
+            .get_data_component::<ItemNameImpl>()
+            .unwrap()
+            .get_hash(),
+        equivalent
+            .get_data_component::<ItemNameImpl>()
+            .unwrap()
+            .get_hash()
+    );
+    assert_persistent_and_wire(
+        command_stack("{translate:'key',with:[['arg']],extra:[['tail']]}"),
+        &nbt_compound_tag! {
+            "translate": NbtTag::String("key".into()),
+            "with": NbtTag::List(vec![NbtTag::String("arg".into())]),
+            "extra": NbtTag::List(vec![NbtTag::String("tail".into())]),
+        },
+    );
 }
 
 #[test]

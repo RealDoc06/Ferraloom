@@ -116,7 +116,7 @@ fn normalize_component(tag: &NbtTag, depth: usize) -> Result<NbtTag, &'static st
     }
     match tag {
         NbtTag::String(_) => Ok(tag.clone()),
-        NbtTag::List(children) => Ok(NbtTag::List(normalize_children(children, depth, false)?)),
+        NbtTag::List(children) => normalize_list(children, depth),
         NbtTag::Compound(source) => {
             let mut component = NbtCompound::new();
             if let Some(kind) = source.get("type") {
@@ -227,6 +227,33 @@ fn normalize_component(tag: &NbtTag, depth: usize) -> Result<NbtTag, &'static st
         }
         _ => Err(INVALID),
     }
+}
+
+/// ComponentSerialization.createFromList keeps the first component's content
+/// and style, then appends the remaining components after its existing extras.
+fn normalize_list(children: &[NbtTag], depth: usize) -> Result<NbtTag, &'static str> {
+    let mut children = normalize_children(children, depth, false)?.into_iter();
+    let first = children.next().ok_or(INVALID)?;
+    if children.len() == 0 {
+        return Ok(first);
+    }
+    let mut component = match first {
+        NbtTag::String(text) => {
+            let mut component = NbtCompound::new();
+            component.put("text", NbtTag::String(text));
+            component
+        }
+        NbtTag::Compound(component) => component,
+        _ => return Err(INVALID),
+    };
+    let mut extra = match component.child_tags.remove("extra") {
+        Some(NbtTag::List(extra)) => extra,
+        None => Vec::new(),
+        Some(_) => return Err(INVALID),
+    };
+    extra.extend(children);
+    component.put_list("extra", extra);
+    Ok(NbtTag::Compound(component))
 }
 
 fn normalize_children(
