@@ -118,7 +118,7 @@ fn execute_store_score_modifier(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         // ExecuteCommand uses getObjective, allowing stores into read-only criteria too.
-        ObjectiveArgumentType::objective_or_error(&scoreboard, &objective)?
+        ObjectiveArgumentType::objective_or_error(&scoreboard, &objective)?;
     };
     let mut source = context.source.as_ref().clone();
     // Keep earlier stores: each nested command completion updates every registered target.

@@ -213,7 +213,7 @@ impl Level {
                     removed.push(pos);
                 }
             }
-            self.update_activation_tickets(&removed, &[])
+            self.update_activation_tickets(&removed, &[]);
         };
         drop(consumer);
         // Requests/publications can arrive while another consumer owns the pass.

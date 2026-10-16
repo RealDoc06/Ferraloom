@@ -627,7 +627,7 @@ impl World {
                 for pos in &removed {
                     loading.remove_force_ticket(*pos);
                 }
-                loading.send_change()
+                loading.send_change();
             };
             *held = desired;
             drop(held);

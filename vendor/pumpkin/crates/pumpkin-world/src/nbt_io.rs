@@ -111,7 +111,7 @@ fn write_atomic_with_backup(
     {
         let mut writer = BufWriter::new(&stage.file);
         write(&mut writer)?;
-        writer.flush()?
+        writer.flush()?;
     };
     stage.file.sync_all()?;
 

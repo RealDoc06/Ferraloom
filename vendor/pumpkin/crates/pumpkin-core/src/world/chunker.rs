@@ -134,7 +134,7 @@ pub fn update_position(player: &Arc<Player>) {
             new_chunk_center,
             view_distance,
             generation_policy,
-        )
+        );
     };
     player.watched_section.store(new_cylindrical);
     let revision = requested.publish(&world, new_cylindrical);
