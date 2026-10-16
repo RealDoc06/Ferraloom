@@ -2806,10 +2806,78 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         }
         recheck_viewers(&world, &[live.as_ref()]);
         world.flush_synced_block_events();
+        assert_eq!(observed.take_events(), expected_events(0));
+        assert!(observed.take_neighbors().is_empty());
+        recheck_viewers(&world, &[live.as_ref()]);
+        world.flush_synced_block_events();
         assert!(
             observed.take_events().is_empty(),
             "inactive counters do not resend"
         );
+        assert!(observed.take_neighbors().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn final_recount_repairs_a_deduplicated_close_without_rearming_an_existing_tick() {
+    for kind in CONTAINERS {
+        let observed = Arc::new(Observed::default());
+        let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
+        let world = fixture.source.world();
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        for position in [OTHER_POS, OTHER_POS.down()] {
+            fixture.set_state(position, Block::COMPARATOR.default_state.id);
+        }
+        let player = registered_menu_player(&world, GameMode::Survival).await;
+        let factory = kind.factory(&world, &BLOCK_POS);
+        open_menu(&player, factory.as_ref(), BLOCK_POS);
+        world.flush_synced_block_events();
+        observed.take_events();
+        observed.take_neighbors();
+
+        // The first open already scheduled tick 5. A reopen at tick 2 must not
+        // postpone it, even when the final count returns to zero before flush.
+        for _ in 0..2 {
+            live.tick(&world);
+        }
+        player.on_handled_screen_closed();
+        open_menu(&player, factory.as_ref(), BLOCK_POS);
+        player.on_handled_screen_closed();
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        world.flush_synced_block_events();
+        let expected = if matches!(kind, ChestKind::Barrel) {
+            Vec::new()
+        } else {
+            vec![(BLOCK_POS, 1, 0), (BLOCK_POS, 1, 1)]
+        };
+        assert_eq!(observed.take_events(), expected);
+        let neighbors = observed.take_neighbors();
+        if matches!(kind, ChestKind::Trapped) {
+            assert_eq!(neighbors, [OTHER_POS, OTHER_POS.down()].repeat(3));
+        } else {
+            assert!(neighbors.is_empty());
+        }
+
+        for _ in 0..2 {
+            live.tick(&world);
+            world.flush_synced_block_events();
+            assert!(observed.take_events().is_empty());
+        }
+        live.tick(&world);
+        world.flush_synced_block_events();
+        let expected = if matches!(kind, ChestKind::Barrel) {
+            Vec::new()
+        } else {
+            vec![(BLOCK_POS, 1, 0)]
+        };
+        assert_eq!(observed.take_events(), expected);
+        assert!(observed.take_neighbors().is_empty());
+        for _ in 0..10 {
+            live.tick(&world);
+            world.flush_synced_block_events();
+            assert!(observed.take_events().is_empty());
+        }
         assert!(observed.take_neighbors().is_empty());
     }
 }

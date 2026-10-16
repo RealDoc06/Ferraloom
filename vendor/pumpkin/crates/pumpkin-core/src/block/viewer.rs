@@ -15,7 +15,7 @@ use crate::{block::entities::BlockEntity, world::World};
 
 pub use pumpkin_inventory::ViewerCountTracker;
 
-/// A menu's viewer callbacks precede publication of current_screen_handler.
+/// A menu's viewer callbacks precede publication of `current_screen_handler`.
 /// Nested/overlapping opens and closes must keep recounts deferred until every
 /// transition has published or returned. No mutex is held across callbacks.
 #[derive(Default)]
@@ -142,7 +142,7 @@ impl ContainerViewerCount {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if opening {
-            if state.current == 0 {
+            if state.current == 0 && state.ticks_until_recheck == 0 {
                 state.ticks_until_recheck = 5;
             }
             state.current = state.current.saturating_add(1);
@@ -237,7 +237,7 @@ impl ContainerViewerCount {
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if state.current == 0 {
+            if state.ticks_until_recheck == 0 {
                 None
             } else {
                 state.ticks_until_recheck = state.ticks_until_recheck.saturating_sub(1);
@@ -268,6 +268,9 @@ impl ContainerViewerCount {
             {
                 state.current = count;
                 state.revision = Arc::new(());
+                if count == 0 {
+                    state.ticks_until_recheck = 0;
+                }
                 recounted = true;
             }
             // Accepted unchanged recounts still resend chest lids (N3). Stale
@@ -291,7 +294,8 @@ fn count_container_viewers<T: Inventory + 'static>(entity: &T, world: &World) ->
             .as_any()
             .is::<super::entities::trapped_chest::TrappedChestBlockEntity>();
     // Unlike Java's spatial ContainerUser query, this bounded port enumerates
-    // registered players. Only active containers reach here, every five BE ticks.
+    // registered players. Opens arm five-tick rechecks, including one after the
+    // last close so a deduplicated lid event cannot leave the client open.
     for player in world.players.load().iter() {
         if player.menu_publication.is_active() {
             return None;
