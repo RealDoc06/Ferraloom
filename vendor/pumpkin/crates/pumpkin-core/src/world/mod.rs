@@ -5858,11 +5858,19 @@ impl World {
                     .portal_poi
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if villager_poi::profession_for_block(old_block).is_some() {
-                    poi.remove(position);
+                // The block write has already happened; report bookkeeping
+                // failure and let the storage's sticky error fail later saves.
+                if villager_poi::profession_for_block(old_block).is_some()
+                    && let Err(error) = poi.remove(position)
+                {
+                    tracing::error!(
+                        "Failed to remove POI after block write at {position:?}: {error}"
+                    );
                 }
-                if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
-                    poi.add_with_free_tickets(*position, poi_type, 1);
+                if let Some(poi_type) = villager_poi::poi_type_for_block(new_block)
+                    && let Err(error) = poi.add_with_free_tickets(*position, poi_type, 1)
+                {
+                    tracing::error!("Failed to add POI after block write at {position:?}: {error}");
                 }
             }
         }
@@ -8225,7 +8233,7 @@ mod tests {
         let custom = std::sync::Mutex::new(data.clone());
         let position = BlockPos::new(0, 64, 0);
         let mut held = portals.lock().unwrap();
-        held.add_portal(position);
+        held.add_portal(position).unwrap();
         let (started, ready) = std::sync::mpsc::channel();
         let (finished, completed) = std::sync::mpsc::channel();
         std::thread::scope(|scope| {
@@ -8252,7 +8260,10 @@ mod tests {
                 .unwrap();
         });
         let mut reloaded = super::portal::PortalPoiStorage::new(folder);
-        assert_eq!(reloaded.get_in_square(position, 1, None), vec![position]);
+        assert_eq!(
+            reloaded.get_in_square(position, 1, None).unwrap(),
+            vec![position]
+        );
         let bytes = std::fs::read(directory.path().join("pumpkin_custom_data.nbt")).unwrap();
         assert_eq!(decode_custom_world_data(&bytes).unwrap(), data);
     }

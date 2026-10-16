@@ -201,11 +201,17 @@ impl PortalType {
                     BlockPos::new(clamped_x, pos.y.floor() as i32, clamped_z);
                 let source_portal_axis = source_portal.map_or(HorizontalAxis::X, |p| p.axis);
 
-                let exit_portal = NetherPortal::search_for_portal(
-                    &dest_world,
-                    approximate_exit_pos,
-                )
-                .or_else(|| {
+                let exit_portal =
+                    match NetherPortal::search_for_portal(&dest_world, approximate_exit_pos) {
+                        Ok(portal) => portal,
+                        Err(error) => {
+                            tracing::error!(
+                                "Aborting portal transition after POI lookup failure: {error}"
+                            );
+                            return None;
+                        }
+                    };
+                let exit_portal = exit_portal.or_else(|| {
                     // Ensure the chunks around approximate_exit_pos are generated/loaded in dest_world
                     if let Ok(handle) = tokio::runtime::Handle::try_current() {
                         tokio::task::block_in_place(|| {
@@ -347,5 +353,85 @@ impl PortalProcessor {
     #[must_use]
     pub const fn has_expired(&self) -> bool {
         self.portal_time == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::{chunk::ChunkData, level::Level, world_info::LevelData};
+
+    #[tokio::test]
+    async fn poi_lookup_failure_aborts_portal_creation_and_fallback_transition() {
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        // Use one manually loaded chunk; no generation or server ticks are needed.
+        level.shutdown().await.unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            std::sync::Weak::new(),
+            Arc::default(),
+        ));
+        // A genuinely missing region still produces a successful empty search.
+        assert!(
+            NetherPortal::search_for_portal(&world, BlockPos::new(1024, 64, 1024))
+                .unwrap()
+                .is_none()
+        );
+        let poi_folder = &world.level.level_folder.poi_folder;
+        std::fs::create_dir_all(poi_folder).unwrap();
+        let path = poi_folder.join("r.0.0.mca");
+        let corrupt = b"unreadable portal region";
+        std::fs::write(&path, corrupt).unwrap();
+        let target = BlockPos::new(8, 64, 8);
+        assert_eq!(
+            NetherPortal::search_for_portal(&world, target)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        let caller = crate::entity::Entity::new(world.clone(), target.0.to_f64(), &EntityType::PIG);
+        assert!(
+            PortalType::Nether
+                .get_portal_destination(&world, world.clone(), &caller, None)
+                .is_none()
+        );
+        assert_eq!(world.level.loaded_chunks.len(), 1);
+        assert_eq!(world.get_block(&target), &Block::AIR);
+        // Subsequent block writes remain visible even when POI bookkeeping
+        // fails. The saved POI region is protected, not the block transaction.
+        world.set_block_state(
+            &target,
+            Block::STONECUTTER.default_state.id,
+            BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        assert_eq!(world.get_block(&target), &Block::STONECUTTER);
+        assert!(!world.portal_poi.is_poisoned());
+        assert_eq!(
+            world
+                .portal_poi
+                .lock()
+                .unwrap()
+                .save_all()
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), corrupt);
     }
 }

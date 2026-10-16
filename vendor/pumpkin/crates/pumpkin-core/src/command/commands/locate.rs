@@ -23,7 +23,7 @@ use crate::command::argument_types::resource_or_tag::{
     STRUCTURE_REGISTRY,
 };
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
@@ -67,6 +67,9 @@ static POI_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
 );
+
+static POI_STORAGE_ERROR_TYPE: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Failed to read POI storage; see the server log");
 
 /// Builds the clickable green `[x, ~, z]` (or `[x, y, z]` when `absolute_y`)
 /// coordinates component used by vanilla's locate feedback.
@@ -379,7 +382,11 @@ impl CommandExecutor for LocatePoiExecutor {
             poi_storage.find_closest_matching(origin, POI_SEARCH_RADIUS, |poi_type| {
                 targets.contains(poi_type)
             })
-        };
+        }
+        .map_err(|error| {
+            tracing::error!("POI locate failed: {error}");
+            POI_STORAGE_ERROR_TYPE.create_without_context()
+        })?;
 
         let Some((target, poi_type)) = found else {
             return Err(POI_NOT_FOUND_ERROR_TYPE
@@ -439,6 +446,44 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 mod tests {
     use super::*;
     use pumpkin_util::identifier::Identifier;
+
+    #[tokio::test]
+    async fn poi_storage_failure_is_distinct_from_successful_not_found() {
+        let fixture = crate::command::commands::data::tests::Fixture::new().await;
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let command = "locate poi minecraft:nether_portal";
+        let missing = dispatcher
+            .execute_input(command, &fixture.source)
+            .unwrap_err();
+        assert!(missing.is(&POI_NOT_FOUND_ERROR_TYPE));
+
+        let world = fixture.source.world();
+        let folder = &world.level.level_folder.poi_folder;
+        std::fs::create_dir_all(folder).unwrap();
+        let path = folder.join("r.0.0.mca");
+        let corrupt = b"unreadable POI region";
+        std::fs::write(&path, corrupt).unwrap();
+        *world.portal_poi.lock().unwrap() =
+            crate::world::portal::PortalPoiStorage::new(folder.clone());
+        let failed = dispatcher
+            .execute_input(command, &fixture.source)
+            .unwrap_err();
+        assert!(failed.is(&POI_STORAGE_ERROR_TYPE));
+        assert!(!failed.is(&POI_NOT_FOUND_ERROR_TYPE));
+        assert!(!world.portal_poi.is_poisoned());
+        assert_eq!(
+            world
+                .portal_poi
+                .lock()
+                .unwrap()
+                .save_all()
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), corrupt);
+    }
 
     fn resource(path: &'static str) -> ResourceOrTag {
         ResourceOrTag::Resource(Identifier::vanilla_static(path))

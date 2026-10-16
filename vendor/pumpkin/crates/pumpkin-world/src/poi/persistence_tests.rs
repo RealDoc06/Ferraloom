@@ -209,13 +209,15 @@ fn multiple_negative_pois_keep_sections_validity_types_and_tickets() {
     );
     let mut storage = PoiStorage::new(directory.path().to_owned());
     assert_eq!(
-        storage.get_in_square(BlockPos::new(-8, 0, -8), 16, Some("minecraft:fisherman")),
+        storage
+            .get_in_square(BlockPos::new(-8, 0, -8), 16, Some("minecraft:fisherman"))
+            .unwrap(),
         vec![BlockPos::new(-1, -17, -1)]
     );
     assert_eq!(storage.total_poi_count(), 5);
 
     // Removing the final record must persist an empty section, not resurrect it.
-    assert!(storage.remove(&BlockPos::new(-1, 1, -1)));
+    assert!(storage.remove(&BlockPos::new(-1, 1, -1)).unwrap());
     storage.save_all().unwrap();
     let root = read_mca_chunk(&path, 1023);
     assert!(
@@ -234,7 +236,9 @@ fn stopped_private_xyz_migrates_on_save_without_gameplay_edits() {
     write_mca(&path, &[(0, LEGACY_CHUNK)]);
     let mut storage = PoiStorage::new(directory.path().to_owned());
     assert_eq!(
-        storage.get_in_square(BlockPos::new(4098, 200, 3), 0, None),
+        storage
+            .get_in_square(BlockPos::new(4098, 200, 3), 0, None)
+            .unwrap(),
         vec![BlockPos::new(4098, 200, 3)]
     );
     assert!(storage.regions[&(8, 0)].is_dirty());
@@ -441,25 +445,55 @@ fn corrupt_region_refuses_mutation_but_healthy_region_still_saves() {
         std::fs::write(&path, &bytes).unwrap();
         let mut storage = PoiStorage::new(directory.path().to_owned());
         let healthy = BlockPos::new(1, 64, 1);
-        storage.add_portal(healthy);
+        storage.add_portal(healthy).unwrap();
         let error = PoiRegion::load(&path).unwrap_err();
-        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            storage.add_portal(BlockPos::new(4099, 200, 3));
-        }));
-        assert!(refused.is_err());
+        let failed_pos = BlockPos::new(4099, 200, 3);
+        assert_eq!(
+            storage.add_portal(failed_pos).unwrap_err().kind(),
+            error.kind()
+        );
+        assert_eq!(
+            storage
+                .add(failed_pos, "minecraft:home")
+                .unwrap_err()
+                .kind(),
+            error.kind()
+        );
+        assert_eq!(
+            storage
+                .add_with_free_tickets(failed_pos, "minecraft:home", 1)
+                .unwrap_err()
+                .kind(),
+            error.kind()
+        );
+        assert_eq!(
+            storage
+                .get_in_square(failed_pos, 0, None)
+                .unwrap_err()
+                .kind(),
+            error.kind()
+        );
+        assert_eq!(
+            storage
+                .find_closest_matching(failed_pos, 0, |_| true)
+                .unwrap_err()
+                .kind(),
+            error.kind()
+        );
         assert_eq!(storage.loaded_region_count(), 1);
         assert_eq!(storage.total_poi_count(), 1);
         // Even a later readable file must not silently clear the failure in
         // this storage instance; reopening is an explicit recovery boundary.
         write_mca(&path, &[(0, OFFICIAL_CHUNK)]);
-        assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                storage.remove(&BlockPos::new(4098, 200, 3));
-            }))
-            .is_err()
+        assert_eq!(
+            storage
+                .remove(&BlockPos::new(4098, 200, 3))
+                .unwrap_err()
+                .kind(),
+            error.kind()
         );
         std::fs::write(&path, &bytes).unwrap();
-        storage.add_portal(healthy);
+        storage.add_portal(healthy).unwrap();
         assert_eq!(storage.save_all().unwrap_err().kind(), error.kind());
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         let saved = PoiRegion::load(&directory.path().join("r.0.0.mca")).unwrap();
@@ -482,4 +516,27 @@ fn wrong_region_write_preserves_previous_mca_and_dirty_state() {
     );
     assert!(loaded.is_dirty());
     assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn save_all_persists_healthy_regions_when_another_region_cannot_encode() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut storage = PoiStorage::new(directory.path().to_owned());
+    let bad_pos = BlockPos::new(1, 64, 1);
+    let healthy_pos = BlockPos::new(513, 64, 1);
+    storage.add_portal(bad_pos).unwrap();
+    storage.save_all().unwrap();
+    let bad_path = directory.path().join("r.0.0.mca");
+    let previous = std::fs::read(&bad_path).unwrap();
+    storage.add(bad_pos, &"😀".repeat(10_923)).unwrap();
+    storage.add_portal(healthy_pos).unwrap();
+    assert_eq!(
+        storage.save_all().unwrap_err().kind(),
+        io::ErrorKind::InvalidData
+    );
+    assert_eq!(std::fs::read(&bad_path).unwrap(), previous);
+    assert!(storage.regions[&(0, 0)].is_dirty());
+    assert!(!storage.regions[&(1, 0)].is_dirty());
+    let healthy = PoiRegion::load(&directory.path().join("r.1.0.mca")).unwrap();
+    assert_eq!(healthy.get_all()[0].pos(), healthy_pos);
 }

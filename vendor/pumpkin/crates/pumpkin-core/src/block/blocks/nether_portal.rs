@@ -149,7 +149,9 @@ impl BlockBehaviour for NetherPortalBlock {
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        poi_storage.remove(args.position);
+        if let Err(error) = poi_storage.remove(args.position) {
+            tracing::error!(position = ?args.position, "Failed to remove replaced portal POI: {error}");
+        }
     }
 
     fn rotate(

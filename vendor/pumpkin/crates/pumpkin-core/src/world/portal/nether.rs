@@ -284,11 +284,14 @@ impl NetherPortal {
                 state,
                 BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
             );
-            world
+            if let Err(error) = world
                 .portal_poi
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .add_portal(pos);
+                .add_portal(pos)
+            {
+                tracing::error!("Failed to add POI after portal block write at {pos:?}: {error}");
+            }
         }
     }
 
@@ -495,7 +498,7 @@ impl NetherPortal {
     pub fn search_for_portal(
         world: &Arc<World>,
         target_pos: BlockPos,
-    ) -> Option<PortalSearchResult> {
+    ) -> std::io::Result<Option<PortalSearchResult>> {
         tracing::debug!(
             "Searching for portal in {:?} around {:?}",
             world.dimension.minecraft_name,
@@ -515,7 +518,11 @@ impl NetherPortal {
                 .portal_poi
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL))
+            poi_storage.get_in_square(
+                target_pos,
+                search_radius,
+                Some(poi::POI_TYPE_NETHER_PORTAL),
+            )?
         };
 
         let mut candidate_chunks: Vec<Vector2<i32>> = Vec::new();
@@ -577,13 +584,9 @@ impl NetherPortal {
                 let dist = f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
                 let y = portal.lower_conor.0.y;
 
-                let is_better = match &best {
-                    None => true,
-                    Some((_, best_dist, best_y)) => {
-                        dist < *best_dist
-                            || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
-                    }
-                };
+                let is_better = best.as_ref().is_none_or(|(_, best_dist, best_y)| {
+                    dist < *best_dist || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
+                });
 
                 if is_better {
                     best = Some((
@@ -600,7 +603,7 @@ impl NetherPortal {
             }
         }
 
-        best.map(|(result, _, _)| result)
+        Ok(best.map(|(result, _, _)| result))
     }
 
     #[allow(clippy::too_many_lines)]
@@ -846,11 +849,16 @@ impl NetherPortal {
                     portal_state,
                     BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
                 );
-                world
+                if let Err(error) = world
                     .portal_poi
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .add_portal(pos);
+                    .add_portal(pos)
+                {
+                    tracing::error!(
+                        "Failed to add POI after portal block write at {pos:?}: {error}"
+                    );
+                }
             }
         }
     }

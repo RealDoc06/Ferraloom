@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap;
+use std::collections::hash_map::Entry;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::info;
@@ -575,7 +576,7 @@ pub struct PoiStorage {
     /// Loaded regions, keyed by (`region_x`, `region_z`)
     regions: FxHashMap<(i32, i32), PoiRegion>,
     /// Failed regions stay unavailable until storage is reopened. Never retry
-    /// them as empty after a caught panic or a recovered poisoned mutex.
+    /// them as empty after a subsequent read or mutation request.
     load_errors: FxHashMap<(i32, i32), io::Error>,
 }
 
@@ -599,35 +600,37 @@ impl PoiStorage {
         self.folder.join(format!("r.{rx}.{rz}.mca"))
     }
 
-    #[allow(
-        clippy::panic,
-        reason = "The existing infallible API must not replace unreadable POIs with an empty writable region"
-    )]
-    fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
+    fn get_or_load_region(&mut self, rx: i32, rz: i32) -> io::Result<&mut PoiRegion> {
         if let Some(error) = self.load_errors.get(&(rx, rz)) {
-            panic!("{error}");
+            return Err(io::Error::new(error.kind(), error.to_string()));
         }
         let path = self.region_path(rx, rz);
-        let load_errors = &mut self.load_errors;
-        self.regions.entry((rx, rz)).or_insert_with(|| {
-            PoiRegion::load(&path).unwrap_or_else(|e| {
-                let message = format!(
-                    "Refusing to replace unreadable POI region {}: {e}",
-                    path.display()
-                );
-                load_errors.insert((rx, rz), io::Error::new(e.kind(), message.clone()));
-                panic!("{message}");
-            })
-        })
+        match self.regions.entry((rx, rz)) {
+            Entry::Occupied(entry) => Ok(entry.into_mut()),
+            Entry::Vacant(entry) => match PoiRegion::load(&path) {
+                Ok(region) => Ok(entry.insert(region)),
+                Err(error) => {
+                    let message = format!("Failed to load POI region {}: {error}", path.display());
+                    self.load_errors
+                        .insert((rx, rz), io::Error::new(error.kind(), message.clone()));
+                    Err(io::Error::new(error.kind(), message))
+                }
+            },
+        }
     }
 
-    pub fn add(&mut self, pos: BlockPos, poi_type: &str) {
-        self.add_with_free_tickets(pos, poi_type, 0);
+    pub fn add(&mut self, pos: BlockPos, poi_type: &str) -> io::Result<()> {
+        self.add_with_free_tickets(pos, poi_type, 0)
     }
 
-    pub fn add_with_free_tickets(&mut self, pos: BlockPos, poi_type: &str, free_tickets: i32) {
+    pub fn add_with_free_tickets(
+        &mut self,
+        pos: BlockPos,
+        poi_type: &str,
+        free_tickets: i32,
+    ) -> io::Result<()> {
         let (rx, rz) = Self::region_coords(&pos);
-        let region = self.get_or_load_region(rx, rz);
+        let region = self.get_or_load_region(rx, rz)?;
         region.add(PoiEntry {
             x: pos.0.x,
             y: pos.0.y,
@@ -635,16 +638,17 @@ impl PoiStorage {
             poi_type: poi_type.to_string(),
             free_tickets,
         });
+        Ok(())
     }
 
-    pub fn add_portal(&mut self, pos: BlockPos) {
-        self.add(pos, POI_TYPE_NETHER_PORTAL);
+    pub fn add_portal(&mut self, pos: BlockPos) -> io::Result<()> {
+        self.add(pos, POI_TYPE_NETHER_PORTAL)
     }
 
-    pub fn remove(&mut self, pos: &BlockPos) -> bool {
+    pub fn remove(&mut self, pos: &BlockPos) -> io::Result<bool> {
         let (rx, rz) = Self::region_coords(pos);
-        let region = self.get_or_load_region(rx, rz);
-        region.remove(pos)
+        let region = self.get_or_load_region(rx, rz)?;
+        Ok(region.remove(pos))
     }
 
     /// Get all POI positions within a square radius (for portal search)
@@ -654,7 +658,7 @@ impl PoiStorage {
         center: BlockPos,
         radius: i32,
         poi_type: Option<&str>,
-    ) -> Vec<BlockPos> {
+    ) -> io::Result<Vec<BlockPos>> {
         let min_x = center.0.x - radius;
         let max_x = center.0.x + radius;
         let min_z = center.0.z - radius;
@@ -670,7 +674,7 @@ impl PoiStorage {
 
         for rx in min_rx..=max_rx {
             for rz in min_rz..=max_rz {
-                let region = self.get_or_load_region(rx, rz);
+                let region = self.get_or_load_region(rx, rz)?;
                 for entry in region.get_all() {
                     if let Some(filter_type) = poi_type
                         && entry.poi_type != filter_type
@@ -687,7 +691,7 @@ impl PoiStorage {
             }
         }
 
-        results
+        Ok(results)
     }
 
     /// Finds the closest POI whose type matches `matches`, considering
@@ -701,7 +705,7 @@ impl PoiStorage {
         center: BlockPos,
         radius: i32,
         matches: impl Fn(&str) -> bool,
-    ) -> Option<(BlockPos, String)> {
+    ) -> io::Result<Option<(BlockPos, String)>> {
         let min_rx = ((center.0.x - radius) >> 4) >> 5;
         let max_rx = ((center.0.x + radius) >> 4) >> 5;
         let min_rz = ((center.0.z - radius) >> 4) >> 5;
@@ -711,7 +715,7 @@ impl PoiStorage {
 
         for rx in min_rx..=max_rx {
             for rz in min_rz..=max_rz {
-                let region = self.get_or_load_region(rx, rz);
+                let region = self.get_or_load_region(rx, rz)?;
                 for entry in region.get_all() {
                     if (entry.x - center.0.x).abs() > radius
                         || (entry.z - center.0.z).abs() > radius
@@ -732,18 +736,27 @@ impl PoiStorage {
             }
         }
 
-        best.map(|(pos, poi_type, _)| (pos, poi_type))
+        Ok(best.map(|(pos, poi_type, _)| (pos, poi_type)))
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.folder)?;
 
+        let mut failure = self
+            .load_errors
+            .values()
+            .next()
+            .map(|error| io::Error::new(error.kind(), error.to_string()));
         let mut saved = 0;
         for ((rx, rz), region) in &mut self.regions {
             if region.is_dirty() {
                 let path = self.folder.join(format!("r.{rx}.{rz}.mca"));
-                region.save(&path)?;
-                saved += 1;
+                match region.save(&path) {
+                    Ok(()) => saved += 1,
+                    Err(error) => {
+                        failure.get_or_insert(error);
+                    }
+                }
             }
         }
 
@@ -752,10 +765,7 @@ impl PoiStorage {
         }
         // Healthy loaded regions can persist, but the overall save must still
         // report a failed lazy load. No failed region was inserted into the map.
-        if let Some(error) = self.load_errors.values().next() {
-            return Err(io::Error::new(error.kind(), error.to_string()));
-        }
-        Ok(())
+        failure.map_or(Ok(()), Err)
     }
 
     /// Get count of loaded regions
@@ -832,13 +842,20 @@ mod tests {
     fn poi_find_closest_matching() {
         let mut storage = PoiStorage::new(std::env::temp_dir().join("pumpkin_poi_closest_test"));
 
-        storage.add_portal(BlockPos(Vector3::new(100, 64, 100)));
-        storage.add_portal(BlockPos(Vector3::new(120, 64, 100)));
-        storage.add(BlockPos(Vector3::new(101, 64, 100)), "minecraft:home");
+        storage
+            .add_portal(BlockPos(Vector3::new(100, 64, 100)))
+            .unwrap();
+        storage
+            .add_portal(BlockPos(Vector3::new(120, 64, 100)))
+            .unwrap();
+        storage
+            .add(BlockPos(Vector3::new(101, 64, 100)), "minecraft:home")
+            .unwrap();
 
         let center = BlockPos(Vector3::new(105, 64, 100));
         let (pos, poi_type) = storage
             .find_closest_matching(center, 256, |t| t == POI_TYPE_NETHER_PORTAL)
+            .unwrap()
             .unwrap();
         assert_eq!(pos, BlockPos(Vector3::new(100, 64, 100)));
         assert_eq!(poi_type, POI_TYPE_NETHER_PORTAL);
@@ -846,6 +863,7 @@ mod tests {
         // The overall closest one ignores the type filter mismatch above.
         let (pos, poi_type) = storage
             .find_closest_matching(center, 256, |_| true)
+            .unwrap()
             .unwrap();
         assert_eq!(pos, BlockPos(Vector3::new(101, 64, 100)));
         assert_eq!(poi_type, "minecraft:home");
@@ -853,12 +871,14 @@ mod tests {
         assert!(
             storage
                 .find_closest_matching(center, 256, |t| t == "minecraft:lodestone")
+                .unwrap()
                 .is_none()
         );
         // Out of horizontal range.
         assert!(
             storage
                 .find_closest_matching(BlockPos(Vector3::new(1000, 64, 100)), 16, |_| true)
+                .unwrap()
                 .is_none()
         );
     }
@@ -870,15 +890,23 @@ mod tests {
 
         let mut storage = PoiStorage::new(dir.join("poi"));
 
-        storage.add_portal(BlockPos(Vector3::new(100, 64, 100)));
-        storage.add_portal(BlockPos(Vector3::new(110, 64, 100)));
-        storage.add_portal(BlockPos(Vector3::new(1000, 64, 1000))); // Different region
+        storage
+            .add_portal(BlockPos(Vector3::new(100, 64, 100)))
+            .unwrap();
+        storage
+            .add_portal(BlockPos(Vector3::new(110, 64, 100)))
+            .unwrap();
+        storage
+            .add_portal(BlockPos(Vector3::new(1000, 64, 1000)))
+            .unwrap(); // Different region
 
-        let results = storage.get_in_square(
-            BlockPos(Vector3::new(105, 64, 100)),
-            16,
-            Some(POI_TYPE_NETHER_PORTAL),
-        );
+        let results = storage
+            .get_in_square(
+                BlockPos(Vector3::new(105, 64, 100)),
+                16,
+                Some(POI_TYPE_NETHER_PORTAL),
+            )
+            .unwrap();
         assert_eq!(results.len(), 2);
 
         storage.save_all().unwrap();
@@ -889,11 +917,13 @@ mod tests {
 
         // Reload and verify
         let mut storage2 = PoiStorage::new(dir.join("poi"));
-        let results2 = storage2.get_in_square(
-            BlockPos(Vector3::new(105, 64, 100)),
-            16,
-            Some(POI_TYPE_NETHER_PORTAL),
-        );
+        let results2 = storage2
+            .get_in_square(
+                BlockPos(Vector3::new(105, 64, 100)),
+                16,
+                Some(POI_TYPE_NETHER_PORTAL),
+            )
+            .unwrap();
         assert_eq!(results2.len(), 2);
 
         let _ = std::fs::remove_dir_all(&dir);
