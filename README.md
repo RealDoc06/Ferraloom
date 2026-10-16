@@ -58,6 +58,8 @@ cargo fmt --all -- --check
 cargo fmt --manifest-path vendor/pumpkin/Cargo.toml --all -- --check
 cargo test --locked
 cargo test --locked -p pumpkin-command --lib
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-data --lib --target-dir target
+cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-protocol --lib --tests --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-world --lib --target-dir target
 cargo test --manifest-path vendor/pumpkin/Cargo.toml --locked -p pumpkin-core --lib --target-dir target -- --test-threads=2
 cargo clippy --locked --all-targets -- -D warnings
