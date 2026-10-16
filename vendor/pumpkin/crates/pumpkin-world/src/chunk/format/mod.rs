@@ -8,8 +8,9 @@ use std::{
 };
 
 use bytes::Bytes;
-use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid, item_stack::ItemStack};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
 
@@ -33,6 +34,63 @@ use super::{
 pub mod anvil;
 pub mod linear;
 pub mod pump;
+
+/// Refuse saved inventories that the infallible container reader would reduce.
+/// This is admission protection, not support for unmodeled item components.
+fn validate_saved_container_items(
+    nbt: &NbtCompound,
+    position: BlockPos,
+) -> Result<(), ChunkParsingError> {
+    let block_entity = match nbt.get_string("id") {
+        Some("minecraft:chest") => "minecraft:chest",
+        Some("minecraft:trapped_chest") => "minecraft:trapped_chest",
+        Some("minecraft:barrel") => "minecraft:barrel",
+        _ => return Ok(()),
+    };
+    // Match read_chest_nbt: a parsed deferred loot table bypasses Items entirely.
+    if nbt
+        .get_string("LootTable")
+        .and_then(|key| Identifier::parse(key).ok())
+        .is_some()
+    {
+        return Ok(());
+    }
+    let refusal = |slot, reason| ChunkParsingError::UnsupportedContainerItem {
+        block_entity,
+        position,
+        slot,
+        reason,
+    };
+    let Some(items) = nbt.get("Items") else {
+        return Ok(());
+    };
+    let NbtTag::List(items) = items else {
+        return Err(refusal(None, "Items is not a list"));
+    };
+    let mut occupied = [false; 27];
+    for item in items {
+        let NbtTag::Compound(item) = item else {
+            return Err(refusal(None, "Items entry is not a compound"));
+        };
+        let Some(slot) = item.get_byte("Slot").map(|slot| slot as u8) else {
+            return Err(refusal(None, "Items entry has no byte Slot"));
+        };
+        let Some(used) = occupied.get_mut(usize::from(slot)) else {
+            return Err(refusal(Some(slot), "Slot is outside the 27-slot inventory"));
+        };
+        if *used {
+            return Err(refusal(Some(slot), "Slot occurs more than once"));
+        }
+        *used = true;
+        if ItemStack::read_item_stack(item).is_none() {
+            return Err(refusal(
+                Some(slot),
+                "ItemStack decoder rejected the saved item",
+            ));
+        }
+    }
+    Ok(())
+}
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
@@ -424,7 +482,11 @@ impl ChunkData {
                     && let Some(y) = nbt.get_int("y")
                     && let Some(z) = nbt.get_int("z")
                 {
-                    block_entities.insert(BlockPos::new(x, y, z), nbt.clone());
+                    let position = BlockPos::new(x, y, z);
+                    // Core migration immediately republishes live inventories;
+                    // refuse before any ChunkData can reach that consumer.
+                    validate_saved_container_items(nbt, position)?;
+                    block_entities.insert(position, nbt.clone());
                 }
             }
         }
@@ -1026,6 +1088,147 @@ mod tests {
     use pumpkin_data::Block;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
+
+    fn parse_saved_container(mut container: NbtCompound) -> Result<ChunkData, ChunkReadingError> {
+        let position = BlockPos::new(1, 64, 2);
+        container.put_int("x", position.0.x);
+        container.put_int("y", position.0.y);
+        container.put_int("z", position.0.z);
+        let source = ChunkData::empty_sync(0, 0);
+        source
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(position, container);
+        ChunkData::from_bytes(&source.to_bytes().unwrap(), Vector2::new(0, 0))
+    }
+
+    #[test]
+    fn saved_containers_refuse_undecodable_effects_before_admission() {
+        let mut effect = NbtCompound::new();
+        effect.put_string("id", "minecraft:speed".into());
+        effect.put_int("duration", 1200);
+        let mut hidden = NbtCompound::new();
+        hidden.put_int("duration", 2400);
+        // hidden_effect has a Java Details representation. The other cases are
+        // unsupported or malformed decoder inputs, not claims of Java validity.
+        let variants = [
+            ("hidden_effect", NbtTag::Compound(hidden)),
+            ("unmodeled_detail", NbtTag::String("private-marker".into())),
+            ("ambient", NbtTag::Byte(2)),
+            ("amplifier", NbtTag::Int(256)),
+            ("amplifier", NbtTag::Int(-1)),
+        ];
+        for id in [
+            "minecraft:chest",
+            "minecraft:barrel",
+            "minecraft:trapped_chest",
+        ] {
+            for item_id in ["minecraft:potion", "minecraft:tipped_arrow"] {
+                for (key, value) in &variants {
+                    let mut rejected = effect.clone();
+                    rejected.put(key, value.clone());
+                    let mut potion = NbtCompound::new();
+                    potion.put_list(
+                        "custom_effects",
+                        vec![NbtTag::Compound(effect.clone()), NbtTag::Compound(rejected)],
+                    );
+                    let mut components = NbtCompound::new();
+                    components.put_compound("minecraft:potion_contents", potion);
+                    let mut item = NbtCompound::new();
+                    item.put_string("id", item_id.into());
+                    item.put_byte("Slot", 4);
+                    item.put_int("count", 1);
+                    item.put_compound("components", components);
+                    assert!(ItemStack::read_item_stack(&item).is_none());
+
+                    let mut supported = NbtCompound::new();
+                    supported.put_string("id", "minecraft:apple".into());
+                    supported.put_byte("Slot", 0);
+                    let mut container = NbtCompound::new();
+                    container.put_string("id", id.into());
+                    container.put_list(
+                        "Items",
+                        vec![NbtTag::Compound(supported), NbtTag::Compound(item)],
+                    );
+                    let error = match parse_saved_container(container) {
+                        Err(error) => error,
+                        Ok(_) => panic!("a rejected stack must refuse the entire saved chunk"),
+                    };
+                    let message = error.to_string();
+                    assert!(message.contains(id));
+                    assert!(!message.contains("private-marker"));
+                    assert!(matches!(error, ChunkReadingError::ParsingError(
+                        ChunkParsingError::UnsupportedContainerItem {
+                            block_entity, position, slot: Some(4),
+                            reason: "ItemStack decoder rejected the saved item",
+                        }
+                    ) if block_entity == id && position == BlockPos::new(1, 64, 2)));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn saved_container_admission_respects_loot_gate_and_rejects_malformed_slots() {
+        let mut item = NbtCompound::new();
+        item.put_string("id", "minecraft:apple".into());
+        item.put_byte("Slot", 0);
+        let mut no_slot = item.clone();
+        no_slot.child_tags.remove("Slot");
+        let mut out_of_bounds = item.clone();
+        out_of_bounds.put_byte("Slot", 27);
+        let mut negative = item.clone();
+        negative.put_byte("Slot", -1);
+        let malformed = [
+            NbtTag::Int(7),
+            NbtTag::List(vec![NbtTag::Byte(1)]),
+            NbtTag::List(vec![NbtTag::Compound(no_slot)]),
+            NbtTag::List(vec![NbtTag::Compound(out_of_bounds)]),
+            NbtTag::List(vec![NbtTag::Compound(negative)]),
+            NbtTag::List(vec![
+                NbtTag::Compound(item.clone()),
+                NbtTag::Compound(item.clone()),
+            ]),
+        ];
+        for id in [
+            "minecraft:chest",
+            "minecraft:barrel",
+            "minecraft:trapped_chest",
+        ] {
+            let mut container = NbtCompound::new();
+            container.put_string("id", id.into());
+            assert!(parse_saved_container(container.clone()).is_ok());
+            for items in [vec![], vec![NbtTag::Compound(item.clone())]] {
+                container.put_list("Items", items);
+                assert!(parse_saved_container(container.clone()).is_ok());
+            }
+            for items in &malformed {
+                container.put("Items", items.clone());
+                container.put_string("LootTable", "INVALID KEY".into());
+                assert!(matches!(
+                    parse_saved_container(container.clone()),
+                    Err(ChunkReadingError::ParsingError(
+                        ChunkParsingError::UnsupportedContainerItem { .. }
+                    ))
+                ));
+                for loot in ["chests/simple_dungeon", "minecraft:chests/simple_dungeon"] {
+                    container.put_string("LootTable", loot.into());
+                    let admitted = parse_saved_container(container.clone()).unwrap();
+                    assert_eq!(
+                        admitted.pending_block_entities.lock().unwrap()[&BlockPos::new(1, 64, 2)]
+                            .get("Items"),
+                        Some(items),
+                    );
+                }
+            }
+        }
+        // This guard does not change admission policy for other inventories.
+        let mut hopper = NbtCompound::new();
+        hopper.put_string("id", "minecraft:hopper".into());
+        hopper.put("Items", NbtTag::Int(7));
+        assert!(parse_saved_container(hopper).is_ok());
+    }
 
     async fn cached_chunk_data<S>(region: &S) -> NbtCompound
     where

@@ -1202,9 +1202,152 @@ impl Level {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chunk::{format::anvil::SingleChunkDataSerializer, io::ChunkSerializer};
     use pumpkin_config::world::LevelConfig;
-    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn refused_container_region_survives_read_flush_and_shutdown_without_publication() {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let position = Vector2::new(0, 0);
+        let block_pos = BlockPos::new(1, 64, 2);
+        let source = ChunkData::empty_sync(0, 0);
+        source.set_block_absolute_y(1, 64, 2, Block::CHEST.default_state.id);
+        let mut hidden = NbtCompound::new();
+        hidden.put_int("duration", 2400);
+        let mut effect = NbtCompound::new();
+        effect.put_string("id", "minecraft:speed".into());
+        effect.put_int("duration", 1200);
+        effect.put_compound("hidden_effect", hidden);
+        let mut potion = NbtCompound::new();
+        potion.put_list("custom_effects", vec![NbtTag::Compound(effect)]);
+        let mut components = NbtCompound::new();
+        components.put_compound("minecraft:potion_contents", potion);
+        let mut item = NbtCompound::new();
+        item.put_string("id", "minecraft:potion".into());
+        item.put_byte("Slot", 6);
+        item.put_int("count", 1);
+        item.put_compound("components", components);
+        let mut container = NbtCompound::new();
+        container.put_string("id", "minecraft:chest".into());
+        container.put_int("x", block_pos.0.x);
+        container.put_int("y", block_pos.0.y);
+        container.put_int("z", block_pos.0.z);
+        container.put_string("preservation_marker", "private-source-marker".into());
+        container.put_list("Items", vec![NbtTag::Compound(item)]);
+        source
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(block_pos, container.clone());
+        let source_nbt = source.to_bytes().unwrap();
+
+        // Seed actual region bytes without invoking the guarded reader. The
+        // Level must subsequently use its own file cache, IO worker and scheduler.
+        let path = level.level_folder.region_folder.join("r.0.0.mca");
+        let mut region = AnvilChunkFile::<ChunkData>::default();
+        region
+            .update_chunk(source.clone(), &Default::default())
+            .await
+            .unwrap();
+        region.write(&path).await.unwrap();
+        drop(region);
+        let before = std::fs::read(&path).unwrap();
+        let mut published = level.chunk_listener.add_single_chunk_listener(position);
+        {
+            let mut loading = level.chunk_loading.lock().unwrap();
+            // The weakest ticket requests only this chunk, without a Full halo.
+            loading.add_ticket(position, ChunkLoading::MAX_LEVEL - 1);
+            loading.send_change();
+        }
+        let failure = timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(failure) = level.fatal_save_failure.lock().unwrap().clone() {
+                    break failure;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await;
+        let failure = match failure {
+            Ok(failure) => failure,
+            Err(error) => {
+                let _ = level.shutdown().await;
+                panic!("saved container read must report a fatal refusal: {error}");
+            }
+        };
+
+        // Existing policy still completes independently attempted healthy writes.
+        // Use another region so the refused source region can be compared whole.
+        let healthy_pos = Vector2::new(32, 0);
+        let healthy = ChunkData::empty_sync(32, 0);
+        healthy.set_block_absolute_y(3, 64, 4, Block::DIAMOND_BLOCK.default_state.id);
+        healthy.mark_dirty(true);
+        level
+            .chunk_saver
+            .watch_chunks(&level.level_folder, &[healthy_pos])
+            .await;
+        level
+            .chunk_saver
+            .save_chunks(&level.level_folder, vec![(healthy_pos, healthy)])
+            .await
+            .unwrap();
+        let flushed = level.save_and_flush().await;
+        let after_flush = std::fs::read(&path).unwrap();
+        let healthy_path = level.level_folder.region_folder.join("r.1.0.mca");
+        let healthy_after_flush = std::fs::read(&healthy_path);
+        let unavailable_after_flush = !level.loaded_chunks.contains_key(&position);
+        let shutdown = level.shutdown().await;
+
+        assert!(failure.contains("minecraft:chest"));
+        assert!(failure.contains("slot Some(6)"));
+        assert!(!failure.contains("private-source-marker"));
+        assert_eq!(flushed, Err(failure.clone()));
+        assert_eq!(shutdown, Err(failure));
+        assert!(unavailable_after_flush);
+        assert!(!level.loaded_chunks.contains_key(&position));
+        assert!(matches!(
+            published.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        // Core receives no admitted chunk to materialize, migrate or republish.
+        assert!(
+            !level
+                .loaded_chunk_changes()
+                .any(|change| change == LoadedChunkChange::Loaded(position))
+        );
+        assert_eq!(after_flush, before);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(
+            std::fs::read(&healthy_path).unwrap(),
+            healthy_after_flush.unwrap()
+        );
+        assert_eq!(source.to_bytes().unwrap(), source_nbt);
+        assert_eq!(
+            source.pending_block_entities.lock().unwrap()[&block_pos],
+            container
+        );
+
+        let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(Default::default());
+        let (send, mut receive) = mpsc::channel(1);
+        reader
+            .fetch_chunks(&level.level_folder, &[healthy_pos], send)
+            .await;
+        let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+            panic!("independent healthy writes must survive the refused flush and shutdown");
+        };
+        assert_eq!(
+            saved.section.get_block_absolute_y(3, 64, 4),
+            Some(Block::DIAMOND_BLOCK.default_state.id)
+        );
+    }
 
     fn entity_chunk(position: Vector2<i32>, marker: i32) -> SyncEntityChunk {
         let mut entity = NbtCompound::new();

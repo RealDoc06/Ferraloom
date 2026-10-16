@@ -978,6 +978,13 @@ pub enum ChunkParsingError {
     ChunkNotGenerated,
     #[error("Error deserializing chunk: {0}")]
     ErrorDeserializingChunk(String),
+    #[error("Cannot load {block_entity} at {position}, slot {slot:?}: {reason}")]
+    UnsupportedContainerItem {
+        block_entity: &'static str,
+        position: BlockPos,
+        slot: Option<u8>,
+        reason: &'static str,
+    },
 }
 
 #[derive(Error, Debug)]

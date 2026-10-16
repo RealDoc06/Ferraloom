@@ -14,7 +14,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId,
     block_properties::{
         BarrelLikeProperties, ChestLikeProperties, ChestType, ComparatorLikeProperties, Facing,
-        HorizontalFacing,
+        FacingHopper, HopperLikeProperties, HorizontalFacing,
     },
     dimension::Dimension,
     item::Item,
@@ -52,13 +52,13 @@ use crate::{
         },
         entities::{
             BlockEntity, barrel::BarrelBlockEntity, comparator::ComparatorBlockEntity,
-            trapped_chest::TrappedChestBlockEntity,
+            hopper::HopperBlockEntity, trapped_chest::TrappedChestBlockEntity,
         },
         registry::default_registry,
     },
     command::{CommandSource, commands::default_dispatcher, node::dispatcher::CommandDispatcher},
     entity::player::Player,
-    world::{World, loot::fill_chest_inventory_handle},
+    world::{BlockFlags, World, loot::fill_chest_inventory_handle},
 };
 
 const BLOCK_POS: BlockPos = BlockPos::new(0, 64, 0);
@@ -466,6 +466,166 @@ impl InventoryPlayer for MenuPlayer {
     ) {
     }
     fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+}
+
+#[tokio::test]
+async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload() {
+    for kind in CONTAINERS {
+        let fixture = Fixture::new().await;
+        let world = fixture.source.world();
+        // A normal named potion and authored, modeled custom effects. Hidden
+        // details and unknown wire payloads are deliberately outside this control.
+        let mut nbt = compound(
+            "{Items:[\
+            {Slot:0b,id:'minecraft:potion',count:1,components:{'minecraft:potion_contents':{potion:'minecraft:swiftness'}}},\
+            {Slot:1b,id:'minecraft:tipped_arrow',count:3,components:{'minecraft:potion_contents':{potion:'minecraft:swiftness',custom_color:12345,custom_effects:[{id:'minecraft:speed',amplifier:1b,duration:400,ambient:0b,show_particles:1b,show_icon:1b}]},'minecraft:custom_data':{marker:17}}},\
+            {Slot:2b,id:'minecraft:potion',count:1,components:{'minecraft:potion_contents':{custom_effects:[{id:'minecraft:strength',duration:200}]}}}\
+        ]}",
+        );
+        nbt.put_string(
+            "id",
+            match kind {
+                ChestKind::Normal => ChestBlockEntity::ID,
+                ChestKind::Trapped => TrappedChestBlockEntity::ID,
+                ChestKind::Barrel => BarrelBlockEntity::ID,
+            }
+            .into(),
+        );
+        nbt.put_int("x", BLOCK_POS.0.x);
+        nbt.put_int("y", BLOCK_POS.0.y);
+        nbt.put_int("z", BLOCK_POS.0.z);
+        let expected: Vec<_> = nbt
+            .get_list("Items")
+            .unwrap()
+            .iter()
+            .map(|tag| ItemStack::read_item_stack(tag.extract_compound().unwrap()).unwrap())
+            .collect();
+        fixture.set_state(BLOCK_POS, kind.block().default_state.id);
+        world
+            .level
+            .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .insert(BLOCK_POS, nbt);
+            })
+            .unwrap();
+        // Admit actual saved bytes before the normal lazy constructor and its
+        // first published snapshot. No direct from_nbt shortcut for these items.
+        let container = fixture.reload_saved_chunk(BLOCK_POS);
+        world.update_block_entity(&container);
+        let player = MenuPlayer::new();
+        let menu = kind
+            .factory(&world, &BLOCK_POS)
+            .create_screen_handler(1, &player.0, &player)
+            .unwrap();
+        {
+            let mut menu = menu.lock().unwrap();
+            for (slot, expected) in expected.iter().enumerate() {
+                assert!(
+                    menu.get_behaviour().slots[slot]
+                        .get_stack()
+                        .are_equal(expected)
+                );
+            }
+            menu.on_closed(&player);
+        }
+
+        let hopper_pos = BLOCK_POS.down();
+        let hopper: Arc<dyn BlockEntity> =
+            Arc::new(HopperBlockEntity::new(hopper_pos, FacingHopper::Down));
+        fixture.install(&Block::HOPPER, hopper.clone());
+        let mut properties = HopperLikeProperties::from_state_id(Block::HOPPER.default_state.id);
+        properties.enabled = true;
+        properties.facing = FacingHopper::Down;
+        fixture.set_state(hopper_pos, properties.to_state_id(&Block::HOPPER));
+        hopper.tick(&world);
+        assert!(
+            hopper
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .are_equal(&expected[0])
+        );
+        assert!(
+            container
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .is_empty()
+        );
+        world.update_block_entity(&container);
+        world.update_block_entity(&hopper);
+        let reloaded = fixture.reload_saved_chunk(BLOCK_POS);
+        let inventory = reloaded.get_inventory().unwrap();
+        assert!(inventory.get_stack(0).is_empty());
+        for (slot, expected) in expected.iter().enumerate().skip(1) {
+            assert!(inventory.get_stack(slot).are_equal(expected));
+        }
+        let reloaded_hopper = world.get_block_entity(&hopper_pos).unwrap();
+        assert!(
+            reloaded_hopper
+                .clone()
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .are_equal(&expected[0])
+        );
+
+        // Actual replacement scatters the remaining inventory. Retire spawned
+        // entities after collecting stacks so the fixture holds no World cycle.
+        world.set_block_state(
+            &BLOCK_POS,
+            Block::AIR.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        let spawned = world.entities.load_full();
+        let dropped: Vec<_> = spawned
+            .iter()
+            .map(|entity| {
+                entity
+                    .get_item_entity()
+                    .unwrap()
+                    .get_item_stack()
+                    .lock()
+                    .unwrap()
+                    .clone()
+            })
+            .collect();
+        for entity in spawned.iter() {
+            world.remove_entity(entity.as_ref());
+        }
+        drop(spawned);
+        assert_eq!(dropped.len(), 2);
+        for expected in &expected[1..] {
+            assert!(dropped.iter().any(|stack| stack.are_equal(expected)));
+        }
+        world.update_block_entity(&reloaded_hopper);
+        let final_hopper = fixture.reload_saved_chunk(hopper_pos);
+        assert!(
+            final_hopper
+                .get_inventory()
+                .unwrap()
+                .get_stack(0)
+                .are_equal(&expected[0])
+        );
+        assert!(world.get_block_entity(&BLOCK_POS).is_none());
+        assert!(
+            world
+                .level
+                .read_chunk_sync(&BLOCK_POS.chunk_position(), |chunk| {
+                    !chunk
+                        .pending_block_entities
+                        .lock()
+                        .unwrap()
+                        .contains_key(&BLOCK_POS)
+                })
+                .unwrap()
+        );
+    }
 }
 
 #[tokio::test]
