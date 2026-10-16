@@ -19,8 +19,12 @@ use crate::{
 use futures::future::BoxFuture;
 use pumpkin_data::{
     Block,
+    advancement::Advancement,
     data_component::DataComponent,
-    data_component_impl::{CustomDataImpl, UseCooldownImpl},
+    data_component_impl::{
+        ConsumableImpl, ConsumeEffect, CustomDataImpl, FoodImpl, StatusEffectInstance,
+        UseCooldownImpl,
+    },
     item_stack::ItemStack,
     packet::CURRENT_MC_VERSION,
     sound::Sound,
@@ -41,6 +45,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
 use std::{
+    borrow::Cow,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -434,6 +439,260 @@ async fn builtin_horns_use_actual_hand_and_gate_all_effects_on_success() {
             );
         }
     }
+    drop(reader);
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Follow real Player/LivingEntity ticks through horn expiry and a food positive control."
+)]
+async fn horn_expiry_ticks_preserve_both_hands_and_original_cooldown() {
+    let mut fixture = player_fixture().await;
+    stop_chunk_workers(&fixture).await;
+    let player = fixture.player.clone();
+    let server = fixture.server.clone();
+    player.get_entity().set_pos(Vector3::new(0.5, 65.0, 0.5));
+    player.set_client_loaded(true);
+    fixture
+        .client
+        .java()
+        .unwrap()
+        .version
+        .store(CURRENT_MC_VERSION);
+    player.world().level_info.rcu(|current| {
+        let mut info = (**current).clone();
+        info.game_rules.natural_health_regeneration = false;
+        info
+    });
+    player.hunger_manager.level.store(10);
+    player.hunger_manager.saturation.store(0.0);
+    let events = Arc::new(UseEvents::default());
+    server.plugin_manager.register::<GenericGameEvent, _>(
+        events.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let used = || player.get_stat(StatisticCategory::Used, i32::from(Item::GOAT_HORN.id));
+    let (remote, _write) = fixture._remote.split();
+    let mut reader = TCPNetworkDecoder::new(remote);
+    observe(&mut reader, &player).await;
+
+    // A deterministic consume effect makes accidental consumption observable,
+    // independently of stack decrement. The apple below validates this observer.
+    let apple = ItemStack::new(2, &Item::APPLE);
+    let food = apple.get_data_component::<FoodImpl>().unwrap().clone();
+    let mut consumable = apple
+        .get_data_component::<ConsumableImpl>()
+        .unwrap()
+        .clone();
+    consumable.effects = Cow::Owned(vec![ConsumeEffect::ApplyEffects((
+        Cow::Owned(vec![StatusEffectInstance {
+            effect_id: Cow::Borrowed("minecraft:speed"),
+            amplifier: 0,
+            duration: 200,
+            ambient: false,
+            show_particles: false,
+            show_icon: false,
+        }]),
+        1.0,
+    ))]);
+
+    for hand in [Hand::Right, Hand::Left] {
+        for explicit_cooldown in [false, true] {
+            let group = if explicit_cooldown {
+                "test:expiry_horns"
+            } else {
+                "minecraft:goat_horn"
+            };
+            let mut horn = ItemStack::new(1, &Item::GOAT_HORN);
+            horn.set_data_component(InstrumentImpl {
+                instrument: Instrument::SingGoatHorn,
+            });
+            if explicit_cooldown {
+                // 600 generic ticks must never replace the instrument's 140.
+                horn.set_data_component(UseCooldownImpl::new(30.0, Some(group.into())));
+                horn.set_data_component(food.clone());
+                horn.set_data_component(consumable.clone());
+            }
+            // Equal stacks catch the old completion branch consuming the main
+            // hand even when the off hand was active.
+            for held_hand in [Hand::Right, Hand::Left] {
+                player
+                    .inventory()
+                    .set_stack_in_hand(held_hand, horn.clone());
+            }
+            observe(&mut reader, &player).await;
+
+            // The second use must succeed solely because the first real use
+            // expired. Neither timer nor active-hand state is advanced manually.
+            for _ in 0..2 {
+                let before = used();
+                let event_count = events.instrument_events.load(Ordering::Relaxed);
+                let started = player.tick_counter.load(Ordering::Relaxed);
+                use_packet(&player, &server, hand);
+                assert_eq!(used(), before + 1);
+                assert_eq!(
+                    *player.living_entity.active_hand.lock().unwrap(),
+                    Some(hand)
+                );
+                assert_eq!(
+                    player.living_entity.item_use_time.load(Ordering::Relaxed),
+                    140
+                );
+                assert_effect_packets(
+                    &observe(&mut reader, &player).await,
+                    Sound::ItemGoatHornSound1,
+                    group,
+                );
+
+                for elapsed in 1..=140 {
+                    if elapsed == 140 {
+                        // This decrement follows expiry in LivingEntity::tick.
+                        // A whole-tick early return would leave it at two.
+                        player
+                            .living_entity
+                            .hurt_cooldown
+                            .store(2, Ordering::Relaxed);
+                    }
+                    player.tick(&server);
+                    assert_eq!(
+                        player.tick_counter.load(Ordering::Relaxed),
+                        started + elapsed
+                    );
+                    assert_eq!(
+                        player.living_entity.item_use_time.load(Ordering::Relaxed),
+                        140 - elapsed
+                    );
+                    assert_eq!(
+                        *player.living_entity.active_hand.lock().unwrap(),
+                        (elapsed < 140).then_some(hand)
+                    );
+                    {
+                        let active = player.living_entity.item_in_use.lock().unwrap();
+                        if elapsed < 140 {
+                            assert!(active.as_ref().unwrap().are_equal(&horn));
+                        } else {
+                            assert!(active.is_none());
+                        }
+                    }
+                    for held_hand in [Hand::Right, Hand::Left] {
+                        assert!(
+                            player
+                                .inventory()
+                                .get_stack_in_hand(held_hand)
+                                .are_equal(&horn)
+                        );
+                    }
+                    {
+                        let cooldowns = player.item_cooldowns.lock().unwrap();
+                        let cooldown = cooldowns.get(group).unwrap();
+                        assert_eq!(cooldown.start_tick, started);
+                        assert_eq!(cooldown.duration, 140);
+                    }
+                    assert_eq!(used(), before + 1);
+                    assert_eq!(
+                        events.instrument_events.load(Ordering::Relaxed),
+                        event_count + 1
+                    );
+                    assert!(!player.has_advancement(Advancement::HUSBANDRY_ROOT));
+                    assert_eq!(player.hunger_manager.level.load(), 10);
+                    assert_eq!(player.hunger_manager.saturation.load(), 0.0);
+                    assert!(
+                        player
+                            .living_entity
+                            .active_effects
+                            .lock()
+                            .unwrap()
+                            .is_empty()
+                    );
+                    if elapsed == 139 {
+                        assert!(player.is_on_cooldown(group));
+                        use_packet(&player, &server, hand);
+                        assert_eq!(used(), before + 1);
+                        assert_eq!(
+                            player.living_entity.item_use_time.load(Ordering::Relaxed),
+                            1
+                        );
+                    }
+                    // Drain each production tick, including the expiry tick,
+                    // so unrelated inventory updates cannot fill the queue.
+                    assert_no_effect_packets(&observe(&mut reader, &player).await);
+                }
+                assert_eq!(
+                    player.living_entity.hurt_cooldown.load(Ordering::Relaxed),
+                    1
+                );
+                assert!(!player.is_on_cooldown(group));
+            }
+        }
+    }
+
+    // The same production expiry path still consumes non-horns, applies their
+    // food/effect payload, and grants the ConsumeItem advancement.
+    let before_food = used();
+    let mut apple = apple;
+    apple.set_data_component(consumable);
+    player
+        .inventory()
+        .set_stack_in_hand(Hand::Left, apple.clone());
+    use_packet(&player, &server, Hand::Left);
+    assert_eq!(
+        player.living_entity.item_use_time.load(Ordering::Relaxed),
+        32
+    );
+    assert_eq!(
+        *player.living_entity.active_hand.lock().unwrap(),
+        Some(Hand::Left)
+    );
+    observe(&mut reader, &player).await;
+    for elapsed in 1..=32 {
+        player.tick(&server);
+        if elapsed < 32 {
+            assert!(
+                player
+                    .inventory()
+                    .get_stack_in_hand(Hand::Left)
+                    .are_equal(&apple)
+            );
+            assert!(!player.has_advancement(Advancement::HUSBANDRY_ROOT));
+            assert!(
+                player
+                    .living_entity
+                    .active_effects
+                    .lock()
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        observe(&mut reader, &player).await;
+    }
+    apple.decrement(1);
+    assert!(
+        player
+            .inventory()
+            .get_stack_in_hand(Hand::Left)
+            .are_equal(&apple)
+    );
+    assert_eq!(player.hunger_manager.level.load(), 14);
+    assert_eq!(player.hunger_manager.saturation.load(), 2.4);
+    assert!(player.has_advancement(Advancement::HUSBANDRY_ROOT));
+    assert!(
+        player
+            .living_entity
+            .active_effects
+            .lock()
+            .unwrap()
+            .contains_key(&pumpkin_data::effect::StatusEffect::SPEED)
+    );
+    assert_eq!(*player.living_entity.active_hand.lock().unwrap(), None);
+    assert!(player.living_entity.item_in_use.lock().unwrap().is_none());
+    assert_eq!(
+        player.living_entity.item_use_time.load(Ordering::Relaxed),
+        0
+    );
+    assert_eq!(used(), before_food);
     drop(reader);
     close_fixture(&fixture).await;
 }

@@ -3455,7 +3455,14 @@ impl EntityBase for LivingEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            if let Some(item) = item_in_use.as_ref() {
+            if item_in_use
+                .as_ref()
+                .is_some_and(|item| item.item.id == Item::GOAT_HORN.id)
+            {
+                // Finishing a toot only stops use. The horn already awarded its
+                // statistic and started its cooldown when use began.
+                self.clear_active_hand();
+            } else if let Some(item) = item_in_use.as_ref() {
                 // Consume item
                 let mut is_potion = false;
                 if let Some(food) = item.get_data_component::<FoodImpl>()
