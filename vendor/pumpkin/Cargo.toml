@@ -6,6 +6,7 @@ members = [
     "crates/pumpkin-command",
     "crates/pumpkin-data",
     "crates/pumpkin-protocol",
+    "crates/pumpkin-gametest",
 ]
 
 # [workspace.lints.rust]
@@ -270,3 +271,4 @@ pumpkin-world = { path = "crates/pumpkin-world" }
 pumpkin-command = { path = "crates/pumpkin-command" }
 pumpkin-data = { path = "crates/pumpkin-data" }
 pumpkin-protocol = { path = "crates/pumpkin-protocol" }
+pumpkin-gametest = { path = "crates/pumpkin-gametest" }
