@@ -1605,7 +1605,7 @@ mod player_data_tests {
         );
         tokio::pin!(spawn);
         let completed = tokio::time::timeout(Duration::from_secs(10), &mut spawn).await;
-        let center = fixture.player.get_entity().chunk_pos.load();
+        let center = fixture.player.living_entity.entity.chunk_pos.load();
         let failures: Vec<_> = (-1..=1)
             .flat_map(|dx| (-1..=1).map(move |dz| center.add_raw(dx, dz)))
             .filter_map(|pos| world.level.chunk_listener.failure(pos))
