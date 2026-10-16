@@ -610,7 +610,7 @@ impl NetherPortal {
         ))
     }
 
-    /// BlockUtil's existing-portal scan: each direction is capped at 21, and
+    /// `BlockUtil`'s existing-portal scan: each direction is capped at 21, and
     /// outward columns inherit the preceding vertical bounds. No frame test.
     fn existing_rectangle(
         world: &Arc<World>,
