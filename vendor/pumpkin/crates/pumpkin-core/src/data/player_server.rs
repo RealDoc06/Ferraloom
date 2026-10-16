@@ -379,6 +379,8 @@ mod test {
             &world,
             pumpkin_util::GameMode::Survival,
         ));
+        // This fixture bypasses admission, which loads progress before publication.
+        player.advancements.lock().unwrap().load().unwrap();
         player
             .screen_handler_sync_handler
             .store_player(player.clone());
@@ -495,18 +497,16 @@ mod test {
             ),
             1
         );
-        let mut advancements = fixture
-            .server
-            .advancement_manager
-            .clone()
-            .new_player_advancement(uuid);
-        advancements.load().unwrap();
-        assert!(
-            advancements
-                .progress
-                .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
-                .is_done()
-        );
+        {
+            let mut advancements = rejoined.advancements.lock().unwrap();
+            advancements.load().unwrap();
+            assert!(
+                advancements
+                    .progress
+                    .get_mut_or_start_progress(pumpkin_data::Advancement::STORY_ROOT)
+                    .is_done()
+            );
+        }
         let rejoined = Arc::new(rejoined);
         rejoined
             .screen_handler_sync_handler
