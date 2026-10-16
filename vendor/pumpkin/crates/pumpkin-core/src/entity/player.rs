@@ -519,6 +519,7 @@ pub struct Player {
     pub signature_cache: Mutex<MessageCache>,
     pub player_screen_handler: Arc<std::sync::Mutex<PlayerScreenHandler>>,
     pub current_screen_handler: std::sync::Mutex<Arc<std::sync::Mutex<dyn ScreenHandler>>>,
+    pub(crate) menu_publication: crate::block::viewer::MenuPublication,
     pub screen_handler_sync_id: AtomicU8,
     pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
     pub inventory_changed: Arc<AtomicBool>,
@@ -825,6 +826,7 @@ impl Player {
             signature_cache: Mutex::new(MessageCache::default()),
             player_screen_handler: player_screen_handler.clone(),
             current_screen_handler: std::sync::Mutex::new(player_screen_handler),
+            menu_publication: crate::block::viewer::MenuPublication::default(),
             screen_handler_sync_id: AtomicU8::new(0),
             screen_handler_listener: Arc::new(ScreenListener(inventory_changed.clone())),
             inventory_changed,
@@ -5692,6 +5694,7 @@ impl Player {
     }
 
     pub fn on_handled_screen_closed(&self) {
+        let _publication = self.menu_publication.begin();
         let current_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
@@ -5787,6 +5790,7 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
+        let _publication = self.menu_publication.begin();
         if !self
             .current_screen_handler
             .lock()

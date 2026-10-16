@@ -13,6 +13,7 @@ use crate::world::loot::LootContextParameters;
 use std::sync::Arc;
 
 pub mod blocks;
+pub(crate) mod container_inventory;
 pub mod entities;
 pub mod fluid;
 pub mod registry;

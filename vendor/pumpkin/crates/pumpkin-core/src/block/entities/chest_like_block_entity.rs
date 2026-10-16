@@ -347,7 +347,7 @@ macro_rules! impl_block_entity_for_chest {
                     ),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     comparator_dirty: std::sync::atomic::AtomicBool::new(false),
-                    viewers: $crate::block::viewer::ViewerCountTracker::new(),
+                    viewers: $crate::block::viewer::ContainerViewerCount::new(),
                 }
             }
 
@@ -472,12 +472,7 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn tick(&self, world: &Arc<$crate::world::World>) {
-                $crate::block::viewer::ViewerCountTrackerExt::update_viewer_count::<$struct_name>(
-                    &self.viewers,
-                    self,
-                    world,
-                    &self.position,
-                );
+                self.viewers.tick(self, world, &self.position);
             }
 
             fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
@@ -686,7 +681,7 @@ macro_rules! impl_container_helper_methods {
                     ),
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
-                    viewers: $crate::block::viewer::ViewerCountTracker::new(),
+                    viewers: $crate::block::viewer::ContainerViewerCount::new(),
                 }
             }
 

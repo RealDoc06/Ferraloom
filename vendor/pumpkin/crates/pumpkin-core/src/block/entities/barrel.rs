@@ -8,7 +8,7 @@ use pumpkin_util::random::{RandomImpl, get_seed};
 use std::sync::RwLock;
 use std::sync::{Arc, atomic::AtomicBool};
 
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
+use crate::block::viewer::{ContainerViewerCount, ViewerCountListener};
 use crate::world::{BlockFlags, World};
 
 pub struct BarrelBlockEntity {
@@ -18,7 +18,7 @@ pub struct BarrelBlockEntity {
     pub comparator_dirty: AtomicBool,
 
     // Viewer
-    viewers: ViewerCountTracker,
+    viewers: ContainerViewerCount,
 }
 
 crate::impl_block_entity_for_chest!(BarrelBlockEntity);

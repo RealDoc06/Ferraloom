@@ -25,10 +25,11 @@ use pumpkin_inventory::{
     entity_equipment::EntityEquipment,
     generic_container_screen_handler::{create_generic_9x3, create_generic_9x6},
     player::player_inventory::PlayerInventory,
-    screen_handler::{InventoryPlayer, ScreenHandler},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::{
+    GameMode,
     math::{position::BlockPos, vector2::Vector2},
     permission::PermissionManager,
     world_seed::Seed,
@@ -54,6 +55,7 @@ use crate::{
         registry::default_registry,
     },
     command::{CommandSource, commands::default_dispatcher, node::dispatcher::CommandDispatcher},
+    entity::player::Player,
     world::{World, loot::fill_chest_inventory_handle},
 };
 
@@ -2078,6 +2080,101 @@ fn assert_viewer_effects(kind: ChestKind, world: &Arc<World>, live: &dyn BlockEn
     }
 }
 
+// Reuse the stopped-worker server fixture. Player::new needs a live Server;
+// no packet reader/writer tasks or game loop are started. The loopback socket
+// only supplies the real JavaClient transport required by Player's constructor.
+struct MenuFixture(crate::command::commands::data::tests::Fixture);
+
+impl MenuFixture {
+    async fn new() -> Self {
+        Self(crate::command::commands::data::tests::Fixture::new().await)
+    }
+}
+
+impl std::ops::Deref for MenuFixture {
+    type Target = crate::command::commands::data::tests::Fixture;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for MenuFixture {
+    fn drop(&mut self) {
+        // Player owns its World; break the registration cycle before teardown.
+        self.source.world().players.store(Arc::new(Vec::new()));
+    }
+}
+
+async fn registered_menu_player(world: &Arc<World>, mode: GameMode) -> Arc<Player> {
+    use crate::net::{
+        ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+        java::{JavaClient, pending::PendingConnection},
+    };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (peer, accepted) =
+        tokio::join!(tokio::net::TcpStream::connect(address), listener.accept(),);
+    let _peer = peer.unwrap();
+    let (socket, address) = accepted.unwrap();
+    let profile = GameProfile {
+        id: uuid::Uuid::new_v4(),
+        name: "ContainerViewer".into(),
+        properties: ArcSwap::from_pointee(Vec::new()),
+        profile_actions: None,
+    };
+    let pending = PendingConnection::new(
+        socket,
+        address,
+        0,
+        PacketRateLimiter::new(false, 0.0, 0.0),
+        world.server.clone(),
+    );
+    let client = Arc::new(ClientPlatform::Java(JavaClient::from_pending(
+        pending,
+        profile.clone(),
+        PlayerConfig::default(),
+    )));
+    let player = Arc::new(Player::new(
+        client,
+        profile,
+        PlayerConfig::default(),
+        world,
+        mode,
+    ));
+    player
+        .living_entity
+        .entity
+        .set_pos(BLOCK_POS.to_centered_f64());
+    world.players.rcu(|players| {
+        let mut players = players.as_ref().clone();
+        players.push(player.clone());
+        Arc::new(players)
+    });
+    player
+}
+
+fn open_menu(
+    player: &Player,
+    factory: &dyn ScreenHandlerFactory,
+    position: BlockPos,
+) -> SharedScreenHandler {
+    assert!(
+        player
+            .open_handled_screen(factory, Some(position))
+            .is_some()
+    );
+    player.current_screen_handler.lock().unwrap().clone()
+}
+
+fn recheck_viewers(world: &Arc<World>, entities: &[&dyn BlockEntity]) {
+    for _ in 0..5 {
+        for entity in entities {
+            entity.tick(world);
+        }
+    }
+}
+
 #[tokio::test]
 async fn materialized_container_factory_excludes_spectators_from_viewer_effects() {
     // Official 26.3 Chest/Barrel startOpen and stopOpen skip spectators;
@@ -2085,23 +2182,20 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
     // constructor (lines 166–168) and on_closed (207–211) already guard both.
     // Test the core factory path as well as the effects published by BE ticks.
     for kind in CONTAINERS {
-        let fixture = Fixture::new().await;
+        let fixture = MenuFixture::new().await;
         let world = fixture.source.world();
         let live = kind.new(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let inventory = live.clone().get_inventory().unwrap();
         let factory = kind.factory(&world, &BLOCK_POS);
-        let mut spectator = MenuPlayer::new();
-        spectator.1 = true;
-        let spectator_menu = factory
-            .create_screen_handler(1, &spectator.0, &spectator)
-            .unwrap();
+        let spectator = registered_menu_player(&world, GameMode::Spectator).await;
+        let spectator_menu = open_menu(&spectator, factory.as_ref(), BLOCK_POS);
         assert_viewer_effects(kind, &world, live.as_ref(), 0);
         assert!(Arc::ptr_eq(
             &inventory,
             &spectator_menu.lock().unwrap().get_behaviour().slots[0].get_inventory()
         ));
-        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:3}]"), 1);
+        assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:3}]" ).unwrap(), 1);
         assert_eq!(
             spectator_menu.lock().unwrap().get_behaviour().slots[0]
                 .get_stack()
@@ -2112,31 +2206,27 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
             &live,
             &world.get_block_entity(&BLOCK_POS).unwrap()
         ));
-        spectator_menu.lock().unwrap().on_closed(&spectator);
+        spectator.on_handled_screen_closed();
         assert_viewer_effects(kind, &world, live.as_ref(), 0);
 
-        let normal = MenuPlayer::new();
+        let normal = registered_menu_player(&world, GameMode::Survival).await;
         for spectator_closes_first in [true, false] {
-            let normal_menu = factory
-                .create_screen_handler(2, &normal.0, &normal)
-                .unwrap();
+            let _normal_menu = open_menu(&normal, factory.as_ref(), BLOCK_POS);
             assert_viewer_effects(kind, &world, live.as_ref(), 1);
-            let spectator_menu = factory
-                .create_screen_handler(3, &spectator.0, &spectator)
-                .unwrap();
+            let _spectator_menu = open_menu(&spectator, factory.as_ref(), BLOCK_POS);
             assert_viewer_effects(kind, &world, live.as_ref(), 1);
             if spectator_closes_first {
                 // A spectator menu must not steal another viewer's count, even
                 // if its owner changes mode before the menu is closed.
-                spectator.1 = false;
-                spectator_menu.lock().unwrap().on_closed(&spectator);
-                spectator.1 = true;
+                spectator.gamemode.store(GameMode::Survival);
+                spectator.on_handled_screen_closed();
+                spectator.gamemode.store(GameMode::Spectator);
                 assert_viewer_effects(kind, &world, live.as_ref(), 1);
-                normal_menu.lock().unwrap().on_closed(&normal);
+                normal.on_handled_screen_closed();
             } else {
-                normal_menu.lock().unwrap().on_closed(&normal);
+                normal.on_handled_screen_closed();
                 assert_viewer_effects(kind, &world, live.as_ref(), 0);
-                spectator_menu.lock().unwrap().on_closed(&spectator);
+                spectator.on_handled_screen_closed();
             }
             assert_viewer_effects(kind, &world, live.as_ref(), 0);
         }
@@ -2146,7 +2236,7 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
 #[tokio::test]
 async fn double_chest_factory_excludes_spectators_on_both_halves() {
     for kind in CHESTS {
-        let fixture = Fixture::new().await;
+        let fixture = MenuFixture::new().await;
         let world = fixture.source.world();
         let first = kind.new(BLOCK_POS);
         let second = kind.new(OTHER_POS);
@@ -2158,14 +2248,11 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
         fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
         properties.r#type = ChestType::Left;
         fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
-        let mut spectator = MenuPlayer::new();
-        spectator.1 = true;
-        let normal = MenuPlayer::new();
+        let spectator = registered_menu_player(&world, GameMode::Spectator).await;
+        let normal = registered_menu_player(&world, GameMode::Survival).await;
         for clicked in [BLOCK_POS, OTHER_POS] {
             let factory = kind.factory(&world, &clicked);
-            let spectator_menu = factory
-                .create_screen_handler(1, &spectator.0, &spectator)
-                .unwrap();
+            let spectator_menu = open_menu(&spectator, factory.as_ref(), clicked);
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
             }
@@ -2184,17 +2271,15 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
                 assert_eq!(menu.get_behaviour().slots[0].get_stack().item_count, 2);
                 assert_eq!(menu.get_behaviour().slots[27].get_stack().item_count, 5);
             }
-            let normal_menu = factory
-                .create_screen_handler(2, &normal.0, &normal)
-                .unwrap();
+            let _normal_menu = open_menu(&normal, factory.as_ref(), clicked);
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 1);
             }
-            normal_menu.lock().unwrap().on_closed(&normal);
+            normal.on_handled_screen_closed();
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
             }
-            spectator_menu.lock().unwrap().on_closed(&spectator);
+            spectator.on_handled_screen_closed();
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
                 assert!(Arc::ptr_eq(
@@ -2204,4 +2289,298 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
             }
         }
     }
+}
+
+#[tokio::test]
+async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let player = registered_menu_player(&world, GameMode::Survival).await;
+    for kind in CONTAINERS {
+        let live = kind.new(BLOCK_POS);
+        fixture.install(kind.block(), live.clone());
+        let factory = kind.factory(&world, &BLOCK_POS);
+        player.gamemode.store(GameMode::Survival);
+        let retained = open_menu(&player, factory.as_ref(), BLOCK_POS);
+        recheck_viewers(&world, &[live.as_ref()]);
+        assert_eq!(
+            kind.viewers(live.as_ref()),
+            1,
+            "normal menu survives recount"
+        );
+        let inventory = live.clone().get_inventory().unwrap();
+        assert!(Arc::ptr_eq(
+            &inventory,
+            &retained.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        ));
+
+        player.gamemode.store(GameMode::Spectator);
+        player.on_handled_screen_closed();
+        // The upstream stop guard skips this decrement; the BE recount repairs it.
+        for _ in 0..4 {
+            live.tick(&world);
+            assert_eq!(kind.viewers(live.as_ref()), 1);
+        }
+        live.tick(&world);
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+
+        // A normal close still takes effect immediately, without waiting five ticks.
+        player.gamemode.store(GameMode::Survival);
+        open_menu(&player, factory.as_ref(), BLOCK_POS);
+        assert_viewer_effects(kind, &world, live.as_ref(), 1);
+        player.on_handled_screen_closed();
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    }
+}
+
+#[tokio::test]
+async fn double_recount_uses_both_retained_half_identities_after_mode_change_and_replacement() {
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let player = registered_menu_player(&world, GameMode::Survival).await;
+    for kind in CHESTS {
+        for clicked in [BLOCK_POS, OTHER_POS] {
+            let first = kind.new(BLOCK_POS);
+            let second = kind.new(OTHER_POS);
+            fixture.install(kind.block(), first.clone());
+            fixture.install(kind.block(), second.clone());
+            let mut properties = ChestLikeProperties::from_state_id(kind.block().default_state.id);
+            properties.facing = HorizontalFacing::South;
+            properties.r#type = ChestType::Right;
+            fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
+            properties.r#type = ChestType::Left;
+            fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
+            player.gamemode.store(GameMode::Survival);
+            let factory = kind.factory(&world, &clicked);
+            let retained = open_menu(&player, factory.as_ref(), clicked);
+            recheck_viewers(&world, &[first.as_ref(), second.as_ref()]);
+            for entity in [&first, &second] {
+                assert_eq!(kind.viewers(entity.as_ref()), 1);
+            }
+
+            // A replacement at the same coordinates is not owned by this menu.
+            let replacement = kind.new(BLOCK_POS);
+            world.add_block_entity(replacement.clone());
+            let replacement_inventory = replacement.clone().get_inventory().unwrap();
+            replacement_inventory.on_open();
+            recheck_viewers(
+                &world,
+                &[replacement.as_ref(), first.as_ref(), second.as_ref()],
+            );
+            assert_eq!(kind.viewers(replacement.as_ref()), 0);
+            assert_eq!(kind.viewers(first.as_ref()), 1);
+            assert_eq!(kind.viewers(second.as_ref()), 1);
+            retained.lock().unwrap().get_behaviour().slots[27]
+                .set_stack(ItemStack::new(2, &Item::APPLE));
+            assert_eq!(
+                second
+                    .clone()
+                    .get_inventory()
+                    .unwrap()
+                    .get_stack(0)
+                    .item_count,
+                2
+            );
+
+            player.gamemode.store(GameMode::Spectator);
+            player.on_handled_screen_closed();
+            recheck_viewers(&world, &[first.as_ref(), second.as_ref()]);
+            assert_viewer_effects(kind, &world, first.as_ref(), 0);
+            assert_viewer_effects(kind, &world, second.as_ref(), 0);
+        }
+    }
+}
+
+struct PausingFactory {
+    inner: Box<dyn ScreenHandlerFactory>,
+    created: mpsc::Sender<()>,
+    resume: Mutex<mpsc::Receiver<()>>,
+}
+
+impl ScreenHandlerFactory for PausingFactory {
+    fn create_screen_handler(
+        &self,
+        id: u8,
+        inventory: &Arc<PlayerInventory>,
+        player: &dyn InventoryPlayer,
+    ) -> Option<SharedScreenHandler> {
+        let menu = self.inner.create_screen_handler(id, inventory, player)?;
+        assert!(
+            player
+                .as_any()
+                .downcast_ref::<Player>()
+                .unwrap()
+                .menu_publication
+                .is_active()
+        );
+        self.created.send(()).unwrap();
+        self.resume
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        Some(menu)
+    }
+
+    fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
+        self.inner.get_display_name()
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recount_defers_between_factory_on_open_and_player_menu_publication() {
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let old = registered_menu_player(&world, GameMode::Survival).await;
+    let next = registered_menu_player(&world, GameMode::Survival).await;
+    let live = ChestKind::Barrel.new(BLOCK_POS);
+    fixture.install(&Block::BARREL, live.clone());
+    let factory = ChestKind::Barrel.factory(&world, &BLOCK_POS);
+    open_menu(&old, factory.as_ref(), BLOCK_POS);
+    recheck_viewers(&world, &[live.as_ref()]);
+    let (created, wait_created) = mpsc::channel();
+    let (resume, wait_resume) = mpsc::channel();
+    let factory = PausingFactory {
+        inner: factory,
+        created,
+        resume: Mutex::new(wait_resume),
+    };
+    let runtime = tokio::runtime::Handle::current();
+    std::thread::scope(|scope| {
+        let pending = scope.spawn(|| {
+            let _runtime = runtime.enter();
+            open_menu(&next, &factory, BLOCK_POS)
+        });
+        wait_created.recv_timeout(Duration::from_secs(5)).unwrap();
+        old.gamemode.store(GameMode::Spectator);
+        old.on_handled_screen_closed();
+        // A nested transition ending cannot clear the pending outer publication.
+        drop(next.menu_publication.begin());
+        assert!(next.menu_publication.is_active());
+        recheck_viewers(&world, &[live.as_ref()]);
+        assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 2);
+        resume.send(()).unwrap();
+        pending.join().unwrap();
+    });
+    assert!(!next.menu_publication.is_active());
+    recheck_viewers(&world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 1);
+    next.on_handled_screen_closed();
+    assert_viewer_effects(ChestKind::Barrel, &world, live.as_ref(), 0);
+}
+
+struct MenuEventHook<E>(Box<dyn Fn(&mut E) + Send + Sync>);
+
+impl<E: crate::plugin::api::events::Payload + Send + Sync> crate::plugin::EventHandler<E>
+    for MenuEventHook<E>
+{
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<crate::server::Server>,
+        event: &'a mut E,
+    ) -> crate::plugin::BoxFuture<'a, ()> {
+        (self.0)(event);
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recount_defers_during_close_callback_and_cancelled_open_releases_guard() {
+    use crate::plugin::api::events::{
+        EventPriority, inventory::inventory_open::InventoryOpenEvent,
+        player::inventory_close::InventoryCloseEvent,
+    };
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let server = world.server.upgrade().unwrap();
+    let first = registered_menu_player(&world, GameMode::Survival).await;
+    let second = registered_menu_player(&world, GameMode::Survival).await;
+    let live = ChestKind::Trapped.new(BLOCK_POS);
+    fixture.install(&Block::TRAPPED_CHEST, live.clone());
+    let factory = ChestKind::Trapped.factory(&world, &BLOCK_POS);
+    open_menu(&first, factory.as_ref(), BLOCK_POS);
+    open_menu(&second, factory.as_ref(), BLOCK_POS);
+    recheck_viewers(&world, &[live.as_ref()]);
+    assert_eq!(ChestKind::Trapped.viewers(live.as_ref()), 2);
+    let (closing, wait_closing) = mpsc::channel();
+    let (resume, wait_resume) = mpsc::channel();
+    let wait_resume = Mutex::new(wait_resume);
+    let first_id = first.gameprofile.id;
+    server.plugin_manager.register::<InventoryCloseEvent, _>(
+        Arc::new(MenuEventHook(Box::new(
+            move |event: &mut InventoryCloseEvent| {
+                if event.player.gameprofile.id == first_id {
+                    assert!(event.player.menu_publication.is_active());
+                    closing.send(()).unwrap();
+                    wait_resume
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap();
+                }
+            },
+        ))),
+        EventPriority::Normal,
+        true,
+    );
+    let runtime = tokio::runtime::Handle::current();
+    std::thread::scope(|scope| {
+        let pending = scope.spawn(|| {
+            let _runtime = runtime.enter();
+            first.on_handled_screen_closed();
+        });
+        wait_closing.recv_timeout(Duration::from_secs(5)).unwrap();
+        recheck_viewers(&world, &[live.as_ref()]);
+        // The closed menu is still published, but may not be counted back in.
+        assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 1);
+        resume.send(()).unwrap();
+        pending.join().unwrap();
+    });
+    assert!(!first.menu_publication.is_active());
+    recheck_viewers(&world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 1);
+    server.plugin_manager.register::<InventoryOpenEvent, _>(
+        Arc::new(MenuEventHook(Box::new(|event: &mut InventoryOpenEvent| {
+            assert!(event.player.menu_publication.is_active());
+            event.cancelled = true;
+        }))),
+        EventPriority::Normal,
+        true,
+    );
+    assert!(
+        first
+            .open_handled_screen(factory.as_ref(), Some(BLOCK_POS))
+            .is_none()
+    );
+    assert!(!first.menu_publication.is_active());
+    assert_eq!(ChestKind::Trapped.viewers(live.as_ref()), 1);
+    second.on_handled_screen_closed();
+    assert_viewer_effects(ChestKind::Trapped, &world, live.as_ref(), 0);
+}
+
+#[tokio::test]
+async fn recount_revision_rejects_open_close_aba_before_menu_scan() {
+    let fixture = MenuFixture::new().await;
+    let world = fixture.source.world();
+    let old = registered_menu_player(&world, GameMode::Survival).await;
+    let next = registered_menu_player(&world, GameMode::Survival).await;
+    let live = Arc::new(ChestBlockEntity::new(BLOCK_POS));
+    fixture.install(&Block::CHEST, live.clone());
+    let factory = ChestKind::Normal.factory(&world, &BLOCK_POS);
+    open_menu(&old, factory.as_ref(), BLOCK_POS);
+    recheck_viewers(&world, &[live.as_ref()]);
+    old.gamemode.store(GameMode::Spectator);
+    old.on_handled_screen_closed();
+    live.viewers.before_recount(move || {
+        open_menu(&next, factory.as_ref(), BLOCK_POS);
+        next.on_handled_screen_closed();
+    });
+    recheck_viewers(&world, &[live.as_ref()]);
+    assert_eq!(
+        live.get_viewer_count(),
+        1,
+        "same numeric count has a new revision"
+    );
+    recheck_viewers(&world, &[live.as_ref()]);
+    assert_viewer_effects(ChestKind::Normal, &world, live.as_ref(), 0);
 }

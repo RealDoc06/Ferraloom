@@ -4,7 +4,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{
-    block::viewer::ViewerCountTracker, impl_block_entity_for_chest, impl_chest_helper_methods,
+    block::viewer::ContainerViewerCount, impl_block_entity_for_chest, impl_chest_helper_methods,
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
 };
 
@@ -17,7 +17,7 @@ pub struct ChestBlockEntity {
     pub comparator_dirty: AtomicBool,
 
     // Viewer
-    viewers: ViewerCountTracker,
+    viewers: ContainerViewerCount,
 }
 
 impl ChestBlockEntity {

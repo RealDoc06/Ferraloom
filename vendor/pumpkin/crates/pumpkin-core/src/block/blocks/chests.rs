@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::container_inventory::DoubleContainerInventory;
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
@@ -241,10 +242,10 @@ pub(crate) fn chest_screen_handler_factory(
         // must remain independent of which half the player clicked.
         if matches!(chest_props.r#type, ChestType::Right) {
             entities.push(second);
-            DoubleInventory::new(first_inventory, second_inventory)
+            DoubleContainerInventory::new(first_inventory, second_inventory)
         } else {
             entities.insert(0, second);
-            DoubleInventory::new(second_inventory, first_inventory)
+            DoubleContainerInventory::new(second_inventory, first_inventory)
         }
     } else {
         first_inventory
