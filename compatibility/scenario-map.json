@@ -648,6 +648,9 @@
     },
     "player_data.advancement_continuation": {
       "skip_reason": "Composite player transfer: source keys identify Java-to-Rust and Rust-to-Java journeys, not independent per-engine results. Retain the directional report without assigning these outcomes to the Vanilla/Rust feature columns."
+    },
+    "player_data.statistics_continuation": {
+      "skip_reason": "Composite same-player statistics transfer combines both engines. Directional received-packet and canonical-file observations are retained without assigning the combined result to either engine column."
     }
   }
 }
