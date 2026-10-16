@@ -57,6 +57,7 @@ class Client:
         self.messages: queue.Queue[dict] = queue.Queue()
         self.pending: dict[int, dict] = {}
         self.events: list[dict] = []
+        self.statistics_values: dict[tuple[int, int], dict | None] = {}
         self.failure: str | None = None
         self.stderr = (server.directory / f"{log_name}.stderr.log").open("w")
         try:
@@ -106,12 +107,30 @@ class Client:
         if event == "error" or event == "eof" or (event == "end" and not message.get("expected")):
             self.failure = str(message.get("message", f"Client ended: {message}"))
             raise RuntimeError(self.failure)
+        if event == "statistics_packet":
+            for entry in message["entries"]:
+                key = (entry["category_id"], entry["statistic_id"])
+                if key in self.statistics_values:
+                    self.statistics_values[key] = {"entry": entry, "packet": message}
         if "id" in message:
             self.pending[message["id"]] = message
         else:
             self.events.append(message)
             self.events = self.events[-100:]
         return message
+
+    def watch_statistic(self, category_id: int, statistic_id: int) -> None:
+        """Retain absolute updates and their raw packet for selected counters.
+
+        AwardStats omits unchanged values. A later packet's omission preserves
+        the last received value; it does not reset the counter or add a delta.
+        """
+        if any(type(value) is not int or value < 0 for value in (category_id, statistic_id)):
+            raise ValueError("Statistic IDs must be nonnegative integers")
+        key = (category_id, statistic_id)
+        if key not in self.statistics_values and len(self.statistics_values) >= 64:
+            raise ValueError("Watched statistics exceed probe budget")
+        self.statistics_values.setdefault(key, None)
 
     def ready(self, timeout: float = 60) -> dict:
         for event in self.events:

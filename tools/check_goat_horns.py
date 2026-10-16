@@ -261,12 +261,15 @@ def fence(server, clients: list[Client]) -> dict:
 
 
 def statistics(client: Client, contract: dict) -> dict:
+    key = (contract["used_category"], contract["horn_item"])
+    client.watch_statistic(*key)
     request = client.request("request_stats")
     state = client.wait_state(lambda s: s.get("statistics_packet") is not None and s["statistics_packet"]["sequence"] > request["after_sequence"])
     packet = state["statistics_packet"]
-    values = [e["value"] for e in packet["entries"] if e["category_id"] == contract["used_category"] and e["statistic_id"] == contract["horn_item"]]
-    require(len(values) <= 1, "Duplicate Used statistic")
-    return {"request": request, "packet": packet, "used": values[0] if values else 0}
+    value = client.statistics_values[key]
+    return {"request": request, "packet": packet, "used": value["entry"]["value"] if value else 0,
+            "value_observation": value,
+            "scope": "Connection-local absolute updates; omitted unchanged counters retain their last raw witness."}
 
 
 def open_menu(client: Client) -> dict:
