@@ -58,6 +58,18 @@ pub enum PoiReconcileError {
     RegionUnavailable(#[source] io::Error),
     #[error("Loaded POI handle belongs to a different chunk")]
     WrongChunk,
+    #[error("POI tracker belongs to a different storage instance")]
+    WrongStorage,
+    #[error("POI storage or publication lock is poisoned")]
+    OwnershipPoisoned,
+    #[error("POI preparation belongs to an obsolete chunk publication")]
+    ObsoletePublication,
+    #[error("Runtime chunk has no POI storage binding")]
+    UnboundChunk,
+    #[error("Incomplete Proto terrain cannot produce a FULL POI preparation stamp")]
+    IncompleteTerrain,
+    #[error("POI preparation worker failed: {0}")]
+    PreparationWorkerFailed(String),
     #[error("POI terrain coordinates or section layout are invalid")]
     InvalidCoordinates,
     #[error("POI section revision exhausted; chunk preparation is unavailable")]
@@ -75,6 +87,7 @@ pub enum PoiReconcileError {
 pub struct LoadedPoiRegion<'a> {
     chunk: ChunkPos,
     region: &'a mut PoiRegion,
+    pub(crate) identity: std::sync::Arc<()>,
 }
 
 impl LoadedPoiRegion<'_> {
@@ -94,6 +107,7 @@ impl LoadedPoiRegion<'_> {
         section_y: i32,
         palette: &BlockPalette,
         changes: &PoiSectionChanges,
+        complete: bool,
     ) -> Result<(), PoiReconcileError> {
         let origin = (
             self.chunk.x.checked_mul(16),
@@ -151,7 +165,7 @@ impl LoadedPoiRegion<'_> {
         }
         self.region
             .section_validity
-            .insert((self.chunk.x, self.chunk.y, section_y), 1);
+            .insert((self.chunk.x, self.chunk.y, section_y), i8::from(complete));
         self.region
             .dirty_chunks
             .insert((self.chunk.x, self.chunk.y));
@@ -705,6 +719,7 @@ impl PoiRegion {
 
 /// Region-based POI storage using MCA format
 pub struct PoiStorage {
+    identity: std::sync::Arc<()>,
     /// Path to the poi folder
     folder: PathBuf,
     /// Loaded regions, keyed by (`region_x`, `region_z`)
@@ -718,6 +733,7 @@ impl PoiStorage {
     #[must_use]
     pub fn new(poi_folder: PathBuf) -> Self {
         Self {
+            identity: std::sync::Arc::new(()),
             folder: poi_folder,
             regions: FxHashMap::default(),
             load_errors: FxHashMap::default(),
@@ -780,7 +796,11 @@ impl PoiStorage {
                 x: coords.0,
                 z: coords.1,
             })?;
-        Ok(LoadedPoiRegion { chunk, region })
+        Ok(LoadedPoiRegion {
+            chunk,
+            region,
+            identity: self.identity.clone(),
+        })
     }
 
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) -> io::Result<()> {
@@ -901,6 +921,18 @@ impl PoiStorage {
         }
 
         Ok(best.map(|(pos, poi_type, _)| (pos, poi_type)))
+    }
+
+    /// Flush only the prepared region, after terrain encoding and after releasing
+    /// terrain/publication guards. Other unavailable regions do not block it.
+    pub(crate) fn save_prepared_region(&mut self, chunk: ChunkPos) -> io::Result<()> {
+        let path = self.region_path(chunk.x >> 5, chunk.y >> 5);
+        std::fs::create_dir_all(&self.folder)?;
+        let loaded = self.loaded_poi_region(chunk).map_err(io::Error::other)?;
+        if loaded.region.is_dirty() {
+            loaded.region.save(&path)?;
+        }
+        Ok(())
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {
@@ -1096,3 +1128,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+mod save_tests;

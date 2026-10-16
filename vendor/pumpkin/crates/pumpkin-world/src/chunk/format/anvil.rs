@@ -344,7 +344,7 @@ impl AnvilChunkData {
         S: SingleChunkDataSerializer,
     {
         let raw_bytes = chunk
-            .to_bytes()
+            .to_bytes_for_save()
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
@@ -535,6 +535,10 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
 
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
+    /// Actual persistence boundary. Pure packet/fixture encoding uses `to_bytes`.
+    fn to_bytes_for_save(&self) -> Result<Bytes, ChunkSerializingError> {
+        self.to_bytes()
+    }
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> (i32, i32);
 }

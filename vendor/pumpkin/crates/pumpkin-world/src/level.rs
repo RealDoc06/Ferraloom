@@ -136,6 +136,8 @@ pub struct Level {
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     pub chunk_saver: Arc<ChunkSaver>,
+    pub poi_storage: Arc<Mutex<crate::poi::PoiStorage>>,
+    pub(crate) poi_runtime: Arc<crate::chunk::poi_binding::PoiRuntime>,
     entity_saver: Arc<EntitySaver>,
 
     pub world_gen: ArcSwap<WorldGenerator>,
@@ -310,6 +312,16 @@ impl Level {
         let thread_tracker = Mutex::new(Vec::new());
         let listener = Arc::new(ChunkListener::new());
 
+        let loaded_chunks = Arc::new(DashMap::new());
+        let chunk_lifecycle = Arc::new(std::sync::RwLock::new(()));
+        let poi_storage = Arc::new(Mutex::new(crate::poi::PoiStorage::new(
+            level_folder.poi_folder.clone(),
+        )));
+        let poi_runtime = Arc::new(crate::chunk::poi_binding::PoiRuntime {
+            storage: poi_storage.clone(),
+            lifecycle: chunk_lifecycle.clone(),
+            chunks: Arc::downgrade(&loaded_chunks),
+        });
         let level_ref = Arc::new(Self {
             seed,
             world_portal: ArcSwap::new(Arc::new(None)),
@@ -318,12 +330,14 @@ impl Level {
             lighting_config: level_config.lighting,
             light_engine: DynamicLightEngine::new(dim_min_y, dim_min_y + dim_height),
             chunk_saver,
+            poi_storage,
+            poi_runtime,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
-            loaded_chunks: Arc::new(DashMap::new()),
+            loaded_chunks,
             loaded_chunk_changes: Arc::new(SegQueue::new()),
             chunk_activation: crate::chunk_system::activation::ChunkActivation::default(),
-            chunk_lifecycle: Arc::new(std::sync::RwLock::new(())),
+            chunk_lifecycle,
             chunk_unload: Arc::new(crate::chunk_system::unload::ChunkUnloadCoordinator::default()),
             chunk_activation_changed: Arc::new(tokio::sync::Notify::new()),
             chunk_activation_revision: Arc::new(AtomicU64::new(0)),
@@ -971,10 +985,62 @@ impl Level {
         .unwrap_or(Block::VOID_AIR.default_state.id)
     }
 
+    /// Memory-only binding before exposing a managed terrain Arc.
+    pub fn bind_chunk_poi(&self, chunk: &SyncChunk) -> Result<(), crate::poi::PoiReconcileError> {
+        chunk.bind_poi(&self.poi_runtime)
+    }
+
+    /// Existing unload workers call this without coordinator/ticket/BE guards.
+    /// A refusal leaves the request pending and is reported by Level shutdown.
+    pub fn prepare_chunk_poi(
+        &self,
+        chunk: &SyncChunk,
+    ) -> Result<crate::chunk::PoiReconciliationStamp, crate::poi::PoiReconcileError> {
+        let result = self
+            .bind_chunk_poi(chunk)
+            .and_then(|()| chunk.prepare_poi());
+        if let Err(error) = &result {
+            self.record_save_failure(error.to_string());
+        }
+        result
+    }
+
+    /// Async boundary for the existing World unload worker. No ownership guards
+    /// cross the await; even a failed blocking task reaches Level's save result.
+    pub async fn prepare_chunk_poi_for_unload(
+        self: &Arc<Self>,
+        chunk: SyncChunk,
+    ) -> Result<crate::chunk::PoiReconciliationStamp, crate::poi::PoiReconcileError> {
+        let level = self.clone();
+        let result = crate::chunk::io::run_blocking(move || level.prepare_chunk_poi(&chunk))
+            .await
+            .unwrap_or_else(|error| {
+                Err(crate::poi::PoiReconcileError::PreparationWorkerFailed(
+                    error.to_string(),
+                ))
+            });
+        if let Err(error) = &result {
+            self.record_save_failure(error.to_string());
+        }
+        result
+    }
+
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
         if chunks_to_write.is_empty() {
             return;
         }
+
+        let chunks_to_write = chunks_to_write
+            .into_iter()
+            .filter(|(_, chunk)| {
+                if let Err(error) = self.bind_chunk_poi(chunk) {
+                    self.record_save_failure(error.to_string());
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect::<Vec<_>>();
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -1253,6 +1319,7 @@ mod tests {
         let position = Vector2::new(0, 0);
         let block_pos = BlockPos::new(1, 64, 2);
         let source = ChunkData::empty_sync(0, 0);
+        level.bind_chunk_poi(&source).unwrap();
         source.set_block_absolute_y(1, 64, 2, Block::CHEST.default_state.id);
         let mut hidden = NbtCompound::new();
         hidden.put_int("duration", 2400);
@@ -1357,6 +1424,7 @@ mod tests {
         // Use another region so the refused source region can be compared whole.
         let healthy_pos = Vector2::new(32, 0);
         let healthy = ChunkData::empty_sync(32, 0);
+        level.bind_chunk_poi(&healthy).unwrap();
         healthy.set_block_absolute_y(3, 64, 4, Block::DIAMOND_BLOCK.default_state.id);
         healthy.mark_dirty(true);
         refused_region_stage(
@@ -1767,6 +1835,7 @@ mod tests {
         );
         let position = Vector2::new(0, 0);
         let chunk = ChunkData::empty_sync(0, 0);
+        level.bind_chunk_poi(&chunk).unwrap();
         level
             .chunk_saver
             .watch_chunks(&level.level_folder, &[position])
@@ -1817,6 +1886,7 @@ mod tests {
         );
         let position = Vector2::new(0, 0);
         let chunk = ChunkData::empty_sync(0, 0);
+        level.bind_chunk_poi(&chunk).unwrap();
         chunk.mark_dirty(true);
         level
             .chunk_saver

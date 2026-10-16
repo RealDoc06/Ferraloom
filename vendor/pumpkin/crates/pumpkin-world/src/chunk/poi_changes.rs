@@ -1,6 +1,6 @@
 //! Coalesced POI history. Every access holds the chunk's terrain guard first.
 
-use std::sync::RwLockReadGuard;
+use std::sync::{Arc, RwLockReadGuard};
 
 use pumpkin_data::{BlockStateId, poi::PoiType};
 
@@ -12,6 +12,7 @@ pub(super) struct PoiChanges {
     sections: Box<[PoiSectionChanges]>,
     // Once any section exhausts its revision, no chunk stamp can certify it.
     exhausted: bool,
+    store: Option<Arc<()>>,
 }
 
 pub(crate) struct PoiSectionChanges {
@@ -32,6 +33,7 @@ impl PoiChanges {
                 })
                 .collect(),
             exhausted: false,
+            store: None,
         }
     }
 
@@ -120,6 +122,38 @@ impl PoiTerrainRead<'_> {
         &self,
         loaded: &mut LoadedPoiRegion<'_>,
     ) -> Result<PoiReconciliationStamp, PoiReconcileError> {
+        if self.chunk.status != pumpkin_data::chunk::ChunkStatus::Full {
+            return Err(PoiReconcileError::IncompleteTerrain);
+        }
+        self.apply(loaded, true)?;
+        let changes = self
+            .chunk
+            .section
+            .poi_changes
+            .lock()
+            .map_err(|_| PoiReconcileError::MetadataPoisoned)?;
+        Ok(PoiReconciliationStamp {
+            revisions: changes.sections.iter().map(|s| s.revision).collect(),
+        })
+    }
+
+    /// Proto snapshots classify their current terrain but remain Valid0 and keep
+    /// all pending revisions/reset bits. A later FULL conversion starts fresh.
+    pub(crate) fn reconcile_for_save(
+        &self,
+        loaded: &mut LoadedPoiRegion<'_>,
+    ) -> Result<(), PoiReconcileError> {
+        self.apply(
+            loaded,
+            self.chunk.status == pumpkin_data::chunk::ChunkStatus::Full,
+        )
+    }
+
+    fn apply(
+        &self,
+        loaded: &mut LoadedPoiRegion<'_>,
+        complete: bool,
+    ) -> Result<(), PoiReconcileError> {
         let chunk = self.chunk;
         if chunk.section.block_sections.is_poisoned() {
             return Err(PoiReconcileError::TerrainPoisoned);
@@ -143,23 +177,30 @@ impl PoiTerrainRead<'_> {
         if changes.sections.len() != self.palettes.len() {
             return Err(PoiReconcileError::InvalidCoordinates);
         }
+        match &changes.store {
+            Some(store) if !Arc::ptr_eq(store, &loaded.identity) => {
+                return Err(PoiReconcileError::WrongStorage);
+            }
+            None => changes.store = Some(loaded.identity.clone()),
+            Some(_) => {}
+        }
         for (index, (palette, section)) in self
             .palettes
             .iter()
             .zip(changes.sections.iter_mut())
             .enumerate()
         {
-            if section.revision == section.applied_revision {
+            if complete && section.revision == section.applied_revision {
                 continue;
             }
-            loaded.reconcile_section(min_y / 16 + index as i32, palette, section)?;
+            loaded.reconcile_section(min_y / 16 + index as i32, palette, section, complete)?;
             // A failed section retains both its revision and complete ABA mask.
-            section.applied_revision = section.revision;
-            section.reset_tickets = None;
+            if complete {
+                section.applied_revision = section.revision;
+                section.reset_tickets = None;
+            }
         }
-        Ok(PoiReconciliationStamp {
-            revisions: changes.sections.iter().map(|s| s.revision).collect(),
-        })
+        Ok(())
     }
 
     /// Call under the final publication fence. A later changed state invalidates

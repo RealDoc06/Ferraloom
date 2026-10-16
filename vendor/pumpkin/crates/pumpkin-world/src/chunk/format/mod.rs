@@ -111,6 +111,43 @@ impl SingleChunkDataSerializer for ChunkData {
         self.internal_to_bytes()
     }
 
+    fn to_bytes_for_save(&self) -> Result<Bytes, ChunkSerializingError> {
+        use crate::poi::PoiReconcileError;
+        let runtime = self.poi_runtime()?;
+        let pos = Vector2::new(self.x, self.z);
+        // IO preload holds storage alone. Never acquire lifecycle from here.
+        runtime
+            .storage
+            .lock()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?
+            .preload_poi_region(pos)
+            .map_err(ChunkSerializingError::PoiIo)?;
+        let lifecycle = runtime
+            .lifecycle
+            .read()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
+        let chunks = runtime
+            .chunks
+            .upgrade()
+            .ok_or(PoiReconcileError::ObsoletePublication)?;
+        let current = self.check_poi_publication(&chunks)?;
+        let mut storage = runtime
+            .storage
+            .lock()
+            .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
+        let root = self.capture_root(Some(&mut storage.loaded_poi_region(pos)?))?;
+        drop(current);
+        drop(lifecycle);
+        // Capture released light/heightmap/terrain/metadata. F1's fallible encoder
+        // MUST succeed before this call makes any durable POI change.
+        let bytes = crate::nbt_io::encode_compound(root)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        storage
+            .save_prepared_region(pos)
+            .map_err(ChunkSerializingError::PoiIo)?;
+        Ok(bytes)
+    }
+
     #[inline]
     fn position(&self) -> (i32, i32) {
         (self.x, self.z)
@@ -561,8 +598,18 @@ impl ChunkData {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        crate::nbt_io::encode_compound(self.capture_root(None)?)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)
+    }
+
+    /// One root builder for pure encoding and actual saves. Reconciliation and
+    /// palette serialization share this terrain guard and existing field order.
+    #[allow(clippy::too_many_lines)]
+    fn capture_root(
+        &self,
+        loaded_poi: Option<&mut crate::poi::LoadedPoiRegion<'_>>,
+    ) -> Result<NbtCompound, ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -599,11 +646,13 @@ impl ChunkData {
             .heightmap
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let block_lock = self
-            .section
-            .block_sections
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let terrain = self.read_for_poi();
+        if let Some(loaded) = loaded_poi {
+            terrain
+                .reconcile_for_save(loaded)
+                .map_err(ChunkSerializingError::Poi)?;
+        }
+        let block_lock = terrain.palettes();
         let biome_lock = self
             .section
             .biome_sections
@@ -772,8 +821,7 @@ impl ChunkData {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }
 
-        crate::nbt_io::encode_compound(root_compound)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)
+        Ok(root_compound)
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
@@ -1295,6 +1343,9 @@ mod tests {
         S: crate::chunk::io::ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
     {
         let chunk = std::sync::Arc::new(ChunkData::empty(0, 0));
+        let poi_directory = tempfile::tempdir().unwrap();
+        let runtime = crate::chunk::poi_binding::TestRuntime::new(poi_directory.path().to_owned());
+        chunk.bind_poi(&runtime.runtime).unwrap();
         chunk.set_custom_data("example", "unknown", NbtTag::Long(42));
         let encoded = chunk.to_bytes().unwrap();
         let decoded = ChunkData::from_bytes(&encoded, Vector2::new(0, 0)).unwrap();

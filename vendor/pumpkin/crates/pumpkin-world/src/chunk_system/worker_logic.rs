@@ -149,10 +149,21 @@ pub async fn io_read_work(
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
                     let chunk_level = level.clone();
-                    let result =
-                        run_blocking(move || process_loaded_chunk(chunk, &chunk_level)).await;
+                    let result = run_blocking(move || {
+                        chunk_level.bind_chunk_poi(&chunk)?;
+                        Ok::<_, crate::poi::PoiReconcileError>(process_loaded_chunk(
+                            chunk,
+                            &chunk_level,
+                        ))
+                    })
+                    .await;
                     let received = match result {
-                        Ok(processed) => RecvChunk::IO(processed),
+                        Ok(Ok(processed)) => RecvChunk::IO(processed),
+                        Ok(Err(error)) => {
+                            let message = format!("Could not bind saved chunk {pos:?}: {error}");
+                            level.record_fatal_save_failure(message.clone());
+                            RecvChunk::ReadFailure(message)
+                        }
                         Err(err) => {
                             let message = format!("Could not activate saved chunk {pos:?}: {err}");
                             level.record_fatal_save_failure(message.clone());
@@ -228,7 +239,10 @@ pub async fn io_write_work(
             let mut vec = Vec::with_capacity(data.len());
             for (pos, chunk) in data {
                 match chunk {
-                    Chunk::Level(chunk) => vec.push((pos, chunk)),
+                    Chunk::Level(chunk) => {
+                        level_for_upgrade.bind_chunk_poi(&chunk)?;
+                        vec.push((pos, chunk));
+                    }
                     Chunk::Proto(chunk) => {
                         let mut temp = Chunk::Proto(chunk);
                         temp.upgrade_to_level_chunk(
@@ -236,15 +250,18 @@ pub async fn io_write_work(
                             &level_for_upgrade.lighting_config,
                         );
                         let Chunk::Level(chunk) = temp else { panic!() };
+                        // status retains the Proto stage; actual save writes POI
+                        // Valid0 without acknowledging a FULL terrain revision.
+                        level_for_upgrade.bind_chunk_poi(&chunk)?;
                         vec.push((pos, chunk));
                     }
                 }
             }
-            vec
+            Ok::<_, crate::poi::PoiReconcileError>(vec)
         })
         .await;
         let upgrade_failed = match upgrade_result {
-            Ok(vec) => {
+            Ok(Ok(vec)) => {
                 if let Err(e) = level
                     .chunk_saver
                     .save_chunks(&level.level_folder, vec)
@@ -254,6 +271,10 @@ pub async fn io_write_work(
                     level.record_save_failure(e.to_string());
                 }
                 false
+            }
+            Ok(Err(error)) => {
+                level.record_fatal_save_failure(error.to_string());
+                true
             }
             Err(_) => true,
         };
@@ -318,7 +339,20 @@ pub fn run_generation(
     }));
 
     match result {
-        Ok(cache) => RecvChunk::Generation(cache),
+        Ok(cache) => {
+            for chunk in &cache.chunks {
+                if let Chunk::Level(chunk) = chunk
+                    && let Err(error) = level.bind_chunk_poi(chunk)
+                {
+                    return RecvChunk::GenerationFailure {
+                        pos,
+                        stage,
+                        error: error.to_string(),
+                    };
+                }
+            }
+            RecvChunk::Generation(cache)
+        }
         Err(payload) => {
             let msg = payload
                 .downcast_ref::<&str>()

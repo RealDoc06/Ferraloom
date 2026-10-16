@@ -568,7 +568,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw = run_blocking(move || {
             chunk
-                .to_bytes()
+                .to_bytes_for_save()
                 .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))
         })
         .await

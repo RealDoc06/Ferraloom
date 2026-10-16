@@ -311,6 +311,8 @@ async fn refused_horn_and_unknown_chests_keep_mca_bytes_while_healthy_regions_wr
         std::fs::create_dir_all(&folder.region_folder).unwrap();
         let container = saved_container("minecraft:chest", item);
         let source = saved_chunk(container.clone());
+        let runtime = crate::chunk::poi_binding::TestRuntime::new(folder.poi_folder.clone());
+        source.bind_poi(&runtime.runtime).unwrap();
         let path = folder.region_folder.join("r.0.0.mca");
         let mut region = anvil::AnvilChunkFile::<ChunkData>::default();
         region
@@ -331,6 +333,7 @@ async fn refused_horn_and_unknown_chests_keep_mca_bytes_while_healthy_regions_wr
         assert_refused(&error, "minecraft:chest");
 
         let healthy = ChunkData::empty_sync(32, 0);
+        healthy.bind_poi(&runtime.runtime).unwrap();
         healthy.set_block_absolute_y(3, 64, 4, Block::DIAMOND_BLOCK.default_state.id);
         healthy.mark_dirty(true);
         tokio::time::timeout(

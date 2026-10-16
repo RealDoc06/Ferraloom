@@ -113,7 +113,7 @@ where
 
         let compressed = run_blocking(move || {
             let bytes = chunk_data
-                .to_bytes()
+                .to_bytes_for_save()
                 .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
             Ok::<_, ChunkWritingError>(compress_to_vec(&bytes[..], CompressionLevel::Fastest))
         })

@@ -18,6 +18,7 @@ use thiserror::Error;
 pub mod format;
 pub mod io;
 pub mod palette;
+pub(crate) mod poi_binding;
 pub(crate) mod poi_changes;
 pub mod postprocessing;
 
@@ -116,6 +117,7 @@ pub struct ChunkSections {
     pub block_sections: RwLock<Box<[BlockPalette]>>,
     // Always acquire block_sections before this runtime-only metadata.
     poi_changes: std::sync::Mutex<poi_changes::PoiChanges>,
+    poi_binding: std::sync::OnceLock<std::sync::Arc<poi_binding::PoiRuntime>>,
     pub random_tick_sections: RwLock<Option<Box<[RandomTickSectionCache]>>>,
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
@@ -357,6 +359,7 @@ impl ChunkSections {
             count: num_sections,
             block_sections: RwLock::new(block_sections),
             poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(num_sections)),
+            poi_binding: std::sync::OnceLock::new(),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
@@ -383,6 +386,7 @@ impl ChunkSections {
             count,
             block_sections: RwLock::new(block_sections),
             poi_changes: std::sync::Mutex::new(poi_changes::PoiChanges::new(count)),
+            poi_binding: std::sync::OnceLock::new(),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
@@ -717,6 +721,7 @@ impl ChunkData {
             condition,
         )?;
         if old != block_state_id {
+            self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             let state = BlockState::from_id(block_state_id);
             self.update_heightmap(relative_x, relative_y, relative_z, state);
         }
@@ -1026,6 +1031,10 @@ pub enum ChunkParsingError {
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
     ErrorSerializingChunk(pumpkin_nbt::Error),
+    #[error("POI preparation failed: {0}")]
+    Poi(#[from] crate::poi::PoiReconcileError),
+    #[error("POI persistence failed: {0}")]
+    PoiIo(#[source] std::io::Error),
 }
 
 #[cfg(test)]

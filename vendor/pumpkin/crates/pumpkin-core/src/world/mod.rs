@@ -373,7 +373,7 @@ pub struct World {
     #[cfg(test)]
     block_entity_update_packets: std::sync::Mutex<Vec<bytes::Bytes>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
-    pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
+    pub portal_poi: Arc<std::sync::Mutex<portal::PortalPoiStorage>>,
     /// Villager job sites and their current owners.
     pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
     /// Active raids in this world.
@@ -565,8 +565,8 @@ impl World {
         // TODO
         let generation_settings = NoiseSettings::from_dimension(&dimension);
 
-        // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
-        let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
+        // Queries and terrain persistence share Level's one lazily loaded POI store.
+        let portal_poi = level.poi_storage.clone();
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| std::sync::Mutex::new(dragon_fight::DragonFight::new()));
 
@@ -623,7 +623,7 @@ impl World {
             flushed_block_changes: std::sync::Mutex::new(Vec::new()),
             #[cfg(test)]
             block_entity_update_packets: std::sync::Mutex::new(Vec::new()),
-            portal_poi: std::sync::Mutex::new(portal_poi),
+            portal_poi,
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,

@@ -100,6 +100,7 @@ async fn frozen_autosave_flushes_watched_cache_and_respects_save_off_selection()
     add_objective(&server);
     let position = Vector2::new(0, 0);
     let chunk = ChunkData::empty_sync(0, 0);
+    overworld.level.bind_chunk_poi(&chunk).unwrap();
     chunk.set_block_absolute_y(3, 200, 11, Block::EMERALD_BLOCK.default_state.id);
     // Raw fixture palette writes bypass Level's normal dirty marking.
     chunk.mark_dirty(true);

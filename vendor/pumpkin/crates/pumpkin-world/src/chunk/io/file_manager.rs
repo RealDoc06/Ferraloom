@@ -679,6 +679,8 @@ mod tests {
         );
         let position = Vector2::new(0, 0);
         let chunk = marked_chunk(0, &Block::DIAMOND_BLOCK);
+        let runtime = crate::chunk::poi_binding::TestRuntime::new(folder.poi_folder.clone());
+        chunk.bind_poi(&runtime.runtime).unwrap();
         let original = Arc::downgrade(&chunk);
         // Move the only strong reference into the failed save, as an unload does.
         assert!(
