@@ -1489,7 +1489,11 @@ mod tests {
         // This current-thread runtime cannot run the IO tasks before our first yield.
         // Poll the real public fetch, then cancel it while its registration is pending.
         let mut fetch = Box::pin(level.get_or_fetch_chunk(position, |_| ()));
-        assert!(futures::poll!(&mut fetch).is_pending());
+        let first_poll = std::future::poll_fn(|context| {
+            std::task::Poll::Ready(std::future::Future::poll(fetch.as_mut(), context))
+        })
+        .await;
+        assert!(first_poll.is_pending());
         assert_eq!(level.chunk_listener.pending_count(), 1);
         assert_eq!(
             level.chunk_loading.lock().unwrap().ticket[&position].len(),
