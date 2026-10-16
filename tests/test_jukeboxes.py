@@ -86,7 +86,7 @@ class JukeboxCampaignTests(unittest.TestCase):
             command=Mock(side_effect=lambda command: trace.append(('live', command)) or ['SYNTHETIC live data']),
             save_flush=Mock(side_effect=lambda: trace.append(('flush',))))
         fixture = SimpleNamespace(server=server, report={'active_boot': 'java_source'})
-        chunk = {'typed': {'jukebox': {'RecordItem': discs.stack(),
+        chunk = {'typed': {'jukebox': {'id': 'minecraft:jukebox', 'RecordItem': discs.stack(),
                                       'ticks_since_song_started': discs.atom('Long', 1440)}}}
 
         def predicate(_server, command):
