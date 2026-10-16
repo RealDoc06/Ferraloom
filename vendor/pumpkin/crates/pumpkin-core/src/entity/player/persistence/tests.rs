@@ -938,7 +938,7 @@ async fn player_dat_equipment_uses_current_schema_after_legacy_and_mixed_imports
         let uuid = Uuid::from_u128(540 + index as u128);
         let mut input = expected.clone();
         if mode != "current" {
-            let mut inventory = expected.get_list("Inventory").unwrap().clone();
+            let mut inventory = expected.get_list("Inventory").unwrap().to_vec();
             for (slot, key) in mappings {
                 let mut item = if mode == "legacy" {
                     expected
