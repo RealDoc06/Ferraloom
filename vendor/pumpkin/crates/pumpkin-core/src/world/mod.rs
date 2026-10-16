@@ -737,6 +737,33 @@ impl World {
         self.enter_packet_callbacks_inner(chunk, false)
     }
 
+    /// A required, unready chunk cannot recover from a refused Full halo. Use
+    /// the same terminal cache and 3x3 dependency as `get_ready_chunk`, then let
+    /// the normal session seal/drain path discard input and retire parked work.
+    pub(crate) fn enter_player_packet_callbacks(
+        &self,
+        player: &Player,
+    ) -> Option<PacketCallbacks<'_>> {
+        let position = player.living_entity.entity.chunk_pos.load();
+        let callbacks = self.enter_packet_callbacks(Some(position));
+        if callbacks.is_none()
+            && !self.packet_admission_closed.load(Ordering::SeqCst)
+            && !self.level.cancel_token.is_cancelled()
+            && self.level.ready_chunk(position).is_none()
+        {
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    if let Some(error) = self.level.chunk_listener.failure(position.add_raw(dx, dz))
+                    {
+                        player.kick_for_chunk_failure(&error);
+                        return None;
+                    }
+                }
+            }
+        }
+        callbacks
+    }
+
     /// Reserve lifetime before inspecting ownership/readiness. Simulation
     /// retirement retains ownership until its callback wait and cleanup finish.
     /// Explicit mutation stages must retain their terrain requirement even when

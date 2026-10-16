@@ -384,9 +384,7 @@ impl PacketActivity {
             .as_ref()
             .is_some_and(|task| !task.explicit_world_stages)
         {
-            let Some(callbacks) =
-                world.enter_packet_callbacks(Some(player.living_entity.entity.chunk_pos.load()))
-            else {
+            let Some(callbacks) = world.enter_player_packet_callbacks(&player) else {
                 if self.state().sealed {
                     if let Some(task) = task {
                         task.cancel();

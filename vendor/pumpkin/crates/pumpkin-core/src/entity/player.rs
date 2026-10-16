@@ -2705,9 +2705,7 @@ impl Player {
 
             let world = self.world();
             let _callbacks = if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
-                let Some(callbacks) =
-                    world.enter_packet_callbacks(Some(self.living_entity.entity.chunk_pos.load()))
-                else {
+                let Some(callbacks) = world.enter_player_packet_callbacks(self) else {
                     self.packet_activity.park();
                     return;
                 };

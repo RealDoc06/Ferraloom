@@ -321,6 +321,55 @@ impl Fixture {
         fixture
     }
 
+    /// Populate the real terminal failure cache through the region reader and
+    /// scheduler before controlling readiness; never inject a synthetic error.
+    async fn refused_packet_halo(count: usize) -> Self {
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{chunk_system::ChunkLoading, level::ChunkUnavailable};
+
+        let fixture = Self::build_for_mode(count, false, false, GameMode::Spectator).await;
+        let world = fixture.players[0].world();
+        let neighbor = Vector2::new(-1, 0);
+        let path = world.level.level_folder.region_folder.join("r.-1.0.mca");
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(!world.level.loaded_chunks.contains_key(&neighbor));
+        std::fs::write(&path, b"refused packet halo region").unwrap();
+        let failed = world
+            .level
+            .chunk_listener
+            .add_single_chunk_listener(neighbor);
+        {
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            // Request only this stored chunk, without generating a Full halo.
+            loading.add_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
+            loading.send_change();
+        };
+        let refusal = bounded(failed)
+            .await
+            .err()
+            .expect("stored halo must be refused");
+        assert!(
+            matches!(refusal, ChunkUnavailable::ReadFailed { position, .. } if position == neighbor)
+        );
+        {
+            let mut loading = world.level.chunk_loading.lock().unwrap();
+            loading.remove_ticket(neighbor, ChunkLoading::MAX_LEVEL - 1);
+            loading.send_change();
+        };
+        Self::stop_terrain_schedulers(&fixture.server).await;
+        assert!(world.level.chunk_listener.failure(neighbor).is_some());
+        assert!(
+            world
+                .level
+                .chunk_listener
+                .failure(Vector2::new(0, 0))
+                .is_none()
+        );
+        assert!(!world.level.loaded_chunks.contains_key(&neighbor));
+        assert_eq!(std::fs::read(path).unwrap(), b"refused packet halo region");
+        fixture
+    }
+
     /// Stop terrain publication before installing synthetic FULL chunks. Keep
     /// the level's cancellation token live so packet admission and entity I/O
     /// retain their normal lifetimes; ordinary fixture shutdown still owns them.
@@ -1798,6 +1847,115 @@ async fn unready_and_retiring_terrain_still_park_spectator_input() {
     settled(player).await;
     assert_eq!(player.inventory.get_selected_slot(), 5);
     assert_eq!(player.packet_activity.state().active, 0);
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn refused_halo_closes_unready_input_but_preserves_ready_center_admission() {
+    let fixture = bounded(Fixture::refused_packet_halo(1)).await;
+    let player = &fixture.players[0];
+    let world = player.world();
+    let position = player.get_entity().chunk_pos.load();
+    let terrain = world.level.ready_chunk(position).unwrap();
+    let required = world.hold_packet_chunk(position);
+
+    // Completed postprocessing needs no halo revalidation. The same permanent
+    // neighboring refusal must not disconnect a player over this ready center.
+    enqueue(player, &SSetHeldItem { slot: 4 });
+    settled(player).await;
+    assert_eq!(player.inventory.get_selected_slot(), 4);
+    assert!(!player.client.closed());
+
+    terrain
+        .post_processing_ready
+        .store(false, Ordering::Release);
+    enqueue(player, &SSetHeldItem { slot: 7 });
+    dispatch(player).await;
+    assert!(player.client.closed());
+    assert!(player.packet_activity.state().sealed);
+    assert_eq!(player.packet_activity.state().active, 0);
+    assert!(player.inbound_packets.is_empty());
+    assert_eq!(player.inventory.get_selected_slot(), 4);
+    drive_until(
+        &fixture.server,
+        crate::finish_player_session(&fixture.server, player),
+    )
+    .await
+    .unwrap();
+    let saved = fixture
+        .server
+        .player_data_storage
+        .load_data(&player.gameprofile.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.get_int("SelectedItemSlot"), Some(4));
+    drop(required);
+    fixture.finish().await;
+    assert_eq!(
+        std::fs::read(world.level.level_folder.region_folder.join("r.-1.0.mca")).unwrap(),
+        b"refused packet halo region"
+    );
+}
+
+#[tokio::test]
+async fn refused_halo_retires_generic_child_and_releases_cross_player_parent() {
+    use pumpkin_util::math::vector3::Vector3;
+
+    let fixture = bounded(Fixture::refused_packet_halo(2)).await;
+    let source = &fixture.players[0];
+    let target = &fixture.players[1];
+    let world = target.world();
+    let position = target.get_entity().chunk_pos.load();
+    let required = world.hold_packet_chunk(position);
+    world
+        .level
+        .ready_chunk(position)
+        .unwrap()
+        .post_processing_ready
+        .store(false, Ordering::Release);
+    // The source remains an existing-only spectator outside this terrain lease.
+    source.get_entity().set_pos(Vector3::new(512.5, 65.0, 0.5));
+    let parent = source.packet_activity.enter_mutation().unwrap();
+    let child = parent.sync_scope(|| target.packet_activity.enter_mutation().unwrap());
+    let owned_target = target.clone();
+    let task = target
+        .client
+        .java()
+        .unwrap()
+        .spawn_activity_task(child, async move {
+            owned_target.add_experience_levels(7);
+        });
+    enqueue(target, &SSetHeldItem { slot: 7 });
+    enqueue(source, &SSetHeldItem { slot: 6 });
+    assert_eq!(source.packet_activity.state().active, 1);
+    assert_eq!(target.packet_activity.state().active, 1);
+    dispatch(target).await;
+    assert!(target.client.closed());
+    assert!(target.packet_activity.state().sealed);
+    assert!(bounded(task).await.unwrap_err().is_cancelled());
+    assert_eq!(target.packet_activity.state().active, 0);
+    assert_eq!(target.experience_level.load(Ordering::Relaxed), 0);
+    assert_eq!(target.inventory.get_selected_slot(), 0);
+    assert!(target.inbound_packets.is_empty());
+    settled(source).await;
+    assert_eq!(source.packet_activity.state().active, 0);
+    assert_eq!(source.inventory.get_selected_slot(), 6);
+    assert!(!source.client.closed());
+    drive_until(
+        &fixture.server,
+        crate::finish_player_session(&fixture.server, target),
+    )
+    .await
+    .unwrap();
+    let saved = fixture
+        .server
+        .player_data_storage
+        .load_data(&target.gameprofile.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.get_int("XpLevel"), Some(0));
+    assert_eq!(saved.get_int("SelectedItemSlot"), Some(0));
+    drop(required);
     fixture.finish().await;
 }
 
