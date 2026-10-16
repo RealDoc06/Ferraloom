@@ -479,6 +479,18 @@ macro_rules! impl_block_entity_for_chest {
                 Some(self)
             }
 
+            fn get_menu_inventory(
+                self: Arc<Self>,
+                world: &Arc<$crate::world::World>,
+            ) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
+                Some(
+                    $crate::block::container_inventory::ContainerMenuInventory::new(
+                        self,
+                        world.clone(),
+                    ),
+                )
+            }
+
             fn is_comparator_dirty(&self) -> bool {
                 self.comparator_dirty
                     .load(std::sync::atomic::Ordering::Relaxed)
@@ -528,6 +540,12 @@ macro_rules! impl_block_entity_for_chest {
 #[macro_export]
 macro_rules! impl_inventory_for_chest {
     ($struct_name:ty) => {
+        impl $crate::block::container_inventory::ViewedContainer for $struct_name {
+            fn viewers(&self) -> &$crate::block::viewer::ContainerViewerCount {
+                &self.viewers
+            }
+        }
+
         impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE

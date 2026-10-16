@@ -121,7 +121,7 @@ pub(crate) fn barrel_screen_handler_factory(
     position: &pumpkin_util::math::position::BlockPos,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
     let block_entity = world.get_block_entity(position)?;
-    let inventory = block_entity.clone().get_inventory()?;
+    let inventory = block_entity.clone().get_menu_inventory(world)?;
     Some(Box::new(BarrelScreenFactory {
         inventory,
         block_entity,

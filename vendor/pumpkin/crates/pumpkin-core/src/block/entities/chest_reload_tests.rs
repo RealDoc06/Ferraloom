@@ -10,7 +10,7 @@ use arc_swap::ArcSwap;
 use pumpkin_command::{snbt::SnbtParser, string_reader::StringReader};
 use pumpkin_config::{CommandsConfig, world::LevelConfig};
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockDirection, BlockId, BlockStateId,
     block_properties::{
         BarrelLikeProperties, ChestLikeProperties, ChestType, ComparatorLikeProperties,
         HorizontalFacing,
@@ -43,10 +43,11 @@ use pumpkin_world::{
 use super::ChestBlockEntity;
 use crate::{
     block::{
-        BlockBehaviour, GetRedstonePowerArgs,
+        BlockBehaviour, BlockMetadata, GetRedstonePowerArgs, OnNeighborUpdateArgs,
+        OnSyncedBlockEventArgs,
         blocks::{
-            barrel::barrel_screen_handler_factory,
-            chests::{TrappedChestBlock, chest_screen_handler_factory},
+            barrel::{BarrelBlock, barrel_screen_handler_factory},
+            chests::{ChestBlock, TrappedChestBlock, chest_screen_handler_factory},
         },
         entities::{
             BlockEntity, barrel::BarrelBlockEntity, comparator::ComparatorBlockEntity,
@@ -2040,10 +2041,8 @@ fn container_load_replaces_metadata_without_replacing_retained_inventory_or_menu
     }
 }
 
-/// Exercise real viewer transitions and block behavior, not a second counter model.
+/// Observe without ticking: menu callbacks must already have published effects.
 fn assert_viewer_effects(kind: ChestKind, world: &Arc<World>, live: &dyn BlockEntity, count: u8) {
-    assert_eq!(kind.viewers(live), u16::from(count));
-    live.tick(world);
     assert_eq!(kind.viewers(live), u16::from(count));
     let position = live.get_position();
     let state = world.get_block_state(&position);
@@ -2200,20 +2199,41 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
     // Official 26.3 Chest/Barrel startOpen and stopOpen skip spectators;
     // TrappedChest inherits Chest. The pinned pumpkin-inventory 5b53f064
     // constructor (lines 166–168) and on_closed (207–211) already guard both.
-    // Test the core factory path as well as the effects published by BE ticks.
+    // Test the core factory path and immediate effects, without any BE tick.
     for kind in CONTAINERS {
-        let fixture = MenuFixture::new().await;
+        let observed = Arc::new(Observed::default());
+        let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
         let live = kind.new(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
         let inventory = live.clone().get_inventory().unwrap();
         let factory = kind.factory(&world, &BLOCK_POS);
         let spectator = registered_menu_player(&world, GameMode::Spectator).await;
+        live.load_nbt(&compound(
+            "{LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:73L}",
+        ))
+        .unwrap();
+        let pending = saved(live.as_ref());
+        assert!(
+            spectator
+                .open_handled_screen(factory.as_ref(), Some(BLOCK_POS))
+                .is_none()
+        );
+        assert_eq!(saved(live.as_ref()), pending);
+        assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        world.flush_synced_block_events();
+        assert!(observed.take_events().is_empty());
+        assert!(observed.take_neighbors().is_empty());
+        live.load_nbt(&NbtCompound::new()).unwrap();
         let spectator_menu = open_menu(&spectator, factory.as_ref(), BLOCK_POS);
         assert_viewer_effects(kind, &world, live.as_ref(), 0);
-        assert!(Arc::ptr_eq(
-            &inventory,
-            &spectator_menu.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        world.flush_synced_block_events();
+        assert!(observed.take_events().is_empty());
+        assert!(std::ptr::eq(
+            inventory.as_any(),
+            spectator_menu.lock().unwrap().get_behaviour().slots[0]
+                .get_inventory()
+                .as_any()
         ));
         assert_eq!(fixture.execute("data modify block 0 64 0 Items set value [{Slot:0b,id:'minecraft:diamond',count:3}]" ).unwrap(), 1);
         assert_eq!(
@@ -2228,6 +2248,8 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
         ));
         spectator.on_handled_screen_closed();
         assert_viewer_effects(kind, &world, live.as_ref(), 0);
+        world.flush_synced_block_events();
+        assert!(observed.take_events().is_empty());
 
         let normal = registered_menu_player(&world, GameMode::Survival).await;
         for spectator_closes_first in [true, false] {
@@ -2256,7 +2278,8 @@ async fn materialized_container_factory_excludes_spectators_from_viewer_effects(
 #[tokio::test]
 async fn double_chest_factory_excludes_spectators_on_both_halves() {
     for kind in CHESTS {
-        let fixture = MenuFixture::new().await;
+        let observed = Arc::new(Observed::default());
+        let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
         let first = kind.new(BLOCK_POS);
         let second = kind.new(OTHER_POS);
@@ -2276,6 +2299,8 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
             }
+            world.flush_synced_block_events();
+            assert!(observed.take_events().is_empty());
             first
                 .clone()
                 .get_inventory()
@@ -2295,11 +2320,23 @@ async fn double_chest_factory_excludes_spectators_on_both_halves() {
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 1);
             }
+            world.flush_synced_block_events();
+            assert_eq!(
+                observed.take_events(),
+                [(BLOCK_POS, 1, 1), (OTHER_POS, 1, 1)]
+            );
             normal.on_handled_screen_closed();
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
             }
+            world.flush_synced_block_events();
+            assert_eq!(
+                observed.take_events(),
+                [(BLOCK_POS, 1, 0), (OTHER_POS, 1, 0)]
+            );
             spectator.on_handled_screen_closed();
+            world.flush_synced_block_events();
+            assert!(observed.take_events().is_empty());
             for entity in [&first, &second] {
                 assert_viewer_effects(kind, &world, entity.as_ref(), 0);
                 assert!(Arc::ptr_eq(
@@ -2329,9 +2366,11 @@ async fn normal_opener_becoming_spectator_is_recounted_after_five_ticks() {
             "normal menu survives recount"
         );
         let inventory = live.clone().get_inventory().unwrap();
-        assert!(Arc::ptr_eq(
-            &inventory,
-            &retained.lock().unwrap().get_behaviour().slots[0].get_inventory()
+        assert!(std::ptr::eq(
+            inventory.as_any(),
+            retained.lock().unwrap().get_behaviour().slots[0]
+                .get_inventory()
+                .as_any()
         ));
 
         player.gamemode.store(GameMode::Spectator);
@@ -2605,73 +2644,79 @@ async fn recount_revision_rejects_open_close_aba_before_menu_scan() {
     assert_viewer_effects(ChestKind::Normal, &world, live.as_ref(), 0);
 }
 
-#[tokio::test]
-async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates() {
-    use crate::block::blocks::{barrel::BarrelBlock, chests::ChestBlock};
-    use crate::block::{BlockMetadata, OnNeighborUpdateArgs, OnSyncedBlockEventArgs};
-    use pumpkin_data::BlockId;
-
-    #[derive(Default)]
-    struct Observed {
-        events: Mutex<Vec<(BlockPos, u8, u8)>>,
-        neighbors: Mutex<Vec<BlockPos>>,
-    }
-    impl Observed {
-        fn take_events(&self) -> Vec<(BlockPos, u8, u8)> {
-            std::mem::take(&mut *self.events.lock().unwrap())
-        }
-        fn take_neighbors(&self) -> Vec<BlockPos> {
-            std::mem::take(&mut *self.neighbors.lock().unwrap())
-        }
-    }
-    struct RecordEvents(Arc<Observed>);
-    impl BlockMetadata for RecordEvents {
-        fn ids() -> Box<[BlockId]> {
-            [BlockId::CHEST, BlockId::TRAPPED_CHEST, BlockId::BARREL].into()
-        }
-    }
-    impl BlockBehaviour for RecordEvents {
-        fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
-            self.0
-                .events
-                .lock()
-                .unwrap()
-                .push((*args.position, args.r#type, args.data));
-            // Observe the actual queue flush, then retain the production decision
-            // about forwarding the event. The BE/listener is never substituted.
-            match args.block.id {
-                BlockId::CHEST => ChestBlock.on_synced_block_event(args),
-                BlockId::TRAPPED_CHEST => TrappedChestBlock.on_synced_block_event(args),
-                BlockId::BARREL => BarrelBlock.on_synced_block_event(args),
-                _ => unreachable!(),
-            }
-        }
-    }
-    struct RecordNeighbors(ChestKind, Arc<Observed>);
-    impl BlockMetadata for RecordNeighbors {
-        fn ids() -> Box<[BlockId]> {
-            [BlockId::COMPARATOR].into()
-        }
-    }
-    impl BlockBehaviour for RecordNeighbors {
-        fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-            let live = args.world.get_block_entity(&BLOCK_POS).unwrap();
-            // Reenter the real tracker to catch callbacks under its state lock.
-            let _count = self.0.viewers(live.as_ref());
-            self.1.neighbors.lock().unwrap().push(*args.position);
-        }
-    }
-
-    for kind in CONTAINERS {
-        let observed = Arc::new(Observed::default());
+#[derive(Default)]
+struct Observed {
+    events: Mutex<Vec<(BlockPos, u8, u8)>>,
+    neighbors: Mutex<Vec<BlockPos>>,
+    on_neighbor: Mutex<Option<ViewerEffectHook>>,
+}
+type ViewerEffectHook = Box<dyn FnOnce(&Arc<World>) + Send + Sync>;
+impl Observed {
+    fn registry(self: &Arc<Self>, kind: ChestKind) -> Arc<crate::block::registry::BlockRegistry> {
         let mut registry = default_registry();
         Arc::get_mut(&mut registry)
             .unwrap()
-            .register(RecordEvents(observed.clone()));
+            .register(RecordEvents(self.clone()));
         Arc::get_mut(&mut registry)
             .unwrap()
-            .register(RecordNeighbors(kind, observed.clone()));
-        let fixture = MenuFixture::with_registry(registry).await;
+            .register(RecordNeighbors(kind, self.clone()));
+        registry
+    }
+    fn take_events(&self) -> Vec<(BlockPos, u8, u8)> {
+        std::mem::take(&mut *self.events.lock().unwrap())
+    }
+    fn take_neighbors(&self) -> Vec<BlockPos> {
+        std::mem::take(&mut *self.neighbors.lock().unwrap())
+    }
+}
+struct RecordEvents(Arc<Observed>);
+impl BlockMetadata for RecordEvents {
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::CHEST, BlockId::TRAPPED_CHEST, BlockId::BARREL].into()
+    }
+}
+impl BlockBehaviour for RecordEvents {
+    fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        self.0
+            .events
+            .lock()
+            .unwrap()
+            .push((*args.position, args.r#type, args.data));
+        // Observe the actual queue flush, then retain the production decision
+        // about forwarding the event. The BE/listener is never substituted.
+        match args.block.id {
+            BlockId::CHEST => ChestBlock.on_synced_block_event(args),
+            BlockId::TRAPPED_CHEST => TrappedChestBlock.on_synced_block_event(args),
+            BlockId::BARREL => BarrelBlock.on_synced_block_event(args),
+            _ => unreachable!(),
+        }
+    }
+}
+struct RecordNeighbors(ChestKind, Arc<Observed>);
+impl BlockMetadata for RecordNeighbors {
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::COMPARATOR].into()
+    }
+}
+impl BlockBehaviour for RecordNeighbors {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        let live = args.world.get_block_entity(&BLOCK_POS).unwrap();
+        // Reenter the real tracker to catch callbacks under its state lock.
+        let _count = self.0.viewers(live.as_ref());
+        assert!(!self.0.state_is_locked(live.as_ref()));
+        self.1.neighbors.lock().unwrap().push(*args.position);
+        let hook = self.1.on_neighbor.lock().unwrap().take();
+        if let Some(hook) = hook {
+            hook(args.world);
+        }
+    }
+}
+
+#[tokio::test]
+async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates() {
+    for kind in CONTAINERS {
+        let observed = Arc::new(Observed::default());
+        let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
         let world = fixture.source.world();
         let live = kind.new(BLOCK_POS);
         fixture.install(kind.block(), live.clone());
@@ -2688,7 +2733,6 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         let player = registered_menu_player(&world, GameMode::Survival).await;
         let factory = kind.factory(&world, &BLOCK_POS);
         open_menu(&player, factory.as_ref(), BLOCK_POS);
-        live.tick(&world);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(1));
         assert_eq!(kind.viewers(live.as_ref()), 1);
@@ -2700,9 +2744,9 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
             assert!(BarrelLikeProperties::from_state_id(world.get_block_state_id(&BLOCK_POS)).open);
         }
 
-        // No repeat on ticks 2–4. Exactly one on tick 5, then on each accepted
+        // No repeat on ticks 1–4. Exactly one on tick 5, then on each accepted
         // five-tick recheck. Neither unchanged recount updates neighbors.
-        for _ in 0..3 {
+        for _ in 0..4 {
             live.tick(&world);
             world.flush_synced_block_events();
             assert!(observed.take_events().is_empty());
@@ -2734,9 +2778,10 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
             });
             recheck_viewers(&world, &[live.as_ref()]);
             world.flush_synced_block_events();
-            assert!(
-                observed.take_events().is_empty(),
-                "stale revision is not accepted"
+            assert_eq!(
+                observed.take_events(),
+                [(BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1)],
+                "open and close publish immediately; the stale recount adds no event"
             );
             assert!(observed.take_neighbors().is_empty());
         }
@@ -2746,7 +2791,6 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         assert!(observed.take_neighbors().is_empty());
 
         player.on_handled_screen_closed();
-        live.tick(&world);
         world.flush_synced_block_events();
         assert_eq!(observed.take_events(), expected_events(0));
         assert_eq!(kind.viewers(live.as_ref()), 0);
@@ -2767,4 +2811,213 @@ async fn accepted_recounts_resend_chest_lids_without_repeating_neighbor_updates(
         );
         assert!(observed.take_neighbors().is_empty());
     }
+}
+
+#[tokio::test]
+async fn retained_menu_close_does_not_publish_effects_for_replacement_entity() {
+    for kind in CONTAINERS {
+        for double in [false, true] {
+            if double && matches!(kind, ChestKind::Barrel) {
+                continue;
+            }
+            let observed = Arc::new(Observed::default());
+            let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
+            let world = fixture.source.world();
+            let original = kind.new(BLOCK_POS);
+            fixture.install(kind.block(), original.clone());
+            let second = double.then(|| {
+                let second = kind.new(OTHER_POS);
+                fixture.install(kind.block(), second.clone());
+                let mut properties = ChestLikeProperties::default(kind.block());
+                properties.facing = HorizontalFacing::South;
+                properties.r#type = ChestType::Right;
+                fixture.set_state(BLOCK_POS, properties.to_state_id(kind.block()));
+                properties.r#type = ChestType::Left;
+                fixture.set_state(OTHER_POS, properties.to_state_id(kind.block()));
+                second
+            });
+            let old_player = registered_menu_player(&world, GameMode::Survival).await;
+            let new_player = registered_menu_player(&world, GameMode::Survival).await;
+            let old_factory = kind.factory(&world, &BLOCK_POS);
+            let retained = open_menu(&old_player, old_factory.as_ref(), BLOCK_POS);
+            assert_viewer_effects(kind, &world, original.as_ref(), 1);
+            world.flush_synced_block_events();
+            drop(observed.take_events());
+
+            let replacement = kind.new(BLOCK_POS);
+            world.add_block_entity(replacement.clone());
+            let new_factory = kind.factory(&world, &BLOCK_POS);
+            open_menu(&new_player, new_factory.as_ref(), BLOCK_POS);
+            assert_viewer_effects(kind, &world, replacement.as_ref(), 1);
+            world.flush_synced_block_events();
+            drop(observed.take_events());
+
+            // The old slot still mutates the retained allocation, not the new
+            // entity at the same position. Its close must not close the new lid.
+            retained.lock().unwrap().get_behaviour().slots[0]
+                .set_stack(ItemStack::new(3, &Item::DIAMOND));
+            assert_eq!(
+                original
+                    .clone()
+                    .get_inventory()
+                    .unwrap()
+                    .get_stack(0)
+                    .item_count,
+                3
+            );
+            assert!(
+                replacement
+                    .clone()
+                    .get_inventory()
+                    .unwrap()
+                    .get_stack(0)
+                    .is_empty()
+            );
+            old_player.on_handled_screen_closed();
+            assert_eq!(kind.viewers(original.as_ref()), 0);
+            assert_viewer_effects(kind, &world, replacement.as_ref(), 1);
+            world.flush_synced_block_events();
+            assert_eq!(
+                observed.take_events(),
+                if double {
+                    vec![(OTHER_POS, 1, 1)]
+                } else {
+                    Vec::new()
+                }
+            );
+            if let Some(second) = second {
+                assert_viewer_effects(kind, &world, second.as_ref(), 1);
+            }
+            new_player.on_handled_screen_closed();
+            assert_viewer_effects(kind, &world, replacement.as_ref(), 0);
+        }
+    }
+}
+
+#[tokio::test]
+async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effects() {
+    use crate::plugin::{
+        EventPriority, api::events::inventory::inventory_open::InventoryOpenEvent,
+    };
+
+    let kind = ChestKind::Trapped;
+    let observed = Arc::new(Observed::default());
+    let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
+    let world = fixture.source.world();
+    let live = kind.new(BLOCK_POS);
+    fixture.install(kind.block(), live.clone());
+    fixture.set_state(OTHER_POS, Block::COMPARATOR.default_state.id);
+    fixture.set_state(OTHER_POS.down(), Block::COMPARATOR.default_state.id);
+    let first = registered_menu_player(&world, GameMode::Survival).await;
+    let second = registered_menu_player(&world, GameMode::Survival).await;
+    let factory = kind.factory(&world, &BLOCK_POS);
+    let next_factory = kind.factory(&world, &BLOCK_POS);
+    let next = second.clone();
+    *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |world| {
+        // A real world callback can read inventory state and enter another
+        // menu transition. The outer tracker must hold neither state lock.
+        let live = world.get_block_entity(&BLOCK_POS).unwrap();
+        assert!(!kind.state_is_locked(live.as_ref()));
+        assert_eq!(kind.viewers(live.as_ref()), 1);
+        open_menu(&next, next_factory.as_ref(), BLOCK_POS);
+        next.on_handled_screen_closed();
+    }));
+    let first_menu = open_menu(&first, factory.as_ref(), BLOCK_POS);
+    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    world.flush_synced_block_events();
+    assert_eq!(
+        observed.take_events(),
+        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1)]
+    );
+    assert_eq!(observed.take_neighbors().len(), 6);
+
+    let next_factory = kind.factory(&world, &BLOCK_POS);
+    *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |world| {
+        // Upstream on_closed invokes Inventory::on_close while holding this
+        // menu. The callback must complete without attempting to relock it.
+        assert!(first_menu.try_lock().is_err());
+        let live = world.get_block_entity(&BLOCK_POS).unwrap();
+        assert_eq!(kind.viewers(live.as_ref()), 0);
+        assert!(!kind.state_is_locked(live.as_ref()));
+        open_menu(&second, next_factory.as_ref(), BLOCK_POS);
+        second.on_handled_screen_closed();
+    }));
+    first.on_handled_screen_closed();
+    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    world.flush_synced_block_events();
+    assert_eq!(
+        observed.take_events(),
+        [(BLOCK_POS, 1, 0), (BLOCK_POS, 1, 1), (BLOCK_POS, 1, 0)]
+    );
+    assert_eq!(observed.take_neighbors().len(), 6);
+
+    let server = world.server.upgrade().unwrap();
+    server.plugin_manager.register::<InventoryOpenEvent, _>(
+        Arc::new(MenuEventHook(Box::new(|event: &mut InventoryOpenEvent| {
+            assert!(event.player.menu_publication.is_active());
+            event.cancelled = true;
+        }))),
+        EventPriority::Normal,
+        true,
+    );
+    assert!(
+        first
+            .open_handled_screen(factory.as_ref(), Some(BLOCK_POS))
+            .is_none()
+    );
+    assert!(!first.menu_publication.is_active());
+    assert_viewer_effects(kind, &world, live.as_ref(), 0);
+    world.flush_synced_block_events();
+    assert!(observed.take_events().is_empty());
+    assert!(observed.take_neighbors().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn overlapping_viewer_callbacks_drain_in_order_without_waiting_under_menu_locks() {
+    let kind = ChestKind::Trapped;
+    let observed = Arc::new(Observed::default());
+    let fixture = MenuFixture::with_registry(observed.registry(kind)).await;
+    let world = fixture.source.world();
+    let live = kind.new(BLOCK_POS);
+    fixture.install(kind.block(), live.clone());
+    fixture.set_state(OTHER_POS, Block::COMPARATOR.default_state.id);
+    let first = registered_menu_player(&world, GameMode::Survival).await;
+    let second = registered_menu_player(&world, GameMode::Survival).await;
+    let factory = kind.factory(&world, &BLOCK_POS);
+    let (entered, wait_entered) = mpsc::channel();
+    let (resume, wait_resume) = mpsc::channel();
+    let wait_resume = Mutex::new(wait_resume);
+    *observed.on_neighbor.lock().unwrap() = Some(Box::new(move |_| {
+        entered.send(()).unwrap();
+        wait_resume
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+    }));
+    let runtime = tokio::runtime::Handle::current();
+    std::thread::scope(|scope| {
+        let opening = scope.spawn(|| {
+            let _runtime = runtime.enter();
+            open_menu(&first, factory.as_ref(), BLOCK_POS);
+        });
+        wait_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        open_menu(&second, factory.as_ref(), BLOCK_POS);
+        second.on_handled_screen_closed();
+        // Its transitions belong to the in-flight synchronous publisher. No
+        // world tick is required and neither producer waits on that publisher.
+        assert_eq!(kind.viewers(live.as_ref()), 1);
+        resume.send(()).unwrap();
+        opening.join().unwrap();
+    });
+    world.flush_synced_block_events();
+    assert_eq!(
+        observed.take_events(),
+        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1)]
+    );
+    assert_viewer_effects(kind, &world, live.as_ref(), 1);
+    first.on_handled_screen_closed();
+    world.flush_synced_block_events();
+    assert_eq!(observed.take_events(), [(BLOCK_POS, 1, 0)]);
+    assert_viewer_effects(kind, &world, live.as_ref(), 0);
 }

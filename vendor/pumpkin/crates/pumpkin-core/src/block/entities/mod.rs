@@ -174,6 +174,12 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Inventory used by menus. Viewer-aware containers retain their world for
+    /// synchronous open/close effects; ordinary storage access stays unchanged.
+    fn get_menu_inventory(self: Arc<Self>, _world: &Arc<World>) -> Option<Arc<dyn Inventory>> {
+        self.get_inventory()
+    }
+
     /// Copies the block entity's state on the item stack dropped for it.
     fn collect_item_components(&self, _stack: &mut ItemStack) {}
 

@@ -214,7 +214,7 @@ pub(crate) fn chest_screen_handler_factory(
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
     let state = world.get_block_state_id(position);
     let first_chest = world.get_block_entity(position)?;
-    let first_inventory = first_chest.clone().get_inventory()?;
+    let first_inventory = first_chest.clone().get_menu_inventory(world)?;
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
@@ -236,7 +236,7 @@ pub(crate) fn chest_screen_handler_factory(
 
     let mut entities = vec![first_chest];
     let inventory = if let Some(second) = second_chest
-        && let Some(second_inventory) = second.clone().get_inventory()
+        && let Some(second_inventory) = second.clone().get_menu_inventory(world)
     {
         // Java FIRST is the RIGHT half: both item order and title precedence
         // must remain independent of which half the player clicked.

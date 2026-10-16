@@ -1,6 +1,9 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use pumpkin_inventory::{
@@ -46,9 +49,38 @@ struct ContainerViewers {
     ticks_until_recheck: u8,
     // A retained allocation cannot ABA, unlike a wrapping revision integer.
     revision: Arc<()>,
+    pending: VecDeque<ViewerUpdate>,
+    publishing: bool,
 }
 
-/// Chest/trapped-chest/barrel recounts only. Other container trackers retain
+struct ViewerUpdate {
+    world: Arc<World>,
+    old: u16,
+    current: u16,
+}
+
+impl ContainerViewers {
+    /// Claim the synchronous drain while holding only the counter lock. Nested
+    /// or concurrent callbacks append in count order; they never wait on a
+    /// publisher which might itself need their menu/world locks.
+    fn enqueue(&mut self, world: &Arc<World>, recounted: bool) -> bool {
+        if recounted || self.published != self.current {
+            self.pending.push_back(ViewerUpdate {
+                world: world.clone(),
+                old: self.published,
+                current: self.current,
+            });
+            self.published = self.current;
+        }
+        if self.publishing || self.pending.is_empty() {
+            return false;
+        }
+        self.publishing = true;
+        true
+    }
+}
+
+/// Chest/trapped-chest/barrel transitions and recounts. Other trackers retain
 /// their existing behavior until their own menu contracts are integrated.
 pub(crate) struct ContainerViewerCount {
     state: Mutex<ContainerViewers>,
@@ -64,6 +96,8 @@ impl ContainerViewerCount {
                 published: 0,
                 ticks_until_recheck: 0,
                 revision: Arc::new(()),
+                pending: VecDeque::new(),
+                publishing: false,
             }),
             #[cfg(test)]
             before_recount: Mutex::new(None),
@@ -78,25 +112,91 @@ impl ContainerViewerCount {
     }
 
     pub(crate) fn open_container(&self) {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if state.current == 0 {
-            state.ticks_until_recheck = 5;
-        }
-        state.current = state.current.saturating_add(1);
-        state.revision = Arc::new(());
+        self.change(true, None);
     }
 
     pub(crate) fn close_container(&self) {
+        self.change(false, None);
+    }
+
+    fn change(&self, opening: bool, world: Option<&Arc<World>>) -> bool {
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // A stale retained menu may close after a recount already removed it.
-        state.current = state.current.saturating_sub(1);
+        if opening {
+            if state.current == 0 {
+                state.ticks_until_recheck = 5;
+            }
+            state.current = state.current.saturating_add(1);
+        } else {
+            // A stale retained menu may close after a recount already removed it.
+            state.current = state.current.saturating_sub(1);
+        }
         state.revision = Arc::new(());
+        world.is_some_and(|world| state.enqueue(world, false))
+    }
+
+    /// Actual menu Inventory callbacks publish before returning, without a BE
+    /// tick. If another callback is already publishing, its synchronous drain
+    /// owns the queued transition; no waiter, task or tick fallback is needed.
+    pub(crate) fn change_in_world<T>(&self, entity: &T, world: &Arc<World>, opening: bool)
+    where
+        T: BlockEntity + ViewerCountListener + 'static,
+    {
+        if self.change(opening, Some(world)) {
+            self.drain(entity, &entity.get_position());
+        }
+    }
+
+    fn drain<T>(&self, entity: &T, position: &BlockPos)
+    where
+        T: BlockEntity + ViewerCountListener + 'static,
+    {
+        loop {
+            let update = {
+                let mut state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(update) = state.pending.pop_front() else {
+                    state.publishing = false;
+                    return;
+                };
+                update
+            };
+            let ViewerUpdate {
+                world,
+                old,
+                current,
+            } = update;
+            // A retained menu still owns its old entity, never a replacement at
+            // the same coordinates. Like Java's removed check, suppress external
+            // effects once that entity is detached. This lookup only validates
+            // identity; it is never used to choose the counter to mutate.
+            let is_attached = || {
+                world.get_block_entity(position).is_some_and(|live| {
+                    live.as_any()
+                        .downcast_ref::<T>()
+                        .is_some_and(|live| std::ptr::eq(live, entity))
+                })
+            };
+            if !is_attached() {
+                continue;
+            }
+            // World, sound, redstone and menu callbacks are outside the viewer
+            // and ChestState locks. Reentry appends to this drain.
+            if old != current {
+                match (old, current) {
+                    (0, _) => entity.on_container_open(&world, position),
+                    (_, 0) => entity.on_container_close(&world, position),
+                    _ => {}
+                }
+            }
+            if is_attached() {
+                entity.on_viewer_count_update(&world, position, old, current);
+            }
+        }
     }
 
     #[cfg(test)]
@@ -125,8 +225,7 @@ impl ContainerViewerCount {
                 })
             }
         };
-        let mut recounted = false;
-        if let Some(revision) = revision {
+        let recount = revision.and_then(|revision| {
             #[cfg(test)]
             {
                 let hook = self.before_recount.lock().unwrap().take();
@@ -134,41 +233,27 @@ impl ContainerViewerCount {
                     hook();
                 }
             }
-            let count = count_container_viewers(entity, world);
+            count_container_viewers(entity, world).map(|count| (revision, count))
+        });
+        let publish = {
             let mut state = self
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(count) = count
+            let mut recounted = false;
+            if let Some((revision, count)) = recount
                 && Arc::ptr_eq(&revision, &state.revision)
             {
                 state.current = count;
                 state.revision = Arc::new(());
                 recounted = true;
             }
-        }
-        let (old, current) = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let old = state.published;
-            state.published = state.current;
-            (old, state.current)
+            // Accepted unchanged recounts still resend chest lids (N3). Stale
+            // revisions and deferred scans do not enqueue a recount callback.
+            state.enqueue(world, recounted)
         };
-        // World, sound, redstone and menu callbacks are outside the viewer lock.
-        if old != current {
-            match (old, current) {
-                (0, _) => entity.on_container_open(world, position),
-                (_, 0) => entity.on_container_close(world, position),
-                _ => {}
-            }
-        }
-        // Java recheckOpeners notifies even when its accepted count is unchanged.
-        // Chest listeners resend the lid event; trapped neighbor updates remain
-        // gated by old != current, and the barrel count listener is empty.
-        if recounted || old != current {
-            entity.on_viewer_count_update(world, position, old, current);
+        if publish {
+            self.drain(entity, position);
         }
     }
 }
