@@ -378,6 +378,10 @@ pub struct PoiRegion {
     // Identity changes on every mutation, avoiding revision wrap/ABA on IO ack.
     version: Arc<()>,
     write_active: Arc<AtomicBool>,
+    #[cfg(test)]
+    completed_writes: Arc<std::sync::atomic::AtomicUsize>,
+    #[cfg(test)]
+    write_pause: Arc<std::sync::Mutex<Option<PoiWritePause>>>,
 }
 
 impl PoiRegion {
@@ -616,6 +620,18 @@ impl PoiRegion {
             return Ok(());
         }
 
+        #[cfg(test)]
+        {
+            let pause = self.write_pause.lock().unwrap().take();
+            if let Some(pause) = pause {
+                let _ = pause.entered.send(());
+                pause
+                    .resume
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .map_err(io::Error::other)?;
+            }
+        }
+
         if self.entries.is_empty() && self.section_validity.is_empty() {
             // Don't save empty regions, delete the file if it exists
             if path.exists() {
@@ -713,6 +729,8 @@ impl PoiRegion {
 
         self.dirty = false;
         self.dirty_chunks.clear();
+        #[cfg(test)]
+        self.completed_writes.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -824,6 +842,13 @@ impl PoiRegion {
 
         Ok(region)
     }
+}
+
+#[cfg(test)]
+#[derive(Debug)]
+struct PoiWritePause {
+    entered: tokio::sync::oneshot::Sender<()>,
+    resume: std::sync::mpsc::Receiver<()>,
 }
 
 struct PoiWriteReservation(Arc<AtomicBool>);
@@ -1053,6 +1078,37 @@ impl PoiStorage {
         }
 
         Ok(best.map(|(pos, poi_type, _)| (pos, poi_type)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn completed_region_writes(&self, chunk: ChunkPos) -> usize {
+        self.regions[&(chunk.x >> 5, chunk.y >> 5)]
+            .completed_writes
+            .load(Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn region_is_dirty(&self, chunk: ChunkPos) -> bool {
+        self.regions[&(chunk.x >> 5, chunk.y >> 5)].is_dirty()
+    }
+
+    /// Deterministic actual IO boundary for completion/cancellation fixtures.
+    #[cfg(test)]
+    pub(crate) fn pause_region_write(
+        &mut self,
+        chunk: ChunkPos,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (entered, received) = tokio::sync::oneshot::channel();
+        let (resume, resumed) = std::sync::mpsc::channel();
+        let region = &self.regions[&(chunk.x >> 5, chunk.y >> 5)];
+        *region.write_pause.lock().unwrap() = Some(PoiWritePause {
+            entered,
+            resume: resumed,
+        });
+        (received, resume)
     }
 
     /// Reserve one region and copy its current accepted memory. Encoding and IO
