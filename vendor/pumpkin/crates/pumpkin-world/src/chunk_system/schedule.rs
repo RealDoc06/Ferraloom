@@ -1116,6 +1116,47 @@ impl GenerationSchedule {
         }
     }
 
+    /// Hold the lifecycle write side, live ticket guard and coordinator first.
+    /// Ordinary writers retain map read references; generation is excluded by
+    /// holder.occupied. Validate Arc + stamp under the exclusive map entry and
+    /// retain that same entry through removal (map -> terrain, never the reverse).
+    fn unpublish_prepared(
+        &self,
+        pos: ChunkPos,
+        chunk: &SyncChunk,
+        unload: &mut super::unload::ChunkUnloadAccess<'_>,
+    ) -> bool {
+        let dashmap::mapref::entry::Entry::Occupied(entry) = self.public_chunk_map.entry(pos)
+        else {
+            return false;
+        };
+        if !Arc::ptr_eq(entry.get(), chunk) || !unload.prepare_or_defer(pos, chunk) {
+            return false;
+        }
+        entry.remove();
+        self.chunk_activation_revision
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.chunk_activation_changed.notify_waiters();
+        self.loaded_chunk_changes
+            .push(LoadedChunkChange::Unloaded(pos));
+        true
+    }
+
+    /// Standalone Level has no World BE worker. Run the same POI preparation
+    /// after releasing every publication/ticket/coordinator guard; the next
+    /// unload pass still performs the final exclusive entry/stamp check.
+    fn prepare_standalone_unloads(&self, level: &Level) {
+        let requests = self.chunk_unload.access().requests();
+        for (pos, chunk) in requests {
+            if let Ok(stamp) = level.prepare_chunk_poi(&chunk) {
+                let mut unload = self.chunk_unload.access();
+                if unload.is_requested(pos, &chunk) {
+                    unload.mark_prepared_poi(pos, &chunk, stamp);
+                }
+            }
+        }
+    }
+
     fn process_unload_queue(&mut self, level: &Level) {
         // Vanilla save-off keeps ordinary terrain resident. Entity-manager
         // cleanup is independent; shutdown still saves and releases terrain.
@@ -1168,14 +1209,18 @@ impl GenerationSchedule {
             }
 
             let mut unload = coordinator.access();
-            if holder.public
-                && let Some(Chunk::Level(chunk)) = &holder.chunk
-                && !unload.prepare_or_defer(pos, chunk)
-            {
-                self.chunk_map.insert(pos, holder);
-                self.unload_chunks.insert(pos);
-                snapshots_requested = true;
-                continue;
+            if holder.public {
+                let retired = match &holder.chunk {
+                    Some(Chunk::Level(chunk)) => self.unpublish_prepared(pos, chunk, &mut unload),
+                    _ => false,
+                };
+                if !retired {
+                    self.chunk_map.insert(pos, holder);
+                    self.unload_chunks.insert(pos);
+                    snapshots_requested = true;
+                    continue;
+                }
+                holder.public = false;
             }
 
             for task in holder.tasks {
@@ -1191,10 +1236,6 @@ impl GenerationSchedule {
             self.graph.drop_edge_chain(holder.occupied_by);
             holder.occupied_by = EdgeKey::null();
 
-            if holder.public {
-                self.unpublish_chunk_locked(pos);
-                holder.public = false;
-            }
             unload.finished(pos);
             drop(unload);
 
@@ -1221,6 +1262,8 @@ impl GenerationSchedule {
             // it while holding publication/ticket/coordinator locks.
             if let Some(world) = level.world_portal.load().as_ref() {
                 world.request_chunk_unload_snapshots();
+            } else {
+                self.prepare_standalone_unloads(level);
             }
         }
         if chunks.is_empty() {
@@ -2101,3 +2144,6 @@ impl GenerationSchedule {
 
 #[cfg(test)]
 mod refused_read_tests;
+
+#[cfg(test)]
+mod poi_tests;

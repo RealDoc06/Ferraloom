@@ -5,7 +5,10 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 enum UnloadState {
     Live,
     Requested(SyncChunk),
-    Prepared(Weak<crate::chunk::ChunkData>),
+    Prepared(
+        Weak<crate::chunk::ChunkData>,
+        Option<crate::chunk::PoiReconciliationStamp>,
+    ),
 }
 
 /// Coordinates World-owned block entities with the terrain scheduler. A prepared
@@ -35,7 +38,7 @@ impl ChunkUnloadAccess<'_> {
     }
 
     pub fn published(&mut self, pos: ChunkPos) {
-        self.cancel(pos);
+        self.mark_live(pos);
     }
 
     /// A renewed owner or a publication change invalidates an earlier decision
@@ -46,18 +49,24 @@ impl ChunkUnloadAccess<'_> {
         }
     }
 
-    /// Called with the ticket and publication locks held. Chunks with no World
-    /// block entities need no handshake, including standalone Level instances.
+    /// Called with ticket/publication locks and the exclusive public map entry.
+    /// Every bound terrain publication needs a current POI stamp, even with no
+    /// block entities. Unbound standalone fixtures retain the legacy handshake.
     pub fn prepare_or_defer(&mut self, pos: ChunkPos, chunk: &SyncChunk) -> bool {
         match self.0.get(&pos) {
-            None => return true,
-            Some(UnloadState::Prepared(saved)) if saved.ptr_eq(&Arc::downgrade(chunk)) => {
-                return true;
+            None if !chunk.has_poi_binding() => return true,
+            Some(UnloadState::Prepared(saved, stamp)) if saved.ptr_eq(&Arc::downgrade(chunk)) => {
+                if stamp.as_ref().map_or_else(
+                    || !chunk.has_poi_binding(),
+                    |stamp| chunk.read_for_poi().is_current(stamp),
+                ) {
+                    return true;
+                }
             }
             Some(UnloadState::Requested(requested)) if Arc::ptr_eq(requested, chunk) => {
                 return false;
             }
-            Some(_) => {}
+            Some(_) | None => {}
         }
         self.0.insert(pos, UnloadState::Requested(chunk.clone()));
         false
@@ -80,7 +89,21 @@ impl ChunkUnloadAccess<'_> {
 
     pub fn mark_prepared(&mut self, pos: ChunkPos, chunk: &SyncChunk) {
         self.0
-            .insert(pos, UnloadState::Prepared(Arc::downgrade(chunk)));
+            .insert(pos, UnloadState::Prepared(Arc::downgrade(chunk), None));
+    }
+
+    /// Call only after POI preparation and the existing BE snapshot succeeded.
+    /// Final map removal checks this exact Arc and rechecks its terrain revision.
+    pub fn mark_prepared_poi(
+        &mut self,
+        pos: ChunkPos,
+        chunk: &SyncChunk,
+        stamp: crate::chunk::PoiReconciliationStamp,
+    ) {
+        self.0.insert(
+            pos,
+            UnloadState::Prepared(Arc::downgrade(chunk), Some(stamp)),
+        );
     }
 
     pub fn finished(&mut self, pos: ChunkPos) {

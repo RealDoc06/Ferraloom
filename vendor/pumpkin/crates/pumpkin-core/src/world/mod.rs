@@ -1445,6 +1445,15 @@ impl World {
     /// an in-flight command cannot mutate a detached BE after its final snapshot.
     /// The caller holds `entity_lifecycle`. No publication write lock is held here.
     fn retire_block_entities(&self, pos: Vector2<i32>, requested: Option<&SyncChunk>) -> bool {
+        self.retire_prepared_block_entities(pos, requested, None)
+    }
+
+    fn retire_prepared_block_entities(
+        &self,
+        pos: Vector2<i32>,
+        requested: Option<&SyncChunk>,
+        stamp: Option<pumpkin_world::chunk::PoiReconciliationStamp>,
+    ) -> bool {
         // Check live tickets before taking the coordinator, matching scheduler
         // order. A ticket may have returned before its scheduler change arrives.
         let loading = requested.map(|_| {
@@ -1488,7 +1497,11 @@ impl World {
         let mut entities = match self.block_entities.entry(pos) {
             dashmap::mapref::entry::Entry::Occupied(entities) => entities,
             dashmap::mapref::entry::Entry::Vacant(_) => {
-                unload.mark_prepared(pos, &chunk);
+                if let Some(stamp) = stamp {
+                    unload.mark_prepared_poi(pos, &chunk, stamp);
+                } else {
+                    unload.mark_prepared(pos, &chunk);
+                }
                 return true;
             }
         };
@@ -1524,7 +1537,11 @@ impl World {
         // Keep the shard write lock through removal: tick vectors clone handles
         // directly from this map without going through get_block_entity.
         entities.remove();
-        unload.mark_prepared(pos, &chunk);
+        if let Some(stamp) = stamp {
+            unload.mark_prepared_poi(pos, &chunk, stamp);
+        } else {
+            unload.mark_prepared(pos, &chunk);
+        }
         // A new owner can arrive immediately after this snapshot. The next
         // active-chunk pass migrates pending BEs even if eligibility never changed.
         self.pending_block_entity_migrations.push(pos);
@@ -1539,11 +1556,24 @@ impl World {
         let running = UnloadSnapshotWorker(self.clone());
         self.level.spawn_task(async move {
             let _running = running;
-            let _lifecycle = world.entity_lifecycle.lock().await;
             let requests = world.level.chunk_unload.access().requests();
             let mut prepared = false;
             for (pos, chunk) in requests {
-                prepared |= world.retire_block_entities(pos, Some(&chunk));
+                // Preload/reconcile outside coordinator, BE and terrain locks.
+                let stamp = world
+                    .level
+                    .prepare_chunk_poi_for_unload(chunk.clone())
+                    .await;
+                match stamp {
+                    Ok(stamp) => {
+                        let _lifecycle = world.entity_lifecycle.lock().await;
+                        prepared |=
+                            world.retire_prepared_block_entities(pos, Some(&chunk), Some(stamp));
+                    }
+                    Err(error) => {
+                        error!("POI unload preparation failed at {pos:?}: {error}");
+                    }
+                };
             }
             // Busy handles stay requested for the next ordinary unload pass.
             // Only successful snapshots wake the scheduler; retries never spin.
