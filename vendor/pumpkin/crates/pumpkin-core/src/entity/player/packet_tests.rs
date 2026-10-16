@@ -3071,7 +3071,9 @@ async fn ticker_continuously_overdue_epochs_poll_once_and_other_player_progresse
     use crate::{entity::player::SpamType, server::ticker::Ticker};
     use pumpkin_gametest::GameTestRunner;
 
-    let fixture = Fixture::new(2).await;
+    // Exact first-epoch progress requires completed login terrain readiness;
+    // the minimal fixture may still be waiting for asynchronous activation.
+    let fixture = Fixture::connected(2, false).await;
     let player = fixture.players[0].clone();
     let other = fixture.players[1].clone();
     let server = fixture.server.clone();
