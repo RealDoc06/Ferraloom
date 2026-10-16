@@ -91,18 +91,11 @@ impl PortalType {
 
                         let platform_pos = BlockPos::new(100, 49, 0);
 
-                        // Ensure chunks covering the platform are loaded/generated
-                        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                            tokio::task::block_in_place(|| {
-                                handle.block_on(async {
-                                    let center_chunk =
-                                        Vector2::new(platform_pos.0.x >> 4, platform_pos.0.z >> 4);
-                                    dest_world
-                                        .level
-                                        .get_or_fetch_chunk(center_chunk, |_| ())
-                                        .await;
-                                });
-                            });
+                        if let Err(error) =
+                            load_portal_chunks(&dest_world, platform_pos.chunk_position(), 1)
+                        {
+                            tracing::error!("Aborting End portal transition: {error}");
+                            return None;
                         }
 
                         // Generate/regenerate the obsidian platform (5x5 obsidian at Y=48, and 5x5x3 air above it)
@@ -136,6 +129,15 @@ impl PortalType {
                         })
                     } else {
                         // Leaving the End through the exit portal: return to overworld spawn
+                        let info = dest_world.level_info.load();
+                        if let Err(error) = load_portal_chunks(
+                            &dest_world,
+                            Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4),
+                            0,
+                        ) {
+                            tracing::error!("Aborting End portal return: {error}");
+                            return None;
+                        }
                         if let Some(player) =
                             current_level.get_player_by_id(caller.get_entity().entity_id)
                         {
@@ -163,7 +165,6 @@ impl PortalType {
                             }
                         }
 
-                        let info = dest_world.level_info.load();
                         Some(TeleportTransition {
                             new_world: dest_world,
                             position: Vector3::new(
@@ -211,45 +212,43 @@ impl PortalType {
                             return None;
                         }
                     };
-                let exit_portal = exit_portal.or_else(|| {
-                    // Ensure the chunks around approximate_exit_pos are generated/loaded in dest_world
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        tokio::task::block_in_place(|| {
-                            handle.block_on(async {
-                                let center_chunk = Vector2::new(
-                                    approximate_exit_pos.0.x >> 4,
-                                    approximate_exit_pos.0.z >> 4,
-                                );
-                                for dx in -1..=1 {
-                                    for dz in -1..=1 {
-                                        let chunk_pos =
-                                            Vector2::new(center_chunk.x + dx, center_chunk.y + dz);
-                                        dest_world
-                                            .level
-                                            .get_or_fetch_chunk(chunk_pos, |_| ())
-                                            .await;
-                                    }
-                                }
-                            });
-                        });
+                let exit_portal = match exit_portal {
+                    Some(portal) => Some(portal),
+                    None => {
+                        if let Err(error) = load_portal_chunks(
+                            &dest_world,
+                            approximate_exit_pos.chunk_position(),
+                            1,
+                        ) {
+                            tracing::error!(
+                                "Aborting portal creation after chunk load failure: {error}"
+                            );
+                            return None;
+                        }
+                        if let Some((build_pos, axis, is_fallback)) =
+                            NetherPortal::find_safe_location(
+                                &dest_world,
+                                approximate_exit_pos,
+                                source_portal_axis,
+                            )
+                        {
+                            NetherPortal::build_portal_frame(
+                                &dest_world,
+                                build_pos,
+                                axis,
+                                is_fallback,
+                            );
+                            Some(PortalSearchResult {
+                                lower_corner: build_pos,
+                                axis,
+                                width: 2,
+                                height: 3,
+                            })
+                        } else {
+                            None
+                        }
                     }
-
-                    if let Some((build_pos, axis, is_fallback)) = NetherPortal::find_safe_location(
-                        &dest_world,
-                        approximate_exit_pos,
-                        source_portal_axis,
-                    ) {
-                        NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback);
-                        Some(PortalSearchResult {
-                            lower_corner: build_pos,
-                            axis,
-                            width: 2,
-                            height: 3,
-                        })
-                    } else {
-                        None
-                    }
-                });
+                };
 
                 let (final_pos, yaw) = exit_portal.map_or_else(
                     || (approximate_exit_pos.0.to_f64(), None),
@@ -285,6 +284,37 @@ impl PortalType {
             }
         }
     }
+}
+
+/// Synchronous portal workers must return a load refusal before inspecting or
+/// modifying destination terrain. Missing runtime ownership is also an error.
+fn load_portal_chunks(
+    world: &Arc<World>,
+    center: Vector2<i32>,
+    radius: i32,
+) -> std::io::Result<()> {
+    let handle = tokio::runtime::Handle::try_current().map_err(std::io::Error::other)?;
+    tokio::task::block_in_place(|| {
+        handle.block_on(async {
+            world
+                .level
+                .get_or_fetch_chunk(center, |_| ())
+                .await
+                .map_err(std::io::Error::other)?;
+            for dx in -radius..=radius {
+                for dz in -radius..=radius {
+                    if dx != 0 || dz != 0 {
+                        world
+                            .level
+                            .get_or_fetch_chunk(center.add_raw(dx, dz), |_| ())
+                            .await
+                            .map_err(std::io::Error::other)?;
+                    }
+                }
+            }
+            Ok(())
+        })
+    })
 }
 
 pub struct TeleportTransition {
@@ -364,6 +394,71 @@ mod tests {
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::world_seed::Seed;
     use pumpkin_world::{chunk::ChunkData, level::Level, world_info::LevelData};
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn refused_terrain_aborts_portal_before_fallback_and_releases_rayon_worker() {
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let path = level.level_folder.region_folder.join("r.0.0.mca");
+        let source = b"refused destination region";
+        std::fs::write(&path, source).unwrap();
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            std::sync::Weak::new(),
+            Arc::default(),
+        ));
+        let target = BlockPos::new(256, 64, 256);
+        let caller = crate::entity::Entity::new(world.clone(), target.0.to_f64(), &EntityType::PIG);
+        let worker_world = world.clone();
+        let runtime = tokio::runtime::Handle::current();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        let (send, receive) = tokio::sync::oneshot::channel();
+        pool.spawn(move || {
+            let _runtime = runtime.enter();
+            let transition = PortalType::Nether.get_portal_destination(
+                &worker_world,
+                worker_world.clone(),
+                &caller,
+                None,
+            );
+            let _ = send.send(transition.is_none());
+        });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(10), receive)
+                .await
+                .unwrap()
+                .unwrap()
+        );
+        let (send, receive) = tokio::sync::oneshot::channel();
+        pool.spawn(move || {
+            let _ = send.send(());
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(1), receive)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!world.level.is_chunk_loaded(&target.chunk_position()));
+        assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        assert!(world.entities.load().is_empty());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(10), world.level.shutdown())
+                .await
+                .unwrap()
+                .is_err()
+        );
+        assert_eq!(std::fs::read(path).unwrap(), source);
+    }
 
     #[tokio::test]
     async fn poi_lookup_failure_aborts_portal_creation_and_fallback_transition() {

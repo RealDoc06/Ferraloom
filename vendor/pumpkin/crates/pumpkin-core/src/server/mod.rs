@@ -842,6 +842,24 @@ impl Server {
             return None;
         }
 
+        // A refused spawn must release the local UUID lease without publishing a
+        // Player or making default spawn data eligible for any of the final writers.
+        let spawn = tokio::select! {
+            biased;
+            () = player.client.await_close_interrupt() => return None,
+            result = world.prepare_initial_spawn(&player) => result,
+        };
+        let (position, yaw, pitch) = match spawn {
+            Ok(spawn) => spawn,
+            Err(error) => {
+                player.kick_for_chunk_failure(&error);
+                return None;
+            }
+        };
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
+        player.living_entity.entity.last_pos.store(position);
+
         // Wrap in Arc after all three persistence families are loaded.
         let player = Arc::new(player);
         {
@@ -1532,12 +1550,131 @@ mod player_data_tests {
 
     #[tokio::test]
     async fn player_data_failure_rejects_login_before_player_publication_or_save() {
-        failed_persistence_rejects_login(false).await;
+        failed_persistence_rejects_login(AdmissionFailure::Player).await;
     }
 
     #[tokio::test]
     async fn advancement_failure_rejects_before_session_login_event_or_save() {
-        failed_persistence_rejects_login(true).await;
+        failed_persistence_rejects_login(AdmissionFailure::Advancement).await;
+    }
+
+    #[tokio::test]
+    async fn refused_spawn_releases_uuid_before_publication_or_any_family_snapshot() {
+        failed_persistence_rejects_login(AdmissionFailure::Spawn).await;
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the real partial-spawn failure, packet exit, three final writers and UUID reuse together."
+    )]
+    async fn returning_spawn_refusal_closes_packet_progress_and_runs_existing_session_cleanup() {
+        let fixture = crate::data::player_server::test::player_fixture().await;
+        let world = fixture.player.world();
+        let java = fixture.client.java().unwrap();
+        java.set_player(fixture.player.clone());
+        fixture
+            .player
+            .has_played_before
+            .store(true, Ordering::Relaxed);
+        // Existing-only view delivery keeps this fixture focused on the direct
+        // spawn activation wait instead of unrelated simulation-distance loads.
+        fixture
+            .player
+            .gamemode
+            .store(pumpkin_util::GameMode::Spectator);
+        world.level_info.rcu(|current| {
+            let mut info = (**current).clone();
+            info.game_rules.spectators_generate_chunks = false;
+            info
+        });
+        fixture.player.config.rcu(|current| {
+            let mut config = (**current).clone();
+            config.view_distance = std::num::NonZero::new(2).unwrap();
+            config
+        });
+        fixture
+            .player
+            .living_entity
+            .entity
+            .set_pos(pumpkin_util::math::vector3::Vector3::new(
+                256.5, 70.0, 256.5,
+            ));
+        let path = world.level.level_folder.region_folder.join("r.0.0.mca");
+        fs::write(&path, b"refused returning-player region").unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            world.spawn_java_player(
+                &fixture.server.basic_config,
+                &fixture.player,
+                &fixture.server,
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(
+            java.is_closed(),
+            "a refused ready-chunk wait must close the connected session"
+        );
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            java.progress_player_packets(&fixture.player, &fixture.server),
+        )
+        .await
+        .unwrap();
+        let exit_status = std::sync::atomic::AtomicI32::new(0);
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            crate::finish_player_session_with_status(
+                &fixture.server,
+                &fixture.player,
+                &exit_status,
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(exit_status.load(Ordering::Relaxed), 0);
+        assert!(fixture.player.session.lock().unwrap().is_none());
+        let uuid = fixture.player.gameprofile.id;
+        drop(
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                fixture
+                    .server
+                    .player_data_storage
+                    .reserve_player_session(uuid),
+            )
+            .await
+            .unwrap(),
+        );
+        assert!(fixture.server.get_player_by_uuid(uuid).is_none());
+        assert!(
+            fixture
+                .server
+                .player_data_storage
+                .load_data(&uuid)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            fixture
+                .server
+                .advancement_manager
+                .advancement_path
+                .join(format!("{uuid}.json"))
+                .exists()
+        );
+        assert!(fixture.server.statistics_manager.player_path(uuid).exists());
+        assert_eq!(fs::read(&path).unwrap(), b"refused returning-player region");
+        crate::data::player_server::test::close_fixture(&fixture).await;
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum AdmissionFailure {
+        Player,
+        Advancement,
+        Spawn,
     }
 
     struct ObserveLogin(AtomicBool);
@@ -1558,7 +1695,9 @@ mod player_data_tests {
         clippy::too_many_lines,
         reason = "Keep each save failure with admission, publication and no-replacement controls."
     )]
-    async fn failed_persistence_rejects_login(advancement_failure: bool) {
+    async fn failed_persistence_rejects_login(failure: AdmissionFailure) {
+        let advancement_failure = failure == AdmissionFailure::Advancement;
+        let spawn_failure = failure == AdmissionFailure::Spawn;
         let directory = tempfile::tempdir().unwrap();
         let basic = BasicConfiguration {
             default_level_name: directory.path().to_string_lossy().into_owned(),
@@ -1598,7 +1737,20 @@ mod player_data_tests {
             .advancement_manager
             .advancement_path
             .join(format!("{uuid}.json"));
-        if advancement_failure {
+        let statistics_path = server.statistics_manager.player_path(uuid);
+        let world = server.worlds.load().first().cloned().unwrap();
+        let region_path = world.level.level_folder.region_folder.join("r.0.0.mca");
+        if spawn_failure {
+            world.level_info.rcu(|current| {
+                let mut info = (**current).clone();
+                info.spawn_x = 256;
+                info.spawn_z = 256;
+                info
+            });
+            fs::write(&region_path, b"refused spawn region").unwrap();
+            fs::write(&advancement_path, b"{}").unwrap();
+            fs::write(&statistics_path, br#"{"DataVersion":5023,"stats":{}}"#).unwrap();
+        } else if advancement_failure {
             fs::write(&advancement_path, b"corrupt advancement").unwrap();
         } else {
             fs::write(&path, b"corrupt primary").unwrap();
@@ -1639,10 +1791,13 @@ mod player_data_tests {
         let client = Arc::new(ClientPlatform::Java(java));
 
         assert!(
-            server
-                .add_player(client.clone(), profile.clone(), None)
-                .await
-                .is_none()
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                server.add_player(client.clone(), profile.clone(), None)
+            )
+            .await
+            .unwrap()
+            .is_none()
         );
         drop(
             tokio::time::timeout(
@@ -1652,6 +1807,24 @@ mod player_data_tests {
             .await
             .unwrap(),
         );
+        if spawn_failure {
+            let (retry, _peer) =
+                crate::data::player_server::test::java_client(&server, &profile).await;
+            assert!(
+                tokio::time::timeout(
+                    Duration::from_secs(2),
+                    server.add_player(retry.clone(), profile.clone(), None)
+                )
+                .await
+                .unwrap()
+                .is_none()
+            );
+            assert!(retry.closed());
+            tokio::time::timeout(Duration::from_secs(5), retry.java().unwrap().await_tasks())
+                .await
+                .unwrap();
+            assert!(world.level.chunk_loading.lock().unwrap().ticket.is_empty());
+        }
         let java = client.java().unwrap();
         assert!(java.is_closed());
         assert!(java.player.load().is_none());
@@ -1669,6 +1842,11 @@ mod player_data_tests {
             .unwrap();
         server
             .advancement_manager
+            .save_all_players(&[])
+            .await
+            .unwrap();
+        server
+            .statistics_manager
             .save_all_players(&[])
             .await
             .unwrap();
@@ -1698,7 +1876,16 @@ mod player_data_tests {
             .await
             .unwrap();
         server.shutdown().await;
-        if advancement_failure {
+        if spawn_failure {
+            assert!(!path.exists());
+            assert!(!backup.exists());
+            assert_eq!(fs::read(&advancement_path).unwrap(), b"{}");
+            assert_eq!(
+                fs::read(&statistics_path).unwrap(),
+                br#"{"DataVersion":5023,"stats":{}}"#
+            );
+            assert_eq!(fs::read(&region_path).unwrap(), b"refused spawn region");
+        } else if advancement_failure {
             assert_eq!(fs::read(&advancement_path).unwrap(), b"corrupt advancement");
             assert!(!path.exists());
             assert!(!backup.exists());

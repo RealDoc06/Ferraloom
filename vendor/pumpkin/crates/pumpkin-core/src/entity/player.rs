@@ -55,6 +55,7 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::level::ChunkUnavailable;
 use spam::SpamCounters;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, warn};
@@ -1869,7 +1870,7 @@ impl Player {
 
     /// Calculates the player's respawn point based on stored spawn data.
     ///
-    /// Returns `Some(CalculatedRespawnPoint)` if a valid respawn point exists, `None` otherwise.
+    /// Returns a valid respawn point, `Ok(None)` for an invalid block, or a terrain load error.
     ///
     /// # Behavior
     /// - If `force` flag is set (via `/spawnpoint` command), validates the spawn position is safe
@@ -1881,12 +1882,14 @@ impl Player {
     ///
     /// # Note
     /// This function does NOT send any packets. The caller is responsible for
-    /// sending `NoRespawnBlockAvailable` if this returns `None`.
+    /// sending `NoRespawnBlockAvailable` if this returns `Ok(None)`.
     #[expect(
         clippy::too_many_lines,
         reason = "Keep readiness ownership and forced, bed and anchor spawn resolution together."
     )]
-    pub async fn calculate_respawn_point(&self) -> Option<CalculatedRespawnPoint> {
+    pub async fn calculate_respawn_point(
+        &self,
+    ) -> Result<Option<CalculatedRespawnPoint>, ChunkUnavailable> {
         type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
         type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 
@@ -1895,7 +1898,10 @@ impl Player {
                 .respawn_point
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            respawn_guard.clone()?
+            let Some(point) = respawn_guard.clone() else {
+                return Ok(None);
+            };
+            point
         };
         let world = if self.world().dimension == respawn_point.dimension {
             self.world()
@@ -1914,14 +1920,10 @@ impl Player {
         for cx in min_chunk_x..=max_chunk_x {
             for cz in min_chunk_z..=max_chunk_z {
                 let fetch = world.level.get_or_fetch_chunk(Vector2::new(cx, cz), |_| ());
-                if let ClientPlatform::Java(client) = self.client.as_ref() {
-                    tokio::select! {
-                        biased;
-                        () = client.await_close_interrupt() => return None,
-                        () = fetch => {},
-                    }
-                } else {
-                    fetch.await;
+                tokio::select! {
+                    biased;
+                    () = self.client.await_close_interrupt() => return Ok(None),
+                    result = fetch => result?,
                 }
             }
         }
@@ -1933,9 +1935,9 @@ impl Player {
             .prepare_packet_destination(pos.chunk_position(), self)
             .await
         {
-            return None;
+            return Ok(None);
         }
-        world
+        Ok(world
             .packet_stage(Some(pos.chunk_position()), async {
                 let (block, state_id) = world.get_block_and_state_id(pos);
 
@@ -2022,7 +2024,7 @@ impl Player {
                 None
             })
             .await
-            .flatten()
+            .flatten())
     }
 
     /// Find a valid spawn position around a bed.
@@ -4408,6 +4410,16 @@ impl Player {
     #[must_use]
     pub fn may_build(&self) -> bool {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
+    }
+
+    pub(crate) fn kick_for_chunk_failure(&self, error: &ChunkUnavailable) {
+        tracing::error!(
+            "Player {} cannot enter unavailable terrain: {error}",
+            self.gameprofile.id
+        );
+        self.client.try_kick(DisconnectReason::Kicked, &TextComponent::text(
+            "The destination chunk could not be loaded. Please contact the server administrator.",
+        ));
     }
 
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {

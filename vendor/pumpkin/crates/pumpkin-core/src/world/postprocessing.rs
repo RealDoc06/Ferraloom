@@ -2,7 +2,10 @@ use super::World;
 use crate::{block::OnScheduledTickArgs, entity::player::Player};
 use pumpkin_data::{Block, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_world::{level::SyncChunk, world::BlockFlags};
+use pumpkin_world::{
+    level::{ChunkUnavailable, SyncChunk},
+    world::BlockFlags,
+};
 use std::sync::Arc;
 
 impl World {
@@ -19,22 +22,35 @@ impl World {
         self: &Arc<Self>,
         pos: Vector2<i32>,
         player: &Player,
-    ) -> Option<SyncChunk> {
+    ) -> Result<Option<SyncChunk>, ChunkUnavailable> {
         let mut demand = self.level.activation_demand();
         loop {
             let changed = self.level.chunk_activation_changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
+            let failed = self.level.chunk_listener.failures_changed.notified();
+            tokio::pin!(failed);
+            failed.as_mut().enable();
             demand.replace([pos]);
             self.process_chunk_postprocessing();
             if let Some(chunk) = self.level.ready_chunk(pos) {
-                return Some(chunk);
+                return Ok(Some(chunk));
+            }
+            // Activation requires the actual 3x3 Full halo. A refused member
+            // cannot become ready and must terminate this direct waiter too.
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    if let Some(error) = self.level.chunk_listener.failure(pos.add_raw(dx, dz)) {
+                        return Err(error);
+                    }
+                }
             }
             tokio::select! {
-                () = crate::STOP_INTERRUPT.cancelled() => return None,
-                () = player.client.await_close_interrupt() => return None,
-                () = self.level.cancel_token.cancelled() => return None,
+                () = crate::STOP_INTERRUPT.cancelled() => return Ok(None),
+                () = player.client.await_close_interrupt() => return Ok(None),
+                () = self.level.cancel_token.cancelled() => return Ok(None),
                 () = &mut changed => {},
+                () = &mut failed => {},
             }
         }
     }

@@ -40,6 +40,11 @@ const ERROR_LOADING: CommandErrorType<0> = CommandErrorType::new(
     "Unable to load forced chunks during server shutdown or without a multithread server runtime",
 );
 
+const ERROR_STORAGE: CommandErrorType<0> = CommandErrorType::new(
+    "ferraloom.forceload.storage",
+    "Unable to load forced chunks: chunk storage could not be read",
+);
+
 #[derive(Debug)]
 struct ChunkRectangle {
     min_x: i32,
@@ -185,7 +190,12 @@ fn change_force_load(context: &CommandContext, add: bool) -> CommandExecutorResu
                     tokio::select! {
                         biased;
                         () = crate::STOP_INTERRUPT.cancelled() => Err(ERROR_LOADING.create_without_context()),
-                        () = world.level.get_or_fetch_chunk(pos, |_| ()) => Ok(true),
+                        result = world.level.get_or_fetch_chunk(pos, |_| ()) => {
+                            result.map(|()| true).map_err(|error| {
+                                tracing::error!("Cannot force-load chunk: {error}");
+                                ERROR_STORAGE.create_without_context()
+                            })
+                        },
                     }
                 }
             }),

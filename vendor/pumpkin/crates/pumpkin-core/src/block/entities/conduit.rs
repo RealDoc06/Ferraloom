@@ -48,7 +48,9 @@ impl ConduitBlockEntity {
         }
         let world = Arc::clone(world);
         tokio::runtime::Handle::current().spawn(async move {
-            world.get_block_state_id_async(&pos).await;
+            if let Err(error) = world.get_block_state_id_async(&pos).await {
+                tracing::error!("Cannot load conduit shape: {error}");
+            }
         });
         false
     }

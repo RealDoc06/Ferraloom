@@ -373,6 +373,17 @@ pub(crate) mod test {
         };
         let (client, remote) = java_client(&server, &profile).await;
         let world = server.worlds.load().first().cloned().unwrap();
+        // Session-replacement tests exercise real admission, including spawn reads,
+        // with existing Full terrain instead of depending on world generation time.
+        for x in -1..=1 {
+            for z in -1..=1 {
+                world.level.loaded_chunks.insert(
+                    pumpkin_util::math::vector2::Vector2::new(x, z),
+                    pumpkin_world::chunk::ChunkData::empty_sync(x, z),
+                );
+            }
+        }
+
         let player = Arc::new(Player::new(
             client.clone(),
             profile,

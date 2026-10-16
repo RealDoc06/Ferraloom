@@ -165,7 +165,7 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::level::SyncChunk;
+use pumpkin_world::level::{ChunkUnavailable, SyncChunk};
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
@@ -491,9 +491,12 @@ impl World {
         | PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits()
         | PlayerInfoFlags::UPDATE_HAT.bits();
 
-    pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
+    pub async fn get_block_state_id_async(
+        &self,
+        position: &BlockPos,
+    ) -> Result<BlockStateId, ChunkUnavailable> {
         if !self.is_in_build_limit(*position) {
-            return Block::AIR.default_state.id;
+            return Ok(Block::AIR.default_state.id);
         }
 
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
@@ -507,9 +510,12 @@ impl World {
             .await
     }
 
-    pub async fn get_block_state_async(&self, position: &BlockPos) -> &'static BlockState {
-        let id = self.get_block_state_id_async(position).await;
-        BlockState::from_id(id)
+    pub async fn get_block_state_async(
+        &self,
+        position: &BlockPos,
+    ) -> Result<&'static BlockState, ChunkUnavailable> {
+        let id = self.get_block_state_id_async(position).await?;
+        Ok(BlockState::from_id(id))
     }
 
     pub async fn get_heightmap_height_async(
@@ -517,7 +523,7 @@ impl World {
         height_map: ChunkHeightmapType,
         x: i32,
         z: i32,
-    ) -> i32 {
+    ) -> Result<i32, ChunkUnavailable> {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
         self.level
             .get_or_fetch_chunk(chunk_pos, |chunk| {
@@ -688,7 +694,11 @@ impl World {
                     }
                     tokio::select! {
                         () = crate::STOP_INTERRUPT.cancelled() => {},
-                        () = chunk_world.level.get_or_fetch_chunk(pos, |_| ()) => {},
+                        result = chunk_world.level.get_or_fetch_chunk(pos, |_| ()) => {
+                            if let Err(error) = result {
+                                error!("Forced chunk is unavailable: {error}");
+                            }
+                        },
                     }
                 });
             }
@@ -819,20 +829,33 @@ impl World {
         chunk: Vector2<i32>,
         player: &Player,
     ) -> bool {
+        let fetched = tokio::select! {
+            biased;
+            () = player.client.await_close_interrupt() => return false,
+            result = self.level.get_or_fetch_chunk(chunk, |_| ()) => result,
+        };
+        if let Err(error) = fetched {
+            player.kick_for_chunk_failure(&error);
+            return false;
+        }
         // Unpublished players and non-packet callers retain their existing
         // execution context. Published Java transfers always own an activity.
         if crate::entity::player::packet_activity::ActivityLease::current().is_none() {
             return true;
         }
         let ready = self.packet_stage(None, self.get_ready_chunk(chunk, player));
-        if let ClientPlatform::Java(client) = player.client.as_ref() {
-            tokio::select! {
-                biased;
-                () = client.await_close_interrupt() => false,
-                chunk = ready => chunk.flatten().is_some(),
+        let result = tokio::select! {
+            biased;
+            () = player.client.await_close_interrupt() => return false,
+            result = ready => result,
+        };
+        match result {
+            Some(Ok(Some(_))) => true,
+            Some(Err(error)) => {
+                player.kick_for_chunk_failure(&error);
+                false
             }
-        } else {
-            ready.await.flatten().is_some()
+            _ => false,
         }
     }
 
@@ -3458,6 +3481,54 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Resolve spawn terrain before login callbacks, publication, or snapshot eligibility.
+    /// The Full halo is the same one required by direct-spawn postprocessing.
+    pub(crate) async fn prepare_initial_spawn(
+        &self,
+        player: &Player,
+    ) -> Result<(Vector3<f64>, f32, f32), ChunkUnavailable> {
+        let returning = player.has_played_before.load(Ordering::Relaxed);
+        let info = self.level_info.load_full();
+        let chunk_pos = if returning {
+            BlockPos::floored_v(player.position()).chunk_position()
+        } else {
+            Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4)
+        };
+        let _terrain = self.hold_packet_chunk(chunk_pos);
+        self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await?;
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                if dx != 0 || dz != 0 {
+                    self.level
+                        .get_or_fetch_chunk(chunk_pos.add_raw(dx, dz), |_| ())
+                        .await?;
+                }
+            }
+        }
+        if returning {
+            return Ok((
+                player.position(),
+                player.get_entity().yaw.load(),
+                player.get_entity().pitch.load(),
+            ));
+        }
+        let top = self.get_top_block(Vector2::new(info.spawn_x, info.spawn_z));
+        let y = if top > self.dimension.min_y {
+            top + 1
+        } else {
+            info.spawn_y
+        };
+        Ok((
+            Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                f64::from(y),
+                f64::from(info.spawn_z) + 0.5,
+            ),
+            info.spawn_yaw,
+            info.spawn_pitch,
+        ))
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -3479,30 +3550,9 @@ impl World {
             (weather.rain_level, weather.thunder_level)
         };
         let runtime_id = player.entity_id() as u64;
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
-            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                level_info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(level_info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(level_info.spawn_z) + 0.5,
-            );
-            (position, level_info.spawn_yaw, level_info.spawn_pitch)
-        };
+        let position = player.position();
+        let yaw = player.get_entity().yaw.load();
+        let pitch = player.get_entity().pitch.load();
 
         // Keep the server-side transform aligned with the StartGame position. In
         // particular, this ensures an early disconnect persists the real spawn.
@@ -4055,31 +4105,9 @@ impl World {
             client.send_packet(&packet).await;
         }
 
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
-            (position, info.spawn_yaw, info.spawn_pitch)
-        };
+        let position = player.position();
+        let yaw = player.get_entity().yaw.load();
+        let pitch = player.get_entity().pitch.load();
 
         // Load chunks around the real spawn position before teleporting the client there.
         player.living_entity.entity.set_pos(position);
@@ -4088,8 +4116,13 @@ impl World {
         chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();
-        let Some(chunk) = self.get_ready_chunk(center_chunk, player).await else {
-            return;
+        let chunk = match self.get_ready_chunk(center_chunk, player).await {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => return,
+            Err(error) => {
+                player.kick_for_chunk_failure(&error);
+                return;
+            }
         };
         if let Some(server) = self.server.upgrade() {
             let mut event =
@@ -4752,69 +4785,80 @@ impl World {
 
         let prepare = async {
             // Get respawn position and dimension
-            let (position, yaw, pitch, respawn_dimension) =
-                if let Some(respawn) = player.calculate_respawn_point().await {
-                    (
-                        respawn.position,
-                        respawn.yaw,
-                        respawn.pitch,
-                        respawn.dimension,
-                    )
-                } else {
-                    if player.client.closed() {
-                        return None;
-                    }
-                    // No valid respawn point - send notification if player had one set
-                    if player
+            let respawn = match player.calculate_respawn_point().await {
+                Ok(respawn) => respawn,
+                Err(error) => {
+                    player.kick_for_chunk_failure(&error);
+                    return None;
+                }
+            };
+            let (position, yaw, pitch, respawn_dimension) = if let Some(respawn) = respawn {
+                (
+                    respawn.position,
+                    respawn.yaw,
+                    respawn.pitch,
+                    respawn.dimension,
+                )
+            } else {
+                if player.client.closed() {
+                    return None;
+                }
+                // No valid respawn point - send notification if player had one set
+                if player
+                    .respawn_point
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .is_some()
+                {
+                    player
+                        .send_client_packet(&CGameEvent::new(
+                            GameEvent::NoRespawnBlockAvailable,
+                            0.0,
+                        ))
+                        .await;
+                    let mut guard = player
                         .respawn_point
                         .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .is_some()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Some(point) = guard.as_ref()
+                        && !point.force
                     {
-                        player
-                            .send_client_packet(&CGameEvent::new(
-                                GameEvent::NoRespawnBlockAvailable,
-                                0.0,
-                            ))
-                            .await;
-                        let mut guard = player
-                            .respawn_point
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(point) = guard.as_ref()
-                            && !point.force
-                        {
-                            *guard = None;
+                        *guard = None;
+                    }
+                }
+
+                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+                // proper spawn position calculation (see #1381). The y-level calculation
+                // needs to account for spawn radius and find a safe spawn position.
+                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+                tokio::select! {
+                    biased;
+                    () = player.client.await_close_interrupt() => return None,
+                    result = default_world.level.get_or_fetch_chunk(chunk_pos, |_| ()) => {
+                        if let Err(error) = result {
+                            player.kick_for_chunk_failure(&error);
+                            return None;
                         }
-                    }
-
-                    // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-                    // proper spawn position calculation (see #1381). The y-level calculation
-                    // needs to account for spawn radius and find a safe spawn position.
-                    let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-                    tokio::select! {
-                        biased;
-                        () = player.client.await_close_interrupt() => return None,
-                        () = default_world.level.get_or_fetch_chunk(chunk_pos, |_| ()) => {},
-                    }
-                    let top = default_world.get_top_block(Vector2::new(spawn_x, spawn_z));
-                    let pos_y = if top > default_world.dimension.min_y {
-                        top + 1
-                    } else {
-                        spawn_y
-                    };
-
-                    (
-                        Vector3::new(
-                            f64::from(spawn_x) + 0.5,
-                            f64::from(pos_y),
-                            f64::from(spawn_z) + 0.5,
-                        ),
-                        spawn_yaw,
-                        spawn_pitch,
-                        default_world.dimension.clone(),
-                    )
+                    },
+                }
+                let top = default_world.get_top_block(Vector2::new(spawn_x, spawn_z));
+                let pos_y = if top > default_world.dimension.min_y {
+                    top + 1
+                } else {
+                    spawn_y
                 };
+
+                (
+                    Vector3::new(
+                        f64::from(spawn_x) + 0.5,
+                        f64::from(pos_y),
+                        f64::from(spawn_z) + 0.5,
+                    ),
+                    spawn_yaw,
+                    spawn_pitch,
+                    default_world.dimension.clone(),
+                )
+            };
 
             let mut spawn_loc_event = crate::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent::new(
             player.clone(),
@@ -5619,8 +5663,13 @@ impl World {
             return;
         };
         let center_chunk = player.get_entity().chunk_pos.load();
-        let Some(chunk) = self.get_ready_chunk(center_chunk, player).await else {
-            return;
+        let chunk = match self.get_ready_chunk(center_chunk, player).await {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => return,
+            Err(error) => {
+                player.kick_for_chunk_failure(&error);
+                return;
+            }
         };
         java_client.send_chunks(&[chunk]).await;
         player

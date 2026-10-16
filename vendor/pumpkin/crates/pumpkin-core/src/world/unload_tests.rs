@@ -88,7 +88,8 @@ async fn published(world: &Arc<World>, pos: Vector2<i32>) -> SyncChunk {
         world.level.get_or_fetch_chunk(pos, Clone::clone),
     )
     .await
-    .expect("FULL disk chunk must publish")
+    .expect("FULL disk chunk must publish within the bound")
+    .expect("FULL disk chunk must be readable")
 }
 
 async fn unloaded(world: &World, pos: Vector2<i32>) {

@@ -235,7 +235,7 @@ impl ServerGameTestWorld {
         self.world.update_block_entity(&entity);
     }
 
-    async fn ensure_chunk_loaded(&self, position: &BlockPos) {
+    async fn ensure_chunk_loaded(&self, position: &BlockPos) -> GameTestResult<()> {
         let chunk = position.chunk_position();
         let chunk_key = (chunk.x, chunk.y);
         let needs_lease = self
@@ -252,8 +252,13 @@ impl ServerGameTestWorld {
         // already-loaded chunk. Vanilla force-loads the complete GameTest structure
         // before placing it; make the async GameTest adapter provide that guarantee.
         if !self.world.level.is_chunk_loaded(&chunk) {
-            self.world.level.get_or_fetch_chunk(chunk, |_| ()).await;
+            self.world
+                .level
+                .get_or_fetch_chunk(chunk, |_| ())
+                .await
+                .map_err(|error| GameTestError::World(error.to_string()))?;
         }
+        Ok(())
     }
 
     fn area_loaded_and_ticking(&self, min: &BlockPos, max: &BlockPos) -> bool {
@@ -352,8 +357,11 @@ fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
 
 #[async_trait]
 impl GameTestWorld for ServerGameTestWorld {
-    async fn block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        self.world.get_block_state_id_async(position).await
+    async fn block_state_id(&self, position: &BlockPos) -> GameTestResult<BlockStateId> {
+        self.world
+            .get_block_state_id_async(position)
+            .await
+            .map_err(|error| GameTestError::World(error.to_string()))
     }
 
     async fn set_block_state(
@@ -362,7 +370,7 @@ impl GameTestWorld for ServerGameTestWorld {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> GameTestResult<()> {
-        self.ensure_chunk_loaded(position).await;
+        self.ensure_chunk_loaded(position).await?;
         self.world.set_block_state(position, block_state_id, flags);
         Ok(())
     }
@@ -387,7 +395,7 @@ impl GameTestWorld for ServerGameTestWorld {
     ) -> GameTestResult<()> {
         // This normally follows set_block_state for the same position, but keeping
         // the guarantee here makes block-entity placement correct independently too.
-        self.ensure_chunk_loaded(position).await;
+        self.ensure_chunk_loaded(position).await?;
 
         let mut nbt = nbt.clone();
         nbt.put_int("x", position.0.x);
@@ -532,9 +540,10 @@ impl GameTestWorld for ServerGameTestWorld {
         Ok(self.test_block_entity(position)?.message())
     }
 
-    async fn surface_height(&self, x: i32, z: i32) -> i32 {
+    async fn surface_height(&self, x: i32, z: i32) -> GameTestResult<i32> {
         self.world
             .get_heightmap_height_async(ChunkHeightmapType::WorldSurface, x, z)
             .await
+            .map_err(|error| GameTestError::World(error.to_string()))
     }
 }
