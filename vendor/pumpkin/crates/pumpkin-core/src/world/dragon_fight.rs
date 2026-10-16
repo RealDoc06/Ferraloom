@@ -426,9 +426,9 @@ impl DragonFight {
         let uuid = Uuid::new_v4();
         let spawn_y = self.origin.0.y + DRAGON_SPAWN_Y;
         let position = Vector3::new(
-            self.origin.0.x as f64 + 0.5,
+            self.origin.0.x as f64,
             spawn_y as f64,
-            self.origin.0.z as f64 + 0.5,
+            self.origin.0.z as f64,
         );
         let dragon =
             crate::entity::r#type::from_type(&EntityType::ENDER_DRAGON, position, world, uuid);
@@ -437,7 +437,12 @@ impl DragonFight {
             .cast_any()
             .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
         ) {
-            dragon_entity.set_fight_origin(self.exit_portal_location.unwrap_or(self.origin));
+            if let Some(fight) = &world.dragon_fight {
+                dragon_entity.attach_fight(fight);
+            }
+            dragon_entity.set_fight_origin(self.origin);
+            dragon_entity.set_phase(crate::entity::boss::ender_dragon::phase::EnderDragonPhase::Circling);
+            dragon.get_entity().set_rotation(rand::random::<f32>() * 360.0, 0.0);
         }
 
         world.spawn_entity_non_save(dragon);

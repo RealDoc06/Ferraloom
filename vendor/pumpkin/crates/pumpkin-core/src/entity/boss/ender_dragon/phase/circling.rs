@@ -99,7 +99,7 @@ impl super::Phase for CirclingPhase {
 
         if rand::random_range(0..64) == 0 {
             if rand::random_bool(0.5) {
-                dragon.set_phase(EnderDragonPhase::FlyToPortal);
+                dragon.set_phase(EnderDragonPhase::LandingApproach);
             } else if let Some(player) = dragon.find_nearest_player() {
                 *dragon
                     .target_player

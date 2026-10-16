@@ -5,7 +5,6 @@ use std::sync::Arc;
 mod charging;
 mod circling;
 mod dying;
-mod fly_to_portal;
 mod hovering;
 mod landing;
 mod landing_approach;
@@ -17,7 +16,6 @@ mod taking_off;
 pub use charging::ChargingPhase;
 pub use circling::CirclingPhase;
 pub use dying::DyingPhase;
-pub use fly_to_portal::FlyToPortalPhase;
 pub use hovering::HoveringPhase;
 pub use landing::LandingPhase;
 pub use landing_approach::LandingApproachPhase;
@@ -32,7 +30,7 @@ pub trait Phase: Send + Sync {
     fn begin(&self, _dragon: &EnderDragonEntity) {}
     fn end(&self, _dragon: &EnderDragonEntity) {}
     fn is_sitting(&self) -> bool {
-        false
+        self.get_type().is_sitting()
     }
     fn get_fly_speed(&self) -> f32 {
         0.6
@@ -47,36 +45,84 @@ pub trait Phase: Send + Sync {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EnderDragonPhase {
+    Circling,
+    Strafing,
+    LandingApproach,
+    Landing,
+    TakingOff,
+    SitBreathing,
+    SitScanning,
+    SitAttacking,
+    Charging,
+    Dying,
     #[default]
-    Circling = 0,
-    Strafing = 1,
-    Charging = 2,
-    FlyToPortal = 3,
-    LandingApproach = 4,
-    Landing = 5,
-    SitAttacking = 6,
-    SitBreathing = 7,
-    TakingOff = 8,
-    Hovering = 9,
-    Dying = 10,
+    Hovering,
 }
 
 impl EnderDragonPhase {
+    /// The exact26.3 registry order. The old extra FlyToPortal state was an
+    /// unregistered approach helper; its caller now enters LandingApproach.
+    pub const ALL: [Self; 11] = [
+        Self::Circling,
+        Self::Strafing,
+        Self::LandingApproach,
+        Self::Landing,
+        Self::TakingOff,
+        Self::SitBreathing,
+        Self::SitScanning,
+        Self::SitAttacking,
+        Self::Charging,
+        Self::Dying,
+        Self::Hovering,
+    ];
+
     #[must_use]
     pub const fn is_sitting(self) -> bool {
         matches!(
             self,
-            Self::LandingApproach
-                | Self::Landing
-                | Self::SitAttacking
-                | Self::SitBreathing
-                | Self::TakingOff
+            Self::SitBreathing | Self::SitScanning | Self::SitAttacking | Self::Hovering
         )
     }
 
     #[must_use]
-    pub const fn network_id(self) -> i32 {
-        self as i32
+    pub fn network_id(self) -> i32 {
+        Self::ALL
+            .iter()
+            .position(|phase| *phase == self)
+            .expect("registered dragon phase") as i32
+    }
+
+    pub fn from_network_id(id: i32) -> Self {
+        usize::try_from(id)
+            .ok()
+            .and_then(|id| Self::ALL.get(id))
+            .copied()
+            .unwrap_or(Self::Circling)
+    }
+
+    pub const fn rejects_sitting_projectile(self) -> bool {
+        matches!(
+            self,
+            Self::SitBreathing | Self::SitScanning | Self::SitAttacking
+        )
+    }
+}
+
+/// Only the registered state and combat policy are ported for Scanning. Keep a
+/// loaded ID 6 as ID 6, without pretending the existing attacking AI is scanning.
+/// Target selection / scanning transitions require a separate flight-AI port.
+struct ScanningState;
+
+impl Phase for ScanningState {
+    fn get_type(&self) -> EnderDragonPhase {
+        EnderDragonPhase::SitScanning
+    }
+    fn tick(&self, _dragon: &EnderDragonEntity) {}
+    fn begin(&self, dragon: &EnderDragonEntity) {
+        *dragon
+            .target_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 }
 
@@ -94,24 +140,26 @@ impl PhaseManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            phases: [
-                Arc::new(CirclingPhase),
-                Arc::new(StrafingPhase),
-                Arc::new(ChargingPhase),
-                Arc::new(FlyToPortalPhase),
-                Arc::new(LandingApproachPhase),
-                Arc::new(LandingPhase),
-                Arc::new(SitAttackingPhase),
-                Arc::new(SitBreathingPhase),
-                Arc::new(TakingOffPhase),
-                Arc::new(HoveringPhase),
-                Arc::new(DyingPhase),
-            ],
+            phases: std::array::from_fn(|id| -> Arc<dyn Phase> {
+                match EnderDragonPhase::ALL[id] {
+                    EnderDragonPhase::Circling => Arc::new(CirclingPhase),
+                    EnderDragonPhase::Strafing => Arc::new(StrafingPhase),
+                    EnderDragonPhase::LandingApproach => Arc::new(LandingApproachPhase),
+                    EnderDragonPhase::Landing => Arc::new(LandingPhase),
+                    EnderDragonPhase::TakingOff => Arc::new(TakingOffPhase),
+                    EnderDragonPhase::SitBreathing => Arc::new(SitBreathingPhase),
+                    EnderDragonPhase::SitScanning => Arc::new(ScanningState),
+                    EnderDragonPhase::SitAttacking => Arc::new(SitAttackingPhase),
+                    EnderDragonPhase::Charging => Arc::new(ChargingPhase),
+                    EnderDragonPhase::Dying => Arc::new(DyingPhase::default()),
+                    EnderDragonPhase::Hovering => Arc::new(HoveringPhase),
+                }
+            }),
         }
     }
 
     #[must_use]
     pub fn get_phase(&self, phase_type: EnderDragonPhase) -> Arc<dyn Phase> {
-        self.phases[phase_type as usize].clone()
+        self.phases[phase_type.network_id() as usize].clone()
     }
 }

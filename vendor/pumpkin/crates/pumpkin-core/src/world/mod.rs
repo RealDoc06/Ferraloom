@@ -384,7 +384,7 @@ pub struct World {
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
-    pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
+    pub dragon_fight: Option<Arc<std::sync::Mutex<dragon_fight::DragonFight>>>,
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: RwLock<FxHashSet<Vector2<i32>>>,
     block_ticking_chunks: RwLock<FxHashSet<Vector2<i32>>>,
@@ -580,7 +580,7 @@ impl World {
         // Queries and terrain persistence share Level's one lazily loaded POI store.
         let portal_poi = level.poi_storage.clone();
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
-            .then(|| std::sync::Mutex::new(dragon_fight::DragonFight::new()));
+            .then(|| Arc::new(std::sync::Mutex::new(dragon_fight::DragonFight::new())));
 
         let custom_data_path = level
             .level_folder
@@ -3792,6 +3792,25 @@ impl World {
                     .get(height_map, x, z, self.min_y)
             })
             .unwrap_or(self.min_y)
+    }
+
+    /// DragonDeathPhase's MOTION_BLOCKING podium target. The stored heightmap
+    /// is the top occupied Y; Level.getHeight returns the first free Y instead.
+    pub(crate) fn dragon_death_target(&self, origin: BlockPos) -> Vector3<f64> {
+        let x = origin.0.x;
+        let z = origin.0.z;
+        let y = if !(-30_000_000..30_000_000).contains(&x)
+            || !(-30_000_000..30_000_000).contains(&z)
+        {
+            self.sea_level + 1
+        } else {
+            self.level.read_chunk_sync(&Vector2::new(x >> 4, z >> 4), |chunk| {
+                chunk.heightmap.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(ChunkHeightmapType::MotionBlocking, x, z, self.min_y) + 1
+            }).unwrap_or(self.min_y)
+        };
+        // Vec3.atBottomCenterOf: lower corner + (0.5, 0, 0.5).
+        Vector3::new(f64::from(x) + 0.5, f64::from(y), f64::from(z) + 0.5)
     }
 
     /// Resolve spawn terrain before login callbacks, publication, or snapshot eligibility.

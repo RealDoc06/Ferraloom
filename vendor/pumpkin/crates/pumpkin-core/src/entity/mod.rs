@@ -874,6 +874,8 @@ pub struct Entity {
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Tracks a horizontal collision
     pub horizontal_collision: AtomicBool,
+    /// Whether the most recent clipped movement changed the requested Y delta.
+    pub vertical_collision: AtomicBool,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
@@ -1029,6 +1031,7 @@ impl Entity {
             touching_lava: AtomicBool::new(false),
             lava_height: AtomicCell::new(0.0),
             horizontal_collision: AtomicBool::new(false),
+            vertical_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
             movement: AtomicCell::new(Vector3::default()),
@@ -1413,6 +1416,7 @@ impl Entity {
         self.on_ground.store(false, Ordering::SeqCst);
         self.supporting_block_pos.store(None);
         self.horizontal_collision.store(false, Ordering::SeqCst);
+        self.vertical_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
 
@@ -1498,6 +1502,8 @@ impl Entity {
 
         self.horizontal_collision
             .store(horizontal_collision, Ordering::SeqCst);
+        self.vertical_collision
+            .store(movement.y != adjusted_movement.y, Ordering::SeqCst);
 
         adjusted_movement
     }
@@ -2022,6 +2028,7 @@ impl Entity {
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
+            self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
             return;

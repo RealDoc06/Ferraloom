@@ -1,6 +1,8 @@
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockStateId};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
@@ -269,6 +271,7 @@ pub struct EnderDragonEntity {
     pub nodes_initialized: Mutex<bool>,
 
     pub fight_origin: Mutex<BlockPos>,
+    fight: Mutex<Option<Weak<Mutex<crate::world::dragon_fight::DragonFight>>>>,
 
     pub phase_manager: PhaseManager,
     pub phase: Mutex<EnderDragonPhase>,
@@ -299,7 +302,7 @@ impl EnderDragonEntity {
         let world = entity.world.load_full();
         let pos = entity.pos.load();
 
-        Arc::new_cyclic(|parent| {
+        let dragon = Arc::new_cyclic(|parent| {
             let parts = std::array::from_fn(|index| {
                 let kind = DragonPartKind::ALL[index];
                 let part_entity = Entity::from_uuid_with_id(
@@ -341,9 +344,10 @@ impl EnderDragonEntity {
                 dragon_death_time: Mutex::new(0),
                 sitting_damage_received: Mutex::new(0.0),
                 nodes_initialized: Mutex::new(false),
-                fight_origin: Mutex::new(BlockPos::new(0, 128, 0)),
+                fight_origin: Mutex::new(BlockPos::new(0, 0, 0)),
+                fight: Mutex::new(None),
                 phase_manager: PhaseManager::new(),
-                phase: Mutex::new(EnderDragonPhase::Circling),
+                phase: Mutex::new(EnderDragonPhase::Hovering),
                 growl_time: Mutex::new(GROWL_COOLDOWN_BASE),
                 yaw_rot_accel: Mutex::new(0.0),
                 holding_pattern_clockwise: Mutex::new(true),
@@ -358,7 +362,12 @@ impl EnderDragonEntity {
                 sit_attack_timer: Mutex::new(0),
                 breathing_timer: Mutex::new(0),
             }
-        })
+        });
+        dragon.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::ender_dragon::DATA_PHASE,
+            VarInt(EnderDragonPhase::Hovering.network_id()),
+        );
+        dragon
     }
 
     pub fn parts(&self) -> &[Arc<EnderDragonPart>; 8] {
@@ -374,14 +383,40 @@ impl EnderDragonEntity {
     }
 
     pub fn set_fight_origin(&self, pos: BlockPos) {
-        if let (Ok(mut initialized), Ok(mut origin)) = (
-            self.nodes_initialized.try_lock(),
-            self.fight_origin.try_lock(),
-        ) && *origin != pos
-        {
+        let mut initialized = self
+            .nodes_initialized
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut origin = self
+            .fight_origin
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *origin != pos {
             *origin = pos;
             *initialized = false;
         }
+    }
+
+    pub fn attach_fight(&self, fight: &Arc<Mutex<crate::world::dragon_fight::DragonFight>>) {
+        *self
+            .fight
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(fight));
+    }
+
+    fn attached_fight(&self) -> Option<Arc<Mutex<crate::world::dragon_fight::DragonFight>>> {
+        self.fight
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
+    }
+
+    pub fn current_phase(&self) -> EnderDragonPhase {
+        *self
+            .phase
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub fn set_phase(&self, phase_type: EnderDragonPhase) {
@@ -394,10 +429,15 @@ impl EnderDragonEntity {
         }
 
         let old_phase = self.phase_manager.get_phase(*phase_lock);
-        old_phase.end(self);
-
         *phase_lock = phase_type;
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::ender_dragon::DATA_PHASE,
+            VarInt(phase_type.network_id()),
+        );
+        drop(phase_lock);
 
+        // Hooks never run while holding the current-phase guard.
+        old_phase.end(self);
         let new_phase = self.phase_manager.get_phase(phase_type);
         new_phase.begin(self);
     }
@@ -881,7 +921,7 @@ impl EnderDragonEntity {
 
         {
             let world = self.mob_entity.living_entity.entity.world.load();
-            if let Some(ref fight_mutex) = world.dragon_fight {
+            if let Some(fight_mutex) = self.attached_fight() {
                 let living = &self.mob_entity.living_entity;
                 if let Ok(mut fight) = fight_mutex.lock() {
                     let custom_name = living.entity.custom_name.load();
@@ -918,15 +958,21 @@ impl EnderDragonEntity {
             return;
         }
 
-        if phase_type != EnderDragonPhase::Dying {
-            let target_location = *self
+        let current_phase = self.phase_manager.get_phase(self.current_phase());
+        let target_location = current_phase.get_fly_target_location().or_else(|| {
+            *self
                 .target_location
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(target) = target_location {
-                let pos = self.mob_entity.living_entity.entity.pos.load();
-                self.steer_toward(pos, target, phase.get_fly_speed(), phase.get_turn_speed());
-            }
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        if let Some(target) = target_location {
+            let pos = self.mob_entity.living_entity.entity.pos.load();
+            self.steer_toward(
+                pos,
+                target,
+                current_phase.get_fly_speed(),
+                current_phase.get_turn_speed(),
+            );
         }
 
         self.tick_parts();
@@ -947,6 +993,41 @@ impl EnderDragonEntity {
 }
 
 impl Mob for EnderDragonEntity {
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("DragonPhase", self.current_phase().network_id());
+        nbt.put_int(
+            "DragonDeathTime",
+            *self
+                .dragon_death_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        nbt.put_float(
+            "sitting_damage_received",
+            *self
+                .sitting_damage_received
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(id) = nbt.get_int("DragonPhase") {
+            self.set_phase(EnderDragonPhase::from_network_id(id));
+        }
+        // Phase.begin resets only private phase state; restore shared counters last.
+        *self
+            .dragon_death_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            nbt.get_int("DragonDeathTime").unwrap_or(0);
+        *self
+            .sitting_damage_received
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            nbt.get_float("sitting_damage_received").unwrap_or(0.0);
+    }
+
     fn mob_can_hit(&self) -> bool {
         false
     }
