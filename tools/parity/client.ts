@@ -13,7 +13,7 @@ const MAX_PACKET = 8 * 1024 * 1024;
 const ids = {
   config: { finish: 3, keepAlive: 4, ping: 5, registry: 7, knownPacks: 15, conduct: 20 },
   play: { commands: 16, chunk: 46, login: 50, position: 73, health: 106, chat: 124, disguisedChat: 33, playerChat: 66, keepAlive: 45, ping: 62,
-    inventory: 18, slot: 20, block: 8, chunkBatch: 11, disconnect: 32 },
+    inventory: 18, slot: 20, block: 8, chunkBatch: 11, disconnect: 32, statistics: 3 },
 } as const;
 
 export function varInt(value: number): Buffer {
@@ -71,6 +71,36 @@ export type ContainerPacket =
   | { kind: 'slot'; packet_id: 20; container_id: number; state_id: number; slot: number; stack: PlainStack };
 
 export type PlayerInventoryObservation = { state_id: number; sequence: number; slots: PlainStack[] };
+
+export type StatisticsPacket = {
+  packet_id: 3;
+  entries: { category_id: number; statistic_id: number; value: number }[];
+  payload_bytes: number;
+  decoded_bytes: number;
+};
+
+/** Official 26.3 AwardStats: map count, then StatType registry ID, that type's
+ * value registry ID, and VAR_INT count. Unknown nonnegative IDs stay numeric;
+ * names come only from the pinned official report in the acceptance harness. */
+export function decodeStatisticsPacket(payload: Buffer): StatisticsPacket {
+  if (payload.length > MAX_PACKET) throw new Error('Statistics packet exceeds probe budget');
+  const reader = new Reader(payload);
+  if (reader.varInt() !== ids.play.statistics) throw new Error('Expected award_stats packet');
+  const count = boundedCount(reader, 65536, 'statistics count');
+  if (count > Math.floor((payload.length - reader.offset) / 3)) throw new Error('Truncated statistics entries');
+  const entries: StatisticsPacket['entries'] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < count; index++) {
+    const category_id = reader.varInt(), statistic_id = reader.varInt(), value = reader.varInt();
+    if (category_id < 0 || statistic_id < 0 || value < 0) throw new Error('Negative statistics category, ID or value');
+    const key = `${category_id}:${statistic_id}`;
+    if (seen.has(key)) throw new Error('Duplicate statistics entry');
+    seen.add(key);
+    entries.push({ category_id, statistic_id, value });
+  }
+  if (reader.offset !== payload.length) throw new Error('Trailing statistics packet bytes');
+  return { packet_id: ids.play.statistics, entries, payload_bytes: payload.length, decoded_bytes: reader.offset };
+}
 
 /** Keep received player slots separate from container slots and local predictions. */
 export function observePlayerInventory(current: PlayerInventoryObservation | null,
@@ -684,11 +714,17 @@ export function decodeSystemChat(payload: Buffer): ChatObservation {
     overlay: overlay === 1, component_nbt };
 }
 
-/** Selected literal container titles. Only list entries unwrap the NBT envelope. */
+/** Selected literal titles and the plain barrel fixture's translation key.
+ * Only list entries unwrap the NBT envelope; no translation rendering. */
 export function decodeContainerTitle(value: unknown, depth = 0): unknown {
   if (depth > 8) throw new Error('Container title nesting exceeds fixture scope');
   if (typeof value === 'string') return { text: value };
   if (!record(value)) throw new Error('Expected literal container title');
+  if (value.translate === 'container.barrel') {
+    knownFields(value, ['translate', 'type'], 'barrel title');
+    if (value.type !== undefined && value.type !== 'translatable') throw new Error('Invalid barrel title type');
+    return { translate: value.translate, ...(value.type === undefined ? {} : { type: value.type }) };
+  }
   knownFields(value, ['text', 'type', 'bold', 'italic', 'color', 'extra'], 'title');
   if (typeof value.text !== 'string' || (value.type !== undefined && value.type !== 'text')) throw new Error('Unsupported title component');
   const result: Record<string, unknown> = { text: value.text };
@@ -788,6 +824,7 @@ export function encodeTrigger(objective: string, value: number): Buffer {
 type Command = { id: string | number } & (
   | { action: 'state' }
   | { action: 'quit' }
+  | { action: 'request_stats' }
   | { action: 'expect_disconnect'; translation: 'disconnect.spam' }
   | { action: 'chat' | 'command'; text: string }
   | { action: 'trigger'; objective: string; value: number }
@@ -802,7 +839,7 @@ type Command = { id: string | number } & (
 export function parseCommand(value: unknown): Command {
   if (!record(value) || (typeof value.id !== 'string' && !Number.isSafeInteger(value.id))) throw new Error('id must be a string or safe integer');
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
-  if (value.action === 'state' || value.action === 'quit') return { id, action: value.action };
+  if (value.action === 'state' || value.action === 'quit' || value.action === 'request_stats') return { id, action: value.action };
   if (value.action === 'expect_disconnect') {
     if (value.translation !== 'disconnect.spam') throw new Error('Only the explicit spam negative fixture may expect a disconnect');
     return { id, action: value.action, translation: value.translation };
@@ -894,6 +931,8 @@ function main() {
       slots: PlainStack[]; carried: PlainStack } | null,
     menu_packets: [] as (ContainerPacket & { sequence: number })[],
     player_inventory: null as PlayerInventoryObservation | null,
+    statistics_packets: 0,
+    statistics_packet: null as (StatisticsPacket & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
     sign_packets: [] as (SignObservation & { sequence: number })[],
     chunk_packets: [] as (Omit<ReturnType<typeof decodeChunkBlockEntities>, 'signs' | 'decoded_bytes'> & { sequence: number })[],
     sounds: [] as (ReturnType<typeof decodeSoundPacket> & { sequence: number; payload_base64: string })[],
@@ -902,15 +941,15 @@ function main() {
   };
 
   function send(id: number, ...parts: Buffer[]) {
-    if (quitting) return false;
+    if (quitting || socket.destroyed || socket.writableEnded || !socket.writable) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
-    if (values['raw-packets'] && phase === 'play' && [7, 9, 18, 19, 41, 66].includes(id)) {
-      emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: packet.toString('base64') });
-    }
+    const raw = values['raw-packets'] && phase === 'play' && [7, 9, 12, 18, 19, 41, 66].includes(id) ? packet : null;
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
     socket.write(Buffer.concat([varInt(packet.length), packet]));
+    // write() returning false means queued with backpressure, not an unsent packet.
+    if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64') });
     return true;
   }
 
@@ -945,7 +984,7 @@ function main() {
     const reader = new Reader(payload);
     const id = reader.varInt();
     state.packets++;
-    if (values['raw-packets'] && phase === 'play' && [4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id)) {
+    if (values['raw-packets'] && phase === 'play' && [3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id)) {
       emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64') });
     }
     if (phase === 'login') {
@@ -990,6 +1029,13 @@ function main() {
     if (id === ids.play.keepAlive) { send(28, reader.take(8)); state.keepalives++; }
     if (id === ids.play.ping) send(45, reader.take(4));
     if (id === ids.play.login) state.login = true;
+    if (id === ids.play.statistics) {
+      const observation = { ...decodeStatisticsPacket(payload), sequence: state.packets,
+        payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
+      state.statistics_packets++;
+      state.statistics_packet = observation;
+      emit({ event: 'statistics_packet', ...observation });
+    }
     if (id === ids.play.commands) {
       state.commands_packets++;
       const body = reader.take(payload.length - reader.offset);
@@ -1147,7 +1193,12 @@ function main() {
         emit({ id: command.id, ok: true, result: { expected_translation: expectedDisconnect } });
       } else {
         if (!ready) throw new Error('Client is not ready');
-        if (command.action === 'move') {
+        if (command.action === 'request_stats') {
+          const after_sequence = state.packets;
+          if (!send(12, varInt(1))) throw new Error('Statistics request was not queued: connection is not writable');
+          emit({ id: command.id, ok: true, result: { sent_action: command.action, packet_id: 12,
+            action_id: 1, written: true, after_sequence } });
+        } else if (command.action === 'move') {
           const previous = state.position!;
           move({ x: command.x, y: command.y, z: command.z, yaw: command.yaw ?? previous.yaw, pitch: command.pitch ?? previous.pitch });
           emit({ id: command.id, ok: true, result: { sent_position: state.position } });
@@ -1158,7 +1209,7 @@ function main() {
         } else if (command.action === 'use_item_on' || command.action === 'close_menu' || command.action === 'swap' || command.action === 'sign_update') {
           if (!values['block-data']) throw new Error('Block interaction actions require --block-data');
           if (command.action === 'use_item_on') {
-            send(66, encodeUseItemOn(command.x, command.y, command.z, ++interactionSequence, command.face));
+            if (!send(66, encodeUseItemOn(command.x, command.y, command.z, ++interactionSequence, command.face))) throw new Error('Interaction was not queued');
           } else if (command.action === 'sign_update') {
             // Deliberately permit unsolicited sends: acceptance must exercise
             // server authorization, not a client-side editor precondition.
@@ -1167,7 +1218,7 @@ function main() {
             const menu = state.menu;
             if (!menu) throw new Error('No open menu');
             if (command.action === 'close_menu') {
-              send(19, varInt(menu.container_id));
+              if (!send(19, varInt(menu.container_id))) throw new Error('Menu close was not queued');
               state.menu = null;
             } else {
               if (menu.menu_type !== 2 || menu.slots.length !== 63) throw new Error('No synchronized single-container SWAP menu');
@@ -1176,6 +1227,7 @@ function main() {
             }
           }
           emit({ id: command.id, ok: true, result: { sent_action: command.action,
+            ...(command.action === 'use_item_on' || command.action === 'close_menu' ? { written: true } : {}),
             ...(command.action === 'use_item_on' ? { interaction_sequence: interactionSequence } : {}) } });
         } else if (command.action === 'trigger') {
           const written = send(7, encodeTrigger(command.objective, command.value));

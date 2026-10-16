@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
+import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, decodeContainerTitle, decodeStatisticsPacket, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
 
 test('probe version matches the repository compatibility target', () => {
   const target: unknown = JSON.parse(readFileSync(new URL('../compatibility/target.json', import.meta.url), 'utf8'));
@@ -36,6 +36,41 @@ test('compression validates declared lengths rather than accepting corrupt paylo
   assert.deepEqual(decodeCompressedPacket(Buffer.concat([varInt(packet.length), compressed]), 1), packet);
   assert.throws(() => decodeCompressedPacket(Buffer.concat([varInt(packet.length + 1), compressed]), 1));
   assert.throws(() => decodeCompressedPacket(Buffer.concat([varInt(packet.length), compressed]), 100));
+});
+
+test('26.3 award_stats retains received triples, including unmapped numeric IDs', () => {
+  // Handwritten packet ID, map count, category/statistic/value triples. These bytes
+  // are independent of the decoder and never imply actual server progress.
+  const payload = Buffer.from('03 05 08 3f 03 08 00 01 08 ce 01 07 09 01 02 00 01 ff ff ff ff 07'.replaceAll(' ', ''), 'hex');
+  assert.deepEqual(decodeStatisticsPacket(payload), { packet_id: 3, entries: [
+    { category_id: 8, statistic_id: 63, value: 3 },
+    { category_id: 8, statistic_id: 0, value: 1 },
+    { category_id: 8, statistic_id: 206, value: 7 },
+    { category_id: 9, statistic_id: 1, value: 2 },
+    { category_id: 0, statistic_id: 1, value: 2147483647 },
+  ], payload_bytes: payload.length, decoded_bytes: payload.length });
+  assert.deepEqual(decodeStatisticsPacket(Buffer.from([3, 0])).entries, []);
+  assert.deepEqual(parseCommand({ id: 'stats', action: 'request_stats' }), { id: 'stats', action: 'request_stats' });
+});
+
+test('award_stats fails closed on truncated, unbounded, negative, duplicate or trailing data', () => {
+  for (const [label, hex] of [
+    ['wrong packet', '04 00'], ['missing count', '03'], ['partial count', '03 80'],
+    ['negative count', '03 ff ff ff ff 0f'], ['over budget count', '03 81 80 04'],
+    ['count mismatch', '03 02 08 3f 03'], ['partial value', '03 01 08 3f 80'],
+    ['negative category', '03 01 ff ff ff ff 0f 3f 03'],
+    ['negative ID', '03 01 08 ff ff ff ff 0f 03'],
+    ['negative value', '03 01 08 3f ff ff ff ff 0f'],
+    ['overflow', '03 01 08 3f 80 80 80 80 10'],
+    ['duplicate key', '03 02 08 3f 03 08 3f 05'], ['trailing bytes', '03 01 08 3f 03 00'],
+  ] as const) assert.throws(() => decodeStatisticsPacket(Buffer.from(hex.replaceAll(' ', ''), 'hex')), label);
+});
+
+test('plain barrel title retains its translation key without a rendering claim', () => {
+  assert.deepEqual(decodeContainerTitle({ translate: 'container.barrel' }), { translate: 'container.barrel' });
+  assert.deepEqual(decodeContainerTitle({ translate: 'container.barrel', type: 'translatable' }),
+    { translate: 'container.barrel', type: 'translatable' });
+  assert.throws(() => decodeContainerTitle({ translate: 'container.barrel', with: ['invented'] }));
 });
 
 function wireString(value: string): Buffer {

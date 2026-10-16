@@ -3,15 +3,17 @@
 These do not constitute paired player-continuity evidence.
 """
 from copy import deepcopy
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import check_player_data as player_data
+from check_container_metadata import failure_labels
 
 
 class WorldCopyTests(unittest.TestCase):
@@ -89,7 +91,7 @@ class AdvancementContinuationTests(unittest.TestCase):
         destination["data"][player_data.ADVENTURE]["criteria"][player_data.PLAIN] = new_time
         added = "minecraft:badlands"
         destination["data"][player_data.ADVENTURE]["criteria"][added] = new_time
-        result = player_data.compare_advancements(source, destination, added)
+        result = player_data.compare_advancements(source, destination, added, destination_kind="rust")
         self.assertEqual(result["preserved_criteria"], [[player_data.ADVENTURE, player_data.UNTOUCHED_CRITERION, old_time]])
         for defect in ("rewritten_original", "missing_mutation"):
             with self.subTest(defect=defect):
@@ -100,7 +102,113 @@ class AdvancementContinuationTests(unittest.TestCase):
                 else:
                     del criteria[added]
                 with self.assertRaises(AssertionError):
-                    player_data.compare_advancements(source, broken, added)
+                    player_data.compare_advancements(source, broken, added, destination_kind="rust")
+
+    def test_timezone_rendering_preserves_instants_but_rust_must_preserve_text(self):
+        utc, local = "2026-10-16 01:00:00 +0000", "2026-10-16 03:00:00 +0200"
+        source = {"path": "source.json", "data": {"DataVersion": 5023,
+            player_data.STORY: {"criteria": {"crafting_table": utc}, "done": True},
+            player_data.ADVENTURE: {"criteria": {player_data.PLAIN: utc,
+                player_data.UNTOUCHED_CRITERION: utc}, "done": False}}}
+        destination = deepcopy(source)
+        destination["path"] = "destination.json"
+        destination["data"][player_data.STORY]["criteria"]["crafting_table"] = local
+        criteria = destination["data"][player_data.ADVENTURE]["criteria"]
+        criteria[player_data.PLAIN] = local
+        criteria[player_data.UNTOUCHED_CRITERION] = local
+        added = "minecraft:badlands"
+        criteria[added] = local
+        self.assertEqual(player_data.compare_advancements(source, destination, added, destination_kind="vanilla")
+                         ["timestamp_preservation"], "instant")
+        with self.assertRaisesRegex(AssertionError, "rewritten_criterion_text"):
+            player_data.compare_advancements(source, destination, added, destination_kind="rust")
+        criteria[player_data.UNTOUCHED_CRITERION] = utc
+        self.assertEqual(player_data.compare_advancements(source, destination, added, destination_kind="rust")
+                         ["timestamp_preservation"], "instant_and_exact_text")
+        criteria[player_data.UNTOUCHED_CRITERION] = "2026-10-16 03:00:01 +0200"
+        for kind in ("vanilla", "rust"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(AssertionError, "changed_criterion_instant"):
+                player_data.compare_advancements(source, destination, added, destination_kind=kind)
+
+
+class StatisticsContinuityTests(unittest.TestCase):
+    def test_json_requires_both_continued_counts_not_an_unchanged_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            world = Path(directory)
+            path = world / "players/stats" / f"{player_data.PLAYER_ID}.json"
+            path.parent.mkdir(parents=True)
+            source_data = {"DataVersion": 5023, "stats": {"minecraft:custom": {
+                "minecraft:open_barrel": 3, "minecraft:leave_game": 1, "future:unknown_stat": 17}}}
+            path.write_text(json.dumps(source_data))
+            source = player_data.read_statistics(world)
+            self.assertEqual(player_data.statistics_counts(source, 3, 1)["counts"]["minecraft:open_barrel"], 3)
+            self.assertEqual(source["data"]["stats"]["minecraft:custom"]["future:unknown_stat"], 17)
+            with self.assertRaises(AssertionError):
+                player_data.statistics_counts(source, 5, 2)
+            for opens, leaves in ((5, 2), (5, 1), (3, 2)):
+                continued = deepcopy(source_data)
+                continued["stats"]["minecraft:custom"].update({"minecraft:open_barrel": opens, "minecraft:leave_game": leaves})
+                path.write_text(json.dumps(continued))
+                saved = player_data.read_statistics(world)
+                if (opens, leaves) == (5, 2):
+                    self.assertEqual(player_data.statistics_counts(saved, 5, 2)["counts"]["minecraft:leave_game"], 2)
+                else:
+                    with self.subTest(opens=opens, leaves=leaves), self.assertRaises(AssertionError):
+                        player_data.statistics_counts(saved, 5, 2)
+
+    def test_canonical_json_rejects_duplicate_keys_versions_and_noninteger_counts(self):
+        invalid = [
+            '{"DataVersion":5023,"DataVersion":5023,"stats":{}}',
+            '{"DataVersion":5022,"stats":{}}', '{"stats":{}}', '{"DataVersion":5023,"stats":[]}',
+            '{"DataVersion":5023,"stats":{"8":{"63":3}}}',
+            *['{"DataVersion":5023,"stats":{"minecraft:custom":{"minecraft:open_barrel":' + value + '}}}'
+              for value in ("true", "3.0", "-1", "2147483648", '"3"', "NaN")],
+            '{"DataVersion":5023,"stats":{"minecraft:custom":{"minecraft:open_barrel":3,"minecraft:open_barrel":5}}}',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            world = Path(directory)
+            path = world / "players/stats" / f"{player_data.PLAYER_ID}.json"
+            path.parent.mkdir(parents=True)
+            for raw in invalid:
+                with self.subTest(raw=raw):
+                    path.write_text(raw)
+                    with self.assertRaises(AssertionError):
+                        player_data.read_statistics(world)
+
+    def test_stats_request_rejects_unwritten_ack_and_requires_fresh_received_value(self):
+        contract = {"request_packet_id": 12, "request_action_id": 1, "award_stats_packet_id": 3,
+                    "stat_types": {"minecraft:custom": {"protocol_id": 8}},
+                    "custom_stats": {"minecraft:open_barrel": {"protocol_id": 63}},
+                    "reports": {"registries": {"sha256": player_data.REGISTRIES_SHA256}}}
+        client = Mock()
+        client.request.return_value = {"packet_id": 12, "action_id": 1, "written": False, "after_sequence": 10}
+        with self.assertRaises(AssertionError):
+            player_data.request_statistics(client, contract, 3)
+        client.wait_state.assert_not_called()
+        client.request.return_value["written"] = True
+        packet = {"packet_id": 3, "sequence": 11, "decoded_bytes": 5, "payload_bytes": 5,
+                  "entries": [{"category_id": 8, "statistic_id": 63, "value": 3}]}
+
+        def received(predicate):
+            self.assertFalse(predicate({"statistics_packet": {**packet, "sequence": 10}}))
+            self.assertTrue(predicate({"statistics_packet": packet}))
+            return {"statistics_packet": packet}
+
+        client.wait_state.side_effect = received
+        self.assertEqual(player_data.request_statistics(client, contract, 3)["named_observation"]["value"], 3)
+        packet["entries"][0]["value"] = 2
+        with self.assertRaises(AssertionError):
+            player_data.request_statistics(client, contract, 3)
+
+
+class CompositeFailureLabelTests(unittest.TestCase):
+    def test_only_recorded_transfers_use_journey_labels(self):
+        rows = [{"id": "fixture.failed", "result": "failed"}, {"id": "fixture.passed", "result": "passed"}]
+        ordinary = {"servers": {"vanilla": rows, "rust": rows}}
+        self.assertEqual(failure_labels(ordinary), ["vanilla:fixture.failed", "rust:fixture.failed"])
+        composite = {**ordinary, "transfers": {"vanilla": {"direction": "vanilla-to-rust"},
+                                               "rust": {"direction": "rust-to-vanilla"}}}
+        self.assertEqual(failure_labels(composite), ["vanilla-to-rust:fixture.failed", "rust-to-vanilla:fixture.failed"])
 
 
 if __name__ == "__main__":

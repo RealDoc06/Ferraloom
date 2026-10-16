@@ -2,11 +2,12 @@
 """Bounded, actual same-identity 26.3 player interchange in both directions.
 
 Exactly four sequential server boots: fresh Java -> Rust and fresh Rust -> Java.
-Six scenario IDs per direction cover received inventory/position/health, typed
-live identity/XP, runtime advancement import, and the final saved continuation.
+Seven composite scenario IDs per direction cover received inventory/position/health,
+typed live identity/XP, advancements, and actual requested statistics continuation.
 Whole worlds are copied unchanged after clean disconnect/save/stop. No UUID
 rewrites, external conversion, synthetic save mutation or player-directory rename.
-Statistics, opaque-field gameplay and a third-boot continuation are not verified.
+Only open_barrel and leave_game statistics are asserted; time counters, opaque-field
+gameplay and a third-boot continuation are not verified.
 Requires --accept-eula, the cached official reference, pinned JDK25 and an existing
 Rust binary on clean committed source. This module does nothing when imported.
 """
@@ -41,10 +42,11 @@ CASES = {
     "player_data.advancement_import": "players.advancements",
     "player_data.saved_continuation": "persistence.player_data",
     "player_data.advancement_continuation": "players.advancements",
+    "player_data.statistics_continuation": "players.statistics",
 }
 DEFERRED = [
-    {"id": "player_data.statistics", "result": "unverified", "reason":
-     "Known gap: Rust uses private Statistics NBT, not official players/stats JSON. File hashes are observations only; unchanged JSON never proves live counter progress."},
+    {"id": "player_data.statistics_remaining", "result": "unverified", "reason":
+     "Only same-UUID DataVersion 5023 open_barrel 3->5 and leave_game 1->2 are covered by this composite. Legacy private Statistics refusal, DFU, unknown named/numeric IDs, time/freeze semantics, contention and full counter gameplay remain unverified; no verified-family promotion."},
     {"id": "player_data.remaining_scope", "result": "unverified", "reason":
      "No legacy UUID migration, DFU, failed-load fixtures, unknown-ID sentinels, equipment/offhand/ender inventory, nondefault selected slot/dimension/respawn, gameplay for recipes/attributes/Brain/post-effects, XP wire decoding, signed/online identity or network-security claim. No third server boot to reload the destination's final mutation."},
 ]
@@ -56,6 +58,10 @@ PLAIN = "minecraft:plains"
 UNTOUCHED_CRITERION = "minecraft:snowy_taiga"
 POSITION = {"x": 4097.5, "y": 200.0, "z": 3.5, "yaw": 90.0, "pitch": 15.0}
 CONTINUED_POSITION = {**POSITION, "x": 4099.5, "yaw": 180.0, "pitch": -10.0}
+BARREL = {"x": 4098, "y": 200, "z": 3}
+BARREL_POS = "4098 200 3"
+REGISTRIES_SHA256 = "51f62d56f8bd0e9134ee88dd9226b64e9e56cf6a32377540d44291bf47ecdac6"
+PACKETS_SHA256 = "2f0486311f18b7d3ec232028f3bff82c657d2f0240d2d65a3df40408db926886"
 ITEM_NAME = "Interchange item"
 CUSTOM_NAME = "Interchange custom"
 OPAQUE = ("recipeBook", "attributes", "Brain", "post_effects")
@@ -142,6 +148,55 @@ def read_advancements(world: Path, definitions: dict) -> dict:
     return {"path": str(path), "sha256": digest(path), "data": data}
 
 
+def read_statistics(world: Path) -> dict:
+    """Independent canonical JSON readback, never player NBT or a wire prediction."""
+    path = world / "players/stats" / f"{PLAYER_ID}.json"
+    raw = read_bytes(path)
+    data = json.loads(raw, object_pairs_hook=unique_object)
+    require(isinstance(data, dict) and type(data.get("DataVersion")) is int and data["DataVersion"] == 5023,
+            "Statistics file must independently declare DataVersion 5023")
+    require(isinstance(data.get("stats"), dict), "Missing named statistics object")
+    count = 0
+    for category, entries in data["stats"].items():
+        require(worlds.IDENTIFIER.fullmatch(category) and isinstance(entries, dict), {"invalid_stat_category": category})
+        for identifier, value in entries.items():
+            count += 1
+            require(count <= 65536 and worlds.IDENTIFIER.fullmatch(identifier)
+                    and type(value) is int and 0 <= value <= 2147483647, {"invalid_stat": [category, identifier, value]})
+    return {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest(), "data": data}
+
+
+def statistics_counts(saved: dict, opens: int, leaves: int) -> dict:
+    custom = saved["data"]["stats"].get("minecraft:custom", {})
+    expected = {"minecraft:open_barrel": opens, "minecraft:leave_game": leaves}
+    for identifier, value in expected.items():
+        require(type(custom.get(identifier)) is int and custom[identifier] == value,
+                {"file": saved["path"], "statistic": identifier, "expected": value, "actual": custom.get(identifier)})
+    return {"path": saved["path"], "sha256": saved["sha256"], "counts": {key: custom[key] for key in expected},
+            "data_version": saved["data"]["DataVersion"]}
+
+
+def statistics_contract() -> dict:
+    reports = {}
+    for name, expected in (("registries", REGISTRIES_SHA256), ("packets", PACKETS_SHA256)):
+        path = oracle.CACHE / f"generated/reports/{name}.json"
+        raw = read_bytes(path)
+        require(hashlib.sha256(raw).hexdigest() == expected, f"Changed primary statistics report: {path}")
+        reports[name] = {"path": str(path), "sha256": expected, "data": json.loads(raw, object_pairs_hook=unique_object)}
+    registries, packets = reports["registries"].pop("data"), reports["packets"].pop("data")
+    types = registries["minecraft:stat_type"]["entries"]
+    custom = registries["minecraft:custom_stat"]["entries"]
+    require(len(types) == 9 and len(custom) == 78 and types["minecraft:custom"]["protocol_id"] == 8
+            and custom["minecraft:open_barrel"]["protocol_id"] == 63
+            and custom["minecraft:leave_game"]["protocol_id"] == 0, "Changed primary statistics IDs")
+    require(packets["play"]["clientbound"]["minecraft:award_stats"]["protocol_id"] == 3
+            and packets["play"]["serverbound"]["minecraft:client_command"]["protocol_id"] == 12, "Changed statistics packet IDs")
+    return {"reports": reports, "stat_types": types, "custom_stats": custom,
+            "award_stats_packet_id": 3, "request_packet_id": 12, "request_action_id": 1,
+            "layout_witness": "Pinned inner JAR: ClientboundAwardStatsPacket map(Stat.STREAM_CODEC, VAR_INT); Stat dispatches STAT_TYPE then StatType value registry. ServerboundClientCommandPacket.Action.REQUEST_STATS ordinal 1; corroborated by local award_stats.rs/client_command.rs.",
+            "scope": "Names only from these reports; other wellformed numeric entries remain unnamed observations."}
+
+
 def world_hashes(world: Path) -> dict:
     """Bound the fresh fixture and refuse links before copying any world files."""
     require(world.is_dir() and not world.is_symlink(), f"Missing/linked world: {world}")
@@ -193,6 +248,7 @@ def primary_inputs(report: dict) -> dict:
         "identity": {"name": NAME, "offline_uuid": str(PLAYER_ID), "uuid_int_array": UUID_INTS},
         "layout": "world/players/{data,advancements,stats}; actual retained official 26.3 layout",
         "item_wire_ids": {"minecraft:stick": 1060, "minecraft:gold_ingot": 1022},
+        "statistics": statistics_contract(),
         "scope": "Exact literal item_name/custom_name through the shared client codec; no rendering normalization."}
     return definitions
 
@@ -265,9 +321,64 @@ def teleport_exact(server: LoggedServer, client: Client, position: dict) -> dict
     return {"output": output, "received_position": state["server_position"], "confirmations": state["teleport_confirmations"]}
 
 
+def barrel_ready(server: LoggedServer, client: Client) -> dict:
+    state = client.wait_state(lambda state: any(chunk["x"] == 256 and chunk["z"] == 0 for chunk in state["chunk_packets"]))
+    require(state.get("server_position") == POSITION and state.get("menu") is None, "Barrel requires observed safe reachable position and no menu")
+    return {"received_lane_chunk": next(chunk for chunk in reversed(state["chunk_packets"]) if chunk["x"] == 256 and chunk["z"] == 0),
+            "received_position": state["server_position"], "predicates": [
+                typed_predicate(server, f"if block {BARREL_POS} minecraft:barrel[open=false]"),
+                *[typed_predicate(server, f"unless data block {BARREL_POS} {field}") for field in ("lock", "LootTable", "CustomName")]]}
+
+
+def barrel_open_close(server: LoggedServer, client: Client) -> dict:
+    before = client.state()
+    require(before.get("menu") is None, "Each barrel interaction requires a real preceding close")
+    sent = client.request("use_item_on", **BARREL)
+    require(isinstance(sent, dict) and sent.get("written") is True, "Barrel use was not queued")
+
+    def opened(state: dict) -> bool:
+        menu = state.get("menu")
+        return (isinstance(menu, dict) and menu["opened_sequence"] > before["packets"] and menu["container_id"] > 0
+                and menu["menu_type"] == 2 and len(menu["slots"]) == 63 and menu["slots"][:27] == [None] * 27
+                and menu["carried"] is None)
+
+    state = client.wait_state(opened)
+    packets = [packet for packet in state["menu_packets"] if packet["sequence"] > before["packets"]
+               and packet["container_id"] == state["menu"]["container_id"]]
+    screens = [packet for packet in packets if packet["kind"] == "open"]
+    require(len(screens) == 1 and screens[0].get("title_component", {}).get("translate") == "container.barrel"
+            and any(packet["kind"] == "content" and len(packet["slots"]) == 63 for packet in packets), packets)
+    opened_block = wait_predicate(server, f"if block {BARREL_POS} minecraft:barrel[open=true]")
+    closed = client.request("close_menu")
+    require(isinstance(closed, dict) and closed.get("written") is True, "Barrel close was not queued")
+    # Local menu=null is only a prediction. The authoritative closed block is
+    # the processing fence before another open, with no tick/time-counter claim.
+    closed_block = wait_predicate(server, f"if block {BARREL_POS} minecraft:barrel[open=false]")
+    return {"position": BARREL, "before_sequence": before["packets"], "use": sent, "received": packets,
+            "opened_block": opened_block, "close": closed, "closed_block": closed_block}
+
+
+def request_statistics(client: Client, contract: dict, opens: int) -> dict:
+    sent = client.request("request_stats")
+    require(isinstance(sent, dict) and sent.get("written") is True and sent.get("packet_id") == contract["request_packet_id"]
+            and sent.get("action_id") == contract["request_action_id"] and type(sent.get("after_sequence")) is int,
+            {"unqueued_statistics_request": sent})
+    state = client.wait_state(lambda state: (state.get("statistics_packet") or {}).get("sequence", -1) > sent["after_sequence"])
+    packet = state["statistics_packet"]
+    category = contract["stat_types"]["minecraft:custom"]["protocol_id"]
+    identifier = contract["custom_stats"]["minecraft:open_barrel"]["protocol_id"]
+    matches = [entry for entry in packet["entries"] if entry["category_id"] == category and entry["statistic_id"] == identifier]
+    require(packet["packet_id"] == contract["award_stats_packet_id"] and packet["decoded_bytes"] == packet["payload_bytes"]
+            and len(matches) == 1 and matches[0]["value"] == opens, {"expected_open_barrel": opens, "received": packet})
+    return {"request": sent, "received": packet, "named_observation": {"category": "minecraft:custom",
+            "statistic": "minecraft:open_barrel", **matches[0]}, "registry_report_sha256": contract["reports"]["registries"]["sha256"],
+            "scope": "Fresh received packet after queued request; protocol has no request correlation ID. No predicted totals."}
+
+
 def validate_player(saved: dict, *, count: int, points: int, position: dict) -> dict:
     """Exact typed selected state; never coerce component strings into objects."""
     data = saved["typed"]
+    require(data.get("Statistics", {}) == {}, "Private nonempty/malformed Statistics NBT is not canonical statistics storage")
     fraction = struct.unpack(">f", struct.pack(">f", points / 31))[0]
     expected = {"UUID": {"nbt_type": "IntArray", "value": list(UUID_INTS)}, "Dimension": "minecraft:overworld"}
     for key, kind, value in (("DataVersion", "Int", 5023), ("SelectedItemSlot", "Int", 0),
@@ -316,7 +427,8 @@ def advancement_import(server: LoggedServer) -> dict:
             "restore_partial": advancement_command(server, "grant", ADVENTURE, PLAIN, 1)}
 
 
-def compare_advancements(source: dict, destination: dict, added: str) -> dict:
+def compare_advancements(source: dict, destination: dict, added: str, *, destination_kind: str) -> dict:
+    require(destination_kind in ("vanilla", "rust"), "Unknown advancement destination runtime")
     original, final = source["data"], destination["data"]
     preserved = []
     for identifier, progress in original.items():
@@ -330,13 +442,17 @@ def compare_advancements(source: dict, destination: dict, added: str) -> dict:
             if (identifier, criterion) in ((STORY, "crafting_table"), (ADVENTURE, PLAIN)):
                 require(timestamp(actual) >= timestamp(achieved), "Re-granted criterion predates the source")
             else:
-                require(actual == achieved, {"lost_or_rewritten_criterion": [identifier, criterion], "source": achieved, "final": actual})
+                require(timestamp(actual) == timestamp(achieved),
+                        {"changed_criterion_instant": [identifier, criterion], "source": achieved, "final": actual})
+                if destination_kind == "rust":
+                    require(actual == achieved, {"rewritten_criterion_text": [identifier, criterion], "source": achieved, "final": actual})
                 preserved.append([identifier, criterion, achieved])
     require(added not in original[ADVENTURE]["criteria"] and added in final[ADVENTURE]["criteria"], "New criterion not persisted")
     return {"source_file": source["path"], "destination_file": destination["path"], "preserved_criteria": preserved,
             "controlled_regrants": {STORY: final[STORY], ADVENTURE: {PLAIN: final[ADVENTURE]["criteria"][PLAIN]}},
             "controlled_addition": {added: final[ADVENTURE]["criteria"][added]},
-            "partial_done": final[ADVENTURE]["done"], "data_version": final["DataVersion"]}
+            "partial_done": final[ADVENTURE]["done"], "data_version": final["DataVersion"],
+            "timestamp_preservation": "instant_and_exact_text" if destination_kind == "rust" else "instant"}
 
 
 def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: dict) -> list[dict]:
@@ -402,6 +518,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
 
     try:
         definitions = primary_inputs(report)
+        stats_contract = report["primary_contracts"]["statistics"]
         source = Fixture(kind, directory / "source", args, report)
         fixtures.append(source)
         source.server.configure()
@@ -412,6 +529,7 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         stage("source_lane", source, lambda: (server.command("fill 4096 199 0 4111 199 15 stone"),
               server.command("difficulty normal"), server.command("scoreboard objectives add pdprobe dummy"),
               command_result(server, "gamerule natural_health_regeneration false", 1, mode="success")))
+        stage("source_barrel_place", source, lambda: command_result(server, f"setblock {BARREL_POS} minecraft:barrel", 1, mode="success"))
         client = connect(source, "source")
         stage("source_identity", source, lambda: identity_witness(server, client))
         stage("source_position", source, lambda: teleport_exact(server, client, POSITION))
@@ -435,6 +553,10 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
             server.command(f"advancement revoke {NAME} only {ADVENTURE}"),
             advancement_command(server, "grant", ADVENTURE, PLAIN, 1),
             advancement_command(server, "grant", ADVENTURE, UNTOUCHED_CRITERION, 1)])
+        stage("source_barrel_ready", source, lambda: barrel_ready(server, client))
+        for opening in range(1, 4):
+            stage(f"source_barrel_open_{opening}", source, lambda: barrel_open_close(server, client))
+        stage("source_statistics_live", source, lambda: request_statistics(client, stats_contract, 3))
         disconnect_and_stop(source, client, "source")
         source_world = server.directory / "world"
         immutable = world_hashes(source_world)
@@ -442,6 +564,9 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         original_player = read_player(source_world)
         detail["source_player"] = write_json(directory / "source-player.json", original_player)
         detail["source_canonical_state"] = validate_player(original_player, count=37, points=7, position=POSITION)
+        original_statistics = stage("source_statistics_json", source, lambda: read_statistics(source_world), guarded=False)
+        detail["source_statistics"] = write_json(directory / "source-statistics.json", original_statistics)
+        stage("source_statistics_counts", source, lambda: statistics_counts(original_statistics, 3, 1), guarded=False)
         original_advancements = read_advancements(source_world, definitions)
         detail["source_advancements"] = write_json(directory / "source-advancements.json", original_advancements)
         missing = sorted(set(definitions[ADVENTURE]["criteria"]) - set(original_advancements["data"][ADVENTURE]["criteria"]))
@@ -474,6 +599,11 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         record("advancement_import", destination, lambda: {"source_json": detail["source_advancements"],
                "runtime_commands": advancement_import(target_server)})
         require(all(row["result"] == "passed" for row in results.values()), "Destination import prerequisite failed; mutation cannot pass")
+        stage("destination_statistics_import", destination, lambda: request_statistics(target_client, stats_contract, 3))
+        stage("destination_barrel_ready", destination, lambda: barrel_ready(target_server, target_client))
+        for opening in range(1, 3):
+            stage(f"destination_barrel_open_{opening}", destination, lambda: barrel_open_close(target_server, target_client))
+        stage("destination_statistics_live", destination, lambda: request_statistics(target_client, stats_contract, 5))
         stage("destination_mutation", destination, lambda: [
             command_result(target_server, f"item replace entity {NAME} hotbar.1 with minecraft:gold_ingot 41", 1, mode="success"),
             command_result(target_server, f"experience add {NAME} 4 points", 1, mode="success"),
@@ -504,13 +634,28 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
         def saved_advancements() -> dict:
             final = read_advancements(destination_world, definitions)
             detail["destination_advancements"] = write_json(directory / "destination-advancements.json", final)
-            return compare_advancements(original_advancements, final, added)
+            return compare_advancements(original_advancements, final, added, destination_kind=target)
 
         record("advancement_continuation", destination, saved_advancements, live=False)
+
+        def saved_statistics() -> dict:
+            final = read_statistics(destination_world)
+            detail["destination_statistics"] = write_json(directory / "destination-statistics.json", final)
+            return {"direction": detail["direction"], "uuid": str(PLAYER_ID),
+                    "source_json": statistics_counts(original_statistics, 3, 1), "destination_json": statistics_counts(final, 5, 2),
+                    "source_live": detail["stages"]["source_statistics_live"]["detail"],
+                    "destination_import": detail["stages"]["destination_statistics_import"]["detail"],
+                    "destination_live": detail["stages"]["destination_statistics_live"]["detail"],
+                    "interactions": {role: [detail["stages"][f"{role}_barrel_open_{opening}"]["detail"]
+                        for opening in range(1, count + 1)] for role, count in (("source", 3), ("destination", 2))},
+                    "logs": {role: {"client": str(fixture.server.directory / f"{role}-player.jsonl"),
+                                    "server": str(fixture.server.log_path), "commands": str(fixture.server.directory / "commands.jsonl")}
+                             for role, fixture in (("source", source), ("destination", destination))},
+                    "primary_reports": stats_contract["reports"], "whole_world_copy": copy_evidence,
+                    "scope": "Both runtimes in one transfer composite; received open_barrel 3/3/5 and independent stopped JSON 3/1 -> 5/2. Other counters are observations only."}
+
+        record("statistics_continuation", destination, saved_statistics, live=False)
         detail["destination_after_stop"] = world_hashes(destination_world)
-        detail["statistics_observation"] = {"result": "unverified", "known_gap": DEFERRED[0]["reason"],
-            "source_files": {path: value for path, value in immutable["players"].items() if path.startswith("players/stats/")},
-            "destination_files": {path: value for path, value in detail["destination_after_stop"]["players"].items() if path.startswith("players/stats/")}}
     except Exception as error:
         errors.append(f"{type(error).__name__}: {error}")
     finally:
@@ -521,6 +666,8 @@ def run_direction(kind: str, directory: Path, args: argparse.Namespace, report: 
                 detail["source_final"] = world_hashes(directory / "source/world")
                 require(detail["source_final"] == immutable, "Immutable source world changed during destination continuation")
             require(digest(Path(report["java"]["path"])) == JDK_SHA256, "Pinned Java executable changed during run")
+            for witness in report.get("primary_contracts", {}).get("statistics", {}).get("reports", {}).values():
+                require(digest(Path(witness["path"])) == witness["sha256"], "Primary statistics report changed during run")
         except Exception as error:
             errors.append(f"Final provenance: {type(error).__name__}: {error}")
     report.setdefault("runtime_errors", {})[kind] = errors

@@ -65,7 +65,7 @@ def now() -> str:
 
 def manifest() -> dict:
     files = ("tools/check_container_metadata.py", "tools/check_player_data.py", "tools/check_chat_throttle.py", "tools/check_block_data.py",
-             "tests/block_data_protocol.test.ts")
+             "tests/block_data_protocol.test.ts", "tests/protocol_client.test.ts", "tests/test_player_data.py")
     return {**suite.harness_manifest(), **{path: digest(ROOT / path) for path in files}}
 
 
@@ -566,6 +566,12 @@ def finish_rows(cases: dict[str, str], results: dict[str, dict], errors: list[st
     return [results[identifier] for identifier in cases]
 
 
+def failure_labels(report: dict) -> list[str]:
+    """Transfer columns identify a source runtime; their failure spans both engines."""
+    return [f'{report.get("transfers", {}).get(kind, {}).get("direction", kind)}:{case["id"]}'
+            for kind, rows in report["servers"].items() for case in rows if case["result"] != "passed"]
+
+
 def paired_main(label: str, cases: dict[str, str], runner: Callable, scope: str, deferred: list[dict]) -> int:
     parser = argparse.ArgumentParser(description=scope)
     parser.add_argument("--accept-eula", action="store_true")
@@ -622,7 +628,7 @@ def paired_main(label: str, cases: dict[str, str], runner: Callable, scope: str,
         require(suite.git_state() == report["source_state"], "Source changed during run")
         require(digest(original) == binary_digest == digest(args.rust_binary), "Rust binary changed during run")
         require(digest(official) == report["official"]["sha256"] and digest(oracle.CACHE / "minecraft.jar") == report["official"]["inner_sha256"], "Official jars changed during run")
-        report["failed"].extend(f"{kind}:{case['id']}" for kind, rows in report["servers"].items() for case in rows if case["result"] != "passed")
+        report["failed"].extend(failure_labels(report))
         report["result"] = "failed" if report["failed"] else "passed"
     except Exception as error:
         report["error"] = f"{type(error).__name__}: {error}"
