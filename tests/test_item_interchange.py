@@ -1,4 +1,4 @@
-"""UNRUN source helper tests, not actual Java/Rust interchange evidence.
+"""Source helper tests, not actual Java/Rust interchange evidence.
 
 Small typed JSON inputs are codec-derived; none is an actual Java save or a
 decoded item packet. No server, Java, Node, Cargo, download or child execution.

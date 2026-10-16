@@ -3071,9 +3071,11 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
     let first_menu = open_menu(&first, factory.as_ref(), BLOCK_POS);
     assert_viewer_effects(kind, &world, live.as_ref(), 1);
     world.flush_synced_block_events();
+    // The pending event set coalesces the repeated count; all three count
+    // transitions still notify neighbors before the flush.
     assert_eq!(
         observed.take_events(),
-        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1)]
+        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2)]
     );
     assert_eq!(observed.take_neighbors().len(), 6);
 
@@ -3093,7 +3095,7 @@ async fn immediate_viewer_callbacks_allow_reentry_and_cancelled_open_has_no_effe
     world.flush_synced_block_events();
     assert_eq!(
         observed.take_events(),
-        [(BLOCK_POS, 1, 0), (BLOCK_POS, 1, 1), (BLOCK_POS, 1, 0)]
+        [(BLOCK_POS, 1, 0), (BLOCK_POS, 1, 1)]
     );
     assert_eq!(observed.take_neighbors().len(), 6);
 
@@ -3159,7 +3161,7 @@ async fn overlapping_viewer_callbacks_drain_in_order_without_waiting_under_menu_
     world.flush_synced_block_events();
     assert_eq!(
         observed.take_events(),
-        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2), (BLOCK_POS, 1, 1)]
+        [(BLOCK_POS, 1, 1), (BLOCK_POS, 1, 2)]
     );
     assert_viewer_effects(kind, &world, live.as_ref(), 1);
     first.on_handled_screen_closed();
