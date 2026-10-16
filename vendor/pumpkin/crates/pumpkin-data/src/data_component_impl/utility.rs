@@ -667,11 +667,14 @@ impl FireworksImpl {
     }
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let compound = tag.extract_compound()?;
-        let flight_duration = compound
-            .get_byte("flight_duration")
-            .map(i32::from)
-            .or_else(|| compound.get_int("flight_duration"))
-            .unwrap_or(1);
+        // Fireworks.CODEC uses UNSIGNED_BYTE with default zero, not the item's
+        // default component (flight one).
+        let flight_duration = match compound.get("flight_duration") {
+            None => 0,
+            Some(NbtTag::Byte(value)) => i32::from(*value as u8),
+            Some(NbtTag::Int(value)) => i32::from(u8::try_from(*value).ok()?),
+            _ => return None,
+        };
         let mut explosions = Vec::new();
         if let Some(list) = compound.get_list("explosions") {
             for item in list {
@@ -689,9 +692,17 @@ impl FireworksImpl {
 impl DataComponentImpl for FireworksImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
-        compound.put_int("flight_duration", self.flight_duration);
-        let explosions_list: Vec<NbtTag> = self.explosions.iter().map(|e| e.write_data()).collect();
-        compound.put_list("explosions", explosions_list);
+        if self.flight_duration != 0 {
+            let flight = u8::try_from(self.flight_duration)
+                .map_or(NbtTag::Int(self.flight_duration), |value| {
+                    NbtTag::Byte(value as i8)
+                });
+            compound.put("flight_duration", flight);
+        }
+        if !self.explosions.is_empty() {
+            let explosions_list = self.explosions.iter().map(|e| e.write_data()).collect();
+            compound.put_list("explosions", explosions_list);
+        }
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {

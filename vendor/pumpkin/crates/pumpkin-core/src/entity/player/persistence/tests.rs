@@ -596,8 +596,274 @@ fn player_dat_lossy_books_and_nested_items_refuse_unchanged() {
             r#"{Inventory:[{Slot:0b,id:"minecraft:stick",count:1,components:{"!minecraft:custom_name":{extension:42}}}]}"#,
             "Inventory",
         ),
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[{slot:0,item:{id:"minecraft:stone",components:{},extension:{components:{},payload:[I;1,2,3]}}}]}}]}"#,
+            "Inventory",
+        ),
+        (
+            r#"{EnderItems:[{Slot:0b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[{id:"minecraft:stick",components:{"minecraft:custom_name":{text:"Keep",components:{},extension:[I;1,2,3]}}}]}}]}"#,
+            "EnderItems",
+        ),
+        (
+            r#"{Inventory:[{Slot:0b,id:"minecraft:crossbow",count:1,components:{"minecraft:charged_projectiles":[{id:"minecraft:arrow",extension:{components:{},payload:[I;1,2,3]}}]}}]}"#,
+            "Inventory",
+        ),
     ] {
         assert_refused_unchanged(snbt, field);
+    }
+}
+
+#[test]
+fn player_dat_unmodeled_potion_and_firework_fields_refuse_unchanged() {
+    for contents in [
+        r#"{potion:"minecraft:water",extension:{components:{},keep:42}}"#,
+        r#"{potion:"minecraft:missing"}"#,
+        r#"{potion:256}"#,
+        r#"{custom_effects:[{id:"minecraft:speed",hidden_effect:{amplifier:1b,duration:200}}]}"#,
+        r#"{custom_effects:[{id:"minecraft:speed",details:{components:{},keep:42}}]}"#,
+        r#"{custom_effects:[{id:"minecraft:speed",amplifier:256}]}"#,
+        r#"{custom_effects:[{id:"minecraft:speed",amplifier:-1}]}"#,
+    ] {
+        assert_refused_unchanged(
+            &format!(
+                r#"{{Inventory:[{{Slot:0b,id:"minecraft:potion",count:1,components:{{"minecraft:potion_contents":{contents}}}}}]}}"#
+            ),
+            "Inventory",
+        );
+    }
+    for fireworks in [
+        r#"{flight_duration:1b,extension:{components:{},keep:42}}"#,
+        r#"{flight_duration:256}"#,
+        r#"{flight_duration:-1}"#,
+        r#"{flight_duration:1b,explosions:[{shape:"small_ball",extension:{components:{},keep:42}}]}"#,
+    ] {
+        assert_refused_unchanged(
+            &format!(
+                r#"{{Inventory:[{{Slot:0b,id:"minecraft:firework_rocket",count:1,components:{{"minecraft:fireworks":{fireworks}}}}}]}}"#
+            ),
+            "Inventory",
+        );
+    }
+}
+
+#[tokio::test]
+async fn player_dat_java_and_rust_potions_survive_actual_player_save() {
+    use pumpkin_data::{
+        data_component_impl::{PotionContentsImpl, StatusEffectInstance},
+        item::Item,
+        potion::Potion,
+    };
+
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(517);
+    // Codec-derived fixtures from the pinned 26.3 bytecode, not Java-run evidence.
+    // Slot 8 is the earlier Rust numeric form; pinned registry ID 0 is water.
+    let original = compound(
+        r#"{Inventory:[
+        {Slot:0b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:water"}}},
+        {Slot:1b,id:"minecraft:splash_potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:swiftness"}}},
+        {Slot:2b,id:"minecraft:lingering_potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:strong_healing"}}},
+        {Slot:3b,id:"minecraft:tipped_arrow",count:8,components:{"minecraft:potion_contents":{potion:"minecraft:long_poison"}}},
+        {Slot:4b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{custom_color:123,custom_name:"Fixture",custom_effects:[
+            {id:"minecraft:speed",amplifier:-1b,duration:40,show_particles:0b},
+            {id:"minecraft:luck",amplifier:0b,duration:0,ambient:0b,show_particles:1b}
+        ]}}},
+        {Slot:5b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":"minecraft:water"}},
+        {Slot:6b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"water",custom_effects:[]}}},
+        {Slot:8b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:0}}}
+    ]}"#,
+    );
+    let expected = compound(
+        r#"{Inventory:[
+        {Slot:0b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:water"}}},
+        {Slot:1b,id:"minecraft:splash_potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:swiftness"}}},
+        {Slot:2b,id:"minecraft:lingering_potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:strong_healing"}}},
+        {Slot:3b,id:"minecraft:tipped_arrow",count:8,components:{"minecraft:potion_contents":{potion:"minecraft:long_poison"}}},
+        {Slot:4b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{custom_color:123,custom_name:"Fixture",custom_effects:[
+            {id:"minecraft:speed",amplifier:-1b,duration:40,show_particles:0b,show_icon:0b},
+            {id:"minecraft:luck",show_icon:1b}
+        ]}}},
+        {Slot:5b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:water"}}},
+        {Slot:6b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:water"}}},
+        {Slot:7b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:regeneration",custom_effects:[
+            {id:"minecraft:regeneration",amplifier:-128b,duration:-1,ambient:1b,show_icon:0b}
+        ]}}},
+        {Slot:8b,id:"minecraft:potion",count:1,components:{"minecraft:potion_contents":{potion:"minecraft:water"}}}
+    ]}"#,
+    );
+    seed(&storage, uuid, original);
+    for pass in 0..2 {
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        if pass == 0 {
+            let mut created = ItemStack::new(1, &Item::POTION);
+            created.set_data_component(PotionContentsImpl {
+                potion_id: Some(i32::from(Potion::REGENERATION.id)),
+                custom_color: None,
+                custom_effects: vec![StatusEffectInstance {
+                    effect_id: "minecraft:regeneration".into(),
+                    amplifier: 128,
+                    duration: -1,
+                    ambient: true,
+                    show_particles: true,
+                    show_icon: false,
+                }],
+                custom_name: None,
+            });
+            current.inventory.main_inventory.write().unwrap()[7] = created;
+        }
+        {
+            let inventory = current.inventory.main_inventory.read().unwrap();
+            for (slot, potion) in [
+                (0, &Potion::WATER),
+                (1, &Potion::SWIFTNESS),
+                (2, &Potion::STRONG_HEALING),
+                (3, &Potion::LONG_POISON),
+                (7, &Potion::REGENERATION),
+            ] {
+                assert_eq!(
+                    inventory[slot]
+                        .get_data_component::<PotionContentsImpl>()
+                        .unwrap()
+                        .potion_id,
+                    Some(i32::from(potion.id))
+                );
+            }
+            let effects = &inventory[4]
+                .get_data_component::<PotionContentsImpl>()
+                .unwrap()
+                .custom_effects;
+            assert_eq!(effects[0].amplifier, 255);
+            assert!(!effects[0].show_icon);
+            assert!(!effects[0].show_particles);
+            assert_eq!(effects[1].amplifier, 0);
+            assert_eq!(effects[1].duration, 0);
+            assert!(effects[1].show_icon);
+            assert!(effects[1].show_particles);
+            assert_eq!(
+                inventory[7]
+                    .get_data_component::<PotionContentsImpl>()
+                    .unwrap()
+                    .custom_effects[0]
+                    .amplifier,
+                128
+            );
+        }
+        assert_eq!(
+            save(&storage, &current).get("Inventory"),
+            expected.get("Inventory")
+        );
+    }
+}
+
+#[tokio::test]
+async fn player_dat_nested_empty_item_patches_survive_actual_player_save() {
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(518);
+    let original = compound(
+        r#"{
+        Inventory:[
+            {Slot:0b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[
+                {slot:0,item:{id:"minecraft:stone",count:64}},
+                {slot:1,item:{id:"minecraft:stick",count:1,components:{}}},
+                {slot:2,item:{id:"minecraft:bundle",components:{"minecraft:bundle_contents":[{id:"minecraft:diamond",components:{}}]}}}
+            ],"minecraft:custom_data":{components:{},item:{id:"opaque",components:{},count:0},keep:[I;1,2,3]}}},
+            {Slot:1b,id:"minecraft:crossbow",count:1,components:{"minecraft:charged_projectiles":[{id:"minecraft:arrow"}]}},
+            {Slot:2b,id:"minecraft:crossbow",count:1,components:{"minecraft:charged_projectiles":[{id:"minecraft:arrow",count:1,components:{}}]}},
+            {Slot:3b,id:"minecraft:stone",count:1,components:{}},
+            {Slot:4b,id:"minecraft:stick"}
+        ],
+        EnderItems:[{Slot:0b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[
+            {id:"minecraft:stone",count:5}, {id:"minecraft:stick",count:1,components:{}}
+        ]}}]
+    }"#,
+    );
+    let expected = compound(
+        r#"{
+        Inventory:[
+            {Slot:0b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[
+                {slot:0,item:{id:"minecraft:stone",count:64}},
+                {slot:1,item:{id:"minecraft:stick",count:1}},
+                {slot:2,item:{id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[{id:"minecraft:diamond",count:1}]}}}
+            ],"minecraft:custom_data":{components:{},item:{id:"opaque",components:{},count:0},keep:[I;1,2,3]}}},
+            {Slot:1b,id:"minecraft:crossbow",count:1,components:{"minecraft:charged_projectiles":[{id:"minecraft:arrow"}]}},
+            {Slot:2b,id:"minecraft:crossbow",count:1,components:{"minecraft:charged_projectiles":[{id:"minecraft:arrow",count:1,components:{}}]}},
+            {Slot:3b,id:"minecraft:stone",count:1},
+            {Slot:4b,id:"minecraft:stick",count:1}
+        ],
+        EnderItems:[{Slot:0b,id:"minecraft:bundle",count:1,components:{"minecraft:bundle_contents":[
+            {id:"minecraft:stone",count:5}, {id:"minecraft:stick",count:1}
+        ]}}]
+    }"#,
+    );
+    seed(&storage, uuid, original);
+    for _ in 0..2 {
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        let saved = save(&storage, &current);
+        for key in ["Inventory", "EnderItems"] {
+            assert_eq!(saved.get(key), expected.get(key), "{key}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn player_dat_firework_unsigned_flight_and_defaults_survive_actual_player_save() {
+    use pumpkin_data::{data_component_impl::FireworksImpl, item::Item};
+
+    let fixture = Fixture::new().await;
+    let folder = tempfile::tempdir().unwrap();
+    let storage = PlayerDataStorage::new(folder.path(), true);
+    let uuid = Uuid::from_u128(519);
+    let original = compound(
+        r#"{Inventory:[
+        {Slot:0b,id:"minecraft:firework_rocket",count:4,components:{"minecraft:fireworks":{flight_duration:1b}}},
+        {Slot:1b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{}}},
+        {Slot:2b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{flight_duration:0b,explosions:[]}}},
+        {Slot:3b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{flight_duration:-1b}}}
+    ]}"#,
+    );
+    let expected = compound(
+        r#"{Inventory:[
+        {Slot:0b,id:"minecraft:firework_rocket",count:4,components:{"minecraft:fireworks":{flight_duration:1b}}},
+        {Slot:1b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{}}},
+        {Slot:2b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{}}},
+        {Slot:3b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{flight_duration:-1b}}},
+        {Slot:4b,id:"minecraft:firework_rocket",count:1,components:{"minecraft:fireworks":{flight_duration:3b}}}
+    ]}"#,
+    );
+    seed(&storage, uuid, original);
+    for pass in 0..2 {
+        let (_, mut loaded) = storage.load_player_data(&uuid).unwrap();
+        let mut current = player(fixture.source.world(), uuid).await;
+        NBTStorage::read_nbt(&mut current, &mut loaded);
+        if pass == 0 {
+            let mut created = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+            created.set_data_component(FireworksImpl::new(3, Vec::new()));
+            current.inventory.main_inventory.write().unwrap()[4] = created;
+        }
+        {
+            let inventory = current.inventory.main_inventory.read().unwrap();
+            for (slot, flight) in [1, 0, 0, 255, 3].into_iter().enumerate() {
+                assert_eq!(
+                    inventory[slot]
+                        .get_data_component::<FireworksImpl>()
+                        .unwrap()
+                        .flight_duration,
+                    flight
+                );
+            }
+        }
+        assert_eq!(
+            save(&storage, &current).get("Inventory"),
+            expected.get("Inventory")
+        );
     }
 }
 
@@ -626,10 +892,6 @@ async fn player_dat_literal_names_and_lossless_containers_survive_actual_player_
     let Some(NbtTag::List(inventory)) = expected.child_tags.get_mut("Inventory") else {
         panic!("expected inventory");
     };
-    let NbtTag::Compound(gold) = &mut inventory[1] else {
-        panic!("expected gold stack");
-    };
-    gold.put_compound("components", NbtCompound::new());
     let mut offhand = original
         .get_compound("equipment")
         .unwrap()

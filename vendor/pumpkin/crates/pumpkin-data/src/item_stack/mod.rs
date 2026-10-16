@@ -801,7 +801,7 @@ impl ItemStack {
     }
 
     pub fn write_item_stack(&self, compound: &mut NbtCompound) {
-        // Minecraft 1.21.4 uses "id" as string with namespaced ID (minecraft:diamond_sword)
+        // ItemStack keeps count on write; an empty component patch is optional.
         compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
         compound.put_int("count", self.item_count as i32);
 
@@ -820,8 +820,11 @@ impl ItemStack {
             }
         }
 
-        // Store custom data like enchantments, display name, etc. would go here
-        compound.put_compound("components", tag);
+        if tag.child_tags.is_empty() {
+            compound.child_tags.remove("components");
+        } else {
+            compound.put_compound("components", tag);
+        }
     }
 
     #[must_use]
@@ -835,7 +838,12 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // Both ItemStack and nested ItemStackTemplate default a missing count to one.
+        let count = match compound.get("count") {
+            None => 1,
+            Some(NbtTag::Int(count)) => u8::try_from(*count).ok()?,
+            _ => return None,
+        };
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);

@@ -62,12 +62,37 @@ pub struct StatusEffectInstance {
 impl StatusEffectInstance {
     pub fn read_data(nbt: &NbtTag) -> Option<Self> {
         let compound = nbt.extract_compound()?;
+        // Hidden effects and future details have no runtime representation yet.
+        if compound.child_tags.keys().any(|key| {
+            !matches!(
+                key.as_ref(),
+                "id" | "amplifier" | "duration" | "ambient" | "show_particles" | "show_icon"
+            )
+        }) {
+            return None;
+        }
         let effect_id = Cow::Owned(compound.get_string("id")?.to_string());
-        let amplifier = compound.get_int("amplifier")?;
-        let duration = compound.get_int("duration")?;
-        let ambient = compound.get_bool("ambient")?;
-        let show_particles = compound.get_bool("show_particles")?;
-        let show_icon = compound.get_bool("show_icon")?;
+        StatusEffect::from_minecraft_name(&effect_id)?;
+        let amplifier = match compound.get("amplifier") {
+            None => 0,
+            Some(NbtTag::Byte(value)) => i32::from(*value as u8),
+            Some(NbtTag::Int(value)) => i32::from(u8::try_from(*value).ok()?),
+            _ => return None,
+        };
+        let duration = match compound.get("duration") {
+            None => 0,
+            Some(NbtTag::Int(value)) => *value,
+            _ => return None,
+        };
+        let boolean = |key, default| match compound.get(key) {
+            None => Some(default),
+            Some(NbtTag::Byte(0)) => Some(false),
+            Some(NbtTag::Byte(1)) => Some(true),
+            _ => None,
+        };
+        let ambient = boolean("ambient", false)?;
+        let show_particles = boolean("show_particles", true)?;
+        let show_icon = boolean("show_icon", show_particles)?;
         Some(Self {
             effect_id,
             amplifier,
@@ -81,10 +106,24 @@ impl StatusEffectInstance {
     pub fn as_nbt(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_string("id", self.effect_id.to_string());
-        compound.put_int("amplifier", self.amplifier);
-        compound.put_int("duration", self.duration);
-        compound.put_bool("ambient", self.ambient);
-        compound.put_bool("show_particles", self.show_particles);
+        // MobEffectInstance.Details uses UNSIGNED_BYTE and omits these defaults.
+        if self.amplifier != 0 {
+            let amplifier = u8::try_from(self.amplifier)
+                .map_or(NbtTag::Int(self.amplifier), |value| {
+                    NbtTag::Byte(value as i8)
+                });
+            compound.put("amplifier", amplifier);
+        }
+        if self.duration != 0 {
+            compound.put_int("duration", self.duration);
+        }
+        if self.ambient {
+            compound.put_bool("ambient", true);
+        }
+        if !self.show_particles {
+            compound.put_bool("show_particles", false);
+        }
+        // The official getter always supplies this optional field on write.
         compound.put_bool("show_icon", self.show_icon);
         NbtTag::Compound(compound)
     }
@@ -463,48 +502,41 @@ pub struct PotionContentsImpl {
 }
 impl PotionContentsImpl {
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        if let NbtTag::String(name) = tag {
+            return Some(Self {
+                potion_id: Some(i32::from(
+                    crate::potion::Potion::from_name(
+                        name.strip_prefix("minecraft:").unwrap_or(name),
+                    )?
+                    .id,
+                )),
+                custom_color: None,
+                custom_effects: Vec::new(),
+                custom_name: None,
+            });
+        }
         let compound = tag.extract_compound()?;
-        let potion_id = if let Some(id) = compound.get_int("potion") {
-            Some(id)
-        } else if let Some(name) = compound.get_string("potion") {
-            let name = name.strip_prefix("minecraft:").unwrap_or(name);
-            crate::potion::Potion::from_name(name).map(|p| p.id as i32)
-        } else {
-            None
+        let potion_id = match compound.get("potion") {
+            None => None,
+            Some(NbtTag::Int(id)) => Some(i32::from(
+                crate::potion::Potion::from_id(u8::try_from(*id).ok()?)?.id,
+            )),
+            Some(NbtTag::String(name)) => Some(i32::from(
+                crate::potion::Potion::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?
+                    .id,
+            )),
+            _ => return None,
         };
         let custom_color = compound.get_int("custom_color");
         let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
-        let custom_effects = compound
-            .get_list("custom_effects")
-            .map(|list| {
-                list.iter()
-                    .filter_map(|item| {
-                        let effect_tag = item.extract_compound()?;
-                        let id: Cow<'static, str> =
-                            Cow::Owned(effect_tag.get_string("id")?.to_string());
-                        let amplifier = effect_tag
-                            .get_int("amplifier")
-                            .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
-                            .unwrap_or(0);
-                        let duration = effect_tag
-                            .get_int("duration")
-                            .or_else(|| effect_tag.get_byte("duration").map(i32::from))
-                            .unwrap_or(0);
-                        let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
-                        let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
-                        let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
-                        Some(StatusEffectInstance {
-                            effect_id: id,
-                            amplifier,
-                            duration,
-                            ambient,
-                            show_particles,
-                            show_icon,
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let custom_effects = match compound.get("custom_effects") {
+            None => Vec::new(),
+            Some(NbtTag::List(list)) => list
+                .iter()
+                .map(StatusEffectInstance::read_data)
+                .collect::<Option<Vec<_>>>()?,
+            _ => return None,
+        };
         Some(Self {
             potion_id,
             custom_color,
@@ -517,24 +549,26 @@ impl DataComponentImpl for PotionContentsImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         if let Some(potion_id) = self.potion_id {
-            compound.put_int("potion", potion_id);
+            let potion = u8::try_from(potion_id)
+                .ok()
+                .and_then(crate::potion::Potion::from_id)
+                .map_or(NbtTag::Int(potion_id), |potion| {
+                    NbtTag::String(format!("minecraft:{}", potion.name).into())
+                });
+            // Preserve invalid internal IDs visibly; never silently erase them.
+            compound.put("potion", potion);
         }
         if let Some(color) = self.custom_color {
             compound.put_int("custom_color", color);
         }
         if !self.custom_effects.is_empty() {
-            let mut effects_list = Vec::new();
-            for effect in &self.custom_effects {
-                let mut effect_compound = NbtCompound::new();
-                effect_compound.put_string("id", effect.effect_id.to_string());
-                effect_compound.put_int("amplifier", effect.amplifier);
-                effect_compound.put_int("duration", effect.duration);
-                effect_compound.put_byte("ambient", effect.ambient as i8);
-                effect_compound.put_byte("show_particles", effect.show_particles as i8);
-                effect_compound.put_byte("show_icon", effect.show_icon as i8);
-                effects_list.push(NbtTag::Compound(effect_compound));
-            }
-            compound.put("custom_effects", NbtTag::List(effects_list));
+            compound.put_list(
+                "custom_effects",
+                self.custom_effects
+                    .iter()
+                    .map(StatusEffectInstance::as_nbt)
+                    .collect(),
+            );
         }
         if let Some(name) = &self.custom_name {
             compound.put_string("custom_name", name.clone());
