@@ -506,6 +506,130 @@
     "block_data.sign_numeric_flags": {
       "feature_id": "blocks.interactives",
       "scenario": "sign numeric flags distinguish direct low-byte conversion from codec nonzero glow"
+    },
+    "container_metadata.barrel_title_recursive": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel literal and styled menu titles retain extras through recursive CustomName merge and reopen"
+    },
+    "container_metadata.barrel_mainhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate"
+    },
+    "container_metadata.barrel_offhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel plain named offhand key cannot unlock until an actual hand swap moves it into the main hand"
+    },
+    "container_metadata.barrel_creative": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control"
+    },
+    "container_metadata.barrel_spectator": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel spectator can open a locked materialized container without a key"
+    },
+    "container_metadata.barrel_pending_loot": {
+      "feature_id": "blocks.containers",
+      "scenario": "barrel wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu"
+    },
+    "container_metadata.barrel_deposit": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "barrel real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data"
+    },
+    "container_metadata.barrel_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "barrel styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart"
+    },
+    "container_metadata.chest_title_recursive": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest literal and styled menu titles retain extras through recursive CustomName merge and reopen"
+    },
+    "container_metadata.chest_mainhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate"
+    },
+    "container_metadata.chest_offhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest plain named offhand key cannot unlock until an actual hand swap moves it into the main hand"
+    },
+    "container_metadata.chest_creative": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control"
+    },
+    "container_metadata.chest_spectator": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest spectator can open a locked materialized container without a key"
+    },
+    "container_metadata.chest_pending_loot": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu"
+    },
+    "container_metadata.chest_deposit": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "chest real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data"
+    },
+    "container_metadata.chest_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "chest styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart"
+    },
+    "container_metadata.trapped_chest_title_recursive": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest literal and styled menu titles retain extras through recursive CustomName merge and reopen"
+    },
+    "container_metadata.trapped_chest_mainhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate"
+    },
+    "container_metadata.trapped_chest_offhand": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest plain named offhand key cannot unlock until an actual hand swap moves it into the main hand"
+    },
+    "container_metadata.trapped_chest_creative": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control"
+    },
+    "container_metadata.trapped_chest_spectator": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest spectator can open a locked materialized container without a key"
+    },
+    "container_metadata.trapped_chest_pending_loot": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu"
+    },
+    "container_metadata.trapped_chest_deposit": {
+      "feature_id": "network.inventory_stream",
+      "scenario": "trapped chest real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data"
+    },
+    "container_metadata.trapped_chest_restart": {
+      "feature_id": "persistence.block_entities",
+      "scenario": "trapped chest styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart"
+    },
+    "container_metadata.chest_double": {
+      "feature_id": "blocks.containers",
+      "scenario": "chest both double-container halves enforce plain custom-name locks and right-first title priority with left fallback from either side"
+    },
+    "container_metadata.trapped_chest_double": {
+      "feature_id": "blocks.containers",
+      "scenario": "trapped chest both double-container halves enforce plain custom-name locks and right-first title priority with left fallback from either side"
+    },
+    "chat_throttle.first_command": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "one-second command throttle applies the first trigger effect before a typed spam disconnect on a fresh nonoperator connection"
+    },
+    "chat_throttle.first_chat": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "one-second chat throttle broadcasts and echoes the first unsigned body before a typed spam disconnect"
+    },
+    "chat_throttle.zero_command": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "zero command threshold permits a real trigger effect and subsequent positive client fence without a spam disconnect"
+    },
+    "chat_throttle.zero_chat": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "zero chat threshold permits unsigned body delivery and a subsequent positive client fence without a spam disconnect"
+    },
+    "chat_throttle.operator_deop_command": {
+      "feature_id": "network.chat_delivery",
+      "scenario": "operator membership bypass permits a trigger effect and the first post-deop trigger effect precedes enforcement at a one-second threshold"
     }
   }
 }

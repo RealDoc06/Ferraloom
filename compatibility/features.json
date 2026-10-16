@@ -389,7 +389,12 @@
       "required_scenarios": [
         "chat visibility settings",
         "system message",
-        "filtered recipient"
+        "filtered recipient",
+        "one-second command throttle applies the first trigger effect before a typed spam disconnect on a fresh nonoperator connection",
+        "one-second chat throttle broadcasts and echoes the first unsigned body before a typed spam disconnect",
+        "zero command threshold permits a real trigger effect and subsequent positive client fence without a spam disconnect",
+        "zero chat threshold permits unsigned body delivery and a subsequent positive client fence without a spam disconnect",
+        "operator membership bypass permits a trigger effect and the first post-deop trigger effect precedes enforcement at a one-second threshold"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -706,7 +711,10 @@
         "chest open menu receives live data and item command changes",
         "chest plain hotbar swaps deposit and extract actual items",
         "trapped chest open menu receives live data and item command changes",
-        "trapped chest plain hotbar swaps deposit and extract actual items"
+        "trapped chest plain hotbar swaps deposit and extract actual items",
+        "barrel real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data",
+        "chest real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data",
+        "trapped chest real plain-stack menu deposit preserves recursively merged styled name lock and opaque base custom data"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -7237,7 +7245,10 @@
         "standing sign both faces and wax survive clean restart in received chunk data with editing controls",
         "ceiling hanging sign both faces and wax survive clean restart in received chunk data with editing controls",
         "standing sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes",
-        "ceiling hanging sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes"
+        "ceiling hanging sign literal non-execution and styled click data including op features survive clean restart and a post-restart nonop click executes",
+        "barrel styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart",
+        "chest styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart",
+        "trapped chest styled menu title plain custom-name lock opaque base custom data and deposited items survive clean restart"
       ],
       "rust_status": "partial",
       "evidence": [
@@ -14105,7 +14116,27 @@
         "trapped chest first open preserves items after pending loot removal",
         "barrel first open preserves items after pending loot removal",
         "barrel pending empty loot survives provider reads and replaces stored items on actual first open",
-        "spectator barrel access preserves pending loot until a survival menu opens"
+        "spectator barrel access preserves pending loot until a survival menu opens",
+        "barrel literal and styled menu titles retain extras through recursive CustomName merge and reopen",
+        "barrel exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate",
+        "barrel plain named offhand key cannot unlock until an actual hand swap moves it into the main hand",
+        "barrel creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control",
+        "barrel spectator can open a locked materialized container without a key",
+        "barrel wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu",
+        "chest literal and styled menu titles retain extras through recursive CustomName merge and reopen",
+        "chest exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate",
+        "chest plain named offhand key cannot unlock until an actual hand swap moves it into the main hand",
+        "chest creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control",
+        "chest spectator can open a locked materialized container without a key",
+        "chest wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu",
+        "trapped chest literal and styled menu titles retain extras through recursive CustomName merge and reopen",
+        "trapped chest exact plain custom-name lock denies empty wrong-name and item-name keys and accepts the main hand or empty predicate",
+        "trapped chest plain named offhand key cannot unlock until an actual hand swap moves it into the main hand",
+        "trapped chest creative mode obeys the plain custom-name lock with wrong-key denial and matching-key control",
+        "trapped chest spectator can open a locked materialized container without a key",
+        "trapped chest wrong-key and spectator access retain pending empty loot until a matching survival key opens the menu",
+        "chest both double-container halves enforce plain custom-name locks and right-first title priority with left fallback from either side",
+        "trapped chest both double-container halves enforce plain custom-name locks and right-first title priority with left fallback from either side"
       ],
       "rust_status": "partial",
       "evidence": [
