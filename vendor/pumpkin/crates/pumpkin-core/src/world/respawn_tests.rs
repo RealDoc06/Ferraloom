@@ -151,3 +151,24 @@ async fn respawn_preserves_score_and_experience_for_keep_inventory_spectator_and
         assert_eq!(item.get_int("count"), Some(3));
     }
 }
+
+#[tokio::test]
+async fn world_info_refresh_preserves_live_health() {
+    let fixture = Fixture::new().await;
+    let world = fixture.source.world();
+    let connected = ConnectedPlayer::new(world, GameMode::Survival).await;
+    let player = &connected.player;
+    player.set_client_loaded(true);
+    player.set_health(7.0);
+    player.hunger_manager.level.store(13);
+    player.hunger_manager.saturation.store(2.5);
+
+    world.send_world_info(player);
+
+    assert_eq!(player.living_entity.health.load(), 7.0);
+    assert_eq!(player.hunger_manager.level.load(), 13);
+    assert_eq!(player.hunger_manager.saturation.load(), 2.5);
+    let mut saved = NbtCompound::new();
+    EntityBase::write_nbt(player.as_ref() as &dyn EntityBase, &mut saved);
+    assert_eq!(saved.get_float("Health"), Some(7.0));
+}

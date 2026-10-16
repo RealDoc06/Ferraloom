@@ -4562,7 +4562,7 @@ impl World {
         chunker::update_position(player);
         // Update commands
 
-        player.set_health(20.0);
+        player.send_health();
     }
 
     pub fn explode(
