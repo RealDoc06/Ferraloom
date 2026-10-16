@@ -39,3 +39,5 @@ lto = "thin"
 pumpkin-core = { path = "vendor/pumpkin/crates/pumpkin-core" }
 pumpkin-world = { path = "vendor/pumpkin/crates/pumpkin-world" }
 pumpkin-command = { path = "vendor/pumpkin/crates/pumpkin-command" }
+pumpkin-data = { path = "vendor/pumpkin/crates/pumpkin-data" }
+pumpkin-protocol = { path = "vendor/pumpkin/crates/pumpkin-protocol" }
