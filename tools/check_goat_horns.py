@@ -171,7 +171,7 @@ def menu_slots(retained: bool) -> list:
 
 
 def menu_semantics(slots: list) -> list:
-    result = deepcopy(slots)
+    result = [deepcopy(value) for value in slots]
     for value in result:
         if value is not None and value.get("item_id") == 1504:
             components = value.get("components", {})
