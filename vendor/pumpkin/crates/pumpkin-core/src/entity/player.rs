@@ -1241,10 +1241,10 @@ impl Player {
 
         // Remove left over entries from all possiblily loaded chunks
         let cleaned_chunks = level.clean_memory();
-        if !cleaned_chunks.is_empty() {
-            if let Err(error) = world.clean_entity_chunks(&cleaned_chunks).await {
-                error!("Failed player chunk cleanup: {error}");
-            }
+        if !cleaned_chunks.is_empty()
+            && let Err(error) = world.clean_entity_chunks(&cleaned_chunks).await
+        {
+            error!("Failed player chunk cleanup: {error}");
         }
         self.clean_up_chunk_tickets(&world.level);
 
@@ -5537,7 +5537,7 @@ impl Player {
         self.set_experience(experience.level, experience.progress, experience.total);
     }
 
-    /// Sets points within this level, clamped like ServerPlayer, without changing XpTotal.
+    /// Sets points within this level, clamped like `ServerPlayer`, without changing `XpTotal`.
     /// Returns true for compatibility; command-specific bounds are checked by the caller.
     pub fn set_experience_points(&self, new_points: i32) -> bool {
         let mut experience = self.experience();

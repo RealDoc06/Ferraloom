@@ -315,10 +315,10 @@ impl AdvancementFile {
             for (name, criterion) in &progress.criteria {
                 let name = name.as_ref();
                 if let Some(instant) = criterion.0 {
-                    if !saved
+                    if saved
                         .criteria
                         .get(name)
-                        .is_some_and(|timestamp| timestamp.instant == instant)
+                        .is_none_or(|timestamp| timestamp.instant != instant)
                     {
                         saved
                             .criteria

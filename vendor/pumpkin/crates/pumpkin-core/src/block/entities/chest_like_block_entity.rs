@@ -9,7 +9,7 @@ use std::sync::{Arc, Weak};
 use crate::server::Server;
 
 /// Preserve the original tags even when the runtime only understands a subset.
-/// 26.3 BaseContainerBlockEntity uses CustomName/lock; BlockEntity separately
+/// 26.3 `BaseContainerBlockEntity` uses `CustomName`/lock; `BlockEntity` separately
 /// persists its components map. These belong to the same transaction as Items.
 pub(super) struct ContainerMetadata {
     custom_name: Option<NbtTag>,
@@ -116,10 +116,9 @@ impl ContainerMetadata {
         } else {
             None
         };
-        match unsupported {
-            Some(field) => Err(super::BlockEntityLoadError::Unsupported(field)),
-            None => Ok(()),
-        }
+        unsupported.map_or(Ok(()), |field| {
+            Err(super::BlockEntityLoadError::Unsupported(field))
+        })
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -705,9 +704,9 @@ macro_rules! impl_container_helper_methods {
 
             /// Generate without holding chest state or calling back into this inventory.
             /// A reload invalidates the detached result, including identical key/seed loads.
-            #[expect(
+            #[allow(
                 clippy::panic,
-                reason = "Inventory cannot return an unbound-context error"
+                reason = "Inventory cannot return an unbound-context error; this macro expansion does not fulfill expect."
             )]
             fn ensure_unpacked(&self) {
                 loop {
@@ -774,7 +773,7 @@ macro_rules! impl_container_helper_methods {
             }
 
             /// The pending check and slot access share a lock. A load can install
-            /// new loot after ensure_unpacked returns, in which case retry first.
+            /// new loot after `ensure_unpacked` returns, in which case retry first.
             fn unpacked_state(
                 &self,
             ) -> std::sync::RwLockWriteGuard<

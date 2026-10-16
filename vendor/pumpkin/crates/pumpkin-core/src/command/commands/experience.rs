@@ -44,7 +44,7 @@ impl ExpType {
         }
     }
 
-    fn can_set(self, experience: Experience, amount: i32) -> bool {
+    const fn can_set(self, experience: Experience, amount: i32) -> bool {
         match self {
             Self::Points => amount < experience.points_needed(),
             Self::Levels => true,

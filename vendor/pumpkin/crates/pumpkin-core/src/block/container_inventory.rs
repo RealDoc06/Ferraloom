@@ -13,14 +13,14 @@ use crate::{
     world::World,
 };
 
-pub(crate) trait ViewedContainer: BlockEntity + Inventory + ViewerCountListener {
+pub trait ViewedContainer: BlockEntity + Inventory + ViewerCountListener {
     fn viewers(&self) -> &ContainerViewerCount;
 }
 
 /// The upstream Inventory callbacks have no World argument. Menus retain this
 /// adapter, while storage users still receive the original block entity. No
 /// world lookup is used to choose which entity receives an open or close.
-pub(crate) struct ContainerMenuInventory<T> {
+pub struct ContainerMenuInventory<T> {
     inner: Arc<T>,
     world: Arc<World>,
 }
@@ -82,10 +82,10 @@ impl<T: ViewedContainer> Clearable for ContainerMenuInventory<T> {
     }
 }
 
-/// The pinned DoubleInventory exposes no half accessors. Keep its original
+/// The pinned `DoubleInventory` exposes no half accessors. Keep its original
 /// inventories alive and delegate operations to it; recounts need exact identity,
 /// including when a menu outlives replacement of a block at the same position.
-pub(crate) struct DoubleContainerInventory {
+pub struct DoubleContainerInventory {
     inner: Arc<DoubleInventory>,
     first: Arc<dyn Inventory>,
     second: Arc<dyn Inventory>,

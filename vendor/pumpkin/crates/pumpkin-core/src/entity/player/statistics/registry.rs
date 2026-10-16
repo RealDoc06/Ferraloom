@@ -1,6 +1,6 @@
 //! Core-owned 26.3 adapter. `Stats.<clinit>` offsets 0..96 bind the value registries:
-//! mined -> BLOCK; crafted/used/broken/picked_up/dropped -> ITEM;
-//! killed/killed_by -> ENTITY_TYPE; custom -> CUSTOM_STAT.
+//! mined -> `BLOCK`; crafted/used/broken/picked_up/dropped -> `ITEM`;
+//! killed/killed_by -> `ENTITY_TYPE`; custom -> `CUSTOM_STAT`.
 //! Primary source: .cache/vanilla/26.3/minecraft.jar, net.minecraft.stats.Stats.
 //! Jar SHA256: a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6.
 //! Registry witness: registry-witness.json (all IDs/names, no copied registry blob).

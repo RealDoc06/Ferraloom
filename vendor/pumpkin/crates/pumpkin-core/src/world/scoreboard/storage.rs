@@ -1,6 +1,6 @@
 //! Java 26.3 saved-data codec. Field names/defaults come from the target's
-//! ScoreboardSaveData.Packed, Objective.Packed, Score.Packed and PlayerTeam.Packed
-//! codecs, checked against an actual DataVersion 5023 scoreboard.dat.
+//! `ScoreboardSaveData.Packed`, `Objective.Packed`, `Score.Packed` and `PlayerTeam.Packed`
+//! codecs, checked against an actual `DataVersion` 5023 `scoreboard.dat`.
 
 use std::{
     fs::{self, File},
@@ -15,7 +15,11 @@ use pumpkin_util::{
 };
 use pumpkin_world::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
 
-use super::*;
+use super::{
+    CollisionRule, FxHashMap, NameTagVisibility, NamedColor, NoTarget, NumberFormat, RenderType,
+    Scoreboard, ScoreboardDisplaySlot, ScoreboardObjective, ScoreboardScore, Team, TextComponent,
+    VarInt,
+};
 
 /// Keep unmodeled fields on their owning records, not a second live scoreboard.
 /// Removed records must also lose their retained data before names can be reused.
@@ -88,17 +92,16 @@ impl Scoreboard {
     /// loading before a server or any world can save replacement defaults.
     pub(crate) fn load(world_path: &Path) -> io::Result<Self> {
         let path = world_path.join("data/minecraft/scoreboard.dat");
-        let (path, file) = match open_existing(&path)? {
-            Some(file) => (path, file),
-            None => {
-                // DimensionStorageFileFix (4772) moved saved data into this
-                // namespace. Preserve the legacy file until a new save commits.
-                let legacy = world_path.join("data/scoreboard.dat");
-                let Some(file) = open_existing(&legacy)? else {
-                    return Ok(Self::new());
-                };
-                (legacy, file)
-            }
+        let (path, file) = if let Some(file) = open_existing(&path)? {
+            (path, file)
+        } else {
+            // DimensionStorageFileFix (4772) moved saved data into this
+            // namespace. Preserve the legacy file until a new save commits.
+            let legacy = world_path.join("data/scoreboard.dat");
+            let Some(file) = open_existing(&legacy)? else {
+                return Ok(Self::new());
+            };
+            (legacy, file)
         };
         let root = read_gzip_compound_tag(file)
             .map_err(|error| invalid(format!("{}: {error}", path.display())))?;
@@ -119,6 +122,10 @@ impl Scoreboard {
             .map_err(Into::into)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Validate and decode the complete saved board before publishing any live scoreboard state."
+    )]
     fn from_saved_data(mut root: NbtCompound) -> io::Result<Self> {
         if let Some(version) = field(&root, "DataVersion", NbtTag::extract_int)?
             && version > MAXIMUM_SUPPORTED_WORLD_DATA_VERSION
@@ -439,7 +446,7 @@ fn put_format(data: &mut NbtCompound, format: Option<&NumberFormat>) -> io::Resu
         }
         NumberFormat::Styled(style) => {
             let mut text = TextComponent::empty();
-            text.0.style = Box::new(style.clone());
+            text.0.style.as_mut().clone_from(style);
             encoded = text.0.to_nbt_compound();
             encoded.child_tags.remove("text");
             for value in encoded.child_tags.values_mut() {
@@ -569,7 +576,7 @@ fn put_text(data: &mut NbtCompound, key: &str, text: Option<&TextComponent>) -> 
 }
 
 /// Adapt NBT booleans and compact children to the engine's serde text model.
-/// Unlike TextComponent::from_nbt, decoding errors never become empty text.
+/// Unlike `TextComponent::from_nbt`, decoding errors never become empty text.
 fn text_json(tag: &NbtTag) -> io::Result<serde_json::Value> {
     use serde_json::{Value, json};
     Ok(match tag {
@@ -662,8 +669,12 @@ fn component_object(value: serde_json::Value) -> serde_json::Value {
     }
 }
 
-pub(crate) const SLOTS: [(ScoreboardDisplaySlot, &str); 19] = {
-    use ScoreboardDisplaySlot::*;
+pub const SLOTS: [(ScoreboardDisplaySlot, &str); 19] = {
+    use ScoreboardDisplaySlot::{
+        BelowName, List, Sidebar, TeamAqua, TeamBlack, TeamBlue, TeamDarkAqua, TeamDarkBlue,
+        TeamDarkGray, TeamDarkGreen, TeamDarkPurple, TeamDarkRed, TeamGold, TeamGray, TeamGreen,
+        TeamLightPurple, TeamRed, TeamWhite, TeamYellow,
+    };
     [
         (List, "list"),
         (Sidebar, "sidebar"),

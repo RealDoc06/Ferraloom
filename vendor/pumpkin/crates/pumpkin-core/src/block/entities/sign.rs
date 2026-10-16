@@ -12,8 +12,8 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 pub use pumpkin_data::dye_color::DyeColor;
 
-/// ValueInput's direct booleans use NumericTag.byteValue, including low-byte
-/// truncation and the FloatTag/DoubleTag floor-to-int conversion.
+/// `ValueInput`'s direct booleans use `NumericTag.byteValue`, including low-byte
+/// truncation and the `FloatTag`/`DoubleTag` floor-to-int conversion.
 fn value_input_bool(tag: Option<&NbtTag>) -> bool {
     match tag {
         Some(NbtTag::Byte(value)) => *value != 0,
@@ -26,7 +26,7 @@ fn value_input_bool(tag: Option<&NbtTag>) -> bool {
     }
 }
 
-/// Codec.BOOL instead uses NbtOps' nonzero-number rule. In particular, 256,
+/// `Codec.BOOL` instead uses `NbtOps`' nonzero-number rule. In particular, 256,
 /// fractional nonzero values and NaN are true here, unlike direct flags.
 fn codec_bool(tag: Option<&NbtTag>) -> Option<bool> {
     match tag? {
@@ -68,7 +68,7 @@ enum SignLine {
 impl SignLine {
     fn literal(text: Box<str>) -> Self {
         Self::Known {
-            component: TextComponent::text(text.to_string()),
+            component: TextComponent::text(text.into_string()),
         }
     }
 
@@ -126,7 +126,7 @@ impl SignLine {
             return Self::literal(text);
         }
         let mut replacement = TextComponent::text(text.to_string());
-        replacement.0.style = component.0.style.clone();
+        replacement.0.style.clone_from(&component.0.style);
         Self::Known {
             component: replacement,
         }
@@ -173,27 +173,30 @@ fn decode_component(tag: &NbtTag, depth: usize) -> ComponentDecode {
         NbtTag::Compound(nbt) => {
             // Explicit type is strict. Untyped content tries other branches when
             // one cannot decode, e.g. a bad text field with a valid translate.
-            let may_decode = if let Some(kind) = nbt.get("type") {
-                kind.extract_string().is_some_and(|kind| match kind {
-                    "translatable" => content_may_decode(nbt, "translate"),
-                    "text" | "score" | "selector" | "keybind" | "nbt" | "object" => {
-                        content_may_decode(nbt, kind)
-                    }
-                    _ => false,
-                })
-            } else {
-                [
-                    "text",
-                    "translate",
-                    "score",
-                    "selector",
-                    "keybind",
-                    "nbt",
-                    "object",
-                ]
-                .iter()
-                .any(|kind| content_may_decode(nbt, kind))
-            };
+            let may_decode = nbt.get("type").map_or_else(
+                || {
+                    [
+                        "text",
+                        "translate",
+                        "score",
+                        "selector",
+                        "keybind",
+                        "nbt",
+                        "object",
+                    ]
+                    .iter()
+                    .any(|kind| content_may_decode(nbt, kind))
+                },
+                |kind| {
+                    kind.extract_string().is_some_and(|kind| match kind {
+                        "translatable" => content_may_decode(nbt, "translate"),
+                        "text" | "score" | "selector" | "keybind" | "nbt" | "object" => {
+                            content_may_decode(nbt, kind)
+                        }
+                        _ => false,
+                    })
+                },
+            );
             if !may_decode {
                 return ComponentDecode::NoValue;
             }
@@ -393,11 +396,10 @@ impl FaceData {
         let mut opaque = false;
         for line in lines {
             match decode_component(line, 0) {
-                ComponentDecode::NoValue if filtered => return None,
+                ComponentDecode::NoValue | ComponentDecode::Partial(_) if filtered => return None,
                 ComponentDecode::NoValue => {}
-                ComponentDecode::Partial(_) if filtered => return None,
                 ComponentDecode::Success(line) | ComponentDecode::Partial(line) => {
-                    decoded.push(line)
+                    decoded.push(line);
                 }
                 ComponentDecode::Unknown(nbt) => {
                     opaque = true;
@@ -634,8 +636,8 @@ impl SignData {
         if allow_op_features {
             // 26.3 resolves privileged text through SignText.Mutable, whose
             // constructor initializes both line arrays from the raw messages.
-            front.filtered_messages = front.messages.clone();
-            back.filtered_messages = back.messages.clone();
+            front.filtered_messages.clone_from(&front.messages);
+            back.filtered_messages.clone_from(&back.messages);
             for face in [&mut front, &mut back] {
                 if face
                     .messages
@@ -964,6 +966,10 @@ impl<'a> SignEntityRef<'a> {
     /// Atomically recheck the designated editor/wax after the plugin event and
     /// replace all raw/filtered lines together. Returns before any world update.
     #[must_use]
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "Preserve the public mutation boundary that accepts the complete packet-owned message array."
+    )]
     pub fn update_player_text(
         &self,
         editor: uuid::Uuid,
@@ -995,7 +1001,7 @@ impl<'a> SignEntityRef<'a> {
         };
         data.messages =
             std::array::from_fn(|index| previous[index].with_literal_text(messages[index].clone()));
-        data.filtered_messages = data.messages.clone();
+        data.filtered_messages.clone_from(&data.messages);
         face.apply_unlocked(data);
         *current = None;
         true

@@ -262,8 +262,7 @@ impl ContainerViewerCount {
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut recounted = false;
-            if let Some((revision, count)) = recount
+            let recounted = if let Some((revision, count)) = recount
                 && Arc::ptr_eq(&revision, &state.revision)
             {
                 state.current = count;
@@ -271,8 +270,10 @@ impl ContainerViewerCount {
                 if count == 0 {
                     state.ticks_until_recheck = 0;
                 }
-                recounted = true;
-            }
+                true
+            } else {
+                false
+            };
             // Accepted unchanged recounts still resend chest lids (N3). Stale
             // revisions and deferred scans do not enqueue a recount callback.
             state.enqueue(world, recounted)

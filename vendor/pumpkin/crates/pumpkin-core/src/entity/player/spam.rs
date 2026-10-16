@@ -4,7 +4,7 @@ use pumpkin_config::AntiSpamConfig;
 
 use super::SpamType;
 
-/// Java 26.3 uses separate TickThrottlers for chat and commands.
+/// Java 26.3 uses separate `TickThrottlers` for chat and commands.
 #[derive(Default)]
 pub(super) struct SpamCounters {
     chat: AtomicU32,

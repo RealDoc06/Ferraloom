@@ -30,6 +30,7 @@ pub enum ChunkGenerationPolicy {
 }
 
 impl ChunkGenerationPolicy {
+    #[must_use]
     pub const fn for_player(is_spectator: bool, spectators_generate_chunks: bool) -> Self {
         if is_spectator && !spectators_generate_chunks {
             Self::ExistingOnly
@@ -213,12 +214,15 @@ impl ChunkSender {
         if self
             .activation_demand
             .as_ref()
-            .is_none_or(|demand| !demand.belongs_to(level))
+            .is_some_and(|demand| !demand.belongs_to(level))
         {
             self.activation_demand = Some(level.activation_demand());
         }
+        let demand = self
+            .activation_demand
+            .get_or_insert_with(|| level.activation_demand());
         let view = Cylindrical::new(center, view_distance);
-        self.activation_demand.as_mut().unwrap().replace(
+        demand.replace(
             self.pending_chunks
                 .iter()
                 .copied()

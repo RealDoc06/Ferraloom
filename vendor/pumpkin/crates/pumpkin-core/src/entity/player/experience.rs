@@ -1,7 +1,7 @@
 //! Player experience arithmetic from the official 26.3 Player/ServerPlayer bytecode.
 //!
 //! Keep every float operation in order: deriving progress from integer totals loses
-//! the rounding accumulated at level boundaries. XpTotal is an independent counter.
+//! the rounding accumulated at level boundaries. `XpTotal` is an independent counter.
 //! Primary minecraft.jar SHA-256:
 //! a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6.
 
@@ -9,7 +9,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::CSetExperience;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Experience {
+pub struct Experience {
     pub level: i32,
     pub progress: f32,
     pub total: i32,

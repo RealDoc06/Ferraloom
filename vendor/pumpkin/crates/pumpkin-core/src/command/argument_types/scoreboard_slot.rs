@@ -57,6 +57,7 @@ impl ScoreboardSlotArgumentType {
         Ok(*context.get_argument(name)?)
     }
 
+    #[must_use]
     pub fn name(slot: ScoreboardDisplaySlot) -> &'static str {
         DISPLAY_SLOTS
             .iter()

@@ -14,7 +14,7 @@ use std::{
 type Entries = HashMap<String, NbtCompound>;
 
 /// Only unmodeled root/data fields and namespace existence live here. Entries
-/// remain in Server::command_storage so commands keep their existing API.
+/// remain in `Server::command_storage` so commands keep their existing API.
 #[derive(Default)]
 pub(super) struct NamespaceFiles {
     roots: BTreeMap<String, NbtCompound>,
@@ -133,20 +133,19 @@ impl NamespaceFiles {
         }
         for namespace in namespaces {
             let modern = namespace_directory(world_path, &namespace).join("command_storage.dat");
-            let (path, file) = match open_existing(&modern)? {
-                Some(file) => (modern, file),
-                None => {
-                    // A legal modern namespace directory can itself have the
-                    // name command_storage_<namespace>.dat. It is not a legacy file.
-                    if !legacy_namespaces.contains(&namespace) {
-                        continue;
-                    }
-                    let legacy = directory.join(format!("command_storage_{namespace}.dat"));
-                    let Some(file) = open_existing(&legacy)? else {
-                        continue;
-                    };
-                    (legacy, file)
+            let (path, file) = if let Some(file) = open_existing(&modern)? {
+                (modern, file)
+            } else {
+                // A legal modern namespace directory can itself have the
+                // name command_storage_<namespace>.dat. It is not a legacy file.
+                if !legacy_namespaces.contains(&namespace) {
+                    continue;
                 }
+                let legacy = directory.join(format!("command_storage_{namespace}.dat"));
+                let Some(file) = open_existing(&legacy)? else {
+                    continue;
+                };
+                (legacy, file)
             };
             let root = read_gzip_compound_tag(file)
                 .map_err(|error| invalid(format!("{}: {error}", path.display())))?;
@@ -271,7 +270,7 @@ impl Server {
     }
 
     /// Remember even an empty first write: Java retains that namespace's file.
-    /// Call before taking the command_storage mutex.
+    /// Call before taking the `command_storage` mutex.
     pub(crate) fn remember_command_storage_namespace(&self, id: &str) {
         let namespace = namespace_from_id(id);
         self.command_storage_files
@@ -282,7 +281,7 @@ impl Server {
             .or_default();
     }
 
-    /// The caller holds SaveCoordinator through snapshot and durable replacement.
+    /// The caller holds `SaveCoordinator` through snapshot and durable replacement.
     pub(super) fn save_command_storage(&self) -> io::Result<()> {
         let entries = self
             .command_storage

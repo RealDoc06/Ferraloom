@@ -89,16 +89,17 @@ impl ServerPlayerData {
                 .sessions
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(slot) = sessions.get(&uuid).and_then(Weak::upgrade) {
-                slot
-            } else {
-                // Owners and waiters retain their slots. Only expired UUIDs
-                // can be discarded without allowing two admissions at once.
-                sessions.retain(|_, slot| slot.strong_count() != 0);
-                let slot = Arc::new(PlayerSessionSlot::default());
-                sessions.insert(uuid, Arc::downgrade(&slot));
-                slot
-            }
+            sessions
+                .get(&uuid)
+                .and_then(Weak::upgrade)
+                .unwrap_or_else(|| {
+                    // Owners and waiters retain their slots. Only expired UUIDs
+                    // can be discarded without allowing two admissions at once.
+                    sessions.retain(|_, slot| slot.strong_count() != 0);
+                    let slot = Arc::new(PlayerSessionSlot::default());
+                    sessions.insert(uuid, Arc::downgrade(&slot));
+                    slot
+                })
         };
         let lock = slot.gate.clone().lock_owned();
         tokio::pin!(lock);
@@ -269,7 +270,7 @@ impl ServerPlayerData {
 }
 
 #[cfg(test)]
-pub(super) mod test {
+pub(crate) mod test {
     use crate::data::VanillaData;
     use crate::data::player_server::ServerPlayerData;
     use crate::entity::{NBTStorage, player::Player};

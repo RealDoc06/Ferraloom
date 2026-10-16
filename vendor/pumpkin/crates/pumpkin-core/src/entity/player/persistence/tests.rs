@@ -618,7 +618,7 @@ fn player_dat_unmodeled_potion_and_firework_fields_refuse_unchanged() {
     for contents in [
         r#"{potion:"minecraft:water",extension:{components:{},keep:42}}"#,
         r#"{potion:"minecraft:missing"}"#,
-        r#"{potion:256}"#,
+        r"{potion:256}",
         r#"{custom_effects:[{id:"minecraft:speed",hidden_effect:{amplifier:1b,duration:200}}]}"#,
         r#"{custom_effects:[{id:"minecraft:speed",details:{components:{},keep:42}}]}"#,
         r#"{custom_effects:[{id:"minecraft:speed",amplifier:256}]}"#,
@@ -632,9 +632,9 @@ fn player_dat_unmodeled_potion_and_firework_fields_refuse_unchanged() {
         );
     }
     for fireworks in [
-        r#"{flight_duration:1b,extension:{components:{},keep:42}}"#,
-        r#"{flight_duration:256}"#,
-        r#"{flight_duration:-1}"#,
+        r"{flight_duration:1b,extension:{components:{},keep:42}}",
+        r"{flight_duration:256}",
+        r"{flight_duration:-1}",
         r#"{flight_duration:1b,explosions:[{shape:"small_ball",extension:{components:{},keep:42}}]}"#,
     ] {
         assert_refused_unchanged(

@@ -20,6 +20,10 @@ pub mod rail;
 
 /// BaseRailBlock.affectNeighborsAfterRemoval does not rerun rail placement or
 /// connection maintenance against a command's replacement block.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Keep the owned callback argument shared by all four rail implementations."
+)]
 fn affect_neighbors_after_removal(args: OnStateReplacedArgs<'_>) {
     if args.moved {
         return;

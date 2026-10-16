@@ -671,6 +671,10 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the admission lease, three persistence loads and publication in one fail-closed sequence."
+    )]
     pub async fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
@@ -694,12 +698,11 @@ impl Server {
             result = tokio::time::timeout_at(
                 admission_deadline,
                 self.player_data_storage.reserve_player_session(profile.id),
-            ) => match result {
-                Ok(session) => session,
-                Err(_) => {
-                    client.try_kick(DisconnectReason::LoggedInOtherLocation, &TextComponent::text("The previous session has not disconnected yet. Please try again."));
-                    return None;
-                }
+            ) => if let Ok(session) = result {
+                session
+            } else {
+                client.try_kick(DisconnectReason::LoggedInOtherLocation, &TextComponent::text("The previous session has not disconnected yet. Please try again."));
+                return None;
             },
         };
         if client.closed() {

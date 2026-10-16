@@ -776,7 +776,7 @@ fn resolve_source_tags(
 
 /// Mutable get-or-create traversal for merge, using the parsed path's node rules.
 /// Primitive arrays are handled separately at the leaf since their elements
-/// cannot contain compounds or supply mutable NbtTag references.
+/// cannot contain compounds or supply mutable `NbtTag` references.
 fn merge_node_targets<'a>(
     parent: &'a mut NbtTag,
     node: &NbtPathNode,

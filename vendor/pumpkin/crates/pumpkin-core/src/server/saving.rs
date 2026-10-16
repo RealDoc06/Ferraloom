@@ -24,16 +24,16 @@ impl SaveCoordinator {
         if interval == 0 {
             return None;
         }
-        let previous = self
-            .elapsed
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |elapsed| {
-                Some(if elapsed >= interval - 1 {
-                    0
-                } else {
-                    elapsed + 1
-                })
-            })
-            .expect("autosave counter update always succeeds");
+        // The closure always updates; both result variants carry the prior value.
+        let (Ok(previous) | Err(previous)) =
+            self.elapsed
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |elapsed| {
+                    Some(if elapsed >= interval - 1 {
+                        0
+                    } else {
+                        elapsed + 1
+                    })
+                });
         if previous < interval - 1 {
             return None;
         }

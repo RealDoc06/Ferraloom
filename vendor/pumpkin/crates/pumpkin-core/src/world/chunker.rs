@@ -112,12 +112,13 @@ pub fn update_position(player: &Arc<Player>) {
             }
         }
     }
-    let (loading_chunks, unloading_chunks): (Vec<_>, Vec<_>) = if let Some(old) = old_cylindrical {
-        let (loading, unloading) = Cylindrical::changed_chunks(old, new_cylindrical);
-        (loading.collect(), unloading.collect())
-    } else {
-        (new_cylindrical.all_chunks_within().collect(), Vec::new())
-    };
+    let (loading_chunks, unloading_chunks): (Vec<_>, Vec<_>) = old_cylindrical.map_or_else(
+        || (new_cylindrical.all_chunks_within().collect(), Vec::new()),
+        |old| {
+            let (loading, unloading) = Cylindrical::changed_chunks(old, new_cylindrical);
+            (loading.collect(), unloading.collect())
+        },
+    );
 
     {
         let mut sender = player
@@ -133,8 +134,8 @@ pub fn update_position(player: &Arc<Player>) {
             new_chunk_center,
             view_distance,
             generation_policy,
-        );
-    }
+        )
+    };
     player.watched_section.store(new_cylindrical);
     let revision = requested.publish(&world, new_cylindrical);
     drop(requested);
@@ -143,13 +144,12 @@ pub fn update_position(player: &Arc<Player>) {
     let player_clone = player.clone();
     if let Some(server) = world.server.upgrade() {
         server.spawn_task(async move {
-            if let Some((world, added)) = player_clone.chunk_watches.apply(revision).await {
-                if !added.is_empty()
-                    && player_clone.chunk_watches.requests_world(world.uuid)
-                    && !player_clone.client.closed()
-                {
-                    world.spawn_world_entity_chunks(player_clone, added);
-                }
+            if let Some((world, added)) = player_clone.chunk_watches.apply(revision).await
+                && !added.is_empty()
+                && player_clone.chunk_watches.requests_world(world.uuid)
+                && !player_clone.client.closed()
+            {
+                world.spawn_world_entity_chunks(player_clone, added);
             }
         });
     }

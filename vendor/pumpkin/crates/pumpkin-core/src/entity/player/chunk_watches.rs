@@ -12,7 +12,7 @@ struct WatchTarget {
 }
 
 #[derive(Default)]
-pub(crate) struct RequestedWatches {
+pub struct RequestedWatches {
     revision: u64,
     target: Option<WatchTarget>,
     paused: bool,
@@ -85,7 +85,7 @@ impl RequestedWatches {
 /// Requested views may change before their tasks run. Only `applied` owns Level
 /// watcher references; serializing its transitions makes stale tasks harmless.
 #[derive(Default)]
-pub(crate) struct PlayerChunkWatches {
+pub struct PlayerChunkWatches {
     requested: Mutex<RequestedWatches>,
     applied: tokio::sync::Mutex<Option<WatchTarget>>,
 }
@@ -123,15 +123,11 @@ impl PlayerChunkWatches {
                 std::mem::take(&mut requested.retired_tickets),
             )
         };
-        if applied
-            .as_ref()
-            .is_some_and(|old| old.world_id != target.world_id)
+        if let Some(old) = applied.take_if(|old| old.world_id != target.world_id)
+            && let Some(old_world) = old.world.upgrade()
         {
-            let old = applied.take().unwrap();
-            if let Some(old_world) = old.world.upgrade() {
-                let removed: Vec<_> = old.view.all_chunks_within().collect();
-                old_world.update_chunk_watches(&[], &removed).await;
-            }
+            let removed: Vec<_> = old.view.all_chunks_within().collect();
+            old_world.update_chunk_watches(&[], &removed).await;
         }
         let (added, removed): (Vec<_>, Vec<_>) = if let Some(old) = applied.as_ref() {
             let (added, removed) = Cylindrical::changed_chunks(old.view, target.view);
@@ -184,7 +180,7 @@ impl PlayerChunkWatches {
 
 /// Tickets carry the level and center that acquired them, rather than deriving
 /// ownership from the player's current position after movement or transfer.
-pub(crate) struct HeldChunkTickets {
+pub struct HeldChunkTickets {
     level: Weak<Level>,
     center: Vector2<i32>,
     view: Option<i8>,

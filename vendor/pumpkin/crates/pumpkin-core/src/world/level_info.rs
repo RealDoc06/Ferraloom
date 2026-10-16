@@ -5,7 +5,7 @@ use std::sync::Arc;
 /// Retry a level-info edit against the latest snapshot until it commits.
 /// Edits must be side-effect free: RCU may retry them. Send feedback and run
 /// callbacks only after this function returns. Returns the committed previous snapshot.
-pub(crate) fn update_level_info(
+pub fn update_level_info(
     level_info: &ArcSwap<LevelData>,
     edit: impl FnMut(&mut LevelData),
 ) -> Arc<LevelData> {
@@ -16,7 +16,7 @@ pub(crate) fn update_level_info(
 /// Returns the previous snapshot from the successful CAS even when unchanged;
 /// callers can check the same condition on it before running side effects.
 /// Both closures must be side-effect free.
-pub(crate) fn update_level_info_if(
+pub fn update_level_info_if(
     level_info: &ArcSwap<LevelData>,
     mut condition: impl FnMut(&LevelData) -> bool,
     mut edit: impl FnMut(&mut LevelData),

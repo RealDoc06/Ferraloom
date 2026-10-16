@@ -30,6 +30,10 @@ struct FillBiomeExecutor {
 }
 
 impl CommandExecutor for FillBiomeExecutor {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep biome bounds, selection, mutation and feedback together."
+    )]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let from_pos = BlockPosArgumentType::get_block_pos(context, "from")?;
         let to_pos = BlockPosArgumentType::get_block_pos(context, "to")?;

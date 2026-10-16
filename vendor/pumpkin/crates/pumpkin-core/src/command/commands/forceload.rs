@@ -137,6 +137,10 @@ fn changed_count(changed: &[Vector2<i32>], add: bool) -> Result<i32, CommandSynt
     Ok(changed.len() as i32)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep force-load bounds, ticket changes and command feedback together."
+)]
 fn change_force_load(context: &CommandContext, add: bool) -> CommandExecutorResult {
     let from = ColumnPosArgumentType::get_column_pos(context, "from")?;
     let to = if context.get_argument::<Coordinates>("to").is_ok() {

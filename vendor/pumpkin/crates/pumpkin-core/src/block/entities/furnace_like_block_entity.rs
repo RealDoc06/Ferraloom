@@ -9,8 +9,8 @@ use crate::block::entities::{BlockEntity, PropertyDelegate};
 pub use pumpkin_inventory::ExperienceContainer;
 use pumpkin_inventory::{Clearable, Inventory};
 
-/// `TagValueInput.getIntOr` accepts every NumericTag. Float/Double.intValue
-/// floors before Java's saturating conversion; Long.intValue keeps its low bits.
+/// `TagValueInput.getIntOr` accepts every `NumericTag`. `Float`/`Double.intValue`
+/// floors before Java's saturating conversion; `Long.intValue` keeps its low bits.
 pub(crate) fn read_cooking_int(nbt: &NbtCompound, key: &str) -> i32 {
     match nbt.get(key) {
         Some(NbtTag::Byte(value)) => i32::from(*value),
