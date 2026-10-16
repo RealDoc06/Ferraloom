@@ -182,10 +182,17 @@ def private_chunk(server: LoggedServer, client: Client, kind: str) -> dict:
     """Require the container's actual entry, with absent NBT, in a fresh chunk."""
     pos = POSITIONS[kind]
     close_menu(client)
+    started = time.monotonic()
+    # Position confirmation can precede the initial watch transfer. Require the
+    # fixture chunk before leaving spawn, whose first view might still be active.
+    client.wait_state(lambda state: any(chunk["x"] == pos[0] // 16 and chunk["z"] == pos[2] // 16
+                                        for chunk in state["chunk_packets"]))
+    ready_at = time.monotonic()
     before = client.state()["packets"]
     teleport(server, client, (0, 200, 0))
     client.wait_state(lambda state: any(chunk["sequence"] > before and chunk["x"] == 0 and chunk["z"] == 0
                                         for chunk in state["chunk_packets"]))
+    away_at = time.monotonic()
     fence = boundary(server, client, before)
     before_return = client.state()["packets"]
     teleport(server, client, pos)
@@ -200,7 +207,10 @@ def private_chunk(server: LoggedServer, client: Client, kind: str) -> dict:
     require(all(entry["block_entity_type"] == BLOCK_ENTITY_TYPES[kind] and entry["data"] is None
                 for entry in entries), {"private_container_nbt_exposed": entries})
     return {"away_boundary": fence, "before_return_sequence": before_return, "received_entries": entries,
-            "chunk_sequences": [chunk["sequence"] for chunk in chunks]}
+            "chunk_sequences": [chunk["sequence"] for chunk in chunks],
+            "phase_seconds": {"fixture_readiness": round(ready_at - started, 3),
+                              "away_chunk": round(away_at - ready_at, 3),
+                              "boundary_and_return": round(time.monotonic() - away_at, 3)}}
 
 
 def denied(server: LoggedServer, client: Client, pos: tuple[int, int, int], *, pending_spectator: bool = False,

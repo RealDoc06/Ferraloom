@@ -902,7 +902,7 @@ function main() {
   };
 
   function send(id: number, ...parts: Buffer[]) {
-    if (quitting) return;
+    if (quitting) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
     if (values['raw-packets'] && phase === 'play' && [7, 9, 18, 19, 41, 66].includes(id)) {
       emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: packet.toString('base64') });
@@ -911,6 +911,7 @@ function main() {
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
     socket.write(Buffer.concat([varInt(packet.length), packet]));
+    return true;
   }
 
   function move(position: Position) {
@@ -1136,6 +1137,7 @@ function main() {
       const value: unknown = JSON.parse(line);
       if (record(value)) id = value.id ?? null;
       const command = parseCommand(value);
+      if (quitting && command.action !== 'state' && command.action !== 'quit') throw new Error('Connection is closing');
       if (command.action === 'state') emit({ id: command.id, ok: true, result: state });
       else if (command.action === 'quit') {
         quitting = true; emit({ id: command.id, ok: true, result: null }); socket.end();
@@ -1176,16 +1178,16 @@ function main() {
           emit({ id: command.id, ok: true, result: { sent_action: command.action,
             ...(command.action === 'use_item_on' ? { interaction_sequence: interactionSequence } : {}) } });
         } else if (command.action === 'trigger') {
-          send(7, encodeTrigger(command.objective, command.value));
-          emit({ id: command.id, ok: true, result: { sent_command: `trigger ${command.objective} set ${command.value}` } });
+          const written = send(7, encodeTrigger(command.objective, command.value));
+          emit({ id: command.id, ok: true, result: { sent_command: `trigger ${command.objective} set ${command.value}`, written } });
         } else {
           const message = command.text.replace(/^\//u, '');
           if (command.action === 'chat' && !command.text.startsWith('/')) {
-            send(9, encodeUnsignedChat(command.text));
-            emit({ id: command.id, ok: true, result: { sent_chat: command.text } });
+            const written = send(9, encodeUnsignedChat(command.text));
+            emit({ id: command.id, ok: true, result: { sent_chat: command.text, written } });
           } else {
-            send(7, string(message));
-            emit({ id: command.id, ok: true, result: { sent_command: message } });
+            const written = send(7, string(message));
+            emit({ id: command.id, ok: true, result: { sent_command: message, written } });
           }
         }
       }

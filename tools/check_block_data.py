@@ -65,7 +65,7 @@ CASES = {
        for case in ("literal_command", "structured_command", "command_reentry", "rich_text")},
     **{f"block_data.{name}_command_restart": "persistence.block_entities" for name in SIGNS},
 }
-WORLD_ERRORS = re.compile(r"\bERROR\b|Failed to parse saved data|Couldn't load chunk|Failed to (?:load|read|write|save|parse).*?(?:chunk|region|world|data)", re.IGNORECASE)
+WORLD_ERRORS = re.compile(r"^\s*(?:\d{4}-\d{2}-\d{2}T\S+\s+)?ERROR\b|\[[^\]\n]*/ERROR\]|Failed to parse saved data|Couldn't load chunk|Failed to (?:load|read|write|save|parse).*?(?:chunk|region|world|data)", re.IGNORECASE)
 
 
 def now() -> str:

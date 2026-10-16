@@ -47,15 +47,19 @@ def offline_uuid(name: str) -> uuid.UUID:
 def membership(fixture: Fixture, client: Client, *, operator: bool = False) -> dict:
     """Read actual ops plus the entity UUID; no player command spends setup debt."""
     identity = offline_uuid(client.name)
+    # Both fixtures request view distance 2. Finish the 7x7 initial view before a
+    # deliberate immediate disconnect, so automatic chunk replies have settled.
+    ready = client.wait_state(lambda state: state["chunks"] >= 49)
     words = [int.from_bytes(identity.bytes[index:index + 4], "big", signed=True) for index in range(0, 16, 4)]
     observed = typed_predicate(fixture.server, f'if data entity {client.name} {{UUID:[I;{",".join(map(str, words))}]}}')
-    path = fixture.server.directory / "ops.json"
+    path = fixture.server.directory / ("ops.json" if fixture.server.kind == "vanilla" else "data/ops.json")
     entries = json.loads(path.read_text())
     require(isinstance(entries, list), "ops.json is not a list")
     matches = [entry for entry in entries if entry.get("uuid") == str(identity)]
     require(bool(matches) == operator, {"uuid": str(identity), "operator_expected": operator, "ops": entries})
     return {"name": client.name, "uuid": str(identity), "entity_uuid": observed,
-            "operator": operator, "ops": entries, "ops_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            "initial_chunks": ready["chunks"], "operator": operator, "ops_path": str(path),
+            "ops": entries, "ops_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def arm_trigger(fixture: Fixture, client: Client, value: int = 0) -> dict:
@@ -68,7 +72,9 @@ def arm_trigger(fixture: Fixture, client: Client, value: int = 0) -> dict:
     objective = next((entry for entry in saved.get("Objectives", []) if entry.get("Name") == "spamprobe"), {})
     score = next((entry for entry in saved.get("PlayerScores", [])
                   if entry.get("Name") == client.name and entry.get("Objective") == "spamprobe"), {})
-    require(objective.get("CriteriaName") == "trigger" and score.get("Score") == value and not score.get("Locked", False),
+    # The official codec omits default Score=0 and Locked=false fields.
+    require(objective.get("CriteriaName") == "trigger" and score.get("Score", 0) == value and not score.get("Locked", False)
+            and score.get("Name") == client.name and score.get("Objective") == "spamprobe",
             {"objective": objective, "score": score})
     return {"console_set": set_output, "console_enable": enable_output, "saved_objective": objective, "saved_score": score}
 
@@ -118,21 +124,26 @@ def queue_burst(client: Client, actions: list[dict]) -> dict:
 
 
 def burst_replies(client: Client, burst: dict, *, complete: bool) -> dict:
-    """Retain actual send acknowledgments, including a control's kick cutoff."""
+    """Distinguish socket-queued writes from actions refused after a kick."""
     replies = []
+    suppressed = []
     for identifier, action in zip(burst["request_ids"], burst["actions"]):
         reply = client.pending.pop(identifier, None)
         if reply is None:
             require(not complete, f"Missing burst send acknowledgment {identifier}")
             continue
-        require(reply.get("ok") is True, reply)
+        if reply.get("ok") is not True:
+            require(not complete and reply.get("error") == "Connection is closing", reply)
+            suppressed.append(reply)
+            continue
         result = reply.get("result")
-        expected = ({"sent_chat": action["text"]} if action["action"] == "chat" else
-                    {"sent_command": f'trigger {action["objective"]} set {action["value"]}'})
+        expected = ({"sent_chat": action["text"], "written": True} if action["action"] == "chat" else
+                    {"sent_command": f'trigger {action["objective"]} set {action["value"]}', "written": True})
         require(result == expected, {"expected": expected, "reply": reply})
         replies.append(reply)
     require(replies, "Burst produced no send acknowledgment")
-    return {"acknowledged_actions": len(replies), "complete_required": complete, "replies": replies}
+    return {"socket_queued_actions": len(replies), "complete_required": complete, "replies": replies,
+            "refused_after_close": suppressed, "scope": "Socket write queued; delivery is established separately from received effects."}
 
 
 def translated_feedback(state: dict, translation: str, after: int) -> list[dict]:
@@ -352,7 +363,10 @@ def run_side(kind: str, directory: Path, args: argparse.Namespace, report: dict)
                 (controls if seconds is None else results)[identifier] = row
                 require(not server.broken, server.broken)
                 require(not any(client.failure for client in fixture.clients), "Unexpected client failure")
-            fixture.close(observer)
+            # Failed cases can leave their owned sender alive. Close every client
+            # before stopping the server, preserving genuine protocol failures.
+            for connected in fixture.clients:
+                fixture.close(connected)
             server.save_flush()
             fixture.stop()
             require(suite.data_version(server.directory / "world") == 5023, "World DataVersion differs from 5023")

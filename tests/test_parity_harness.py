@@ -12,10 +12,21 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import protocol
+from check_block_data import WORLD_ERRORS
 from parity.suite import Scenario, Server, check_signal_exit, compare_command_trees, is_server_say, pin_binary, recorded, run_scenario, stop_by_signal
 
 
 class HarnessTests(unittest.TestCase):
+    def test_server_error_filter_distinguishes_levels_from_os_error_details(self):
+        for line in [
+            " ERROR Failed to flush packets: Broken pipe (os error 32)",
+            "[03:33:29] [Server thread/ERROR]: Broken pipe (os error 32)",
+            " WARN Failed to write region data: Permission denied (os error 13)",
+        ]:
+            with self.subTest(line=line):
+                self.assertIsNotNone(WORLD_ERRORS.search(line))
+        self.assertIsNone(WORLD_ERRORS.search(" WARN Failed to flush packets: Broken pipe (os error 32)"))
+
     def test_no_change_scenario_rejects_an_unrelated_command_error(self):
         scenario = Scenario("fluid", (), ("fill 0 200 0 0 200 0 water destroy",),
                             "if block 0 200 0 water", settle=0,
