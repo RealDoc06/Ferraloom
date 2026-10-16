@@ -375,8 +375,11 @@ mod tests {
                 })
             })
             .unwrap();
-        for _ in 0..4 {
-            reader.get_list(NetworkReadExt::get_i64_be).unwrap();
+        // Protocol 777 BIT_SET is a trimmed little-endian byte array.
+        let light_masks: [Vec<u8>; 4] =
+            std::array::from_fn(|_| reader.get_list(NetworkReadExt::get_u8).unwrap());
+        for mask in &light_masks[2..] {
+            assert_eq!(mask.first().map(|byte| byte & 1), Some(1));
         }
         for _ in 0..2 {
             reader
@@ -406,6 +409,10 @@ mod tests {
     #[test]
     fn chunk_container_entries_omit_private_pending_nbt() {
         let chunk = ChunkData::empty(-2, 3);
+        *chunk.light_engine.lock().unwrap() = pumpkin_world::chunk::ChunkLight {
+            sky_light: vec![LightContainer::new_empty(0); 24].into_boxed_slice(),
+            block_light: vec![LightContainer::new_empty(0); 24].into_boxed_slice(),
+        };
         for (index, (id, _)) in CONTAINERS.iter().enumerate() {
             let pos = BlockPos::new(-30 + index as i32, -32, 51);
             chunk

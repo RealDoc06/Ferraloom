@@ -24,6 +24,8 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
+#[cfg(test)]
+mod block_entity_update_tests;
 pub mod brightness;
 pub mod chunker;
 pub mod explosion;
@@ -361,6 +363,9 @@ pub struct World {
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
     #[cfg(test)]
     flushed_block_changes: std::sync::Mutex<Vec<(BlockPos, BlockStateId)>>,
+    /// Encoded packets at the Java block-entity publication boundary.
+    #[cfg(test)]
+    block_entity_update_packets: std::sync::Mutex<Vec<bytes::Bytes>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
@@ -557,6 +562,8 @@ impl World {
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
             #[cfg(test)]
             flushed_block_changes: std::sync::Mutex::new(Vec::new()),
+            #[cfg(test)]
+            block_entity_update_packets: std::sync::Mutex::new(Vec::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
@@ -2369,18 +2376,8 @@ impl World {
                     &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
                     &pumpkin_protocol::bedrock::client::CUpdateBlock::new(block_pos, be_block_id),
                 );
-                if let Some(block_entity) = self.get_block_entity(&block_pos)
-                    && let Some(nbt) = block_entity.chunk_data_nbt()
-                {
-                    let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
-                    self.broadcast_to_chunk(
-                        chunk_pos,
-                        &CBlockEntityData::new(
-                            block_pos,
-                            VarInt(block_entity.get_id() as i32),
-                            bytes.as_ref().into(),
-                        ),
-                    );
+                if let Some(block_entity) = self.get_block_entity(&block_pos) {
+                    self.notify_block_entity(&block_entity);
                 }
                 if let Some(data) = self.bedrock_block_entity_data(block_state_id, block_pos) {
                     self.broadcast_to_chunk_bedrock(
@@ -2442,18 +2439,8 @@ impl World {
                 );
 
                 for (block_pos, _) in &updates {
-                    if let Some(block_entity) = self.get_block_entity(block_pos)
-                        && let Some(nbt) = block_entity.chunk_data_nbt()
-                    {
-                        let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
-                        self.broadcast_to_chunk(
-                            chunk_pos,
-                            &CBlockEntityData::new(
-                                *block_pos,
-                                VarInt(block_entity.get_id() as i32),
-                                bytes.as_ref().into(),
-                            ),
-                        );
+                    if let Some(block_entity) = self.get_block_entity(block_pos) {
+                        self.notify_block_entity(&block_entity);
                     }
                 }
             }
@@ -7177,22 +7164,33 @@ impl World {
         self.notify_block_entity(block_entity);
     }
 
-    /// Client tags can omit persisted fields, so notification never saves them.
+    /// Java getUpdatePacket is separate from getUpdateTag. Notification never
+    /// saves client projections or suppresses the block-state/event channels.
     fn notify_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
+        if matches!(
+            block_entity.resource_location(),
+            "minecraft:chest" | "minecraft:trapped_chest" | "minecraft:barrel"
+        ) {
+            // These inherit BlockEntity.getUpdatePacket() == null in 26.3.
+            // ChunkHolder skips that packet entirely, including for empty NBT.
+            return;
+        }
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
             let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
-            self.broadcast_to_chunk(
-                chunk_pos,
-                &CBlockEntityData::new(
-                    block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
-                    bytes.as_ref().into(),
-                ),
+            let packet = CBlockEntityData::new(
+                block_pos,
+                VarInt(block_entity.get_id() as i32),
+                bytes.as_ref().into(),
             );
+            #[cfg(test)]
+            self.block_entity_update_packets.lock().unwrap().push(
+                JavaClient::serialize_packet_for_version(&packet, CURRENT_MC_VERSION).unwrap(),
+            );
+            self.broadcast_to_chunk(chunk_pos, &packet);
         }
     }
 
