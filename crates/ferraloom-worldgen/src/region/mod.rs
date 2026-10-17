@@ -145,6 +145,63 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
+    // --- nether, end and misc family ---
+    /// Delegates ChorusFlowerBlock#generatePlant, including connected shapes.
+    fn generate_chorus_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _radius: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: ChorusFlowerBlock.generatePlant".into()))
+    }
+    fn configure_end_gateway(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _exit: [i32; 3],
+        _exact: bool,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: TheEndGatewayBlockEntity.setExitPosition".into(),
+        ))
+    }
+    fn is_collision_empty(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: BlockState.getCollisionShape".into()))
+    }
+    /// RandomizableContainer#setBlockEntityLootTable consumes the loot seed only
+    /// when the block entity implements RandomizableContainer.
+    fn set_bonus_chest_loot(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: RandomizableContainer.setBlockEntityLootTable".into(),
+        ))
+    }
+    /// Creates and inserts EndCrystal, draws its yaw only after successful
+    /// creation, then places bedrock and FireBlock#getState at its feet.
+    fn create_end_spike_crystal(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _beam: Option<[i32; 3]>,
+        _invulnerable: bool,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: EndCrystal creation and FireBlock.getState".into(),
+        ))
+    }
+    // --- end nether, end and misc family ---
+
     fn has_block_entity(&self, state: BlockState) -> bool;
     fn post_process_pos(
         &self,
@@ -464,4 +521,42 @@ impl<'a> WorldGenRegion<'a> {
     pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_unobstructed(state, self, p)
     }
+    // --- nether, end and misc family ---
+    pub fn generate_chorus_plant(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        radius: i32,
+    ) -> Result<(), Error> {
+        self.behavior.generate_chorus_plant(self, p, random, radius)
+    }
+    pub fn configure_end_gateway(
+        &mut self,
+        p: [i32; 3],
+        exit: [i32; 3],
+        exact: bool,
+    ) -> Result<(), Error> {
+        self.behavior.configure_end_gateway(self, p, exit, exact)
+    }
+    pub fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.is_collision_empty(self, p)
+    }
+    pub fn set_bonus_chest_loot(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_bonus_chest_loot(self, p, random)
+    }
+    pub fn create_end_spike_crystal(
+        &mut self,
+        p: [i32; 3],
+        beam: Option<[i32; 3]>,
+        invulnerable: bool,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior
+            .create_end_spike_crystal(self, p, beam, invulnerable, random)
+    }
+    // --- end nether, end and misc family ---
 }
