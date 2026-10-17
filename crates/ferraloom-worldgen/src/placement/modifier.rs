@@ -85,11 +85,7 @@ impl PlacementModifier {
                 Self::RarityFilter(int_range(field(v, "chance")?, 1, i32::MAX)?)
             }
             "minecraft:random_chance" => {
-                let chance = float(field(v, "chance")?)?;
-                if !(0.0..=1.0).contains(&chance) {
-                    return Err(Error("chance outside [0,1]".into()));
-                }
-                Self::RandomChance(chance)
+                Self::RandomChance(float_range(field(v, "chance")?, 0.0, 1.0)?)
             }
             "minecraft:biome" => Self::Biome,
             "minecraft:surface_relative_threshold_filter" => Self::SurfaceRelativeThreshold {

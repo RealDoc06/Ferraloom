@@ -100,10 +100,7 @@ pub enum WorldCarver {
 impl WorldCarver {
     pub fn decode(v: &Value) -> Result<Self, Error> {
         let ty = kind(v)?;
-        let probability = float(field(v, "probability")?)?;
-        if !(0.0..=1.0).contains(&probability) {
-            return Err(Error("carver probability outside [0,1]".into()));
-        }
+        let probability = float_range(field(v, "probability")?, 0.0, 1.0)?;
         let y = HeightProvider::decode(field(v, "y")?)?;
         Ok(match ty.to_string().as_str() {
             "minecraft:cave" => Self::Cave(CaveWorldCarver {
