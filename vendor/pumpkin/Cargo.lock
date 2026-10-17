@@ -2520,7 +2520,6 @@ dependencies = [
 [[package]]
 name = "pumpkin-inventory"
 version = "0.2.0+26.3-26.51"
-source = "git+https://github.com/Pumpkin-MC/Pumpkin.git?rev=5b53f064af8708ba33fcaa533b81ca29a53a3310#5b53f064af8708ba33fcaa533b81ca29a53a3310"
 dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
