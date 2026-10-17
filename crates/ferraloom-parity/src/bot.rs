@@ -73,6 +73,8 @@ pub struct BotState {
     pub min_section: i32,
     pub entities: BTreeMap<i32, Entity>,
     pub containers: BTreeMap<i32, Container>,
+    /// Player Inventory indices (0..42), distinct from inventory-menu slot numbers.
+    pub inventory: BTreeMap<i32, ItemStack>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
     pub display_objectives: Vec<cb::SetDisplayObjective>,
@@ -228,7 +230,15 @@ impl Bot {
                 cfg::ClientboundPacket::SelectKnownPacks(p) => {
                     io.send(&cfg::ServerboundPacket::SelectKnownPacks(
                         cfg::ServerboundSelectKnownPacks {
-                            known_packs: p.known_packs,
+                            known_packs: p
+                                .known_packs
+                                .into_iter()
+                                .filter(|pack| {
+                                    pack.namespace == "minecraft"
+                                        && pack.id == "core"
+                                        && pack.version == "26.3"
+                                })
+                                .collect(),
                         },
                     ))
                     .await?
@@ -237,13 +247,7 @@ impl Bot {
                     let entries = p
                         .entries
                         .into_iter()
-                        .map(|entry| {
-                            assert!(
-                                entry.data.is_none(),
-                                "negotiated core data should be omitted"
-                            );
-                            entry.id.to_string()
-                        })
+                        .map(|entry| entry.id.to_string())
                         .collect::<Vec<_>>();
                     sequence
                         .registries
@@ -919,6 +923,13 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             }
         }
         cb::Packet::ContainerSetContent(p) => {
+            if p.container_id.0 == 0 {
+                for (slot, stack) in p.items.iter().enumerate() {
+                    if let Some(index) = inventory_slot(slot) {
+                        s.inventory.insert(index, stack.clone());
+                    }
+                }
+            }
             s.containers.insert(
                 p.container_id.0,
                 Container {
@@ -935,11 +946,24 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
                 c.slots
                     .resize(c.slots.len().max(slot + 1), ItemStack::default());
                 c.slots[slot] = p.item_stack.clone();
+                if p.container_id.0 == 0 {
+                    if let Some(index) = inventory_slot(slot) {
+                        s.inventory.insert(index, p.item_stack.clone());
+                    }
+                }
             }
         }
         cb::Packet::SetPlayerInventory(p) => {
-            let c = s.containers.entry(0).or_default();
-            if let Ok(slot) = usize::try_from(p.slot.0) {
+            s.inventory.insert(p.slot.0, p.contents.clone());
+            let menu_slot = match p.slot.0 {
+                0..=8 => Some(p.slot.0 as usize + 36),
+                9..=35 => Some(p.slot.0 as usize),
+                36..=39 => Some(44 - p.slot.0 as usize),
+                40 => Some(45),
+                _ => None,
+            };
+            if let Some(slot) = menu_slot {
+                let c = s.containers.entry(0).or_default();
                 c.slots
                     .resize(c.slots.len().max(slot + 1), ItemStack::default());
                 c.slots[slot] = p.contents.clone();
@@ -985,6 +1009,16 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+/// Port of InventoryMenu's equipment/hotbar slot layout to Inventory indices.
+fn inventory_slot(menu_slot: usize) -> Option<i32> {
+    match menu_slot {
+        5..=8 => Some(44 - menu_slot as i32),
+        9..=35 => Some(menu_slot as i32),
+        36..=44 => Some(menu_slot as i32 - 36),
+        45 => Some(40),
+        _ => None,
+    }
 }
 /// Port of VecDeltaCodec#decode: zero axes preserve precision; Math.round ties toward +infinity.
 fn apply_delta(entity: &mut Entity, delta: &play::EntityDelta) {

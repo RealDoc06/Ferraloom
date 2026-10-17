@@ -36,11 +36,11 @@ impl ObservationLog {
         let mut uuids = BTreeMap::new();
         let mut selected = std::collections::BTreeSet::new();
         for rule in rules {
-            let (pointer, kind) = match rule {
-                Normalization::EntityId(p) => (p, 0),
-                Normalization::RandomUuid(p) => (p, 1),
-                Normalization::Timestamp(p) => (p, 2),
-                Normalization::VaryingSeed(p) => (p, 3),
+            let pointer = match rule {
+                Normalization::EntityId(p)
+                | Normalization::RandomUuid(p)
+                | Normalization::Timestamp(p)
+                | Normalization::VaryingSeed(p) => p,
             };
             ensure!(
                 selected.insert(pointer),
@@ -49,13 +49,13 @@ impl ObservationLog {
             let entry = value.pointer_mut(pointer).with_context(|| {
                 format!("normalization points to missing observation: {pointer}")
             })?;
-            match kind {
-                0 => {
+            match rule {
+                Normalization::EntityId(_) => {
                     let raw = entry.as_i64().context("entity id is not an integer")?;
                     let next = entities.len() as i64;
                     *entry = Value::from(*entities.entry(raw).or_insert(next));
                 }
-                1 => {
+                Normalization::RandomUuid(_) => {
                     let raw = entry.as_str().context("UUID is not a string")?.to_owned();
                     ensure!(
                         raw.len() == 36
@@ -71,7 +71,7 @@ impl ObservationLog {
                     let next = uuids.len();
                     *entry = Value::from(format!("uuid-{}", uuids.entry(raw).or_insert(next)));
                 }
-                _ => {
+                Normalization::Timestamp(_) | Normalization::VaryingSeed(_) => {
                     ensure!(
                         entry.is_number(),
                         "timestamp/seed must be numeric at {pointer}"
