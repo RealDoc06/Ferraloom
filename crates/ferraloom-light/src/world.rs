@@ -19,6 +19,9 @@ pub trait LightWorld {
         if !self.has_chunk(section.chunk()) {
             return Block::BEDROCK.default_state();
         }
+        if section.y < self.min_section() || section.y >= self.max_section() {
+            return Block::AIR.default_state();
+        }
         self.section(section)
             .map_or(Block::AIR.default_state(), |s| {
                 s.get_block_state((pos.x & 15) as u8, (pos.y & 15) as u8, (pos.z & 15) as u8)

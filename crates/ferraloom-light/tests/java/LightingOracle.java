@@ -22,6 +22,9 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
     final boolean sky;
     final LinkedHashMap<ChunkPos, ProtoChunk> chunks = new LinkedHashMap<>();
     LevelLightEngine engine;
+    record Notification(LightLayer layer, SectionPos section) {}
+    final List<Notification> notifications = new ArrayList<>();
+    public void onLightUpdate(LightLayer layer, SectionPos section) { notifications.add(new Notification(layer,section)); }
     final DataOutputStream out;
     static PalettedContainerFactory factory;
 
@@ -135,6 +138,12 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
                 rle(out,queried);
             }
         }
+        out.writeInt(notifications.size());
+        for(var notification:notifications) {
+            out.writeBoolean(notification.layer()==LightLayer.SKY);
+            out.writeInt(notification.section().x());out.writeInt(notification.section().y());out.writeInt(notification.section().z());
+        }
+        notifications.clear();
     }
     static void rle(DataOutputStream out,byte[] bytes) throws Exception {
         int count=0;
@@ -144,9 +153,13 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
     }
     void close() throws Exception { out.writeByte(0); out.close(); }
     static void faces(Path output) throws Exception {
+        try(var flags=new DataOutputStream(Files.newOutputStream(output.resolve("shape_flags.bin")))) {
+            flags.writeInt(Block.BLOCK_STATE_REGISTRY.size());
+            for(var state:Block.BLOCK_STATE_REGISTRY) flags.writeBoolean(!state.canOcclude() || !state.useShapeForLightOcclusion());
+        }
         var representatives=new LinkedHashMap<String,BlockState>();
         for(var state:Block.BLOCK_STATE_REGISTRY) {
-            String key=state.useShapeForLightOcclusion()+":"+state.getOcclusionShape().toAabbs();
+            String key=(!state.useShapeForLightOcclusion() || !state.canOcclude()) ? "[]" : state.getOcclusionShape().toAabbs().toString();
             representatives.putIfAbsent(key,state);
         }
         try(var out=new DataOutputStream(Files.newOutputStream(output.resolve("faces.bin")))) {
@@ -230,6 +243,18 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
         w.set(-1,112,-1,Blocks.AIR.defaultBlockState(),true);w.checkpoint();
         w.set(0,48,0,Blocks.STONE.defaultBlockState(),true);w.checkpoint();
         w.set(0,48,0,Blocks.AIR.defaultBlockState(),true);w.checkpoint();w.close();
+
+        w=new LightingOracle(output.resolve("batches.bin"),4,true);
+        w.fill(-16,20,-16,31,20,31,Blocks.STONE);
+        w.set(-1,-1,-1,Blocks.GLOWSTONE);
+        w.initialize(false);w.light();w.checkpoint();
+        BlockState[] palette={Blocks.AIR.defaultBlockState(),Blocks.GLOWSTONE.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.OAK_LEAVES.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.OAK_STAIRS.defaultBlockState(),Blocks.OAK_SLAB.defaultBlockState()};
+        var random=new Random(0x5eed);
+        for(int batch=0;batch<3;batch++) {
+            for(int i=0;i<800;i++) w.set(i%40-16, (i/40)%2*16-1, i/80-4, palette[random.nextInt(palette.length)],true);
+            w.checkpoint();
+        }
+        w.diskReload();w.checkpoint();w.close();
 
         w=new LightingOracle(output.resolve("lifecycle.bin"),4,false);
         w.set(0,0,0,Blocks.GLOWSTONE);w.initialize(false);w.light();w.checkpoint();

@@ -1,6 +1,7 @@
 use crate::DataLayer;
+use crate::long_set::LongSet;
 use ferraloom_util::core::{BlockPos, ChunkPos, SectionPos};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,14 +33,14 @@ pub struct LightSectionUpdate {
 pub(crate) struct Storage {
     pub layer: LightLayer,
     states: HashMap<i64, u8>,
-    enabled: HashSet<i64>,
+    enabled: LongSet,
     pub updating: HashMap<i64, Arc<DataLayer>>,
     visible: HashMap<i64, Arc<DataLayer>>,
     queued: HashMap<i64, Arc<DataLayer>>,
-    retained: HashSet<i64>,
-    remove: HashSet<i64>,
-    changed: HashSet<i64>,
-    affected: HashSet<i64>,
+    retained: LongSet,
+    remove: LongSet,
+    changed: LongSet,
+    affected: LongSet,
     pub inconsistent: bool,
     pub bottom: i32,
     tops: HashMap<i64, i32>,
@@ -52,14 +53,14 @@ impl Storage {
         Self {
             layer,
             states: HashMap::new(),
-            enabled: HashSet::new(),
+            enabled: LongSet::default(),
             updating: HashMap::new(),
             visible: HashMap::new(),
             queued: HashMap::new(),
-            retained: HashSet::new(),
-            remove: HashSet::new(),
-            changed: HashSet::new(),
-            affected: HashSet::new(),
+            retained: LongSet::default(),
+            remove: LongSet::default(),
+            changed: LongSet::default(),
+            affected: LongSet::default(),
             inconsistent: false,
             bottom: i32::MAX,
             tops: HashMap::new(),
@@ -237,13 +238,13 @@ impl Storage {
             return;
         }
         self.inconsistent = false;
-        for key in &self.remove {
+        for key in self.remove.iter() {
             let queued = self.queued.remove(key);
             let stored = self.updating.remove(key);
-            if self.retained.contains(&SectionPos::of(*key).chunk().pack()) {
-                if let Some(data) = queued.or(stored) {
-                    self.queued.insert(*key, data);
-                }
+            if self.retained.contains(&SectionPos::of(*key).chunk().pack())
+                && let Some(data) = queued.or(stored)
+            {
+                self.queued.insert(*key, data);
             }
         }
         for key in self.remove.drain() {

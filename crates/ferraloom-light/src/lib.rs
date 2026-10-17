@@ -9,6 +9,7 @@
 
 mod data_layer;
 mod engine;
+mod long_set;
 mod occlusion;
 mod queue;
 mod sky_sources;

@@ -85,7 +85,7 @@ impl DataLayer {
         }
         let input = self.bytes.as_ref().unwrap();
         let mut output = Box::new([0; Self::SIZE]);
-        for layer in output.chunks_exact_mut(128) {
+        for layer in output.as_chunks_mut::<128>().0 {
             layer.copy_from_slice(&input[..128]);
         }
         Self::from_bytes(output)
