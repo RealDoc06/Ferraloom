@@ -246,7 +246,7 @@ impl Feature for HugeFungus {
         if c.random.next_int_bound(12) == 0 {
             height *= 2;
         }
-        if !self.planted && origin[1] + height + 1 >= c.generator.settings.noise.height {
+        if !self.planted && origin[1] + height + 1 >= c.generator.gen_depth() {
             return Ok(false);
         }
         let huge = !self.planted && c.random.next_float() < 0.06;
