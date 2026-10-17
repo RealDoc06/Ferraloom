@@ -191,5 +191,5 @@ state_packets!(ServerboundPacket, ferraloom_data::packets::status::serverbound::
     Request(StatusRequest) => StatusRequest, Ping(sb::PingRequest) => PingRequest,
 });
 state_packets!(ClientboundPacket, ferraloom_data::packets::status::clientbound::Packet, {
-    Response(StatusResponse) => StatusResponse, Pong(cb::PongResponse) => PongResponse,
+    Response(Box<StatusResponse>) => StatusResponse, Pong(cb::PongResponse) => PongResponse,
 });

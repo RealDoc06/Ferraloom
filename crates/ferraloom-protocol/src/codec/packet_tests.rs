@@ -12,9 +12,8 @@ fn hex(text: &str) -> Vec<u8> {
 
 #[test]
 fn vanilla_handshake_sb() {
-    for fixture in [include_str!(
-        "../../tests/fixtures/handshake_sb_intention.hex"
-    )] {
+    {
+        let fixture = include_str!("../../tests/fixtures/handshake_sb_intention.hex");
         let bytes = hex(fixture);
         let packet = crate::handshake::ServerboundPacket::from_bytes(&bytes).unwrap();
         assert_eq!(packet.to_bytes().unwrap(), bytes, "{packet:?}");

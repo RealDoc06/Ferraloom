@@ -1,8 +1,12 @@
 //! Vanilla 26.3 item data components, patches and stack representations.
+mod map;
 mod patch;
+pub use map::*;
+mod persistent;
 mod stack;
 mod values;
 pub use patch::*;
+pub use persistent::{Persistent, PersistentValue};
 pub use stack::*;
 pub use values::*;
 

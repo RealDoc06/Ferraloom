@@ -1,6 +1,5 @@
 use super::*;
 use crate::{Identifier, Reader, Result, Wire, Writer, chat::Component, codec::VarInt};
-use ferraloom_nbt::Tag;
 
 macro_rules! components {
     ($($variant:ident($ty:ty) => $key:literal),* $(,)?) => {
@@ -10,10 +9,17 @@ macro_rules! components {
         impl DataComponent {
             pub fn component_type(&self) -> ComponentTypeId { match self { $(Self::$variant(_) => ComponentTypeId::from_name(concat!("minecraft:", $key)).expect("registered component")),* } }
             pub fn key(&self) -> Identifier { registry(self.component_type().name()) }
+            pub fn from_json(key:&Identifier,value:&serde_json::Value)->Result<Self> { super::persistent::component_from_json(key,value) }
+            pub fn from_nbt(key:&Identifier,value:&ferraloom_nbt::Tag)->Result<Self> { super::persistent::component_from_nbt(key,value) }
+            pub fn to_persistent(&self)->Result<PersistentValue> { super::persistent::component_value(self) }
+            pub fn to_json(&self)->Result<serde_json::Value> { Ok(self.to_persistent()?.to_json()) }
+            pub fn to_nbt(&self)->Result<ferraloom_nbt::Tag> { Ok(self.to_persistent()?.to_nbt()) }
+            pub fn hash(&self)->Result<i32> { Ok(self.to_persistent()?.hash()) }
             pub fn decode_value(key: &Identifier, r: &mut Reader<'_>) -> Result<Self> {
+                if key.as_str() == "minecraft:intangible_projectile" { <Unit as Persistent>::from_nbt(&r.nbt(false)?)?; return Ok(Self::IntangibleProjectile(Unit)); }
                 match key.as_str() { $(concat!("minecraft:", $key) => Ok(Self::$variant(r.read()?)),)* _ => Err(crate::Error::invalid("component", key.to_string())) }
             }
-            pub fn encode_value(&self, w: &mut Writer<'_>) -> Result<()> { match self { $(Self::$variant(v) => w.write(v)),* } }
+            pub fn encode_value(&self, w: &mut Writer<'_>) -> Result<()> { if let Self::IntangibleProjectile(v) = self { return w.nbt(&v.to_nbt()?); } match self { $(Self::$variant(v) => w.write(v)),* } }
         }
     };
 }
@@ -67,7 +73,7 @@ components! {
     Dye(DyeColor) => "dye",
     DyedColor(i32) => "dyed_color",
     MapId(VarInt) => "map_id",
-    MapDecorations(Tag) => "map_decorations",
+    MapDecorations(MapDecorations) => "map_decorations",
     MapPostProcessing(MapPostProcessing) => "map_post_processing",
     ChargedProjectiles(BoundedList<ItemStackTemplate, 1024>) => "charged_projectiles",
     BundleContents(Vec<ItemStackTemplate>) => "bundle_contents",
@@ -77,7 +83,7 @@ components! {
     WritableBookContent(BoundedList<Filterable<BoundedString<1024>>, 100>) => "writable_book_content",
     WrittenBookContent(WrittenBookContent) => "written_book_content",
     Trim(ArmorTrim) => "trim",
-    DebugStickState(Tag) => "debug_stick_state",
+    DebugStickState(DebugStickState) => "debug_stick_state",
     EntityData(TypedEntityData) => "entity_data",
     BucketEntityData(CustomData) => "bucket_entity_data",
     BlockEntityData(TypedBlockEntityData) => "block_entity_data",
@@ -86,7 +92,7 @@ components! {
     OminousBottleAmplifier(VarInt) => "ominous_bottle_amplifier",
     JukeboxPlayable(JukeboxSongHolder) => "jukebox_playable",
     ProvidesBannerPatterns(BannerPatternSet) => "provides_banner_patterns",
-    Recipes(Tag) => "recipes",
+    Recipes(Recipes) => "recipes",
     LodestoneTracker(LodestoneTracker) => "lodestone_tracker",
     FireworkExplosion(FireworkExplosion) => "firework_explosion",
     Fireworks(Fireworks) => "fireworks",
@@ -99,8 +105,8 @@ components! {
     BlockState(BlockItemStateProperties) => "block_state",
     Bees(Vec<BeeOccupant>) => "bees",
     SulfurCubeContent(ItemStackTemplate) => "sulfur_cube_content",
-    Lock(Tag) => "lock",
-    ContainerLoot(Tag) => "container_loot",
+    Lock(LockCode) => "lock",
+    ContainerLoot(SeededContainerLoot) => "container_loot",
     BreakSound(Sound) => "break_sound",
     Compostable(Compostable) => "compostable",
     CookingFuel(CookingFuel) => "cooking_fuel",

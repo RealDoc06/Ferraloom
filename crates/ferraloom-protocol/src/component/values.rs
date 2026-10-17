@@ -396,7 +396,10 @@ pub enum ConsumeEffect {
     },
     RemoveEffects(MobEffectSet),
     ClearAllEffects,
-    TeleportRandomly(f32),
+    TeleportRandomly {
+        diameter: f32,
+        directional_particles: bool,
+    },
     PlaySound(Sound),
 }
 impl Wire for ConsumeEffect {
@@ -409,7 +412,10 @@ impl Wire for ConsumeEffect {
             },
             "remove_effects" => Self::RemoveEffects(r.read()?),
             "clear_all_effects" => Self::ClearAllEffects,
-            "teleport_randomly" => Self::TeleportRandomly(r.read()?),
+            "teleport_randomly" => Self::TeleportRandomly {
+                diameter: r.read()?,
+                directional_particles: r.read()?,
+            },
             "play_sound" => Self::PlaySound(r.read()?),
             _ => return Err(invalid("consume effect")),
         })
@@ -419,7 +425,7 @@ impl Wire for ConsumeEffect {
             Self::ApplyEffects { .. } => "apply_effects",
             Self::RemoveEffects(_) => "remove_effects",
             Self::ClearAllEffects => "clear_all_effects",
-            Self::TeleportRandomly(_) => "teleport_randomly",
+            Self::TeleportRandomly { .. } => "teleport_randomly",
             Self::PlaySound(_) => "play_sound",
         };
         w.registry(&registry("consume_effect_type"), &registry(name))?;
@@ -433,7 +439,13 @@ impl Wire for ConsumeEffect {
             }
             Self::RemoveEffects(v) => w.write(v),
             Self::ClearAllEffects => Ok(()),
-            Self::TeleportRandomly(v) => w.write(v),
+            Self::TeleportRandomly {
+                diameter,
+                directional_particles,
+            } => {
+                w.write(diameter)?;
+                w.write(directional_particles)
+            }
             Self::PlaySound(v) => w.write(v),
         }
     }
@@ -520,7 +532,7 @@ impl Wire for SignText {
 }
 registry_ref!(BlockTransformerHolder, "block_transformer");
 record!(AdventureModePredicate { predicates: Vec<BlockPredicate> });
-record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<Vec<PropertyMatcher>>, nbt: Option<CustomData>, components: DataComponentMatchers });
+record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePropertiesPredicate>, nbt: Option<CustomData>, components: DataComponentMatchers });
 record!(PropertyMatcher { name: String, matcher: Either<String, PropertyRange> });
 record!(PropertyRange { min: Option<String>, max: Option<String> });
 record!(DataComponentMatchers { exact: Vec<super::DataComponent>, partial: BoundedList<ComponentPredicate, 64> });
@@ -570,3 +582,47 @@ impl Wire for super::ComponentTypeId {
         Ok(())
     }
 }
+/// Port of the components whose default network codec is their persistent NBT codec.
+macro_rules! persistent_wire {
+ ($($ty:ty),* $(,)?) => {$(impl Wire for $ty {
+  fn decode(r:&mut Reader<'_>)->Result<Self> {<Self as super::Persistent>::from_nbt(&r.nbt(false)?)}
+  fn encode(&self,w:&mut Writer<'_>)->Result<()> {w.nbt(&<Self as super::Persistent>::to_nbt(self)?)}
+ })*};
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapDecorations(pub Vec<(String, MapDecoration)>);
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapDecoration {
+    pub decoration_type: Identifier,
+    pub x: f64,
+    pub z: f64,
+    pub rotation: f32,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct DebugStickState(pub Vec<(ferraloom_data::Block, String)>);
+#[derive(Clone, Debug, PartialEq)]
+pub struct Recipes(pub Vec<Identifier>);
+#[derive(Clone, Debug, PartialEq)]
+pub struct SeededContainerLoot {
+    pub loot_table: Identifier,
+    pub seed: i64,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct LockCode {
+    pub items: Option<ItemSet>,
+    pub count: IntBounds,
+    pub components: DataComponentMatchers,
+}
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct IntBounds {
+    pub min: Option<i32>,
+    pub max: Option<i32>,
+}
+persistent_wire!(
+    MapDecorations,
+    DebugStickState,
+    Recipes,
+    SeededContainerLoot,
+    LockCode
+);
+record!(StatePropertiesPredicate { properties:Vec<PropertyMatcher> });
