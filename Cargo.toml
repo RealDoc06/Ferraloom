@@ -14,6 +14,7 @@ ferraloom-util = { path = "crates/ferraloom-util" }
 ferraloom-nbt = { path = "crates/ferraloom-nbt" }
 ferraloom-data = { path = "crates/ferraloom-data" }
 ferraloom-chunk = { path = "crates/ferraloom-chunk" }
+ferraloom-light = { path = "crates/ferraloom-light" }
 ferraloom-protocol = { path = "crates/ferraloom-protocol" }
 ferraloom-worldgen = { path = "crates/ferraloom-worldgen" }
 ferraloom-storage = { path = "crates/ferraloom-storage" }
