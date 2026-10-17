@@ -26,9 +26,7 @@ pub struct NoiseState {
 }
 impl NoiseState {
     fn decode(v: &Value) -> Result<(Self, i64), Error> {
-        let seed = field(v, "seed")?
-            .as_i64()
-            .ok_or_else(|| Error("invalid noise seed".into()))?;
+        let seed = long(field(v, "seed")?)?;
         let scale = float(field(v, "scale")?)?;
         if scale <= 0.0 {
             return Err(Error("noise scale must be positive".into()));
