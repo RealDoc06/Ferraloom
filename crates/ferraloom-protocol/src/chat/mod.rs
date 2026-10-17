@@ -1,5 +1,6 @@
 //! Port of net.minecraft.network.chat's component tree and serialization codecs.
 //! Components retain explicit false style flags, which override inherited styles.
+mod encode;
 pub(crate) mod json;
 mod serialization;
 use crate::{Identifier, Reader, Result, Uuid, Wire, Writer};
@@ -13,6 +14,11 @@ pub struct Component {
     pub extra: Vec<Component>,
 }
 impl Component {
+    /// Port of ComponentSerialization.CODEC for NbtOps, JsonOps and HashOps.
+    pub fn encode_ops<O: crate::ops::EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        encode::component(self, ops)
+    }
+
     pub fn new(contents: Contents) -> Self {
         Self {
             contents,
@@ -187,6 +193,11 @@ pub struct Style {
     pub font: Option<Identifier>,
 }
 impl Style {
+    /// Port of Style.Serializer.CODEC, preserving boolean and numeric operation kinds.
+    pub fn encode_ops<O: crate::ops::EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        encode::style(self, ops)
+    }
+
     /// Port of Style#applyTo. Local values take precedence over inherited ones.
     pub fn apply_to(&self, parent: &Self) -> Self {
         Self {

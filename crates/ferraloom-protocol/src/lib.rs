@@ -5,15 +5,15 @@
 pub mod chat;
 pub mod codec;
 pub mod common;
+pub mod component;
 pub mod configuration;
+pub mod entity_data;
 pub mod handshake;
 pub mod login;
+pub mod ops;
 pub mod play;
 pub mod status;
 pub mod transport;
-pub mod component;
-pub mod entity_data;
-pub mod ops;
 pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
 pub use ferraloom_util::{BlockPos, Uuid};
 

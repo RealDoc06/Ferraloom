@@ -1,6 +1,13 @@
 import io.netty.buffer.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.util.Crypt;
+import net.minecraft.util.HashOps;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.core.HolderSet;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.Blocks;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
 import java.nio.file.*;
@@ -95,6 +102,27 @@ public final class ProtocolVectors {
         Bootstrap.bootStrap();
         var lookup = VanillaRegistries.createWorldLookup();
         var registryOps = lookup.createSerializationContext(JsonOps.INSTANCE);
+        var hashOps = lookup.createSerializationContext(HashOps.CRC32C_INSTANCE);
+        vector("registry_holders",b -> {
+            var buffer = new RegistryFriendlyByteBuf(b,RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+            ByteBufCodecs.registry(Registries.BLOCK).encode(buffer,Blocks.STONE);
+            SoundEvent.STREAM_CODEC.encode(buffer,SoundEvents.AMBIENT_CAVE);
+            SoundEvent.STREAM_CODEC.encode(buffer,Holder.direct(SoundEvent.createFixedRangeEvent(Identifier.parse("test:direct"),24.5f)));
+            ByteBufCodecs.holderSet(Registries.BLOCK).encode(buffer,HolderSet.direct(Blocks.STONE.builtInRegistryHolder(),Blocks.DIRT.builtInRegistryHolder()));
+            ByteBufCodecs.holderSet(Registries.BLOCK).encode(buffer,HolderSet.emptyNamed(BuiltInRegistries.BLOCK,TagKey.create(Registries.BLOCK,Identifier.parse("test:named"))));
+        });
+        byte[][] malformed = {
+            {(byte)0xed,(byte)0xa0,(byte)0x80}, {(byte)0xed,(byte)0xa0},
+            {(byte)0xed,(byte)0xa0,65}, {(byte)0xe0,(byte)0x80,(byte)0x80},
+            {(byte)0xf0,(byte)0x9f,(byte)0x92}, {(byte)0xf4,(byte)0x90,(byte)0x80,(byte)0x80}
+        };
+        for (int i=0;i<malformed.length;i++) {
+            byte[] raw = malformed[i];
+            vector("malformed_utf8_input_"+i,b -> { b.writeVarInt(raw.length); b.writeBytes(raw); });
+            var input = new FriendlyByteBuf(Unpooled.buffer()); input.writeVarInt(raw.length); input.writeBytes(raw);
+            String text = input.readUtf(16); input.release();
+            vector("malformed_utf8_normalized_"+i,b -> b.writeUtf(text,16));
+        }
         var uuid = UUID.fromString("01234567-89ab-cdef-fedc-ba9876543210");
         var testId = Identifier.parse("minecraft:test");
         var reason = Component.literal("test").withStyle(style -> style.withBold(true));
@@ -161,7 +189,11 @@ public final class ProtocolVectors {
         for (int i=0;i<components.length;i++) {
             var component = ComponentSerialization.CODEC.parse(registryOps,JsonParser.parseString(components[i])).getOrThrow();
             var finalComponent = component;
-            if (i == 1 || i == 2) vector("style_"+i,b -> Style.Serializer.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent.getStyle()));
+            Files.writeString(output.resolve("component_"+i+".hash"),Integer.toString(ComponentSerialization.CODEC.encodeStart(hashOps,component).getOrThrow().asInt())+"\n");
+            if (i == 1 || i == 2) {
+                vector("style_"+i,b -> Style.Serializer.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent.getStyle()));
+                Files.writeString(output.resolve("style_"+i+".hash"),Integer.toString(Style.Serializer.CODEC.encodeStart(hashOps,component.getStyle()).getOrThrow().asInt())+"\n");
+            }
             vector("component_"+i, b -> ComponentSerialization.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent));
             Files.writeString(output.resolve("component_"+i+".json"),ComponentSerialization.CODEC.encodeStart(registryOps,component).getOrThrow().toString()+"\n");
         }

@@ -933,3 +933,7 @@ pub(super) fn style_to_nbt(style: &Style) -> Result<Tag> {
 pub(super) fn style_from_json(value: Value) -> Result<Style> {
     style_from_nbt(json_to_tag(value)?, false)
 }
+
+pub(super) fn validate_click(click: &ClickEvent) -> Result<()> {
+    encode_click(click).map(|_| ())
+}

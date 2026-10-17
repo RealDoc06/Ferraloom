@@ -194,6 +194,6 @@ state_packets!(ServerboundPacket, ferraloom_data::packets::login::serverbound::P
     LoginAcknowledged(LoginAcknowledged) => LoginAcknowledged, CookieResponse(sb::CookieResponse) => CookieResponse,
 });
 state_packets!(ClientboundPacket, ferraloom_data::packets::login::clientbound::Packet, {
-    Disconnect(LoginDisconnect) => LoginDisconnect, Hello(ClientboundHello) => Hello, LoginFinished(LoginFinished) => LoginFinished,
+    Disconnect(Box<LoginDisconnect>) => LoginDisconnect, Hello(ClientboundHello) => Hello, LoginFinished(LoginFinished) => LoginFinished,
     Compression(LoginCompression) => LoginCompression, CustomQuery(CustomQuery) => CustomQuery, CookieRequest(cb::CookieRequest) => CookieRequest,
 });

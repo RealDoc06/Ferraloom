@@ -361,3 +361,12 @@ pub fn uuid_from_string(text: &str) -> Result<Uuid> {
         ((words[3] & 65535) << 48 | words[4] & 0xffffffffffff) as i64,
     ))
 }
+
+impl<T: Wire> Wire for Box<T> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Box::new(r.read()?))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.as_ref().encode(w)
+    }
+}
