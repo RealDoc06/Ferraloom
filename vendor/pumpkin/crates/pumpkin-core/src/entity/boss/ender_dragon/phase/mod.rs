@@ -27,8 +27,9 @@ pub use taking_off::TakingOffPhase;
 pub trait Phase: Send + Sync {
     fn get_type(&self) -> EnderDragonPhase;
     fn tick(&self, dragon: &EnderDragonEntity);
-    fn begin(&self, _dragon: &EnderDragonEntity) {}
-    fn end(&self, _dragon: &EnderDragonEntity) {}
+    /// Callback-free resets only, under the current-phase publication guard.
+    /// Never acquire the phase guard from a reset-state guard in tick().
+    fn reset_on_entry(&self, _dragon: &EnderDragonEntity) {}
     fn is_sitting(&self) -> bool {
         self.get_type().is_sitting()
     }
@@ -137,7 +138,7 @@ impl Phase for ScanningState {
         EnderDragonPhase::SitScanning
     }
     fn tick(&self, _dragon: &EnderDragonEntity) {}
-    fn begin(&self, dragon: &EnderDragonEntity) {
+    fn reset_on_entry(&self, dragon: &EnderDragonEntity) {
         *dragon
             .target_location
             .lock()

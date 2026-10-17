@@ -16,7 +16,7 @@ impl super::Phase for StrafingPhase {
         EnderDragonPhase::Strafing
     }
 
-    fn begin(&self, dragon: &EnderDragonEntity) {
+    fn reset_on_entry(&self, dragon: &EnderDragonEntity) {
         *dragon
             .fireball_charge
             .lock()

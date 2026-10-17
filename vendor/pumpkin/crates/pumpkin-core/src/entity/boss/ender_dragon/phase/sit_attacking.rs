@@ -8,7 +8,7 @@ impl super::Phase for SitAttackingPhase {
         EnderDragonPhase::SitAttacking
     }
 
-    fn begin(&self, dragon: &EnderDragonEntity) {
+    fn reset_on_entry(&self, dragon: &EnderDragonEntity) {
         *dragon
             .target_location
             .lock()

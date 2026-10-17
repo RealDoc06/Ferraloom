@@ -12,7 +12,7 @@ impl super::Phase for SitBreathingPhase {
         EnderDragonPhase::SitBreathing
     }
 
-    fn begin(&self, dragon: &EnderDragonEntity) {
+    fn reset_on_entry(&self, dragon: &EnderDragonEntity) {
         *dragon
             .target_location
             .lock()

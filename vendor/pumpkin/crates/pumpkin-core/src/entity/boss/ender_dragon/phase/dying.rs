@@ -20,7 +20,7 @@ impl super::Phase for DyingPhase {
         EnderDragonPhase::Dying
     }
 
-    fn begin(&self, _dragon: &EnderDragonEntity) {
+    fn reset_on_entry(&self, _dragon: &EnderDragonEntity) {
         *self
             .state
             .lock()

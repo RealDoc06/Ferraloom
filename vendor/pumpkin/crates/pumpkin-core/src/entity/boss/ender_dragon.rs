@@ -425,18 +425,19 @@ impl EnderDragonEntity {
             return;
         }
 
-        let old_phase = self.phase_manager.get_phase(*phase_lock);
-        *phase_lock = phase_type;
+        // Entry is only a callback-free state reset. The current phase stays
+        // locked through initialization/publication so another setter cannot
+        // apply an obsolete reset after a newer entry, and readers cannot tick
+        // an uninitialized Dying state. Phase ticks release target/charge/timer
+        // guards before calling set_phase; do not reverse that lock order.
+        self.phase_manager
+            .get_phase(phase_type)
+            .reset_on_entry(self);
         self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::ender_dragon::DATA_PHASE,
             VarInt(phase_type.network_id()),
         );
-        drop(phase_lock);
-
-        // Hooks never run while holding the current-phase guard.
-        old_phase.end(self);
-        let new_phase = self.phase_manager.get_phase(phase_type);
-        new_phase.begin(self);
+        *phase_lock = phase_type;
     }
 
     fn ensure_nodes_initialized(&self) {
@@ -1213,7 +1214,7 @@ impl Mob for EnderDragonEntity {
         if let Some(id) = nbt.get_int("DragonPhase") {
             self.set_phase(EnderDragonPhase::from_network_id(id));
         }
-        // Phase.begin resets only private phase state; restore shared counters last.
+        // Entry resets only private phase state; restore shared counters last.
         *self
             .dragon_death_time
             .lock()
