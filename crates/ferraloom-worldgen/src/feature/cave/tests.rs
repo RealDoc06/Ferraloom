@@ -13,29 +13,16 @@ use std::{collections::BTreeMap, io::Read, path::Path};
 
 struct FixtureBehavior;
 impl WorldgenBlockBehavior for FixtureBehavior {
-    fn has_block_entity(&self, state: BlockState) -> bool {
-        state.has_block_entity()
-    }
     fn post_process_pos(
         &self,
-        state: BlockState,
-        _region: &WorldGenRegion<'_>,
-        p: [i32; 3],
-    ) -> Result<Option<[i32; 3]>, Error> {
-        Ok(state.post_process_y_offset().map(|y| offset(p, [0, y, 0])))
-    }
-    fn has_sturdy_face(
-        &self,
-        state: BlockState,
+        _state: BlockState,
         _region: &WorldGenRegion<'_>,
         _p: [i32; 3],
-        face: Direction,
-    ) -> Result<bool, Error> {
-        state
-            .cached_sturdy_face(face)
-            .ok_or_else(|| Error("Unsupported: dynamic sturdy face".into()))
+    ) -> Result<Option<[i32; 3]>, Error> {
+        Err(Error("Unsupported: contextual post-processing".into()))
     }
 }
+
 fn cases() -> Vec<Value> {
     let mut text = String::new();
     flate2::read::GzDecoder::new(include_bytes!("vanilla.json.gz").as_slice())
@@ -177,16 +164,14 @@ fn pending(case: &Value) -> Option<&'static str> {
 fn check(
     case: &Value,
     generator: &NoiseBasedChunkGenerator,
-    resources: &ResourceManager,
+    feature: &dyn Feature,
+    registry: &FeatureRegistry,
     base: &[RegionChunk],
 ) {
     assert!(
         case.get("vanilla_pending").is_none(),
         "vanilla fixture incomplete: {case}"
     );
-    let mut loader = FeatureLoader::new(resources).unwrap();
-    let feature = loader.feature(&case["config"]).unwrap();
-    let registry: FeatureRegistry = loader.finish();
     let seed = case["seed"].as_i64().unwrap();
     let origin = point(&case["origin"]);
     let terrain = case["terrain"].as_str().unwrap();
@@ -209,7 +194,7 @@ fn check(
         random: &mut random,
         origin,
         generator,
-        registry: &registry,
+        registry,
     };
     let result = feature.place(&mut context).unwrap();
     let label = format!(
@@ -225,19 +210,34 @@ fn check(
     let mut blocks = BTreeMap::new();
     let mut entities = BTreeMap::new();
     let mut ticks = Vec::new();
-    for c in &chunks {
+    for (c, before) in chunks.iter().zip(base) {
         let chunk = &c.chunk;
-        for y in -64..64 {
-            for z in 0..16 {
-                for x in 0..16 {
-                    let p = [
-                        chunk.position[0] * 16 + i32::from(x),
-                        y,
-                        chunk.position[1] * 16 + i32::from(z),
-                    ];
-                    let state = chunk.block(x, y, z);
-                    if state != initial(terrain, origin, p) {
-                        blocks.insert(p, state.id());
+        for (section_index, (section, baseline)) in chunk
+            .sections
+            .iter()
+            .zip(&before.chunk.sections)
+            .enumerate()
+        {
+            let states = section.states();
+            let old_states = baseline.states();
+            if states.bits_per_entry() == old_states.bits_per_entry()
+                && states.palette_entries() == old_states.palette_entries()
+                && states.raw() == old_states.raw()
+            {
+                continue;
+            }
+            for y in 0..16 {
+                for z in 0..16 {
+                    for x in 0..16 {
+                        let state = section.get_block_state(x, y, z);
+                        if state != baseline.get_block_state(x, y, z) {
+                            let p = [
+                                chunk.position[0] * 16 + i32::from(x),
+                                chunk.min_y + section_index as i32 * 16 + i32::from(y),
+                                chunk.position[1] * 16 + i32::from(z),
+                            ];
+                            blocks.insert(p, state.id());
+                        }
                     }
                 }
             }
@@ -283,23 +283,46 @@ fn check(
         })
         .collect::<BTreeMap<_, _>>();
     assert_eq!(entities, expected_entities, "block entities {label}");
-    let mut expected_ticks = case["ticks"].as_array().unwrap().clone();
-    ticks.sort_by_key(Value::to_string);
-    expected_ticks.sort_by_key(Value::to_string);
-    assert_eq!(ticks, expected_ticks, "scheduled ticks {label}");
+    let group_ticks = |values: &[Value]| {
+        let mut groups = BTreeMap::<_, Vec<_>>::new();
+        for value in values {
+            let p = point(value);
+            groups
+                .entry((p[0] >> 4, p[2] >> 4, value[3].as_str().unwrap().to_owned()))
+                .or_default()
+                .push(value.clone());
+        }
+        groups
+    };
+    assert_eq!(
+        group_ticks(&ticks),
+        group_ticks(case["ticks"].as_array().unwrap()),
+        "scheduled tick order {label}"
+    );
 }
 fn run(select: impl Fn(&Value) -> bool) {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
     let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
     let generator = generator(&resources);
+    let selected = cases().into_iter().filter(select).collect::<Vec<_>>();
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    let mut features = BTreeMap::new();
+    for case in &selected {
+        let name = case["feature"].as_str().unwrap();
+        if !features.contains_key(name) {
+            features.insert(name.to_owned(), loader.feature(&case["config"]).unwrap());
+        }
+    }
+    let registry = loader.finish();
     let mut templates = BTreeMap::new();
-    for case in cases().into_iter().filter(select) {
+    for case in selected {
         let terrain = case["terrain"].as_str().unwrap();
         let origin = point(&case["origin"]);
         let base = templates
             .entry((terrain.to_owned(), origin))
             .or_insert_with(|| chunks(&generator, terrain, origin));
-        check(&case, &generator, &resources, base);
+        let feature = &features[case["feature"].as_str().unwrap()];
+        check(&case, &generator, feature.as_ref(), &registry, base);
     }
 }
 #[test]

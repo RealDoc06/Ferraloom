@@ -127,7 +127,7 @@ impl OreFeature {
         let mut below_surface = false;
         'probe: for px in start[0]..=start[0] + size_xz {
             for pz in start[2]..=start[2] + size_xz {
-                if start[1] <= ctx.region.height_at(Heightmap::OceanFloor, px, pz)? {
+                if start[1] <= ctx.region.height_at(Heightmap::OceanFloorWg, px, pz)? {
                     below_surface = true;
                     break 'probe;
                 }

@@ -532,7 +532,7 @@ impl LargeDripstone {
                 let mut outside = false;
                 let max_y = if self.up {
                     ctx.region
-                        .height_at(crate::region::Heightmap::WorldSurface, p[0], p[2])?
+                        .height_at(crate::region::Heightmap::WorldSurfaceWg, p[0], p[2])?
                 } else {
                     i32::MAX
                 };
