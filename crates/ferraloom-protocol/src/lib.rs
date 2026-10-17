@@ -5,6 +5,8 @@
 pub mod chat;
 pub mod codec;
 pub mod common;
+pub mod component;
+pub mod entity_data;
 pub mod play;
 pub mod transport;
 pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
