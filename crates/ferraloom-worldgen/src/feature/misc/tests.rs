@@ -120,10 +120,7 @@ fn chunks(
 struct ObserveWrites(Mutex<Vec<Value>>);
 impl WorldgenBlockBehavior for ObserveWrites {
     fn has_block_entity(&self, state: BlockState) -> bool {
-        matches!(
-            state.block(),
-            Block::END_GATEWAY | Block::END_PORTAL | Block::CHEST
-        )
+        state.has_block_entity()
     }
     fn post_process_pos(
         &self,

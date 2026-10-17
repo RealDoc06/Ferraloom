@@ -247,18 +247,6 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: BlockState.getCollisionShape".into()))
     }
-    /// RandomizableContainer#setBlockEntityLootTable consumes the loot seed only
-    /// when the block entity implements RandomizableContainer.
-    fn set_bonus_chest_loot(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _random: &mut ferraloom_util::random::WorldgenRandom,
-    ) -> Result<(), Error> {
-        Err(Error(
-            "Unsupported: RandomizableContainer.setBlockEntityLootTable".into(),
-        ))
-    }
     /// Creates and inserts EndCrystal, draws its yaw only after successful
     /// creation, then places bedrock and FireBlock#getState at its feet.
     fn create_end_spike_crystal(
@@ -679,14 +667,10 @@ impl<'a> WorldGenRegion<'a> {
         self.behavior.configure_end_gateway(self, p, exit, exact)
     }
     pub fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_collision_empty(self, p)
-    }
-    pub fn set_bonus_chest_loot(
-        &mut self,
-        p: [i32; 3],
-        random: &mut ferraloom_util::random::WorldgenRandom,
-    ) -> Result<(), Error> {
-        self.behavior.set_bonus_chest_loot(self, p, random)
+        match self.block(p)?.cached_collision_empty() {
+            Some(empty) => Ok(empty),
+            None => self.behavior.is_collision_empty(self, p),
+        }
     }
     pub fn create_end_spike_crystal(
         &mut self,

@@ -1,7 +1,8 @@
 //! Selector composition and miscellaneous world generation.
 use super::{Feature, FeatureContext, FeatureLoader, PlacedFeature};
 use crate::{
-    Error, codec::*, generator::is_air, placement::predicate::move_direction, region::Heightmap,
+    Error, Identifier, codec::*, generator::is_air, placement::predicate::move_direction,
+    region::Heightmap,
 };
 use ferraloom_data::Block;
 use ferraloom_util::{Direction, random::RandomSource};
@@ -22,7 +23,9 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
         Ok(Arc::new(VoidStartPlatformFeature))
     })?;
     loader.register("bonus_chest".parse()?, |_, _| {
-        Ok(Arc::new(BonusChestFeature))
+        Ok(Arc::new(BonusChestFeature {
+            loot_table: "chests/spawn_bonus_chest".parse()?,
+        }))
     })?;
     Ok(())
 }
@@ -179,7 +182,9 @@ impl Feature for VoidStartPlatformFeature {
 /// Port of BonusChestFeature. Collision, loot assignment and torch survival use
 /// the shared game bridge, rather than approximating block behavior here.
 #[derive(Debug)]
-struct BonusChestFeature;
+struct BonusChestFeature {
+    loot_table: Identifier,
+}
 impl Feature for BonusChestFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut xs = (0..16)
@@ -204,7 +209,7 @@ impl Feature for BonusChestFeature {
                 ];
                 if is_air(ctx.region.block(p)?) || ctx.region.is_collision_empty(p)? {
                     ctx.region.set_block(p, Block::CHEST.default_state(), 2)?;
-                    ctx.region.set_bonus_chest_loot(p, ctx.random)?;
+                    ctx.region.set_loot_table(p, &self.loot_table, ctx.random)?;
                     let torch = Block::TORCH.default_state();
                     for d in [
                         Direction::North,
