@@ -473,7 +473,7 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
         assert_eq!(values.len(), state_count, "state transform table length");
         write!(
             out,
-            "const STATE_TRANSFORM_{}: [u16; {}] = [",
+            "static STATE_TRANSFORM_{}: [u16; {}] = [",
             constant(name),
             state_count
         )
