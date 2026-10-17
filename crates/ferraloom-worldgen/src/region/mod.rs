@@ -91,6 +91,60 @@ impl RegionChunk {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    fn place_liquid(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _fluid: FluidState,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: place_liquid".into()))
+    }
+    fn update_shape(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _direction: ferraloom_util::Direction,
+        _neighbor_p: [i32; 3],
+        _neighbor_state: BlockState,
+    ) -> Result<BlockState, Error> {
+        Err(Error("Unsupported: update_shape".into()))
+    }
+    fn update_from_neighbor_shapes(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _state: BlockState,
+    ) -> Result<BlockState, Error> {
+        Err(Error("Unsupported: update_from_neighbor_shapes".into()))
+    }
+    fn update_neighbors_at(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _block: Block,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: update_neighbors_at".into()))
+    }
+    fn load_block_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _tag: CompoundTag,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: load_block_entity".into()))
+    }
+    fn finalize_template_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _tag: &mut CompoundTag,
+        _mirror: Mirror,
+        _rotation: Rotation,
+        _finalize: bool,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: finalize_template_entity".into()))
+    }
+
     fn has_block_entity(&self, state: BlockState) -> bool;
     fn post_process_pos(
         &self,
@@ -126,6 +180,21 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("block collision behavior is unavailable".into()))
     }
+}
+
+/// Vanilla template transforms, shared with the worldgen behavior adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Mirror {
+    None,
+    LeftRight,
+    FrontBack,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Rotation {
+    None,
+    Clockwise90,
+    Clockwise180,
+    Counterclockwise90,
 }
 
 pub struct WorldGenRegion<'a> {
@@ -324,6 +393,47 @@ impl<'a> WorldGenRegion<'a> {
         )?;
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
+    }
+    pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
+        self.behavior.place_liquid(self, p, fluid)
+    }
+    pub fn update_shape(
+        &mut self,
+        p: [i32; 3],
+        direction: ferraloom_util::Direction,
+        neighbor_p: [i32; 3],
+        neighbor_state: BlockState,
+    ) -> Result<BlockState, Error> {
+        self.behavior
+            .update_shape(self, p, direction, neighbor_p, neighbor_state)
+    }
+    pub fn update_from_neighbor_shapes(
+        &mut self,
+        p: [i32; 3],
+        state: BlockState,
+    ) -> Result<BlockState, Error> {
+        self.behavior.update_from_neighbor_shapes(self, p, state)
+    }
+    pub fn update_neighbors_at(&mut self, p: [i32; 3], block: Block) -> Result<(), Error> {
+        self.behavior.update_neighbors_at(self, p, block)
+    }
+    pub fn load_block_entity(
+        &mut self,
+        p: [i32; 3],
+        tag: CompoundTag,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.load_block_entity(self, p, tag, random)
+    }
+    pub fn finalize_template_entity(
+        &mut self,
+        tag: &mut CompoundTag,
+        mirror: Mirror,
+        rotation: Rotation,
+        finalize: bool,
+    ) -> Result<(), Error> {
+        self.behavior
+            .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_solid(self.block(p)?)
