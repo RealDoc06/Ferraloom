@@ -6,7 +6,7 @@ pub use patch::*;
 pub use stack::*;
 pub use values::*;
 
-use crate::{Identifier, Result};
+use crate::Identifier;
 pub(crate) fn registry(name: &str) -> Identifier {
     Identifier::parse(name).expect("vanilla registry identifier")
 }
@@ -15,6 +15,6 @@ pub(crate) fn invalid(kind: &'static str) -> crate::Error {
 }
 
 /// Static vanilla data-component registry ID, generated from registry reports.
-pub type ComponentTypeId = ferraloom_data::registries::minecraft_data_component_type::Id;
+pub type ComponentTypeId = ferraloom_data::registries::data_component_type::Id;
 #[cfg(test)]
 pub(crate) mod tests;
