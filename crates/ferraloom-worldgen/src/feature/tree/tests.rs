@@ -12,10 +12,7 @@ use std::{io::Read, path::Path};
 struct UnsupportedBehavior;
 impl WorldgenBlockBehavior for UnsupportedBehavior {
     fn has_block_entity(&self, s: BlockState) -> bool {
-        matches!(
-            s.block(),
-            Block::BEE_NEST | Block::BEEHIVE | Block::CREAKING_HEART
-        )
+        s.has_block_entity()
     }
     fn post_process_pos(
         &self,

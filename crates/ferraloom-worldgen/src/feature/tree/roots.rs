@@ -221,7 +221,7 @@ impl RootSystem {
             if self.allowed.test(c.region, p, c.generator)? && self.space(c, p)? {
                 let below = add(p, [0, -1, 0]);
                 if self.lava.contains(&c.region.fluid(below)?.fluid_type)
-                    || !c.region.is_solid(below)?
+                    || !c.region.block(below)?.is_solid()
                 {
                     return Ok(false);
                 }

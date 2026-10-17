@@ -93,14 +93,19 @@ impl RegionChunk {
 pub trait WorldgenBlockBehavior: Sync {
     // --- tree family ---
     fn populate_worldgen_beehive(
-        &self, _region: &mut WorldGenRegion<'_>, _p: [i32; 3],
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
         _random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<(), Error> {
         Err(Error("Unsupported: populate_worldgen_beehive".into()))
     }
     fn state_has_sturdy_face(
-        &self, _region: &WorldGenRegion<'_>, _state: BlockState,
-        _query_position: [i32; 3], _face: ferraloom_util::Direction,
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _query_position: [i32; 3],
+        _face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: state_has_sturdy_face".into()))
     }
@@ -293,14 +298,24 @@ pub struct WorldGenRegion<'a> {
 impl<'a> WorldGenRegion<'a> {
     // --- tree family ---
     pub fn populate_worldgen_beehive(
-        &mut self, p: [i32; 3], random: &mut ferraloom_util::random::WorldgenRandom,
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<(), Error> {
         self.behavior.populate_worldgen_beehive(self, p, random)
     }
     pub fn state_has_sturdy_face(
-        &self, state: BlockState, query_position: [i32; 3], face: ferraloom_util::Direction,
+        &self,
+        state: BlockState,
+        query_position: [i32; 3],
+        face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
-        self.behavior.state_has_sturdy_face(self, state, query_position, face)
+        match state.cached_sturdy_face(face) {
+            Some(sturdy) => Ok(sturdy),
+            None => self
+                .behavior
+                .state_has_sturdy_face(self, state, query_position, face),
+        }
     }
     // --- end tree family ---
 
@@ -492,20 +507,20 @@ impl<'a> WorldGenRegion<'a> {
             .chunk
             .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
         self.chunks[index].poi_changes.push((p, old, state));
-        if self.behavior.has_block_entity(state) {
+        if state.has_block_entity() {
             let mut tag = CompoundTag::new();
             for (key, value) in [("x", p[0]), ("y", p[1]), ("z", p[2])] {
                 tag.insert(key, Tag::Int(value));
             }
             tag.insert("id", Tag::String("DUMMY".into()));
             self.chunks[index].block_entities.insert(p, tag);
-        } else if in_height && self.behavior.has_block_entity(old) {
+        } else if in_height && old.has_block_entity() {
             self.chunks[index].block_entities.remove(&p);
         }
         if flags & 16 == 0
-            && let Some(post) = self.behavior.post_process_pos(state, self, p)?
+            && let Some(dy) = state.post_process_y_offset()
         {
-            self.mark_post_processing(post)?;
+            self.mark_post_processing([p[0], p[1] + dy, p[2]])?;
         }
         Ok(true)
     }
