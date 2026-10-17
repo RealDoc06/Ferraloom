@@ -1293,4 +1293,77 @@ mod parser_tests {
         assert!(predicate.ensure_supported_nbt().is_err());
         assert_eq!(reader.remaining_part(), " next");
     }
+
+    fn resource_texts(value: &str) -> BTreeSet<String> {
+        let result = suggestions(value);
+        let range = StringRange::between(PREFIX.len(), PREFIX.len() + value.len());
+        let texts: BTreeSet<_> = result
+            .suggestions
+            .iter()
+            .map(|suggestion| {
+                assert_eq!(suggestion.range, range, "{value}");
+                suggestion.text.cached_text().clone()
+            })
+            .collect();
+        assert_eq!(texts.len(), result.suggestions.len(), "{value}");
+        if !texts.is_empty() {
+            assert_eq!(result.range, range, "{value}");
+        }
+        texts
+    }
+
+    #[test]
+    fn unqualified_resources_match_namespace_or_path_at_word_boundaries() {
+        for value in ["oak", "OAK", "log"] {
+            let texts = resource_texts(value);
+            assert!(texts.contains("minecraft:oak_log"), "{value}");
+            assert!(texts.contains("minecraft:dark_oak_log"), "{value}");
+            assert!(!texts.contains("minecraft:stone"), "{value}");
+            assert!(texts.iter().all(|text| !text.starts_with('#')), "{value}");
+        }
+        let namespace = resource_texts("mine");
+        assert!(namespace.contains("minecraft:stone"));
+        assert!(namespace.contains("minecraft:oak_log"));
+        assert_eq!(namespace.len(), usize::from(BlockId::COUNT));
+        let inside_namespace = resource_texts("craft");
+        assert!(inside_namespace.contains("minecraft:crafter"));
+        assert!(!inside_namespace.contains("minecraft:stone"));
+        assert!(!resource_texts("ak").contains("minecraft:oak_log"));
+    }
+
+    #[test]
+    fn tag_resources_require_hash_for_nonempty_queries_and_match_path_suffixes() {
+        let empty = resource_texts("");
+        assert!(empty.contains("minecraft:stone"));
+        assert!(empty.contains("#minecraft:logs"));
+        for value in ["#", "#lo", "#LO", "#mine"] {
+            let texts = resource_texts(value);
+            assert!(texts.contains("#minecraft:logs"), "{value}");
+            assert!(texts.iter().all(|text| text.starts_with('#')), "{value}");
+            assert!(texts.iter().all(|text| !text.starts_with("##")), "{value}");
+        }
+        assert!(resource_texts("#mine").contains("#minecraft:anvil"));
+        assert!(resource_texts("#c").contains("#c:ores/coal"));
+        assert!(resource_texts("#coal").contains("#c:ores/coal"));
+        let unprefixed = resource_texts("lo");
+        assert!(unprefixed.contains("minecraft:oak_log"));
+        assert!(unprefixed.iter().all(|text| !text.starts_with('#')));
+    }
+
+    #[test]
+    fn qualified_resources_match_full_ids_without_restarting_at_the_colon() {
+        let unqualified = resource_texts("#oak");
+        assert!(unqualified.contains("#minecraft:oak_logs"));
+        assert!(unqualified.contains("#minecraft:dark_oak_logs"));
+
+        let block = resource_texts("minecraft:oak");
+        assert!(block.contains("minecraft:oak_log"));
+        assert!(!block.contains("minecraft:dark_oak_log"));
+        let tag = resource_texts("#minecraft:oak");
+        assert!(tag.contains("#minecraft:oak_logs"));
+        assert!(!tag.contains("#minecraft:dark_oak_logs"));
+        assert!(!resource_texts("#c:coal").contains("#c:ores/coal"));
+        assert!(resource_texts("oak:").is_empty());
+        assert!(resource_texts(":oak").is_empty());
+    }
 }
