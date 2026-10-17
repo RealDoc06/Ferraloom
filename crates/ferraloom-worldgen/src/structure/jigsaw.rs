@@ -426,3 +426,7 @@ impl<R: RandomSource, H: FnMut(i32, i32, Heightmap) -> Result<i32, Error>> Place
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "jigsaw_tests.rs"]
+mod tests;

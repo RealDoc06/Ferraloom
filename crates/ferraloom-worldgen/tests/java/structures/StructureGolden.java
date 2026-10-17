@@ -27,6 +27,7 @@ import com.mojang.serialization.JsonOps;
 
 /** Authored scenarios run against vanilla; no decompiled sources or assets. */
 public final class StructureGolden {
+    static net.minecraft.server.packs.resources.ResourceManager RESOURCES;
     static final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     static JsonArray ints(int... values) { var a=new JsonArray(); for(int v:values)a.add(v); return a; }
     static void write(Path path, JsonElement value) throws Exception {
@@ -61,7 +62,7 @@ public final class StructureGolden {
     static RegistryAccess.Frozen load() {
         var location=new PackLocationInfo("vanilla",Component.literal("vanilla"),PackSource.BUILT_IN,Optional.empty());
         var pack=new VanillaPackResourcesBuilder().pushJarResources().exposeNamespace("minecraft").build(location).fullResources();
-        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));
+        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));RESOURCES=manager;
         var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         TagLoader.loadTagsForExistingRegistries(manager,builtins).forEach(Registry.PendingTags::apply);
         var loaded=RegistryDataLoader.load(manager,builtins.registries().<HolderLookup.RegistryLookup<?>>map(e -> e.value()).toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
@@ -224,8 +225,9 @@ public final class StructureGolden {
             if(container!=property)throw new IllegalStateException("LiquidBlockContainer classification: "+state);
         }
     }
+    static net.minecraft.nbt.ListTag nbtInts(int... values) {var list=new net.minecraft.nbt.ListTag();for(int v:values)list.add(net.minecraft.nbt.IntTag.valueOf(v));return list;}
     static void placedTemplates(Path directory) throws Exception {
-        var tag=new net.minecraft.nbt.CompoundTag();tag.putInt("DataVersion",5023);tag.put("size",net.minecraft.nbt.NbtOps.INSTANCE.createIntList(java.util.stream.IntStream.of(4,3,3)));
+        var tag=new net.minecraft.nbt.CompoundTag();tag.putInt("DataVersion",5023);tag.put("size",nbtInts(4,3,3));
         var palettes=new net.minecraft.nbt.ListTag();
         for(boolean variant:new boolean[]{false,true}) {
             var palette=new net.minecraft.nbt.ListTag();
@@ -233,7 +235,7 @@ public final class StructureGolden {
             palettes.add(palette);
         }
         tag.put("palettes",palettes);var blocks=new net.minecraft.nbt.ListTag();
-        for(int x=0;x<4;x++)for(int y=0;y<3;y++)for(int z=0;z<3;z++) {var block=new net.minecraft.nbt.CompoundTag();block.put("pos",net.minecraft.nbt.NbtOps.INSTANCE.createIntList(java.util.stream.IntStream.of(x,y,z)));block.putInt("state",(x*3+y+z)%6);blocks.add(block);}
+        for(int x=0;x<4;x++)for(int y=0;y<3;y++)for(int z=0;z<3;z++) {var block=new net.minecraft.nbt.CompoundTag();block.put("pos",nbtInts(x,y,z));block.putInt("state",(x*3+y+z)%6);blocks.add(block);}
         tag.put("blocks",blocks);var template=new StructureTemplate();template.load(BuiltInRegistries.BLOCK,tag);var out=new JsonArray();
         for(var mirror:net.minecraft.world.level.block.Mirror.values())for(var rotation:net.minecraft.world.level.block.Rotation.values())for(boolean external:new boolean[]{false,true}) {
             var settings=new StructurePlaceSettings().setMirror(mirror).setRotation(rotation).setRotationPivot(new BlockPos(1,0,-2)).setBoundingBox(new BoundingBox(2,63,2,13,69,13)).setKnownShape(true).setIgnoreEntities(true).setLiquidSettings(LiquidSettings.IGNORE_WATERLOGGING).addProcessor(new BlockIgnoreProcessor(List.of(net.minecraft.world.level.block.Blocks.AIR))).addProcessor(BlackstoneReplaceProcessor.INSTANCE);
@@ -270,8 +272,35 @@ public final class StructureGolden {
         }
         write(directory.resolve("aliases.json.gz"),aliases);
     }
+    static JsonArray bounds(BoundingBox b) {return ints(b.minX(),b.minY(),b.minZ(),b.maxX(),b.maxY(),b.maxZ());}
+    static void jigsaw(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var out=new JsonArray();var biomes=registries.lookupOrThrow(Registries.BIOME);var source=new FixedBiomeSource(biomes.getOrThrow(Biomes.PLAINS));
+        var structures=registries.lookupOrThrow(Registries.STRUCTURE);var accessor=net.minecraft.world.level.LevelHeightAccessor.create(-64,384);
+        var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.OVERWORLD);
+        var flat=new FlatLevelSource(net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.lookupOrThrow(Registries.STRUCTURE_SET),registries.lookupOrThrow(Registries.PLACED_FEATURE)));
+        var noise=new NoiseBasedChunkGenerator(source,settings);
+        try(var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("structures-world")).createAccess("test")) {
+            var templates=new StructureTemplateManager(RESOURCES,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
+            for(String terrain:List.of("flat","noise"))for(long seed:new long[]{0,-1,8675309})for(int[] chunk:new int[][]{{0,0},{-7,11}}) {
+                var state=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings.value());var generator=terrain.equals("flat")?flat:noise;
+                for(var entry:structures.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList())if(entry.value() instanceof net.minecraft.world.level.levelgen.structure.structures.JigsawStructure structure) {
+                    var context=new Structure.GenerationContext(registries,generator,source,state.createClimateSampler(SamplerContext.builder().enableCaches().build()),state,templates,seed,new ChunkPos(chunk[0],chunk[1]),accessor,b->true);
+                    var stub=structure.findGenerationPoint(context);var item=new JsonObject();item.addProperty("structure",entry.key().identifier().toString());item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("chunk",ints(chunk));var pieces=new JsonArray();
+                    if(stub.isPresent()) {
+                        var p=stub.get().position();item.add("position",ints(p.getX(),p.getY(),p.getZ()));
+                        for(var piece:stub.get().getPiecesBuilder().build().pieces()) {
+                            var poolPiece=(PoolElementStructurePiece)piece;var value=new JsonObject();value.addProperty("element",elementName(poolPiece.getElement()));value.add("bounds",bounds(piece.getBoundingBox()));var pos=poolPiece.getPosition();value.add("position",ints(pos.getX(),pos.getY(),pos.getZ()));value.addProperty("rotation",poolPiece.getRotation().ordinal());value.addProperty("ground",poolPiece.getGroundLevelDelta());
+                            var junctions=new JsonArray();for(var junction:poolPiece.getJunctions()) {var j=new JsonObject();j.add("source",ints(junction.getSourceX(),junction.getSourceGroundY(),junction.getSourceZ()));j.addProperty("delta_y",junction.getDeltaY());j.addProperty("projection",junction.getDestProjection().getName());junctions.add(j);}value.add("junctions",junctions);pieces.add(value);
+                        }
+                    }
+                    item.add("pieces",pieces);out.add(item);
+                }
+            }
+        }
+        write(directory.resolve("jigsaw.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);
     }
 }

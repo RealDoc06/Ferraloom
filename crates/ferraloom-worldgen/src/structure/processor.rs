@@ -88,8 +88,8 @@ impl RuleBlockEntityModifier {
         }
     }
 }
-// JsonOps#convertTo selects the narrowest numeric tag, and NbtOps#createList
-// specializes homogeneous byte/int/long streams to the corresponding arrays.
+// JsonOps#convertTo selects the narrowest numeric tag. In 26.3,
+// NbtOps#createList always produces a ListTag, including numeric streams.
 fn json_nbt(v: &Value) -> Result<Tag, Error> {
     Ok(match v {
         Value::Null => return Err(Error("null is not a structure compound value".into())),
@@ -121,18 +121,7 @@ fn json_nbt(v: &Value) -> Result<Tag, Error> {
         }
         Value::Array(values) => {
             let values = values.iter().map(json_nbt).collect::<Result<Vec<_>, _>>()?;
-            match values.first() {
-                Some(Tag::Byte(_)) if values.iter().all(|v| matches!(v, Tag::Byte(_))) => {
-                    Tag::ByteArray(values.iter().map(|v| v.as_byte().unwrap()).collect())
-                }
-                Some(Tag::Int(_)) if values.iter().all(|v| matches!(v, Tag::Int(_))) => {
-                    Tag::IntArray(values.iter().map(|v| v.as_int().unwrap()).collect())
-                }
-                Some(Tag::Long(_)) if values.iter().all(|v| matches!(v, Tag::Long(_))) => {
-                    Tag::LongArray(values.iter().map(|v| v.as_long().unwrap()).collect())
-                }
-                _ => Tag::List(ListTag(values)),
-            }
+            Tag::List(ListTag(values))
         }
         Value::Object(values) => {
             let mut tag = CompoundTag::new();
