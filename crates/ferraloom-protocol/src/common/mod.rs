@@ -4,14 +4,14 @@ use crate::codec::{Either, Holder, VarInt};
 use crate::{Error, Identifier, Reader, Result, Uuid, Wire, Writer};
 
 macro_rules! packet {
-    ($(#[$meta:meta])* $name:ident { $($field:ident: $ty:ty),* $(,)? }) => {
+    ($(#[$meta:meta])* $name:ident { $($field:ident: $ty:ty $(=> $decode:path)?),* $(,)? }) => {
         $(#[$meta])*
         #[derive(Clone, Debug, PartialEq)]
         pub struct $name { $(pub $field: $ty),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {
                 let _ = &r;
-                Ok(Self { $($field: <$ty>::decode(r)?),* })
+                Ok(Self { $($field: packet!(@read r, $ty $(, $decode)?)),* })
             }
             fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
                 let _ = &w;
@@ -20,6 +20,8 @@ macro_rules! packet {
             }
         }
     };
+    (@read $r:ident, $ty:ty) => { <$ty as Wire>::decode($r)? };
+    (@read $r:ident, $ty:ty, $decode:path) => { $decode($r)? };
 }
 
 macro_rules! wire_enum {
@@ -94,7 +96,7 @@ pub mod serverbound;
 #[derive(Clone, Debug, PartialEq)]
 pub enum CustomPayload {
     Brand(String),
-    Unknown { id: Identifier, data: Vec<u8> },
+    Discarded { id: Identifier },
 }
 impl CustomPayload {
     fn decode(r: &mut Reader<'_>, max: usize) -> Result<Self> {
@@ -109,29 +111,21 @@ impl CustomPayload {
                     max,
                 });
             }
-            Ok(Self::Unknown {
-                id,
-                data: r.take(len)?.to_vec(),
-            })
+            r.take(len)?;
+            Ok(Self::Discarded { id })
         }
     }
-    fn encode(&self, w: &mut Writer<'_>, max: usize) -> Result<()> {
+    fn encode(&self, w: &mut Writer<'_>, _max: usize) -> Result<()> {
         match self {
             Self::Brand(name) => {
                 Identifier::parse("minecraft:brand")?.encode(w)?;
                 name.encode(w)
             }
-            Self::Unknown { id, data } => {
-                if data.len() > max {
-                    return Err(Error::Length {
-                        length: data.len() as i64,
-                        max,
-                    });
-                }
-                id.encode(w)?;
-                w.extend(data);
-                Ok(())
-            }
+            Self::Discarded { id } => id.encode(w),
         }
     }
+}
+
+fn optional_trusted_component(r: &mut Reader<'_>) -> Result<Option<Component>> {
+    r.optional(Component::decode_trusted)
 }

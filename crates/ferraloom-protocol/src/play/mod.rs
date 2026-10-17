@@ -5,14 +5,14 @@ use crate::codec::{Angle, BitSet, GlobalPos, VarInt, VarLong};
 use crate::{BlockPos, Error, Identifier, Reader, Result, Uuid, Wire, Writer};
 
 macro_rules! packet {
-    ($(#[$meta:meta])* $name:ident { $($field:ident: $ty:ty),* $(,)? }) => {
+    ($(#[$meta:meta])* $name:ident { $($field:ident: $ty:ty $(=> $decode:path)?),* $(,)? }) => {
         $(#[$meta])*
         #[derive(Clone, Debug, PartialEq)]
         pub struct $name { $(pub $field: $ty),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {
                 let _ = &r;
-                Ok(Self { $($field: <$ty>::decode(r)?),* })
+                Ok(Self { $($field: packet!(@read r, $ty $(, $decode)?)),* })
             }
             fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
                 let _ = &w;
@@ -21,6 +21,8 @@ macro_rules! packet {
             }
         }
     };
+    (@read $r:ident, $ty:ty) => { <$ty as Wire>::decode($r)? };
+    (@read $r:ident, $ty:ty, $decode:path) => { $decode($r)? };
 }
 
 macro_rules! wire_enum {
@@ -40,14 +42,14 @@ macro_rules! wire_enum {
 
 /// Tagged vanilla stream-codec dispatch with strongly typed variant payloads.
 macro_rules! wire_union {
-    ($name:ident : $tag:ident { $($variant:ident = $id:literal { $($field:ident : $ty:ty),* $(,)? }),* $(,)? }) => {
+    ($name:ident : $tag:ident { $($variant:ident = $id:literal { $($field:ident : $ty:ty $(=> $decode:path)?),* $(,)? }),* $(,)? }) => {
         #[derive(Clone, Debug, PartialEq)]
         pub enum $name { $($variant { $($field: $ty),* }),* }
         impl $name {
             pub fn tag(&self) -> i32 { match self { $(Self::$variant { .. } => $id),* } }
             pub fn decode_variant(r: &mut Reader<'_>, id: i32) -> Result<Self> {
                 let _ = &r;
-                match id { $($id => Ok(Self::$variant { $($field: <$ty>::decode(r)?),* }),)* id => Err(Error::invalid(stringify!($name), id.to_string())) }
+                match id { $($id => Ok(Self::$variant { $($field: packet!(@read r, $ty $(, $decode)?)),* }),)* id => Err(Error::invalid(stringify!($name), id.to_string())) }
             }
             pub fn encode_body(&self, w: &mut Writer<'_>) -> Result<()> {
                 let _ = &w;
@@ -88,6 +90,8 @@ mod advancement;
 pub use advancement::*;
 mod debug;
 pub use debug::*;
+mod bundle;
+pub use bundle::*;
 mod types;
 pub use types::*;
 pub mod clientbound;
@@ -95,3 +99,11 @@ pub mod serverbound;
 
 #[cfg(test)]
 mod tests;
+
+fn optional_trusted_component(r: &mut Reader<'_>) -> Result<Option<Component>> {
+    r.optional(Component::decode_trusted)
+}
+
+fn optional_trusted_boxed_component(r: &mut Reader<'_>) -> Result<Option<Box<Component>>> {
+    r.optional(|r| Component::decode_trusted(r).map(Box::new))
+}

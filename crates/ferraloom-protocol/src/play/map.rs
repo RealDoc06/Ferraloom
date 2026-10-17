@@ -1,7 +1,7 @@
 //! Port of map decorations and optional rectangular map color patches.
 use super::*;
 packet!(/// Port of MapDecoration.
-MapDecoration {decoration_type:MapDecorationTypeId,x:i8,y:i8,rotation:u8,name:Option<Component>});
+MapDecoration {decoration_type:MapDecorationTypeId,x:i8,y:i8,rotation:u8 => map_rotation,name:Option<Component>});
 #[derive(Clone, Debug, PartialEq)]
 pub struct MapPatch {
     pub width: u8,
@@ -46,4 +46,8 @@ impl Wire for OptionalMapPatch {
             Ok(())
         }
     }
+}
+
+fn map_rotation(r: &mut Reader<'_>) -> Result<u8> {
+    Ok(r.u8()? & 15)
 }

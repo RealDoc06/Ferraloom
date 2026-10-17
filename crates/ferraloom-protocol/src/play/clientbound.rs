@@ -231,23 +231,23 @@ GameRuleValues {values:Vec<GameRuleEntry>});
 packet!(/// Port of ClientboundCommandSuggestionsPacket.
 CommandSuggestions {id:VarInt,start:VarInt,length:VarInt,suggestions:Vec<CommandSuggestion>});
 packet!(/// Port of ClientboundSetActionBarTextPacket.
-SetActionBarText {text:Component});
+SetActionBarText {text:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundSetTitleTextPacket.
-SetTitleText {text:Component});
+SetTitleText {text:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundSetSubtitleTextPacket.
-SetSubtitleText {text:Component});
+SetSubtitleText {text:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundTabListPacket.
-TabList {header:Component,footer:Component});
+TabList {header:Component => Component::decode_trusted,footer:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundSystemChatPacket.
-SystemChat {content:Component,overlay:bool});
+SystemChat {content:Component => Component::decode_trusted,overlay:bool});
 packet!(/// Port of ClientboundPlayerCombatKillPacket.
-PlayerCombatKill {player_id:VarInt,message:Component});
+PlayerCombatKill {player_id:VarInt,message:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundServerDataPacket.
-ServerData {motd:Component,icon_bytes:Option<ByteArray>});
+ServerData {motd:Component => Component::decode_trusted,icon_bytes:Option<ByteArray>});
 packet!(/// Port of ClientboundBlockEntityDataPacket.
 BlockEntityData {pos:BlockPos,block_entity_type:BlockEntityTypeId,tag:TrustedCompoundTag});
 packet!(/// Port of ClientboundOpenScreenPacket.
-OpenScreen {container_id:VarInt,menu_type:MenuId,title:Component});
+OpenScreen {container_id:VarInt,menu_type:MenuId,title:Component => Component::decode_trusted});
 packet!(/// Port of ClientboundSwingAnimationPacket.
 SwingAnimationPacket {entity_id:VarInt,hand:InteractionHand,animation:SwingAnimation});
 packet!(/// Port of ClientboundSoundEntityPacket.
@@ -401,11 +401,11 @@ SetObjective {objective_name:String,operation:ObjectiveOperation});
 packet!(/// Port of ClientboundSetPlayerTeamPacket.
 SetPlayerTeam {name:String,operation:TeamOperation});
 packet!(/// Port of ClientboundSetScorePacket.
-SetScore {owner:String,objective_name:String,score:VarInt,display:Option<Component>,number_format:Option<NumberFormat>});
+SetScore {owner:String,objective_name:String,score:VarInt,display:Option<Component> => optional_trusted_component,number_format:Option<NumberFormat>});
 packet!(/// Port of ClientboundDisguisedChatPacket.
-DisguisedChat {message:Component,chat_type:ChatTypeBound});
+DisguisedChat {message:Component => Component::decode_trusted,chat_type:ChatTypeBound});
 packet!(/// Port of ClientboundPlayerChatPacket.
-PlayerChat {global_index:VarInt,sender:Uuid,index:VarInt,signature:Option<MessageSignature>,body:SignedMessageBodyPacked,unsigned_content:Option<Component>,filter_mask:FilterMask,chat_type:ChatTypeBound});
+PlayerChat {global_index:VarInt,sender:Uuid,index:VarInt,signature:Option<MessageSignature>,body:SignedMessageBodyPacked,unsigned_content:Option<Component> => optional_trusted_component,filter_mask:FilterMask,chat_type:ChatTypeBound});
 packet!(/// Port of ClientboundUpdateAdvancementsPacket.
 UpdateAdvancements {should_reset:bool,added:Vec<PositionedAdvancement>,removed:Vec<Identifier>,progress:Vec<AdvancementProgress>,show_advancements:bool});
 packet!(/// Port of Stat#STREAM_CODEC followed by the statistic count.

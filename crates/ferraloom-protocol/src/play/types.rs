@@ -241,7 +241,7 @@ ClockUpdate {clock:WorldClockId,state:ClockNetworkState});
 packet!(/// Port of gamerule key/value network entries.
 GameRuleEntry {key:Identifier,value:String});
 packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
-CommandSuggestion {text:String,tooltip:Option<Component>});
+CommandSuggestion {text:String,tooltip:Option<Component> => optional_trusted_component});
 wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2}, zero);
 packet!(/// Port of SwingAnimation.
 SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});
@@ -275,15 +275,7 @@ impl Wire for BlockHitResult {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
         let block_pos = r.read()?;
         let id = r.var_int()?;
-        let direction = match id {
-            0 => ferraloom_util::Direction::Down,
-            1 => ferraloom_util::Direction::Up,
-            2 => ferraloom_util::Direction::North,
-            3 => ferraloom_util::Direction::South,
-            4 => ferraloom_util::Direction::West,
-            5 => ferraloom_util::Direction::East,
-            _ => return Err(Error::invalid("direction", id.to_string())),
-        };
+        let direction = ferraloom_util::Direction::VALUES[id.rem_euclid(6) as usize];
         Ok(Self {
             block_pos,
             direction,

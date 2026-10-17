@@ -13,8 +13,8 @@ pub struct AdvancementDisplay {
 }
 impl Wire for AdvancementDisplay {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let title = r.read()?;
-        let description = r.read()?;
+        let title = Component::decode_trusted(r)?;
+        let description = Component::decode_trusted(r)?;
         let icon = r.read()?;
         let advancement_type = r.read()?;
         let flags = r.i32()?;
