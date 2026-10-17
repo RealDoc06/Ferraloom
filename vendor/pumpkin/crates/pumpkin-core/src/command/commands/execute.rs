@@ -75,6 +75,11 @@ const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
 );
 
+const ERROR_CONDITIONAL_FAILED_COUNT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+);
+
 static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 
 struct StoreScoreCallback {
@@ -267,6 +272,45 @@ fn execute_unless_entity_modifier(
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
+    }
+}
+
+enum EntityConditionalExecutor {
+    If,
+    Unless,
+}
+
+// Terminal `if entity` reports the selected count; redirects only filter sources.
+impl CommandExecutor for EntityConditionalExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let count = EntityArgumentType::get_optional_entities(context, "targets")?.len() as i32;
+        let (result, feedback) = match self {
+            Self::If if count <= 0 => {
+                return Err(ERROR_CONDITIONAL_FAILED.create_without_context());
+            }
+            Self::If => (
+                count,
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                    translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                    [TextComponent::text(count.to_string())],
+                ),
+            ),
+            Self::Unless if count != 0 => {
+                return Err(ERROR_CONDITIONAL_FAILED_COUNT
+                    .create_without_context(TextComponent::text(count.to_string())));
+            }
+            Self::Unless => (
+                1,
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                    translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                    [],
+                ),
+            ),
+        };
+        context.source.send_feedback(feedback, false);
+        Ok(result)
     }
 }
 
@@ -1318,12 +1362,16 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("if")
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
+                .then(
+                    literal("entity").then(
+                        argument("targets", EntityArgumentType::Entities)
+                            .redirect_with_modifier(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
+                            )
+                            .executes(EntityConditionalExecutor::If),
                     ),
-                ))
+                )
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
                         argument("block", BlockPredicateArgumentType).redirect_with_modifier(
@@ -1474,12 +1522,16 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("unless")
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
+                .then(
+                    literal("entity").then(
+                        argument("targets", EntityArgumentType::Entities)
+                            .redirect_with_modifier(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
+                            )
+                            .executes(EntityConditionalExecutor::Unless),
                     ),
-                ))
+                )
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
                         argument("block", BlockPredicateArgumentType).redirect_with_modifier(
@@ -1653,6 +1705,10 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
         set_redirects_to_execute(tree, child_id, execute_id);
     }
 }
+
+#[cfg(test)]
+#[path = "execute_entity_tests.rs"]
+mod entity_tests;
 
 #[cfg(test)]
 mod tests {
