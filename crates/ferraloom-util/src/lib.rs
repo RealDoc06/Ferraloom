@@ -6,6 +6,7 @@
 pub mod core;
 pub mod java;
 pub mod mth;
+pub mod noise;
 pub mod phys;
 pub mod random;
 pub mod uuid;
