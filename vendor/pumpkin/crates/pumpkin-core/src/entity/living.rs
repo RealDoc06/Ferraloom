@@ -2964,7 +2964,6 @@ impl LivingEntity {
         damage
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
@@ -2978,6 +2977,7 @@ impl LivingEntity {
             .accepted
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn damage_with_outcome(
         &self,
         caller: &dyn EntityBase,

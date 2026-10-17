@@ -24,7 +24,7 @@ pub use sit_breathing::SitBreathingPhase;
 pub use strafing::StrafingPhase;
 pub use taking_off::TakingOffPhase;
 
-pub trait Phase: Send + Sync {
+pub(crate) trait Phase: Send + Sync {
     fn get_type(&self) -> EnderDragonPhase;
     fn tick(&self, dragon: &EnderDragonEntity);
     /// Callback-free resets only, under the current-phase publication guard.
@@ -179,7 +179,7 @@ impl PhaseManager {
     }
 
     #[must_use]
-    pub fn get_phase(&self, phase_type: EnderDragonPhase) -> Arc<dyn Phase> {
+    pub(crate) fn get_phase(&self, phase_type: EnderDragonPhase) -> Arc<dyn Phase> {
         self.phases[phase_type.network_id() as usize].clone()
     }
 }
