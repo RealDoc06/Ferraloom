@@ -269,3 +269,73 @@ fn generic_static_registry_lookup_matches_numeric_reports() {
         Some(Block::STONE)
     );
 }
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
+}
+
+#[test]
+fn every_state_rotation_and_mirror_matches_vanilla_registry() {
+    use ferraloom_util::{Mirror, Rotation};
+    let captured: Value = serde_json::from_str(include_str!(
+        "../../../data/generated/state_transforms.json"
+    ))
+    .unwrap();
+    for id in 0..BLOCK_STATES.len() {
+        let state = BlockState::from_id(id as u16).unwrap();
+        for (name, actual) in [
+            ("clockwise_90", state.rotate(Rotation::Clockwise90)),
+            ("clockwise_180", state.rotate(Rotation::Clockwise180)),
+            (
+                "counterclockwise_90",
+                state.rotate(Rotation::CounterClockwise90),
+            ),
+            ("left_right", state.mirror(Mirror::LeftRight)),
+            ("front_back", state.mirror(Mirror::FrontBack)),
+        ] {
+            assert_eq!(
+                actual.id(),
+                captured[name][id].as_u64().unwrap() as u16,
+                "state {id} {name}"
+            );
+            assert_eq!(
+                actual.block(),
+                state.block(),
+                "state {id} {name} changed block"
+            );
+        }
+        assert_eq!(state.rotate(Rotation::None), state);
+        assert_eq!(state.mirror(Mirror::None), state);
+    }
+}

@@ -128,6 +128,57 @@ impl SurfaceSystem {
             ],
         })
     }
+    /// Port of MaterialSystem#topMaterial. Carved grass exposes the material
+    /// rule evaluated with one solid block above/below and the current fluid.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn top_material(
+        &self,
+        chunk: &GeneratedChunk,
+        noise: &mut NoiseChunk,
+        compiler: &DensityFunctionCompiler,
+        temperatures: &BiomeTemperatures,
+        biome: &mut dyn FnMut([i32; 3]) -> Identifier,
+        p: [i32; 3],
+        under_fluid: bool,
+    ) -> Option<BlockState> {
+        let x = (p[0] & 15) as usize;
+        let z = (p[2] & 15) as usize;
+        let volume = DensityVolume {
+            size: [1; 3],
+            min: p,
+            step: [1; 3],
+        };
+        let mut context = SurfaceContext {
+            system: self,
+            compiler,
+            samplers: &mut noise.samplers,
+            temperatures,
+            biome_getter: biome,
+            volume,
+            prefilled: HashMap::new(),
+            preliminary: None,
+            p,
+            biome: None,
+            depth: (f64::from(self.surface.get(f64::from(p[0]), 0.0, f64::from(p[2]))) * 2.75
+                + 3.0
+                + self.random.at(p[0], 0, p[2]).next_double() * 0.25) as i32,
+            above: 1,
+            below: 1,
+            water: if under_fluid { p[1] + 1 } else { i32::MIN },
+            gradient: [
+                chunk.world_surface[z * 16 + (x + 1).min(15)]
+                    - chunk.world_surface[z * 16 + x.saturating_sub(1)],
+                chunk.world_surface[(z + 1).min(15) * 16 + x]
+                    - chunk.world_surface[z.saturating_sub(1) * 16 + x],
+            ],
+            secondary: None,
+            min_surface: None,
+            min_y: chunk.min_y.max(self.generation.min_y),
+            height: chunk.height.min(self.generation.height),
+        };
+        self.rule.prefill(&mut context);
+        self.rule.apply(&mut context)
+    }
     pub fn build(
         &self,
         chunk: &mut GeneratedChunk,
