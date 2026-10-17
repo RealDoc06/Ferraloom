@@ -141,7 +141,7 @@ pub trait WorldgenBlockBehavior: Sync {
         _mirror: Mirror,
         _rotation: Rotation,
         _finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
@@ -441,7 +441,7 @@ impl<'a> WorldGenRegion<'a> {
         mirror: Mirror,
         rotation: Rotation,
         finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
