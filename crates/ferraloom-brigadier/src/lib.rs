@@ -23,6 +23,8 @@ mod argument_tests;
 #[cfg(test)]
 mod completion_tests;
 #[cfg(test)]
+mod context_tests;
+#[cfg(test)]
 mod dispatcher_tests;
 #[cfg(test)]
 mod reader_tests;
