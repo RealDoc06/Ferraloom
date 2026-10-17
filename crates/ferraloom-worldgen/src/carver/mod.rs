@@ -7,7 +7,7 @@ use ferraloom_util::{
     random::{LegacyRandomSource, RandomSource, SingleThreadedRandomSource, WorldgenRandom},
 };
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 /// Port of CarvingMask. Layout is Y contiguous, then Z, then X. Visit emits
 /// each maximal vertical run, in X/Z/ascending-bottom order.
@@ -268,7 +268,8 @@ impl CaveWorldCarver {
             if random.next_int_bound(4) == 0 {
                 let room_scale = f64::from(self.room_vertical_radius_multiplier.sample(random));
                 let thickness = 1.0 + random.next_float() * 6.0;
-                let radius = 1.5 + f64::from(mth::sin(1.5707963705062866) * thickness);
+                let radius =
+                    1.5 + f64::from(mth::sin(f64::from(std::f32::consts::FRAC_PI_2)) * thickness);
                 carve_ellipsoid(
                     chunk,
                     [x + 1.0, y, z],
@@ -494,29 +495,56 @@ impl CanyonWorldCarver {
 
 #[derive(Clone, Debug, Default)]
 pub struct CarverRegistry {
-    pub carvers: BTreeMap<Identifier, WorldCarver>,
-    pub biomes: BTreeMap<Identifier, Vec<Identifier>>,
+    pub carvers: BTreeMap<Identifier, Arc<WorldCarver>>,
+    pub biomes: BTreeMap<Identifier, Vec<Arc<WorldCarver>>>,
 }
 impl CarverRegistry {
     pub fn load(resources: &ResourceManager) -> Result<Self, Error> {
-        let carvers = resources
+        let carvers: BTreeMap<_, _> = resources
             .registry("worldgen/carver")
             .into_iter()
-            .map(|(id, r)| Ok((id, WorldCarver::decode(&r.json()?)?)))
+            .map(|(id, r)| Ok((id, Arc::new(WorldCarver::decode(&r.json()?)?))))
             .collect::<Result<_, Error>>()?;
+        let tags = ferraloom_data::datapack::load_tags(resources, "worldgen/carver", |id, _| {
+            carvers.contains_key(id).then(|| id.clone())
+        });
+        if !tags.diagnostics.is_empty() {
+            return Err(Error("invalid carver tags".into()));
+        }
+        let holder = |v: &Value| -> Result<Arc<WorldCarver>, Error> {
+            if v.is_string() {
+                let id = crate::codec::id(v)?;
+                carvers
+                    .get(&id)
+                    .cloned()
+                    .ok_or_else(|| Error(format!("missing carver {id}")))
+            } else {
+                Ok(Arc::new(WorldCarver::decode(v)?))
+            }
+        };
         let biomes = resources
             .registry("worldgen/biome")
             .into_iter()
             .map(|(id, r)| {
                 let v = r.json()?;
                 let entries = field(&v, "carvers")?;
-                let carvers = if entries.is_string() {
-                    vec![crate::codec::id(entries)?]
-                } else {
-                    list(entries)?
+                let carvers = if let Some(tag) = entries.as_str().and_then(|s| s.strip_prefix('#'))
+                {
+                    tags.values
+                        .get(&tag.parse()?)
+                        .ok_or_else(|| Error(format!("missing carver tag {tag}")))?
                         .iter()
-                        .map(crate::codec::id)
-                        .collect::<Result<Vec<_>, _>>()?
+                        .map(|id| {
+                            carvers
+                                .get(id)
+                                .cloned()
+                                .ok_or_else(|| Error(format!("missing carver {id}")))
+                        })
+                        .collect::<Result<_, _>>()?
+                } else if let Some(entries) = entries.as_array() {
+                    entries.iter().map(&holder).collect::<Result<_, _>>()?
+                } else {
+                    vec![holder(entries)?]
                 };
                 Ok((id, carvers))
             })
@@ -546,11 +574,7 @@ impl CarverRegistry {
                     .biomes
                     .get(&id)
                     .ok_or_else(|| Error(format!("missing biome carvers {id}")))?;
-                for (index, id) in carvers.iter().enumerate() {
-                    let carver = self
-                        .carvers
-                        .get(id)
-                        .ok_or_else(|| Error(format!("missing carver {id}")))?;
+                for (index, carver) in carvers.iter().enumerate() {
                     random.set_large_feature_seed(
                         seed.wrapping_add(index as i64),
                         source[0],

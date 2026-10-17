@@ -156,6 +156,14 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
     }
     // --- end ore and cave family ---
+    fn destroy_block(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _drop: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: destroy_block".into()))
+    }
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -206,7 +214,7 @@ pub trait WorldgenBlockBehavior: Sync {
         _mirror: Mirror,
         _rotation: Rotation,
         _finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
@@ -533,6 +541,9 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
     }
+    pub fn destroy_block(&mut self, p: [i32; 3], drop: bool) -> Result<bool, Error> {
+        self.behavior.destroy_block(self, p, drop)
+    }
     pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
         self.behavior.place_liquid(self, p, fluid)
     }
@@ -570,7 +581,7 @@ impl<'a> WorldGenRegion<'a> {
         mirror: Mirror,
         rotation: Rotation,
         finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
