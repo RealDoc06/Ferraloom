@@ -310,7 +310,7 @@ impl StructurePoolElement {
         list.extend(processors.processors.iter().cloned());
         if *projection == Projection::TerrainMatching {
             list.push(StructureProcessor::Gravity {
-                heightmap: crate::region::Heightmap::WorldSurface,
+                heightmap: crate::region::Heightmap::WorldSurfaceWg,
                 offset: -1,
             });
         }
