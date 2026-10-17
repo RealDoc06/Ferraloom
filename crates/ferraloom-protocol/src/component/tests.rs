@@ -133,6 +133,14 @@ fn vanilla_persistent_component_hashes() {
             }
             if let Some(expected) = fixture.get("nbt").and_then(Value::as_str) {
                 let expected = unhex(expected);
+                let mut nbt_reader = Reader::new(&expected);
+                let tag = nbt_reader.nbt(false).unwrap();
+                match DataComponent::from_nbt(&key, &tag) {
+                    Ok(restored) if restored == value => {}
+                    other => mismatches.push(format!(
+                        "{key} persistent NBT decode: {other:?}, expected {value:?}"
+                    )),
+                }
                 let mut writer = Writer::new();
                 match value.to_nbt().and_then(|v| writer.nbt(&v)) {
                     Ok(()) if writer.as_slice() == expected => {}

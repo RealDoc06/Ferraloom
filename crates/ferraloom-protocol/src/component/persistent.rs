@@ -1179,10 +1179,7 @@ persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
 impl Persistent for Fireworks {
     fn from_json(v: &Json) -> Result<Self> {
-        let flight_duration = field::<VarInt>(v, "flight_duration", Some(VarInt(0)))?;
-        if !(0..=255).contains(&flight_duration.0) {
-            return Err(invalid("fireworks flight duration"));
-        }
+        let flight_duration = VarInt(field::<i32>(v, "flight_duration", Some(0))? as u8 as i32);
         Ok(Self {
             flight_duration,
             explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
@@ -1635,7 +1632,7 @@ impl Persistent for MobEffectDetails {
     fn from_json(v: &Json) -> Result<Self> {
         let show_particles = field(v, "show_particles", Some(true))?;
         Ok(Self {
-            amplifier: field(v, "amplifier", Some(VarInt(0)))?,
+            amplifier: VarInt(field::<i32>(v, "amplifier", Some(0))? as u8 as i32),
             duration: field(v, "duration", Some(VarInt(0)))?,
             ambient: field(v, "ambient", Some(false))?,
             show_particles,
