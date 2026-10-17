@@ -237,7 +237,7 @@ async fn honey_pickup_returns_whole_output_and_fresh_positioned_remainder() {
                 }
                 case.assert_inventory(&inventory);
                 case.assert_drops(&[]);
-                case.assert_crafted(3);
+                case.assert_crafted(if button == 0 { 3 } else { 2 });
             }
         }
     }
@@ -274,6 +274,129 @@ async fn honey_cursor_capacity_rejects_partial_output_without_consumption() {
                 case.assert_drops(&[]);
                 case.assert_crafted(3);
             }
+        }
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn honey_mixed_empty_cursor_takes_reset_requested_count_each_time() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+        let index = width * width - 1;
+        case.input(index, tagged(&Item::HONEY_BOTTLE, 3));
+        case.sync();
+        let mut inventory = empty_inventory();
+        for (step, (button, crafted)) in [(1, 2), (0, 5), (1, 7)].into_iter().enumerate() {
+            case.click(button, SlotActionType::Pickup);
+            case.assert_cursor(&stack(&Item::SUGAR, 3));
+            if step < 2 {
+                case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 2 - step as u8))]);
+                case.assert_result(&stack(&Item::SUGAR, 3));
+                inventory[0] = stack(&Item::GLASS_BOTTLE, 1 + step as u8);
+            } else {
+                case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+                case.assert_result(ItemStack::EMPTY);
+            }
+            case.assert_inventory(&inventory);
+            case.assert_drops(&[]);
+            case.assert_crafted(crafted);
+
+            // Deposit through the real menu so the next take starts with an empty cursor.
+            case.click_slot(if width == 2 { 37 } else { 38 }, 0, SlotActionType::Pickup);
+            inventory[1] = stack(&Item::SUGAR, 3 * (1 + step as u8));
+            case.assert_cursor(ItemStack::EMPTY);
+            case.assert_inventory(&inventory);
+            case.assert_drops(&[]);
+            case.assert_crafted(crafted);
+        }
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn matching_cursor_right_pickup_requests_full_output_and_empty_one_item_requests_one() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+        let index = width * width - 1;
+        case.input(index, tagged(&Item::HONEY_BOTTLE, 1));
+        case.sync();
+        case.cursor(stack(&Item::SUGAR, 1));
+        case.click(1, SlotActionType::Pickup);
+        case.assert_cursor(&stack(&Item::SUGAR, 4));
+        case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+        case.assert_result(ItemStack::EMPTY);
+        case.assert_inventory(&empty_inventory());
+        case.assert_drops(&[]);
+        case.assert_crafted(3);
+
+        let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+        case.input(index, tagged(&Item::SUGAR_CANE, 1));
+        case.sync();
+        case.assert_result(&stack(&Item::SUGAR, 1));
+        case.click(1, SlotActionType::Pickup);
+        case.assert_cursor(&stack(&Item::SUGAR, 1));
+        case.assert_grid(&[]);
+        case.assert_result(ItemStack::EMPTY);
+        case.assert_inventory(&empty_inventory());
+        case.assert_drops(&[]);
+        case.assert_crafted(1);
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn full_matching_cursor_rejects_both_buttons_without_pending_count() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+        let index = width * width - 1;
+        case.input(index, tagged(&Item::HONEY_BOTTLE, 1));
+        case.sync();
+        case.cursor(stack(&Item::SUGAR, 64));
+        for button in [0, 1] {
+            case.click(button, SlotActionType::Pickup);
+            case.assert_cursor(&stack(&Item::SUGAR, 64));
+            case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 1))]);
+            case.assert_result(&stack(&Item::SUGAR, 3));
+            case.assert_inventory(&empty_inventory());
+            case.assert_drops(&[]);
+            case.assert_crafted(0);
+        }
+        case.click_slot(if width == 2 { 37 } else { 38 }, 0, SlotActionType::Pickup);
+        case.click(1, SlotActionType::Pickup);
+        case.assert_cursor(&stack(&Item::SUGAR, 3));
+        case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+        case.assert_result(ItemStack::EMPTY);
+        let mut inventory = empty_inventory();
+        inventory[1] = stack(&Item::SUGAR, 64);
+        case.assert_inventory(&inventory);
+        case.assert_drops(&[]);
+        case.assert_crafted(2);
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn result_safe_take_clamps_request_without_falling_back_to_returned_count() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        for (requested, crafted) in [(0, 0), (u8::MAX, 3)] {
+            let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+            let index = width * width - 1;
+            case.input(index, tagged(&Item::HONEY_BOTTLE, 1));
+            case.sync();
+            let slot = case.menu.lock().unwrap().get_behaviour().slots[0].clone();
+            let taken = slot.safe_take(requested, u8::MAX, fixture.player.as_ref());
+            assert_stack(&taken, &stack(&Item::SUGAR, 3));
+            case.assert_cursor(ItemStack::EMPTY);
+            case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+            case.assert_result(ItemStack::EMPTY);
+            case.assert_inventory(&empty_inventory());
+            case.assert_drops(&[]);
+            case.assert_crafted(crafted);
         }
     }
     close_fixture(&fixture).await;
@@ -385,9 +508,57 @@ async fn honey_shift_click_full_and_partial_inventory_accounts_for_every_item() 
                 dropped.push(stack(&Item::SUGAR, 2));
             }
             case.assert_drops(&dropped);
-            // Preserve the existing callback's moved-output count on partial insertion.
-            // Java's removeCount/achievement accounting is a separate, unimplemented contract.
+            // Quick craft charges only the transferred count, once per consumed recipe.
             case.assert_crafted(i32::from(room));
+        }
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quick_move_count_cannot_carry_into_the_next_right_pickup() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        for room in [0, 1, 3] {
+            let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+            let index = width * width - 1;
+            let mut inventory = full_inventory();
+            inventory[8] = stack(&Item::SUGAR, 64 - room);
+            case.inventory(&inventory);
+            case.input(index, tagged(&Item::HONEY_BOTTLE, 2));
+            case.sync();
+            case.click(0, SlotActionType::QuickMove);
+            case.assert_cursor(ItemStack::EMPTY);
+            case.assert_result(&stack(&Item::SUGAR, 3));
+            case.assert_grid(&[(
+                index,
+                tagged(&Item::HONEY_BOTTLE, if room == 0 { 2 } else { 1 }),
+            )]);
+            inventory[8] = stack(&Item::SUGAR, 64);
+            case.assert_inventory(&inventory);
+            let mut drops = Vec::new();
+            if room != 0 {
+                drops.push(stack(&Item::GLASS_BOTTLE, 1));
+                if room == 1 {
+                    drops.push(stack(&Item::SUGAR, 2));
+                }
+            }
+            case.assert_drops(&drops);
+            case.assert_crafted(i32::from(room));
+
+            case.click(1, SlotActionType::Pickup);
+            case.assert_cursor(&stack(&Item::SUGAR, 3));
+            if room == 0 {
+                case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 1))]);
+                case.assert_result(&stack(&Item::SUGAR, 3));
+                drops.push(stack(&Item::GLASS_BOTTLE, 1));
+            } else {
+                case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+                case.assert_result(ItemStack::EMPTY);
+            }
+            case.assert_inventory(&inventory);
+            case.assert_drops(&drops);
+            case.assert_crafted(i32::from(room) + 2);
         }
     }
     close_fixture(&fixture).await;
@@ -416,6 +587,36 @@ async fn honey_number_key_moves_output_to_empty_hotbar_once() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn honey_empty_offhand_swap_counts_full_output_once_before_right_pickup() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+        let index = width * width - 1;
+        case.input(index, tagged(&Item::HONEY_BOTTLE, 2));
+        case.sync();
+        case.click(40, SlotActionType::Swap);
+        case.assert_cursor(ItemStack::EMPTY);
+        case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 1))]);
+        case.assert_result(&stack(&Item::SUGAR, 3));
+        let mut inventory = empty_inventory();
+        inventory[40] = stack(&Item::SUGAR, 3);
+        inventory[0] = stack(&Item::GLASS_BOTTLE, 1);
+        case.assert_inventory(&inventory);
+        case.assert_drops(&[]);
+        case.assert_crafted(3);
+
+        case.click(1, SlotActionType::Pickup);
+        case.assert_cursor(&stack(&Item::SUGAR, 3));
+        case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
+        case.assert_result(ItemStack::EMPTY);
+        case.assert_inventory(&inventory);
+        case.assert_drops(&[]);
+        case.assert_crafted(5);
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn honey_throw_zero_consumes_once_and_throw_one_finishes() {
     let fixture = player_fixture().await;
     for width in [2, 3] {
@@ -432,7 +633,7 @@ async fn honey_throw_zero_consumes_once_and_throw_one_finishes() {
                 case.assert_result(&stack(&Item::SUGAR, 3));
                 inventory[0] = stack(&Item::GLASS_BOTTLE, 1);
                 case.assert_drops(&[stack(&Item::SUGAR, 3)]);
-                case.assert_crafted(3);
+                case.assert_crafted(1);
             } else {
                 case.assert_grid(&[(index, stack(&Item::GLASS_BOTTLE, 1))]);
                 case.assert_result(ItemStack::EMPTY);
@@ -469,6 +670,55 @@ async fn stale_result_throw_one_stops_on_empty_take_without_consuming_inputs() {
         case.assert_crafted(0);
         case.sync();
         case.assert_result(ItemStack::EMPTY);
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stale_take_or_pickup_rejection_clears_pending_requested_count() {
+    let fixture = player_fixture().await;
+    for width in [2, 3] {
+        for reject_on_take in [false, true] {
+            let case = CraftCase::new(&fixture, width, &Item::SUGAR);
+            let index = width * width - 1;
+            case.input(index, tagged(&Item::HONEY_BOTTLE, 2));
+            case.sync();
+            let slot = case.menu.lock().unwrap().get_behaviour().slots[0].clone();
+            // Split the real slot's removal/callback to exercise invalidation in between.
+            let taken = slot.take_stack(2);
+            assert_stack(&taken, &stack(&Item::SUGAR, 3));
+            case.input(0, stack(&Item::STONE, 1));
+            if reject_on_take {
+                slot.on_take_item(fixture.player.as_ref(), &taken);
+                case.assert_result(ItemStack::EMPTY);
+            } else {
+                slot.set_stack(taken);
+                case.click(1, SlotActionType::Throw);
+                case.assert_result(&stack(&Item::SUGAR, 3));
+            }
+            case.assert_grid(&[
+                (0, stack(&Item::STONE, 1)),
+                (index, tagged(&Item::HONEY_BOTTLE, 2)),
+            ]);
+            case.assert_cursor(ItemStack::EMPTY);
+            case.assert_inventory(&empty_inventory());
+            case.assert_drops(&[]);
+            case.assert_crafted(0);
+            case.sync();
+            case.assert_result(ItemStack::EMPTY);
+
+            case.input(0, ItemStack::EMPTY.clone());
+            case.sync();
+            case.click(1, SlotActionType::Pickup);
+            case.assert_cursor(&stack(&Item::SUGAR, 3));
+            case.assert_grid(&[(index, tagged(&Item::HONEY_BOTTLE, 1))]);
+            case.assert_result(&stack(&Item::SUGAR, 3));
+            let mut inventory = empty_inventory();
+            inventory[0] = stack(&Item::GLASS_BOTTLE, 1);
+            case.assert_inventory(&inventory);
+            case.assert_drops(&[]);
+            case.assert_crafted(2);
+        }
     }
     close_fixture(&fixture).await;
 }
