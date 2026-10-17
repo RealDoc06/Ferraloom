@@ -15,6 +15,30 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.*;
+import net.minecraft.network.protocol.*;
+import net.minecraft.network.protocol.handshake.*;
+import net.minecraft.network.protocol.status.*;
+import net.minecraft.network.protocol.login.*;
+import net.minecraft.network.protocol.configuration.*;
+import net.minecraft.network.protocol.common.*;
+import net.minecraft.network.protocol.cookie.*;
+import net.minecraft.network.protocol.ping.*;
+import net.minecraft.network.protocol.common.custom.BrandPayload;
+import net.minecraft.network.protocol.login.custom.*;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.RegistrySynchronization;
+import net.minecraft.core.Holder;
+import net.minecraft.server.packs.repository.KnownPack;
+import net.minecraft.server.ServerLinks;
+import net.minecraft.server.dialog.Dialog;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.tags.TagNetworkSerialization;
+import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.*;
+import com.google.common.collect.ImmutableMultimap;
+import it.unimi.dsi.fastutil.ints.IntList;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 
@@ -29,6 +53,9 @@ public final class ProtocolVectors {
             buf.readBytes(bytes);
             Files.writeString(output.resolve(name + ".hex"), HexFormat.of().formatHex(bytes) + "\n");
         } finally { buf.release(); }
+    }
+    static <L extends PacketListener> void packet(String name, ProtocolInfo<L> protocol, Packet<? super L> packet) throws Exception {
+        vector(name,b -> protocol.codec().encode(b,packet));
     }
     public static void main(String[] args) throws Exception {
         output = Path.of(args[0]);
@@ -68,6 +95,61 @@ public final class ProtocolVectors {
         Bootstrap.bootStrap();
         var lookup = VanillaRegistries.createWorldLookup();
         var registryOps = lookup.createSerializationContext(JsonOps.INSTANCE);
+        var uuid = UUID.fromString("01234567-89ab-cdef-fedc-ba9876543210");
+        var testId = Identifier.parse("minecraft:test");
+        var reason = Component.literal("test").withStyle(style -> style.withBold(true));
+        var profile = new GameProfile(uuid,"Doc",new PropertyMap(ImmutableMultimap.of("textures",new Property("textures","value","signature"))));
+        var registryTag = new CompoundTag(); registryTag.putInt("value",42);
+        packet("handshake_sb_intention",HandshakeProtocols.SERVERBOUND,new ClientIntentionPacket(777,"localhost",25565,ClientIntent.LOGIN));
+        packet("status_sb_request",StatusProtocols.SERVERBOUND,ServerboundStatusRequestPacket.INSTANCE);
+        packet("status_sb_ping",StatusProtocols.SERVERBOUND,new ServerboundPingRequestPacket(-123456789L));
+        packet("status_cb_pong",StatusProtocols.CLIENTBOUND,new ClientboundPongResponsePacket(-123456789L));
+        var status = new ServerStatus(reason,Optional.of(new ServerStatus.Players(20,1,List.of(new net.minecraft.server.players.NameAndId(uuid,"Doc")))),Optional.of(new ServerStatus.Version("26.3",777)),Optional.of(new ServerStatus.Favicon(new byte[]{1,2,3})),true);
+        packet("status_cb_response",StatusProtocols.CLIENTBOUND,new ClientboundStatusResponsePacket(status));
+        packet("login_sb_hello",LoginProtocols.SERVERBOUND,new ServerboundHelloPacket("Doc",uuid));
+        packet("login_sb_key",LoginProtocols.SERVERBOUND,new ServerboundKeyPacket(key,keyPair.getPublic(),new byte[]{1,2,3,4}));
+        packet("login_sb_query",LoginProtocols.SERVERBOUND,new ServerboundCustomQueryAnswerPacket(42,DiscardedQueryAnswerPayload.INSTANCE));
+        packet("login_sb_ack",LoginProtocols.SERVERBOUND,ServerboundLoginAcknowledgedPacket.INSTANCE);
+        packet("login_sb_cookie",LoginProtocols.SERVERBOUND,new ServerboundCookieResponsePacket(testId,new byte[]{1,2,3}));
+        packet("login_cb_disconnect",LoginProtocols.CLIENTBOUND,new ClientboundLoginDisconnectPacket(reason));
+        packet("login_cb_hello",LoginProtocols.CLIENTBOUND,new ClientboundHelloPacket("",keyPair.getPublic().getEncoded(),new byte[]{1,2,3,4},true));
+        packet("login_cb_finished",LoginProtocols.CLIENTBOUND,new ClientboundLoginFinishedPacket(profile,uuid));
+        packet("login_cb_compression",LoginProtocols.CLIENTBOUND,new ClientboundLoginCompressionPacket(256));
+        packet("login_cb_query",LoginProtocols.CLIENTBOUND,new ClientboundCustomQueryPacket(42,new DiscardedQueryPayload(testId)));
+        packet("login_cb_cookie",LoginProtocols.CLIENTBOUND,new ClientboundCookieRequestPacket(testId));
+        var packs = List.of(new KnownPack("minecraft","core","26.3"));
+        packet("config_sb_information",ConfigurationProtocols.SERVERBOUND,new ServerboundClientInformationPacket(ClientInformation.createDefault()));
+        packet("config_sb_cookie",ConfigurationProtocols.SERVERBOUND,new ServerboundCookieResponsePacket(testId,null));
+        packet("config_sb_payload",ConfigurationProtocols.SERVERBOUND,new ServerboundCustomPayloadPacket(new BrandPayload("ferraloom")));
+        packet("config_sb_finish",ConfigurationProtocols.SERVERBOUND,ServerboundFinishConfigurationPacket.INSTANCE);
+        packet("config_sb_keepalive",ConfigurationProtocols.SERVERBOUND,new ServerboundKeepAlivePacket(-42L));
+        packet("config_sb_pong",ConfigurationProtocols.SERVERBOUND,new ServerboundPongPacket(42));
+        packet("config_sb_pack",ConfigurationProtocols.SERVERBOUND,new ServerboundResourcePackPacket(uuid,ServerboundResourcePackPacket.Action.ACCEPTED));
+        packet("config_sb_knownpacks",ConfigurationProtocols.SERVERBOUND,new ServerboundSelectKnownPacks(packs));
+        packet("config_sb_click",ConfigurationProtocols.SERVERBOUND,new ServerboundCustomClickActionPacket(testId,Optional.of(registryTag)));
+        packet("config_sb_conduct",ConfigurationProtocols.SERVERBOUND,ServerboundAcceptCodeOfConductPacket.INSTANCE);
+        packet("config_cb_cookie",ConfigurationProtocols.CLIENTBOUND,new ClientboundCookieRequestPacket(testId));
+        packet("config_cb_payload",ConfigurationProtocols.CLIENTBOUND,new ClientboundCustomPayloadPacket(new BrandPayload("vanilla")));
+        packet("config_cb_disconnect",ConfigurationProtocols.CLIENTBOUND,new ClientboundDisconnectPacket(reason));
+        packet("config_cb_finish",ConfigurationProtocols.CLIENTBOUND,ClientboundFinishConfigurationPacket.INSTANCE);
+        packet("config_cb_keepalive",ConfigurationProtocols.CLIENTBOUND,new ClientboundKeepAlivePacket(-42L));
+        packet("config_cb_ping",ConfigurationProtocols.CLIENTBOUND,new ClientboundPingPacket(42));
+        packet("config_cb_reset",ConfigurationProtocols.CLIENTBOUND,ClientboundResetChatPacket.INSTANCE);
+        packet("config_cb_registry",ConfigurationProtocols.CLIENTBOUND,new ClientboundRegistryDataPacket(ResourceKey.createRegistryKey(testId),List.of(new RegistrySynchronization.PackedRegistryEntry(testId,Optional.of(registryTag)),new RegistrySynchronization.PackedRegistryEntry(Identifier.parse("minecraft:omitted"),Optional.empty()))));
+        packet("config_cb_pop",ConfigurationProtocols.CLIENTBOUND,new ClientboundResourcePackPopPacket(Optional.of(uuid)));
+        packet("config_cb_push",ConfigurationProtocols.CLIENTBOUND,new ClientboundResourcePackPushPacket(uuid,"https://example.com/pack.zip","abc123",true,Optional.of(reason)));
+        packet("config_cb_effects",ConfigurationProtocols.CLIENTBOUND,new ClientboundPostEffectsPacket(List.of(testId)));
+        packet("config_cb_store",ConfigurationProtocols.CLIENTBOUND,new ClientboundStoreCookiePacket(testId,new byte[]{1,2,3}));
+        packet("config_cb_transfer",ConfigurationProtocols.CLIENTBOUND,new ClientboundTransferPacket("example.com",25565));
+        packet("config_cb_features",ConfigurationProtocols.CLIENTBOUND,new ClientboundUpdateEnabledFeaturesPacket(Set.of(Identifier.parse("minecraft:vanilla"))));
+        packet("config_cb_tags",ConfigurationProtocols.CLIENTBOUND,new ClientboundUpdateTagsPacket(Map.of(Registries.BLOCK,new TagNetworkSerialization.NetworkPayload(Map.of(testId,IntList.of(1,2,3))))));
+        packet("config_cb_knownpacks",ConfigurationProtocols.CLIENTBOUND,new ClientboundSelectKnownPacks(packs));
+        packet("config_cb_report",ConfigurationProtocols.CLIENTBOUND,new ClientboundCustomReportDetailsPacket(Map.of("key","value")));
+        packet("config_cb_links",ConfigurationProtocols.CLIENTBOUND,new ClientboundServerLinksPacket(List.of(new ServerLinks.UntrustedEntry(com.mojang.datafixers.util.Either.right(reason),"https://example.com"))));
+        packet("config_cb_clear",ConfigurationProtocols.CLIENTBOUND,ClientboundClearDialogPacket.INSTANCE);
+        var dialog = Dialog.DIRECT_CODEC.parse(registryOps,JsonParser.parseString("{\"type\":\"minecraft:notice\",\"title\":\"Notice\"}")).getOrThrow();
+        packet("config_cb_dialog",ConfigurationProtocols.CLIENTBOUND,new ClientboundShowDialogPacket(Holder.direct(dialog)));
+        packet("config_cb_conduct",ConfigurationProtocols.CLIENTBOUND,new ClientboundCodeOfConductPacket("Be kind."));
         String[] components = {
             "\"literal\"",
             "{\"text\":\"root\",\"bold\":true,\"color\":\"red\",\"extra\":[{\"text\":\"child\",\"bold\":false,\"italic\":true,\"hover_event\":{\"action\":\"show_text\",\"value\":{\"translate\":\"tooltip.test\",\"with\":[\"arg\",2]}}}]}",
@@ -79,6 +161,7 @@ public final class ProtocolVectors {
         for (int i=0;i<components.length;i++) {
             var component = ComponentSerialization.CODEC.parse(registryOps,JsonParser.parseString(components[i])).getOrThrow();
             var finalComponent = component;
+            if (i == 1 || i == 2) vector("style_"+i,b -> Style.Serializer.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent.getStyle()));
             vector("component_"+i, b -> ComponentSerialization.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent));
             Files.writeString(output.resolve("component_"+i+".json"),ComponentSerialization.CODEC.encodeStart(registryOps,component).getOrThrow().toString()+"\n");
         }

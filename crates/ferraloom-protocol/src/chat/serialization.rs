@@ -921,3 +921,15 @@ fn ordered(mut map: Map<String, Value>, order: &[&str]) -> Map<String, Value> {
     result.extend(map);
     result
 }
+
+pub(super) fn style_from_nbt(tag: Tag, nbt: bool) -> Result<Style> {
+    decode_style(compound(&tag)?, nbt)
+}
+pub(super) fn style_to_nbt(style: &Style) -> Result<Tag> {
+    let mut map = Fields::new();
+    encode_style(style, &mut map)?;
+    Ok(Tag::Compound(map))
+}
+pub(super) fn style_from_json(value: Value) -> Result<Style> {
+    style_from_nbt(json_to_tag(value)?, false)
+}
