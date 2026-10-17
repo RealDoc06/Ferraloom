@@ -54,6 +54,52 @@ pub enum ChunkWritingError {
     Compression(CompressionError),
     #[error("Chunk serializing error: {0}")]
     ChunkSerializingError(String),
+    #[error("Terrain changed after save capture; retry without acknowledging POI history")]
+    StaleSaveCapture,
+}
+
+impl ChunkWritingError {
+    pub(crate) const fn is_stale_save_capture(&self) -> bool {
+        matches!(self, Self::StaleSaveCapture)
+    }
+
+    /// Keep the first hard failure while still attempting independent siblings.
+    /// A stale capture cannot mask a failed codec, ownership check or file write.
+    pub(crate) fn combine_results(
+        first: Result<(), Self>,
+        next: Result<(), Self>,
+    ) -> Result<(), Self> {
+        match (first, next) {
+            (Ok(()), result) | (result, Ok(())) => result,
+            (Err(first), Err(next)) => {
+                if first.is_stale_save_capture() && !next.is_stale_save_capture() {
+                    Err(next)
+                } else {
+                    Err(first)
+                }
+            }
+        }
+    }
+}
+
+impl From<crate::poi::PoiReconcileError> for ChunkWritingError {
+    fn from(error: crate::poi::PoiReconcileError) -> Self {
+        match error {
+            crate::poi::PoiReconcileError::StaleSaveCapture => Self::StaleSaveCapture,
+            error => Self::ChunkSerializingError(error.to_string()),
+        }
+    }
+}
+
+impl From<ChunkSerializingError> for ChunkWritingError {
+    fn from(error: ChunkSerializingError) -> Self {
+        match error {
+            ChunkSerializingError::Poi(crate::poi::PoiReconcileError::StaleSaveCapture) => {
+                Self::StaleSaveCapture
+            }
+            error => Self::ChunkSerializingError(error.to_string()),
+        }
+    }
 }
 
 #[derive(Error, Debug)]

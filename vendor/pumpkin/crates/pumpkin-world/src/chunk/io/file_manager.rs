@@ -219,7 +219,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
         })?;
         let mut region = cached.write().await;
         let mut applied = Vec::new();
-        let mut failure = None;
+        let mut result = Ok(());
         for (position, chunk) in pending.iter() {
             if !chunk.is_dirty() {
                 applied.push(*position);
@@ -247,14 +247,14 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                 }
                 Err(error) => {
                     chunk.mark_dirty(true);
-                    failure.get_or_insert(error);
+                    result = ChunkWritingError::combine_results(result, Err(error));
                 }
             }
         }
         for position in applied {
             pending.remove(&position);
         }
-        failure.map_or(Ok(()), Err)
+        result
     }
 
     async fn flush_serialized(&self) -> Result<(), ChunkWritingError> {
@@ -271,7 +271,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
     async fn flush(&self, config: &S::ChunkConfig) -> Result<(), ChunkWritingError> {
         let applied = self.apply_pending(config).await;
         let written = self.flush_serialized().await;
-        applied.and(written)
+        ChunkWritingError::combine_results(applied, written)
     }
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
@@ -594,7 +594,7 @@ where
                 } else {
                     debug!("Flushing {} to disk", path.display());
                     let written = loader.flush_serialized().await;
-                    applied.and(written)?;
+                    ChunkWritingError::combine_results(applied, written)?;
                     drop(loader);
                     self.maybe_evict(&path).await;
                 }
@@ -602,9 +602,11 @@ where
                 Ok(())
             });
 
-        // Collect all region results; surface the first error encountered.
+        // Attempt every region; a hard sibling failure dominates a stale capture.
         let results: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
-        results.into_iter().find(Result::is_err).unwrap_or(Ok(()))
+        results
+            .into_iter()
+            .fold(Ok(()), ChunkWritingError::combine_results)
     }
 
     /// Blocks until all in-flight serialiser operations have completed by
@@ -649,7 +651,9 @@ where
             .into_iter()
             .map(|loader| async move { loader.flush(&self.chunk_config).await });
         let results: Vec<Result<(), ChunkWritingError>> = join_all(writes).await;
-        results.into_iter().find(Result::is_err).unwrap_or(Ok(()))
+        results
+            .into_iter()
+            .fold(Ok(()), ChunkWritingError::combine_results)
     }
 }
 

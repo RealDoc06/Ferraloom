@@ -570,9 +570,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
     ) -> Result<Option<EncodedPoiCommit>, ChunkWritingError> {
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw = run_blocking(move || {
-            let encoded = chunk
-                .capture_for_save()
-                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+            let encoded = chunk.capture_for_save().map_err(ChunkWritingError::from)?;
             encoded.validate()?;
             Ok::<_, ChunkWritingError>(encoded)
         })

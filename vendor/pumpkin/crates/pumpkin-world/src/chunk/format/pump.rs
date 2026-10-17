@@ -114,7 +114,7 @@ where
         let (compressed, receipt) = run_blocking(move || {
             let encoded = chunk_data
                 .capture_for_save()
-                .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
+                .map_err(ChunkWritingError::from)?;
             let compressed = compress_to_vec(&encoded.bytes[..], CompressionLevel::Fastest);
             encoded.validate()?;
             Ok::<_, ChunkWritingError>((compressed, encoded.poi))

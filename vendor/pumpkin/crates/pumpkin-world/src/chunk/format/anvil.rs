@@ -346,9 +346,7 @@ impl AnvilChunkData {
     where
         S: SingleChunkDataSerializer,
     {
-        let encoded = chunk
-            .capture_for_save()
-            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+        let encoded = chunk.capture_for_save().map_err(ChunkWritingError::from)?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
         let level = chunk_config.compression.level;

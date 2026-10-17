@@ -1045,7 +1045,8 @@ impl Level {
     }
 
     /// Existing unload workers call this without coordinator/ticket/BE guards.
-    /// A refusal leaves the request pending and is reported by Level shutdown.
+    /// A refusal leaves the request pending. Only hard failures enter the
+    /// historical save result; a stale capture remains deferred unload work.
     pub fn prepare_chunk_poi(
         &self,
         chunk: &SyncChunk,
@@ -1054,7 +1055,9 @@ impl Level {
             .bind_chunk_poi(chunk)
             .and_then(|()| chunk.prepare_poi());
         if let Err(error) = &result {
-            self.record_save_failure(error.to_string());
+            if !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture) {
+                self.record_save_failure(error.to_string());
+            }
         }
         result
     }
@@ -1074,7 +1077,9 @@ impl Level {
                 ))
             });
         if let Err(error) = &result {
-            self.record_save_failure(error.to_string());
+            if !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture) {
+                self.record_save_failure(error.to_string());
+            }
         }
         result
     }
@@ -1104,8 +1109,12 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            error!("Failed writing Chunk to disk {error}");
-            self.record_save_failure(error.to_string());
+            if error.is_stale_save_capture() {
+                debug!("Deferred changed chunk save capture: {error}");
+            } else {
+                error!("Failed writing Chunk to disk {error}");
+                self.record_save_failure(error.to_string());
+            }
         }
     }
 

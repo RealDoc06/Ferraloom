@@ -70,7 +70,7 @@ impl EncodedPoiCommit {
     pub(crate) fn validate(&self) -> Result<(), ChunkWritingError> {
         self.source
             .validate_poi_capture(&self.stamp)
-            .map_err(|error| ChunkWritingError::ChunkSerializingError(error.to_string()))
+            .map_err(ChunkWritingError::from)
     }
 
     pub(crate) fn needs_recapture(&self) -> bool {
@@ -126,11 +126,16 @@ pub fn complete_poi_batch<'a>(
     receipts: impl Iterator<Item = &'a mut EncodedPoiCommit>,
 ) -> Result<(), ChunkWritingError> {
     let mut groups = std::collections::BTreeMap::<_, Vec<_>>::new();
+    let mut result = Ok(());
     for receipt in receipts {
-        let runtime = receipt
-            .source
-            .poi_runtime()
-            .map_err(|error| ChunkWritingError::ChunkSerializingError(error.to_string()))?;
+        let runtime = match receipt.source.poi_runtime() {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                receipt.refuse(&error);
+                result = ChunkWritingError::combine_results(result, Err(error.into()));
+                continue;
+            }
+        };
         groups
             .entry((
                 Arc::as_ptr(&runtime.storage) as usize,
@@ -140,7 +145,6 @@ pub fn complete_poi_batch<'a>(
             .or_default()
             .push(receipt);
     }
-    let mut failure = None;
     for (_, group) in groups {
         let mut eligible = Vec::new();
         for receipt in group {
@@ -148,19 +152,20 @@ pub fn complete_poi_batch<'a>(
                 Ok(()) => eligible.push(receipt),
                 Err(error) => {
                     receipt.refuse(&error);
-                    failure
-                        .get_or_insert(ChunkWritingError::ChunkSerializingError(error.to_string()));
+                    result = ChunkWritingError::combine_results(result, Err(error.into()));
                 }
             }
         }
         let Some(first) = eligible.first() else {
             continue;
         };
-        let runtime = first
-            .source
-            .poi_runtime()
-            .map_err(|error| ChunkWritingError::ChunkSerializingError(error.to_string()))?
-            .clone();
+        let runtime = match first.source.poi_runtime() {
+            Ok(runtime) => runtime.clone(),
+            Err(error) => {
+                result = ChunkWritingError::combine_results(result, Err(error.into()));
+                continue;
+            }
+        };
         let pos = ChunkPos::new(first.source.x, first.source.z);
         let write = (|| {
             let snapshot = runtime
@@ -179,7 +184,8 @@ pub fn complete_poi_batch<'a>(
             Ok::<_, std::io::Error>(())
         })();
         if let Err(error) = write {
-            failure.get_or_insert(ChunkWritingError::IoError(error));
+            result =
+                ChunkWritingError::combine_results(result, Err(ChunkWritingError::IoError(error)));
             continue;
         }
         for receipt in eligible {
@@ -187,13 +193,12 @@ pub fn complete_poi_batch<'a>(
                 Ok(()) => receipt.state = CommitState::Complete,
                 Err(error) => {
                     receipt.refuse(&error);
-                    failure
-                        .get_or_insert(ChunkWritingError::ChunkSerializingError(error.to_string()));
+                    result = ChunkWritingError::combine_results(result, Err(error.into()));
                 }
             }
         }
     }
-    failure.map_or(Ok(()), Err)
+    result
 }
 
 impl ChunkData {

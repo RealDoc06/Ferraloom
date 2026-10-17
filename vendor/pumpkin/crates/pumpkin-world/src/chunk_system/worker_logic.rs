@@ -369,8 +369,12 @@ pub async fn io_write_work(
                     .save_chunks(&level.level_folder, vec)
                     .await
                 {
-                    error!("Failed to save chunks: {:?}", e);
-                    level.record_save_failure(e.to_string());
+                    if e.is_stale_save_capture() {
+                        debug!("Deferred changed chunk save capture: {e}");
+                    } else {
+                        error!("Failed to save chunks: {:?}", e);
+                        level.record_save_failure(e.to_string());
+                    }
                 }
                 false
             }
