@@ -867,7 +867,7 @@ impl LivingEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             self.absorption.store(new_abs);
-        }
+        };
         self.sync_absorption();
     }
 
@@ -2044,7 +2044,8 @@ impl LivingEntity {
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
             return;
         };
-        if !std::ptr::eq(dyn_self.get_entity(), &self.entity) || self.entity.is_removed() {
+        if !std::ptr::eq(dyn_self.get_entity(), &raw const self.entity) || self.entity.is_removed()
+        {
             return;
         }
         if self

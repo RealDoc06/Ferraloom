@@ -56,7 +56,7 @@ pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
 });
 
 impl WindChargeEntity {
-    /// Java WindCharge, distinct from its sibling BreezeWindCharge class.
+    /// Java `WindCharge`, distinct from its sibling `BreezeWindCharge` class.
     pub const fn is_player_wind_charge(&self) -> bool {
         matches!(self.kind, WindChargeKind::Normal { .. })
     }

@@ -1,4 +1,4 @@
-//! Authored UNRUN: source-only exact26.3 candidate. Uses registered PlayerFixture,
+//! Authored UNRUN: source-only exact26.3 candidate. Uses registered `PlayerFixture`,
 //! production factories/packet dispatch/projectile handlers and owner ticks.
 #![allow(
     clippy::too_many_lines,
@@ -373,7 +373,7 @@ async fn interleaved_unpublished_allocation_keeps_nine_ids_and_exact_current_par
         assert!(world.get_entity_by_id(id).is_none());
         assert!(std::ptr::eq(
             world.get_entity_or_part(id).unwrap().get_entity(),
-            &part.entity
+            &raw const part.entity
         ));
         assert!(Arc::ptr_eq(&part.current_parent().unwrap(), &live));
         assert!(world.entity_tracker.get_tracked_entity(id).is_none());
@@ -394,7 +394,7 @@ async fn interleaved_unpublished_allocation_keeps_nine_ids_and_exact_current_par
                     .get_entity_or_part(part.entity.entity_id)
                     .unwrap()
                     .get_entity(),
-                &part.entity
+                &raw const part.entity
             ));
         }
     }
@@ -1457,7 +1457,7 @@ async fn actual_death_ticks_1_20_155_180_200_award_move_and_retire_once() {
                 f.dragon_uuid = Some(live.get_entity().entity_uuid);
                 f.exit_portal_location = Some(BlockPos::new(8, 64, 8));
                 f.gateways.clear();
-            }
+            };
             d.attach_fight(&fight);
             fight
         });
@@ -1653,10 +1653,10 @@ async fn ordinary_mob_twenty_tick_death_and_registered_player_respawn_second_dea
         );
         if death == 1 {
             assert_eq!(
-                tokio::time::timeout(
+                Box::pin(tokio::time::timeout(
                     Duration::from_secs(10),
                     drive_packet_future(&fixture.server, world.respawn_player(&player, false))
-                )
+                ))
                 .await
                 .unwrap(),
                 crate::world::RespawnOutcome::Committed

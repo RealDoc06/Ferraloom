@@ -172,6 +172,7 @@ impl DragonPartKind {
         Self::Wing2,
     ];
 
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Head => "head",
@@ -182,6 +183,7 @@ impl DragonPartKind {
         }
     }
 
+    #[must_use]
     pub const fn size(self) -> (f32, f32) {
         match self {
             Self::Head => (1.0, 1.0),
@@ -263,7 +265,7 @@ pub struct EnderDragonEntity {
 
     pub in_wall: Mutex<bool>,
     pub dragon_death_time: Mutex<i32>,
-    /// Mob::mob_tick precedes LivingEntity::tick in this engine. A phase's new
+    /// `Mob::mob_tick` precedes `LivingEntity::tick` in this engine. A phase's new
     /// health-zero handoff starts death ticking on the following owner tick.
     defer_first_death_tick: AtomicBool,
     pub sitting_damage_received: Mutex<f32>,
@@ -371,7 +373,7 @@ impl EnderDragonEntity {
         dragon
     }
 
-    pub fn parts(&self) -> &[Arc<EnderDragonPart>; 8] {
+    pub const fn parts(&self) -> &[Arc<EnderDragonPart>; 8] {
         &self.parts
     }
 
@@ -1002,7 +1004,7 @@ impl EnderDragonEntity {
     }
 
     /// Exact26.3 parent hurt policy. Only the accepted health path enters the
-    /// ordinary LivingEntity pipeline, with the real parent as victim/caller.
+    /// ordinary `LivingEntity` pipeline, with the real parent as victim/caller.
     /// No part, registry or phase guard spans that pipeline's plugin callbacks.
     pub fn hurt_part(
         &self,
@@ -1089,7 +1091,7 @@ impl Mob for EnderDragonEntity {
             return;
         }
         let fight = self.attached_fight();
-        let xp_total = if let Some(fight) = &fight {
+        let xp_total = fight.as_ref().map_or(500, |fight| {
             let mut fight = fight
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -1106,9 +1108,7 @@ impl Mob for EnderDragonEntity {
             } else {
                 12000
             }
-        } else {
-            500
-        };
+        });
         let time = {
             let mut time = self
                 .dragon_death_time

@@ -100,7 +100,7 @@ impl<'a> CraftCase<'a> {
             }
             *handler.get_behaviour().cursor_stack.lock().unwrap() = ItemStack::EMPTY.clone();
             handler.send_content_updates();
-        }
+        };
         Self {
             fixture,
             menu,

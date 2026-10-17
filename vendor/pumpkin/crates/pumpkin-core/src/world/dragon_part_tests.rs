@@ -9,8 +9,13 @@ use crate::{
     },
 };
 use pumpkin_data::damage::DamageType;
+use pumpkin_nbt::tag::NbtTag;
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the persisted unload, replacement activation and retained-part checks in one lifecycle fixture"
+)]
 async fn real_chunk_snapshot_and_unload_save_parent_only_and_retained_parts_stay_inert() {
     let fixture = player_fixture().await;
     stop_chunk_workers(&fixture).await;
@@ -45,9 +50,9 @@ async fn real_chunk_snapshot_and_unload_save_parent_only_and_retained_parts_stay
         assert!(
             saved[0]
                 .get_list("Passengers")
-                .is_none_or(|passengers| passengers.is_empty())
+                .is_none_or(<[NbtTag]>::is_empty)
         );
-    }
+    };
     assert!(
         world
             .remove_entities_in_chunks([position])

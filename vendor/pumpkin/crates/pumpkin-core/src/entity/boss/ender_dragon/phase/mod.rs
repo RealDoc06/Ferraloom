@@ -28,7 +28,7 @@ pub(crate) trait Phase: Send + Sync {
     fn get_type(&self) -> EnderDragonPhase;
     fn tick(&self, dragon: &EnderDragonEntity);
     /// Callback-free resets only, under the current-phase publication guard.
-    /// Never acquire the phase guard from a reset-state guard in tick().
+    /// Never acquire the phase guard from a reset-state guard in `tick()`.
     fn reset_on_entry(&self, _dragon: &EnderDragonEntity) {}
     fn on_hurt(&self, direct: Option<&dyn crate::entity::EntityBase>, amount: f32) -> f32 {
         use crate::entity::projectile::{
@@ -77,8 +77,8 @@ pub enum EnderDragonPhase {
 }
 
 impl EnderDragonPhase {
-    /// The exact26.3 registry order. The old extra FlyToPortal state was an
-    /// unregistered approach helper; its caller now enters LandingApproach.
+    /// The 26.3 registry order. The old extra `FlyToPortal` state was an
+    /// unregistered approach helper; its caller now enters `LandingApproach`.
     pub const ALL: [Self; 11] = [
         Self::Circling,
         Self::Strafing,
@@ -102,13 +102,23 @@ impl EnderDragonPhase {
     }
 
     #[must_use]
-    pub fn network_id(self) -> i32 {
-        Self::ALL
-            .iter()
-            .position(|phase| *phase == self)
-            .expect("registered dragon phase") as i32
+    pub const fn network_id(self) -> i32 {
+        match self {
+            Self::Circling => 0,
+            Self::Strafing => 1,
+            Self::LandingApproach => 2,
+            Self::Landing => 3,
+            Self::TakingOff => 4,
+            Self::SitBreathing => 5,
+            Self::SitScanning => 6,
+            Self::SitAttacking => 7,
+            Self::Charging => 8,
+            Self::Dying => 9,
+            Self::Hovering => 10,
+        }
     }
 
+    #[must_use]
     pub fn from_network_id(id: i32) -> Self {
         usize::try_from(id)
             .ok()
@@ -117,6 +127,7 @@ impl EnderDragonPhase {
             .unwrap_or(Self::Circling)
     }
 
+    #[must_use]
     pub const fn rejects_sitting_projectile(self) -> bool {
         matches!(
             self,

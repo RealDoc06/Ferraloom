@@ -3806,7 +3806,7 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
-    /// DragonDeathPhase's MOTION_BLOCKING podium target. The stored heightmap
+    /// `DragonDeathPhase`'s `MOTION_BLOCKING` podium target. The stored heightmap
     /// is the top occupied Y; Level.getHeight returns the first free Y instead.
     pub(crate) fn dragon_death_target(&self, origin: BlockPos) -> Vector3<f64> {
         let x = origin.0.x;
