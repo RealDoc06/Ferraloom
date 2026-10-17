@@ -98,7 +98,7 @@ fn pending(world: &World, position: BlockPos) -> Option<NbtCompound> {
         .unwrap()
 }
 
-fn put_pending(world: &World, position: BlockPos, nbt: NbtCompound) {
+fn put_pending(world: &World, position: BlockPos, nbt: &NbtCompound) {
     world
         .level
         .read_chunk_sync(&position.chunk_position(), |chunk| {
@@ -343,7 +343,7 @@ async fn counted_second_b3_stop_maps_different_and_same_block_states() {
         let placements = Arc::new(AtomicUsize::new(0));
         let (fixture, world) = fixture(Some(registry(Callbacks {
             removal: Some(Arc::new(move |world, position| {
-                set_state(world, *position, replacement)
+                set_state(world, *position, replacement);
             })),
             placements: placements.clone(),
             ..Callbacks::default()
@@ -395,7 +395,7 @@ async fn counted_second_b3_stop_keeps_callback_owned_exact_target_entity() {
     let placements = Arc::new(AtomicUsize::new(0));
     let (fixture, world) = fixture(Some(registry(Callbacks {
         removal: Some(Arc::new(move |world, _| {
-            world.add_block_entity(next.clone())
+            world.add_block_entity(next.clone());
         })),
         placements: placements.clone(),
         ..Callbacks::default()
@@ -605,7 +605,7 @@ async fn live_capture_uses_one_current_state_without_pending_overlay_or_live_mar
             let mut opaque = NbtCompound::new();
             opaque.put_int("unknown", 1);
             stale.put_compound("components", opaque);
-            put_pending(&world, SOURCE, stale.clone());
+            put_pending(&world, SOURCE, &stale);
             let chunk = world
                 .level
                 .loaded_chunks
@@ -675,7 +675,7 @@ async fn pending_capture_is_detached_and_normalizes_absent_or_empty_components()
             if explicit_empty {
                 nbt.put_compound("components", NbtCompound::new());
             }
-            put_pending(&world, SOURCE, nbt.clone());
+            put_pending(&world, SOURCE, &nbt);
             let chunk = world
                 .level
                 .loaded_chunks
@@ -742,7 +742,7 @@ async fn live_and_pending_deferred_loot_capture_does_not_open_inventory() {
             if let Some(live) = &live {
                 world.add_block_entity(live.clone());
             } else {
-                put_pending(&world, SOURCE, nbt);
+                put_pending(&world, SOURCE, &nbt);
             }
             let before = pending(&world, SOURCE);
             let payload = world
@@ -799,7 +799,7 @@ async fn live_and_pending_deferred_loot_capture_does_not_open_inventory() {
 async fn restore_uses_current_target_arc_retains_real_menu_and_inventory_and_target_identity() {
     let (fixture, world) = fixture(None).await;
     set_state(&world, SOURCE, Block::CHEST.default_state.id);
-    put_pending(&world, SOURCE, container_nbt("minecraft:chest", SOURCE, 6));
+    put_pending(&world, SOURCE, &container_nbt("minecraft:chest", SOURCE, 6));
     let payload = world
         .snapshot_block_entity_for_clone(&SOURCE)
         .unwrap()
@@ -915,7 +915,7 @@ async fn pending_refusals_preserve_actual_terrain_records_and_never_publish() {
     world.add_block_entity(first.clone());
     let first_pending = pending(&world, TARGET);
     for nbt in cases {
-        put_pending(&world, SOURCE, nbt.clone());
+        put_pending(&world, SOURCE, &nbt);
         let maps = world.block_entities.len();
         let before = saved(first.as_ref());
         assert!(matches!(
@@ -1026,7 +1026,7 @@ async fn unsupported_missing_and_mismatched_entities_are_refusals_only_true_non_
     ));
     assert_eq!(pending(&world, SOURCE), raw);
     world.remove_block_entity(&SOURCE);
-    put_pending(&world, SOURCE, raw.unwrap());
+    put_pending(&world, SOURCE, &raw.unwrap());
     let raw = pending(&world, SOURCE);
     assert!(matches!(
         world.snapshot_block_entity_for_clone(&SOURCE),
@@ -1041,7 +1041,7 @@ async fn unsupported_missing_and_mismatched_entities_are_refusals_only_true_non_
 async fn restore_refuses_invalid_payload_before_commit_and_missing_target_skips_terrain_write() {
     let (fixture, world) = fixture(None).await;
     set_state(&world, SOURCE, Block::CHEST.default_state.id);
-    put_pending(&world, SOURCE, container_nbt("minecraft:chest", SOURCE, 3));
+    put_pending(&world, SOURCE, &container_nbt("minecraft:chest", SOURCE, 3));
     let payload = world
         .snapshot_block_entity_for_clone(&SOURCE)
         .unwrap()
@@ -1093,7 +1093,7 @@ async fn pending_keep_packed_markers_match_live_capture_without_mutating_raw_rec
         for marker in [0, 1] {
             let mut raw = nbt.clone();
             raw.put_byte("keepPacked", marker);
-            put_pending(&world, SOURCE, raw.clone());
+            put_pending(&world, SOURCE, &raw);
             let payload = world
                 .snapshot_block_entity_for_clone(&SOURCE)
                 .unwrap()
@@ -1119,7 +1119,7 @@ async fn pending_keep_packed_markers_match_live_capture_without_mutating_raw_rec
         ] {
             let mut raw = nbt.clone();
             raw.put("keepPacked", marker);
-            put_pending(&world, SOURCE, raw.clone());
+            put_pending(&world, SOURCE, &raw);
             assert!(matches!(
                 world.snapshot_block_entity_for_clone(&SOURCE),
                 Err(BlockEntityLoadError::Unsupported(_))
@@ -1172,7 +1172,7 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
         world
             .custom_block_entity_data
             .insert(SOURCE, retained.clone());
-        put_pending(&world, SOURCE, raw.clone());
+        put_pending(&world, SOURCE, &raw);
         let attached = world.ensure_block_entity_for_state(&SOURCE, state).unwrap();
         assert!(attached.as_any().is::<ChestBlockEntity>());
         assert_guards_released(&world, &SOURCE);
@@ -1190,7 +1190,7 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
 
         // An occupied allocation wins without importing a different raw cache.
         raw.put_compound(field, retained.clone());
-        put_pending(&world, SOURCE, raw.clone());
+        put_pending(&world, SOURCE, &raw);
         let occupied = world.ensure_block_entity_for_state(&SOURCE, state).unwrap();
         assert!(Arc::ptr_eq(&attached, &occupied));
         assert_eq!(pending(&world, SOURCE), Some(raw));
@@ -1208,7 +1208,7 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
         world
             .custom_block_entity_data
             .insert(SOURCE, retained.clone());
-        put_pending(&world, SOURCE, raw.clone());
+        put_pending(&world, SOURCE, &raw);
         assert!(
             world
                 .ensure_block_entity_for_state(&SOURCE, Block::BARREL.default_state.id)
@@ -1234,7 +1234,7 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
     world.add_block_entity(wrong.clone());
     let mut raw = container_nbt("minecraft:chest", SOURCE, 4);
     raw.put_compound("PumpkinCustomData", incoming);
-    put_pending(&world, SOURCE, raw.clone());
+    put_pending(&world, SOURCE, &raw);
     world
         .custom_block_entity_data
         .insert(SOURCE, retained.clone());
