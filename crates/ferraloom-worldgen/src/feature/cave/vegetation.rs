@@ -1,6 +1,7 @@
 use super::super::PlacedFeature;
 use super::*;
 use ferraloom_data::properties;
+use ferraloom_util::{BlockPos, collections::JavaHashSet};
 
 /// Port of VegetationPatchFeature and WaterloggedVegetationPatchFeature.
 #[derive(Debug)]
@@ -47,53 +48,9 @@ fn decode(
         waterlogged,
     }))
 }
-/// Java HashSet's bucket traversal is observable here: vegetation uses the same
-/// RNG for each position. Preserve its resize splits and collision insertion order.
-struct PositionSet {
-    buckets: Vec<Vec<[i32; 3]>>,
-    len: usize,
-}
-impl PositionSet {
-    fn new() -> Self {
-        Self {
-            buckets: vec![Vec::new(); 16],
-            len: 0,
-        }
-    }
-    fn hash(p: [i32; 3]) -> usize {
-        let h = p[1]
-            .wrapping_add(p[2].wrapping_mul(31))
-            .wrapping_mul(31)
-            .wrapping_add(p[0]) as u32;
-        (h ^ (h >> 16)) as usize
-    }
-    fn insert(&mut self, p: [i32; 3]) -> Result<(), Error> {
-        let index = Self::hash(p) & (self.buckets.len() - 1);
-        if self.buckets[index].contains(&p) {
-            return Ok(());
-        }
-        self.buckets[index].push(p);
-        self.len += 1;
-        let crowded = self.buckets[index].len() >= 9;
-        if crowded && self.buckets.len() >= 64 {
-            return Err(Error(
-                "Unsupported: Java HashSet tree-bin iteration for vegetation patch".into(),
-            ));
-        }
-        if self.len > self.buckets.len() * 3 / 4 || crowded {
-            let capacity = self.buckets.len() * 2;
-            let old = std::mem::replace(&mut self.buckets, vec![Vec::new(); capacity]);
-            for p in old.into_iter().flatten() {
-                let i = Self::hash(p) & (self.buckets.len() - 1);
-                self.buckets[i].push(p);
-            }
-        }
-        Ok(())
-    }
-    fn positions(&self) -> impl Iterator<Item = [i32; 3]> + '_ {
-        self.buckets.iter().flatten().copied()
-    }
-}
+// Vanilla draws RNG while iterating HashSet<BlockPos>. The shared collection
+// preserves its deterministic order; identical-hash tree ties are not stable
+// even in vanilla and are excluded from parity fixtures.
 impl VegetationPatchFeature {
     fn ground(
         &self,
@@ -120,7 +77,7 @@ impl Feature for VegetationPatchFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let xr = self.radius.sample(ctx.random) + 1;
         let zr = self.radius.sample(ctx.random) + 1;
-        let mut surface = PositionSet::new();
+        let mut surface = JavaHashSet::<BlockPos>::new();
         for dx in -xr..=xr {
             for dz in -zr..=zr {
                 let xe = dx == -xr || dx == xr;
@@ -153,14 +110,15 @@ impl Feature for VegetationPatchFeature {
                             self.extra_bottom > 0.0 && ctx.random.next_float() < self.extra_bottom,
                         );
                     if self.ground(ctx, ground, depth)? {
-                        surface.insert(ground)?;
+                        surface.insert(BlockPos::new(ground[0], ground[1], ground[2]));
                     }
                 }
             }
         }
         if self.waterlogged {
-            let mut water = PositionSet::new();
-            for p in surface.positions() {
+            let mut water = JavaHashSet::<BlockPos>::new();
+            for p in surface.iter() {
+                let p = [p.x, p.y, p.z];
                 let mut exposed = false;
                 for d in HORIZONTAL.into_iter().chain([Direction::Down]) {
                     if !ctx
@@ -172,15 +130,17 @@ impl Feature for VegetationPatchFeature {
                     }
                 }
                 if !exposed {
-                    water.insert(p)?;
+                    water.insert(BlockPos::new(p[0], p[1], p[2]));
                 }
             }
-            for p in water.positions() {
+            for p in water.iter() {
+                let p = [p.x, p.y, p.z];
                 ctx.region.set_block(p, Block::WATER.default_state(), 2)?;
             }
             surface = water;
         }
-        for p in surface.positions() {
+        for p in surface.iter() {
+            let p = [p.x, p.y, p.z];
             if self.chance > 0.0 && ctx.random.next_float() < self.chance {
                 let origin = ctx.origin;
                 let vegetation_p = if self.waterlogged {
@@ -203,6 +163,6 @@ impl Feature for VegetationPatchFeature {
                 }
             }
         }
-        Ok(surface.len != 0)
+        Ok(!surface.is_empty())
     }
 }
