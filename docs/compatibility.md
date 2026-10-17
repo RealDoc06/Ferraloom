@@ -120,6 +120,26 @@ The [current-engine item interchange](../compatibility/results/item-interchange.
 
 The eight selected item stacks cover water/swiftness, typed potion defaults, nested stacks, opaque custom data, fireworks and count mutation followed by reload. Two intermediate player saves and the two unchanged world-copy operations remain historical runtime witnesses; final source/reloaded player bytes and world manifests were independently checked. Container observations cover selected titles, lock controls, hand swaps, pending loot, deposits, double chests and clean restart; privacy observations have no raw chunk-packet check, and deposit prediction-hash tails were retained without decoding. Unsupported loaded predicates remain unverified, as do general item wire/gameplay and full-family compatibility; only Java used buffered chunk writes, Rust stayed unchanged, the existing native proof was reused without new test counts, and older failures and ledger statuses are unchanged.
 
+The separate [selected Jukebox campaign](../compatibility/results/jukeboxes-B-J.json)
+used engine `b8e01b4`, client `5bcd504` and the recorded B executable on
+`ferraloom-builder`. All 12 composites passed across Java source, Rust import,
+Rust reload and Java return: four clean boots, eight clean clients, 12 lifecycle
+checkpoints, two unchanged world-copy witnesses and 36 `play_record` events.
+All 22 song identities transfer; selected disc 11/Cat gameplay covers both hands
+and survival/creative. Only disc 11 reaches actual ticks 1440/1441, on Java source
+and Rust import.
+
+ROOT independently checked all 1,373 exported originals. Earlier mutable
+player/statistics references and whole-MCA hashes remain historical witnesses;
+retained chunk/entity payload decoding does not verify earlier whole-MCA bytes.
+Wire privacy checks decode block-entity projections; terrain/light contents are
+length-skipped. Registry/item associations and numeric Java prediction hashes
+retain the result index's limits. Java used buffered chunk writes, Rust stayed
+unchanged, and the prior B native and focused J Python proofs were reused without
+new test counts. The [failed combined B/B campaign](../compatibility/results/chat-horns-jukebox-B.json)
+and older Jukebox/regression records remain unchanged. No family, default-sync,
+crash-durability, plugin or REA claim follows.
+
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
 and Jukeboxes, imported game time, scheduled tick delays, and current-format

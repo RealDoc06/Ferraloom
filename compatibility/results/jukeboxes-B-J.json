@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "kind": "selected-jukebox-B-J-index",
+  "publication_status": "selected_original_summary",
+  "result": "passed",
+  "evidence_kind": "Public whitelist summary of ROOT-verified selected originals from a separate completed campaign; not a raw production report.",
+  "target": {
+    "version": "26.3",
+    "protocol": 777,
+    "data_version": 5023
+  },
+  "engine_source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "client_source_commit": "5bcd504abf710c1efb4635f6510fd391b05ba721",
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "job_id": "20261017T165454Z-f313a1aa",
+  "actual_execution_host": "ferraloom-builder",
+  "verification_host": "devbox",
+  "reference_profile": {
+    "name": "java-reference-buffered-chunk-writes-v1",
+    "java_reference_properties": {
+      "sync-chunk-writes": "false"
+    },
+    "rust_configuration": "unchanged",
+    "claim_scope": "Configured buffered Java reference only; no default-profile or crash-durability parity claim."
+  },
+  "reference_pins": {
+    "server_jar_sha256": "d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64",
+    "inner_jar_sha256": "a362163eec5d1612d520772bc16e5b39c09e3b234fdc045f56bf544284ee8ae6",
+    "java_executable_sha256": "7380ce48ed5013735d2c8414db54adb8f981e7933ff594bd36f3baccddaafba3"
+  },
+  "observations": {
+    "passing_composites": 12,
+    "server_boots": 4,
+    "clients": 8,
+    "lifecycle_checkpoints": 12,
+    "unchanged_world_copy_runtime_witnesses": 2,
+    "play_record": 36,
+    "raw_drop_recoveries_checked": 36,
+    "registry_observations": 8,
+    "clean_unforced_server_exits": 4,
+    "clean_unforced_client_exits": 8,
+    "runtime_errors": 0,
+    "cleanup_complete": true,
+    "provenance_checked_before": true,
+    "provenance_checked_after": true,
+    "counts_scope": "Original completed campaign counts. Export and offline verification added no server, client, runtime or test execution."
+  },
+  "boot_order": [
+    "java_source",
+    "rust_import",
+    "rust_reload",
+    "java_return"
+  ],
+  "all_four_boots_required": true,
+  "case_ids": [
+    "jukeboxes.registry_eight_connections",
+    "jukeboxes.java_prediction_acceptance",
+    "jukeboxes.builtin22_transfer",
+    "jukeboxes.selected_both_hands",
+    "jukeboxes.survival_creative",
+    "jukeboxes.level_events_owner_observer",
+    "jukeboxes.default_removal_opaque",
+    "jukeboxes.disc11_tick1441",
+    "jukeboxes.chunk_live_privacy",
+    "jukeboxes.record_elapsed_continuation",
+    "jukeboxes.rust_restart",
+    "jukeboxes.java_return"
+  ],
+  "selected_behavior": {
+    "songs": "All 22 effective builtin song identities transfer, with 21 nondefault patch references; default disc 11 elision and identifier aliases are the only item normalizations.",
+    "gameplay": "Selected disc 11 and Cat through both hands in survival and creative, owner plus one nearby observer, retained record and elapsed controls, Rust restart and Java return.",
+    "natural_duration": "Actual disc 11 elapsed 1440 then stopped state at tick 1441, with the record retained, only on Java source and Rust import. Omitted elapsed tags do not establish a saved finished-Long transfer.",
+    "prediction": "Actual predicted SWAP replies, authoritative reopen and same-stream statistics fences support acceptance inferentially; direct numeric Java hash output was not observed.",
+    "drops": "Each of 36 recoveries binds raw typed Item and geometry to signed UUID/live-nearest selection and the original successful pre-removal journal order. This is not an atomic runtime hook.",
+    "world_copies": "Two stopped whole-world copy maps matched as historical runtime witnesses. Final source files were rehashed; later destination files are not substituted for copy-time snapshots.",
+    "privacy": "Independent packet 6 and packet 46 block-entity projection checks, plus packet 47 level-event decoding. Packet 46 terrain and light contents are bounded and length-skipped, not semantically decoded."
+  },
+  "originals_verification": {
+    "performed_by": "ROOT",
+    "result": "selected_original_checks_passed",
+    "offline_verifier_exit_code": 0,
+    "private_proof_sha256": "cba08b940277dbf7b1bfcfe63bf789f6d8666e71140631e6fa719d19639569c4",
+    "safe_extraction_receipt_sha256": "d27b07ccba1c24a48576f1ffd39be9db6cc0c8d64477aaf15d8569566ba76fff",
+    "verifier_console_sha256": "bb39ee8d4110ac3d2589db2f77882803e11d577f713a738f6bd4c85bc55991a4",
+    "final_verifier_source_sha256": "752761320718b2b28a6e18610e7645b7e095fdd7ca32b1408e35b99df5ee54a0",
+    "original_files": 1373,
+    "original_regular_bytes": 2498951194,
+    "all_archive_members_and_extracted_originals_rehashed": true,
+    "required_policy_dependency_leaves_rehashed": 121,
+    "required_closure_dependency_leaves_rehashed": 84,
+    "missing_required_named_references": 0,
+    "source_binding": {
+      "client_commit_tracked_source_files_materialized_from_pinned_git_objects": 32,
+      "other_engine_build_inputs_identical_between_B_and_J": 2492,
+      "scope": "Listed J source uses pinned Git objects. Other required input leaves, the original B executable and retained raw sidecars were physically included and rehashed. The executable source association is supplied, not embedded in the binary."
+    },
+    "historical_reference_scope": {
+      "mutable_player_or_statistics_references": 340,
+      "earlier_whole_region_or_entity_file_references": 170,
+      "treatment": "Historical witnesses only. Current-path bytes never verify an earlier state. Same-dict retained chunk/entity payloads are independently decoded and typed-associated; this does not verify earlier whole-MCA bytes. Matching retained player/statistics sidecars may separately support their state."
+    },
+    "publication_policy": "Only this whitelist summary and documentation additions are public. Full proofs, reports, configurations, process data, streams, archives, worlds and player/entity data remain private.",
+    "wire_observations": {
+      "statistics_packet3_distinct_rows": 412,
+      "statistics_packet3_decode_operations": 2479,
+      "cooldown_packet22_rows": 0,
+      "cooldown_packet22_exercised": false,
+      "block_entity_packet6": 78,
+      "chunk_packet46": 492,
+      "level_event_packet47": 146,
+      "block_entity_packet6_engines": [
+        "rust_import",
+        "rust_reload"
+      ],
+      "scope": "Repeated decode operations are not unique packets or tests. Packet 6 appeared only on Rust boots; packet counts differ by engine and establish no wire parity. Packet 46 terrain/light contents were length-skipped."
+    },
+    "current_saved_structure_scope": "Current final player/chunk paths were structurally decoded, without typed state-equality acceptance. Saved player/statistics state checks use retained sidecars; earlier whole-MCA bytes remain unverified as labeled.",
+    "outside_sphere_scope": "No extra outside-sphere saved item entities occurred in this completed run. It does not exercise retention of an unrelated drop."
+  },
+  "private_evidence": {
+    "availability": "Digests identify retained private originals, not published raw artifacts.",
+    "archive_sha256": "84c0d1d67eddd0b365034dfbbbb6cbe168ee4914758295183b722d7380da7e54",
+    "index_sha256": "4102fd7c998b04a96dea6a05a4399455af9cdf46515ebf0ae5090692f087f6ca",
+    "report_sha256": "5c7868ec5c07747a2747b7aed51c22bd7fc5f78516b7139fe6d5c4c5deeea7f6",
+    "controller_summary_sha256": "641ad4cb98137dff0beaf33c8a5ca5d83cc199dbed2d516462767a2b212777f0",
+    "validation_sha256": "60a29873ef1f610a8e33168f25ad46bb0aa9c348dc3dde11b47f98bde1fab153",
+    "supervision_sha256": "f51b0ebb93c1cc3311b493df41eb7fb3d25014d8b3a5c62304b8eb2d9f4df01c",
+    "evidence_manifest_sha256": "9cdc5c767fb9a0487c1a958599378fa1ed94251f67df389948064aaeb359e321",
+    "builder_receipt_sha256": "c52896126dc1a09d3e23306e32805cc3efc218f4cd62e36615291b9d1c5925ec"
+  },
+  "reused_checks": {
+    "engine_native": {
+      "record": "compatibility/results/evidence/400878c17988cf45a6db0b20d1430155d9eb0c5b265e8f5aa2e331d9df436fb7.json",
+      "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+      "rust_tests": 1647,
+      "execution": "Original exact-B proof reused; no new native tests.",
+      "record_sha256": "400878c17988cf45a6db0b20d1430155d9eb0c5b265e8f5aa2e331d9df436fb7"
+    },
+    "client_focused": {
+      "source_commit": "5bcd504abf710c1efb4635f6510fd391b05ba721",
+      "python_tests": 20,
+      "job_id": "20261017T162616Z-6dc064eb",
+      "execution": "Original focused J Python proof reused; no full J Python, Node, strict TypeScript or native pass is claimed."
+    },
+    "new_runtime_or_tests_added_by_offline_verification": false
+  },
+  "historical_records": {
+    "failed_combined_campaign": "compatibility/results/chat-horns-jukebox-B.json",
+    "earlier_jukebox_campaign": "compatibility/results/jukeboxes.json",
+    "earlier_regression_attempt": "compatibility/results/regression-checks.json",
+    "status": "All retained unchanged. The failed combined B/B jukebox import remains failed; this independent B/J success does not reverse it."
+  },
+  "limitations": [
+    "Only the selected campaign is accepted. No feature-family, full-parity, default-sync, crash-durability, REA or ledger promotion.",
+    "Registry and item projections retain original typed-client/raw-stream association limits; no full registry or item wire decoder claim.",
+    "All 22 identities transfer, but only disc 11 and Cat have selected gameplay and only disc 11 reaches its natural duration on two boots. Rendering and all-song natural duration remain open.",
+    "Unknown, custom or overridden songs and direct holders are unsupported. Opaque custom-data controls do not establish predicted opaque hash behavior.",
+    "Advancement criteria, sculk/vibration, missing-block-entity insertion, elapsed-only reentrant audio timing and plugin parity remain open.",
+    "Recipients cover the owner and one nearby observer in the current overworld only; radius boundaries and other-dimension exclusion remain unverified.",
+    "Snapshots deliberately dirty the loaded chunk with a normal stone/air round trip before flushing. Natural clean-chunk playback/autosave timing is not established.",
+    "Earlier mutable save references and whole-MCA hashes remain historical as labeled; current bytes never substitute for those earlier observations.",
+    "Rust commits elapsed+1 before guard-free notifications, while vanilla periodic notifications precede increment. This observable timing difference remains open.",
+    "Cooldown packet 22 was absent and not exercised. Packet 6 appeared only on the Rust boots; no packet-count or wire parity is inferred."
+  ],
+  "feature_ledger": {
+    "families": 200,
+    "partial": 27,
+    "unverified": 173,
+    "verified": 0,
+    "changed_by_this_record": false
+  }
+}
