@@ -42,11 +42,11 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.chunk.custom-spawner-phase | Run custom spawners after random ticks when mob spawning is enabled | `ServerChunkCache#tickChunks; ServerLevel#tickCustomSpawners` | | - | todo |
 | ticking.chunk.broadcast-phase | Broadcast changed chunks after simulation, including when simulation is frozen | `ServerChunkCache#tickChunks; ServerChunkCache#broadcastChangedChunks` | | - | todo |
 | ticking.chunk.map-unload-phase | Tick chunk map and unload work, then clear lookup cache | `ServerChunkCache#tick` | | - | todo |
-| ticking.scheduled.order | Order each chunk tick queue by trigger time, priority and sub-tick order | `ScheduledTick#DRAIN_ORDER; LevelChunkTicks` | | - | todo |
-| ticking.scheduled.deduplicate | Deduplicate scheduled ticks for the same position and type | `LevelChunkTicks#schedule` | | - | todo |
-| ticking.scheduled.loaded-only | Run ticks only for eligible ticking chunks and defer unloaded containers | `LevelTicks#tick; LevelTicks#sortContainersToTick` | | - | todo |
+| ticking.scheduled.order | Order each chunk tick queue by trigger time, priority and sub-tick order | `ScheduledTick#DRAIN_ORDER; LevelChunkTicks` | `ferraloom-game: ticks::tests::vanilla_container_drain_and_deduplication` | pass | todo |
+| ticking.scheduled.deduplicate | Deduplicate scheduled ticks for the same position and type | `LevelChunkTicks#schedule` | `ferraloom-game: ticks::tests::vanilla_container_drain_and_deduplication` | pass | todo |
+| ticking.scheduled.loaded-only | Run ticks only for eligible ticking chunks and defer unloaded containers | `LevelTicks#tick; LevelTicks#sortContainersToTick` | `ferraloom-game: ticks::tests::ineligible_containers_keep_ticks_and_unregistered_chunks_reject_them` | - | todo |
 | ticking.scheduled.stale-type | Skip a scheduled tick if the block or fluid at its position no longer matches | `ServerLevel#tickBlock; ServerLevel#tickFluid` | | - | todo |
-| ticking.scheduled.persist-delay | Preserve scheduled delays and relative ordering across chunk unload and reload | `LevelChunkTicks#pack; LevelChunkTicks#unpack; SavedTick` | | - | todo |
+| ticking.scheduled.persist-delay | Preserve scheduled delays and relative ordering across chunk unload and reload | `LevelChunkTicks#pack; LevelChunkTicks#unpack; SavedTick` | `ferraloom-game: ticks::tests::vanilla_saved_ticks_pack_and_negative_unpack_order` | pass | todo |
 | ticking.scheduled.copy-clear | Copy and clear pending ticks with block-area clone operations and preserve ordering | `LevelTicks#copyAreaFrom; LevelTicks#clearArea` | | - | todo |
 | ticking.block-events.queue | Deduplicate and process queued block events, including events queued by another event | `ServerLevel#blockEvent; ServerLevel#runBlockEvents` | | - | todo |
 | ticking.block-events.retry | Defer events outside ticking chunks and reject events whose block has changed | `ServerLevel#runBlockEvents; ServerLevel#doBlockEvent` | | - | todo |
@@ -61,7 +61,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.vibration.travel | Deliver vibrations after floored travel distance and restore travel state after reload | `VibrationSystem.Ticker#tick; VibrationSystem.Data` | | - | todo |
 | ticking.vibration.adjacent-chunks | Defer delivery when a listener requires surrounding chunks to be ticking | `VibrationSystem.Ticker#areAdjacentChunksTicking` | | - | todo |
 | ticking.vibration.signal-distance | Compute listener redstone strength from distance with minimum power one | `VibrationSystem#getRedstoneStrengthForDistance` | | - | todo |
-| ticking.scheduled.cross-chunk-drain | Merge due chunk queues by priority and sub-tick order, excluding trigger time from the cross-chunk comparator | `ScheduledTick#INTRA_TICK_DRAIN_ORDER; LevelTicks#drainFromCurrentContainer` | | - | todo |
+| ticking.scheduled.cross-chunk-drain | Merge due chunk queues by priority and sub-tick order, excluding trigger time from the cross-chunk comparator | `ScheduledTick#INTRA_TICK_DRAIN_ORDER; LevelTicks#drainFromCurrentContainer` | `ferraloom-game: ticks::tests::vanilla_container_drain_and_deduplication` | pass | todo |
 | ticking.game-event.block-activate | `minecraft:block_activate` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
 | ticking.game-event.block-attach | `minecraft:block_attach` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
 | ticking.game-event.block-change | `minecraft:block_change` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
@@ -125,3 +125,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.game-event.unequip | `minecraft:unequip` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
 | ticking.position-source-type.block | `minecraft:block` (position source type) | `net.minecraft.world.level.gameevent.PositionSourceType#register` | | - | todo |
 | ticking.position-source-type.entity | `minecraft:entity` (position source type) | `net.minecraft.world.level.gameevent.PositionSourceType#register` | | - | todo |
+
+| ticking.scheduled.reentrant-collection | Collect before execution and expose only remaining ticks through willTickThisTick | `LevelTicks#collectTicks; LevelTicks#willTickThisTick` | `ferraloom-game: ticks::tests::vanilla_reentrant_collection_and_will_tick` | pass | todo |

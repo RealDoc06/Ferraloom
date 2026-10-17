@@ -1,0 +1,4 @@
+container-order	C,A,B
+reentrant-collection	A:true,B:false,C
+saved-pack	A:5:0,B:2:-1
+saved-unpack	B:12:-1,A:15:-2
