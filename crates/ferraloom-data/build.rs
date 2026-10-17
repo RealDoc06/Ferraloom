@@ -487,6 +487,63 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
     }
 }
 
+// Java class/interface identity is generated separately from state properties.
+fn block_classes(out: &mut String, data: &Value, block_count: usize) {
+    let classes = data["classes"].as_array().unwrap();
+    let blocks = data["blocks"].as_array().unwrap();
+    assert_eq!(blocks.len(), block_count);
+    let names = classes
+        .iter()
+        .map(|c| string(&c["name"]))
+        .collect::<Vec<_>>();
+    let variants = names
+        .iter()
+        .map(|name| pascal(name.rsplit('.').next().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        variants.iter().collect::<BTreeSet<_>>().len(),
+        variants.len(),
+        "class name collision"
+    );
+    out.push_str("/// Vanilla concrete block classes, superclasses and implemented interfaces.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]\n#[repr(u16)]\npub enum BlockClass {\n");
+    for variant in &variants {
+        writeln!(out, "{variant},").unwrap();
+    }
+    out.push_str("}\nimpl BlockClass {\npub const ALL: &[Self] = &[");
+    for variant in &variants {
+        write!(out, "Self::{variant},").unwrap();
+    }
+    out.push_str("];\npub const fn java_name(self) -> &'static str { BLOCK_CLASS_NAMES[self as usize] }\n}\n");
+    writeln!(
+        out,
+        "const BLOCK_CLASS_NAMES: [&str; {}] = {names:?};",
+        names.len()
+    )
+    .unwrap();
+    write!(out, "const BLOCK_CLASSES: [BlockClass; {block_count}] = [").unwrap();
+    for class in blocks {
+        write!(out, "BlockClass::{},", variants[number(class) as usize]).unwrap();
+    }
+    out.push_str("];\n");
+    let words = classes.len().div_ceil(64);
+    writeln!(
+        out,
+        "const BLOCK_CLASS_INSTANCES: [[u64; {words}]; {}] = [",
+        classes.len()
+    )
+    .unwrap();
+    for class in classes {
+        let mut bits = vec![0u64; words];
+        for parent in class["instances"].as_array().unwrap() {
+            let index = number(parent) as usize;
+            assert!(index < classes.len());
+            bits[index / 64] |= 1u64 << (index % 64);
+        }
+        writeln!(out, "{bits:?},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -512,6 +569,11 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    block_classes(
+        &mut out,
+        &load(root, "block_classes"),
+        block_properties["blocks"].as_array().unwrap().len(),
+    );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
     blocks(&mut out, &block_report, &block_properties, &props);

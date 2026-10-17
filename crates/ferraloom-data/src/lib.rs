@@ -377,3 +377,16 @@ impl BlockState {
         Ok(Self(self.0 - old * property.stride + new * property.stride))
     }
 }
+
+impl Block {
+    /// Concrete vanilla Java class, extracted from the registered block object.
+    pub const fn class(self) -> BlockClass {
+        BLOCK_CLASSES[self.protocol_id() as usize]
+    }
+
+    /// Java instanceof, including transitive superclasses and interfaces.
+    pub const fn is_instance_of(self, class: BlockClass) -> bool {
+        let index = class as usize;
+        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
+    }
+}

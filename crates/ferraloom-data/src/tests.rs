@@ -339,3 +339,40 @@ fn every_state_rotation_and_mirror_matches_vanilla_registry() {
         assert_eq!(state.mirror(Mirror::None), state);
     }
 }
+
+#[test]
+fn block_class_hierarchy_matches_extracted_vanilla_classes() {
+    use crate::{Block, BlockClass};
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/generated/block_classes.json")).unwrap();
+    for (&block, concrete) in crate::registries::block::ALL
+        .iter()
+        .zip(data["blocks"].as_array().unwrap())
+    {
+        let index = concrete.as_u64().unwrap() as usize;
+        assert_eq!(
+            block.class().java_name(),
+            data["classes"][index]["name"].as_str().unwrap()
+        );
+        for (class_index, &class) in BlockClass::ALL.iter().enumerate() {
+            assert_eq!(
+                block.is_instance_of(class),
+                data["classes"][index]["instances"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|id| id.as_u64().unwrap() as usize == class_index),
+                "{} {class:?}",
+                block.name()
+            );
+        }
+    }
+    assert!(Block::TALL_SEAGRASS.is_instance_of(BlockClass::DoublePlantBlock));
+    assert!(Block::PALE_MOSS_CARPET.is_instance_of(BlockClass::MossyCarpetBlock));
+    assert!(Block::OAK_STAIRS.is_instance_of(BlockClass::SimpleWaterloggedBlock));
+    assert!(!Block::STONE.is_instance_of(BlockClass::DoublePlantBlock));
+    const CONCRETE: BlockClass = Block::STONE.class();
+    const IS_BLOCK: bool = Block::STONE.is_instance_of(BlockClass::Block);
+    assert_eq!(CONCRETE, BlockClass::Block);
+    assert!(std::hint::black_box(IS_BLOCK));
+}
