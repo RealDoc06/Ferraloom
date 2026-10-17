@@ -5,18 +5,30 @@ pub trait Message: fmt::Debug + Send + Sync {
     fn text(&self) -> &str;
 }
 impl Message for String {
-    fn text(&self) -> &str { self }
+    fn text(&self) -> &str {
+        self
+    }
 }
 pub type MessageRef = Arc<dyn Message>;
 
 /// Identifies the built-in exception independently of its rendered message.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExceptionKind {
-    ExpectedNumber(&'static str), InvalidNumber(&'static str),
-    TooLow(&'static str), TooHigh(&'static str), LiteralIncorrect,
-    ExpectedStartOfQuote, ExpectedEndOfQuote, InvalidEscape,
-    InvalidBool, ExpectedBool, ExpectedSymbol,
-    UnknownCommand, UnknownArgument, ExpectedArgumentSeparator, ParseException,
+    ExpectedNumber(&'static str),
+    InvalidNumber(&'static str),
+    TooLow(&'static str),
+    TooHigh(&'static str),
+    LiteralIncorrect,
+    ExpectedStartOfQuote,
+    ExpectedEndOfQuote,
+    InvalidEscape,
+    InvalidBool,
+    ExpectedBool,
+    ExpectedSymbol,
+    UnknownCommand,
+    UnknownArgument,
+    ExpectedArgumentSeparator,
+    ParseException,
     Custom(String),
 }
 
@@ -43,7 +55,9 @@ impl BuiltInExceptionProvider for BuiltInExceptions {
             ExpectedSymbol => format!("Expected '{}'", a[0]),
             UnknownCommand => "Unknown command".into(),
             UnknownArgument => "Incorrect argument for command".into(),
-            ExpectedArgumentSeparator => "Expected whitespace to end one argument, but found trailing data".into(),
+            ExpectedArgumentSeparator => {
+                "Expected whitespace to end one argument, but found trailing data".into()
+            }
             ParseException => format!("Could not parse command: {}", a[0]),
             Custom(message) => message.clone(),
         })
@@ -60,16 +74,26 @@ pub struct CommandSyntaxException {
 }
 impl CommandSyntaxException {
     pub fn new(kind: ExceptionKind, message: MessageRef) -> Self {
-        Self { kind, raw_message: message, input: None, cursor: None }
+        Self {
+            kind,
+            raw_message: message,
+            input: None,
+            cursor: None,
+        }
     }
     pub fn with_context(mut self, input: impl Into<String>, cursor: usize) -> Self {
-        self.input = Some(input.into()); self.cursor = Some(cursor); self
+        self.input = Some(input.into());
+        self.cursor = Some(cursor);
+        self
     }
     pub fn context(&self) -> Option<String> {
         let input: Vec<u16> = self.input.as_ref()?.encode_utf16().collect();
         let cursor = self.cursor?.min(input.len());
-        Some(format!("{}{}<--[HERE]", if cursor > 10 { "..." } else { "" },
-            String::from_utf16_lossy(&input[cursor.saturating_sub(10)..cursor])))
+        Some(format!(
+            "{}{}<--[HERE]",
+            if cursor > 10 { "..." } else { "" },
+            String::from_utf16_lossy(&input[cursor.saturating_sub(10)..cursor])
+        ))
     }
 }
 impl fmt::Display for CommandSyntaxException {
@@ -90,17 +114,30 @@ pub struct CommandExceptionType {
     message: Arc<dyn Fn(&[String]) -> MessageRef + Send + Sync>,
 }
 impl CommandExceptionType {
-    pub fn new(kind: ExceptionKind, message: impl Fn(&[String]) -> MessageRef + Send + Sync + 'static) -> Self {
-        Self { kind, message: Arc::new(message) }
+    pub fn new(
+        kind: ExceptionKind,
+        message: impl Fn(&[String]) -> MessageRef + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            kind,
+            message: Arc::new(message),
+        }
     }
     pub fn simple(message: impl Into<String>) -> Self {
         let message = message.into();
-        Self::new(ExceptionKind::Custom(message.clone()), move |_| Arc::new(message.clone()))
+        Self::new(ExceptionKind::Custom(message.clone()), move |_| {
+            Arc::new(message.clone())
+        })
     }
     pub fn create(&self, arguments: &[String]) -> CommandSyntaxException {
         CommandSyntaxException::new(self.kind.clone(), (self.message)(arguments))
     }
-    pub fn create_with_context(&self, reader: &crate::StringReader, arguments: &[String]) -> CommandSyntaxException {
-        self.create(arguments).with_context(reader.string(), reader.cursor())
+    pub fn create_with_context(
+        &self,
+        reader: &crate::StringReader,
+        arguments: &[String],
+    ) -> CommandSyntaxException {
+        self.create(arguments)
+            .with_context(reader.string(), reader.cursor())
     }
 }
