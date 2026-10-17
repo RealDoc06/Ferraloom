@@ -31,10 +31,10 @@ components! {
     Damage(VarInt) => DAMAGE, "damage",
     Unbreakable(Unit) => UNBREAKABLE, "unbreakable",
     UseEffects(UseEffects) => USE_EFFECTS, "use_effects",
-    CustomName(Component) => CUSTOM_NAME, "custom_name",
+    CustomName(Box<Component>) => CUSTOM_NAME, "custom_name",
     MinimumAttackCharge(f32) => MINIMUM_ATTACK_CHARGE, "minimum_attack_charge",
     DamageType(DamageType) => DAMAGE_TYPE, "damage_type",
-    ItemName(Component) => ITEM_NAME, "item_name",
+    ItemName(Box<Component>) => ITEM_NAME, "item_name",
     ItemModel(Identifier) => ITEM_MODEL, "item_model",
     Lore(BoundedList<Component, 256>) => LORE, "lore",
     Rarity(Rarity) => RARITY, "rarity",
@@ -143,8 +143,8 @@ components! {
     SheepColor(DyeColor) => SHEEP_COLOR, "sheep/color",
     ShulkerColor(DyeColor) => SHULKER_COLOR, "shulker/color",
     ProvidesPotteryPattern(DecoratedPotPattern) => PROVIDES_POTTERY_PATTERN, "provides_pottery_pattern",
-    SignTextFront(SignText) => SIGN_TEXT_FRONT, "sign_text_front",
-    SignTextBack(SignText) => SIGN_TEXT_BACK, "sign_text_back",
+    SignTextFront(Box<SignText>) => SIGN_TEXT_FRONT, "sign_text_front",
+    SignTextBack(Box<SignText>) => SIGN_TEXT_BACK, "sign_text_back",
     Waxed(Unit) => WAXED, "waxed",
     CushionColor(DyeColor) => CUSHION_COLOR, "cushion/color",
 }
@@ -171,9 +171,11 @@ impl DataComponentPatch {
             let key = registry(component_type.name());
             let value = if delimited {
                 let bytes = r.byte_array(i32::MAX as usize)?;
-                let mut value_reader = Reader::with_context(bytes, r.context()?);
-                let value = DataComponent::decode_value(&key, &mut value_reader)?;
-                value
+                let mut value_reader = match r.context() {
+                    Ok(context) => Reader::with_context(bytes, context),
+                    Err(_) => Reader::new(bytes),
+                };
+                DataComponent::decode_value(&key, &mut value_reader)?
             } else {
                 DataComponent::decode_value(&key, r)?
             };
@@ -190,7 +192,10 @@ impl DataComponentPatch {
         for value in &self.added {
             w.write(&value.component_type())?;
             if delimited {
-                let mut value_writer = Writer::with_context(w.context()?);
+                let mut value_writer = match w.context() {
+                    Ok(context) => Writer::with_context(context),
+                    Err(_) => Writer::new(),
+                };
                 value.encode_value(&mut value_writer)?;
                 w.byte_array(value_writer.as_slice(), i32::MAX as usize)?;
             } else {
@@ -235,5 +240,21 @@ impl Wire for DataComponent {
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         w.write(&self.component_type())?;
         self.encode_value(w)
+    }
+}
+impl DataComponentPatch {
+    /// Port of PatchedDataComponentMap#fromPatch: discard redundant sets and absent removals.
+    pub fn sanitize(&mut self, prototype: &DataComponentMap) {
+        self.added
+            .retain(|v| prototype.get(v.component_type()) != Some(v));
+        self.removed.retain(|id| prototype.get(*id).is_some());
+    }
+}
+impl DataComponent {
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::CreativeSlotLock(_) | Self::AdditionalTradeCost(_) | Self::MapPostProcessing(_)
+        )
     }
 }

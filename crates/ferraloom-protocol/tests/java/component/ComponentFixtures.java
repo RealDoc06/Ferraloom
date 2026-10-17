@@ -23,6 +23,7 @@ public final class ComponentFixtures {
     static HolderLookup.Provider lookup;
     static JsonObject fixtures = new JsonObject();
     static JsonArray components = new JsonArray();
+    static JsonArray validatedStacks = new JsonArray();
     static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     static <T> String bytes(StreamCodec<? super RegistryFriendlyByteBuf,T> codec, T value) {
         var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
@@ -51,6 +52,23 @@ public final class ComponentFixtures {
         fixtures.addProperty(name+"_untrusted",bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,value));
         HashedPatchMap.HashGenerator hasher = c -> c.encodeValue(lookup.createSerializationContext(HashOps.CRC32C_INSTANCE)).getOrThrow().asInt();
         fixtures.addProperty(name+"_hashed",bytes(HashedStack.STREAM_CODEC,HashedStack.create(value,hasher)));
+    }
+    static void validatedStack(String name, ItemStack value) {
+        String input = bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,value);
+        var buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(HexFormat.of().parseHex(input)),access);
+        var out = new JsonObject(); out.addProperty("name",name); out.addProperty("bytes",input);
+        try {
+            var decoded = ItemStack.validatedStreamCodec(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC).decode(buf);
+            out.addProperty("accepted",true);
+            if(buf.isReadable()) throw new AssertionError("Trailing stack bytes: "+name);
+            if(!bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,decoded).equals(input)) throw new AssertionError("Stack changed: "+name);
+        } catch(io.netty.handler.codec.DecoderException e) {
+            out.addProperty("accepted",false);
+        } finally { buf.release(); }
+        validatedStacks.add(out);
+    }
+    static <T> ItemStack withComponent(DataComponentType<T> type,T value) {
+        var stack = new ItemStack(Items.STONE); stack.set(type,value); return stack;
     }
     @SuppressWarnings({"unchecked", "rawtypes"})
     static void sample(String key,String json) {
@@ -106,6 +124,25 @@ public final class ComponentFixtures {
         var nested = new ItemStack(Items.CHEST);
         nested.set(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(sword,ItemStack.EMPTY,new ItemStack(Items.APPLE,2))));
         stack("nested",nested);
+        validatedStack("empty",ItemStack.EMPTY);
+        validatedStack("count_99",new ItemStack(Items.STONE,99));
+        validatedStack("count_100",new ItemStack(Items.STONE,100));
+        validatedStack("custom_data",withComponent(DataComponents.CUSTOM_DATA,CustomData.of(custom)));
+        validatedStack("container",withComponent(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(new ItemStack(Items.APPLE,2)))));
+        validatedStack("nested_count_100",withComponent(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(new ItemStack(Items.APPLE,100)))));
+        validatedStack("max_stack_size_100",withComponent(DataComponents.MAX_STACK_SIZE,100));
+        validatedStack("negative_food",withComponent(DataComponents.FOOD,new net.minecraft.world.food.FoodProperties(-1,0.5f,false)));
+        validatedStack("unrestricted_saturation",withComponent(DataComponents.FOOD,new net.minecraft.world.food.FoodProperties(0,Float.NaN,false)));
+        validatedStack("negative_weapon_damage",withComponent(DataComponents.WEAPON,new Weapon(-1,0.0f)));
+        validatedStack("attack_reach_65",withComponent(DataComponents.ATTACK_RANGE,new AttackRange(0,65,0,5,0.3f,1)));
+        validatedStack("negative_zero_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,-0.0f));
+        validatedStack("nan_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,Float.NaN));
+        validatedStack("infinite_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,Float.POSITIVE_INFINITY));
+        validatedStack("zero_tool_speed",withComponent(DataComponents.TOOL,new Tool(List.of(new Tool.Rule(HolderSet.direct( net.minecraft.world.level.block.Blocks.STONE.builtInRegistryHolder()),Optional.of(0.0f),Optional.empty())),1.0f,1,true)));
+        validatedStack("invalid_profile_name",withComponent(DataComponents.PROFILE,ResolvableProfile.createUnresolved("bad name")));
+        validatedStack("fireworks_256",withComponent(DataComponents.FIREWORKS,new Fireworks(256,List.of())));
+        validatedStack("fireworks_negative",withComponent(DataComponents.FIREWORKS,new Fireworks(-1,List.of())));
+        fixtures.add("validated_stacks",validatedStacks);
         var profile = ResolvableProfile.createResolved(new com.mojang.authlib.GameProfile(UUID.fromString("01234567-89ab-cdef-fedc-ba9876543210"),"Doc"));
         component("profile",new TypedDataComponent<>(DataComponents.PROFILE,profile));
         sample("unbreakable","{}");
@@ -170,6 +207,12 @@ public final class ComponentFixtures {
         sample("map_decorations","{\"test\":{\"type\":\"minecraft:target_x\",\"x\":10.5,\"z\":-20.0,\"rotation\":45.5}}");
         sample("can_place_on","{\"blocks\":[\"minecraft:oak_log\"],\"state\":{\"axis\":\"y\"},\"nbt\":\"{id:\\\"minecraft:chest\\\",foo:3}\"}");
         sample("lock","{\"components\":{\"minecraft:custom_name\":{\"text\":\"key\",\"bold\":true}},\"predicates\":{\"minecraft:damage\":{\"damage\":{\"min\":1}}}}");
+        sample("break_sound","{\"sound_id\":\"minecraft:test\",\"range\":16.0}");
+        sample("provides_trim_material","{\"palette_id\":\"minecraft:test\",\"description\":{\"text\":\"Metal\",\"bold\":true}}");
+        sample("instrument","{\"sound_event\":{\"sound_id\":\"minecraft:test\"},\"use_duration\":2.0,\"range\":8.0,\"durability_damage\":2,\"description\":{\"text\":\"Horn\",\"italic\":true}}");
+        sample("banner_patterns","[{\"pattern\":{\"asset_id\":\"minecraft:test\",\"translation_key\":\"banner.test\"},\"color\":\"red\"}]");
+        sample("fireworks","{\"flight_duration\":255}");
+        sample("potion_contents","{\"custom_effects\":[{\"id\":\"minecraft:poison\",\"amplifier\":255,\"duration\":10}]}");
         fixtures.add("components",components);
         var serializers = new JsonObject();
         for (var field:EntityDataSerializers.class.getFields()) if(field.getType()==EntityDataSerializer.class) serializers.addProperty(field.getName(),EntityDataSerializers.getSerializedId((EntityDataSerializer<?>)field.get(null)));
@@ -231,6 +274,14 @@ public final class ComponentFixtures {
         metadata(allMetadata,"HUMANOID_ARM",net.minecraft.world.entity.HumanoidArm.LEFT);
         metadata(allMetadata,"DYE_COLOR",DyeColor.CYAN);
         fixtures.addProperty("all_entity_data",bytes(net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.STREAM_CODEC,new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(42,allMetadata)));
+        var rawStack = new RegistryFriendlyByteBuf(Unpooled.buffer(),access);
+        rawStack.writeVarInt(1); Item.STREAM_CODEC.encode(rawStack,Items.DIAMOND_SWORD.builtInRegistryHolder());
+        DataComponentPatch.STREAM_CODEC.encode(rawStack,DataComponentPatch.builder().set(DataComponents.DAMAGE,0).remove(DataComponents.PROFILE).build());
+        byte[] redundant = new byte[rawStack.readableBytes()];rawStack.getBytes(rawStack.readerIndex(),redundant);
+        fixtures.addProperty("redundant_stack_input",HexFormat.of().formatHex(redundant));
+        fixtures.addProperty("redundant_stack_output",bytes(ItemStack.OPTIONAL_STREAM_CODEC,ItemStack.OPTIONAL_STREAM_CODEC.decode(rawStack)));
+        rawStack.release();
+        fixtures.addProperty("scalar_patch_untrusted",bytes(DataComponentPatch.DELIMITED_STREAM_CODEC,DataComponentPatch.builder().set(DataComponents.DAMAGE,7).build()));
         var hashOps = HashOps.CRC32C_INSTANCE;
         var hashes = new JsonArray();
         for(var value:List.of(hashOps.empty(),hashOps.createBoolean(false),hashOps.createBoolean(true),hashOps.createByte((byte)-5),hashOps.createShort((short)1000),hashOps.createInt(-300),hashOps.createLong(12345678901234L),hashOps.createFloat(1.25f),hashOps.createDouble(-1.75),hashOps.createString("hello 🌍"),hashOps.createByteList(java.nio.ByteBuffer.wrap(new byte[]{-1,2,3})),hashOps.createIntList(java.util.stream.IntStream.of(-1,2,300)),hashOps.createLongList(java.util.stream.LongStream.of(-1,2,300)),hashOps.createList(java.util.stream.Stream.of(hashOps.createInt(1),hashOps.createInt(2))),hashOps.createMap(java.util.stream.Stream.of(com.mojang.datafixers.util.Pair.of(hashOps.createString("x"),hashOps.createFloat(1.5f)),com.mojang.datafixers.util.Pair.of(hashOps.createString("y"),hashOps.createBoolean(true)))))) hashes.add(value.asInt());

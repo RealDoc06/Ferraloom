@@ -111,7 +111,7 @@ fn assert_blocks(chunk: &GeneratedChunk, expected: &Value, description: &str) {
             }
         }
     }
-    for ([x, z], runs) in [[0, 0], [7, 11], [15, 15]]
+    for ([x, z], runs) in [[0, 0], [7, 11], [15, 15], [8, 8]]
         .into_iter()
         .zip(expected["columns"].as_array().unwrap())
     {
@@ -140,6 +140,24 @@ fn assert_blocks(chunk: &GeneratedChunk, expected: &Value, description: &str) {
         format!("{:x}", hash.finalize()),
         expected["hash"].as_str().unwrap(),
         "{description} full chunk"
+    );
+    let mut post = Sha256::new();
+    for section in 0..chunk.sections.len() {
+        let entries = chunk
+            .post_processing
+            .iter()
+            .filter(|p| ((p[1] - chunk.min_y) / 16) as usize == section)
+            .collect::<Vec<_>>();
+        post.update((entries.len() as u32).to_be_bytes());
+        for p in entries {
+            let packed = ((p[0] & 15) | ((p[1] & 15) << 4) | ((p[2] & 15) << 8)) as u16;
+            post.update(packed.to_be_bytes());
+        }
+    }
+    assert_eq!(
+        format!("{:x}", post.finalize()),
+        expected["post_processing"].as_str().unwrap(),
+        "{description} fluid post-processing order"
     );
     for (actual, field) in [
         (&chunk.world_surface, "world_surface"),

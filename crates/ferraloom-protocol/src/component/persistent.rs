@@ -26,7 +26,7 @@ impl PersistentValue {
     pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
         Ok(match self {
             Self::Nbt(v) => return encode_nbt(v, ops),
-            Self::Component(v) => return v.encode_ops(ops),
+            Self::Component(v) => return v.as_ref().encode_ops(ops),
             Self::Boolean(v) => ops.create_boolean(*v),
             Self::String(v) => ops.create_string_utf16(v.as_utf16()),
             Self::Int(v) => ops.create_int(*v),
@@ -98,13 +98,32 @@ pub(super) fn entry<T: Persistent + PartialEq>(
     }
     Ok(())
 }
+// ExtraCodecs uses Float.compareTo: -0.0 sorts below +0.0, and NaN above finite values.
+fn float_range(value: f32, min: f32, max: f32) -> bool {
+    value.total_cmp(&min).is_ge() && value.total_cmp(&max).is_le()
+}
+fn nonnegative_float(value: &f32) -> bool {
+    float_range(*value, 0.0, f32::MAX)
+}
+fn positive_float(value: &f32) -> bool {
+    value.total_cmp(&0.0).is_gt() && value.total_cmp(&f32::MAX).is_le()
+}
+fn player_name(value: &str) -> bool {
+    value.encode_utf16().count() <= 16 && value.bytes().all(|v| v > 32 && v < 127)
+}
 macro_rules! persistent_record {
-    ($ty:ident { $($field:ident => $name:literal [$default:expr]),* $(,)? }) => {
+    ($ty:ident { $($field:ident => $name:literal [$default:expr $(; $check:expr)?]),* $(,)? }) => {
         impl Persistent for $ty {
             fn from_json(value:&Json)->Result<Self> { object(value)?; Ok(Self { $($field:field(value,$name,$default)?),* }) }
             fn from_nbt(value:&Tag)->Result<Self>{if value.as_compound().is_none(){return Err(invalid("component object"));}Ok(Self{$($field:field_nbt(value,$name,$default)?),*})}
             fn to_persistent(&self)->Result<PersistentValue> {
-                let mut entries=Vec::new(); $(entry(&mut entries,$name,&self.$field,$default)?;)* Ok(PersistentValue::Map(entries))
+                let mut entries=Vec::new();
+                $(let default = $default;
+                $(if !($check)(&self.$field) {
+                    return Err(invalid($name));
+                })?
+                entry(&mut entries,$name,&self.$field,default)?;)*
+                Ok(PersistentValue::Map(entries))
             }
         }
     };
@@ -231,6 +250,9 @@ impl<const MAX: usize> Persistent for BoundedString<MAX> {
         Ok(Self(value))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if self.0.encode_utf16().count() > MAX {
+            return Err(invalid("string length"));
+        }
         self.0.to_persistent()
     }
 }
@@ -360,6 +382,9 @@ impl Persistent for CustomData {
         Ok(Self(json_tag(v)?))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if self.0.as_compound().is_none() {
+            return Err(invalid("compound tag"));
+        }
         self.0.to_persistent()
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
@@ -615,7 +640,14 @@ impl Persistent for Sound {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(SoundEvent::from_json(v)?)
+            Holder::Direct(Box::new(SoundEvent::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(SoundEvent::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -630,7 +662,14 @@ impl Persistent for TrimMaterialHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimMaterial::from_json(v)?)
+            Holder::Direct(Box::new(TrimMaterial::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimMaterial::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -645,7 +684,14 @@ impl Persistent for TrimPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimPattern::from_json(v)?)
+            Holder::Direct(Box::new(TrimPattern::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimPattern::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -660,7 +706,14 @@ impl Persistent for InstrumentHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(Instrument::from_json(v)?)
+            Holder::Direct(Box::new(Instrument::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(Instrument::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -687,7 +740,14 @@ impl Persistent for BannerPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(BannerPattern::from_json(v)?)
+            Holder::Direct(Box::new(BannerPattern::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(BannerPattern::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1154,41 +1214,42 @@ pub(super) fn set_value(v: &HolderSet) -> Result<PersistentValue> {
 persistent_record!(SoundEvent {location => "sound_id" [None],fixed_range => "range" [Some(None)]});
 persistent_record!(TrimMaterial {palette_id => "palette_id" [None],description => "description" [None]});
 persistent_record!(TrimPattern {asset_id => "asset_id" [None],description => "description" [None],decal => "decal" [Some(false)]});
-persistent_record!(Instrument {sound_event => "sound_event" [None],use_duration => "use_duration" [None],range => "range" [None],durability_damage => "durability_damage" [Some(VarInt(0))],description => "description" [None]});
-persistent_record!(JukeboxSong {sound_event => "sound_event" [None],description => "description" [None],length_in_seconds => "length_in_seconds" [None],comparator_output => "comparator_output" [None]});
+persistent_record!(Instrument {sound_event => "sound_event" [None],use_duration => "use_duration" [None; nonnegative_float],range => "range" [None; positive_float],durability_damage => "durability_damage" [Some(VarInt(0)); |v: &VarInt| v.0 >= 0],description => "description" [None]});
+persistent_record!(JukeboxSong {sound_event => "sound_event" [None],description => "description" [None],length_in_seconds => "length_in_seconds" [None; positive_float],comparator_output => "comparator_output" [None; |v: &VarInt| (0..=15).contains(&v.0)]});
 persistent_record!(BannerPattern {asset_id => "asset_id" [None],translation_key => "translation_key" [None]});
-persistent_record!(PaintingVariant {width => "width" [None],height => "height" [None],asset_id => "asset_id" [None],title => "title" [Some(None)],author => "author" [Some(None)]});
-persistent_record!(UseEffects {can_sprint => "can_sprint" [Some(false)],interact_vibrations => "interact_vibrations" [Some(true)],speed_multiplier => "speed_multiplier" [Some(0.2f32)]});
-persistent_record!(FoodProperties {nutrition => "nutrition" [None],saturation => "saturation" [None],can_always_eat => "can_always_eat" [Some(false)]});
-persistent_record!(Weapon {item_damage_per_attack => "item_damage_per_attack" [Some(VarInt(1))],disable_blocking_for_seconds => "disable_blocking_for_seconds" [Some(0.0f32)]});
-persistent_record!(UseCooldown {seconds => "seconds" [None],cooldown_group => "cooldown_group" [Some(None)]});
-persistent_record!(AttackRange {min_reach => "min_reach" [Some(0.0f32)],max_reach => "max_reach" [Some(3.0f32)],min_creative_reach => "min_creative_reach" [Some(0.0f32)],max_creative_reach => "max_creative_reach" [Some(5.0f32)],hitbox_margin => "hitbox_margin" [Some(0.3f32)],mob_factor => "mob_factor" [Some(1.0f32)]});
-persistent_record!(Consumable {consume_seconds => "consume_seconds" [Some(1.6f32)],animation => "animation" [Some(ItemUseAnimation::Eat)],sound => "sound" [Some(sound("entity.generic.eat"))],has_consume_particles => "has_consume_particles" [Some(true)],on_consume_effects => "on_consume_effects" [Some(vec![])]});
+persistent_record!(PaintingVariant {width => "width" [None; |v: &VarInt| (1..=16).contains(&v.0)],height => "height" [None; |v: &VarInt| (1..=16).contains(&v.0)],asset_id => "asset_id" [None],title => "title" [Some(None)],author => "author" [Some(None)]});
+persistent_record!(UseEffects {can_sprint => "can_sprint" [Some(false)],interact_vibrations => "interact_vibrations" [Some(true)],speed_multiplier => "speed_multiplier" [Some(0.2f32); |v: &f32| float_range(*v, 0.0, 1.0)]});
+persistent_record!(FoodProperties {nutrition => "nutrition" [None; |v: &VarInt| v.0 >= 0],saturation => "saturation" [None],can_always_eat => "can_always_eat" [Some(false)]});
+persistent_record!(Weapon {item_damage_per_attack => "item_damage_per_attack" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],disable_blocking_for_seconds => "disable_blocking_for_seconds" [Some(0.0f32); nonnegative_float]});
+persistent_record!(UseCooldown {seconds => "seconds" [None; positive_float],cooldown_group => "cooldown_group" [Some(None)]});
+persistent_record!(AttackRange {min_reach => "min_reach" [Some(0.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],max_reach => "max_reach" [Some(3.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],min_creative_reach => "min_creative_reach" [Some(0.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],max_creative_reach => "max_creative_reach" [Some(5.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],hitbox_margin => "hitbox_margin" [Some(0.3f32); |v: &f32| float_range(*v, 0.0, 1.0)],mob_factor => "mob_factor" [Some(1.0f32); |v: &f32| float_range(*v, 0.0, 2.0)]});
+persistent_record!(Consumable {consume_seconds => "consume_seconds" [Some(1.6f32); nonnegative_float],animation => "animation" [Some(ItemUseAnimation::Eat)],sound => "sound" [Some(sound("entity.generic.eat"))],has_consume_particles => "has_consume_particles" [Some(true)],on_consume_effects => "on_consume_effects" [Some(vec![])]});
 persistent_record!(DeathProtection {death_effects => "death_effects" [Some(vec![])]});
-persistent_record!(Tool {rules => "rules" [None],default_mining_speed => "default_mining_speed" [Some(1.0f32)],damage_per_block => "damage_per_block" [Some(VarInt(1))],can_destroy_blocks_in_creative => "can_destroy_blocks_in_creative" [Some(true)]});
-persistent_record!(ToolRule {blocks => "blocks" [None],speed => "speed" [Some(None)],correct_for_drops => "correct_for_drops" [Some(None)]});
+persistent_record!(Tool {rules => "rules" [None],default_mining_speed => "default_mining_speed" [Some(1.0f32)],damage_per_block => "damage_per_block" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],can_destroy_blocks_in_creative => "can_destroy_blocks_in_creative" [Some(true)]});
+persistent_record!(ToolRule {blocks => "blocks" [None],speed => "speed" [Some(None); |v: &Option<f32>| v.as_ref().is_none_or(positive_float)],correct_for_drops => "correct_for_drops" [Some(None)]});
 persistent_record!(Equippable {slot => "slot" [None],equip_sound => "equip_sound" [Some(sound("item.armor.equip_generic"))],asset_id => "asset_id" [Some(None)],camera_overlay => "camera_overlay" [Some(None)],allowed_entities => "allowed_entities" [Some(None)],dispensable => "dispensable" [Some(true)],swappable => "swappable" [Some(true)],damage_on_hurt => "damage_on_hurt" [Some(true)],equip_on_interact => "equip_on_interact" [Some(false)],can_be_sheared => "can_be_sheared" [Some(false)],shearing_sound => "shearing_sound" [Some(sound("item.shears.snip"))]});
-persistent_record!(BlocksAttacks {block_delay_seconds => "block_delay_seconds" [Some(0.0f32)],disable_cooldown_scale => "disable_cooldown_scale" [Some(1.0f32)],damage_reductions => "damage_reductions" [Some(vec![DamageReduction {horizontal_blocking_angle:90.0,types:None,base:0.0,factor:1.0}])],item_damage => "item_damage" [Some(ItemDamageFunction {threshold:1.0,base:0.0,factor:1.0})],bypassed_by => "bypassed_by" [Some(None)],block_sound => "block_sound" [Some(None)],disable_sound => "disabled_sound" [Some(None)]});
-persistent_record!(DamageReduction {horizontal_blocking_angle => "horizontal_blocking_angle" [Some(90.0f32)],types => "type" [Some(None)],base => "base" [None],factor => "factor" [None]});
-persistent_record!(ItemDamageFunction {threshold => "threshold" [None],base => "base" [None],factor => "factor" [None]});
+persistent_record!(BlocksAttacks {block_delay_seconds => "block_delay_seconds" [Some(0.0f32); nonnegative_float],disable_cooldown_scale => "disable_cooldown_scale" [Some(1.0f32); nonnegative_float],damage_reductions => "damage_reductions" [Some(vec![DamageReduction {horizontal_blocking_angle:90.0,types:None,base:0.0,factor:1.0}])],item_damage => "item_damage" [Some(ItemDamageFunction {threshold:1.0,base:0.0,factor:1.0})],bypassed_by => "bypassed_by" [Some(None)],block_sound => "block_sound" [Some(None)],disable_sound => "disabled_sound" [Some(None)]});
+persistent_record!(DamageReduction {horizontal_blocking_angle => "horizontal_blocking_angle" [Some(90.0f32); positive_float],types => "type" [Some(None)],base => "base" [None],factor => "factor" [None]});
+persistent_record!(ItemDamageFunction {threshold => "threshold" [None; nonnegative_float],base => "base" [None],factor => "factor" [None]});
 persistent_record!(PiercingWeapon {deals_knockback => "deals_knockback" [Some(true)],dismounts => "dismounts" [Some(false)],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
-persistent_record!(KineticWeapon {contact_cooldown_ticks => "contact_cooldown_ticks" [Some(VarInt(10))],delay_ticks => "delay_ticks" [Some(VarInt(0))],dismount_conditions => "dismount_conditions" [Some(None)],knockback_conditions => "knockback_conditions" [Some(None)],damage_conditions => "damage_conditions" [Some(None)],forward_movement => "forward_movement" [Some(0.0f32)],damage_multiplier => "damage_multiplier" [Some(1.0f32)],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
-persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" [None],min_speed => "min_speed" [Some(0.0f32)],min_relative_speed => "min_relative_speed" [Some(0.0f32)]});
-persistent_record!(SwingAnimation {animation_type => "type" [Some(SwingAnimationType::Whack)],duration => "duration" [Some(VarInt(6))]});
+persistent_record!(KineticWeapon {contact_cooldown_ticks => "contact_cooldown_ticks" [Some(VarInt(10)); |v: &VarInt| v.0 >= 0],delay_ticks => "delay_ticks" [Some(VarInt(0)); |v: &VarInt| v.0 >= 0],dismount_conditions => "dismount_conditions" [Some(None)],knockback_conditions => "knockback_conditions" [Some(None)],damage_conditions => "damage_conditions" [Some(None)],forward_movement => "forward_movement" [Some(0.0f32)],damage_multiplier => "damage_multiplier" [Some(1.0f32)],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
+persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" [None; |v: &VarInt| v.0 >= 0],min_speed => "min_speed" [Some(0.0f32)],min_relative_speed => "min_relative_speed" [Some(0.0f32)]});
+persistent_record!(SwingAnimation {animation_type => "type" [Some(SwingAnimationType::Whack)],duration => "duration" [Some(VarInt(6)); |v: &VarInt| v.0 >= 0]});
 persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "flags" [Some(vec![])],strings => "strings" [Some(vec![])],colors => "colors" [Some(vec![])]});
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
 impl Persistent for Fireworks {
     fn from_json(v: &Json) -> Result<Self> {
-        let flight_duration = field::<VarInt>(v, "flight_duration", Some(VarInt(0)))?;
-        if !(0..=255).contains(&flight_duration.0) {
-            return Err(invalid("fireworks flight duration"));
-        }
+        let flight_duration = VarInt(field::<i32>(v, "flight_duration", Some(0))? as u8 as i32);
         Ok(Self {
             flight_duration,
             explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
+        if self.flight_duration.0 > 255 {
+            return Err(invalid("unsigned byte"));
+        }
         let mut v = Vec::new();
         if self.flight_duration.0 != 0 {
             v.push((
@@ -1210,15 +1271,15 @@ persistent_record!(ArmorTrim {material => "material" [None],pattern => "pattern"
 persistent_record!(BannerLayer {pattern => "pattern" [None],color => "color" [None]});
 persistent_record!(PotionContents {potion => "potion" [Some(None)],custom_color => "custom_color" [Some(None)],custom_effects => "custom_effects" [Some(vec![])],custom_name => "custom_name" [Some(None)]});
 persistent_record!(StewEffect {effect => "id" [None],duration => "duration" [Some(VarInt(160))]});
-persistent_record!(WrittenBookContent {title => "title" [None],author => "author" [None],generation => "generation" [Some(VarInt(0))],pages => "pages" [Some(vec![])],resolved => "resolved" [Some(false)]});
+persistent_record!(WrittenBookContent {title => "title" [None],author => "author" [None],generation => "generation" [Some(VarInt(0)); |v: &VarInt| (0..=3).contains(&v.0)],pages => "pages" [Some(vec![])],resolved => "resolved" [Some(false)]});
 persistent_record!(BeeOccupant {entity_data => "entity_data" [None],ticks_in_hive => "ticks_in_hive" [None],min_ticks_in_hive => "min_ticks_in_hive" [None]});
 persistent_record!(PotDecorations {back => "back" [Some(None)],left => "left" [Some(None)],right => "right" [Some(None)],front => "front" [Some(None)]});
 persistent_record!(Compostable {layers => "layers" [None]});
 persistent_record!(CookingFuel {burn_time => "burn_time" [None],speed_multiplier => "speed_multiplier" [None]});
 persistent_record!(BrewingFuel {uses => "uses" [None],speed_multiplier => "speed_multiplier" [None]});
-persistent_record!(MobVisibility {targeting_entity_types => "targeting_entity_types" [None],visibility => "visibility" [None]});
+persistent_record!(MobVisibility {targeting_entity_types => "targeting_entity_types" [None],visibility => "visibility" [None; |v: &f32| float_range(*v, 0.0, 10.0)]});
 persistent_record!(TooltipDisplay {hide_tooltip => "hide_tooltip" [Some(false)],hidden_components => "hidden_components" [Some(ComponentTypeList {entries:vec![]})]});
-persistent_record!(VillagerFood {nutrition => "nutrition" [None]});
+persistent_record!(VillagerFood {nutrition => "nutrition" [None; |v: &VarInt| v.0 > 0]});
 persistent_record!(SkinPatch {body => "texture" [Some(None)],cape => "cape" [Some(None)],elytra => "elytra" [Some(None)],model => "model" [Some(None)]});
 persistent_record!(PropertyRange {min => "min" [Some(None)],max => "max" [Some(None)]});
 
@@ -1289,7 +1350,12 @@ impl Persistent for ItemEnchantments {
         Ok(PersistentValue::Map(
             self.0
                 .iter()
-                .map(|(k, v)| Ok((k.0.to_string(), v.to_persistent()?)))
+                .map(|(k, v)| {
+                    if !(1..=255).contains(&v.0) {
+                        return Err(invalid("enchantment level"));
+                    }
+                    Ok((k.0.to_string(), v.to_persistent()?))
+                })
                 .collect::<Result<_>>()?,
         ))
     }
@@ -1384,6 +1450,10 @@ impl Persistent for ItemStackTemplate {
         )
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if !(1..=99).contains(&self.count) || self.item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack template"));
+        }
+
         let mut v = vec![("id".into(), self.item.to_persistent()?)];
         entry(&mut v, "count", &self.count, Some(1))?;
         entry(
@@ -1432,7 +1502,7 @@ impl Persistent for DataComponentPatch {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = Vec::new();
-        for c in &self.added {
+        for c in self.added.iter().filter(|v| !v.is_transient()) {
             v.push((c.component_type().name().into(), c.to_persistent()?));
         }
         for c in &self.removed {
@@ -1507,9 +1577,9 @@ impl Persistent for Uuid {
         ])))
     }
 }
-persistent_record!(ProfileProperty {name=>"name"[None],value=>"value"[None],signature=>"signature"[Some(None)]});
-persistent_record!(GameProfile {id=>"id"[None],name=>"name"[None],properties=>"properties"[Some(BoundedList(vec![]))]});
-persistent_record!(PartialProfile {name=>"name"[Some(None)],id=>"id"[Some(None)],properties=>"properties"[Some(BoundedList(vec![]))]});
+persistent_record!(ProfileProperty {name=>"name"[None; |v: &String| v.encode_utf16().count() <= 64],value=>"value"[None; |v: &String| v.encode_utf16().count() <= 32767],signature=>"signature"[Some(None); |v: &Option<String>| v.as_ref().is_none_or(|v| v.encode_utf16().count() <= 1024)]});
+persistent_record!(GameProfile {id=>"id"[None],name=>"name"[None; |v: &BoundedString<16>| player_name(&v.0)],properties=>"properties"[Some(BoundedList(vec![]))]});
+persistent_record!(PartialProfile {name=>"name"[Some(None); |v: &Option<BoundedString<16>>| v.as_ref().is_none_or(|v| player_name(&v.0))],id=>"id"[Some(None)],properties=>"properties"[Some(BoundedList(vec![]))]});
 impl Persistent for ResolvableProfile {
     fn from_json(v: &Json) -> Result<Self> {
         if v.is_string() {
@@ -1635,7 +1705,7 @@ impl Persistent for MobEffectDetails {
     fn from_json(v: &Json) -> Result<Self> {
         let show_particles = field(v, "show_particles", Some(true))?;
         Ok(Self {
-            amplifier: field(v, "amplifier", Some(VarInt(0)))?,
+            amplifier: VarInt(field::<i32>(v, "amplifier", Some(0))? as u8 as i32),
             duration: field(v, "duration", Some(VarInt(0)))?,
             ambient: field(v, "ambient", Some(false))?,
             show_particles,
@@ -1644,6 +1714,10 @@ impl Persistent for MobEffectDetails {
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
+        if self.amplifier.0 > 255 {
+            return Err(invalid("unsigned byte"));
+        }
         let mut v = Vec::new();
         if self.amplifier.0 != 0 {
             v.push((
@@ -1702,6 +1776,9 @@ impl Persistent for ConsumeEffect {
                 effects,
                 probability,
             } => {
+                if !float_range(*probability, 0.0, 1.0) {
+                    return Err(invalid("effect probability"));
+                }
                 v.push(("effects".into(), effects.to_persistent()?));
                 entry(&mut v, "probability", probability, Some(1.0))?;
                 "apply_effects"
@@ -1715,6 +1792,9 @@ impl Persistent for ConsumeEffect {
                 diameter,
                 directional_particles,
             } => {
+                if !positive_float(diameter) {
+                    return Err(invalid("teleport diameter"));
+                }
                 entry(&mut v, "diameter", diameter, Some(16.0))?;
                 entry(
                     &mut v,
@@ -1887,6 +1967,11 @@ impl Persistent for IntBounds {
         }
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if let (Some(min), Some(max)) = (self.min, self.max)
+            && min > max
+        {
+            return Err(invalid("swapped bounds"));
+        }
         if let (Some(min), Some(max)) = (self.min, self.max)
             && min == max
         {
@@ -2071,6 +2156,9 @@ fn container_from_json(v: &Json) -> Result<BoundedList<Option<ItemStackTemplate>
     Ok(BoundedList(items))
 }
 fn container_value(v: &BoundedList<Option<ItemStackTemplate>, 256>) -> Result<PersistentValue> {
+    if v.0.len() > 256 {
+        return Err(invalid("container length"));
+    }
     Ok(PersistentValue::List(
         v.0.iter()
             .enumerate()
@@ -2104,7 +2192,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::UseEffects(<UseEffects as Persistent>::from_json(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_json(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_json(value)?)
@@ -2113,7 +2201,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::DamageType(<DamageType as Persistent>::from_json(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_json(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_json(value)?)
@@ -2408,10 +2496,10 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             <DecoratedPotPattern as Persistent>::from_json(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_json(value)?),
         "minecraft:cushion/color" => {
@@ -2441,7 +2529,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::UseEffects(<UseEffects as Persistent>::from_nbt(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_nbt(value)?)
@@ -2450,7 +2538,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::DamageType(<DamageType as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_nbt(value)?)
@@ -2745,10 +2833,10 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             <DecoratedPotPattern as Persistent>::from_nbt(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_nbt(value)?),
         "minecraft:cushion/color" => {
@@ -2913,6 +3001,15 @@ fn validate_component(value: &DataComponent) -> Result<()> {
         DataComponent::Damage(v) | DataComponent::RepairCost(v) if v.0 < 0 => {
             Err(invalid("nonnegative component"))
         }
+        DataComponent::MinimumAttackCharge(v) if !float_range(*v, 0.0, 1.0) => {
+            Err(invalid("minimum attack charge"))
+        }
+        DataComponent::PotionDurationScale(v) if !nonnegative_float(v) => {
+            Err(invalid("potion duration scale"))
+        }
+        DataComponent::OminousBottleAmplifier(v) if !(0..=4).contains(&v.0) => {
+            Err(invalid("ominous bottle amplifier"))
+        }
         _ => Ok(()),
     }
 }
@@ -2951,4 +3048,51 @@ fn container_from_nbt(v: &Tag) -> Result<BoundedList<Option<ItemStackTemplate>, 
         items[slot] = Some(field_nbt(v, "item", None)?);
     }
     Ok(BoundedList(items))
+}
+impl Persistent for ItemStack {
+    fn from_json(value: &Json) -> Result<Self> {
+        let item = field(value, "id", None)?;
+        let count = field::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn from_nbt(value: &Tag) -> Result<Self> {
+        let item = field_nbt(value, "id", None)?;
+        let count = field_nbt::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field_nbt(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        let value = self
+            .0
+            .as_ref()
+            .filter(|_| !self.is_empty())
+            .ok_or_else(|| invalid("empty item stack"))?;
+        if !(1..=99).contains(&value.count) {
+            return Err(invalid("item stack count"));
+        }
+        let mut entries = vec![
+            ("id".into(), value.item.to_persistent()?),
+            ("count".into(), value.count.to_persistent()?),
+        ];
+        entry(
+            &mut entries,
+            "components",
+            &value.components,
+            Some(DataComponentPatch::default()),
+        )?;
+        Ok(PersistentValue::Map(entries))
+    }
 }

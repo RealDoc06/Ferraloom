@@ -9,7 +9,7 @@ use ferraloom_data::{
     datapack::{ResourceManager, load_tags},
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -284,7 +284,7 @@ impl NoiseBasedChunkGenerator {
                         chunk.set_block(x as u8, p[1], z as u8, state);
                         if noise.aquifer.should_schedule_fluid_update() && !state.data().fluid.empty
                         {
-                            chunk.post_processing.insert(p);
+                            chunk.post_processing.push(p);
                         }
                     }
                 }
@@ -355,7 +355,7 @@ pub struct GeneratedChunk {
     pub sections: Vec<LevelChunkSection>,
     pub world_surface: [i32; 256],
     pub ocean_floor: [i32; 256],
-    pub post_processing: BTreeSet<[i32; 3]>,
+    pub post_processing: Vec<[i32; 3]>,
     motion_blocking: Arc<HashSet<Block>>,
 }
 impl GeneratedChunk {
@@ -377,7 +377,7 @@ impl GeneratedChunk {
             sections,
             world_surface: [height.min_y; 256],
             ocean_floor: [height.min_y; 256],
-            post_processing: BTreeSet::new(),
+            post_processing: Vec::new(),
             motion_blocking,
         }
     }

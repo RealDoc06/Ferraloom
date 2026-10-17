@@ -129,3 +129,16 @@ impl CustomPayload {
 fn optional_trusted_component(r: &mut Reader<'_>) -> Result<Option<Component>> {
     r.optional(Component::decode_trusted)
 }
+
+/// Port of FriendlyByteBuf.readUtf(max) paired with writeUtf's default write limit.
+/// Some hand-written packet codecs restrict incoming text more tightly than outgoing text.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FriendlyString<const MAX: usize>(pub String);
+impl<const MAX: usize> Wire for FriendlyString<MAX> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self(r.string(MAX)?.into_owned()))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.string(&self.0, 32767)
+    }
+}

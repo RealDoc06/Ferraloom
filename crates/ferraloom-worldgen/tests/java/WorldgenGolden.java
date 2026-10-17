@@ -57,13 +57,14 @@ public final class WorldgenGolden {
             var settings=settingsRegistry.getValue(Identifier.withDefaultNamespace(dimension));
             var state=RandomState.create(noises,seed,settings);
             var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("dimension",dimension);
-            var functions=new JsonObject();
+            var functions=new JsonObject();var ranges=new JsonObject();
             for(var entry:definitions.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList()) {
                 var function=entry.value();var samples=new JsonArray();
                 for(int[] p:POINTS) samples.add(Integer.toUnsignedLong(Float.floatToRawIntBits(state.getSampler(function).sampleValue(SamplerContext.EMPTY_UNCACHED,p[0],p[1],p[2]))));
                 functions.add(entry.key().identifier().toString(),samples);
+                var range=function.range();ranges.add(entry.key().identifier().toString(),array(Integer.toUnsignedLong(Float.floatToIntBits(range.min())),Integer.toUnsignedLong(Float.floatToIntBits(range.max()))));
             }
-            item.add("functions",functions);
+            item.add("functions",functions);item.add("ranges",ranges);
             var router=settings.noiseRouter();var volumes=new JsonObject();
             var volume=new DensityVolume(3,5,2,-17,-63,31,4,3,7);
             var context=SamplerContext.builder().enableCaches().build();
@@ -121,7 +122,7 @@ public final class WorldgenGolden {
         }
         out.addProperty("hash",HexFormat.of().formatHex(digest.digest()));
         var columns=new JsonArray();
-        for(int[] local:new int[][]{{0,0},{7,11},{15,15}}) {
+        for(int[] local:new int[][]{{0,0},{7,11},{15,15},{8,8}}) {
             var column=new JsonArray();int previous=-1,count=0;
             for(int y=chunk.getMinY();y<=chunk.getMaxY();y++) {
                 int id=net.minecraft.world.level.block.Block.getId(chunk.getBlockState(new BlockPos(chunk.getPos().getMinBlockX()+local[0],y,chunk.getPos().getMinBlockZ()+local[1])));
@@ -133,6 +134,12 @@ public final class WorldgenGolden {
         var surface=new JsonArray();var floor=new JsonArray();
         for(int z=0;z<16;z++)for(int x=0;x<16;x++) {surface.add(chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG,x,z)+1);floor.add(chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG,x,z)+1);}
         out.add("world_surface",surface);out.add("ocean_floor",floor);
+        var packed=new ByteArrayOutputStream();var post=new DataOutputStream(packed);
+        for(var section:chunk.getPostProcessing()) {
+            post.writeInt(section==null?0:section.size());
+            if(section!=null)for(short entry:section)post.writeShort(entry);
+        }
+        out.addProperty("post_processing",HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(packed.toByteArray())));
         return out;
     }
     static List<int[]> locations(RegistryAccess.Frozen registries,long seed,String dimension) {
@@ -146,6 +153,15 @@ public final class WorldgenGolden {
             if(needed.remove(biome)) {locations.add(p);System.err.println("seed="+seed+" "+biome+" chunk="+Arrays.toString(p));}
         }
         if(!needed.isEmpty())throw new AssertionError("missing test biomes "+needed);
+        var generator=new NoiseBasedChunkGenerator(source(registries,dimension),Holder.direct(settings));
+        var heights=net.minecraft.world.level.LevelHeightAccessor.create(settings.noiseSettings().minY(),settings.noiseSettings().height());
+        boolean found=false;
+        for(int cx=-63;cx<=63&&!found;cx+=7)for(int cz=-63;cz<=63&&!found;cz+=7) {
+            var column=generator.getBaseColumn(cx*16+8,cz*16+8,heights,state);int water=0;
+            for(int y=-53;y<0;y++)if(column.getBlock(y).is(net.minecraft.world.level.block.Blocks.WATER))water++;
+            if(water>=5) {locations.add(new int[]{cx,cz});found=true;System.err.println("seed="+seed+" aquifer cave chunk="+cx+","+cz+" center-column water="+water);}
+        }
+        if(!found)throw new AssertionError("missing aquifer cave test area");
         return locations;
     }
     static void chunks(RegistryAccess.Frozen registries,Path directory) throws Exception {
@@ -354,7 +370,24 @@ public final class WorldgenGolden {
             {"material","{\"type\":\"minecraft:block\",\"result_state\":\"stone\"}"},
             {"material","{\"type\":\"minecraft:ore_vein\",\"ore_block\":\"iron_ore\",\"raw_ore_block\":\"raw_iron_block\",\"filler_block\":\"tuff\",\"raw_ore_chance\":1.00000001,\"density\":1,\"richness\":1,\"filler_gap\":-1}"},
         };
-        for(var test:cases) {
+        var shiftedZero=JsonParser.parseString("{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":-0.0}");
+        var extended=new ArrayList<>(Arrays.asList(cases));extended.add(new String[]{"density",shiftedZero.toString()});
+        extended.add(new String[]{"noise","{\"base_octave\":1e100}"});
+        extended.add(new String[]{"noise","{\"base_octave\":4294967296.75}"});
+        extended.add(new String[]{"noise_settings","{\"min_y\":-4.294967296e9,\"height\":16}"});
+        extended.add(new String[]{"noise","{\"base_octave\":0,\"amplitude_modifiers\":[-0.0]}"});
+        extended.add(new String[]{"parameter","[-0.0,0.0]"});
+        extended.add(new String[]{"parameter","[0.0,-0.0]"});
+        extended.add(new String[]{"density","1.000000059604644775390625000001"});
+        extended.add(new String[]{"density","-1.000000059604644775390625000001"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":1e999,\"y_scale\":1}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:min\",\"left\":-1,\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:max\",\"left\":10,\"right\":{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:min\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:max\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":{\"type\":\"minecraft:min\",\"left\":0,\"right\":{\"type\":\"minecraft:add\",\"left\":1,\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}}}"});
+        for(String type:List.of("min","max")) for(String[] arguments:List.of(new String[]{"-0.0","0.0"},new String[]{"0.0","-0.0"})) extended.add(new String[]{"density","{\"type\":\"minecraft:"+type+"\",\"left\":"+arguments[0]+",\"right\":"+arguments[1]+"}"});
+        for(var test:extended) {
             var definition=JsonParser.parseString(test[1]);
             com.mojang.serialization.Codec<?> codec=switch(test[0]) {
                 case "density" -> DensityFunction.CODEC;
@@ -369,6 +402,7 @@ public final class WorldgenGolden {
             var parsed=codec.parse(ops,definition).result();var row=new JsonObject();row.addProperty("codec",test[0]);row.add("input",definition);row.addProperty("accepted",parsed.isPresent());
             if(parsed.isPresent() && test[0].equals("block_state")) row.addProperty("state",net.minecraft.world.level.block.Block.getId((net.minecraft.world.level.block.state.BlockState)parsed.get()));
             if(parsed.isPresent() && test[0].equals("density")) {
+                var bounds=((DensityFunction)parsed.get()).range();row.add("range",array(Integer.toUnsignedLong(Float.floatToIntBits(bounds.min())),Integer.toUnsignedLong(Float.floatToIntBits(bounds.max()))));
                 var sampler=state.getSampler((DensityFunction)parsed.get());var values=new JsonArray();
                 for(int[] p:POINTS)values.add(Integer.toUnsignedLong(Float.floatToIntBits(sampler.sampleValue(SamplerContext.EMPTY_UNCACHED,p[0],p[1],p[2]))));row.add("values",values);
                 var volume=new DensityVolume(3,5,2,-17,-63,31,4,3,7);var context=SamplerContext.builder().enableCaches().build();

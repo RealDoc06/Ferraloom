@@ -136,7 +136,7 @@ impl MaterialRule {
                 filler: decode_block_state(field(v, "filler_block")?)?,
                 raw_chance: {
                     let n = float(field(v, "raw_ore_chance")?)?;
-                    if !(0.0..=1.0).contains(&n) {
+                    if n.total_cmp(&0.0).is_lt() || n.total_cmp(&1.0).is_gt() {
                         return Err(Error("ore chance outside [0,1]".into()));
                     }
                     n

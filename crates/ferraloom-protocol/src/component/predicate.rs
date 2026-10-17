@@ -134,6 +134,11 @@ impl Persistent for DoubleBounds {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
+            && min.total_cmp(&max).is_gt()
+        {
+            return Err(invalid("swapped bounds"));
+        }
+        if let (Some(min), Some(max)) = (self.min, self.max)
             && min == max
         {
             return min.to_persistent();
@@ -162,6 +167,12 @@ impl<P: Persistent + PartialEq> Persistent for CollectionCount<P> {
             count: field(v, "count", None)?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            test: field_nbt(v, "test", None)?,
+            count: field_nbt(v, "count", None)?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Map(vec![
             ("test".into(), self.test.to_persistent()?),
@@ -175,6 +186,13 @@ impl<P: Persistent + PartialEq> Persistent for CollectionPredicate<P> {
             contains: field(v, "contains", Some(None))?,
             count: field(v, "count", Some(None))?,
             size: field(v, "size", Some(None))?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            contains: field_nbt(v, "contains", Some(None))?,
+            count: field_nbt(v, "count", Some(None))?,
+            size: field_nbt(v, "size", Some(None))?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {

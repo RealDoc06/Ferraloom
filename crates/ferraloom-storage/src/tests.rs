@@ -445,3 +445,90 @@ fn vanilla_observes_rust_directory_lock() {
         assert!(status.success());
     }
 }
+
+/// Resolve the cell's disk palette index independently of the field codec being checked.
+fn fixture_block_state(chunk: &SerializableChunkData, pos: [i32; 3]) -> &BlockStatePaletteEntry {
+    let section = chunk
+        .sections
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|section| section.y == Some((pos[1] >> 4) as i8))
+        .unwrap();
+    let palette = section.block_states.as_ref().unwrap();
+    let strategy = ferraloom_chunk::Strategy::<ferraloom_data::BlockState>::block_states();
+    let bits = strategy
+        .configuration_for_palette_size(palette.palette.len())
+        .bits_in_storage;
+    let index = if bits == 0 {
+        0
+    } else {
+        let raw = palette
+            .data
+            .as_ref()
+            .unwrap()
+            .0
+            .iter()
+            .map(|&value| value as u64)
+            .collect();
+        let storage = ferraloom_chunk::SimpleBitStorage::from_raw(bits, 4096, raw).unwrap();
+        storage.get(((pos[1] & 15) * 256 + (pos[2] & 15) * 16 + (pos[0] & 15)) as usize) as usize
+    };
+    &palette.palette[index]
+}
+
+#[test]
+fn vanilla_non_default_block_states_decode_and_write_current_keys() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/fixtures/block_states.json")).unwrap();
+    let directory = fixture().join("dimensions/minecraft/overworld/region");
+    let mut region = RegionFile::open(
+        directory.join("r.0.0.mca"),
+        &directory,
+        RegionFileVersion::Deflate,
+        false,
+    )
+    .unwrap();
+    let tag = region.read(ChunkPos::new(0, 0)).unwrap().unwrap();
+    let chunk = SerializableChunkData::parse(tag.clone()).unwrap();
+    let mut compound_states = 0;
+    for case in cases.as_array().unwrap() {
+        let pos = std::array::from_fn(|i| i32::try_from(case["pos"][i].as_i64().unwrap()).unwrap());
+        let entry = fixture_block_state(&chunk, pos);
+        assert_eq!(
+            entry.name.as_ref().unwrap().to_string_lossy(),
+            case["id"].as_str().unwrap(),
+            "{pos:?}"
+        );
+        if entry.shorthand {
+            // Of these scenarios, vanilla writes only the default Y-axis log as a bare string.
+            assert_eq!(case["id"], "minecraft:oak_log");
+            assert_eq!(case["properties"]["axis"], "y");
+        } else {
+            compound_states += 1;
+            let properties = entry.properties.as_ref().unwrap();
+            for (key, value) in case["properties"].as_object().unwrap() {
+                assert_eq!(
+                    properties
+                        .get(&key.as_str().into())
+                        .unwrap()
+                        .to_string_lossy(),
+                    value.as_str().unwrap(),
+                    "{pos:?} {key}"
+                );
+            }
+            let serialized = entry.to_nbt();
+            assert!(serialized.get_string("id").is_some());
+            assert!(serialized.get_compound("properties").is_some());
+            assert!(!serialized.contains_key("Name"));
+            assert!(!serialized.contains_key("Properties"));
+        }
+    }
+    assert_eq!(
+        compound_states, 10,
+        "fixture must exercise non-default compound states"
+    );
+    assert_eq!(chunk.write().unwrap(), tag);
+    let reread = SerializableChunkData::parse(chunk.write().unwrap()).unwrap();
+    assert_eq!(reread, chunk);
+}

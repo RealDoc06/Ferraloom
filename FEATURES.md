@@ -22,8 +22,8 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 50 | 50 | 0 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 4 | 0 | 0 | 0 |
-| [Items and data components](features/items.md) | 239 | 239 | 0 | 0 | 0 |
-| [Lighting](features/lighting.md) | 10 | 10 | 0 | 0 | 0 |
+| [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
+| [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
 | [Loot](features/loot.md) | 1652 | 1652 | 0 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
 | [Maps, decoration and variants](features/maps-decoration.md) | 255 | 255 | 0 | 0 | 0 |
@@ -34,7 +34,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Player mechanics](features/player.md) | 42 | 42 | 0 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
 | [Predicates](features/predicates.md) | 92 | 92 | 0 | 0 | 0 |
-| [Protocol packets](features/protocol.md) | 260 | 260 | 0 | 0 | 0 |
+| [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 39 | 39 | 0 | 0 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 56 | 56 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 306 | 306 | 0 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3013 | 3013 | 0 | 0 | 0 |
-| **Total** | **18689** | **18644** | **17** | **28** | **0** |
+| **Total** | **18705** | **18300** | **140** | **265** | **0** |

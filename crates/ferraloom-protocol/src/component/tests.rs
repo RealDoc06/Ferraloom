@@ -85,6 +85,35 @@ fn vanilla_stacks_removals_nesting_and_untrusted_delimiters() {
     }
 }
 #[test]
+fn vanilla_validated_creative_stacks() {
+    let (fixtures, registries) = fixtures();
+    for fixture in fixtures["validated_stacks"].as_array().unwrap() {
+        let name = fixture["name"].as_str().unwrap();
+        let bytes = unhex(fixture["bytes"].as_str().unwrap());
+        let accepted = fixture["accepted"].as_bool().unwrap();
+        let mut reader = Reader::with_context(&bytes, &registries);
+        let stack = OPTIONAL_UNTRUSTED_ITEM_STACK.decode(&mut reader).unwrap();
+        reader.finish().unwrap();
+        assert_eq!(stack.validate_persistent().is_ok(), accepted, "{name}");
+        if !stack.is_empty() {
+            // The same persistent encoders constrain storage, JSON and hashes.
+            assert_eq!(stack.to_nbt().is_ok(), accepted, "NBT: {name}");
+            assert_eq!(stack.to_json().is_ok(), accepted, "JSON: {name}");
+            assert_eq!(stack.hash().is_ok(), accepted, "hash: {name}");
+        }
+        let mut reader = Reader::with_context(&bytes, &registries);
+        let result = VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK.decode(&mut reader);
+        assert_eq!(result.is_ok(), accepted, "{name}: {result:?}");
+        reader.finish().unwrap();
+        // Vanilla does not validate on the encode path, even for rejected stacks.
+        let mut writer = Writer::with_context(&registries);
+        VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK
+            .encode(&mut writer, &stack)
+            .unwrap();
+        assert_eq!(writer.as_slice(), bytes, "{name}");
+    }
+}
+#[test]
 fn vanilla_entity_data_list() {
     let (f, registries) = fixtures();
     let bytes = unhex(f["entity_data"].as_str().unwrap());
@@ -133,6 +162,14 @@ fn vanilla_persistent_component_hashes() {
             }
             if let Some(expected) = fixture.get("nbt").and_then(Value::as_str) {
                 let expected = unhex(expected);
+                let mut nbt_reader = Reader::new(&expected);
+                let tag = nbt_reader.nbt(false).unwrap();
+                match DataComponent::from_nbt(&key, &tag) {
+                    Ok(restored) if restored == value => {}
+                    other => mismatches.push(format!(
+                        "{key} persistent NBT decode: {other:?}, expected {value:?}"
+                    )),
+                }
                 let mut writer = Writer::new();
                 match value.to_nbt().and_then(|v| writer.nbt(&v)) {
                     Ok(()) if writer.as_slice() == expected => {}
@@ -251,4 +288,35 @@ fn item_defaults_merge_with_additions_and_explicit_removals() {
         components.get(ComponentTypeId::CUSTOM_DATA),
         Some(DataComponent::CustomData(_))
     ));
+}
+#[test]
+fn vanilla_stack_patch_normalization() {
+    let (f, registries) = fixtures();
+    let input = unhex(f["redundant_stack_input"].as_str().unwrap());
+    let mut r = Reader::with_context(&input, &registries);
+    let stack: ItemStack = r.read().unwrap();
+    r.finish().unwrap();
+    assert!(stack.0.as_ref().unwrap().components.added.is_empty());
+    assert!(stack.0.as_ref().unwrap().components.removed.is_empty());
+    let mut w = Writer::with_context(&registries);
+    w.write(&stack).unwrap();
+    assert_eq!(
+        w.as_slice(),
+        unhex(f["redundant_stack_output"].as_str().unwrap())
+    );
+}
+#[test]
+fn vanilla_scalar_untrusted_patch_needs_no_registry_context() {
+    let (f, _) = fixtures();
+    let bytes = unhex(f["scalar_patch_untrusted"].as_str().unwrap());
+    let mut reader = Reader::new(&bytes);
+    let patch = DataComponentPatch::decode_delimited(&mut reader).unwrap();
+    reader.finish().unwrap();
+    assert_eq!(
+        patch.added,
+        vec![DataComponent::Damage(crate::codec::VarInt(7))]
+    );
+    let mut writer = Writer::new();
+    patch.encode_delimited(&mut writer).unwrap();
+    assert_eq!(writer.as_slice(), bytes);
 }

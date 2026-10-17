@@ -85,7 +85,7 @@ impl ParameterPoint {
             .try_into()
             .unwrap();
         let offset = float(field(v, "offset")?)?;
-        if !(0.0..=1.0).contains(&offset) {
+        if offset.total_cmp(&0.0).is_lt() || offset.total_cmp(&1.0).is_gt() {
             return Err(Error("climate offset outside [0,1]".into()));
         }
         Ok(Self {

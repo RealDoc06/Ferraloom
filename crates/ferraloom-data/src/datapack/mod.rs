@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Port of Identifier. Resource paths use `/` independently of the host OS.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Identifier {
     namespace: String,
     path: String,
@@ -25,9 +25,8 @@ impl Identifier {
         let namespace = namespace.into();
         let path = path.into();
         let valid = |c: u8| c.is_ascii_lowercase() || c.is_ascii_digit() || b"_.-".contains(&c);
-        if namespace.is_empty()
+        if namespace == ".."
             || !namespace.bytes().all(valid)
-            || path.is_empty()
             || !path.bytes().all(|c| valid(c) || c == b'/')
         {
             return Err(Error::InvalidIdentifier(format!("{namespace}:{path}")));
@@ -42,6 +41,18 @@ impl Identifier {
     }
     pub fn with_path(&self, path: impl Into<String>) -> Result<Self, Error> {
         Self::new(self.namespace.clone(), path)
+    }
+}
+impl Ord for Identifier {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.path
+            .cmp(&other.path)
+            .then_with(|| self.namespace.cmp(&other.namespace))
+    }
+}
+impl PartialOrd for Identifier {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 impl FromStr for Identifier {
@@ -211,47 +222,21 @@ impl Resource<'_> {
         strict_json(self.bytes)
     }
 }
-/// Port of StrictJsonParser's duplicate-key rejection. serde_json validates the
-/// syntax first; the second pass retains raw object keys before Value can hide
-/// duplicate fields. Braces and colons inside strings never become tokens.
+/// Port of StrictJsonParser. Gson retains the final duplicate object key and
+/// skips the end-of-document check for a null root; streaming preserves both.
 fn strict_json(bytes: &[u8]) -> Result<Value, Error> {
-    let value = serde_json::from_slice(bytes)?;
-    let mut objects: Vec<BTreeSet<String>> = Vec::new();
-    let mut index = 0;
-    while index < bytes.len() {
-        match bytes[index] {
-            b'{' => objects.push(BTreeSet::new()),
-            b'}' => {
-                objects.pop();
-            }
-            b'"' => {
-                let start = index;
-                index += 1;
-                while bytes[index] != b'"' {
-                    if bytes[index] == b'\\' {
-                        index += 1;
-                    }
-                    index += 1;
-                }
-                let end = index + 1;
-                let mut next = end;
-                while next < bytes.len() && bytes[next].is_ascii_whitespace() {
-                    next += 1;
-                }
-                if next < bytes.len() && bytes[next] == b':' {
-                    let key: String = serde_json::from_slice(&bytes[start..end])?;
-                    if !objects
-                        .last_mut()
-                        .expect("valid JSON object key")
-                        .insert(key.clone())
-                    {
-                        return Err(Error::InvalidData(format!("duplicate JSON key {key}")));
-                    }
-                }
-            }
-            _ => {}
-        }
-        index += 1;
+    let mut decoder = serde_json::Deserializer::from_slice(bytes);
+    decoder.disable_recursion_limit();
+    let mut stream = decoder.into_iter::<Value>();
+    let value = stream.next().transpose()?.unwrap_or(Value::Null);
+    if !value.is_null()
+        && bytes[stream.byte_offset()..]
+            .iter()
+            .any(|b| !b.is_ascii_whitespace())
+    {
+        return Err(Error::InvalidData(
+            "JSON document has trailing content".into(),
+        ));
     }
     Ok(value)
 }

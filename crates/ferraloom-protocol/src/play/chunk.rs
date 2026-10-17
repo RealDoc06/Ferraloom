@@ -1,7 +1,7 @@
 //! Port of ClientboundLevelChunkPacketData and PalettedContainer's 26.3 wire form.
 use super::*;
 
-wire_enum!(HeightmapType { WorldSurfaceWg=0, WorldSurface=1, OceanFloorWg=2, OceanFloor=3, MotionBlocking=4, MotionBlockingNoLeaves=5 });
+wire_enum!(HeightmapType { WorldSurfaceWg=0, WorldSurface=1, OceanFloorWg=2, OceanFloor=3, MotionBlocking=4, MotionBlockingNoLeaves=5 }, zero);
 packet!(/// Port of ClientboundLevelChunkPacketData's heightmap entries.
 Heightmap { kind:HeightmapType, data:Vec<i64> });
 packet!(/// Port of ClientboundLevelChunkPacketData.BlockEntityInfo.
@@ -163,6 +163,83 @@ impl Wire for LevelChunkPacketData {
 }
 
 packet!(/// Port of ClientboundLightUpdatePacketData.
-LightUpdatePacketData {sky_y_mask:BitSet,block_y_mask:BitSet,empty_sky_y_mask:BitSet,empty_block_y_mask:BitSet,sky_updates:Vec<ByteArray<2048>>,block_updates:Vec<ByteArray<2048>>});
+LightUpdatePacketData {sky_y_mask:ByteBitSet,block_y_mask:ByteBitSet,empty_sky_y_mask:ByteBitSet,empty_block_y_mask:ByteBitSet,sky_updates:Vec<ByteArray<2048>>,block_updates:Vec<ByteArray<2048>>});
 packet!(/// Port of ClientboundChunksBiomesPacket.ChunkBiomeData.
-ChunkBiomeData {pos:i64,buffer:ByteArray<2097152>});
+ChunkBiomeData {pos:ChunkPos,buffer:ByteArray<2097152>});
+
+/// Port of ChunkPos.STREAM_CODEC. X occupies the low 32 bits.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChunkPos {
+    pub x: i32,
+    pub z: i32,
+}
+impl Wire for ChunkPos {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let packed = r.i64()?;
+        Ok(Self {
+            x: packed as i32,
+            z: (packed >> 32) as i32,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.i64(((u64::from(self.z as u32) << 32) | u64::from(self.x as u32)) as i64);
+        Ok(())
+    }
+}
+
+/// Port of SectionPos.STREAM_CODEC (22-bit X/Z, 20-bit Y).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SectionPos {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+impl Wire for SectionPos {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let packed = r.i64()?;
+        Ok(Self {
+            x: (packed >> 42) as i32,
+            y: (packed << 44 >> 44) as i32,
+            z: (packed << 22 >> 42) as i32,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.i64(
+            (((self.x as u64 & 0x3fffff) << 42)
+                | ((self.z as u64 & 0x3fffff) << 20)
+                | (self.y as u64 & 0xfffff)) as i64,
+        );
+        Ok(())
+    }
+}
+
+/// Port of ClientboundSectionBlocksUpdatePacket's packed state/relative-position pairs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SectionBlockChange {
+    pub position: u16,
+    pub state: ferraloom_data::BlockState,
+}
+impl Wire for SectionBlockChange {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let packed = r.var_long()? as u64;
+        let id = (packed >> 12) as u32;
+        let state = u16::try_from(id)
+            .ok()
+            .and_then(ferraloom_data::BlockState::from_id)
+            .ok_or_else(|| Error::invalid("block state", id.to_string()))?;
+        Ok(Self {
+            position: (packed & 4095) as u16,
+            state,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        if self.position > 4095 {
+            return Err(Error::invalid(
+                "section relative position",
+                self.position.to_string(),
+            ));
+        }
+        w.var_long(((u64::from(self.state.id()) << 12) | u64::from(self.position)) as i64);
+        Ok(())
+    }
+}

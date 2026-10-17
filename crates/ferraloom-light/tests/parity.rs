@@ -91,7 +91,19 @@ fn world(min: i32, max: i32) -> SectionSnapshots<'static> {
     }
     world
 }
-fn initialize(engine: &mut LevelLightEngine, world: &impl LightWorld, lighted: bool) {
+fn run(
+    engine: &mut LevelLightEngine,
+    world: &impl LightWorld,
+    notifications: &mut Vec<(LightLayer, SectionPos)>,
+) {
+    notifications.extend(engine.run_light_updates(world).affected_sections);
+}
+fn initialize(
+    engine: &mut LevelLightEngine,
+    world: &impl LightWorld,
+    lighted: bool,
+    notifications: &mut Vec<(LightLayer, SectionPos)>,
+) {
     for chunk in chunks() {
         for y in world.min_section()..world.max_section() {
             let pos = SectionPos::new(chunk.x, y, chunk.z);
@@ -100,13 +112,18 @@ fn initialize(engine: &mut LevelLightEngine, world: &impl LightWorld, lighted: b
             }
         }
     }
-    engine.run_light_updates(world);
+    run(engine, world, notifications);
     for chunk in chunks() {
         engine.set_light_enabled(world, chunk, lighted);
         engine.retain_data(chunk, false);
     }
 }
-fn disk_reload(engine: &mut LevelLightEngine, world: &impl LightWorld, sky: bool) {
+fn disk_reload(
+    engine: &mut LevelLightEngine,
+    world: &impl LightWorld,
+    sky: bool,
+    notifications: &mut Vec<(LightLayer, SectionPos)>,
+) {
     let mut new = LevelLightEngine::new(true, sky);
     for chunk in chunks() {
         new.retain_data(chunk, true);
@@ -119,8 +136,8 @@ fn disk_reload(engine: &mut LevelLightEngine, world: &impl LightWorld, sky: bool
             }
         }
     }
-    initialize(&mut new, world, true);
-    new.run_light_updates(world);
+    initialize(&mut new, world, true, notifications);
+    run(&mut new, world, notifications);
     *engine = new;
 }
 fn compare(
@@ -227,6 +244,7 @@ fn scenario(name: &str, bytes: &[u8]) {
     let mut world = world(min, max);
     let mut engine = LevelLightEngine::new(true, sky);
     let mut checkpoints = 0;
+    let mut notifications = Vec::new();
     loop {
         match input.byte() {
             0 => break,
@@ -249,16 +267,42 @@ fn scenario(name: &str, bytes: &[u8]) {
                     engine.check_block(pos);
                 }
             }
-            2 => initialize(&mut engine, &world, input.bool()),
+            2 => initialize(&mut engine, &world, input.bool(), &mut notifications),
             3 => {
                 for chunk in chunks() {
                     engine.propagate_light_sources(&world, chunk);
                 }
-                engine.run_light_updates(&world);
+                run(&mut engine, &world, &mut notifications);
             }
             5 => {
-                engine.run_light_updates(&world);
+                run(&mut engine, &world, &mut notifications);
                 compare(&mut input, &engine, &world, name, checkpoints);
+                let expected: Vec<_> = (0..input.int())
+                    .map(|_| {
+                        let layer = if input.bool() {
+                            LightLayer::Sky
+                        } else {
+                            LightLayer::Block
+                        };
+                        (layer, input.section())
+                    })
+                    .collect();
+                assert_eq!(
+                    notifications.len(),
+                    expected.len(),
+                    "{name} checkpoint {checkpoints}: section notification count"
+                );
+                if let Some(index) = notifications
+                    .iter()
+                    .zip(&expected)
+                    .position(|(a, b)| a != b)
+                {
+                    panic!(
+                        "{name} checkpoint {checkpoints}: notification {index}: actual {:?}, vanilla {:?}",
+                        notifications[index], expected[index]
+                    );
+                }
+                notifications.clear();
                 checkpoints += 1;
                 assert!(!engine.has_light_work());
             }
@@ -291,7 +335,7 @@ fn scenario(name: &str, bytes: &[u8]) {
                     (value != 255).then(|| DataLayer::new(value)),
                 );
             }
-            10 => disk_reload(&mut engine, &world, sky),
+            10 => disk_reload(&mut engine, &world, sky, &mut notifications),
             command => panic!("unknown oracle command {command}"),
         }
     }
@@ -310,6 +354,9 @@ scenario_tests!(
     overhang,
     boundaries,
     gaps,
+    slab_boundary,
+    batches,
+    queued_edits,
     lifecycle
 );
 
@@ -342,4 +389,19 @@ fn all_occlusion_face_pairs_match_vanilla() {
         }
     }
     assert_eq!(input.0.position(), bytes.len() as u64);
+}
+
+#[test]
+fn shape_flags_match_vanilla_states() {
+    let mut input = Input(Cursor::new(include_bytes!("fixtures/shape_flags.bin")));
+    let count = input.int();
+    assert_eq!(count as usize, BLOCK_STATES.len());
+    for id in 0..count {
+        let state = BlockState::from_id(id as u16).unwrap();
+        assert_eq!(
+            ferraloom_light::is_empty_shape(state),
+            input.bool(),
+            "empty-shape flag for state {id}"
+        );
+    }
 }

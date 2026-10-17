@@ -1,4 +1,5 @@
-use crate::queue::{BlockNodes, QueueEntry};
+use crate::long_set::LongSet;
+use crate::queue::QueueEntry;
 use crate::storage::Storage;
 use crate::{
     ChunkSkyLightSources, DataLayer, LightLayer, LightSectionUpdate, LightWorld, SectionType,
@@ -11,7 +12,7 @@ use std::collections::{HashMap, VecDeque};
 #[derive(Debug)]
 struct LayerEngine {
     storage: Storage,
-    checks: BlockNodes,
+    checks: LongSet,
     decreases: VecDeque<(BlockPos, QueueEntry)>,
     increases: VecDeque<(BlockPos, QueueEntry)>,
     sources: HashMap<i64, ChunkSkyLightSources>,
@@ -20,7 +21,7 @@ impl LayerEngine {
     fn new(layer: LightLayer) -> Self {
         Self {
             storage: Storage::new(layer),
-            checks: BlockNodes::default(),
+            checks: LongSet::new(512, 2),
             decreases: VecDeque::new(),
             increases: VecDeque::new(),
             sources: HashMap::new(),
@@ -66,10 +67,10 @@ impl LayerEngine {
         let lowest_fully_source_section = (highest.wrapping_sub(1) >> 4) + 1;
         let bottom = self.storage.bottom.max(lowest_fully_source_section);
         for y in (bottom..self.storage.top(chunk)).rev() {
-            if let Some(data) = self.storage.write(SectionPos::new(chunk.x, y, chunk.z)) {
-                if data.is_empty() {
-                    data.fill(15);
-                }
+            if let Some(data) = self.storage.write(SectionPos::new(chunk.x, y, chunk.z))
+                && data.is_empty()
+            {
+                data.fill(15);
             }
         }
     }
@@ -80,7 +81,7 @@ impl LayerEngine {
             || !self.increases.is_empty()
     }
     fn run<W: LightWorld + ?Sized>(&mut self, world: &W) -> usize {
-        let nodes = self.checks.take();
+        let nodes = self.checks.clear_and_trim(512);
         // ChunkAccess maintains source heights before vanilla drains checkBlock.
         // Refresh the affected columns against this job's final snapshot first.
         if self.is_sky() {
@@ -249,7 +250,7 @@ impl LayerEngine {
         }
         let section = SectionPos::from_block(pos);
         let mut count = 0;
-        while section.y - count - 1 >= self.storage.bottom
+        while section.y - count > self.storage.bottom
             && !self.storage.stores(section.offset(0, -count - 1, 0))
         {
             count += 1;
