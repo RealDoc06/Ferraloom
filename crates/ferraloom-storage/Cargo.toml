@@ -11,6 +11,7 @@ repository.workspace = true
 ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
+ferraloom-chunk.workspace = true
 
 log = "0.4.29"
 flate2 = "1.1.9"

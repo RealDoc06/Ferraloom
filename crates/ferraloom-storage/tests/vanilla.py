@@ -198,15 +198,39 @@ def run_server(world, jar, java, generate):
             proc.wait()
 
 
+def compact_region(path, keep):
+    data = path.read_bytes()
+    output, sector = bytearray(8192), 2
+    for index in sorted(keep):
+        offset = int.from_bytes(data[4 * index:4 * index + 4], "big")
+        start, count = offset >> 8, offset & 255
+        if not offset:
+            continue
+        output[4 * index:4 * index + 4] = ((sector << 8) | count).to_bytes(4, "big")
+        output[4096 + 4 * index:4100 + 4 * index] = data[4096 + 4 * index:4100 + 4 * index]
+        output.extend(data[start * 4096:(start + count) * 4096])
+        sector += count
+    path.write_bytes(output)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["generate", "verify"])
+    parser.add_argument("mode", choices=["generate", "verify", "compression"])
     parser.add_argument("world", nargs="?", type=Path)
     parser.add_argument("--jar", type=Path, default=os.environ.get("FERRALOOM_VANILLA_JAR"))
     parser.add_argument("--java", default=str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java")
     args = parser.parse_args()
     if args.jar is None:
         parser.error("--jar or FERRALOOM_VANILLA_JAR is required")
+    if args.mode == "compression":
+        if args.world is None:
+            parser.error("compression requires an output directory")
+        cache = args.jar.resolve().parent
+        jars = list((cache / "libraries").rglob("*.jar")) + list((cache / "versions").rglob("*.jar"))
+        if not jars:
+            parser.error("vanilla jar must have been extracted in its shared cache")
+        subprocess.run([args.java, "-cp", os.pathsep.join(map(str, jars)), str(Path(__file__).parent / "CompressionVectors.java"), "verify", str(args.world)], check=True)
+        return
     if args.mode == "generate":
         world = run_server(Path("/tmp/ferraloom-storage-nonexistent-world"), args.jar.resolve(), args.java, True)
         destination = Path(__file__).parent / "fixtures/world"
@@ -219,6 +243,13 @@ def main():
                 target = destination / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
+        region = destination / "dimensions/minecraft/overworld/region"
+        for path in region.glob("*.mca"):
+            keep = {"r.0.0.mca": {0, 1}, "r.-1.0.mca": {31}}.get(path.name)
+            if keep is None:
+                path.unlink()
+            else:
+                compact_region(path, keep)
         print("Generated fixtures:", destination)
     else:
         if args.world is None:

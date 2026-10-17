@@ -173,3 +173,20 @@ mod tests {
         assert!(RegionFileVersion::Custom.compress(&bytes).is_err());
     }
 }
+
+#[cfg(test)]
+pub(crate) fn vector_payload() -> Vec<u8> {
+    let mut random = 12345u32;
+    (0..140000)
+        .map(|i| {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            if i < 65536 {
+                (i % 71) as u8
+            } else {
+                random as u8
+            }
+        })
+        .collect()
+}

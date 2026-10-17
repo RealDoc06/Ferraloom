@@ -1,4 +1,4 @@
-use crate::{DATA_VERSION, Error, Result, check_tag_version, files};
+use crate::{Error, Result, check_tag_version, files};
 use ferraloom_nbt::{CompoundTag, NbtString, Tag};
 use rustix::fs::{FlockOperation, fcntl_lock};
 use std::{
@@ -309,7 +309,7 @@ impl PlayerDataStorage {
     fn player_path(&self, uuid: &str, suffix: &str) -> Result<PathBuf> {
         Ok(self
             .world
-            .join("playerdata")
+            .join("players/data")
             .join(format!("{}{suffix}", canonical_uuid(uuid)?)))
     }
     pub fn save(&self, uuid: &str, tag: &CompoundTag) -> Result<()> {
@@ -374,6 +374,7 @@ impl PlayerDataStorage {
     fn json_path(&self, uuid: &str, kind: PlayerJsonKind) -> Result<PathBuf> {
         Ok(self
             .world
+            .join("players")
             .join(kind.directory())
             .join(format!("{}.json", canonical_uuid(uuid)?)))
     }
@@ -437,7 +438,7 @@ mod tests {
     }
     #[test]
     fn old_and_future_data_versions_are_not_relabelled() {
-        assert!(crate::check_data_version(DATA_VERSION - 1).is_err());
-        assert!(crate::check_data_version(DATA_VERSION + 1).is_err());
+        assert!(crate::check_data_version(crate::DATA_VERSION - 1).is_err());
+        assert!(crate::check_data_version(crate::DATA_VERSION + 1).is_err());
     }
 }

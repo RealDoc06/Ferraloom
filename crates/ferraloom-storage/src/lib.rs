@@ -6,6 +6,8 @@ mod level;
 mod region;
 mod saved_data;
 mod schema;
+mod section_codec;
+pub use section_codec::SectionRegistry;
 mod worker;
 
 pub use compression::RegionFileVersion;

@@ -206,9 +206,9 @@ fn session_lock_backups_and_saved_data_dirty_tracking() {
     let players = access.player_data();
     players.save(uuid, &tag(3)).unwrap();
     players.save(uuid, &tag(4)).unwrap();
-    fs::write(dir.0.join(format!("playerdata/{uuid}.dat")), b"corrupt").unwrap();
+    fs::write(dir.0.join(format!("players/data/{uuid}.dat")), b"corrupt").unwrap();
     assert_eq!(players.load(uuid).unwrap(), Some(tag(3)));
-    assert!(fs::read_dir(dir.0.join("playerdata")).unwrap().any(|e| {
+    assert!(fs::read_dir(dir.0.join("players/data")).unwrap().any(|e| {
         e.unwrap()
             .file_name()
             .to_string_lossy()
@@ -327,7 +327,7 @@ fn rewrite_fixture(destination: &Path) -> usize {
                 let tag = crate::files::read_nbt(&path).unwrap();
                 let rewritten = if relative == Path::new("level.dat") {
                     LevelData::from_nbt(tag.clone()).unwrap().to_nbt().unwrap()
-                } else if relative.starts_with("playerdata") {
+                } else if relative.starts_with("players/data") {
                     crate::check_tag_version(&tag).unwrap();
                     tag.clone()
                 } else {
@@ -379,4 +379,50 @@ fn vanilla_accepts_rewritten_world() {
         status.success(),
         "vanilla rejected {chunks} rewritten chunks"
     );
+}
+
+#[test]
+fn reads_all_vanilla_compression_vectors() {
+    let expected = crate::compression::vector_payload();
+    for version in [
+        RegionFileVersion::Gzip,
+        RegionFileVersion::Deflate,
+        RegionFileVersion::None,
+        RegionFileVersion::Lz4,
+    ] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "tests/fixtures/compression/compression-{}.bin",
+            version as u8
+        ));
+        assert_eq!(
+            version.decompress(&fs::read(path).unwrap()).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires vanilla 26.3 server jar and JDK 25; run explicitly on the builder"]
+fn vanilla_accepts_all_rust_compression_streams() {
+    let dir = Scratch::new();
+    let payload = crate::compression::vector_payload();
+    for version in [
+        RegionFileVersion::Gzip,
+        RegionFileVersion::Deflate,
+        RegionFileVersion::None,
+        RegionFileVersion::Lz4,
+    ] {
+        fs::write(
+            dir.0.join(format!("compression-{}.bin", version as u8)),
+            version.compress(&payload).unwrap(),
+        )
+        .unwrap();
+    }
+    let status = std::process::Command::new("python3")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vanilla.py"))
+        .arg("compression")
+        .arg(&dir.0)
+        .status()
+        .unwrap();
+    assert!(status.success());
 }
