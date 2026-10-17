@@ -2,14 +2,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
-use crate::data::player_server::test::{close_fixture, player_fixture};
+use crate::data::player_server::test::{PlayerFixture, close_fixture, player_fixture};
 use pumpkin_protocol::java::client::play::CSystemChatMessage;
 use pumpkin_protocol::ser::NetworkReadSliceExt;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -852,4 +852,849 @@ async fn actual_tcp_streamed_commands_deliver_processed_prefix_and_typed_spam() 
 #[tokio::test]
 async fn actual_tcp_streamed_chat_delivers_processed_prefix_and_typed_spam() {
     actual_tcp_streamed_spam(StreamRoute::Chat).await;
+}
+
+fn connected_player(fixture: &PlayerFixture, socket: TcpStream) -> Arc<Player> {
+    let address = socket.peer_addr().unwrap();
+    let pending = PendingConnection::new(
+        socket,
+        address,
+        71,
+        PacketRateLimiter::new(false, 0.0, 0.0),
+        Arc::downgrade(&fixture.server),
+    );
+    pending.connection_state.store(ConnectionState::Play);
+    let profile = fixture.player.gameprofile.clone();
+    let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+    java.start_outgoing_packet_task();
+    let client = Arc::new(ClientPlatform::Java(java));
+    let player = Arc::new(Player::new(
+        client.clone(),
+        profile,
+        PlayerConfig::default(),
+        &fixture.player.world(),
+        pumpkin_util::GameMode::Survival,
+    ));
+    client.java().unwrap().set_player(&player);
+    player
+}
+
+mod preparation_tests {
+    use super::*;
+    use crate::plugin::{EventHandler, EventPriority};
+    use futures::future::BoxFuture;
+    use std::cell::Cell;
+    use std::collections::VecDeque;
+    use std::sync::{Mutex, Weak};
+    use std::task::{Wake, Waker};
+    use tokio::sync::Notify;
+
+    thread_local! {
+        // A reactor wake on another thread must not masquerade as the
+        // synchronous notification of the production preparation waiter.
+        static PROBING_RESOLUTION: Cell<bool> = const { Cell::new(false) };
+    }
+
+    struct PreparationPort {
+        entered: oneshot::Sender<()>,
+        release: oneshot::Receiver<bool>,
+    }
+
+    struct HoldTranslation {
+        player: Weak<Player>,
+        ports: Mutex<VecDeque<PreparationPort>>,
+    }
+
+    impl EventHandler<PacketSentEvent> for HoldTranslation {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if !self
+                    .player
+                    .upgrade()
+                    .is_some_and(|player| Arc::ptr_eq(&player, &event.player))
+                {
+                    return;
+                }
+                assert_eq!(event.packet_id, CPlayDisconnect::to_id(CURRENT_MC_VERSION));
+                let java = event.player.client.java().unwrap();
+                assert!(
+                    java.disconnect_intent.try_lock().is_ok(),
+                    "callback under transport lock"
+                );
+                assert!(event.player.packet_activity.enter_non_packet().is_none());
+                let port = self.ports.lock().unwrap().pop_front().unwrap();
+                let _ = port.entered.send(());
+                // Dropping the test's sender also releases a failed test's callback.
+                event.cancelled = port.release.await.unwrap_or(true);
+            })
+        }
+    }
+
+    fn hold_translations(
+        fixture: &PlayerFixture,
+        player: &Arc<Player>,
+        count: usize,
+    ) -> VecDeque<(oneshot::Receiver<()>, oneshot::Sender<bool>)> {
+        let mut ports = VecDeque::new();
+        let mut controls = VecDeque::new();
+        for _ in 0..count {
+            let (entered, observed) = oneshot::channel();
+            let (release, released) = oneshot::channel();
+            ports.push_back(PreparationPort {
+                entered,
+                release: released,
+            });
+            controls.push_back((observed, release));
+        }
+        fixture.server.plugin_manager.register(
+            Arc::new(HoldTranslation {
+                player: Arc::downgrade(player),
+                ports: Mutex::new(ports),
+            }),
+            EventPriority::Normal,
+            true,
+        );
+        // Only selects the real translation callback. It passes the current
+        // protocol bytes through unchanged; this is not a version-parity test.
+        player
+            .client
+            .java()
+            .unwrap()
+            .version
+            .store(JavaMinecraftVersion::V_1_21_11);
+        controls
+    }
+
+    fn start_kick(player: Arc<Player>, explicit: bool) -> JoinHandle<()> {
+        tokio::task::spawn_blocking(move || {
+            let java = player.client.java().unwrap();
+            if explicit {
+                tokio::runtime::Handle::current()
+                    .block_on(java.kick_explicit(&spam_reason(), true));
+            } else {
+                java.try_kick(&spam_reason());
+            }
+        })
+    }
+
+    fn queue_prefixes(java: &JavaClient) {
+        java.suspend_flushing();
+        for index in 0..PREFIX_COUNT {
+            java.try_send_packet(&CSystemChatMessage::new(
+                &TextComponent::text(format!("prefix_{index}")),
+                false,
+            ));
+        }
+    }
+
+    async fn lifecycle(player: &Arc<Player>, server: &Arc<Server>, returned: &AtomicBool) {
+        let java = player.client.java().unwrap();
+        java.progress_player_packets(player, server).await;
+        returned.store(true, Ordering::Release);
+        java.close();
+        java.await_tasks().await;
+    }
+
+    #[derive(Default)]
+    struct ReadWake {
+        resolution_waiter: AtomicBool,
+        ready: Notify,
+    }
+
+    impl Wake for ReadWake {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            if PROBING_RESOLUTION.get() {
+                self.resolution_waiter.store(true, Ordering::Relaxed);
+            }
+            self.ready.notify_one();
+        }
+    }
+
+    /// Observe the production resolution waiter through its registered waker.
+    /// This proves the complete TCP packet passed decode and was refused at
+    /// sealed admission: a future still waiting for input cannot pass this gate.
+    async fn reach_preparation_wait<F: Future<Output = ()>>(
+        mut transport: Pin<&mut F>,
+        java: &JavaClient,
+        returned: &AtomicBool,
+    ) {
+        let signal = Arc::new(ReadWake::default());
+        let waker = Waker::from(signal.clone());
+        loop {
+            assert!(
+                transport
+                    .as_mut()
+                    .poll(&mut Context::from_waker(&waker))
+                    .is_pending()
+            );
+            assert!(
+                !returned.load(Ordering::Acquire),
+                "reader escaped before preparation resolved"
+            );
+            PROBING_RESOLUTION.set(true);
+            java.disconnect_changed.notify_waiters();
+            PROBING_RESOLUTION.set(false);
+            if signal.resolution_waiter.load(Ordering::Relaxed) {
+                assert!(java.network_reader.lock().unwrap().is_none());
+                assert!(!java.is_closed());
+                assert!(!java.writer_finished.is_cancelled());
+                return;
+            }
+            signal.ready.notified().await;
+        }
+    }
+
+    async fn completed_tick(peer: &mut TcpStream) {
+        let mut encoder = TCPNetworkEncoder::new(peer);
+        encoder
+            .write_packet(
+                JavaClient::serialize_packet_for_version(&SClientTickEnd, CURRENT_MC_VERSION)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        encoder.flush().await.unwrap();
+    }
+
+    async fn paused_case(fixture: &PlayerFixture, explicit: bool, abort: bool) {
+        let (socket, mut peer) = tcp_pair(false).await;
+        let player = connected_player(fixture, socket);
+        let java = player.client.java().unwrap();
+        queue_prefixes(java);
+        let (entered, release) = hold_translations(fixture, &player, 1).pop_front().unwrap();
+        let kick = start_kick(player.clone(), explicit);
+        entered.await.unwrap();
+        let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+        let returned = AtomicBool::new(false);
+        let mut transport = Box::pin(lifecycle(&player, &fixture.server, &returned));
+        completed_tick(&mut peer).await;
+        reach_preparation_wait(transport.as_mut(), java, &returned).await;
+        assert!(player.inbound_packets.is_empty());
+        release.send(abort).unwrap();
+        let observation = if abort {
+            // The peer stays open: an aborted translation must not wait for its EOF.
+            let (_, result) = tokio::time::timeout(Duration::from_secs(1), async {
+                tokio::join!(&mut transport, kick)
+            })
+            .await
+            .expect("resolved abort must release reader and writer promptly");
+            result.unwrap();
+            observe_peer(peer).await
+        } else {
+            let (_, result, observation) = tokio::join!(transport, kick, observe_peer(peer));
+            result.unwrap();
+            observation
+        };
+        assert_eq!(observation.prefixes, PREFIX_COUNT, "{observation:?}");
+        assert!(observation.clean_eof, "{observation:?}");
+        assert!(observation.failure.is_none(), "{observation:?}");
+        assert_eq!(observation.typed_spam, !abort, "{observation:?}");
+        let intent = java.disconnect_intent.lock().unwrap();
+        assert_eq!(intent.deadline, Some(deadline));
+        assert_eq!(intent.preparing, 0);
+        assert_eq!(intent.queued, !abort);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn actual_tcp_completed_read_retains_decoder_during_kick_preparation() {
+        let fixture = bounded(player_fixture()).await;
+        for explicit in [false, true] {
+            for abort in [false, true] {
+                bounded(paused_case(&fixture, explicit, abort)).await;
+            }
+        }
+        bounded(close_fixture(&fixture)).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn actual_tcp_one_aborted_preparation_does_not_close_another() {
+        let fixture = bounded(player_fixture()).await;
+        bounded(async {
+            let (socket, mut peer) = tcp_pair(false).await;
+            let player = connected_player(&fixture, socket);
+            let java = player.client.java().unwrap();
+            queue_prefixes(java);
+            let mut controls = hold_translations(&fixture, &player, 2);
+            let (entered_first, release_first) = controls.pop_front().unwrap();
+            let (entered_second, release_second) = controls.pop_front().unwrap();
+            let first = start_kick(player.clone(), false);
+            entered_first.await.unwrap();
+            let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+            let second = start_kick(player.clone(), true);
+            entered_second.await.unwrap();
+            assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 2);
+            let returned = AtomicBool::new(false);
+            let mut transport = Box::pin(lifecycle(&player, &fixture.server, &returned));
+            completed_tick(&mut peer).await;
+            reach_preparation_wait(transport.as_mut(), java, &returned).await;
+            release_first.send(true).unwrap();
+            first.await.unwrap();
+            assert!(!java.is_closed());
+            assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 1);
+            reach_preparation_wait(transport.as_mut(), java, &returned).await;
+            release_second.send(false).unwrap();
+            let (_, result, observation) = tokio::join!(transport, second, observe_peer(peer));
+            result.unwrap();
+            assert_clean(&observation);
+            assert_eq!(
+                java.disconnect_intent.lock().unwrap().deadline,
+                Some(deadline)
+            );
+            assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 0);
+        })
+        .await;
+        bounded(close_fixture(&fixture)).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn actual_tcp_independent_close_can_abort_a_preparing_reason() {
+        let fixture = bounded(player_fixture()).await;
+        for explicit in [false, true] {
+            bounded(async {
+                let (socket, mut peer) = tcp_pair(false).await;
+                let player = connected_player(&fixture, socket);
+                let java = player.client.java().unwrap();
+                queue_prefixes(java);
+                let (entered, release) =
+                    hold_translations(&fixture, &player, 1).pop_front().unwrap();
+                let kick = start_kick(player.clone(), explicit);
+                entered.await.unwrap();
+                let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+                let returned = AtomicBool::new(false);
+                let mut transport = Box::pin(lifecycle(&player, &fixture.server, &returned));
+                completed_tick(&mut peer).await;
+                reach_preparation_wait(transport.as_mut(), java, &returned).await;
+
+                // An independent close is authoritative. In contrast to the
+                // ordinary preparation path, it may end the writer before enqueue.
+                java.close();
+                java.writer_finished.cancelled().await;
+                assert!(java.outgoing_packet_queue_send.is_closed());
+                assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 1);
+                release.send(false).unwrap();
+                let (_, result) = tokio::time::timeout(Duration::from_secs(1), async {
+                    tokio::join!(transport, kick)
+                })
+                .await
+                .expect("failed enqueue must resolve the still-open peer's reader promptly");
+                result.unwrap();
+                let observation = observe_peer(peer).await;
+                assert_eq!(observation.prefixes, PREFIX_COUNT, "{observation:?}");
+                assert!(!observation.typed_spam, "{observation:?}");
+                assert!(observation.clean_eof, "{observation:?}");
+                assert!(observation.failure.is_none(), "{observation:?}");
+                let intent = java.disconnect_intent.lock().unwrap();
+                assert_eq!(intent.deadline, Some(deadline));
+                assert_eq!(intent.preparing, 0);
+                assert!(!intent.queued);
+                assert_eq!(java.pending_bytes.load(Ordering::Acquire), 0);
+            })
+            .await;
+        }
+        bounded(close_fixture(&fixture)).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn actual_tcp_unresolved_preparation_expires_at_first_intent_deadline() {
+        let fixture = bounded(player_fixture()).await;
+        bounded(async {
+            let (socket, mut peer) = tcp_pair(false).await;
+            let player = connected_player(&fixture, socket);
+            let java = player.client.java().unwrap();
+            let (entered, release) = hold_translations(&fixture, &player, 1).pop_front().unwrap();
+            let kick = start_kick(player.clone(), false);
+            entered.await.unwrap();
+            let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+            let returned = AtomicBool::new(false);
+            let mut transport = Box::pin(lifecycle(&player, &fixture.server, &returned));
+            completed_tick(&mut peer).await;
+            reach_preparation_wait(transport.as_mut(), java, &returned).await;
+            tokio::time::timeout_at(deadline + Duration::from_secs(1), transport)
+                .await
+                .unwrap();
+            assert!(Instant::now() >= deadline);
+            assert!(java.is_closed());
+            release.send(true).unwrap();
+            kick.await.unwrap();
+            assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 0);
+            assert_eq!(
+                java.disconnect_intent.lock().unwrap().deadline,
+                Some(deadline)
+            );
+        })
+        .await;
+        bounded(close_fixture(&fixture)).await;
+    }
+
+    #[tokio::test]
+    async fn actual_tcp_canceled_explicit_kick_resolves_intent_and_keeps_queued_reason() {
+        let fixture = bounded(player_fixture()).await;
+        for already_eof in [false, true] {
+            bounded(async {
+                let (socket, mut peer) = tcp_pair(false).await;
+                let player = connected_player(&fixture, socket);
+                let java = player.client.java().unwrap();
+                if already_eof {
+                    peer.shutdown().await.unwrap();
+                }
+                queue_prefixes(java);
+                let reason = spam_reason();
+                let mut kick = Box::pin(java.kick_explicit(&reason, true));
+                // Current-thread runtime: the real writer cannot consume this FIFO
+                // between enqueue and the first poll of the flush receipt.
+                assert!(futures::poll!(&mut kick).is_pending());
+                assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 1);
+                assert!(java.disconnect_intent.lock().unwrap().queued);
+                drop(kick);
+                assert!(java.is_closed());
+                assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 0);
+                let returned = AtomicBool::new(false);
+                let (_, observation) = tokio::time::timeout(Duration::from_secs(1), async {
+                    tokio::join!(
+                        lifecycle(&player, &fixture.server, &returned),
+                        observe_peer(peer),
+                    )
+                })
+                .await
+                .expect("healthy or already-EOF peer must not incur the full kick deadline");
+                assert_clean(&observation);
+            })
+            .await;
+        }
+        bounded(close_fixture(&fixture)).await;
+    }
+
+    #[tokio::test]
+    async fn actual_tcp_failed_serialization_closed_queue_and_suppressed_packet_skip_wait() {
+        let fixture = bounded(player_fixture()).await;
+        for case in 0..3 {
+            bounded(async {
+                let (socket, peer) = tcp_pair(false).await;
+                let player = connected_player(&fixture, socket);
+                let java = player.client.java().unwrap();
+                match case {
+                    0 => {
+                        // Real serialization failure: login JSON exceeds the
+                        // packet codec's string bound, without a fake serializer.
+                        java.connection_state.store(ConnectionState::Login);
+                        let reason = TextComponent::text("x".repeat(i16::MAX as usize + 1));
+                        assert!(java.serialize_disconnect(&reason).is_none());
+                        java.try_kick(&reason);
+                    }
+                    1 => {
+                        java.close();
+                        java.await_tasks().await;
+                        assert!(java.outgoing_packet_queue_send.is_closed());
+                        java.try_kick(&spam_reason());
+                    }
+                    _ => java.kick_explicit(&spam_reason(), false).await,
+                }
+                let returned = AtomicBool::new(false);
+                tokio::time::timeout(
+                    Duration::from_secs(1),
+                    lifecycle(&player, &fixture.server, &returned),
+                )
+                .await
+                .expect("no-packet resolution must not wait for the still-open peer");
+                let intent = java.disconnect_intent.lock().unwrap();
+                assert_eq!(intent.preparing, 0);
+                assert!(!intent.queued);
+                assert_eq!(intent.deadline.is_none(), case == 2);
+                assert_eq!(java.pending_bytes.load(Ordering::Acquire), 0);
+                drop(peer);
+            })
+            .await;
+        }
+        bounded(close_fixture(&fixture)).await;
+    }
+}
+
+#[tokio::test]
+async fn actual_tcp_stalled_kicked_peer_uses_one_shared_deadline() {
+    let fixture = bounded(player_fixture()).await;
+    bounded(async {
+        let (socket, peer) = tcp_pair(false).await;
+        let player = connected_player(&fixture, socket);
+        let java = player.client.java().unwrap();
+        java.try_kick(&spam_reason());
+        let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+        let mut reader = Box::pin(java.progress_player_packets(&player, &fixture.server));
+        assert!(futures::poll!(&mut reader).is_pending());
+        java.writer_finished.cancelled().await;
+        // Actual TCP writer completed, but this peer neither reads nor sends EOF.
+        assert!(Instant::now() < deadline);
+        assert!(futures::poll!(&mut reader).is_pending());
+        tokio::time::timeout_at(deadline + Duration::from_secs(1), reader)
+            .await
+            .expect("reader must not start a second close budget after writer completion");
+        assert!(Instant::now() >= deadline);
+        java.await_tasks().await;
+        drop(peer);
+    })
+    .await;
+    bounded(close_fixture(&fixture)).await;
+}
+
+#[tokio::test]
+async fn actual_tcp_eof_and_non_kick_close_skip_terminal_wait() {
+    let fixture = bounded(player_fixture()).await;
+    bounded(async {
+        for peer_eof in [true, false] {
+            let (socket, mut peer) = tcp_pair(false).await;
+            let player = connected_player(&fixture, socket);
+            let java = player.client.java().unwrap();
+            if peer_eof {
+                peer.shutdown().await.unwrap();
+            } else {
+                java.close();
+            }
+            tokio::time::timeout(Duration::from_secs(1), async {
+                java.progress_player_packets(&player, &fixture.server).await;
+                java.await_tasks().await;
+            })
+            .await
+            .expect("ordinary EOF/close must not incur the five-second kick wait");
+            assert!(java.disconnect_intent.lock().unwrap().deadline.is_none());
+            assert!(java.writer_finished.is_cancelled());
+            assert!(player.inbound_packets.is_empty());
+        }
+    })
+    .await;
+    bounded(close_fixture(&fixture)).await;
+}
+
+#[tokio::test]
+async fn actual_tcp_terminal_flood_stops_at_byte_budget_before_deadline() {
+    let fixture = bounded(player_fixture()).await;
+    bounded(async {
+        let (socket, mut peer) = tcp_pair(false).await;
+        let player = connected_player(&fixture, socket);
+        let java = player.client.java().unwrap();
+        java.try_kick(&spam_reason());
+        let deadline = java.disconnect_intent.lock().unwrap().deadline.unwrap();
+        let lifecycle = async {
+            java.progress_player_packets(&player, &fixture.server).await;
+            java.await_tasks().await;
+            assert!(
+                Instant::now() < deadline,
+                "flood must hit byte cap, not timeout"
+            );
+            assert!(player.inbound_packets.is_empty());
+        };
+        let flooding = async {
+            let mut sent = 0;
+            // Valid tick frames prevent malformed input from being the reason
+            // this test ends. They must never reach gameplay after the seal.
+            let tick =
+                JavaClient::serialize_packet_for_version(&SClientTickEnd, CURRENT_MC_VERSION)
+                    .unwrap();
+            let mut encoder = TCPNetworkEncoder::new(tokio::io::sink());
+            let mut frame = Vec::new();
+            encoder.frame_packet(&tick, &mut frame).unwrap();
+            let data = frame.repeat(8192 / frame.len());
+            while sent < DISCONNECT_DISCARD_BYTES * 2 {
+                match peer.write(&data[sent % data.len()..]).await {
+                    Ok(0) => break,
+                    Ok(count) => sent += count,
+                    Err(error) => {
+                        assert!(matches!(
+                            error.kind(),
+                            io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+                        ));
+                        break;
+                    }
+                }
+            }
+            assert!(sent >= DISCONNECT_DISCARD_BYTES);
+        };
+        tokio::join!(lifecycle, flooding);
+    })
+    .await;
+    bounded(close_fixture(&fixture)).await;
+}
+
+#[tokio::test]
+async fn actual_tcp_terminal_discard_bypasses_partial_encrypted_compressed_frame() {
+    bounded(async {
+        let (mut socket, mut peer) = tcp_pair(false).await;
+        let (encoded, mut encoded_reader) = tokio::io::duplex(4096);
+        let mut encoder = TCPNetworkEncoder::new(encoded);
+        encoder.set_compression((0, 6));
+        encoder.set_encryption(&[7; 16]).unwrap();
+        encoder
+            .write_packet(Bytes::from(vec![5; 512]))
+            .await
+            .unwrap();
+        encoder.flush().await.unwrap();
+        drop(encoder);
+        let mut wire = Vec::new();
+        encoded_reader.read_to_end(&mut wire).await.unwrap();
+        assert!(wire.len() > 1);
+        peer.write_all(&wire[..1]).await.unwrap();
+        // Prove the encrypted fragment arrived before polling the real decoder.
+        assert_eq!(socket.peek(&mut [0; 1]).await.unwrap(), 1);
+        let mut decoder = TCPNetworkDecoder::new(BufReader::with_capacity(1, &mut socket));
+        decoder.set_compression(0);
+        decoder.set_encryption(&[7; 16]).unwrap();
+        let mut partial = Box::pin(decoder.get_raw_packet());
+        assert!(futures::poll!(&mut partial).is_pending());
+        drop(partial);
+        peer.write_all(&wire[1..]).await.unwrap();
+        // Deliberately not a valid encrypted/compressed frame. Terminal cleanup
+        // must accept it as opaque bytes, not resume the canceled parser.
+        peer.write_all(&[0xff; 29]).await.unwrap();
+        peer.shutdown().await.unwrap();
+        let remainder = wire.len() - 1 + 29;
+        assert_eq!(
+            decoder.discard_after_close(remainder - 1).await.unwrap(),
+            remainder - 1
+        );
+        assert_eq!(decoder.discard_after_close(2).await.unwrap(), 1);
+        assert_eq!(decoder.discard_after_close(1).await.unwrap(), 0);
+    })
+    .await;
+}
+
+/// Full campaign-sized command burst, independent of the window-four controls.
+/// Local writes are receipts, not server acknowledgments or Node callback parity.
+mod full_burst_tests {
+    use super::*;
+
+    #[derive(Debug, Default)]
+    struct BurstProducer {
+        attempted: usize,
+        completed: usize,
+        tick_ends: usize,
+        write_failure: Option<String>,
+        clean_shutdown: bool,
+    }
+
+    /// Send all 32 commands without waiting for feedback. Keep the real 50ms
+    /// TickEnd sender active until the concurrent reader observes the typed
+    /// reason or a transport end. No delays or server-side transport gates.
+    async fn produce_burst(
+        mut writer: OwnedWriteHalf,
+        peer_done: &CancellationToken,
+        typed_spam: &AtomicBool,
+        trace: &StreamTrace,
+    ) -> BurstProducer {
+        let mut result = BurstProducer::default();
+        let mut encoder = TCPNetworkEncoder::new(&mut writer);
+        encoder.set_compression(STREAM_COMPRESSION);
+        let command = StreamRoute::Command.action(0);
+        // Exact payload captured in B113's closed buffered campaign, including
+        // packet id 7 and the command string's VarInt length (24 bytes).
+        assert_eq!(&command[..], b"\x07\x18trigger spamprobe set 13");
+        assert_eq!(command.len(), 26);
+        let tick =
+            JavaClient::serialize_packet_for_version(&SClientTickEnd, CURRENT_MC_VERSION).unwrap();
+        let tick_period = Duration::from_millis(50);
+        let mut ticks = tokio::time::interval_at(Instant::now() + tick_period, tick_period);
+        ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            let (data, action) = tokio::select! {
+                biased;
+                // An already queued burst is not truncated by feedback. After
+                // all commands, only the reader owns the peer's terminal decision.
+                () = peer_done.cancelled(), if result.attempted == STREAM_ACTIONS => break,
+                _ = ticks.tick(), if result.tick_ends < STREAM_ACTIONS => {
+                    result.tick_ends += 1;
+                    (&tick, None)
+                }
+                () = std::future::ready(()), if result.attempted < STREAM_ACTIONS => {
+                    let index = result.attempted;
+                    result.attempted += 1;
+                    (&command, Some(index))
+                }
+            };
+            let packet_id = (&data[..]).get_var_int().unwrap().0;
+            let mut frame = Vec::new();
+            encoder.frame_packet(data, &mut frame).unwrap();
+            if action.is_some() {
+                assert_eq!(frame.len(), 28);
+                assert_eq!(&frame[..2], &[27, 0]);
+            }
+            trace.record(format_args!(
+                "burst write start action={action:?} packet={packet_id} wire_bytes={} typed_spam={}",
+                frame.len(), typed_spam.load(Ordering::Acquire)
+            ));
+            let write = encoder.write_frame(&frame).await;
+            trace.record(format_args!(
+                "burst write end action={action:?} packet={packet_id} result={write:?} typed_spam={}",
+                typed_spam.load(Ordering::Acquire)
+            ));
+            if let Err(error) = write {
+                result.write_failure = Some(format!(
+                    "action={action:?} packet={packet_id} write: {error:?}"
+                ));
+                break;
+            }
+            let flush = encoder.flush().await;
+            trace.record(format_args!(
+                "burst flush action={action:?} packet={packet_id} result={flush:?}"
+            ));
+            if let Err(error) = flush {
+                result.write_failure = Some(format!(
+                    "action={action:?} packet={packet_id} flush: {error:?}"
+                ));
+                break;
+            }
+            result.completed += usize::from(action.is_some());
+        }
+        drop(encoder);
+        // Preserve a failed write independently while the reader keeps trying
+        // to decode the reason. Half-close only after an actual typed reason.
+        peer_done.cancelled().await;
+        if typed_spam.load(Ordering::Acquire) {
+            match writer.shutdown().await {
+                Ok(()) => result.clean_shutdown = true,
+                Err(error) => {
+                    result.write_failure = Some(format!(
+                        "{:?}; peer shutdown: {error:?}",
+                        result.write_failure
+                    ));
+                }
+            }
+        }
+        trace.record(format_args!("burst producer end: {result:?}"));
+        result
+    }
+
+    /// The existing observer sends feedback receipts, but this receiver is
+    /// deliberately dropped: no decoded reply can grant an action credit.
+    #[tokio::test]
+    #[allow(clippy::print_stderr, clippy::too_many_lines)]
+    async fn actual_tcp_full_32_command_burst_delivers_prefix_typed_spam_and_clean_end() {
+        use crate::data::player_server::test::{drive_packet_future, stop_chunk_workers};
+        use crate::entity::EntityBase;
+        use crate::world::scoreboard::{NoTarget, ScoreboardObjective, ScoreboardScore};
+        use pumpkin_protocol::java::client::play::RenderType;
+
+        let fixture = bounded(player_fixture()).await;
+        bounded(stop_chunk_workers(&fixture)).await;
+        let world = fixture.player.world();
+        for chunk in world.level.loaded_chunks.iter() {
+            chunk.post_processing_ready.store(true, Ordering::Release);
+        }
+        let (socket, peer) = bounded(tcp_pair(false)).await;
+        let mut pending = PendingConnection::new(
+            socket,
+            peer.local_addr().unwrap(),
+            74,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&fixture.server),
+        );
+        pending.connection_state.store(ConnectionState::Play);
+        pending.network_reader.set_compression(STREAM_COMPRESSION.0);
+        pending.network_writer.set_compression(STREAM_COMPRESSION);
+        let mut profile = fixture.player.gameprofile.clone();
+        profile.id = uuid::Uuid::from_u128(104);
+        profile.name = "StreamedPlayer".into();
+        let mut java = JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        java.start_outgoing_packet_task();
+        let client = Arc::new(ClientPlatform::Java(java));
+        let player = Arc::new(Player::new(
+            client.clone(),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            pumpkin_util::GameMode::Survival,
+        ));
+        player
+            .get_entity()
+            .set_pos(pumpkin_util::math::vector3::Vector3::new(0.5, 65.0, 0.5));
+        let java = client.java().unwrap();
+        java.set_player(&player);
+        world.add_player(&player).unwrap();
+        // Same production handler/admission path as the window-four control,
+        // with budget for the entire burst and at most 32 periodic TickEnds.
+        player.packet_activity.begin_epoch();
+        {
+            let mut scoreboard = world.scoreboard.lock().unwrap();
+            scoreboard.add_objective(
+                &NoTarget,
+                ScoreboardObjective::new(
+                    "spamprobe",
+                    TextComponent::text("spamprobe"),
+                    RenderType::Integer,
+                    None,
+                    "trigger",
+                ),
+            );
+            let mut score =
+                ScoreboardScore::new("StreamedPlayer", "spamprobe", VarInt(0), None, None);
+            score.locked = false;
+            scoreboard.update_score(&NoTarget, score);
+        }
+        let trace = StreamTrace {
+            started: Instant::now(),
+            events: std::sync::Mutex::new(Vec::new()),
+        };
+        let peer_done = CancellationToken::new();
+        let typed_spam = AtomicBool::new(false);
+        let (feedback, replies) = tokio::sync::mpsc::unbounded_channel();
+        drop(replies);
+        let (reader, writer) = peer.into_split();
+        let (pending_bytes, producer, observation) = drive_packet_future(&fixture.server, async {
+            tokio::join!(
+                async {
+                    java.progress_player_packets(&player, &fixture.server).await;
+                    trace.record("burst server reader returned");
+                    java.await_tasks().await;
+                    trace.record("burst server client tasks joined");
+                    java.pending_bytes.load(Ordering::Acquire)
+                },
+                produce_burst(writer, &peer_done, &typed_spam, &trace),
+                observe_stream(
+                    reader,
+                    StreamRoute::Command,
+                    feedback,
+                    &peer_done,
+                    &typed_spam,
+                    &trace,
+                ),
+            )
+        })
+        .await;
+        eprintln!(
+            "full burst producer={producer:?}; peer={observation:?}; pending_bytes={pending_bytes}; events={:#?}",
+            trace.events.lock().unwrap()
+        );
+        let score = world
+            .scoreboard
+            .lock()
+            .unwrap()
+            .get_score("StreamedPlayer", "spamprobe")
+            .cloned();
+        let queue_empty = player.inbound_packets.is_empty();
+        let reader_released = java.network_reader.lock().unwrap().is_none();
+        let writer_finished = java.writer_finished.is_cancelled();
+        bounded(world.remove_player(&player, false)).await;
+        java.player.store(Arc::new(None));
+        bounded(close_fixture(&fixture)).await;
+
+        assert_eq!(producer.attempted, STREAM_ACTIONS, "{producer:?}");
+        assert_eq!(producer.completed, STREAM_ACTIONS, "{producer:?}");
+        assert!(producer.write_failure.is_none(), "{producer:?}");
+        assert!(producer.clean_shutdown, "{producer:?}");
+        assert_eq!(observation.prefixes, PREFIX_COUNT, "{observation:?}");
+        assert!(observation.typed_spam, "{observation:?}");
+        assert!(observation.protocol_failure.is_none(), "{observation:?}");
+        assert!(
+            matches!(observation.transport_end, Some(Ok(()))),
+            "{observation:?}"
+        );
+        assert_eq!(pending_bytes, 0);
+        assert!(queue_empty && reader_released && writer_finished);
+        let score = score.unwrap();
+        assert_eq!(score.value, VarInt(13));
+        assert!(score.locked);
+    }
 }
