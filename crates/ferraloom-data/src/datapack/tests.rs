@@ -61,6 +61,97 @@ fn pack_order_and_tag_merge_replace_optional() {
 }
 
 #[test]
+fn resolved_tags_preserve_order_and_test_membership_across_words() {
+    use crate::{Block, registries::block, tags::BlockTags};
+    let selected = [0, 63, 64, block::ALL.len() - 1].map(|i| block::ALL[i]);
+    let mut pack = Pack::new("custom");
+    pack.insert(
+        "test:tags/block/custom.json".parse().unwrap(),
+        serde_json::to_vec(&serde_json::json!({
+            "values": selected.map(Block::name),
+        }))
+        .unwrap(),
+    );
+    let tags = TagSet::<Block>::load(&ResourceManager::new(vec![pack])).unwrap();
+    assert!(tags.diagnostics.is_empty());
+    let tag = tags.resolve_name(&"test:custom".parse().unwrap()).unwrap();
+    assert_eq!(tags.values(tag), selected);
+    assert_eq!(tags.name(tag).to_string(), "test:custom");
+    assert_eq!(tags.resolve(TagKey::new("test:custom")), Some(tag));
+    for &block in block::ALL {
+        assert_eq!(tags.contains(tag, block), selected.contains(&block));
+    }
+    assert!(tags.resolve(BlockTags::SUPPORTS_VEGETATION).is_none());
+    assert!(!tags.contains_key(BlockTags::SUPPORTS_VEGETATION, Block::DIRT));
+}
+
+#[test]
+fn generated_tag_keys_cover_vanilla_and_static_registries_resolve() {
+    use crate::{Block, EntityType, Item, registries::fluid, tags::*};
+    let path = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&path)).unwrap()]);
+    let blocks = TagSet::<Block>::load(&resources).unwrap();
+    let fluids = TagSet::<fluid::Id>::load(&resources).unwrap();
+    let items = TagSet::<Item>::load(&resources).unwrap();
+    let entities = TagSet::<EntityType>::load(&resources).unwrap();
+    assert!(blocks.diagnostics.is_empty(), "{:?}", blocks.diagnostics);
+    assert!(fluids.diagnostics.is_empty(), "{:?}", fluids.diagnostics);
+    assert!(items.diagnostics.is_empty(), "{:?}", items.diagnostics);
+    assert!(
+        entities.diagnostics.is_empty(),
+        "{:?}",
+        entities.diagnostics
+    );
+    let water = fluids.resolve(FluidTags::WATER).unwrap();
+    assert!(fluids.contains(water, fluid::Id::WATER));
+    assert!(fluids.contains_key(FluidTags::WATER, fluid::Id::WATER));
+    assert!(fluids.contains(water, fluid::Id::FLOWING_WATER));
+    assert!(!fluids.contains(water, fluid::Id::LAVA));
+    assert!(blocks.contains(blocks.resolve(BlockTags::DIRT).unwrap(), Block::DIRT));
+    for (ordinal, &key) in BlockTags::ALL.iter().enumerate() {
+        assert_eq!(key.ordinal(), Some(ordinal));
+        let tag = blocks.resolve_name(&key.name().parse().unwrap());
+        assert_eq!(blocks.resolve(key), tag);
+        for &block in crate::registries::block::ALL {
+            assert_eq!(
+                blocks.contains_key(key, block),
+                tag.is_some_and(|tag| blocks.contains(tag, block))
+            );
+        }
+    }
+    assert!(items.contains(items.resolve(ItemTags::LOGS).unwrap(), Item::OAK_LOG));
+    assert!(entities.contains(
+        entities.resolve(EntityTypeTags::ARTHROPOD).unwrap(),
+        EntityType::SPIDER,
+    ));
+    for (registry, keys) in [
+        (
+            "block",
+            BlockTags::ALL
+                .iter()
+                .map(|key| key.name())
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "fluid",
+            FluidTags::ALL.iter().map(|key| key.name()).collect(),
+        ),
+        ("item", ItemTags::ALL.iter().map(|key| key.name()).collect()),
+        (
+            "entity_type",
+            EntityTypeTags::ALL.iter().map(|key| key.name()).collect(),
+        ),
+    ] {
+        for name in resources.registry(&format!("tags/{registry}")).keys() {
+            assert!(
+                keys.contains(&name.to_string().as_str()),
+                "missing key {registry}/{name}"
+            );
+        }
+    }
+}
+
+#[test]
 fn zip_and_directory_have_identical_resources() {
     let root = std::env::temp_dir().join(format!("ferraloom-pack-{}", std::process::id()));
     fs::create_dir_all(root.join("data/test/registry")).unwrap();
