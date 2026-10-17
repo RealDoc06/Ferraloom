@@ -618,6 +618,13 @@ impl Persistent for Sound {
             Holder::Direct(Box::new(SoundEvent::from_json(v)?))
         }))
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(SoundEvent::from_nbt(v)?))
+        }))
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
@@ -631,6 +638,13 @@ impl Persistent for TrimMaterialHolder {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
             Holder::Direct(Box::new(TrimMaterial::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimMaterial::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -648,6 +662,13 @@ impl Persistent for TrimPatternHolder {
             Holder::Direct(Box::new(TrimPattern::from_json(v)?))
         }))
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimPattern::from_nbt(v)?))
+        }))
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
@@ -661,6 +682,13 @@ impl Persistent for InstrumentHolder {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
             Holder::Direct(Box::new(Instrument::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(Instrument::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -688,6 +716,13 @@ impl Persistent for BannerPatternHolder {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
             Holder::Direct(Box::new(BannerPattern::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(BannerPattern::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
