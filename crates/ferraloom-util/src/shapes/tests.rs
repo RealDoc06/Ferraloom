@@ -1,8 +1,8 @@
 use super::*;
 use crate::BlockPos;
 
-struct Reader<'a>(&'a [u8]);
-impl Reader<'_> {
+struct Reader<'a>(&'a [u8], Vec<&'a [u8]>);
+impl<'a> Reader<'a> {
     fn bytes<const N: usize>(&mut self) -> [u8; N] {
         let (head, tail) = self.0.split_at(N);
         self.0 = tail;
@@ -41,6 +41,19 @@ impl Reader<'_> {
         (0..self.count()).map(|_| self.doubles()).collect()
     }
     fn snapshot(&mut self) -> Snapshot {
+        let index = self.count();
+        if index == self.1.len() {
+            let length = self.count();
+            let (snapshot, rest) = self.0.split_at(length);
+            self.1.push(snapshot);
+            self.0 = rest;
+        }
+        let mut reader = Reader(self.1[index], Vec::new());
+        let snapshot = reader.raw_snapshot();
+        assert!(reader.0.is_empty());
+        snapshot
+    }
+    fn raw_snapshot(&mut self) -> Snapshot {
         let kind = match self.byte() {
             0 => VoxelShapeKind::Cube,
             1 => VoxelShapeKind::Array,
@@ -212,12 +225,13 @@ fn check_lines(actual: &[[f64; 6]], expected: &[[f64; 6]], label: &str) {
 /// were recorded by our Java harness from the unmodified vanilla 26.3 jar.
 #[test]
 fn vanilla_shape_operations_and_every_block_state() {
-    let mut reader = Reader(include_bytes!("vanilla.bin"));
+    let mut reader = Reader(include_bytes!("vanilla.bin"), Vec::new());
     assert_eq!(reader.int(), 0x53485031);
     let mut shapes = Vec::new();
     let mut record = 0;
     let mut states = 0;
-    let mut counts = [0; 12];
+    let mut rejected = [false; 16];
+    let mut counts = [0; 16];
     loop {
         let tag = reader.byte();
         if tag == 255 {
@@ -255,9 +269,12 @@ fn vanilla_shape_operations_and_every_block_state() {
                     } else {
                         join_unoptimized(&a, &b, op)
                     })
-                } else {
+                } else if !rejected[op as usize] {
                     assert!(std::panic::catch_unwind(|| join_unoptimized(&a, &b, op)).is_err());
                     assert!(std::panic::catch_unwind(|| join_is_not_empty(&a, &b, op)).is_err());
+                    rejected[op as usize] = true;
+                    None
+                } else {
                     None
                 }
             }
@@ -380,6 +397,146 @@ fn vanilla_shape_operations_and_every_block_state() {
                 }
                 None
             }
+            12 => {
+                let a = reader.shape(&shapes);
+                let b = reader.shape(&shapes);
+                let axis = Axis::VALUES[reader.byte() as usize];
+                let cost = reader.count();
+                let first = reader.boolean();
+                let second = reader.boolean();
+                let merger = IndexMerger::new(cost, a.coords(axis), b.coords(axis), first, second);
+                let expected_kind = [
+                    IndexMergerKind::DiscreteCube,
+                    IndexMergerKind::Identical,
+                    IndexMergerKind::NonOverlapping,
+                    IndexMergerKind::Indirect,
+                ][reader.byte() as usize];
+                assert_eq!(merger.kind(), expected_kind, "record {record} merger");
+                assert_eq!(
+                    merger.coordinates().len(),
+                    reader.count(),
+                    "record {record} merger size"
+                );
+                assert_eq!(
+                    merger.coordinates().is_cube(),
+                    reader.boolean(),
+                    "record {record} merger coordinate type"
+                );
+                for i in 0..merger.coordinates().len() {
+                    assert_bits(
+                        merger.coordinates().get(i),
+                        reader.double(),
+                        &format!("record {record} merger coordinate"),
+                    );
+                }
+                assert_eq!(
+                    merger.indexes().len(),
+                    reader.count(),
+                    "record {record} merger indexes"
+                );
+                for (i, pair) in merger.indexes().iter().enumerate() {
+                    assert_eq!(
+                        *pair,
+                        [reader.int(), reader.int()],
+                        "record {record} mapping"
+                    );
+                    assert_eq!(i, reader.count(), "record {record} merged index");
+                }
+                None
+            }
+            13 => {
+                let list: Vec<_> = (0..reader.count()).map(|_| reader.shape(&shapes)).collect();
+                let axis = Axis::VALUES[reader.byte() as usize];
+                let moving = reader.aabb();
+                let distance = reader.double();
+                assert_bits(
+                    collide(axis, moving, &list, distance),
+                    reader.double(),
+                    &format!("record {record} iterable collision"),
+                );
+                None
+            }
+            14 => {
+                let shape = reader.shape(&shapes);
+                let kind = reader.byte();
+                let descending = reader.boolean();
+                let placement = reader.boolean();
+                let y = reader.double();
+                let fluid_collisions = reader.boolean();
+                let default_value = reader.boolean();
+                let context: Box<dyn CollisionContext<Item = u8, Fluid = u8>> = match kind {
+                    0 => Box::new(EmptyCollisionContext::new(false)),
+                    1 => Box::new(EmptyCollisionContext::new(true)),
+                    2 => Box::new(PositionCollisionContext::new(y)),
+                    3 => Box::new(EntityCollisionContext {
+                        descending,
+                        placement,
+                        entity_bottom: y,
+                        always_collide_with_fluid: fluid_collisions,
+                        held_item: 1,
+                        entity: NonLivingEntity,
+                    }),
+                    _ => panic!("unknown context kind"),
+                };
+                assert_eq!(
+                    context.is_descending(),
+                    reader.boolean(),
+                    "record {record} descending"
+                );
+                assert_eq!(
+                    context.is_placement(),
+                    reader.boolean(),
+                    "record {record} placement"
+                );
+                assert_eq!(
+                    context.always_collide_with_fluid(),
+                    reader.boolean(),
+                    "record {record} fluid collisions"
+                );
+                assert_eq!(
+                    context.is_above(&shape, BlockPos::new(0, 5, 0), default_value),
+                    reader.boolean(),
+                    "record {record} above"
+                );
+                assert_eq!(
+                    context.is_holding_item(&1),
+                    reader.boolean(),
+                    "record {record} holding stick"
+                );
+                assert_eq!(
+                    context.is_holding_item(&2),
+                    reader.boolean(),
+                    "record {record} holding stone"
+                );
+                assert_eq!(
+                    context.can_stand_on_fluid(&0, &1),
+                    reader.boolean(),
+                    "record {record} stand on fluid"
+                );
+                None
+            }
+            15 => {
+                let shape = reader.shape(&shapes);
+                for _ in 0..4 {
+                    let point = reader.vec3();
+                    let closest = shape.closest_point_to(point);
+                    assert_eq!(
+                        closest.is_some(),
+                        reader.boolean(),
+                        "record {record} closest point presence"
+                    );
+                    if let Some(closest) = closest {
+                        for actual in [closest.x, closest.y, closest.z] {
+                            assert_bits(
+                                actual,
+                                reader.double(),
+                                &format!("record {record} closest point"),
+                            );
+                        }
+                    }
+                }
+                None
+            }
             _ => panic!("unknown record tag {tag}"),
         };
         if let Some(shape) = result {
@@ -394,6 +551,22 @@ fn vanilla_shape_operations_and_every_block_state() {
         "{record} vanilla records, {states} registry states, {} shapes; tag counts {counts:?}",
         shapes.len()
     );
+}
+
+struct NonLivingEntity;
+impl EntityCollisionData for NonLivingEntity {
+    type Item = u8;
+    type Fluid = u8;
+    type HeldItem = u8;
+    fn is_holding_item(&self, held: &u8, item: &u8) -> bool {
+        held == item
+    }
+    fn can_stand_on_fluid(&self, _fluid: &u8) -> bool {
+        false
+    }
+    fn is_same_fluid(&self, a: &u8, b: &u8) -> bool {
+        a == b
+    }
 }
 
 #[test]

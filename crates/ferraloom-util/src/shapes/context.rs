@@ -37,19 +37,21 @@ pub trait CollisionContext {
 pub trait EntityCollisionData {
     type Item: ?Sized;
     type Fluid: ?Sized;
-    fn is_holding_item(&self, item: &Self::Item) -> bool;
+    type HeldItem;
+    fn is_holding_item(&self, held_item: &Self::HeldItem, item: &Self::Item) -> bool;
     fn can_stand_on_fluid(&self, fluid: &Self::Fluid) -> bool;
     fn is_same_fluid(&self, first: &Self::Fluid, second: &Self::Fluid) -> bool;
 }
 
 /// Port of EntityCollisionContext's captured movement/placement data. `entity`
-/// supplies main-hand membership and living-entity fluid-standing behavior.
-#[derive(Clone, Debug)]
-pub struct EntityCollisionContext<E> {
+/// supplies item membership and living-entity fluid-standing behavior. The
+/// held stack is captured separately, just as vanilla captures getMainHandItem.
+pub struct EntityCollisionContext<E: EntityCollisionData> {
     pub descending: bool,
     pub placement: bool,
     pub entity_bottom: f64,
     pub always_collide_with_fluid: bool,
+    pub held_item: E::HeldItem,
     pub entity: E,
 }
 impl<E: EntityCollisionData> CollisionContext for EntityCollisionContext<E> {
@@ -62,7 +64,7 @@ impl<E: EntityCollisionData> CollisionContext for EntityCollisionContext<E> {
         above(self.entity_bottom, shape, pos)
     }
     fn is_holding_item(&self, item: &Self::Item) -> bool {
-        self.entity.is_holding_item(item)
+        self.entity.is_holding_item(&self.held_item, item)
     }
     fn always_collide_with_fluid(&self) -> bool {
         self.always_collide_with_fluid

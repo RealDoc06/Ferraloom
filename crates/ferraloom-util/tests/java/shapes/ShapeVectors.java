@@ -17,6 +17,7 @@ public final class ShapeVectors {
     static DataOutputStream out;
     static final List<VoxelShape> shapes = new ArrayList<>();
     static final Map<String, Integer> registryShapes = new HashMap<>();
+    static final Map<String, Integer> snapshots = new HashMap<>();
     static final Field DISCRETE;
     static { try { DISCRETE = VoxelShape.class.getDeclaredField("shape"); DISCRETE.setAccessible(true); }
         catch (ReflectiveOperationException e) { throw new ExceptionInInitializerError(e); } }
@@ -52,7 +53,13 @@ public final class ShapeVectors {
         lines(stream,s,true);
     }
     static int result(VoxelShape s) throws Exception {
-        int id = shapes.size(); shapes.add(s); snapshot(out,s); return id;
+        int id = shapes.size(); shapes.add(s);
+        var bytes = new ByteArrayOutputStream(); snapshot(new DataOutputStream(bytes),s);
+        byte[] data=bytes.toByteArray();String key=Base64.getEncoder().encodeToString(data);
+        Integer index=snapshots.get(key);
+        if(index==null){index=snapshots.size();snapshots.put(key,index);out.writeInt(index);out.writeInt(data.length);out.write(data);}
+        else out.writeInt(index);
+        return id;
     }
     static int box(double... bounds) throws Exception {
         out.writeByte(1); doubles(out,bounds);
@@ -100,6 +107,41 @@ public final class ShapeVectors {
         for(var a:Direction.Axis.values())out.writeBoolean(rotation.inverts(a));
         doubles(out,point.x,point.y,point.z);result(Shapes.rotate(shapes.get(id),rotation,point));
     }
+    static void merger(int a,int b,Direction.Axis axis,int cost,boolean firstOnly,boolean secondOnly) throws Exception {
+        var method=Shapes.class.getDeclaredMethod("createIndexMerger",int.class,it.unimi.dsi.fastutil.doubles.DoubleList.class,it.unimi.dsi.fastutil.doubles.DoubleList.class,boolean.class,boolean.class);
+        method.setAccessible(true);
+        var merger=(IndexMerger)method.invoke(null,cost,shapes.get(a).getCoords(axis),shapes.get(b).getCoords(axis),firstOnly,secondOnly);
+        out.writeByte(12);out.writeInt(a);out.writeInt(b);out.writeByte(axis.ordinal());out.writeInt(cost);out.writeBoolean(firstOnly);out.writeBoolean(secondOnly);
+        out.writeByte(switch(merger.getClass().getSimpleName()){case "DiscreteCubeMerger"->0;case "IdenticalMerger"->1;case "NonOverlappingMerger"->2;case "IndirectMerger"->3;default->throw new AssertionError();});
+        out.writeInt(merger.size());out.writeBoolean(merger.getList().getClass().getSimpleName().equals("CubePointRange"));
+        for(double v:merger.getList())doubles(out,v);
+        var indexes=new ArrayList<int[]>();merger.forMergedIndexes((x,y,z)->{indexes.add(new int[]{x,y,z});return true;});
+        out.writeInt(indexes.size());for(var index:indexes)for(int i:index)out.writeInt(i);
+    }
+    static void iterableCollision(List<Integer> ids,Direction.Axis axis,AABB moving,double distance)throws Exception {
+        out.writeByte(13);out.writeInt(ids.size());for(int id:ids)out.writeInt(id);out.writeByte(axis.ordinal());
+        doubles(out,moving.minX,moving.minY,moving.minZ,moving.maxX,moving.maxY,moving.maxZ,distance);
+        doubles(out,Shapes.collide(axis,moving,ids.stream().map(shapes::get).toList(),distance));
+    }
+    static net.minecraft.world.item.ItemStack heldStack() {
+        // These queries need item identity only; component registries are normally
+        // bound by a world datapack reload, which this geometry harness does not run.
+        try {
+            var constructor=net.minecraft.world.item.ItemStack.class.getDeclaredConstructor(net.minecraft.core.Holder.class,int.class,net.minecraft.core.component.PatchedDataComponentMap.class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(net.minecraft.world.item.Items.STICK.builtInRegistryHolder(),1,new net.minecraft.core.component.PatchedDataComponentMap(net.minecraft.core.component.DataComponentMap.EMPTY));
+        }catch(ReflectiveOperationException e){throw new RuntimeException(e);}
+    }
+    static class Context extends EntityCollisionContext {
+        Context(boolean descending,boolean placement,double y,boolean fluid){super(descending,placement,y,heldStack(),fluid,null);}
+    }
+    static void context(int id,int kind,boolean descending,boolean placement,double y,boolean fluid,boolean defaultValue)throws Exception {
+        CollisionContext context=switch(kind){case 0->CollisionContext.empty();case 1->CollisionContext.emptyWithFluidCollisions();case 2->CollisionContext.positionContext(y);case 3->new Context(descending,placement,y,fluid);default->throw new AssertionError();};
+        out.writeByte(14);out.writeInt(id);out.writeByte(kind);out.writeBoolean(descending);out.writeBoolean(placement);doubles(out,y);out.writeBoolean(fluid);out.writeBoolean(defaultValue);
+        out.writeBoolean(context.isDescending());out.writeBoolean(context.isPlacement());out.writeBoolean(context.alwaysCollideWithFluid());out.writeBoolean(context.isAbove(shapes.get(id),new BlockPos(0,5,0),defaultValue));
+        out.writeBoolean(context.isHoldingItem(net.minecraft.world.item.Items.STICK));out.writeBoolean(context.isHoldingItem(net.minecraft.world.item.Items.STONE));
+        out.writeBoolean(context.canStandOnFluid(net.minecraft.world.level.material.Fluids.EMPTY.defaultFluidState(),net.minecraft.world.level.material.Fluids.WATER.defaultFluidState()));
+    }
     static int imported(VoxelShape shape) throws Exception {
         var bytes=new ByteArrayOutputStream();snapshot(new DataOutputStream(bytes),shape);
         var key=Base64.getEncoder().encodeToString(bytes.toByteArray());
@@ -121,6 +163,11 @@ public final class ShapeVectors {
         clip(id,new Vec3(0.5,0.5,0.5),new Vec3(0.50001,0.5,0.5),BlockPos.ZERO);
         clip(id,new Vec3(0.5,0.5,0.5),new Vec3(1,1,1),BlockPos.ZERO);
         clip(id,new Vec3(13,5,-7),new Vec3(16,7,-5),new BlockPos(14,5,-7));
+        out.writeByte(15);out.writeInt(id);
+        for(var point:List.of(new Vec3(-2,0,0.5),new Vec3(0.5,0.5,0.5),new Vec3(1,1,1),new Vec3(2,-0.0,-3))) {
+            doubles(out,point.x,point.y,point.z);var closest=shapes.get(id).closestPointTo(point);out.writeBoolean(closest.isPresent());
+            if(closest.isPresent()){var p=closest.get();doubles(out,p.x,p.y,p.z);}
+        }
         out.writeByte(11);out.writeInt(id);
         for(var axis:Direction.Axis.values())for(double b:new double[]{-1e-7,0,0.5,1,Double.NaN})for(double c:new double[]{-1e-7,0,0.5,1,Double.NaN}) {
             doubles(out,b,c,shapes.get(id).min(axis,b,c),shapes.get(id).max(axis,b,c));
@@ -170,6 +217,25 @@ public final class ShapeVectors {
                 int a=box(0,0,0,0.5,1,1), b=box(0.5+gap,0,0,1,1,1);
                 for(int op=0;op<16;op++)join(a,b,op,false);
             }
+            for(int i=1;i<candidates.size();i++)for(var axis:Direction.Axis.values())for(int flags=0;flags<4;flags++)for(int cost:new int[]{1,257}) {
+                // Empty lists are excluded from the cube merger's nonzero gcd contract.
+                int a=candidates.get(i),b=candidates.get(1+(i*13)%(candidates.size()-1));
+                merger(a,b,axis,cost,(flags&1)!=0,(flags&2)!=0);
+                merger(a,a,axis,cost,(flags&1)!=0,(flags&2)!=0);
+            }
+            for(var axis:Direction.Axis.values())for(double distance:new double[]{-2,-1e-7,Math.nextUp(-1e-7),-0.0,Math.nextDown(1e-7),1e-7,2,Double.NaN}) {
+                iterableCollision(List.of(),axis,new AABB(-1,0,0,0,1,1),distance);
+                iterableCollision(List.of(empty),axis,new AABB(-1,0,0,0,1,1),distance);
+                iterableCollision(List.of(empty,block,candidates.get(7),infinity),axis,new AABB(-1,0,0,0,1,1),distance);
+            }
+            for(double gap:new double[]{-1e-7,Math.nextDown(-1e-7),Math.nextUp(-1e-7),-0.0,0,Math.nextDown(1e-7),1e-7,Math.nextUp(1e-7)})for(var axis:Direction.Axis.values()) {
+                double[] low={0.25,0.25,0.25},high={0.75,0.75,0.75};
+                low[axis.ordinal()]=-1;high[axis.ordinal()]=gap;
+                for(double distance:new double[]{1e-7,0.25,1,2})collide(block,axis,new AABB(low[0],low[1],low[2],high[0],high[1],high[2]),distance);
+                low[axis.ordinal()]=1+gap;high[axis.ordinal()]=2;
+                for(double distance:new double[]{-1e-7,-0.25,-1,-2})collide(block,axis,new AABB(low[0],low[1],low[2],high[0],high[1],high[2]),distance);
+            }
+            for(int id:List.of(empty,block,candidates.get(7)))for(double y:new double[]{-Double.MAX_VALUE,5,6-9.999999747378752E-6,Math.nextUp(6-9.999999747378752E-6),6,Double.NaN})for(int kind=0;kind<4;kind++)for(int flags=0;flags<16;flags++)context(id,kind,(flags&1)!=0,(flags&2)!=0,y,(flags&4)!=0,(flags&8)!=0);
             out.writeByte(255);
             System.out.printf("states=%d unique_registry_shapes=%d shape_results=%d%n",states,unique.size(),shapes.size());
         }
