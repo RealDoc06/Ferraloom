@@ -6,8 +6,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 |---|---|---|---|---|---|
 | player.join.initial-state | Send login, dimension, permissions, abilities, recipes, effects, inventory and scoreboard state | `PlayerList#placeNewPlayer` | | - | todo |
 | player.movement.invalid-values | Reject NaN positions or nonfinite rotation and clamp packet coordinates | `ServerGamePacketListenerImpl#containsInvalidValues; ServerGamePacketListenerImpl#clampHorizontal; ServerGamePacketListenerImpl#clampVertical` | | - | todo |
-| player.movement.too-quickly | Check packet movement against allowed velocity with elytra and movement-rule branches | `ServerGamePacketListenerImpl#handlePlayerPositionChange` | `player::tests::movement_sweep_cannot_tunnel_through_terrain` | - | partial: ordinary terrain sweep; vehicle and step paths remain |
-| player.movement.collision-correction | Detect moved-wrongly and newly introduced collisions and correct authoritative position | `ServerGamePacketListenerImpl#handlePlayerPositionChange` | | - | todo |
+| player.movement.too-quickly | Check packet movement against allowed velocity with elytra and movement-rule branches | `ServerGamePacketListenerImpl#handlePlayerPositionChange` |  | - | partial |
+| player.movement.collision-correction | Detect moved-wrongly and newly introduced collisions and correct authoritative position | `ServerGamePacketListenerImpl#handlePlayerPositionChange` | `player::tests::movement_sweep_cannot_tunnel_through_terrain` | - | partial |
 | player.movement.teleport-ack | Match pending teleport ids and positions and resend corrections after the timeout | `ServerGamePacketListenerImpl#handleAcceptTeleportPacket; ServerGamePacketListenerImpl#updateAwaitingTeleport` | | - | todo |
 | player.movement.floating | Track floating players and vehicles and disconnect after allowed flight ticks | `ServerGamePacketListenerImpl#tick` | | - | todo |
 | player.movement.vehicle | Validate controlling passenger vehicle movement and correct invalid moves | `ServerGamePacketListenerImpl#handleMoveVehicle` | | - | todo |

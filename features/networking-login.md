@@ -50,4 +50,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | networking-login.bundle.delimiter | Decode and encode packet bundles using delimiters and enforce bundle packet constraints | `PacketBundlePacker; PacketBundleUnpacker; BundlerInfo` | | - | todo |
 | networking-login.login.custom-query | Reject unexpected login custom-query replies with the vanilla login behavior | `ServerLoginPacketListenerImpl#handleCustomQueryPacket` | | - | todo |
 
-| networking-login.security.chat-certificate | Verify profile certificates, signed message chains and last-seen acknowledgement windows | `ProfilePublicKey; SignedMessageChain; LastSeenMessagesValidator` | `chat::tests::signed_chain_rejects_tampering_and_acknowledgement_retraction` | - | partial: unit and runtime integration awaiting validation |
+| networking-login.security.chat-certificate | Verify profile certificates, signed message chains and last-seen acknowledgement windows | `ProfilePublicKey; SignedMessageChain; LastSeenMessagesValidator` | `chat::tests::signed_chain_rejects_tampering_and_acknowledgement_retraction` | - | partial |
