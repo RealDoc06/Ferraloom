@@ -442,6 +442,7 @@ def validate_boot(boot: dict, role: str) -> None:
         case = boot['cases'][name]
         require(case['name'] == name and case['subject']['label'] == name and case['boot'] == role
                 and case['t0'] == boot['t0'], 'Case name/subject/boot ownership mismatch')
+        require(('attacks' in case) == (name not in STATE_CASES), 'Wrong attack evidence presence for case')
         validate_case(case)
         if name in STATE_CASES:
             require(case['values'] == case['subject']['initial'] and case['gametime_before'] == case['gametime_after'] == boot['t0'],
@@ -544,7 +545,8 @@ class Probe:
         return actual
 
     def retain(self) -> None:
-        write_json(self.server.directory / 'boot-evidence.json', self.entry)
+        (self.server.directory / 'boot-evidence.json').write_text(
+            json.dumps(self.entry, allow_nan=False, separators=(',', ':')) + '\n')
 
     def field(self, subject: dict, field: str, kind: str) -> dict:
         command = f'data get entity {subject["uuid"]} {field}'
@@ -659,7 +661,6 @@ class Probe:
                 command = f'if data entity {identity} {{Health:{literal}}}'
                 witness = result[identity] = {'uuid': identity, 'nbt_type': 'Float', 'literal': literal, 'command': command}
                 self.case.setdefault('non_target_witnesses', []).append(witness)
-                self.retain()
                 witness['predicate'] = typed_predicate(self.server, command)
         self.retain()
         return result
@@ -939,6 +940,7 @@ def run_campaign(args: argparse.Namespace, run: Path, report: dict, original: Pa
         finally:
             if fixture is not None:
                 errors = fixture.cleanup()
+                entry['watchdog_events'] = deepcopy(fixture.server.abort_events)
                 if fixture.processes:
                     entry['teardown'] = deepcopy(fixture.processes[-1])
                 try:

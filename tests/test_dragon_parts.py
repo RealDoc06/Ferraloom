@@ -443,7 +443,8 @@ class DragonValidatorTests(unittest.TestCase):
                          report['boots']['java_death1']['subjects'][0]['entity_id'])
 
     def test_partial_misowned_duplicated_or_out_of_order_four_boot_reports_stay_failed(self):
-        for defect in ('missing_boot', 'order', 'missing_case', 'extra_case', 'misowned', 'duplicate_subject', 'stale_two_boot'):
+        for defect in ('missing_boot', 'order', 'missing_case', 'extra_case', 'misowned', 'duplicate_subject', 'stale_two_boot',
+                       'frozen_parent_removed', 'death_boot_not_removed', 'state_attacks'):
             report = campaign()
             frozen = report['boots']['java_frozen24']
             if defect == 'missing_boot':
@@ -458,10 +459,26 @@ class DragonValidatorTests(unittest.TestCase):
                 frozen['cases']['default_hover']['boot'] = 'java_death1'
             elif defect == 'duplicate_subject':
                 frozen['subjects'][1] = deepcopy(frozen['subjects'][0])
+            elif defect == 'frozen_parent_removed':
+                raw = b'\x4e\x01' + dragon.protocol.varint(frozen['subjects'][0]['entity_id'])
+                removal = envelope(raw, kind='remove', packet_id=78, sequence=300,
+                    entity_ids=[frozen['subjects'][0]['entity_id']], complete=True, decoded_bytes=len(raw), payload_bytes=len(raw))
+                frozen['observations'].append(removal)
+                frozen['wire'].append({**removal, 'pid': frozen['clients'][0]['pid'], 'direction': 'clientbound'})
+            elif defect == 'death_boot_not_removed':
+                death = report['boots']['java_death1']
+                death['observations'] = [packet for packet in death['observations'] if packet['kind'] != 'remove']
+                death['wire'] = [packet for packet in death['wire'] if packet['packet_id'] != 78]
+            elif defect == 'state_attacks':
+                frozen['cases']['default_hover']['attacks'] = []
             else:
                 report['completed_boots'] = ['java_fresh', 'rust_fresh']
-            with self.subTest(defect=defect), self.assertRaises(AssertionError):
+            with self.subTest(defect=defect), self.assertRaises(AssertionError) as rejected:
                 dragon.validate_campaign(report)
+            if defect in ('frozen_parent_removed', 'death_boot_not_removed'):
+                self.assertEqual(str(rejected.exception), 'Wrong parent removal count')
+            elif defect == 'state_attacks':
+                self.assertEqual(str(rejected.exception), 'Wrong attack evidence presence for case')
             self.assertTrue(all(row['result'] == 'failed' for row in dragon.campaign_rows(report)))
 
     def test_each_boot_requires_clean_owned_nonoverlapping_process_boundaries(self):
@@ -646,13 +663,24 @@ class DragonValidatorTests(unittest.TestCase):
             full.assert_called_once_with(victim, 'Health', 'Float')
             live.assert_called_once_with(probe.server, command)
             self.assertEqual(values[other['uuid']], non_target(other['uuid'], other['initial']['Health']))
-        with patch.object(probe, 'retain'), patch.object(probe, 'field', return_value=victim['initial']['Health']), \
+        retained = []
+        with patch.object(probe, 'retain', side_effect=lambda: retained.append(deepcopy(probe.entry))), \
+                patch.object(probe, 'field', return_value=victim['initial']['Health']), \
                 patch.object(dragon, 'typed_predicate', side_effect=AssertionError('actual predicate failed: Health changed')):
             with self.assertRaisesRegex(AssertionError, 'Health changed'):
                 probe.health_map(victim)
             witness = probe.case['non_target_witnesses'][-1]
             self.assertEqual(witness['command'], command)
             self.assertNotIn('predicate', witness)
+            probe.entry['cases'] = {victim['label']: {}}
+            cleanup = Mock()
+            with patch.object(dragon, 'interaction_deadline'):
+                self.assertFalse(probe.row(victim['label'], lambda: probe.health_map(victim), cleanup))
+            failed = retained[-1]['cases'][victim['label']]
+            self.assertEqual(failed['result'], 'failed')
+            self.assertEqual(failed['non_target_witnesses'][-1], witness)
+            self.assertIn('Health changed', failed['error'])
+            cleanup.assert_not_called()
 
 
 if __name__ == '__main__':
