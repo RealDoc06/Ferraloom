@@ -141,7 +141,7 @@ pub trait WorldgenBlockBehavior: Sync {
         _mirror: Mirror,
         _rotation: Rotation,
         _finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
@@ -344,6 +344,23 @@ impl<'a> WorldGenRegion<'a> {
         }
         Ok(true)
     }
+    /// Port of BulkSectionAccess#getSection followed by setBlockState. Ore
+    /// features check write bounds and build height before taking this path.
+    /// It intentionally changes only section storage and its derived counts.
+    pub fn set_block_in_section(&mut self, p: [i32; 3], state: BlockState) -> Result<(), Error> {
+        let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        let chunk = &mut self.chunks[index].chunk;
+        if p[1] < chunk.min_y || p[1] >= chunk.min_y + chunk.height {
+            return Err(Error("bulk section write outside build height".into()));
+        }
+        chunk.sections[((p[1] - chunk.min_y) >> 4) as usize].set_block_state(
+            (p[0] & 15) as u8,
+            (p[1] & 15) as u8,
+            (p[2] & 15) as u8,
+            state,
+        );
+        Ok(())
+    }
     pub fn mark_post_processing(&mut self, p: [i32; 3]) -> Result<(), Error> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
         let chunk = &mut self.chunks[index].chunk;
@@ -424,7 +441,7 @@ impl<'a> WorldGenRegion<'a> {
         mirror: Mirror,
         rotation: Rotation,
         finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
