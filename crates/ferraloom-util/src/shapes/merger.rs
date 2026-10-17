@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::{Coordinates, EPSILON};
 
 /// The four vanilla IndexMerger algorithms. The selected algorithm determines
@@ -49,8 +47,7 @@ impl IndexMerger {
         if second.get(m) < first.get(0) - EPSILON {
             return Self::non_overlapping(second, first, true);
         }
-        // fastutil DoubleList.equals uses Double.doubleToLongBits, including -0.
-        if n == m && (0..=n).all(|i| same_double(first.get(i), second.get(i))) {
+        if n == m && first.same_list(second) {
             return Self {
                 kind: IndexMergerKind::Identical,
                 coords: first.clone(),
@@ -129,7 +126,7 @@ impl IndexMerger {
         }
         Self {
             kind: IndexMergerKind::Indirect,
-            coords: Coordinates::Array(Arc::from(values)),
+            coords: Coordinates::array(values),
             indexes,
         }
     }
@@ -150,8 +147,4 @@ fn gcd(mut a: usize, mut b: usize) -> usize {
         (a, b) = (b, a % b);
     }
     a
-}
-
-fn same_double(a: f64, b: f64) -> bool {
-    a.to_bits() == b.to_bits() || a.is_nan() && b.is_nan()
 }

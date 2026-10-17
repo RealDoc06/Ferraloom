@@ -231,7 +231,7 @@ fn vanilla_shape_operations_and_every_block_state() {
     let mut record = 0;
     let mut states = 0;
     let mut rejected = [false; 16];
-    let mut counts = [0; 16];
+    let mut counts = [0; 17];
     loop {
         let tag = reader.byte();
         if tag == 255 {
@@ -537,6 +537,48 @@ fn vanilla_shape_operations_and_every_block_state() {
                 }
                 None
             }
+            16 => {
+                let a = Coordinates::array(
+                    (0..reader.count())
+                        .map(|_| reader.double())
+                        .collect::<Vec<_>>(),
+                );
+                let b = Coordinates::array(
+                    (0..reader.count())
+                        .map(|_| reader.double())
+                        .collect::<Vec<_>>(),
+                );
+                let b = if reader.boolean() { a.clone() } else { b };
+                let first = reader.boolean();
+                let second = reader.boolean();
+                let merger = IndexMerger::new(1, &a, &b, first, second);
+                let kind = [
+                    IndexMergerKind::DiscreteCube,
+                    IndexMergerKind::Identical,
+                    IndexMergerKind::NonOverlapping,
+                    IndexMergerKind::Indirect,
+                ][reader.byte() as usize];
+                assert_eq!(merger.kind(), kind, "record {record} literal merger");
+                assert_eq!(
+                    merger.coordinates().len(),
+                    reader.count(),
+                    "record {record} literal merger size"
+                );
+                assert_eq!(merger.coordinates().is_cube(), reader.boolean());
+                for i in 0..merger.coordinates().len() {
+                    assert_bits(
+                        merger.coordinates().get(i),
+                        reader.double(),
+                        &format!("record {record} literal coordinate"),
+                    );
+                }
+                assert_eq!(merger.indexes().len(), reader.count());
+                for (i, pair) in merger.indexes().iter().enumerate() {
+                    assert_eq!(*pair, [reader.int(), reader.int()]);
+                    assert_eq!(i, reader.count());
+                }
+                None
+            }
             _ => panic!("unknown record tag {tag}"),
         };
         if let Some(shape) = result {
@@ -546,7 +588,7 @@ fn vanilla_shape_operations_and_every_block_state() {
     }
     assert!(reader.0.is_empty());
     assert_eq!(states, 35723);
-    assert_eq!(shapes.len(), 27601);
+    assert_eq!(shapes.len(), 27665);
     println!(
         "{record} vanilla records, {states} registry states, {} shapes; tag counts {counts:?}",
         shapes.len()

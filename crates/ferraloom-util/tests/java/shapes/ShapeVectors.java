@@ -112,11 +112,21 @@ public final class ShapeVectors {
         method.setAccessible(true);
         var merger=(IndexMerger)method.invoke(null,cost,shapes.get(a).getCoords(axis),shapes.get(b).getCoords(axis),firstOnly,secondOnly);
         out.writeByte(12);out.writeInt(a);out.writeInt(b);out.writeByte(axis.ordinal());out.writeInt(cost);out.writeBoolean(firstOnly);out.writeBoolean(secondOnly);
+        writeMerger(merger);
+    }
+    static void writeMerger(IndexMerger merger)throws Exception {
         out.writeByte(switch(merger.getClass().getSimpleName()){case "DiscreteCubeMerger"->0;case "IdenticalMerger"->1;case "NonOverlappingMerger"->2;case "IndirectMerger"->3;default->throw new AssertionError();});
         out.writeInt(merger.size());out.writeBoolean(merger.getList().getClass().getSimpleName().equals("CubePointRange"));
         for(double v:merger.getList())doubles(out,v);
         var indexes=new ArrayList<int[]>();merger.forMergedIndexes((x,y,z)->{indexes.add(new int[]{x,y,z});return true;});
         out.writeInt(indexes.size());for(var index:indexes)for(int i:index)out.writeInt(i);
+    }
+    static void literalMerger(double[] a,double[] b,boolean identity,boolean firstOnly,boolean secondOnly)throws Exception {
+        var first=it.unimi.dsi.fastutil.doubles.DoubleArrayList.wrap(a);
+        var second=identity?first:it.unimi.dsi.fastutil.doubles.DoubleArrayList.wrap(b);
+        var method=Shapes.class.getDeclaredMethod("createIndexMerger",int.class,it.unimi.dsi.fastutil.doubles.DoubleList.class,it.unimi.dsi.fastutil.doubles.DoubleList.class,boolean.class,boolean.class);
+        method.setAccessible(true);var merged=(IndexMerger)method.invoke(null,1,first,second,firstOnly,secondOnly);
+        out.writeByte(16);out.writeInt(a.length);doubles(out,a);out.writeInt(b.length);doubles(out,b);out.writeBoolean(identity);out.writeBoolean(firstOnly);out.writeBoolean(secondOnly);writeMerger(merged);
     }
     static void iterableCollision(List<Integer> ids,Direction.Axis axis,AABB moving,double distance)throws Exception {
         out.writeByte(13);out.writeInt(ids.size());for(int id:ids)out.writeInt(id);out.writeByte(axis.ordinal());
@@ -212,6 +222,7 @@ public final class ShapeVectors {
                 rotate(id,rotation,new Vec3(0.5,0.5,0.5));rotate(id,rotation,new Vec3(-0.0,0.25,-0.125));
             }
             for(int a:candidates)for(int op=0;op<16;op++){join(a,a,op,false);join(a,empty,op,false);join(empty,a,op,false);}
+            for(int a:List.of(block,cube,slice,candidates.get(9)))for(int op=0;op<16;op++){join(infinity,a,op,false);join(a,infinity,op,false);}
             var unique=new HashSet<Integer>();int states=0;
             for(var blockType:BuiltInRegistries.BLOCK)for(var state:blockType.getStateDefinition().getPossibleStates()) {
                 int collision=imported(state.getCollisionShape(EmptyBlockGetter.INSTANCE,BlockPos.ZERO));
@@ -255,6 +266,10 @@ public final class ShapeVectors {
                 for(double distance:new double[]{-1e-7,-0.25,-1,-2})collide(block,axis,new AABB(low[0],low[1],low[2],high[0],high[1],high[2]),distance);
             }
             for(int id:List.of(empty,block,candidates.get(7)))for(double y:new double[]{-Double.MAX_VALUE,5,6-9.999999747378752E-6,Math.nextUp(6-9.999999747378752E-6),6,Double.NaN})for(int kind=0;kind<4;kind++)for(int flags=0;flags<16;flags++)context(id,kind,(flags&1)!=0,(flags&2)!=0,y,(flags&4)!=0,(flags&8)!=0);
+            for(var pair:List.of(new double[][]{{-0.0,1},{0.0,1}},new double[][]{{Double.NaN,1},{Double.NaN,1}},new double[][]{{0,Double.NaN},{0,Double.NaN}},new double[][]{{Double.NEGATIVE_INFINITY,Double.POSITIVE_INFINITY},{Double.NEGATIVE_INFINITY,Double.POSITIVE_INFINITY}}))for(int flags=0;flags<4;flags++) {
+                literalMerger(pair[0],pair[1],false,(flags&1)!=0,(flags&2)!=0);
+                literalMerger(pair[0],pair[0],true,(flags&1)!=0,(flags&2)!=0);
+            }
             out.writeByte(255);
             System.out.printf("states=%d unique_registry_shapes=%d shape_results=%d%n",states,unique.size(),shapes.size());
         }

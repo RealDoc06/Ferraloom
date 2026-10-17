@@ -25,45 +25,67 @@ pub const BIG_EPSILON: f64 = 1.0e-6;
 /// Ports CubePointRange, DoubleArrayList and OffsetDoubleList. Nested offsets
 /// are kept separate because regrouping additions changes double rounding.
 #[derive(Clone, Debug)]
-pub enum Coordinates {
+pub struct Coordinates(Arc<CoordinateStorage>);
+
+#[derive(Debug)]
+enum CoordinateStorage {
     Cube(usize),
     Array(Arc<[f64]>),
-    Offset { source: Arc<Self>, offset: f64 },
+    Offset { source: Coordinates, offset: f64 },
 }
 
 impl Coordinates {
     pub fn cube(intervals: usize) -> Self {
-        Self::Cube(intervals)
+        assert!(
+            intervals > 0,
+            "cube point range needs at least one interval"
+        );
+        Self(Arc::new(CoordinateStorage::Cube(intervals)))
     }
     pub fn array(values: impl Into<Arc<[f64]>>) -> Self {
-        Self::Array(values.into())
+        Self(Arc::new(CoordinateStorage::Array(values.into())))
     }
     pub fn offset(&self, offset: f64) -> Self {
-        Self::Offset {
-            source: Arc::new(self.clone()),
+        Self(Arc::new(CoordinateStorage::Offset {
+            source: self.clone(),
             offset,
-        }
+        }))
     }
     pub fn len(&self) -> usize {
-        match self {
-            Self::Cube(n) => n + 1,
-            Self::Array(a) => a.len(),
-            Self::Offset { source, .. } => source.len(),
+        match self.0.as_ref() {
+            CoordinateStorage::Cube(n) => n + 1,
+            CoordinateStorage::Array(a) => a.len(),
+            CoordinateStorage::Offset { source, .. } => source.len(),
         }
     }
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
     pub fn is_cube(&self) -> bool {
-        matches!(self, Self::Cube(_))
+        matches!(self.0.as_ref(), CoordinateStorage::Cube(_))
     }
     pub fn get(&self, index: usize) -> f64 {
         assert!(index < self.len());
-        match self {
-            Self::Cube(n) => index as f64 / *n as f64,
-            Self::Array(a) => a[index],
-            Self::Offset { source, offset } => source.get(index) + offset,
+        match self.0.as_ref() {
+            CoordinateStorage::Cube(n) => index as f64 / *n as f64,
+            CoordinateStorage::Array(a) => a[index],
+            CoordinateStorage::Offset { source, offset } => source.get(index) + offset,
         }
+    }
+
+    // fastutil DoubleList.equals compares primitive doubles, with an identity
+    // shortcut. In particular +0 == -0, while distinct NaN lists are unequal.
+    fn same_list(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+            || match (self.0.as_ref(), other.0.as_ref()) {
+                (CoordinateStorage::Array(a), CoordinateStorage::Array(b)) if Arc::ptr_eq(a, b) => {
+                    true
+                }
+                _ => {
+                    self.len() == other.len()
+                        && (0..self.len()).all(|i| self.get(i) == other.get(i))
+                }
+            }
     }
 }
 
