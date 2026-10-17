@@ -12,6 +12,27 @@ pub enum BiomeSource {
     TheEnd,
 }
 impl BiomeSource {
+    pub fn possible_biomes(&self) -> Vec<Identifier> {
+        match self {
+            Self::Fixed(id) => vec![id.clone()],
+            Self::MultiNoise(parameters) => parameters
+                .values()
+                .iter()
+                .map(|(_, id)| id.clone())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+            Self::TheEnd => [
+                "the_end",
+                "end_highlands",
+                "end_midlands",
+                "small_end_islands",
+                "end_barrens",
+            ]
+            .map(|name| name.parse().unwrap())
+            .to_vec(),
+        }
+    }
     pub fn decode(v: &Value, resources: &ResourceManager) -> Result<Self, Error> {
         let ty = kind(v)?;
         match ty.to_string().as_str() {
@@ -104,11 +125,19 @@ impl BiomeSource {
             step: [4; 3],
         };
         if let Self::MultiNoise(parameters) = self {
-            router
-                .sample_climate_volume(compiler, samplers, volume)
-                .into_iter()
-                .map(|target| parameters.find(target, search).clone())
-                .collect()
+            let targets = router.sample_climate_volume(compiler, samplers, volume);
+            let mut result = vec![parameters.values()[0].1.clone(); volume.len()];
+            for section_y in (0..size[1]).step_by(4) {
+                for x in 0..size[0] {
+                    for y in section_y..(section_y + 4).min(size[1]) {
+                        for z in 0..size[2] {
+                            let index = volume.index(x, y, z);
+                            result[index] = parameters.find(targets[index], search).clone();
+                        }
+                    }
+                }
+            }
+            result
         } else {
             (0..volume.len())
                 .map(|i| {

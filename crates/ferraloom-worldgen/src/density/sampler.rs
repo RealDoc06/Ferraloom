@@ -11,12 +11,12 @@ pub struct NodeId(usize);
 
 /// Chunk-local equivalent of SamplerContext. A cache holds one volume and one
 /// scalar value independently, including vanilla's packed BlockPos key aliasing.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SamplerContext {
     enabled: bool,
     cells: HashMap<NodeId, CacheCell>,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct CacheCell {
     volume: Option<(DensityVolume, Vec<f32>)>,
     scalar: Option<(i64, f32)>,
@@ -85,6 +85,9 @@ impl DensityFunctionCompiler {
             memo: Vec::new(),
             caches: Vec::new(),
         }
+    }
+    pub fn noise_random(&self) -> PositionalRandomFactory {
+        self.random
     }
     pub fn positional_random(&self, name: &Identifier) -> PositionalRandomFactory {
         self.random
@@ -302,7 +305,7 @@ impl DensityFunctionCompiler {
             },
         })
     }
-    fn create_noise(&self, holder: &Holder<NoiseSpec>) -> Result<NoiseStack, Error> {
+    pub fn create_noise(&self, holder: &Holder<NoiseSpec>) -> Result<NoiseStack, Error> {
         let Holder::Reference(id) = holder else {
             return Err(Error(
                 "RandomState requires a registry key for noise samplers".into(),

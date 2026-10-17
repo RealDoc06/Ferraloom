@@ -36,3 +36,7 @@ pub mod material;
 pub mod settings;
 
 pub mod aquifer;
+
+pub mod biome_manager;
+pub mod generator;
+pub mod surface;
