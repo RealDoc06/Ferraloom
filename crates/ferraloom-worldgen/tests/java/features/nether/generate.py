@@ -26,4 +26,4 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-nether-java-') as directory:
     subprocess.run([str(JDK / 'bin/javac'), '-cp', classpath, '-d', str(directory), *map(str, sources)], check=True, cwd=directory)
     out = HERE.parents[3] / 'src/feature/misc/testdata'
     out.mkdir(exist_ok=True)
-    subprocess.run([str(JDK / 'bin/java'), '-Xmx1G', '-XX:+EnableDynamicAgentLoading', '-cp', str(directory) + ':' + classpath, 'NetherEndGolden', str(out)], check=True, cwd=directory)
+    subprocess.run([str(JDK / 'bin/java'), '-Xmx1G', '-XX:+EnableDynamicAgentLoading', '-cp', str(directory) + ':' + classpath, 'NetherEndGolden', str(out), str(out / 'template.snbt')], check=True, cwd=directory)

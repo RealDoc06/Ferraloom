@@ -29,7 +29,28 @@ fn cases() -> Vec<Value> {
 }
 fn resources() -> ResourceManager {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
-    ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()])
+    let mut pack = Pack::new("template feature fixtures");
+    let template = ferraloom_nbt::parse(include_str!("testdata/template.snbt")).unwrap();
+    let mut empty = template.clone();
+    empty.as_compound_mut().unwrap().insert(
+        "blocks",
+        ferraloom_nbt::Tag::List(ferraloom_nbt::ListTag::new()),
+    );
+    for (name, tag) in [("solid", template), ("empty", empty)] {
+        let mut bytes = Vec::new();
+        ferraloom_nbt::NbtIo::write(
+            &mut bytes,
+            ferraloom_nbt::Compression::Gzip,
+            &ferraloom_nbt::RootFormat::Named("".into()),
+            &tag,
+        )
+        .unwrap();
+        pack.insert(
+            format!("ferraloom:structure/{name}.nbt").parse().unwrap(),
+            bytes,
+        );
+    }
+    ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap(), pack])
 }
 fn generator(resources: &ResourceManager) -> NoiseBasedChunkGenerator {
     let data = Arc::new(GenerationData::load(resources).unwrap());
@@ -133,6 +154,9 @@ fn missing_behavior(case: &Value) -> Option<&str> {
         "end_podium" if case["config"]["active"] == true => {
             Some("Level.destroyBlock(dropResources=true)")
         }
+        "template" if case["name"] == "custom:template_solid" => {
+            Some("StructureTemplate neighbor shapes and updateNeighborsAt")
+        }
         "bonus_chest" => Some("RandomizableContainer.setBlockEntityLootTable; torch canSurvive"),
         _ if case["entities"].as_array().is_some_and(|v| !v.is_empty()) => {
             Some("EndCrystal creation and FireBlock.getState")
@@ -157,7 +181,7 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
         let ground =
             Block::from_name(&format!("minecraft:{}", case["ground"].as_str().unwrap())).unwrap();
         let baseline = baselines
-            .entry((center, ground.id(), mode))
+            .entry((center, ground.protocol_id(), mode))
             .or_insert_with(|| chunks(&generator, center, ground, mode));
         let mut chunks = baseline.clone();
         let observer = ObserveWrites::default();
@@ -223,6 +247,82 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
                 state,
                 "final block {p:?} {label}"
             );
+        }
+
+        let expected_entities = case["block_entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| {
+                let p = std::array::from_fn::<_, 3, _>(|i| {
+                    entry["position"][i].as_i64().unwrap() as i32
+                });
+                (
+                    p,
+                    ferraloom_nbt::parse_compound(entry["nbt"].as_str().unwrap()).unwrap(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut actual_entities = BTreeMap::new();
+        let mut crystals = Vec::new();
+        for cx in center[0] - 2..=center[0] + 2 {
+            for cz in center[1] - 2..=center[1] + 2 {
+                let chunk = region.chunk([cx, cz], ChunkStatus::Empty).unwrap();
+                for (&p, tag) in &chunk.block_entities {
+                    let mut tag = tag.clone();
+                    for key in ["id", "x", "y", "z"] {
+                        tag.remove(key);
+                    }
+                    actual_entities.insert(p, tag);
+                }
+                crystals.extend(chunk.entities.iter());
+            }
+        }
+        assert_eq!(actual_entities, expected_entities, "block entities {label}");
+        let expected_crystals = case["entities"].as_array().unwrap();
+        assert_eq!(
+            crystals.len(),
+            expected_crystals.len(),
+            "end crystals {label}"
+        );
+        for (actual, expected) in crystals.iter().zip(expected_crystals) {
+            assert_eq!(
+                actual.get_string("id").unwrap().to_string_lossy(),
+                expected["id"].as_str().unwrap(),
+                "{label}"
+            );
+            let pos = actual.get_list("Pos").unwrap();
+            for i in 0..3 {
+                assert_eq!(
+                    pos[i].as_double().unwrap(),
+                    expected["position"][i].as_f64().unwrap(),
+                    "crystal position {label}"
+                );
+            }
+            assert_eq!(
+                actual.get_list("Rotation").unwrap()[0]
+                    .as_float()
+                    .unwrap()
+                    .to_bits(),
+                (expected["yaw"].as_f64().unwrap() as f32).to_bits(),
+                "crystal yaw {label}"
+            );
+            assert_eq!(
+                actual.get_boolean_or("Invulnerable", false),
+                expected["invulnerable"].as_bool().unwrap(),
+                "{label}"
+            );
+            if expected["beam"].is_null() {
+                assert!(actual.get("beam_target").is_none(), "{label}");
+            } else {
+                assert_eq!(
+                    actual.get_int_array("beam_target").unwrap().as_slice(),
+                    &std::array::from_fn::<_, 3, _>(
+                        |i| expected["beam"][i].as_i64().unwrap() as i32
+                    ),
+                    "{label}"
+                );
+            }
         }
     }
 }

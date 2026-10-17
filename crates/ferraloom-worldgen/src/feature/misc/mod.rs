@@ -79,10 +79,12 @@ fn decode_selector(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Arc<dyn Featu
             features: list(field(v, "features")?)?
                 .iter()
                 .map(|v| {
-                    Ok((
-                        l.placed(field(v, "feature")?)?,
-                        bounded(field(v, "chance")?, 0.0, 1.0)? as f32,
-                    ))
+                    let feature = l.placed(field(v, "feature")?)?;
+                    let chance = float(field(v, "chance")?)?;
+                    if !(0.0..=1.0).contains(&chance) {
+                        return Err(Error("selector chance outside [0,1]".into()));
+                    }
+                    Ok((feature, chance))
                 })
                 .collect::<Result<_, Error>>()?,
             default: l.placed(field(v, "default")?)?,

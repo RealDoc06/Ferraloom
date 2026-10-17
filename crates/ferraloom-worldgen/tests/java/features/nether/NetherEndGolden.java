@@ -37,6 +37,7 @@ public final class NetherEndGolden {
     static final class ControlledLevel implements InvocationHandler {
         final Map<BlockPos,BlockState> blocks=new HashMap<>();
         final Map<BlockPos,BlockEntity> blockEntities=new HashMap<>();
+        final Map<ChunkPos,ProtoChunk> chunks=new HashMap<>();
         final JsonArray writes=new JsonArray(),entities=new JsonArray();
         final WorldGenLevel level;
         final String ground;final int mode;
@@ -47,11 +48,20 @@ public final class NetherEndGolden {
             var row=new JsonArray();row.add(p.getX());row.add(p.getY());row.add(p.getZ());row.add(Block.getId(state));row.add(flags);writes.add(row);
             if(p.getY() < -64 || p.getY()>319)return false;
             blocks.put(p,state);
+            var chunk=chunks.get(ChunkPos.containing(p));if(chunk!=null)chunk.setBlockState(p,state,flags);
             if(state.getBlock() instanceof EntityBlock entityBlock)blockEntities.put(p,entityBlock.newBlockEntity(p,state));else blockEntities.remove(p);
             return true;
         }
+        ProtoChunk chunk(int x,int z){
+            return chunks.computeIfAbsent(new ChunkPos(x,z),key->{
+                var chunk=new ProtoChunk(key,UpgradeData.EMPTY,LevelHeightAccessor.create(-64,384),PalettedContainerFactory.create(registries),null);
+                for(var p:BlockPos.betweenClosed(x*16,-64,z*16,x*16+15,66,z*16+15))chunk.setBlockState(p,block(p),0);
+                return chunk;
+            });
+        }
         public Object invoke(Object proxy,Method method,Object[] args)throws Throwable{
             return switch(method.getName()){
+                case "getChunk" -> args[0] instanceof BlockPos p ? chunk(p.getX()>>4,p.getZ()>>4) : chunk((int)args[0],(int)args[1]);
                 case "getBlockState" -> block((BlockPos)args[0]);
                 case "getFluidState" -> block((BlockPos)args[0]).getFluidState();
                 case "isEmptyBlock" -> block((BlockPos)args[0]).isAir();
@@ -76,7 +86,7 @@ public final class NetherEndGolden {
                 case "getRandom" -> new LegacyRandomSource(0);
                 case "getBiome" -> registries.lookupOrThrow(Registries.BIOME).getOrThrow(net.minecraft.resources.ResourceKey.create(Registries.BIOME,Identifier.withDefaultNamespace("plains")));
                 case "getBlockTicks","getFluidTicks" -> throw new UnsupportedOperationException(method.toString());
-                case "scheduleTick","blockUpdated","updateNeighborsAt","neighborShapeChanged","markAboveForPostProcessing","setCurrentlyGenerating" -> null;
+                case "playSound","levelEvent","gameEvent","scheduleTick","blockUpdated","updateNeighborsAt","neighborShapeChanged","markAboveForPostProcessing","setCurrentlyGenerating" -> null;
                 case "ensureCanWrite","hasChunk","hasChunksAt","isAreaLoaded","isStateAtPosition","isFluidAtPosition" -> {
                     if(method.getName().equals("isStateAtPosition"))yield ((java.util.function.Predicate<BlockState>)args[1]).test(block((BlockPos)args[0]));
                     if(method.getName().equals("isFluidAtPosition"))yield ((java.util.function.Predicate<net.minecraft.world.level.material.FluidState>)args[1]).test(block((BlockPos)args[0]).getFluidState());
@@ -118,6 +128,11 @@ public final class NetherEndGolden {
         Mockito.when(entityLevel.getServer()).thenReturn(server);Mockito.when(server.getStructureTemplateManager()).thenReturn(templates);
         Mockito.when(templates.getOrCreate(Mockito.any())).thenAnswer(call->{
             Identifier id=call.getArgument(0);var template=new net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate();
+            if(id.getNamespace().equals("ferraloom")){
+                var tag=net.minecraft.nbt.TagParser.parseCompoundFully(Files.readString(Path.of(args[1])));
+                if(id.getPath().equals("empty"))tag.put("blocks",new net.minecraft.nbt.ListTag());
+                template.load(BuiltInRegistries.BLOCK,tag);return template;
+            }
             try(var stream=NetherEndGolden.class.getResourceAsStream("/data/"+id.getNamespace()+"/structure/"+id.getPath()+".nbt")){
                 if(stream!=null)template.load(BuiltInRegistries.BLOCK,net.minecraft.nbt.NbtIo.readCompressed(stream,net.minecraft.nbt.NbtAccounter.unlimitedHeap()));
             }
@@ -152,6 +167,11 @@ public final class NetherEndGolden {
         for(int i=0;i<configs.size();i++){
             var config=JsonParser.parseString(configs.get(i));var feature=Feature.DIRECT_CODEC.parse(ops,config).getOrThrow();
             for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:ORIGINS)for(int mode:new int[]{0,1})run(cases,"custom:"+i,config,feature,generator,"netherrack",mode,origin,seed,false);
+        }
+        for(String name:List.of("empty","solid")){
+            var config=JsonParser.parseString("{type:'template',templates:[{data:{id:'ferraloom:"+name+"'},weight:2},{data:{id:'ferraloom:"+name+"',rotations:['clockwise_90','180']},weight:3}]}");
+            var feature=Feature.DIRECT_CODEC.parse(ops,config).getOrThrow();
+            for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:ORIGINS)for(int mode:new int[]{0,1})run(cases,"custom:template_"+name,config,feature,generator,"netherrack",mode,origin,seed,false);
         }
         WorldgenGolden.write(Path.of(args[0]).resolve("nether_end.json.gz"),cases);
         System.out.println("Captured "+cases.size()+" vanilla cases");
