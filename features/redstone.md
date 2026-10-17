@@ -1,0 +1,45 @@
+# Redstone mechanics
+
+Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
+
+| ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
+|---|---|---|---|---|---|
+| redstone.wire.power-decay | Decay wire power by one per wire step and combine with block signal strength | `RedstoneWireEvaluator#getIncomingWireSignal; DefaultRedstoneWireEvaluator#calculateTargetStrength` | | - | todo |
+| redstone.wire.feedback-suppression | Suppress wire output while measuring external block power | `RedstoneWireEvaluator#getBlockSignal` | | - | todo |
+| redstone.wire.connections | Resolve side, upward and disconnected wire shapes across solid and nonsolid blocks | `RedstoneWireBlock#getConnectionState` | | - | todo |
+| redstone.wire.dot-cross | Toggle dot and cross wire form and update affected neighbors | `RedstoneWireBlock#useWithoutItem` | | - | todo |
+| redstone.wire.directional-output | Provide power on connected sides and upward but not downward | `RedstoneWireBlock#getSignal; RedstoneWireBlock#getDirectSignal` | | - | todo |
+| redstone.wire.vanilla-update-order | Reproduce default evaluator changed-state checks and neighbor notification iteration | `DefaultRedstoneWireEvaluator#updatePowerStrength` | | - | todo |
+| redstone.wire.experimental-evaluator | Select the alternate orientation-based evaluator only with the redstone experiment enabled | `ExperimentalRedstoneWireEvaluator; RedstoneWireBlock` | | - | todo |
+| redstone.updates.direction-order | Apply vanilla neighbor direction ordering and skipped-face behavior | `NeighborUpdater#UPDATE_ORDER; CollectingNeighborUpdater.MultiNeighborUpdate` | | - | todo |
+| redstone.updates.depth-first | Process nested neighbor updates before resuming the current multi-neighbor operation | `CollectingNeighborUpdater#runUpdates` | | - | todo |
+| redstone.updates.chain-limit | Stop excess chained updates at max-chained-neighbor-updates and reset after the chain | `CollectingNeighborUpdater#addAndRun` | | - | todo |
+| redstone.updates.shape-flags | Apply shape updates, block-update flags and recursion-depth limits independently | `NeighborUpdater#executeShapeUpdate; Level#setBlock` | | - | todo |
+| redstone.power.strong-weak | Distinguish weak power, direct power and conductive-block relay | `SignalGetter` | | - | todo |
+| redstone.piston.quasi-connectivity | Power pistons through above-position signal checks without inventing extra update triggers | `PistonBaseBlock#getNeighborSignal` | | - | todo |
+| redstone.piston.push-limit | Reject piston movement that would push more than 12 blocks across all sticky branches | `PistonStructureResolver#addBlockLine` | | - | todo |
+| redstone.piston.sticky-branch | Collect slime and honey branches and avoid sticking slime to honey | `PistonStructureResolver#canStickToEachOther; PistonStructureResolver#addBranchingBlocks` | | - | todo |
+| redstone.piston.branch-order | Reorder push lists when sticky branches collide | `PistonStructureResolver#reorderListAtCollision` | | - | todo |
+| redstone.piston.immovable | Respect push reactions, world height, border, extended pistons and block entities | `PistonBaseBlock#isPushable` | | - | todo |
+| redstone.piston.block-event-recheck | Recheck power when extension and contraction block events execute | `PistonBaseBlock#triggerEvent` | | - | todo |
+| redstone.piston.short-pulse | Handle retract and drop events for still-moving blocks and sticky piston block dropping | `PistonBaseBlock#checkIfExtend; PistonBaseBlock#triggerEvent` | | - | todo |
+| redstone.piston.movement-updates | Move blocks and destroy popped blocks with vanilla reverse placement and notification order | `PistonBaseBlock#moveBlocks` | | - | todo |
+| redstone.piston.entity-collision | Move colliding entities with piston progress and respect movement caps | `PistonMovingBlockEntity#tick; PistonMovingBlockEntity#moveCollidedEntities` | | - | todo |
+| redstone.piston.slime-honey | Apply slime velocity and honey dragging to entities on moving blocks | `PistonMovingBlockEntity` | | - | todo |
+| redstone.observer.pulse | Schedule the observer pulse on watched state changes and ignore changes during its pulse | `ObserverBlock#updateShape; ObserverBlock#tick` | | - | todo |
+| redstone.repeater.delay-lock | Apply selectable repeater delay, side locking and scheduled-tick priority | `RepeaterBlock; DiodeBlock` | | - | todo |
+| redstone.comparator.modes | Compare or subtract side input with the main input and store output in the block entity | `ComparatorBlock#calculateOutputSignal; ComparatorBlockEntity` | | - | todo |
+| redstone.comparator.container-read | Read container fullness, analog-output blocks and item frames through the permitted block path | `ComparatorBlock#getInputSignal` | | - | todo |
+| redstone.torch.burnout | Track rapid torch toggles, burn out and schedule recovery | `RedstoneTorchBlock#tick; RedstoneTorchBlock#isToggledTooFrequently` | | - | todo |
+| redstone.rail.power-propagation | Propagate powered-rail signal through connected slopes with the recursion limit | `PoweredRailBlock#findPoweredRailSignal` | | - | todo |
+| redstone.rail.detector | Detect minecarts, update powered state and expose comparator output | `DetectorRailBlock#checkPressed; DetectorRailBlock#getAnalogOutputSignal` | | - | todo |
+| redstone.rail.switch | Choose rail connections and junction branch from neighbor layout and signal | `RailState#place` | | - | todo |
+| redstone.rail.activator | Activate riding and explosive minecart behavior on powered activator rails | `AbstractMinecart; MinecartTNT` | | - | todo |
+| redstone.hopper.cooldown | Apply transfer cooldown, powered disable state and push/pull slot order | `HopperBlockEntity#pushItemsTick; HopperBlockEntity#tryMoveItems` | | - | todo |
+| redstone.dispenser.quasi-connectivity | Trigger dispenser or dropper from direct or above-position power and schedule its action | `DispenserBlock#neighborChanged` | | - | todo |
+| redstone.dispenser.behaviors | Dispatch item-specific dispense behavior and fallback ejection | `DispenseItemBehavior#bootStrap; DefaultDispenseItemBehavior` | | - | todo |
+| redstone.crafter.trigger | Schedule crafting from rising power, honor disabled slots and distribute inserted items | `CrafterBlock; CrafterBlockEntity` | | - | todo |
+| redstone.daylight.sensor | Compute daylight-detector signal from sky brightness, time and inverted state | `DaylightDetectorBlock#updateSignalStrength` | | - | todo |
+| redstone.sculk.calibration | Filter calibrated sculk sensor vibrations using side-input frequency | `CalibratedSculkSensorBlock; CalibratedSculkSensorBlockEntity` | | - | todo |
+| redstone.trapdoor-door | Apply powered state and manual interaction behavior to doors, trapdoors and gates | `DoorBlock; TrapDoorBlock; FenceGateBlock` | | - | todo |
+| redstone.note.instrument | Resolve note-block instrument from neighboring blocks and emit powered notes | `NoteBlock` | | - | todo |
