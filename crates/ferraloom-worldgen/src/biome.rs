@@ -18,20 +18,25 @@ impl BiomeSource {
             Self::Fixed(id) => vec![id.clone()],
             Self::Checkerboard { biomes, .. } => {
                 let mut seen = std::collections::BTreeSet::new();
-                biomes
-                    .iter()
-                    .filter_map(|id| seen.insert(id.clone()).then(|| id.clone()))
-                    .collect()
+                let mut result = Vec::new();
+                for id in biomes {
+                    if seen.insert(id.clone()) {
+                        result.push(id.clone());
+                    }
+                }
+                result
             }
             Self::MultiNoise(parameters) => {
                 // BiomeSource collects into an ImmutableSet: first encounter
                 // order determines FeatureSorter's global per-step indices.
                 let mut seen = std::collections::BTreeSet::new();
-                parameters
-                    .values()
-                    .iter()
-                    .filter_map(|(_, id)| seen.insert(id.clone()).then(|| id.clone()))
-                    .collect()
+                let mut result = Vec::new();
+                for (_, id) in parameters.values() {
+                    if seen.insert(id.clone()) {
+                        result.push(id.clone());
+                    }
+                }
+                result
             }
             Self::TheEnd => [
                 "the_end",

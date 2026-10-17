@@ -511,7 +511,11 @@ fn actual_vanilla_biome_decoration_matches_feature_indices_seeds_and_filters() {
     let generator = fixture_generator(&resources);
     let mut registry = FeatureRegistry::default();
     let ids = (0..6)
-        .map(|i| format!("ferraloom:test_{i}").parse().unwrap())
+        .map(|i| {
+            format!("ferraloom:test_{i}")
+                .parse::<ferraloom_worldgen::Identifier>()
+                .unwrap()
+        })
         .collect::<Vec<_>>();
     for (i, id) in ids.iter().enumerate() {
         registry.placed.insert(
@@ -906,5 +910,58 @@ fn feature_codec_boundaries_and_exclusive_alternatives_match_vanilla() {
             "{} {config}",
             case["kind"]
         );
+    }
+}
+
+#[test]
+fn protochunk_heightmap_priming_freezing_and_bulk_writes_match_vanilla() {
+    use ferraloom_data::Block;
+    use ferraloom_worldgen::region::*;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let cases = golden(include_bytes!("golden/feature_heightmaps.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let mut chunk = generator.new_chunk([0, 0]);
+        chunk.set_block(0, 0, 0, Block::STONE.default_state());
+        let mut chunks = vec![RegionChunk::new(chunk, ChunkStatus::Terrain)];
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Terrain],
+            0,
+            None,
+            &FixtureBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        let mut output = Vec::new();
+        for operation in case["ops"].as_array().unwrap() {
+            if operation["op"] == "query" {
+                output.push(
+                    Heightmap::ALL
+                        .map(|map| region.height_at(map, 0, 0).unwrap())
+                        .to_vec(),
+                );
+                continue;
+            }
+            let y = operation["y"].as_i64().unwrap() as i32;
+            let block = Block::from_name(&format!(
+                "minecraft:{}",
+                operation["block"].as_str().unwrap()
+            ))
+            .unwrap();
+            if operation["op"] == "bulk" {
+                region
+                    .set_block_in_section([0, y, 0], block.default_state())
+                    .unwrap();
+            } else {
+                region
+                    .set_block([0, y, 0], block.default_state(), 16)
+                    .unwrap();
+            }
+        }
+        assert_eq!(serde_json::to_value(output).unwrap(), case["output"]);
     }
 }
