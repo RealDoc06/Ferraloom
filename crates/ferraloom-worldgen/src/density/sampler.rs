@@ -1,9 +1,11 @@
+mod ranges;
 use super::*;
 use ferraloom_util::{
     BlockPos, java, mth,
     noise::{Noise, NoiseStack, SimplexNoise, SmearedPerlinNoise},
     random::{Algorithm, LegacyRandomSource, PositionalRandomFactory, RandomSource},
 };
+pub use ranges::Interval;
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -46,6 +48,7 @@ impl SamplerContext {
 
 #[derive(Debug)]
 struct Compiled {
+    forward: Option<NodeId>,
     definition: Function,
     children: Vec<NodeId>,
     noise: Option<NoiseStack>,
@@ -72,6 +75,7 @@ pub struct DensityFunctionCompiler {
     random: PositionalRandomFactory,
     registry: Arc<DensityRegistry>,
     nodes: Vec<Compiled>,
+    ranges: Vec<Interval>,
     memo: Vec<(Function, u8, NodeId)>,
     caches: Vec<(Function, NodeId)>,
 }
@@ -90,6 +94,7 @@ impl DensityFunctionCompiler {
             random,
             registry,
             nodes: Vec::new(),
+            ranges: Vec::new(),
             memo: Vec::new(),
             caches: Vec::new(),
         }
@@ -176,10 +181,26 @@ impl DensityFunctionCompiler {
             }
         }
     }
-    fn push(&mut self, node: Compiled) -> NodeId {
+    fn push(&mut self, mut node: Compiled) -> NodeId {
+        let range = self.compute_range(&node);
+        if let DensityFunction::Binary { kind, .. } = node.definition.as_ref() {
+            let a = self.ranges[node.children[0].0];
+            let b = self.ranges[node.children[1].0];
+            node.forward = match kind {
+                Binary::Min if a.max < b.min => Some(node.children[0]),
+                Binary::Min if b.max < a.min => Some(node.children[1]),
+                Binary::Max if a.min > b.max => Some(node.children[0]),
+                Binary::Max if b.min > a.max => Some(node.children[1]),
+                _ => None,
+            };
+        }
         let id = NodeId(self.nodes.len());
         self.nodes.push(node);
+        self.ranges.push(range);
         id
+    }
+    pub fn range(&self, id: NodeId) -> Interval {
+        self.ranges[id.0]
     }
     fn compile_with_axes(&mut self, f: &Function, parent: u8) -> Result<NodeId, Error> {
         use DensityFunction as D;
@@ -206,6 +227,7 @@ impl DensityFunctionCompiler {
             } else {
                 let child = self.compile_with_axes(input, 7)?;
                 let id = self.push(Compiled {
+                    forward: None,
                     definition: f.clone(),
                     children: vec![child],
                     noise: None,
@@ -260,6 +282,7 @@ impl DensityFunctionCompiler {
                 None
             };
             self.push(Compiled {
+                forward: None,
                 definition: f.clone(),
                 children,
                 noise,
@@ -281,6 +304,7 @@ impl DensityFunctionCompiler {
                         coordinate: 0,
                     });
                     id = self.push(Compiled {
+                        forward: None,
                         definition: def,
                         children: vec![id],
                         noise: None,
@@ -350,6 +374,9 @@ impl DensityFunctionCompiler {
 
     pub fn sample_value(&self, id: NodeId, context: &mut SamplerContext, p: [i32; 3]) -> f32 {
         let node = &self.nodes[id.0];
+        if let Some(target) = node.forward {
+            return self.sample_value(target, context, p);
+        }
         let c = &node.children;
         let sample = |id, ctx: &mut SamplerContext| self.sample_value(id, ctx, p);
         use DensityFunction as D;
@@ -402,6 +429,14 @@ impl DensityFunctionCompiler {
             D::Unary { kind, .. } => unary(*kind, sample(c[0], context)),
             D::Binary { kind, .. } => {
                 let left = sample(c[0], context);
+                if self.constant(c[0]).is_none() && self.constant(c[1]).is_none() {
+                    let right = self.ranges[c[1].0];
+                    if (*kind == Binary::Min && left <= right.min)
+                        || (*kind == Binary::Max && left >= right.max)
+                    {
+                        return left;
+                    }
+                }
                 if matches!(kind, Binary::Mul | Binary::Div)
                     && left == 0.0
                     && self.constant(c[0]).is_none()
@@ -553,6 +588,9 @@ impl DensityFunctionCompiler {
     ) -> Vec<f32> {
         use DensityFunction as D;
         let node = &self.nodes[id.0];
+        if let Some(target) = node.forward {
+            return self.sample_volume(target, context, volume);
+        }
         let c = &node.children;
         let sample = |id, ctx: &mut SamplerContext| self.sample_volume(id, ctx, volume);
         match node.definition.as_ref() {

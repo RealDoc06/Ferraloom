@@ -69,6 +69,17 @@ fn codecs_and_all_density_operations_match_vanilla() {
         };
         assert_eq!(accepted, expected, "{codec} acceptance of {input}");
         if let Some(function) = function {
+            let range = compiler.range(function);
+            assert_float(
+                range.min,
+                &case["range"][0],
+                &format!("minimum range {input}"),
+            );
+            assert_float(
+                range.max,
+                &case["range"][1],
+                &format!("maximum range {input}"),
+            );
             let mut context = SamplerContext::uncached();
             for (point, bits) in points.into_iter().zip(case["values"].as_array().unwrap()) {
                 assert_float(

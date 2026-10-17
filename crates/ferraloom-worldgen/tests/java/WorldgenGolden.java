@@ -380,6 +380,11 @@ public final class WorldgenGolden {
         extended.add(new String[]{"density","1.000000059604644775390625000001"});
         extended.add(new String[]{"density","-1.000000059604644775390625000001"});
         extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":1e999,\"y_scale\":1}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:min\",\"left\":-1,\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:max\",\"left\":10,\"right\":{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:min\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:max\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":{\"type\":\"minecraft:min\",\"left\":0,\"right\":{\"type\":\"minecraft:add\",\"left\":1,\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}}}"});
         for(var test:extended) {
             var definition=JsonParser.parseString(test[1]);
             com.mojang.serialization.Codec<?> codec=switch(test[0]) {
@@ -395,6 +400,7 @@ public final class WorldgenGolden {
             var parsed=codec.parse(ops,definition).result();var row=new JsonObject();row.addProperty("codec",test[0]);row.add("input",definition);row.addProperty("accepted",parsed.isPresent());
             if(parsed.isPresent() && test[0].equals("block_state")) row.addProperty("state",net.minecraft.world.level.block.Block.getId((net.minecraft.world.level.block.state.BlockState)parsed.get()));
             if(parsed.isPresent() && test[0].equals("density")) {
+                var bounds=((DensityFunction)parsed.get()).range();row.add("range",array(Integer.toUnsignedLong(Float.floatToIntBits(bounds.min())),Integer.toUnsignedLong(Float.floatToIntBits(bounds.max()))));
                 var sampler=state.getSampler((DensityFunction)parsed.get());var values=new JsonArray();
                 for(int[] p:POINTS)values.add(Integer.toUnsignedLong(Float.floatToIntBits(sampler.sampleValue(SamplerContext.EMPTY_UNCACHED,p[0],p[1],p[2]))));row.add("values",values);
                 var volume=new DensityVolume(3,5,2,-17,-63,31,4,3,7);var context=SamplerContext.builder().enableCaches().build();

@@ -6,7 +6,7 @@ mod sampler;
 use crate::{Error, Identifier};
 pub use ferraloom_util::noise::NoiseVolume as DensityVolume;
 use ferraloom_util::noise::{NoiseParameters, NormalNoise};
-pub use sampler::{DensityFunctionCompiler, NodeId, SamplerContext};
+pub use sampler::{DensityFunctionCompiler, Interval, NodeId, SamplerContext};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 
