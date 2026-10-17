@@ -99,11 +99,11 @@ impl Bucket {
         }
     }
     fn front(&mut self) {
-        if let Some(root) = self.root {
-            if let Some(index) = self.order.iter().position(|i| *i == root) {
-                self.order.remove(index);
-                self.order.insert(0, root);
-            }
+        if let Some(root) = self.root
+            && let Some(index) = self.order.iter().position(|i| *i == root)
+        {
+            self.order.remove(index);
+            self.order.insert(0, root);
         }
     }
     fn treeify(&mut self) {

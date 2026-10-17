@@ -539,7 +539,11 @@ pub fn compare_nbt(expected: Option<&Tag>, actual: Option<&Tag>, partial_lists: 
 macro_rules! from_tag {
     ($($ty:ty => $variant:ident),* $(,)?) => {$(impl From<$ty> for Tag {fn from(value:$ty)->Self {Self::$variant(value)}})*};
 }
-from_tag!(i8=>Byte,i16=>Short,i32=>Int,i64=>Long,Vec<i8>=>ByteArray,Vec<i32>=>IntArray,Vec<i64>=>LongArray,NbtString=>String,ListTag=>List,CompoundTag=>Compound);
+from_tag!(
+    i8 => Byte, i16 => Short, i32 => Int, i64 => Long,
+    Vec<i8> => ByteArray, Vec<i32> => IntArray, Vec<i64> => LongArray,
+    NbtString => String, ListTag => List, CompoundTag => Compound,
+);
 impl From<bool> for Tag {
     fn from(value: bool) -> Self {
         Self::Byte(i8::from(value))

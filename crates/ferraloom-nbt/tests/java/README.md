@@ -13,7 +13,7 @@ classpath="$cache/versions/26.3/server-26.3.jar:$(find "$cache/libraries" -name 
 mkdir -p /tmp/ferraloom-nbt-java
 "$jdk/javac" -cp "$classpath" -d /tmp/ferraloom-nbt-java crates/ferraloom-nbt/tests/java/VanillaNbt.java
 (cd /tmp && "$jdk/java" -cp "/tmp/ferraloom-nbt-java:$classpath" VanillaNbt) |
-  rg '^(parse|error|path|patherror|compare|compressed|account|utf|fallback|numeric|text|float|double|map|surrogate|scenario|named)\t' > "$repo/crates/ferraloom-nbt/tests/java/vectors.tsv"
+  rg '^(parse|error|path|patherror|compare|compressed|account|utf|fallback|numeric|text|float|double|map|surrogate|scenario|named|binary)\t' > "$repo/crates/ferraloom-nbt/tests/java/vectors.tsv"
 ```
 
 Passing arguments to the Java class probes individual SNBT strings.

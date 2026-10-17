@@ -655,16 +655,14 @@ fn named_codepoint(name: &str) -> Option<u32> {
     if let Some((cp, _)) = CONTROLS.iter().find(|(_, n)| *n == name) {
         return Some(*cp);
     }
-    if let Some((block, hex)) = name.rsplit_once(' ') {
-        if let Ok(cp) = u32::from_str_radix(hex, 16) {
-            if RANGES
-                .iter()
-                .any(|(first, last, n)| *first <= cp && cp <= *last && *n == block)
-                && name == format!("{block} {cp:X}")
-            {
-                return Some(cp);
-            }
-        }
+    if let Some((block, hex)) = name.rsplit_once(' ')
+        && let Ok(cp) = u32::from_str_radix(hex, 16)
+        && RANGES
+            .iter()
+            .any(|(first, last, n)| *first <= cp && cp <= *last && *n == block)
+        && name == format!("{block} {cp:X}")
+    {
+        return Some(cp);
     }
     let c = unicode_names2::character(&name)?;
     let cp = u32::from(c);
