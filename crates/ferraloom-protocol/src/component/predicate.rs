@@ -134,6 +134,11 @@ impl Persistent for DoubleBounds {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
+            && min.total_cmp(&max).is_gt()
+        {
+            return Err(invalid("swapped bounds"));
+        }
+        if let (Some(min), Some(max)) = (self.min, self.max)
             && min == max
         {
             return min.to_persistent();

@@ -1,4 +1,4 @@
-use super::{DataComponentPatch, invalid};
+use super::{DataComponentPatch, Persistent, invalid};
 use crate::{Reader, Result, Wire, Writer, codec::Codec};
 
 /// Port of ItemStack#OPTIONAL_STREAM_CODEC. `None` represents the empty stack.
@@ -31,6 +31,15 @@ impl ItemStack {
         self.0
             .as_ref()
             .is_none_or(|v| v.count <= 0 || v.item == ferraloom_data::Item::AIR)
+    }
+    /// Port of ItemStack#validatedStreamCodec's persistent codec validation.
+    /// Empty stacks are accepted; nonempty stacks must encode through ItemStack.CODEC.
+    pub fn validate_persistent(&self) -> Result<()> {
+        if self.is_empty() {
+            Ok(())
+        } else {
+            self.encode_ops(&crate::ops::NullOps)
+        }
     }
     fn decode_with(r: &mut Reader<'_>, untrusted: bool) -> Result<Self> {
         let count = r.var_int()?;
@@ -94,6 +103,17 @@ pub const OPTIONAL_ITEM_STACK: Codec<ItemStack> = Codec {
 /// ItemStack#OPTIONAL_UNTRUSTED_STREAM_CODEC delimits each added component value.
 pub const OPTIONAL_UNTRUSTED_ITEM_STACK: Codec<ItemStack> = Codec {
     read: |r| ItemStack::decode_with(r, true),
+    write: |w, v| v.encode_with(w, true),
+};
+
+/// ItemStack#validatedStreamCodec(OPTIONAL_UNTRUSTED_STREAM_CODEC), used by creative slots.
+/// Vanilla validates only decoding; encoding preserves the underlying codec's behavior.
+pub const VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK: Codec<ItemStack> = Codec {
+    read: |r| {
+        let value = ItemStack::decode_with(r, true)?;
+        value.validate_persistent()?;
+        Ok(value)
+    },
     write: |w, v| v.encode_with(w, true),
 };
 

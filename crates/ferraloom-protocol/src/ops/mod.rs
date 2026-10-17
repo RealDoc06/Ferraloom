@@ -24,6 +24,28 @@ pub trait EncodeOps {
     fn create_list(&self, value: Vec<Self::Value>) -> Self::Value;
     fn create_map(&self, value: Vec<(Self::Value, Self::Value)>) -> Result<Self::Value>;
 }
+/// Port of NullOps: run persistent codec constraints without retaining encoded values.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NullOps;
+impl EncodeOps for NullOps {
+    type Value = ();
+    fn empty(&self) {}
+    fn create_boolean(&self, _: bool) {}
+    fn create_byte(&self, _: i8) {}
+    fn create_short(&self, _: i16) {}
+    fn create_int(&self, _: i32) {}
+    fn create_long(&self, _: i64) {}
+    fn create_float(&self, _: f32) {}
+    fn create_double(&self, _: f64) {}
+    fn create_string_utf16(&self, _: &[u16]) {}
+    fn create_byte_list(&self, _: &[i8]) {}
+    fn create_int_list(&self, _: &[i32]) {}
+    fn create_long_list(&self, _: &[i64]) {}
+    fn create_list(&self, _: Vec<()>) {}
+    fn create_map(&self, _: Vec<((), ())>) -> Result<()> {
+        Ok(())
+    }
+}
 /// Port of NbtOps' creation operations. CompoundTag owns vanilla's Java key traversal order.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NbtOps;

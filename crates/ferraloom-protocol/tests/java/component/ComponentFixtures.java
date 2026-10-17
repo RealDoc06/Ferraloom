@@ -23,6 +23,7 @@ public final class ComponentFixtures {
     static HolderLookup.Provider lookup;
     static JsonObject fixtures = new JsonObject();
     static JsonArray components = new JsonArray();
+    static JsonArray validatedStacks = new JsonArray();
     static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     static <T> String bytes(StreamCodec<? super RegistryFriendlyByteBuf,T> codec, T value) {
         var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
@@ -51,6 +52,23 @@ public final class ComponentFixtures {
         fixtures.addProperty(name+"_untrusted",bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,value));
         HashedPatchMap.HashGenerator hasher = c -> c.encodeValue(lookup.createSerializationContext(HashOps.CRC32C_INSTANCE)).getOrThrow().asInt();
         fixtures.addProperty(name+"_hashed",bytes(HashedStack.STREAM_CODEC,HashedStack.create(value,hasher)));
+    }
+    static void validatedStack(String name, ItemStack value) {
+        String input = bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,value);
+        var buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(HexFormat.of().parseHex(input)),access);
+        var out = new JsonObject(); out.addProperty("name",name); out.addProperty("bytes",input);
+        try {
+            var decoded = ItemStack.validatedStreamCodec(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC).decode(buf);
+            out.addProperty("accepted",true);
+            if(buf.isReadable()) throw new AssertionError("Trailing stack bytes: "+name);
+            if(!bytes(ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC,decoded).equals(input)) throw new AssertionError("Stack changed: "+name);
+        } catch(io.netty.handler.codec.DecoderException e) {
+            out.addProperty("accepted",false);
+        } finally { buf.release(); }
+        validatedStacks.add(out);
+    }
+    static <T> ItemStack withComponent(DataComponentType<T> type,T value) {
+        var stack = new ItemStack(Items.STONE); stack.set(type,value); return stack;
     }
     @SuppressWarnings({"unchecked", "rawtypes"})
     static void sample(String key,String json) {
@@ -106,6 +124,25 @@ public final class ComponentFixtures {
         var nested = new ItemStack(Items.CHEST);
         nested.set(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(sword,ItemStack.EMPTY,new ItemStack(Items.APPLE,2))));
         stack("nested",nested);
+        validatedStack("empty",ItemStack.EMPTY);
+        validatedStack("count_99",new ItemStack(Items.STONE,99));
+        validatedStack("count_100",new ItemStack(Items.STONE,100));
+        validatedStack("custom_data",withComponent(DataComponents.CUSTOM_DATA,CustomData.of(custom)));
+        validatedStack("container",withComponent(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(new ItemStack(Items.APPLE,2)))));
+        validatedStack("nested_count_100",withComponent(DataComponents.CONTAINER,ItemContainerContents.fromItems(List.of(new ItemStack(Items.APPLE,100)))));
+        validatedStack("max_stack_size_100",withComponent(DataComponents.MAX_STACK_SIZE,100));
+        validatedStack("negative_food",withComponent(DataComponents.FOOD,new net.minecraft.world.food.FoodProperties(-1,0.5f,false)));
+        validatedStack("unrestricted_saturation",withComponent(DataComponents.FOOD,new net.minecraft.world.food.FoodProperties(0,Float.NaN,false)));
+        validatedStack("negative_weapon_damage",withComponent(DataComponents.WEAPON,new Weapon(-1,0.0f)));
+        validatedStack("attack_reach_65",withComponent(DataComponents.ATTACK_RANGE,new AttackRange(0,65,0,5,0.3f,1)));
+        validatedStack("negative_zero_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,-0.0f));
+        validatedStack("nan_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,Float.NaN));
+        validatedStack("infinite_potion_scale",withComponent(DataComponents.POTION_DURATION_SCALE,Float.POSITIVE_INFINITY));
+        validatedStack("zero_tool_speed",withComponent(DataComponents.TOOL,new Tool(List.of(new Tool.Rule(HolderSet.direct( net.minecraft.world.level.block.Blocks.STONE.builtInRegistryHolder()),Optional.of(0.0f),Optional.empty())),1.0f,1,true)));
+        validatedStack("invalid_profile_name",withComponent(DataComponents.PROFILE,ResolvableProfile.createUnresolved("bad name")));
+        validatedStack("fireworks_256",withComponent(DataComponents.FIREWORKS,new Fireworks(256,List.of())));
+        validatedStack("fireworks_negative",withComponent(DataComponents.FIREWORKS,new Fireworks(-1,List.of())));
+        fixtures.add("validated_stacks",validatedStacks);
         var profile = ResolvableProfile.createResolved(new com.mojang.authlib.GameProfile(UUID.fromString("01234567-89ab-cdef-fedc-ba9876543210"),"Doc"));
         component("profile",new TypedDataComponent<>(DataComponents.PROFILE,profile));
         sample("unbreakable","{}");

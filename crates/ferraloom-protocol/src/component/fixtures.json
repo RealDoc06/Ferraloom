@@ -9190,5 +9190,97 @@
   "stone_untrusted": "40010000",
   "sword": "019a0803010307000a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d000d01210309",
   "sword_hashed": "019a0801030017da820f0d55f77bbd039915c56e0109",
-  "sword_untrusted": "019a08030103010700270a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d000d0301210309"
+  "sword_untrusted": "019a08030103010700270a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d000d0301210309",
+  "validated_stacks": [
+    {
+      "accepted": true,
+      "bytes": "00",
+      "name": "empty"
+    },
+    {
+      "accepted": true,
+      "bytes": "63010000",
+      "name": "count_99"
+    },
+    {
+      "accepted": false,
+      "bytes": "64010000",
+      "name": "count_100"
+    },
+    {
+      "accepted": true,
+      "bytes": "0101010000270a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d00",
+      "name": "custom_data"
+    },
+    {
+      "accepted": true,
+      "bytes": "010101004d070101ef07020000",
+      "name": "container"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101004d070101ef07640000",
+      "name": "nested_count_100"
+    },
+    {
+      "accepted": false,
+      "bytes": "01010100010164",
+      "name": "max_stack_size_100"
+    },
+    {
+      "accepted": false,
+      "bytes": "01010100170affffffff0f3f00000000",
+      "name": "negative_food"
+    },
+    {
+      "accepted": true,
+      "bytes": "010101001706007fc0000000",
+      "name": "unrestricted_saturation"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101001d09ffffffff0f00000000",
+      "name": "negative_weapon_damage"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101001e1800000000428200000000000040a000003e99999a3f800000",
+      "name": "attack_reach_65"
+    },
+    {
+      "accepted": false,
+      "bytes": "01010100360480000000",
+      "name": "negative_zero_potion_scale"
+    },
+    {
+      "accepted": false,
+      "bytes": "0101010036047fc00000",
+      "name": "nan_potion_scale"
+    },
+    {
+      "accepted": false,
+      "bytes": "0101010036047f800000",
+      "name": "infinite_potion_scale"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101001c0f0102010100000000003f8000000101",
+      "name": "zero_tool_speed"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101004811000108626164206e616d65000000000000",
+      "name": "invalid_profile_name"
+    },
+    {
+      "accepted": false,
+      "bytes": "010101004703800200",
+      "name": "fireworks_256"
+    },
+    {
+      "accepted": true,
+      "bytes": "010101004706ffffffff0f00",
+      "name": "fireworks_negative"
+    }
+  ]
 }
