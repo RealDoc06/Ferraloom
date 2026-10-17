@@ -526,3 +526,202 @@ async fn normal_save_with_queued_poi(fail_write: bool, poi_runtime: &tokio::runt
     assert_eq!(std::fs::read(&poi_path).unwrap(), bytes);
     server.shutdown().await;
 }
+
+// UNRUN: exercise World::shutdown itself with the public managed POI owner
+// queued in a separate occupied blocking pool, including a real IO refusal.
+#[test]
+fn world_shutdown_waits_for_owned_poi_and_keeps_real_errors() {
+    let poi_runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                for fail_write in [false, true] {
+                    shutdown_with_queued_poi(fail_write, &poi_runtime).await;
+                }
+            })
+            .await
+            .unwrap();
+        });
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "Keep the actual shutdown wait, current POI disk proof and independent writes in one fixture."
+)]
+async fn shutdown_with_queued_poi(fail_write: bool, poi_runtime: &tokio::runtime::Runtime) {
+    use crate::world::WorldSaveError;
+    use pumpkin_data::poi::PoiType;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::poi::{PoiRegion, PoiStorage};
+
+    let folder = tempfile::tempdir().unwrap();
+    let server = server_at(folder.path(), 0).await;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    assert_eq!(server.tasks.len(), 0);
+    assert!(world.players.load().is_empty());
+    assert!(world.entities.load().is_empty());
+    assert!(world.block_entities.is_empty());
+    assert!(world.level.live_entity_chunk_positions().is_empty());
+    // Drain actual callbacks first. With no entity chunks, the lifecycle lock
+    // and snapshots then complete inline, so pending shutdown identifies POI.
+    world.withdraw_packet_admission().await;
+    assert!(world.save_lifecycle_available_for_test());
+
+    // Keep real terrain output cached in a separate region until level shutdown.
+    let chunk_pos = Vector2::new(32, 0);
+    let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+    world.level.bind_chunk_poi(&chunk).unwrap();
+    chunk.set_block_absolute_y(3, 200, 11, Block::EMERALD_BLOCK.default_state.id);
+    chunk.mark_dirty(true);
+    world
+        .level
+        .chunk_saver
+        .watch_chunks(&world.level.level_folder, &[chunk_pos])
+        .await;
+    world
+        .level
+        .chunk_saver
+        .save_chunks(&world.level.level_folder, vec![(chunk_pos, chunk.clone())])
+        .await
+        .unwrap();
+    assert!(!chunk.is_dirty());
+    let terrain_path = world.level.level_folder.region_folder.join("r.1.0.mca");
+    assert!(!terrain_path.exists());
+
+    let storage = &world.portal_poi;
+    let position = BlockPos::new(1, 0, 1);
+    storage
+        .lock()
+        .unwrap()
+        .add_with_free_tickets(position, PoiType::Home.identifier(), 1)
+        .unwrap();
+    let poi_path = world.level.level_folder.poi_folder.join("r.0.0.mca");
+    if fail_write {
+        std::fs::create_dir_all(&poi_path).unwrap();
+        std::fs::write(poi_path.join("keep"), b"refused destination").unwrap();
+    }
+    world.custom_data.lock().unwrap().put_int("after_poi", 31);
+    let custom_path = world
+        .level
+        .level_folder
+        .dim_folder
+        .join("pumpkin_custom_data.nbt");
+    assert!(!custom_path.exists());
+
+    let (entered, ready) = tokio::sync::oneshot::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let blocker = poi_runtime.spawn_blocking(move || {
+        entered.send(()).unwrap();
+        released
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+    });
+    ready.await.unwrap();
+    let mut owner = Box::pin(tokio::task::unconstrained(PoiStorage::save_all_managed(
+        storage,
+    )));
+    assert!(
+        std::future::poll_fn(|cx| {
+            let _entered = poi_runtime.enter();
+            std::task::Poll::Ready(owner.as_mut().poll(cx))
+        })
+        .await
+        .is_pending()
+    );
+    assert_eq!(
+        storage.try_lock().unwrap().save_all().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+
+    let mut shutdown = Box::pin(tokio::task::unconstrained(world.shutdown()));
+    assert!(
+        std::future::poll_fn(|cx| std::task::Poll::Ready(shutdown.as_mut().poll(cx)))
+            .await
+            .is_pending()
+    );
+    assert!(world.save_lifecycle_available_for_test());
+    assert!(
+        !world.level.cancel_token.is_cancelled(),
+        "shutdown must await POI before entering level shutdown"
+    );
+    assert!(!terrain_path.exists());
+    assert!(!custom_path.exists());
+    storage
+        .try_lock()
+        .expect("shutdown must not retain storage while waiting")
+        .add_with_free_tickets(position, PoiType::Home.identifier(), -7)
+        .unwrap();
+
+    release.send(()).unwrap();
+    blocker.await.unwrap();
+    let owner_result = owner.await;
+    if fail_write {
+        assert_ne!(
+            owner_result.unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    } else {
+        owner_result.unwrap();
+        assert_eq!(
+            PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
+            1
+        );
+    }
+    let result = shutdown.await;
+    if fail_write {
+        let Err(WorldSaveError::PortalPoi(error)) = result else {
+            panic!("shutdown must preserve the actual POI IO failure: {result:?}");
+        };
+        assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock);
+        assert_eq!(
+            std::fs::read(poi_path.join("keep")).unwrap(),
+            b"refused destination"
+        );
+    } else {
+        result.unwrap();
+        let disk = PoiRegion::load(&poi_path).unwrap();
+        assert_eq!(disk.get_all()[0].pos(), position);
+        assert_eq!(disk.get_all()[0].free_tickets, -7);
+        let bytes = std::fs::read(&poi_path).unwrap();
+        storage.lock().unwrap().save_all().unwrap();
+        assert_eq!(std::fs::read(&poi_path).unwrap(), bytes);
+    }
+
+    assert!(world.level.cancel_token.is_cancelled());
+    let custom = pumpkin_nbt::Nbt::read(&mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+        std::io::Cursor::new(std::fs::read(custom_path).unwrap()),
+    ))
+    .unwrap();
+    assert_eq!(custom.root_tag.get_int("after_poi"), Some(31));
+    assert!(terrain_path.exists());
+    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+        pumpkin_config::chunk::AnvilChunkConfig::default(),
+    );
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    reader
+        .fetch_chunks(&world.level.level_folder, &[chunk_pos], send)
+        .await;
+    let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+        panic!("shutdown must flush independent cached terrain despite a POI failure");
+    };
+    assert_eq!(
+        saved.section.get_block_absolute_y(3, 200, 11),
+        Some(Block::EMERALD_BLOCK.default_state.id)
+    );
+
+    // This world already stopped. Exclude it before server cleanup to avoid a
+    // second level shutdown and keep the expected failure out of global status.
+    server.worlds.rcu(|worlds| {
+        let mut remaining = (**worlds).clone();
+        remaining.retain(|candidate| !Arc::ptr_eq(candidate, &world));
+        remaining
+    });
+    server.shutdown().await;
+}

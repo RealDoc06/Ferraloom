@@ -306,8 +306,9 @@ fn load_custom_world_data(canonical: &Path, legacy: &Path) -> Result<NbtCompound
     Ok(NbtCompound::new())
 }
 
-/// Wait for auxiliary state locks and report IO failures before save success.
-/// Both std mutex guards are released before the caller performs any await.
+/// Strict synchronous auxiliary save for tests; production waits for POI owners
+/// through `save_all_managed` without holding world lifecycle or storage guards.
+#[cfg(test)]
 fn save_auxiliary_data(
     portal_poi: &std::sync::Mutex<portal::PortalPoiStorage>,
     custom_data: &std::sync::Mutex<NbtCompound>,
@@ -1442,14 +1443,19 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        let auxiliary_result = save_auxiliary_data(
-            &self.portal_poi,
+        // Let pending POI owners finish and capture current state without
+        // retaining the world lifecycle, storage or terrain guards.
+        drop(lifecycle);
+        let portal_result = portal::PortalPoiStorage::save_all_managed(&self.portal_poi)
+            .await
+            .map_err(WorldSaveError::PortalPoi);
+        let auxiliary_result = save_custom_data(
             &self.custom_data,
             &self.level.level_folder.dim_folder,
             self.custom_data_load_error.as_deref(),
-        );
+        )
+        .and(portal_result);
 
-        drop(lifecycle);
         let level_result = self.level.shutdown().await.map_err(WorldSaveError::Level);
         snapshot_result.and(auxiliary_result).and(level_result)
     }
