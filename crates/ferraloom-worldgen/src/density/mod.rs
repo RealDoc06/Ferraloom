@@ -1,5 +1,6 @@
 //! Ports of 26.3's densityfunction generators and operations.
 mod decode;
+mod equality;
 mod sampler;
 
 use crate::{Error, Identifier};
@@ -17,7 +18,7 @@ pub enum Holder<T> {
 pub type Function = Arc<DensityFunction>;
 
 /// Port of NormalNoise.Parameters' codec, with validation before construction.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct NoiseSpec {
     pub base_amplitude: f64,
     pub base_octave: i32,
@@ -118,7 +119,7 @@ pub enum Shift {
 }
 
 /// Port of CubicSpline. Nested values retain float locations and derivatives.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum CubicSpline {
     Constant(f32),
     Multipoint {
@@ -126,7 +127,7 @@ pub enum CubicSpline {
         points: Vec<SplinePoint>,
     },
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SplinePoint {
     pub location: f32,
     pub value: CubicSpline,
@@ -134,7 +135,7 @@ pub struct SplinePoint {
 }
 
 /// Every density function registered by DensityFunctions#bootstrap in 26.3.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum DensityFunction {
     Reference(Identifier),
     Constant(f32),
