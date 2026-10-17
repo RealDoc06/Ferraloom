@@ -3482,8 +3482,10 @@ impl EntityBase for LivingEntity {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
-            // Players push other entities like any living entity.
-            self.push_entities(caller);
+            // Server players only push (including cramming) on simulation ticks.
+            if server.tick_rate_manager.runs_normally() {
+                self.push_entities(caller);
+            }
 
             self.entity.tick_frozen(caller);
         }
