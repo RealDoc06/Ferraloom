@@ -2139,10 +2139,12 @@ mod tests {
                     writer.save_chunks(&folder, submitted()).await.unwrap();
                     sources[0].set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
                 }
-                // Real rename refusal at the real POI destination. Preserve the
-                // original file beside it and restore it before the retained retry.
+                // Real rename refusal at the real POI destination. Keep the backup's
+                // valid region filename for the decoder, then restore it before retry.
                 let blocked = folder.poi_folder.join(format!("r.{}.0.mca", bx >> 5));
-                let backup = blocked.with_extension("original");
+                let backup_folder = folder.poi_folder.join("original");
+                std::fs::create_dir(&backup_folder).unwrap();
+                let backup = backup_folder.join(blocked.file_name().unwrap());
                 let original = std::fs::read(&blocked).unwrap();
                 std::fs::rename(&blocked, &backup).unwrap();
                 std::fs::create_dir(&blocked).unwrap();
