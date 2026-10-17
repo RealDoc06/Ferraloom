@@ -37,5 +37,15 @@ public final class StateProviderGolden {
             var item=new JsonObject();item.add("config",value);item.addProperty("seed",seed);item.add("optional",optional);item.add("samples",samples);item.addProperty("next",random.nextLong());cases.add(item);
         }
         WorldgenGolden.write(out.resolve("state_providers.json.gz"),cases);
+        var rotations=new JsonArray();
+        for(var direction:Direction.values()) {
+            var values=new JsonArray();var random=new WorldgenRandom(new XoroshiroRandomSource(0));
+            for(var state:Block.BLOCK_STATE_REGISTRY) {
+                var provider=new RotatedBlockProvider(Holder.direct(new SimpleStateProvider(state)),Optional.of(direction));
+                values.add(Block.getId(provider.getState(level,random,BlockPos.ZERO)));
+            }
+            rotations.add(values);
+        }
+        WorldgenGolden.write(out.resolve("rotated_state_providers.json.gz"),rotations);
     }
 }
