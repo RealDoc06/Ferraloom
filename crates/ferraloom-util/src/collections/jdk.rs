@@ -28,6 +28,9 @@ pub(super) struct Node<K, V> {
 
 /// Port of java.util.HashMap; LINKED selects java.util.LinkedHashMap.
 /// JDK capacity is a table capacity, unlike fastutil's expected-entry constructor.
+/// Equal-hash non-Comparable keys use deterministic arena-index ties instead of
+/// JVM identity hashes, whose order varies across runs. This includes BlockPos:
+/// its inherited Comparable<Vec3i> is rejected by HashMap#comparableClassFor.
 #[derive(Clone, Debug)]
 pub struct JavaHashMap<K, V, const LINKED: bool = false> {
     bins: Vec<Bin>,

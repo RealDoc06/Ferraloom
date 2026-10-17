@@ -20,7 +20,7 @@ public class HashOracle {
                 out.println("uuid "+v+" "+new UUID(v,Long.rotateLeft(v,17)).hashCode());
             }
             for(int x:new int[]{0,1,-1,Integer.MIN_VALUE,Integer.MAX_VALUE,33554431}) {
-                int y=x*31,z=x^0xdeadbeef;
+                int y=x*31,z=x^0x12345678;
                 out.println("pos "+x+" "+new Vec3i(x,y,z).hashCode()+" "+new BlockPos(x,y,z).hashCode()+" "+SectionPos.of(x,y,z).hashCode()+" "+new ChunkPos(x,z).hashCode());
                 out.println("record "+x+" "+new Pair(x,"abc").hashCode());
             }

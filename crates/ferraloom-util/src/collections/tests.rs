@@ -873,7 +873,7 @@ fn java_hashes_match_vanilla_util_and_jdk() {
             "pos" => {
                 let x = at(1);
                 let y = x.wrapping_mul(31);
-                let z = x ^ (-559038737);
+                let z = x ^ 0x12345678;
                 assert_eq!(JavaHash::java_hash_code(&crate::Vec3i::new(x, y, z)), at(2));
                 assert_eq!(
                     JavaHash::java_hash_code(&crate::BlockPos::new(x, y, z)),
