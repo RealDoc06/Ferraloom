@@ -102,3 +102,40 @@ fn real_vanilla_pack_loads_from_bundle_or_extracted_jar() {
     assert!(tags.diagnostics.is_empty(), "{:?}", tags.diagnostics);
     assert!(!tags.values[&"minecraft:logs".parse().unwrap()].is_empty());
 }
+
+#[test]
+fn strict_json_rejects_duplicate_decoded_keys_and_block_properties_are_lenient() {
+    let manager = ResourceManager::new(vec![pack(
+        "invalid",
+        &[
+            ("tag.json", r#"{"replace":false,"repl\u0061ce":true}"#),
+            ("valid.json", r#"{"a":"{}:\"", "nested":{"a":1}}"#),
+        ],
+    )]);
+    assert!(
+        manager
+            .require(&"tag.json".parse().unwrap())
+            .unwrap()
+            .json()
+            .is_err()
+    );
+    assert!(
+        manager
+            .require(&"valid.json".parse().unwrap())
+            .unwrap()
+            .json()
+            .is_ok()
+    );
+    let state=decode_block_state(&serde_json::json!({"id":"oak_stairs","properties":{"facing":"west","waterlogged":"true","half":"invalid","invented":"value"}})).unwrap();
+    assert_eq!(
+        state.get(crate::properties::FACING),
+        Some(crate::properties::Facing::West)
+    );
+    assert_eq!(state.get(crate::properties::WATERLOGGED), Some(true));
+    assert_eq!(
+        state.get(crate::properties::HALF),
+        crate::Block::OAK_STAIRS
+            .default_state()
+            .get(crate::properties::HALF)
+    );
+}

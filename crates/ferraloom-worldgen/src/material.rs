@@ -134,7 +134,13 @@ impl MaterialRule {
                 ore: decode_block_state(field(v, "ore_block")?)?,
                 raw: decode_block_state(field(v, "raw_ore_block")?)?,
                 filler: decode_block_state(field(v, "filler_block")?)?,
-                raw_chance: bounded(field(v, "raw_ore_chance")?, 0.0, 1.0)? as f32,
+                raw_chance: {
+                    let n = float(field(v, "raw_ore_chance")?)?;
+                    if !(0.0..=1.0).contains(&n) {
+                        return Err(Error("ore chance outside [0,1]".into()));
+                    }
+                    n
+                },
                 density: DensityFunction::decode(field(v, "density")?)?,
                 richness: DensityFunction::decode(field(v, "richness")?)?,
                 filler_gap: DensityFunction::decode(field(v, "filler_gap")?)?,
@@ -164,10 +170,6 @@ impl MaterialCondition {
                         .iter()
                         .map(id)
                         .collect::<Result<Vec<_>, _>>()?;
-                    let unique = values.iter().collect::<std::collections::BTreeSet<_>>();
-                    if unique.len() != values.len() {
-                        return Err(Error("duplicate biome in holder set".into()));
-                    }
                     BiomeSet::Direct(values)
                 };
                 Self::Biome(set)

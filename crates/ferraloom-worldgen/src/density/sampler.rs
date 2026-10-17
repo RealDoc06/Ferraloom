@@ -444,7 +444,13 @@ impl DensityFunctionCompiler {
             }
             D::IntervalSelect { thresholds, .. } => {
                 let v = sample(c[0], context);
-                sample(c[1 + thresholds.partition_point(|t| v >= *t)], context)
+                sample(
+                    c[1 + thresholds
+                        .iter()
+                        .position(|t| v < *t)
+                        .unwrap_or(thresholds.len())],
+                    context,
+                )
             }
             D::Cache(_) => {
                 if !context.enabled {
@@ -695,7 +701,12 @@ impl DensityFunctionCompiler {
                 input
                     .into_iter()
                     .enumerate()
-                    .map(|(i, v)| functions[thresholds.partition_point(|t| v >= *t)][i])
+                    .map(|(i, v)| {
+                        functions[thresholds
+                            .iter()
+                            .position(|t| v < *t)
+                            .unwrap_or(thresholds.len())][i]
+                    })
                     .collect()
             }
             D::Cache(_) => {
@@ -921,7 +932,17 @@ impl DensityFunctionCompiler {
             CompiledSpline::Constant(v) => *v,
             CompiledSpline::Multipoint { coordinate, points } => {
                 let x = sample(*coordinate);
-                let upper = points.partition_point(|p| x >= p.0);
+                let mut lower = 0;
+                let mut upper = points.len();
+                while lower < upper {
+                    let middle = lower + (upper - lower) / 2;
+                    if x < points[middle].0 {
+                        upper = middle;
+                    } else {
+                        lower = middle + 1;
+                    }
+                }
+                let upper = lower;
                 if upper == 0 || upper == points.len() {
                     let (location, value, derivative) = if upper == 0 {
                         &points[0]
@@ -1021,7 +1042,7 @@ fn create_fbm(
     out
 }
 fn clamp(v: f32, min: f32, max: f32) -> f32 {
-    java::min_f32(java::max_f32(v, min), max)
+    if v < min { min } else { java::min_f32(v, max) }
 }
 fn unary(kind: Unary, v: f32) -> f32 {
     match kind {

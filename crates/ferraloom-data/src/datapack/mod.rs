@@ -208,9 +208,54 @@ pub struct Resource<'a> {
 }
 impl Resource<'_> {
     pub fn json(&self) -> Result<Value, Error> {
-        Ok(serde_json::from_slice(self.bytes)?)
+        strict_json(self.bytes)
     }
 }
+/// Port of StrictJsonParser's duplicate-key rejection. serde_json validates the
+/// syntax first; the second pass retains raw object keys before Value can hide
+/// duplicate fields. Braces and colons inside strings never become tokens.
+fn strict_json(bytes: &[u8]) -> Result<Value, Error> {
+    let value = serde_json::from_slice(bytes)?;
+    let mut objects: Vec<BTreeSet<String>> = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => objects.push(BTreeSet::new()),
+            b'}' => {
+                objects.pop();
+            }
+            b'"' => {
+                let start = index;
+                index += 1;
+                while bytes[index] != b'"' {
+                    if bytes[index] == b'\\' {
+                        index += 1;
+                    }
+                    index += 1;
+                }
+                let end = index + 1;
+                let mut next = end;
+                while next < bytes.len() && bytes[next].is_ascii_whitespace() {
+                    next += 1;
+                }
+                if next < bytes.len() && bytes[next] == b':' {
+                    let key: String = serde_json::from_slice(&bytes[start..end])?;
+                    if !objects
+                        .last_mut()
+                        .expect("valid JSON object key")
+                        .insert(key.clone())
+                    {
+                        return Err(Error::InvalidData(format!("duplicate JSON key {key}")));
+                    }
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    Ok(value)
+}
+
 impl ResourceManager {
     pub fn new(packs: Vec<Pack>) -> Self {
         Self { packs }

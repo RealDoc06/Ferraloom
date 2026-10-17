@@ -210,9 +210,179 @@ public final class WorldgenGolden {
         }
         write(directory.resolve("blending.json.gz"),result);
     }
+    static void codecsAndOperations(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var ops=RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE,registries);
+        var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace("overworld"));
+        var state=RandomState.create(registries.lookupOrThrow(Registries.NOISE),0,settings);
+        var result=new JsonArray();
+        String[][] cases={
+            {"density","0.0"},
+            {"density","-0.0"},
+            {"density","1000000.0"},
+            {"density","true"},
+            {"density","{}"},
+            {"density","\"minecraft:zero\""},
+            {"density","{\"type\":\"minecraft:blend_alpha\"}"},
+            {"density","{\"type\":\"minecraft:blend_offset\"}"},
+            {"density","{\"type\":\"minecraft:beardifier\"}"},
+            {"density","{\"type\":\"minecraft:end_outer_islands\"}"},
+            {"density","{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}"},
+            {"density","{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25,\"tiling\":\"repeat\"}"},
+            {"density","{\"type\":\"minecraft:gradient\",\"axis\":\"z\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25,\"tiling\":\"mirrored_repeat\"}"},
+            {"density","{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":17,\"to_coordinate\":-31,\"from_value\":-3.875,\"to_value\":5.25}"},
+            {"density","{\"type\":\"minecraft:shift\",\"noise\":\"minecraft:shift\"}"},
+            {"density","{\"type\":\"minecraft:shift_a\",\"noise\":\"minecraft:shift\"}"},
+            {"density","{\"type\":\"minecraft:shift_b\",\"noise\":\"minecraft:shift\"}"},
+            {"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}"},
+            {"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"shift_y\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"shift_z\":0.75}"},
+            {"density","{\"type\":\"minecraft:distance_to_point\",\"point\":[17,-7,12],\"metric\":\"euclidean\"}"},
+            {"density","{\"type\":\"minecraft:distance_to_point\",\"point\":[17,-7,12],\"metric\":\"euclidean_squared\"}"},
+            {"density","{\"type\":\"minecraft:distance_to_point\",\"point\":[17,-7,12],\"metric\":\"manhattan\"}"},
+            {"density","{\"type\":\"minecraft:distance_to_point\",\"point\":[17,-7,12],\"metric\":\"chebyshev\"}"},
+            {"density","{\"type\":\"minecraft:abs\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:square\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:cube\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:half_negative\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:quarter_negative\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:reciprocal\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:negate\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:squeeze\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:sign\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:add\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:add\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:add\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:sub\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:sub\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:sub\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:mul\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:mul\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:mul\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:div\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:div\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:div\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:min\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:min\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:min\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:max\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:max\",\"left\":2.25,\"right\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:max\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":0.3}"},
+            {"density","{\"type\":\"minecraft:floor\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:floor\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0.75}"},
+            {"density","{\"type\":\"minecraft:floor\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0}"},
+            {"density","{\"type\":\"minecraft:round\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:round\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0.75}"},
+            {"density","{\"type\":\"minecraft:round\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0}"},
+            {"density","{\"type\":\"minecraft:ceil\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:ceil\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0.75}"},
+            {"density","{\"type\":\"minecraft:ceil\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0}"},
+            {"density","{\"type\":\"minecraft:truncate\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:truncate\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0.75}"},
+            {"density","{\"type\":\"minecraft:truncate\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"multiple\":0}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":-3}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":-2}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":-1}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":-0.5}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":0}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":0.5}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":1}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":2}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":3}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":1.3}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":3.75,\"exponent\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:pow\",\"base\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"exponent\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}"},
+            {"density","{\"type\":\"minecraft:clamp\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"min\":-0.125,\"max\":0.875}"},
+            {"density","{\"type\":\"minecraft:lerp\",\"alpha\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"first\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"second\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}}"},
+            {"density","{\"type\":\"minecraft:range_choice\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"min_inclusive\":-1,\"max_exclusive\":1,\"when_in_range\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"when_out_of_range\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}}"},
+            {"density","{\"type\":\"minecraft:interval_select\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"thresholds\":[-1,-1,0,0.5],\"functions\":[{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5},0,1]}"},
+            {"density","{\"type\":\"minecraft:interval_select\",\"input\":{\"type\":\"minecraft:log\",\"input\":-1},\"thresholds\":[-1,0,0.5],\"functions\":[0,1,2,3]}"},
+            {"density","{\"type\":\"minecraft:cache\",\"input\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}}"},
+            {"density","{\"type\":\"minecraft:blend_density\",\"input\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}}"},
+            {"density","{\"type\":\"minecraft:interpolated\",\"input\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5},\"cell_size_xz\":3,\"cell_size_y\":7}"},
+            {"density","{\"type\":\"minecraft:slice\",\"axis\":\"x\",\"coordinate\":13,\"input\":{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:shift\",\"xz_scale\":0.25,\"y_scale\":0.5}}"},
+            {"density","{\"type\":\"minecraft:find_top_surface\",\"density\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"upper_bound\":45,\"lower_bound\":-31,\"cell_height\":7}"},
+            {"density","{\"type\":\"minecraft:spline\",\"spline\":{\"coordinate\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"points\":[{\"location\":-1.25,\"value\":-3.5,\"derivative\":0.75},{\"location\":1.25,\"value\":5.5,\"derivative\":-0.35}]}}"},
+            {"density","{\"type\":\"minecraft:spline\",\"spline\":{\"coordinate\":{\"type\":\"minecraft:log\",\"input\":-1},\"points\":[{\"location\":-1,\"value\":1,\"derivative\":0},{\"location\":1,\"value\":2,\"derivative\":0}]}}"},
+            {"density","{\"type\":\"minecraft:clamp\",\"input\":-0.0,\"min\":0,\"max\":1}"},
+            {"density","{\"type\":\"minecraft:clamp\",\"input\":0,\"min\":1,\"max\":0}"},
+            {"density","{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":0,\"to_coordinate\":0,\"from_value\":0,\"to_value\":1}"},
+            {"density","{\"type\":\"minecraft:interpolated\",\"input\":1,\"cell_size_xz\":0,\"cell_size_y\":1}"},
+            {"density","{\"type\":\"minecraft:spline\",\"spline\":{\"coordinate\":0,\"points\":[]}}"},
+            {"density","{\"type\":\"minecraft:interval_select\",\"input\":0,\"thresholds\":[1,0],\"functions\":[0,1,2]}"},
+            {"noise","{\"base_octave\":-5}"},
+            {"noise","{\"base_octave\":0,\"normalize\":false}"},
+            {"noise","{\"base_octave\":0,\"normalize\":\"legacy\"}"},
+            {"noise","{\"base_octave\":0,\"normalize\":\"enabled\"}"},
+            {"noise","{\"base_octave\":0,\"octave_count\":2,\"amplitude_modifiers\":[1]}"},
+            {"noise","{\"base_octave\":0,\"octave_count\":2,\"amplitude_modifiers\":[]}"},
+            {"noise","{\"base_octave\":33}"},
+            {"noise","{\"base_octave\":0,\"base_amplitude\":0}"},
+            {"noise","{\"base_octave\":-0.5}"},
+            {"noise","{\"base_octave\":true}"},
+            {"noise_settings","{\"min_y\":-64,\"height\":384}"},
+            {"noise_settings","{\"min_y\":0,\"height\":0}"},
+            {"noise_settings","{\"min_y\":-2032,\"height\":4064}"},
+            {"noise_settings","{\"min_y\":-63,\"height\":384}"},
+            {"noise_settings","{\"min_y\":0,\"height\":4096}"},
+            {"noise_settings","{\"min_y\":2032,\"height\":0}"},
+            {"noise_settings","{\"min_y\":0,\"height\":15.99}"},
+            {"block_state","\"stone\""},
+            {"block_state","{\"id\":\"oak_stairs\",\"properties\":{\"waterlogged\":\"true\",\"facing\":\"west\",\"half\":\"bogus\"}}"},
+            {"block_state","{\"id\":\"grass_block\",\"properties\":{\"snowy\":true}}"},
+            {"block_state","{\"id\":\"stone\",\"properties\":4}"},
+            {"block_state","{\"id\":\"oak_stairs\",\"properties\":{\"waterlogged\":true}}"},
+            {"block_state","{\"Name\":\"stone\"}"},
+            {"parameter","0"},
+            {"parameter","[-2,2]"},
+            {"parameter","{\"min\":0,\"max\":0}"},
+            {"parameter","[1,-1]"},
+            {"parameter","[-2.00000001,2.00000001]"},
+            {"parameter","[]"},
+            {"parameter","[0,1,2]"},
+            {"parameter","true"},
+            {"anchor","{\"absolute\":0}"},
+            {"anchor","{\"absolute\":0,\"above_bottom\":1}"},
+            {"anchor","{\"absolute\":\"bad\",\"above_bottom\":1}"},
+            {"anchor","{\"relative_to_sea_level\":-5}"},
+            {"anchor","5"},
+            {"condition","{\"type\":\"minecraft:biome\",\"biome_is\":[\"minecraft:plains\",\"minecraft:plains\"]}"},
+            {"condition","{\"type\":\"minecraft:noise_threshold\",\"noise\":\"minecraft:surface\",\"min_threshold\":0,\"max_threshold\":1}"},
+            {"condition","{\"type\":\"minecraft:water\",\"offset\":0,\"surface_depth_multiplier\":21,\"add_stone_depth\":false}"},
+            {"condition","{\"type\":\"minecraft:stone_depth\",\"offset\":0,\"add_surface_depth\":true,\"secondary_depth_range\":-1,\"surface_type\":\"floor\"}"},
+            {"material","{\"type\":\"minecraft:sequence\",\"sequence\":[]}"},
+            {"material","{\"type\":\"minecraft:block\",\"result_state\":\"stone\"}"},
+            {"material","{\"type\":\"minecraft:ore_vein\",\"ore_block\":\"iron_ore\",\"raw_ore_block\":\"raw_iron_block\",\"filler_block\":\"tuff\",\"raw_ore_chance\":1.00000001,\"density\":1,\"richness\":1,\"filler_gap\":-1}"},
+        };
+        for(var test:cases) {
+            var definition=JsonParser.parseString(test[1]);
+            com.mojang.serialization.Codec<?> codec=switch(test[0]) {
+                case "density" -> DensityFunction.CODEC;
+                case "noise" -> net.minecraft.world.level.levelgen.synth.NormalNoise.DIRECT_CODEC;
+                case "noise_settings" -> NoiseSettings.CODEC;
+                case "block_state" -> net.minecraft.world.level.block.state.BlockState.CODEC;
+                case "parameter" -> Climate.Parameter.CODEC;
+                case "anchor" -> VerticalAnchor.CODEC;
+                case "condition" -> net.minecraft.world.level.levelgen.material.condition.MaterialCondition.CODEC;
+                default -> net.minecraft.world.level.levelgen.material.rule.MaterialRule.CODEC;
+            };
+            var parsed=codec.parse(ops,definition).result();var row=new JsonObject();row.addProperty("codec",test[0]);row.add("input",definition);row.addProperty("accepted",parsed.isPresent());
+            if(parsed.isPresent() && test[0].equals("block_state")) row.addProperty("state",net.minecraft.world.level.block.Block.getId((net.minecraft.world.level.block.state.BlockState)parsed.get()));
+            if(parsed.isPresent() && test[0].equals("density")) {
+                var sampler=state.getSampler((DensityFunction)parsed.get());var values=new JsonArray();
+                for(int[] p:POINTS)values.add(Integer.toUnsignedLong(Float.floatToIntBits(sampler.sampleValue(SamplerContext.EMPTY_UNCACHED,p[0],p[1],p[2]))));row.add("values",values);
+                var volume=new DensityVolume(3,5,2,-17,-63,31,4,3,7);var context=SamplerContext.builder().enableCaches().build();
+                sampler.sampleValue(context,-17,-63,31);
+                var data=new JsonArray();try(var buffer=context.acquireBuffer(volume)) {sampler.sampleVolume(context,buffer,volume);for(int i=0;i<volume.size();i++)data.add(Integer.toUnsignedLong(Float.floatToIntBits(buffer.get(i))));}row.add("volume",data);
+                var cached=new JsonArray();for(int[] p:new int[][]{{-17,-63,31},{-13,-60,38},{17,-7,31},{-17,-63,31}})cached.add(Integer.toUnsignedLong(Float.floatToIntBits(sampler.sampleValue(context,p[0],p[1],p[2]))));row.add("cached",cached);
+            }
+            result.add(row);
+        }
+        write(directory.resolve("codecs_and_operations.json.gz"),result);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         var directory=Path.of(args[0]);Files.createDirectories(directory);
-        var registries=load();presets(directory);densities(registries,directory);biomes(registries,directory);chunks(registries,directory);blending(registries,directory);
+        var registries=load();presets(directory);densities(registries,directory);biomes(registries,directory);chunks(registries,directory);blending(registries,directory);codecsAndOperations(registries,directory);
     }
 }

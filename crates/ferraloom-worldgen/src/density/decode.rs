@@ -197,11 +197,18 @@ pub(super) fn function(v: &Value) -> Result<Function, Error> {
             first: f("first")?,
             second: f("second")?,
         },
-        "clamp" => D::Clamp {
-            input: f("input")?,
-            min: n("min")?,
-            max: n("max")?,
-        },
+        "clamp" => {
+            let min = n("min")?;
+            let max = n("max")?;
+            if max < min {
+                return Err(Error("clamp min exceeds max".into()));
+            }
+            D::Clamp {
+                input: f("input")?,
+                min,
+                max,
+            }
+        }
         "range_choice" => D::RangeChoice {
             input: f("input")?,
             min: n("min_inclusive")?,
