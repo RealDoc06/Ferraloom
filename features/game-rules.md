@@ -1,0 +1,68 @@
+# Game rules
+
+Every report rule has its type and bootstrapped default. Feature-gated entries are explicitly labeled; values still start untested.
+
+| ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
+|---|---|---|---|---|---|
+| game-rules.values.parse-bounds | Parse typed rule values and enforce integer bounds and serialized representations | `GameRule#deserialize; GameRuleMap` | | - | todo |
+| game-rules.values.feature-gates | Expose experimental rules only with their required feature flags | `GameRules; GameRule#requiredFeatures` | | - | todo |
+| game-rules.values.change-notifications | Apply rule changes and notify clients or server services that depend on changed values | `GameRules; GameRuleCommand; ServerGamePacketListenerImpl#broadcastGameRuleChangeToOperators` | | - | todo |
+| game-rules.game-rule.advance-time | `minecraft:advance_time` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.advance-weather | `minecraft:advance_weather` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.allow-entering-nether-using-portals | `minecraft:allow_entering_nether_using_portals` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.block-drops | `minecraft:block_drops` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.block-explosion-drop-decay | `minecraft:block_explosion_drop_decay` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.command-block-output | `minecraft:command_block_output` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.command-blocks-work | `minecraft:command_blocks_work` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.drowning-damage | `minecraft:drowning_damage` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.elytra-movement-check | `minecraft:elytra_movement_check` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.ender-pearls-vanish-on-death | `minecraft:ender_pearls_vanish_on_death` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.entity-drops | `minecraft:entity_drops` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.fall-damage | `minecraft:fall_damage` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.fire-damage | `minecraft:fire_damage` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.fire-spread-radius-around-player | `minecraft:fire_spread_radius_around_player` (game rule); type `Integer`, default `128` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.forgive-dead-players | `minecraft:forgive_dead_players` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.freeze-damage | `minecraft:freeze_damage` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.global-sound-events | `minecraft:global_sound_events` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.immediate-respawn | `minecraft:immediate_respawn` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.keep-inventory | `minecraft:keep_inventory` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.lava-source-conversion | `minecraft:lava_source_conversion` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.limited-crafting | `minecraft:limited_crafting` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.locator-bar | `minecraft:locator_bar` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.log-admin-commands | `minecraft:log_admin_commands` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-block-modifications | `minecraft:max_block_modifications` (game rule); type `Integer`, default `32768` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-command-forks | `minecraft:max_command_forks` (game rule); type `Integer`, default `65536` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-command-sequence-length | `minecraft:max_command_sequence_length` (game rule); type `Integer`, default `65536` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-entity-cramming | `minecraft:max_entity_cramming` (game rule); type `Integer`, default `24` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-minecart-speed | `minecraft:max_minecart_speed` (game rule); type `Integer`, default `8`; requires `minecart_improvements` feature | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.max-snow-accumulation-height | `minecraft:max_snow_accumulation_height` (game rule); type `Integer`, default `1` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.mob-drops | `minecraft:mob_drops` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.mob-explosion-drop-decay | `minecraft:mob_explosion_drop_decay` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.mob-griefing | `minecraft:mob_griefing` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.natural-health-regeneration | `minecraft:natural_health_regeneration` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.player-movement-check | `minecraft:player_movement_check` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.players-nether-portal-creative-delay | `minecraft:players_nether_portal_creative_delay` (game rule); type `Integer`, default `0` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.players-nether-portal-default-delay | `minecraft:players_nether_portal_default_delay` (game rule); type `Integer`, default `80` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.players-sleeping-percentage | `minecraft:players_sleeping_percentage` (game rule); type `Integer`, default `100` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.projectiles-can-break-blocks | `minecraft:projectiles_can_break_blocks` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.pvp | `minecraft:pvp` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.raids | `minecraft:raids` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.random-tick-speed | `minecraft:random_tick_speed` (game rule); type `Integer`, default `3` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.reduced-debug-info | `minecraft:reduced_debug_info` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.respawn-radius | `minecraft:respawn_radius` (game rule); type `Integer`, default `10` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.send-command-feedback | `minecraft:send_command_feedback` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.show-advancement-messages | `minecraft:show_advancement_messages` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.show-death-messages | `minecraft:show_death_messages` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-mobs | `minecraft:spawn_mobs` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-monsters | `minecraft:spawn_monsters` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-patrols | `minecraft:spawn_patrols` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-phantoms | `minecraft:spawn_phantoms` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-wandering-traders | `minecraft:spawn_wandering_traders` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawn-wardens | `minecraft:spawn_wardens` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spawner-blocks-work | `minecraft:spawner_blocks_work` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spectators-generate-chunks | `minecraft:spectators_generate_chunks` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.spread-vines | `minecraft:spread_vines` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.tnt-explodes | `minecraft:tnt_explodes` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.tnt-explosion-drop-decay | `minecraft:tnt_explosion_drop_decay` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.universal-anger | `minecraft:universal_anger` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+| game-rules.game-rule.water-source-conversion | `minecraft:water_source_conversion` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
