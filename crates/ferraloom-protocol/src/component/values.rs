@@ -36,7 +36,7 @@ macro_rules! registry_holder {
     ($name:ident, $direct:ident, $registry:literal) => {
         #[doc = concat!("Port of ", stringify!($direct), "#STREAM_CODEC, with inline values and shifted registry IDs.")]
         #[derive(Clone, Debug, PartialEq)]
-        pub struct $name(pub Holder<$direct>);
+        pub struct $name(pub Holder<Box<$direct>>);
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> { Ok(Self(Holder::decode(r, &registry($registry))?)) }
             fn encode(&self, w: &mut Writer<'_>) -> Result<()> { self.0.encode(w, &registry($registry)) }

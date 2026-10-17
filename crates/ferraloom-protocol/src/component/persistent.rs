@@ -615,7 +615,7 @@ impl Persistent for Sound {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(SoundEvent::from_json(v)?)
+            Holder::Direct(Box::new(SoundEvent::from_json(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -630,7 +630,7 @@ impl Persistent for TrimMaterialHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimMaterial::from_json(v)?)
+            Holder::Direct(Box::new(TrimMaterial::from_json(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -645,7 +645,7 @@ impl Persistent for TrimPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimPattern::from_json(v)?)
+            Holder::Direct(Box::new(TrimPattern::from_json(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -660,7 +660,7 @@ impl Persistent for InstrumentHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(Instrument::from_json(v)?)
+            Holder::Direct(Box::new(Instrument::from_json(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -687,7 +687,7 @@ impl Persistent for BannerPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(BannerPattern::from_json(v)?)
+            Holder::Direct(Box::new(BannerPattern::from_json(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -2101,7 +2101,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::UseEffects(<UseEffects as Persistent>::from_json(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_json(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_json(value)?)
@@ -2110,7 +2110,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::DamageType(<DamageType as Persistent>::from_json(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_json(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_json(value)?)
@@ -2405,10 +2405,10 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             <DecoratedPotPattern as Persistent>::from_json(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_json(value)?),
         "minecraft:cushion/color" => {
@@ -2438,7 +2438,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::UseEffects(<UseEffects as Persistent>::from_nbt(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_nbt(value)?)
@@ -2447,7 +2447,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::DamageType(<DamageType as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_nbt(value)?)
@@ -2742,10 +2742,10 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             <DecoratedPotPattern as Persistent>::from_nbt(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_nbt(value)?),
         "minecraft:cushion/color" => {
