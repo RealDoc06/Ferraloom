@@ -1094,6 +1094,7 @@ async fn actual_projectile_handlers_ignite_direct_arrows_and_player_wind_charge_
                 .get_entity()
                 .fire_ticks
                 .load(Ordering::Relaxed);
+            let damage_events_before = hooks.damage.lock().unwrap().len();
             direct.on_hit(projectile_hit(d.parts()[0].clone()));
             let rejected = phase != EnderDragonPhase::Hovering && kind < 3;
             if rejected {
@@ -1103,6 +1104,7 @@ async fn actual_projectile_handlers_ignite_direct_arrows_and_player_wind_charge_
                 );
                 assert_eq!(direct.get_entity().get_frozen_ticks(), 0);
                 assert_eq!(d.mob_entity.living_entity.health.load(), 200.0);
+                assert_eq!(hooks.damage.lock().unwrap().len(), damage_events_before);
             } else {
                 assert_eq!(
                     direct.get_entity().fire_ticks.load(Ordering::Relaxed),
@@ -1138,6 +1140,80 @@ async fn actual_projectile_handlers_ignite_direct_arrows_and_player_wind_charge_
             );
             world.remove_entity(live.as_ref());
         }
+    }
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actual_normal_and_breeze_wind_hits_push_bystander_without_blast_damage() {
+    let fixture = fixture().await;
+    let world = fixture.player.world();
+    let hooks = Events::register(&fixture.server);
+    for breeze in [false, true] {
+        let live = spawn(&world);
+        let d = dragon(&live);
+        d.set_phase(EnderDragonPhase::SitScanning);
+        let hit_pos = d.parts()[0].entity.pos.load();
+        let bystander = crate::entity::r#type::from_type(
+            &EntityType::COW,
+            Vector3::new(hit_pos.x + 1.0, hit_pos.y, hit_pos.z),
+            &world,
+            Uuid::new_v4(),
+        );
+        assert!(world.spawn_entity(bystander.clone()));
+        bystander
+            .get_mob()
+            .unwrap()
+            .get_mob_entity()
+            .set_no_ai(true);
+        let living = bystander.get_living_entity().unwrap();
+        let bystander_health = living.health.load();
+        assert_eq!(
+            bystander.get_entity().velocity.load(),
+            Vector3::new(0.0, 0.0, 0.0)
+        );
+
+        let thrown = ThrownItemEntity::new(
+            Entity::new(
+                world.clone(),
+                hit_pos,
+                if breeze {
+                    &EntityType::BREEZE_WIND_CHARGE
+                } else {
+                    &EntityType::WIND_CHARGE
+                },
+            ),
+            fixture.player.get_entity(),
+            0.0,
+        );
+        let direct = Arc::new(if breeze {
+            WindChargeEntity::new_breeze(thrown)
+        } else {
+            WindChargeEntity::new_normal(thrown)
+        });
+        direct.get_entity().set_pos(hit_pos);
+        assert!(world.spawn_entity(direct.clone()));
+        let damage_events_before = hooks.damage.lock().unwrap().len();
+        direct.on_hit(projectile_hit(d.parts()[0].clone()));
+
+        assert_eq!(living.health.load(), bystander_health);
+        assert!(bystander.get_entity().velocity.load().x > 0.0);
+        assert_eq!(
+            d.mob_entity.living_entity.health.load(),
+            if breeze { 199.0 } else { 200.0 }
+        );
+        if breeze {
+            assert_eq!(
+                &hooks.damage.lock().unwrap()[damage_events_before..],
+                &[(live.get_entity().entity_id, 1.0)]
+            );
+        } else {
+            assert_eq!(hooks.damage.lock().unwrap().len(), damage_events_before);
+            assert_eq!(direct.get_entity().fire_ticks.load(Ordering::Relaxed), 20);
+        }
+        world.remove_entity(direct.as_ref());
+        world.remove_entity(bystander.as_ref());
+        world.remove_entity(live.as_ref());
     }
     close_fixture(&fixture).await;
 }
