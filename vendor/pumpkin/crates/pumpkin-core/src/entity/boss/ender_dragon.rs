@@ -1033,15 +1033,15 @@ impl EnderDragonEntity {
                 .has_tag(&pumpkin_data::tag::DamageType::MINECRAFT_ALWAYS_HURTS_ENDER_DRAGONS)
         {
             let living = &self.mob_entity.living_entity;
-            let before = living.health.load();
-            living.damage_with_context(self, amount, damage_type, position, source, cause);
+            let outcome =
+                living.damage_with_outcome(self, amount, damage_type, position, source, cause);
             if self.current_phase().is_sitting() {
                 let take_off = {
                     let mut received = self
                         .sitting_damage_received
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    *received += before - living.health.load();
+                    *received += outcome.health_loss;
                     if *received > living.get_max_health() * 0.25 {
                         *received = 0.0;
                         true

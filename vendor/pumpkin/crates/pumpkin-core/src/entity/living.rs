@@ -70,6 +70,13 @@ use pumpkin_util::text::TextComponent;
 use rand::RngExt;
 use std::sync::RwLock;
 
+/// One invocation's committed loss, excluding absorption and nested hits.
+#[derive(Default)]
+pub(crate) struct DamageOutcome {
+    pub accepted: bool,
+    pub health_loss: f32,
+}
+
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
@@ -84,6 +91,8 @@ pub struct LivingEntity {
     pub health: AtomicCell<f32>,
     /// The current absorption (yellow hearts) on the entity.
     pub absorption: AtomicCell<f32>,
+    /// Serialize only health/absorption mutations, never plugin or loot callbacks.
+    health_mutation: std::sync::Mutex<()>,
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
@@ -287,6 +296,7 @@ impl LivingEntity {
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
+            health_mutation: std::sync::Mutex::new(()),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
@@ -794,10 +804,23 @@ impl LivingEntity {
         // Clamp to [0, max_health]
         let max_health = self.get_max_health();
         let clamped = health.max(0.0).min(max_health);
+        let _mutation = self.health_mutation.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.health.store(clamped);
         // tell everyone entities health changed
         self.entity
             .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
+    }
+
+    fn subtract_health(&self, amount: f32) -> (f32, f32) {
+        let max_health = self.get_max_health();
+        let _mutation = self.health_mutation.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = self.health.load();
+        let after = (before - amount).clamp(0.0, max_health);
+        self.health.store(after);
+        self.entity.set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, after);
+        (after, (before - after).max(0.0))
     }
 
     /// Returns the current maximum health for this entity
@@ -833,9 +856,15 @@ impl LivingEntity {
         // Must be at least 0
         let new_abs = new_abs.max(0.0);
 
-        // Set local state
-        self.absorption.store(new_abs);
+        {
+            let _mutation = self.health_mutation.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.absorption.store(new_abs);
+        }
+        self.sync_absorption();
+    }
 
+    fn sync_absorption(&self) {
         // Broadcast attribute update for max_absorption so clients receive
         // the updated absorption value via the attribute packet.
         crate::entity::attributes::send_attribute_updates_for_living(
@@ -846,7 +875,7 @@ impl LivingEntity {
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
             self.entity
-                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, self.absorption.load());
         }
     }
 
@@ -2945,19 +2974,32 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
+        self.damage_with_outcome(caller, amount, damage_type, position, source, cause)
+            .accepted
+    }
+
+    pub(crate) fn damage_with_outcome(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> DamageOutcome {
         let mut amount = amount;
 
         // Check invulnerability before applying damage
         if self.entity.is_invulnerable_to(&damage_type, cause) {
-            return false;
+            return DamageOutcome::default();
         }
 
         if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
-            return false; // Dying or dead
+            return DamageOutcome::default(); // Dying or dead
         }
 
         if amount < 0.0 {
-            return false;
+            return DamageOutcome::default();
         }
 
         let mut damage_event =
@@ -2972,7 +3014,7 @@ impl LivingEntity {
                 .fire_blocking(&server, &mut damage_event);
         }
         if damage_event.cancelled {
-            return false;
+            return DamageOutcome::default();
         }
         amount = damage_event.damage;
 
@@ -2991,7 +3033,7 @@ impl LivingEntity {
                     .fire_blocking(&server, &mut by_entity_event);
             }
             if by_entity_event.cancelled {
-                return false;
+                return DamageOutcome::default();
             }
             amount = by_entity_event.damage;
         } else if position.is_some()
@@ -3025,7 +3067,7 @@ impl LivingEntity {
                     .fire_blocking(&server, &mut by_block_event);
             }
             if by_block_event.cancelled {
-                return false;
+                return DamageOutcome::default();
             }
             amount = by_block_event.damage;
         }
@@ -3039,14 +3081,14 @@ impl LivingEntity {
             if self.entity.entity_type == &EntityType::PLAYER
                 && !world.level_info.load().game_rules.fire_damage
             {
-                return false;
+                return DamageOutcome::default();
             }
 
             // Check for fire resistance effect
             if self.has_effect(&StatusEffect::FIRE_RESISTANCE)
                 && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
             {
-                return false;
+                return DamageOutcome::default();
             }
         }
 
@@ -3128,7 +3170,7 @@ impl LivingEntity {
                     }
                 }
 
-                return false;
+                return DamageOutcome::default();
             }
         }
 
@@ -3152,7 +3194,7 @@ impl LivingEntity {
         let (damage_amount, play_sound) =
             if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
                 if effective_amount <= last_damage {
-                    return false;
+                    return DamageOutcome::default();
                 }
                 (effective_amount - last_damage, false)
             } else {
@@ -3172,7 +3214,7 @@ impl LivingEntity {
         self.last_damage_stamp.store(world.get_world_age(), Relaxed);
 
         let Some(server) = world.server.upgrade() else {
-            return false;
+            return DamageOutcome::default();
         };
         let config = &server.advanced_config.pvp;
 
@@ -3227,13 +3269,20 @@ impl LivingEntity {
 
         // Vanilla parity: actuallyHurt
         let original_damage = damage_amount;
-        let current_abs = self.absorption.load();
-        let dmg_to_health = (original_damage - current_abs).max(0.0);
-        let absorbed_damage = original_damage - dmg_to_health;
+        let (dmg_to_health, absorbed_damage) = {
+            let _mutation = self.health_mutation.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let current_abs = self.absorption.load();
+            let dmg_to_health = (original_damage - current_abs).max(0.0);
+            let absorbed = original_damage - dmg_to_health;
+            if absorbed > 0.0 {
+                self.absorption.store((current_abs - absorbed).max(0.0));
+            }
+            (dmg_to_health, absorbed)
+        };
 
         if absorbed_damage > 0.0 {
-            let new_abs = (current_abs - absorbed_damage).max(0.0);
-            self.set_absorption(new_abs);
+            self.sync_absorption();
 
             if let Some(player) = caller.get_player() {
                 player.increment_stat(
@@ -3259,8 +3308,8 @@ impl LivingEntity {
             }
         }
 
-        let max_h = self.get_max_health();
-        let new_health = (self.health.load() - dmg_to_health).clamp(0.0, max_h);
+        let mut new_health = self.health.load();
+        let mut health_loss = 0.0;
 
         if dmg_to_health > 0.0 {
             if let Some(player) = caller.get_player() {
@@ -3274,7 +3323,7 @@ impl LivingEntity {
                 );
             }
 
-            self.set_health(new_health);
+            (new_health, health_loss) = self.subtract_health(dmg_to_health);
 
             if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
@@ -3328,7 +3377,10 @@ impl LivingEntity {
             self.on_death(damage_type, source, cause);
         }
 
-        true
+        DamageOutcome {
+            accepted: true,
+            health_loss,
+        }
     }
 
     /// Ordinary death animation. Virtual owners may replace this entire clock.
