@@ -5,21 +5,22 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
 The latest [native-check record](../compatibility/results/native-checks.json) used clean engine source
-`a951d03e175831d5220fbd741ad488bfc9b6745e` on the dedicated `ferraloom-builder` (`10.10.10.162`),
-with executable SHA-256 `b1f0902c006a175be892c6b4781fb1a59fb4ce830f7aebe246f8ef2df7384f35`.
-All 16 checks passed: 1,637 Rust tests (96 data, 141 protocol, 92 command,
-416 world, 24 inventory, 856 core and 12 wrapper), 128 Python tests, 70 Node
+`b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb` on the dedicated `ferraloom-builder` (`10.10.10.162`),
+with executable SHA-256 `145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f`.
+All 16 checks passed: 1,647 Rust tests (96 data, 141 protocol, 92 command,
+416 world, 24 inventory, 866 core and 12 wrapper), 151 Python tests, 74 Node
 tests, strict TypeScript, both formatting checks, Clippy for the wrapper and all
 seven vendored crates, and the final build. Four inherited filtered Core child
 results are retained separately and are not added to the total. GameTest compiled
 only and contributes zero standalone behavior tests. The
-[original native receipt](../compatibility/results/evidence/beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3.json),
-[completed builder receipt](../compatibility/results/evidence/51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443.json) and
-[ROOT verification](../compatibility/results/evidence/c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce.json) bind the actual source, host,
+[original native receipt](../compatibility/results/evidence/0d2cb9a1bdd58986df1974805ef528b4775bb73b559ee4262ab2a9d1fe3c93ee.json),
+[completed builder receipt](../compatibility/results/evidence/9ff973e5b879ad6f197ee0a10eb7887b5a0b3630eb2ec720ae2f5347e90dd0c8.json) and
+[ROOT verification](../compatibility/results/evidence/fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b.json) bind actual source, host,
 resource scope, final binary and original command logs by content hash.
-This checkpoint applies to the tested engine commit, not a later evidence/docs
-commit. Fresh paired runtime and REA acceptance remain separate; no new runtime
-or verified-family result is claimed here.
+This checkpoint applies to tested engine `b8e01b4`; the future evidence/docs commit remains unknown.
+Engine source `b8e01b4` was [published to GitHub](../compatibility/results/evidence/3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f.json)
+on `main` and `validation/r29-cc10c5b`. The receipt records those refs before any later evidence/docs commit.
+CI completion is unknown. Fresh paired runtime and REA acceptance remain pending; no verified family is claimed.
 
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
@@ -50,7 +51,7 @@ transfer, `save-all flush` timed out and the console reported
 The seven reverse-transfer cases share that failed save prerequisite; the Java
 destination never booted. All three started servers and five clients exited with
 code zero and no forced cleanup. The save failure remains an observed failure of that historical build. Fresh
-paired acceptance for `a951d03` is not established by its native pass. Item interchange,
+paired acceptance for `b8e01b4` is not established by its native pass. Item interchange,
 container metadata, chat throttling and goat horns did not start.
 
 Earlier 24-boot/44-client regression passes at engine `6401924` apply to that

@@ -1,0 +1,31 @@
+{
+  "kind": "ROOT-tested-engine-source-publication",
+  "at": "2026-10-17T11:11:27.782837+00:00",
+  "verification_host": "devbox",
+  "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "remote": "origin",
+  "refs": [
+    "main",
+    "validation/r29-cc10c5b"
+  ],
+  "source_before": "ae26989de759558a2d1cca77f83610de75f220b1",
+  "source_after": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "actual_push_exit_code": 0,
+  "command": [
+    "git",
+    "push",
+    "--atomic",
+    "origin",
+    "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb:refs/heads/main",
+    "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb:refs/heads/validation/r29-cc10c5b"
+  ],
+  "native_verification": ".cache/reviews/r30-corrected-engine-first-success/root-verification.json",
+  "native_verification_sha256": "fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b",
+  "CI": "not yet observed",
+  "paired_runtime_or_REA": "not established",
+  "files": {
+    "remote-before.txt": "7e843bb00834a49179bf7886813a8f192d6bf5f675f9a0a3d815d357047e1dc2",
+    "push-console.log": "3ed5ce957e9e2dabf9165a4a2783f1c999a6b73cbfec0b4b1be83e2a43366257",
+    "remote-after.txt": "db6ff919b104fb61636141279e6062e190074eb90ef74d23564e447815ce3856"
+  }
+}

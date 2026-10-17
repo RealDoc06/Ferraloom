@@ -5,66 +5,66 @@
   "target_version": "26.3",
   "protocol": 777,
   "data_version": 5023,
-  "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
+  "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
   "source_worktree_clean": true,
-  "binary_sha256": "b1f0902c006a175be892c6b4781fb1a59fb4ce830f7aebe246f8ef2df7384f35",
-  "binary_bytes": 124665752,
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "binary_bytes": 124545688,
   "receipt": {
-    "path": "compatibility/results/evidence/beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3.json",
-    "sha256": "beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3",
-    "bytes": 10831
+    "path": "compatibility/results/evidence/0d2cb9a1bdd58986df1974805ef528b4775bb73b559ee4262ab2a9d1fe3c93ee.json",
+    "sha256": "0d2cb9a1bdd58986df1974805ef528b4775bb73b559ee4262ab2a9d1fe3c93ee",
+    "bytes": 11121
   },
   "completed_outer_receipt": {
-    "path": "compatibility/results/evidence/51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443.json",
-    "sha256": "51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443",
-    "bytes": 590
+    "path": "compatibility/results/evidence/9ff973e5b879ad6f197ee0a10eb7887b5a0b3630eb2ec720ae2f5347e90dd0c8.json",
+    "sha256": "9ff973e5b879ad6f197ee0a10eb7887b5a0b3630eb2ec720ae2f5347e90dd0c8",
+    "bytes": 594
   },
   "root_verification": {
-    "path": "compatibility/results/evidence/c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce.json",
-    "sha256": "c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce",
-    "bytes": 5703
+    "path": "compatibility/results/evidence/fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b.json",
+    "sha256": "fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b",
+    "bytes": 6115
   },
   "binary_preservation_metadata": {
-    "path": "compatibility/results/evidence/53a847679d0992a1f3c99b7037518d14064c3a4484b20c61a369176028c7a1cd.json",
-    "sha256": "53a847679d0992a1f3c99b7037518d14064c3a4484b20c61a369176028c7a1cd",
+    "path": "compatibility/results/evidence/9fd126ef5c82dcde1ed79832a5c33a78a46dd0c7405a426180fee85b0f391496.json",
+    "sha256": "9fd126ef5c82dcde1ed79832a5c33a78a46dd0c7405a426180fee85b0f391496",
     "bytes": 481
   },
   "exact_native_helper": {
-    "path": "compatibility/results/evidence/769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c.py",
-    "sha256": "769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c",
-    "bytes": 7301
+    "path": "compatibility/results/evidence/d160e2f738a9c9cfe2ffcef1fcb10fc0b20d00410f933b1debd3424872eab44f.py",
+    "sha256": "d160e2f738a9c9cfe2ffcef1fcb10fc0b20d00410f933b1debd3424872eab44f",
+    "bytes": 8831
   },
   "exact_root_verifier": {
-    "path": "compatibility/results/evidence/09ea796a97a461db8606d1732f17863f053b34f411d6246b118d087cb4109db5.py",
-    "sha256": "09ea796a97a461db8606d1732f17863f053b34f411d6246b118d087cb4109db5",
-    "bytes": 9839
+    "path": "compatibility/results/evidence/4fcbad3622c6bf8c6111627c94d9b44204592f63f01f39bb7ccaa6df892cbe15.py",
+    "sha256": "4fcbad3622c6bf8c6111627c94d9b44204592f63f01f39bb7ccaa6df892cbe15",
+    "bytes": 11986
   },
   "actual_wrapper_submission": {
-    "path": "compatibility/results/evidence/8bc4d49e965f49accb31906a84379430b132f29a4246f52715c884f531a475ff.json",
-    "sha256": "8bc4d49e965f49accb31906a84379430b132f29a4246f52715c884f531a475ff",
-    "bytes": 922
+    "path": "compatibility/results/evidence/58b6d32343beab86af5c7c65bdf2aa453a69a079f029eb42808c0a937defd53f.json",
+    "sha256": "58b6d32343beab86af5c7c65bdf2aa453a69a079f029eb42808c0a937defd53f",
+    "bytes": 739
   },
   "export_metadata": {
-    "path": "compatibility/results/evidence/837db2e7264d2df8decc8e869ec5509895de63e5f417171de026e3e11ee93f6a.json",
-    "sha256": "837db2e7264d2df8decc8e869ec5509895de63e5f417171de026e3e11ee93f6a",
-    "bytes": 3808
+    "path": "compatibility/results/evidence/7b41a04839e837c68a54ec0046442a02d50ac36626d32d612e5d2d13ac5f1be6.json",
+    "sha256": "7b41a04839e837c68a54ec0046442a02d50ac36626d32d612e5d2d13ac5f1be6",
+    "bytes": 3997
   },
   "original_archive": {
-    "sha256": "5363256fdff38dba078e0e95e10a45599a9203d5fd6d77914c6e42a89db9a31e",
-    "bytes": 215040,
+    "sha256": "fa5249ac3168458a9d764fe296da9c6c71025891e2b21421e532fe4d8ee45c25",
+    "bytes": 225280,
     "members": 19,
-    "publication_scope": "All original members are materialized separately by content hash; archive and executable bytes are not published."
+    "publication_scope": "All original members separately content-addressed; archive and executable bytes excluded."
   },
   "execution_host": {
     "hostname": "ferraloom-builder",
     "address": "10.10.10.162",
     "repository": "/home/doc/code/Ferraloom",
-    "scope": "Dedicated unprivileged CT107 on nodo-3; distinct from devbox and GitHub Actions."
+    "scope": "Dedicated unprivileged CT107 on nodo-3; distinct from devbox and CI."
   },
   "verification_host": "devbox",
-  "job_id": "20261017T072541Z-065f4129",
-  "prefix": "review29-all16-builder-fourth",
-  "outer_elapsed_seconds": 1645.178262,
+  "job_id": "20261017T103344Z-2791200f",
+  "prefix": "review30-corrected-engine-builder-first",
+  "outer_elapsed_seconds": 2025.465754,
   "resource_limits": {
     "memory.max": "6442450944",
     "memory.swap.max": "0",
@@ -74,10 +74,15 @@
     "CARGO_INCREMENTAL": "0",
     "CARGO_BUILD_JOBS": "1"
   },
+  "outer_jar": {
+    "sha256": "d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64",
+    "bytes": 62294556,
+    "bytes_published": false
+  },
   "passed_tests": {
-    "rust": 1637,
-    "python": 128,
-    "node": 70
+    "rust": 1647,
+    "python": 151,
+    "node": 74
   },
   "rust_test_breakdown": {
     "data": 96,
@@ -86,15 +91,15 @@
     "command": 92,
     "world": 416,
     "inventory": 24,
-    "core": 856,
+    "core": 866,
     "wrapper": 12
   },
   "isolated_core_subprocesses": {
     "count": 4,
     "each_passed": 1,
-    "each_filtered_out": 855,
+    "each_filtered_out": 865,
     "added_to_rust_total": false,
-    "authoritative_outer_passed": 856,
+    "authoritative_outer_passed": 866,
     "authoritative_outer_failed": 0,
     "authoritative_outer_filtered_out": 0
   },
@@ -110,7 +115,7 @@
         "--",
         "--check"
       ],
-      "elapsed_seconds": 0.265,
+      "elapsed_seconds": 0.114,
       "log": {
         "path": "compatibility/results/evidence/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -130,7 +135,7 @@
         "--",
         "--check"
       ],
-      "elapsed_seconds": 8.031,
+      "elapsed_seconds": 7.88,
       "log": {
         "path": "compatibility/results/evidence/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -150,13 +155,13 @@
         "-s",
         "tests"
       ],
-      "elapsed_seconds": 1.918,
+      "elapsed_seconds": 5.475,
       "log": {
-        "path": "compatibility/results/evidence/ade647ffb7aa899f822e3fa37e790a66276c8888861b6845bcbea5a7c6199ccc.log",
-        "sha256": "ade647ffb7aa899f822e3fa37e790a66276c8888861b6845bcbea5a7c6199ccc",
-        "bytes": 510
+        "path": "compatibility/results/evidence/89b84721d660457e18a4cfc776ee81303a723b1821bc4e64dbc3fc4de18e8555.log",
+        "sha256": "89b84721d660457e18a4cfc776ee81303a723b1821bc4e64dbc3fc4de18e8555",
+        "bytes": 533
       },
-      "passed_tests": 128
+      "passed_tests": 151
     },
     {
       "step": "vendor-clippy",
@@ -180,10 +185,10 @@
         "-D",
         "warnings"
       ],
-      "elapsed_seconds": 142.768,
+      "elapsed_seconds": 139.96,
       "log": {
-        "path": "compatibility/results/evidence/783407910aeea4ffdbe8a75564de5982451ced180301736ee8a3dac317318a98.log",
-        "sha256": "783407910aeea4ffdbe8a75564de5982451ced180301736ee8a3dac317318a98",
+        "path": "compatibility/results/evidence/e1d7a7c9dd4aa99209efc3da2f125ca57e9ae5620d776909486fc1a525140cff.log",
+        "sha256": "e1d7a7c9dd4aa99209efc3da2f125ca57e9ae5620d776909486fc1a525140cff",
         "bytes": 829
       }
     },
@@ -206,10 +211,10 @@
         "--target-dir",
         "target"
       ],
-      "elapsed_seconds": 0.415,
+      "elapsed_seconds": 0.315,
       "log": {
-        "path": "compatibility/results/evidence/18012bb8f63c35f78c575980e5723316ddafabb673f6fd646d0115016f51809d.log",
-        "sha256": "18012bb8f63c35f78c575980e5723316ddafabb673f6fd646d0115016f51809d",
+        "path": "compatibility/results/evidence/863cb5dced4fa8d114f83d805339c495739da1319ceb3bb2954937f9ed45829e.log",
+        "sha256": "863cb5dced4fa8d114f83d805339c495739da1319ceb3bb2954937f9ed45829e",
         "bytes": 7784
       },
       "passed_tests": 96
@@ -234,10 +239,10 @@
         "--target-dir",
         "target"
       ],
-      "elapsed_seconds": 0.415,
+      "elapsed_seconds": 0.315,
       "log": {
-        "path": "compatibility/results/evidence/c76e28650314f8d619d12da438ca4ecf485ede38fa163dcb1cdf5ca4886f8765.log",
-        "sha256": "c76e28650314f8d619d12da438ca4ecf485ede38fa163dcb1cdf5ca4886f8765",
+        "path": "compatibility/results/evidence/0f018b5d0d8f637821ba5f172564859dbe50e2878473c8989cc3d60372e84d13.log",
+        "sha256": "0f018b5d0d8f637821ba5f172564859dbe50e2878473c8989cc3d60372e84d13",
         "bytes": 12938
       },
       "passed_tests": 141
@@ -259,8 +264,8 @@
       ],
       "elapsed_seconds": 0.565,
       "log": {
-        "path": "compatibility/results/evidence/eb30aeece9f39905fb1678eff4f62218e17fc93bbd9df69c36fe8337d562b529.log",
-        "sha256": "eb30aeece9f39905fb1678eff4f62218e17fc93bbd9df69c36fe8337d562b529",
+        "path": "compatibility/results/evidence/d431e4012e1a4d83c9b98c0477c6f4ecf3cac9b1e6efdcb742710d3d35f8c016.log",
+        "sha256": "d431e4012e1a4d83c9b98c0477c6f4ecf3cac9b1e6efdcb742710d3d35f8c016",
         "bytes": 6230
       },
       "passed_tests": 92
@@ -286,11 +291,11 @@
         "--",
         "--test-threads=2"
       ],
-      "elapsed_seconds": 167.985,
+      "elapsed_seconds": 168.993,
       "log": {
-        "path": "compatibility/results/evidence/b198c10c06da2450dcabbe8a18b9fb01f58f0315117fb848397c03f7fc9156fd.log",
-        "sha256": "b198c10c06da2450dcabbe8a18b9fb01f58f0315117fb848397c03f7fc9156fd",
-        "bytes": 38557
+        "path": "compatibility/results/evidence/174e22ec4adbec65cbeb24390b8310bebd26b6548998ee94a707308d3b10de08.log",
+        "sha256": "174e22ec4adbec65cbeb24390b8310bebd26b6548998ee94a707308d3b10de08",
+        "bytes": 38663
       },
       "passed_tests": 416
     },
@@ -313,10 +318,10 @@
         "--target-dir",
         "target"
       ],
-      "elapsed_seconds": 0.566,
+      "elapsed_seconds": 1.016,
       "log": {
-        "path": "compatibility/results/evidence/d110fb23666474111959122b0aaf68f54aaee8bbf60b38b4ad6d4685cc732a3e.log",
-        "sha256": "d110fb23666474111959122b0aaf68f54aaee8bbf60b38b4ad6d4685cc732a3e",
+        "path": "compatibility/results/evidence/d35a2b97c3516b71593a3d3d66523561b898b053ec444f7fac407a285e6e45f3.log",
+        "sha256": "d35a2b97c3516b71593a3d3d66523561b898b053ec444f7fac407a285e6e45f3",
         "bytes": 2984
       },
       "passed_tests": 24
@@ -342,13 +347,13 @@
         "--",
         "--test-threads=2"
       ],
-      "elapsed_seconds": 599.815,
+      "elapsed_seconds": 1161.877,
       "log": {
-        "path": "compatibility/results/evidence/cb2d71df512ae5eb3497ea5d454864e84bb5345f110e04f4f1a81b3a3b8b48b5.log",
-        "sha256": "cb2d71df512ae5eb3497ea5d454864e84bb5345f110e04f4f1a81b3a3b8b48b5",
-        "bytes": 86286
+        "path": "compatibility/results/evidence/8853ea6b0c4094c3039038ca82f33481f75401cee77a4f75bec989d8706793e6.log",
+        "sha256": "8853ea6b0c4094c3039038ca82f33481f75401cee77a4f75bec989d8706793e6",
+        "bytes": 87595
       },
-      "passed_tests": 856
+      "passed_tests": 866
     },
     {
       "step": "gametest-compile",
@@ -369,11 +374,11 @@
         "--target-dir",
         "target"
       ],
-      "elapsed_seconds": 11.941,
+      "elapsed_seconds": 0.816,
       "log": {
-        "path": "compatibility/results/evidence/4f0db75995f8c2c53324c5d0e141975ac265437a4e00c4409c5343f87bbf3dd8.log",
-        "sha256": "4f0db75995f8c2c53324c5d0e141975ac265437a4e00c4409c5343f87bbf3dd8",
-        "bytes": 945
+        "path": "compatibility/results/evidence/2ca82de24c0da28d361a5dc49ae919989dbdf0987b83dbd597899be326adbf7f.log",
+        "sha256": "2ca82de24c0da28d361a5dc49ae919989dbdf0987b83dbd597899be326adbf7f",
+        "bytes": 722
       },
       "scope": "Compile only; no standalone behavior tests.",
       "standalone_behavior_tests": 0
@@ -394,11 +399,11 @@
         "-D",
         "warnings"
       ],
-      "elapsed_seconds": 73.12,
+      "elapsed_seconds": 58.688,
       "log": {
-        "path": "compatibility/results/evidence/26ef21c95c5d8fd78e172157b4a7c8a7aa0af896784f2f31d4b6c7fd5b775148.log",
-        "sha256": "26ef21c95c5d8fd78e172157b4a7c8a7aa0af896784f2f31d4b6c7fd5b775148",
-        "bytes": 1041
+        "path": "compatibility/results/evidence/299787b8426777d35ac01d8bdb38de8bab4e7abedef693e7cbeff6363399fd5b.log",
+        "sha256": "299787b8426777d35ac01d8bdb38de8bab4e7abedef693e7cbeff6363399fd5b",
+        "bytes": 477
       }
     },
     {
@@ -413,11 +418,11 @@
         "--jobs",
         "1"
       ],
-      "elapsed_seconds": 549.474,
+      "elapsed_seconds": 391.159,
       "log": {
-        "path": "compatibility/results/evidence/bd5c6bae469dffa1eb17f48928b6c1c43fc47b8264a8d21516db9ad82178b1cc.log",
-        "sha256": "bd5c6bae469dffa1eb17f48928b6c1c43fc47b8264a8d21516db9ad82178b1cc",
-        "bytes": 2037
+        "path": "compatibility/results/evidence/7e0ea0d9b5db94b7119e2d47759ea58209a9544f1a0750575fc187d99a9f4631.log",
+        "sha256": "7e0ea0d9b5db94b7119e2d47759ea58209a9544f1a0750575fc187d99a9f4631",
+        "bytes": 1587
       },
       "passed_tests": 12
     },
@@ -430,13 +435,13 @@
         "run",
         "test:protocol"
       ],
-      "elapsed_seconds": 1.067,
+      "elapsed_seconds": 1.167,
       "log": {
-        "path": "compatibility/results/evidence/0f1a24e8d19092a1015c7121a010f3357f31060c27b138733c82ab74c7f699b1.log",
-        "sha256": "0f1a24e8d19092a1015c7121a010f3357f31060c27b138733c82ab74c7f699b1",
-        "bytes": 7400
+        "path": "compatibility/results/evidence/1b90125cb7802c4107f4d8e46923f00fb43856cb7ff60b0dd0080bb6c3e97bcb.log",
+        "sha256": "1b90125cb7802c4107f4d8e46923f00fb43856cb7ff60b0dd0080bb6c3e97bcb",
+        "bytes": 7805
       },
-      "passed_tests": 70
+      "passed_tests": 74
     },
     {
       "step": "typescript",
@@ -447,7 +452,7 @@
         "run",
         "check:protocol"
       ],
-      "elapsed_seconds": 2.119,
+      "elapsed_seconds": 2.171,
       "log": {
         "path": "compatibility/results/evidence/81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd.log",
         "sha256": "81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd",
@@ -466,7 +471,7 @@
         "--jobs",
         "1"
       ],
-      "elapsed_seconds": 84.072,
+      "elapsed_seconds": 84.088,
       "log": {
         "path": "compatibility/results/evidence/3f66122d95f710bb9234efac87fa955de6eda54c10d2efe7a5e4cffbb831a874.log",
         "sha256": "3f66122d95f710bb9234efac87fa955de6eda54c10d2efe7a5e4cffbb831a874",
@@ -476,67 +481,66 @@
   ],
   "generated_test_artifact": {
     "artifact": {
-      "path": "compatibility/results/evidence/d1636a654c4bc59dcf98996249837f54b6ead7a48533060ed8c6cb6edd6b9755.json",
-      "sha256": "d1636a654c4bc59dcf98996249837f54b6ead7a48533060ed8c6cb6edd6b9755",
+      "path": "compatibility/results/evidence/18635e09e099c348e428bc964fb294f10ef9414681bea9c6fa64f93b90de8421.json",
+      "sha256": "18635e09e099c348e428bc964fb294f10ef9414681bea9c6fa64f93b90de8421",
       "bytes": 116
     },
-    "scope": "Synthetic QueuedPlayer/UUID66 unit-test usercache only, preserved from the original run; no world or real player data."
+    "scope": "Synthetic QueuedPlayer/UUID66 only; no world or real player data."
   },
   "CI": {
-    "result": "success",
-    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
-    "run_id": 39012929138,
-    "url": "https://github.com/RealDoc06/Ferraloom/actions/runs/39012929138",
-    "original_run_metadata": {
-      "path": "compatibility/results/evidence/b22498af43f0151483b6236e33d377f6b16c7c86c70eab457834235c23cd4a3f.json",
-      "sha256": "b22498af43f0151483b6236e33d377f6b16c7c86c70eab457834235c23cd4a3f",
-      "bytes": 3778
-    },
-    "scope": "Actual GitHub Actions completion for this engine commit; distinct from the dedicated builder run and any later evidence/docs commit."
+    "result": "unknown",
+    "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+    "run_id": null,
+    "original_run_metadata": null,
+    "scope": "No CI completion for b8e01b4 is included; previous engine CI results are not reused."
   },
   "engine_source_publication": {
-    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
-    "branch": "main",
-    "result": "fast-forward-published",
+    "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+    "result": "published",
     "receipt": {
-      "path": "compatibility/results/evidence/c382d8d6ce982298fdae9f33ab08fa0f8676d039eb072539fa1494c6ae2098c7.json",
-      "sha256": "c382d8d6ce982298fdae9f33ab08fa0f8676d039eb072539fa1494c6ae2098c7",
-      "bytes": 734
+      "path": "compatibility/results/evidence/3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f.json",
+      "sha256": "3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f",
+      "bytes": 1216
     },
-    "scope": "Engine source only; no subsequent evidence/docs commit is claimed tested or published by this receipt."
+    "original_texts": {
+      "remote-before.txt": {
+        "path": "compatibility/results/evidence/7e843bb00834a49179bf7886813a8f192d6bf5f675f9a0a3d815d357047e1dc2.txt",
+        "sha256": "7e843bb00834a49179bf7886813a8f192d6bf5f675f9a0a3d815d357047e1dc2",
+        "bytes": 132
+      },
+      "push-console.log": {
+        "path": "compatibility/results/evidence/3ed5ce957e9e2dabf9165a4a2783f1c999a6b73cbfec0b4b1be83e2a43366257.log",
+        "sha256": "3ed5ce957e9e2dabf9165a4a2783f1c999a6b73cbfec0b4b1be83e2a43366257",
+        "bytes": 196
+      },
+      "remote-after.txt": {
+        "path": "compatibility/results/evidence/db6ff919b104fb61636141279e6062e190074eb90ef74d23564e447815ce3856.txt",
+        "sha256": "db6ff919b104fb61636141279e6062e190074eb90ef74d23564e447815ce3856",
+        "bytes": 132
+      }
+    },
+    "scope": "Source publication snapshot from the original 2026-10-17 receipt: GitHub RealDoc06/Ferraloom refs main and validation/r29-cc10c5b pointed to b8e01b4 before any later evidence/docs commit. CI completion and future ref state are not established."
   },
+  "future_evidence_docs_commit": null,
   "previous_native_record": {
-    "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
     "exact_index": {
-      "path": "compatibility/results/evidence/bfb49e6f63e958f60df4eafa0c65a86abd96812b7e276e549545af9305a9ceaa.json",
-      "sha256": "bfb49e6f63e958f60df4eafa0c65a86abd96812b7e276e549545af9305a9ceaa",
-      "bytes": 10473
+      "path": "compatibility/results/evidence/5ca6968e299f3c215385b69284ba1e0b5437133694679c3cec70dc9d31c77df6.json",
+      "sha256": "5ca6968e299f3c215385b69284ba1e0b5437133694679c3cec70dc9d31c77df6",
+      "bytes": 18227
     },
-    "scope": "Original 97db native index archived byte-for-byte before updating this latest pointer."
+    "scope": "Original a951d03 index preserved byte-identically before updating the latest pointer."
   },
   "historical_runtime": {
     "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
-    "binary_sha256": "57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670",
-    "jukeboxes": {
-      "result": "passed",
-      "index": "compatibility/results/jukeboxes.json",
-      "modified_by_this_record": false
-    },
-    "regression_attempt": {
-      "result": "failed",
-      "index": "compatibility/results/regression-checks.json",
-      "original_exact_index": {
-        "path": "compatibility/results/evidence/084092f56395c0c4e2b6b988de0cf51b696d622c87b64b21586a04fdb7b67e34.json",
-        "sha256": "084092f56395c0c4e2b6b988de0cf51b696d622c87b64b21586a04fdb7b67e34",
-        "bytes": 5525
-      },
-      "only_proposed_change": "same_source_passes.native_checks navigation now identifies the archived97db native index."
-    },
-    "scope": "These historical results remain bound to 97db; they are not a951 paired acceptance."
+    "jukebox_index": "compatibility/results/jukeboxes.json",
+    "regression_index": "compatibility/results/regression-checks.json",
+    "all_historical_indices_modified": false,
+    "scope": "Historical 97db9ed results remain bound to their original source and binary; a951d03 native history remains in its preserved exact index."
   },
   "paired_runtime_for_this_source": {
     "status": "not established by this native record",
-    "scope": "Fresh paired runtime, crafting, Dragon and REA acceptance remain separate. No current in-progress run is interpreted here."
+    "scope": "Fresh paired/runtime/REA/full compatibility remain separate."
   },
   "feature_ledger": {
     "families": 200,
@@ -546,12 +550,12 @@
     "changed_by_this_record": false
   },
   "scope": [
-    "All 16 recorded commands passed at the same clean a951 engine source and completed executable digest.",
-    "Rust totals count each full executed binary once; four inherited filtered Core child summaries are retained but not added.",
-    "Strict TypeScript, both formatting checks, root and all seven vendored-crate Clippy checks, and the final executable build passed.",
+    "All 16 recorded commands passed at exact clean engine b8e01b4 and the completed executable digest.",
+    "Rust full-binary totals exclude four inherited filtered child results.",
+    "Both fmt checks, strict TypeScript, executable and all seven vendored-crate Clippy checks, and final executable build passed.",
     "GameTest compiled only and contributes zero standalone behavior tests.",
-    "Native evidence applies to engine source a951, not an unknown later evidence/docs commit. This publication proposal changes no engine or build inputs.",
-    "No paired runtime, REA capture, complete compatibility, performance or verified-family promotion follows from this record."
+    "Native evidence applies to engine b8e01b4. The future evidence/docs commit remains unknown.",
+    "CI completion, paired runtime, REA, full compatibility and verified-family promotion remain separate from these native checks."
   ],
   "open_gaps": [
     "Fresh paired runtime and REA evidence for this engine remains separate from these native checks.",
