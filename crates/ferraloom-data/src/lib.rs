@@ -8,6 +8,8 @@
 //! assert_eq!(wet.block(), Block::OAK_STAIRS);
 //! ```
 
+pub mod datapack;
+
 use std::marker::PhantomData;
 
 /// Vanilla global block-state ID, in `Block.BLOCK_STATE_REGISTRY` order.
