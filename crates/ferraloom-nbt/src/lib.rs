@@ -10,3 +10,6 @@ pub use snbt::{ParseError, parse, parse_compound, parse_prefix, pretty, to_text}
 
 mod path;
 pub use path::{NbtPath, PathError};
+
+#[cfg(test)]
+mod tests;
