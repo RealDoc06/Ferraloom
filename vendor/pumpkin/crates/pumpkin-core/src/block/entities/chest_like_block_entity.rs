@@ -99,8 +99,15 @@ pub(crate) fn snapshot_pending_for_clone(
     position: pumpkin_util::math::position::BlockPos,
     nbt: &NbtCompound,
 ) -> Result<BlockEntityCloneData, BlockEntityLoadError> {
-    validate_clone_nbt(kind, position, nbt)?;
-    ChestState::<27>::from_nbt(nbt).snapshot_for_clone(kind, position)
+    // Java's chunk save adds this packing marker to both live and pending
+    // records. It is not custom BE data and must never enter the clone payload.
+    let mut detached = nbt.clone();
+    match detached.child_tags.remove("keepPacked") {
+        None | Some(NbtTag::Byte(0 | 1)) => {}
+        Some(_) => return Err(BlockEntityLoadError::Unsupported("clone packing marker")),
+    }
+    validate_clone_nbt(kind, position, &detached)?;
+    ChestState::<27>::from_nbt(&detached).snapshot_for_clone(kind, position)
 }
 
 /// Preserve the original tags even when the runtime only understands a subset.

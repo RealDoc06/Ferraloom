@@ -1954,10 +1954,15 @@ impl World {
             crate::block::entities::create_block_entity(entity_type, *position)?
         };
         entity.bind_world(self);
-        let custom_data = self
-            .custom_block_entity_data
-            .get(position)
-            .map(|data| data.clone());
+        let pending_custom_data = pending.as_ref().and_then(|nbt| {
+            nbt.get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+        });
+        let custom_data = pending_custom_data.cloned().or_else(|| {
+            self.custom_block_entity_data
+                .get(position)
+                .map(|data| data.clone())
+        });
         let mut unload = self.level.chunk_unload.access();
         let chunk = self.level.loaded_chunks.get(&chunk_pos)?.value().clone();
         if self.get_block_state_id_if_loaded(position) != Some(state) {
@@ -1975,6 +1980,12 @@ impl World {
             != pending.as_ref()
         {
             return None;
+        }
+        // Match ordinary lazy extraction, but only after the candidate passes
+        // every publication guard. Refused and callback-owned records win.
+        if let Some(custom_data) = pending_custom_data {
+            self.custom_block_entity_data
+                .insert(*position, custom_data.clone());
         }
         published.insert(*position, entity.clone());
         entity.snapshot_nbt(&mut |nbt| {
