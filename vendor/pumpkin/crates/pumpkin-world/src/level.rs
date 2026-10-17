@@ -1547,7 +1547,7 @@ impl Level {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             assert!(!phase.active, "previous block phase must finish normally");
-            phase.active = true
+            phase.active = true;
         };
         // Never hold phase while acquiring map/scheduler locks.
         let (ticks, owners) =
@@ -1710,7 +1710,7 @@ impl Level {
                     && pos.z < max.0.z
             };
             phase.pending.retain(|tick| !contains(tick));
-            phase.already_run.retain(|tick| !contains(tick))
+            phase.already_run.retain(|tick| !contains(tick));
         };
         for x in (min.0.x >> 4)..=((max.0.x - 1) >> 4) {
             for z in (min.0.z >> 4)..=((max.0.z - 1) >> 4) {
