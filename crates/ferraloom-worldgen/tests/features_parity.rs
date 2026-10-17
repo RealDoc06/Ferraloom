@@ -669,3 +669,165 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .starts_with("Unsupported")
     );
 }
+
+#[test]
+fn biome_source_encounter_order_and_all_builtin_feature_indices_match_vanilla() {
+    use ferraloom_worldgen::{
+        biome::BiomeSource, climate::SearchContext, decoration::DecorationPlan,
+        density::SamplerContext, feature::FeatureLoader, generator::*,
+        settings::NoiseGeneratorSettings,
+    };
+    use std::sync::Arc;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    loader.load_biome_features().unwrap();
+    let registry = loader.finish();
+    let cases = golden(include_bytes!("golden/biome_order.json.gz"));
+    let points = [
+        [0, 0, 0],
+        [-1, -64, -1],
+        [7, 25, -31],
+        [i32::MAX, 0, i32::MAX],
+        [i32::MIN, 1, -13456],
+    ];
+    for case in cases.as_array().unwrap() {
+        let source = BiomeSource::decode(&case["config"], &resources).unwrap();
+        let possible = source.possible_biomes();
+        assert_eq!(
+            serde_json::to_value(possible.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .unwrap(),
+            case["possible"]
+        );
+        let plan = DecorationPlan::new(&registry, &possible).unwrap();
+        assert_eq!(
+            serde_json::to_value(
+                plan.steps
+                    .iter()
+                    .map(|s| s
+                        .features
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>())
+                    .collect::<Vec<_>>()
+            )
+            .unwrap(),
+            case["features"],
+            "{}",
+            case["config"]
+        );
+        if possible.is_empty() {
+            continue;
+        }
+        let dimension = case["dimension"].as_str().unwrap();
+        let value = resources
+            .require(
+                &format!("worldgen/noise_settings/{dimension}.json")
+                    .parse()
+                    .unwrap(),
+            )
+            .unwrap()
+            .json()
+            .unwrap();
+        let generator = NoiseBasedChunkGenerator::new(
+            data.clone(),
+            NoiseGeneratorSettings::decode(&value).unwrap(),
+            source,
+            8675309,
+        )
+        .unwrap();
+        let mut samplers = SamplerContext::uncached();
+        let mut search = SearchContext::default();
+        for (p, expected) in points.into_iter().zip(case["samples"].as_array().unwrap()) {
+            assert_eq!(
+                generator
+                    .source
+                    .sample(
+                        &generator.random.compiler,
+                        generator.random.router,
+                        &mut samplers,
+                        &mut search,
+                        p
+                    )
+                    .to_string(),
+                expected.as_str().unwrap(),
+                "{} {p:?}",
+                case["config"]
+            );
+        }
+    }
+}
+#[test]
+fn base_heights_and_single_block_noise_columns_match_vanilla() {
+    use ferraloom_worldgen::{
+        biome::BiomeSource, generator::*, region::Heightmap, settings::NoiseGeneratorSettings,
+    };
+    use serde_json::json;
+    use std::{collections::BTreeMap, sync::Arc};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let cases = golden(include_bytes!("golden/base_columns.json.gz"));
+    let mut generators = BTreeMap::new();
+    for case in cases.as_array().unwrap() {
+        let seed = case["seed"].as_i64().unwrap();
+        let dimension = case["dimension"].as_str().unwrap();
+        let generator = generators.entry((seed,dimension.to_owned())).or_insert_with(|| {
+            let value = resources.require(&format!("worldgen/noise_settings/{dimension}.json").parse().unwrap()).unwrap().json().unwrap();
+            let source = BiomeSource::decode(&if dimension=="end" {json!({"type":"minecraft:the_end"})} else {json!({"type":"minecraft:multi_noise","preset":format!("minecraft:{dimension}")})},&resources).unwrap();
+            NoiseBasedChunkGenerator::new(data.clone(),NoiseGeneratorSettings::decode(&value).unwrap(),source,seed).unwrap()
+        });
+        let p = [
+            case["position"][0].as_i64().unwrap() as i32,
+            case["position"][1].as_i64().unwrap() as i32,
+        ];
+        let bounds = [
+            case["bounds"][0].as_i64().unwrap() as i32,
+            case["bounds"][1].as_i64().unwrap() as i32,
+        ];
+        for (i, map) in [
+            Heightmap::WorldSurface,
+            Heightmap::OceanFloor,
+            Heightmap::MotionBlocking,
+            Heightmap::MotionBlockingNoLeaves,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let height = generator
+                .get_base_height(p[0], p[1], map, bounds[0], bounds[1])
+                .unwrap();
+            assert_eq!(
+                i64::from(height),
+                case["heights"][i].as_i64().unwrap(),
+                "{dimension} seed={seed} {p:?} {bounds:?} {map:?}"
+            );
+            assert_eq!(
+                generator
+                    .get_first_free_height(p[0], p[1], map, bounds[0], bounds[1])
+                    .unwrap(),
+                height
+            );
+            assert_eq!(
+                generator
+                    .get_first_occupied_height(p[0], p[1], map, bounds[0], bounds[1])
+                    .unwrap(),
+                height - 1
+            );
+        }
+        let column = generator
+            .get_base_column(p[0], p[1], bounds[0], bounds[1])
+            .unwrap();
+        let actual = column.map(|column| {
+            (bounds[0] - 1..=bounds[0] + bounds[1])
+                .map(|y| column.get_block(y).id())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            case["column"],
+            "{dimension} seed={seed} {p:?} {bounds:?}"
+        );
+    }
+}
