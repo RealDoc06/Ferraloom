@@ -21,3 +21,9 @@ pub use random::{
     XoroshiroRandomSource,
 };
 pub use uuid::Uuid;
+
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+#[allow(clippy::type_complexity)]
+mod vanilla_vectors;
