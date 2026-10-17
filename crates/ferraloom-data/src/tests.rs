@@ -206,3 +206,66 @@ fn packet_ids_match_protocol_state_and_direction() {
         );
     }
 }
+
+#[test]
+fn generic_state_properties_match_every_report_state() {
+    let report: Value =
+        serde_json::from_str(include_str!("../../../data/generated/blocks.json")).unwrap();
+    for (name, block) in report.as_object().unwrap() {
+        let block_id = Block::from_name(name).unwrap();
+        assert_eq!(block_id.name(), name);
+        for row in block["states"].as_array().unwrap() {
+            let state = BlockState::from_id(row["id"].as_u64().unwrap() as u16).unwrap();
+            let actual: Vec<_> = state.properties().collect();
+            let mut expected: Vec<_> = row["properties"]
+                .as_object()
+                .into_iter()
+                .flat_map(|p| p.iter())
+                .map(|(k, v)| (k.as_str(), v.as_str().unwrap()))
+                .collect();
+            expected.sort_unstable_by_key(|(name, _)| *name);
+            assert_eq!(actual, expected, "{name}");
+            assert_eq!(BlockState::from_properties(block_id, actual), Some(state));
+        }
+        assert_eq!(
+            BlockState::from_properties(block_id, [("unknown", "bad")]),
+            Some(block_id.default_state())
+        );
+    }
+    assert_eq!(
+        BlockState::from_properties(
+            Block::OAK_STAIRS,
+            [("facing", "invalid"), ("waterlogged", "true")]
+        ),
+        Some(
+            Block::OAK_STAIRS
+                .default_state()
+                .with(properties::WATERLOGGED, true)
+                .unwrap()
+        )
+    );
+}
+
+#[test]
+fn generic_static_registry_lookup_matches_numeric_reports() {
+    let report: Value =
+        serde_json::from_str(include_str!("../../../data/generated/registries.json")).unwrap();
+    for (name, registry) in report.as_object().unwrap() {
+        let entries = registry_entries(name).unwrap();
+        assert_eq!(
+            entries.len(),
+            registry["entries"].as_object().unwrap().len()
+        );
+        for (entry, value) in registry["entries"].as_object().unwrap() {
+            assert_eq!(
+                entries[value["protocol_id"].as_u64().unwrap() as usize],
+                entry
+            );
+        }
+    }
+    assert_eq!(registries::block::name(Block::STONE), "minecraft:stone");
+    assert_eq!(
+        registries::block::from_name("minecraft:stone"),
+        Some(Block::STONE)
+    );
+}

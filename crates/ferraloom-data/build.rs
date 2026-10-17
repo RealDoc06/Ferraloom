@@ -101,9 +101,19 @@ fn registries(out: &mut String, reports: &Value) {
         for (_, id) in &entries {
             write!(out, "Id({id}),").unwrap();
         }
-        out.push_str("];\n}\n");
+        out.push_str("];\npub const fn name(id: Id) -> &'static str { id.name() }\npub fn from_name(name: &str) -> Option<Id> { Id::from_name(name) }\n}\n");
     }
     out.push_str("}\npub use registries::{block::Id as Block, item::Id as Item, entity_type::Id as EntityType};\n");
+    out.push_str("/// Static registry entries in numeric protocol order.\npub fn registry_entries(name: &str) -> Option<&'static [&'static str]> { match name {\n");
+    for registry in reports.as_object().unwrap().keys() {
+        writeln!(
+            out,
+            "{registry:?} => Some(registries::{}::NAMES),",
+            ident(registry)
+        )
+        .unwrap();
+    }
+    out.push_str("_ => None, } }\n");
     out.push_str("pub const REGISTRIES: &[RegistryInfo] = &[\n");
     for (name, report) in reports.as_object().unwrap() {
         writeln!(
@@ -282,8 +292,8 @@ fn blocks(
                 let indexes: Vec<_> = values.iter().map(|v| property.index(string(v))).collect();
                 writeln!(
                     out,
-                    "PropertyLayout {{ id: {}, stride: {stride}, values: &{indexes:?} }},",
-                    property.id
+                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, stride: {stride}, values: &{indexes:?} }},",
+                    property.id, values.iter().map(string).collect::<Vec<_>>()
                 )
                 .unwrap();
                 layouts.push((name, values, stride));
