@@ -1,6 +1,7 @@
 //! Port of net.minecraft.network.chat's component tree and serialization codecs.
 //! Components retain explicit false style flags, which override inherited styles.
-mod json;
+mod encode;
+pub(crate) mod json;
 mod serialization;
 use crate::{Identifier, Reader, Result, Uuid, Wire, Writer};
 use ferraloom_nbt::{CompoundTag, Tag};
@@ -13,6 +14,11 @@ pub struct Component {
     pub extra: Vec<Component>,
 }
 impl Component {
+    /// Port of ComponentSerialization.CODEC for NbtOps, JsonOps and HashOps.
+    pub fn encode_ops<O: crate::ops::EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        encode::component(self, ops)
+    }
+
     pub fn new(contents: Contents) -> Self {
         Self {
             contents,
@@ -187,6 +193,11 @@ pub struct Style {
     pub font: Option<Identifier>,
 }
 impl Style {
+    /// Port of Style.Serializer.CODEC, preserving boolean and numeric operation kinds.
+    pub fn encode_ops<O: crate::ops::EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        encode::style(self, ops)
+    }
+
     /// Port of Style#applyTo. Local values take precedence over inherited ones.
     pub fn apply_to(&self, parent: &Self) -> Self {
         Self {
@@ -269,3 +280,42 @@ pub enum HoverEvent {
 
 #[cfg(test)]
 mod tests;
+
+impl Style {
+    /// Port of Style.Serializer.CODEC, independent of component contents.
+    pub fn from_nbt(tag: Tag) -> Result<Self> {
+        serialization::style_from_nbt(tag, true)
+    }
+    pub fn to_nbt(&self) -> Result<Tag> {
+        serialization::style_to_nbt(self)
+    }
+    pub fn decode_trusted(input: &mut Reader<'_>) -> Result<Self> {
+        Self::from_nbt(input.nbt(true)?)
+    }
+    pub fn from_json(json: &str) -> Result<Self> {
+        let value =
+            serde_json::from_str(json).map_err(|e| crate::Error::invalid("JSON", e.to_string()))?;
+        serialization::style_from_json(value)
+    }
+    pub fn from_json_lenient(json: &str) -> Result<Self> {
+        serialization::style_from_json(json::parse(json)?)
+    }
+    pub fn to_json(&self) -> Result<String> {
+        let component = Component {
+            contents: Contents::Keybind(String::new()),
+            style: self.clone(),
+            extra: Vec::new(),
+        };
+        let mut value = serialization::encode_json(&component)?;
+        value.as_object_mut().unwrap().remove("keybind");
+        Ok(value.to_string())
+    }
+}
+impl Wire for Style {
+    fn decode(input: &mut Reader<'_>) -> Result<Self> {
+        Self::from_nbt(input.nbt(false)?)
+    }
+    fn encode(&self, output: &mut Writer<'_>) -> Result<()> {
+        output.nbt(&self.to_nbt()?)
+    }
+}

@@ -4,9 +4,16 @@
 //! Transport layers are applied in this order: packet, compression, frame, cipher.
 pub mod chat;
 pub mod codec;
+pub mod common;
 pub mod component;
+pub mod configuration;
 pub mod entity_data;
+pub mod handshake;
+pub mod login;
 pub mod ops;
+pub mod play;
+pub mod status;
+pub mod transport;
 pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
 pub use ferraloom_util::{BlockPos, Uuid};
 

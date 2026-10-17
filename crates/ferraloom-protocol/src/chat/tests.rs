@@ -55,3 +55,87 @@ fn lenient_syntax_and_strict_discriminators() {
         .is_err()
     );
 }
+
+#[test]
+fn vanilla_standalone_style_codec() {
+    for fixture in [
+        include_str!("../../tests/fixtures/style_1.hex"),
+        include_str!("../../tests/fixtures/style_2.hex"),
+    ] {
+        let bytes = hex(fixture);
+        let style = Style::from_bytes(&bytes).unwrap();
+        assert_eq!(style.to_bytes().unwrap(), bytes);
+        assert_eq!(Style::from_json(&style.to_json().unwrap()).unwrap(), style);
+    }
+    assert_eq!(Style::from_json("{}").unwrap(), Style::default());
+    assert!(Style::from_json(r#"{"bold":0}"#).is_err());
+}
+
+#[test]
+fn vanilla_component_and_style_dynamic_ops() {
+    use crate::ops::{HashOps, JsonOps, NbtOps};
+    for (json, hash, network) in [
+        (
+            include_str!("../../tests/fixtures/component_0.json"),
+            include_str!("../../tests/fixtures/component_0.hash"),
+            include_str!("../../tests/fixtures/component_0.hex"),
+        ),
+        (
+            include_str!("../../tests/fixtures/component_1.json"),
+            include_str!("../../tests/fixtures/component_1.hash"),
+            include_str!("../../tests/fixtures/component_1.hex"),
+        ),
+        (
+            include_str!("../../tests/fixtures/component_2.json"),
+            include_str!("../../tests/fixtures/component_2.hash"),
+            include_str!("../../tests/fixtures/component_2.hex"),
+        ),
+        (
+            include_str!("../../tests/fixtures/component_3.json"),
+            include_str!("../../tests/fixtures/component_3.hash"),
+            include_str!("../../tests/fixtures/component_3.hex"),
+        ),
+        (
+            include_str!("../../tests/fixtures/component_4.json"),
+            include_str!("../../tests/fixtures/component_4.hash"),
+            include_str!("../../tests/fixtures/component_4.hex"),
+        ),
+        (
+            include_str!("../../tests/fixtures/component_5.json"),
+            include_str!("../../tests/fixtures/component_5.hash"),
+            include_str!("../../tests/fixtures/component_5.hex"),
+        ),
+    ] {
+        let component = Component::from_json(json).unwrap();
+        assert_eq!(
+            component.encode_ops(&HashOps).unwrap().0,
+            hash.trim().parse::<i32>().unwrap(),
+            "{json}"
+        );
+        assert_eq!(
+            component.encode_ops(&JsonOps).unwrap().to_string(),
+            json.trim()
+        );
+        let mut encoded = Writer::new();
+        encoded
+            .nbt(&component.encode_ops(&NbtOps).unwrap())
+            .unwrap();
+        assert_eq!(encoded.as_slice(), hex(network));
+    }
+    for (fixture, hash) in [
+        (
+            include_str!("../../tests/fixtures/style_1.hex"),
+            include_str!("../../tests/fixtures/style_1.hash"),
+        ),
+        (
+            include_str!("../../tests/fixtures/style_2.hex"),
+            include_str!("../../tests/fixtures/style_2.hash"),
+        ),
+    ] {
+        let style = Style::from_bytes(&hex(fixture)).unwrap();
+        assert_eq!(
+            style.encode_ops(&HashOps).unwrap().0,
+            hash.trim().parse::<i32>().unwrap()
+        );
+    }
+}

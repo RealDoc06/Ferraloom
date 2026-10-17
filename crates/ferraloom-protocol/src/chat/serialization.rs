@@ -475,10 +475,11 @@ fn decode_profile(tag: &Tag) -> Result<ResolvableProfile> {
 }
 
 pub(super) fn encode(component: &Component) -> Result<Tag> {
-    if let Contents::Text(text) = &component.contents {
-        if component.style == Style::default() && component.extra.is_empty() {
-            return Ok(Tag::String(text.as_str().into()));
-        }
+    if let Contents::Text(text) = &component.contents
+        && component.style == Style::default()
+        && component.extra.is_empty()
+    {
+        return Ok(Tag::String(text.as_str().into()));
     }
     let mut map = Fields::new();
     match &component.contents {
@@ -816,10 +817,10 @@ pub(super) fn encode_json(component: &Component) -> Result<Value> {
                 map.insert("separator".into(), encode_json(v)?);
             }
         }
-        Contents::Object { fallback, .. } => {
-            if let Some(v) = fallback {
-                map.insert("fallback".into(), encode_json(v)?);
-            }
+        Contents::Object {
+            fallback: Some(v), ..
+        } => {
+            map.insert("fallback".into(), encode_json(v)?);
         }
         _ => {}
     }
@@ -919,4 +920,20 @@ fn ordered(mut map: Map<String, Value>, order: &[&str]) -> Map<String, Value> {
     }
     result.extend(map);
     result
+}
+
+pub(super) fn style_from_nbt(tag: Tag, nbt: bool) -> Result<Style> {
+    decode_style(compound(&tag)?, nbt)
+}
+pub(super) fn style_to_nbt(style: &Style) -> Result<Tag> {
+    let mut map = Fields::new();
+    encode_style(style, &mut map)?;
+    Ok(Tag::Compound(map))
+}
+pub(super) fn style_from_json(value: Value) -> Result<Style> {
+    style_from_nbt(json_to_tag(value)?, false)
+}
+
+pub(super) fn validate_click(click: &ClickEvent) -> Result<()> {
+    encode_click(click).map(|_| ())
 }

@@ -339,3 +339,34 @@ impl HolderSet {
         }
     }
 }
+
+/// Port of UUIDUtil.STRING_CODEC (Java UUID.fromString accepts short groups).
+pub fn uuid_from_string(text: &str) -> Result<Uuid> {
+    if text.len() > 36 {
+        return Err(Error::invalid("UUID", text));
+    }
+    let groups: Vec<_> = text.split('-').collect();
+    if groups.len() != 5 {
+        return Err(Error::invalid("UUID", text));
+    }
+    let words = groups
+        .into_iter()
+        .map(|part| {
+            u64::from_str_radix(part.strip_prefix('+').unwrap_or(part), 16)
+                .map_err(|_| Error::invalid("UUID", text))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Uuid::new(
+        ((words[0] & 0xffffffff) << 32 | (words[1] & 65535) << 16 | words[2] & 65535) as i64,
+        ((words[3] & 65535) << 48 | words[4] & 0xffffffffffff) as i64,
+    ))
+}
+
+impl<T: Wire> Wire for Box<T> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Box::new(r.read()?))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.as_ref().encode(w)
+    }
+}
