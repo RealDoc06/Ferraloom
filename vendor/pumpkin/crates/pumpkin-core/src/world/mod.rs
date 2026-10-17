@@ -343,6 +343,11 @@ fn save_custom_data(
         .map_err(|error| WorldSaveError::CustomData(error.into()))
 }
 
+struct BlockWriteOutcome {
+    legacy: BlockStateId,
+    counted: bool,
+}
+
 /// Represents a Minecraft world, containing entities, players, and the underlying level data.
 ///
 /// Each dimension (Overworld, Nether, End) typically has its own `World`.
@@ -1904,6 +1909,83 @@ impl World {
             GameRuleValue::Int(v) => GameRuleValue::Int(*v),
             GameRuleValue::Bool(v) => GameRuleValue::Bool(*v),
         }
+    }
+
+    /// Attaches only to vacant, current terrain. Construction occurs outside the
+    /// publication guards; a changed pending record or callback-owned Arc wins.
+    pub(crate) fn ensure_block_entity_for_state(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        state: BlockStateId,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        let entity_type = BlockState::from_id(state).block_entity_type;
+        if entity_type == u16::MAX {
+            return None;
+        }
+        let chunk_pos = position.chunk_position();
+        let pending = {
+            let _unload = self.level.chunk_unload.access();
+            if self.get_block_state_id_if_loaded(position) != Some(state) {
+                return None;
+            }
+            if let Some(entity) = self.published_block_entity(position) {
+                return (entity.get_id() == u32::from(entity_type)).then_some(entity);
+            }
+            self.level.read_chunk_sync(&chunk_pos, |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(position)
+                    .cloned()
+            })?
+        };
+        let entity = if let Some(nbt) = &pending {
+            let entity = block_entity_from_nbt(nbt)?;
+            if entity.get_position() != *position || entity.get_id() != u32::from(entity_type) {
+                return None;
+            }
+            entity
+        } else {
+            crate::block::entities::create_block_entity(entity_type, *position)?
+        };
+        entity.bind_world(self);
+        let custom_data = self
+            .custom_block_entity_data
+            .get(position)
+            .map(|data| data.clone());
+        let mut unload = self.level.chunk_unload.access();
+        let chunk = self.level.loaded_chunks.get(&chunk_pos)?.value().clone();
+        if self.get_block_state_id_if_loaded(position) != Some(state) {
+            return None;
+        }
+        let mut published = self.block_entities.entry(chunk_pos).or_default();
+        if let Some(current) = published.get(position) {
+            return (current.get_id() == u32::from(entity_type)).then(|| current.clone());
+        }
+        if chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(position)
+            != pending.as_ref()
+        {
+            return None;
+        }
+        published.insert(*position, entity.clone());
+        entity.snapshot_nbt(&mut |nbt| {
+            Self::stage_block_entity_snapshot(&chunk, *position, custom_data.as_ref(), nbt);
+        });
+        unload.mark_live(chunk_pos);
+        drop(published);
+        drop(unload);
+        if self
+            .published_block_entity(position)
+            .is_some_and(|live| Arc::ptr_eq(&live, &entity))
+        {
+            self.notify_block_entity(&entity);
+        }
+        Some(entity)
     }
 
     #[expect(
@@ -6516,6 +6598,34 @@ impl World {
         }
     }
 
+    /// Clone's changed-write result, without changing the legacy setters' policy.
+    pub(crate) fn set_block_state_counted(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+    ) -> bool {
+        if !self.is_in_build_limit(*position) || self.is_debug() {
+            return false;
+        }
+        let Some(previous) =
+            self.write_block_state_if(position, block_state_id, |old| old != block_state_id)
+        else {
+            return false;
+        };
+        self.on_block_state_set(position, previous, block_state_id, flags)
+            .counted
+    }
+
+    pub(crate) fn is_debug(&self) -> bool {
+        self.level_info
+            .load()
+            .world_gen_settings
+            .dimensions
+            .get(self.dimension.minecraft_name)
+            .is_some_and(|dimension| dimension.generator.generator_type == "minecraft:debug")
+    }
+
     pub fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -6529,6 +6639,7 @@ impl World {
             .write_block_state_if(position, block_state_id, |_| true)
             .unwrap_or(Block::AIR.default_state.id);
         self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags)
+            .legacy
     }
 
     /// `set_block_state`, but only when `condition` accepts the current state. The check and
@@ -6546,7 +6657,10 @@ impl World {
         }
         let replaced_block_state_id =
             self.write_block_state_if(position, block_state_id, condition)?;
-        Some(self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags))
+        Some(
+            self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags)
+                .legacy,
+        )
     }
 
     /// Writes the state into the loaded chunk
@@ -6587,9 +6701,13 @@ impl World {
         replaced_block_state_id: BlockStateId,
         block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> BlockStateId {
+    ) -> BlockWriteOutcome {
+        let changed = replaced_block_state_id != block_state_id;
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
-            return block_state_id;
+            return BlockWriteOutcome {
+                legacy: block_state_id,
+                counted: false,
+            };
         }
 
         let old_block = Block::from_state_id(replaced_block_state_id);
@@ -6616,8 +6734,16 @@ impl World {
             self.get_block_state_id(position) == block_state_id
                 && (!detached_old_entity || self.published_block_entity(position).is_none())
         };
+        let stopped = || {
+            let current = self.get_block_state_id_if_loaded(position);
+            BlockWriteOutcome {
+                legacy: current.unwrap_or(Block::AIR.default_state.id),
+                counted: changed
+                    && current.is_some_and(|state| Block::from_state_id(state) == new_block),
+            }
+        };
         if !continuation_is_current() {
-            return self.get_block_state_id(position);
+            return stopped();
         }
 
         if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
@@ -6631,7 +6757,7 @@ impl World {
         }
 
         if !continuation_is_current() {
-            return self.get_block_state_id(position);
+            return stopped();
         }
 
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
@@ -6652,6 +6778,8 @@ impl World {
                 replaced_block_state_id,
                 block_moved,
             );
+        } else if is_new_block {
+            self.ensure_block_entity_for_state(position, block_state_id);
         }
 
         // Level.java setBlock
@@ -6708,7 +6836,31 @@ impl World {
                 .update_lighting_at(&self.level, *position);
         }
 
-        replaced_block_state_id
+        BlockWriteOutcome {
+            legacy: replaced_block_state_id,
+            counted: changed,
+        }
+    }
+
+    /// Completes clone's ordinary final walk using the pre-mutation destination.
+    pub(crate) fn update_neighbours_on_block_set(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        previous: BlockStateId,
+    ) {
+        let Some(current) = self.get_block_state_id_if_loaded(position) else {
+            return;
+        };
+        let old_block = Block::from_state_id(previous);
+        let current_block = Block::from_state_id(current);
+        if old_block != current_block {
+            self.block_registry
+                .affect_neighbors_after_removal(self, old_block, position, previous, false);
+        }
+        self.update_neighbors_at(position, current_block, None);
+        if current.has_analog_output_signal() {
+            self.update_neighbour_for_output_signal(position, current_block);
+        }
     }
 
     pub fn break_block(

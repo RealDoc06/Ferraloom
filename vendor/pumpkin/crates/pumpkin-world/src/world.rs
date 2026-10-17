@@ -7,7 +7,8 @@ use thiserror::Error;
 
 bitflags! {
     /// Flags used to control the side effects of a block state change.
-    /// These match the internal bitmask used by Minecraft's `setBlockState` method
+    /// These are Pumpkin's existing bit assignments. Map Minecraft semantics by
+    /// name; its numeric `setBlockState` bitmask is different.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct BlockFlags: u32 {
         /// Causes a neighbor update to be sent to surrounding blocks.
