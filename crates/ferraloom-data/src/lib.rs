@@ -132,13 +132,14 @@ impl ShapeId {
     }
 }
 
+/// Port of vanilla 26.3 PushReaction (which renamed the older variants).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PushReaction {
-    Normal,
-    Destroy,
-    Block,
-    Ignore,
-    PushOnly,
+    PushPull,
+    Push,
+    Popped,
+    Immoveable,
+    IgnoreEntity,
 }
 
 #[derive(Clone, Copy, Debug)]

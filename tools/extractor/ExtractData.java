@@ -6,6 +6,7 @@ import java.util.*;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.*;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.*;
@@ -18,7 +19,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** Extracts facts directly from the pinned vanilla registries and codecs. */
 public final class ExtractData {
-    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
     private static final List<JsonArray> SHAPES = new ArrayList<>();
     private static final Map<String, Integer> SHAPE_IDS = new LinkedHashMap<>();
     private static final Map<SoundType, String> SOUND_NAMES = new IdentityHashMap<>();
@@ -60,7 +61,9 @@ public final class ExtractData {
         out.addProperty("collision", shape(state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
         out.addProperty("outline", shape(state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
         out.addProperty("occlusion", shape(state.getOcclusionShape()));
-        out.addProperty("context_dependent_shape", state.getBlock().hasDynamicShape() || state.hasOffsetFunction());
+        out.addProperty("context_dependent_shape", state.getBlock().hasDynamicShape() || state.hasOffsetFunction()
+            || state.getBlock() instanceof LiquidBlock || state.getBlock() instanceof ScaffoldingBlock
+            || state.getBlock() instanceof PowderSnowBlock || state.getBlock() instanceof LightBlock);
         out.addProperty("solid_render", state.isSolidRender());
         out.addProperty("opacity", state.getLightDampening());
         out.addProperty("propagates_skylight", state.propagatesSkylightDown());
@@ -152,12 +155,11 @@ public final class ExtractData {
         var items = new JsonArray();
         for (var item : BuiltInRegistries.ITEM) {
             var out = new JsonObject();
-            var stack = item.getDefaultInstance();
             out.addProperty("id", BuiltInRegistries.ITEM.getId(item));
             out.addProperty("name", BuiltInRegistries.ITEM.getKey(item).toString());
-            out.addProperty("max_stack_size", stack.getMaxStackSize());
-            out.addProperty("max_damage", stack.getMaxDamage());
-            out.addProperty("rarity", stack.getRarity().name().toLowerCase(Locale.ROOT));
+            out.addProperty("max_stack_size", item.getDefaultMaxStackSize());
+            out.addProperty("max_damage", item.components().getOrDefault(DataComponents.MAX_DAMAGE, 0));
+            out.addProperty("rarity", item.components().getOrDefault(DataComponents.RARITY, Rarity.COMMON).name().toLowerCase(Locale.ROOT));
             if (item instanceof BlockItem blockItem) out.addProperty("block", BuiltInRegistries.BLOCK.getId(blockItem.getBlock()));
             else out.add("block", JsonNull.INSTANCE);
             out.add("components", DataComponentMap.CODEC.encodeStart(ops, item.components()).getOrThrow());

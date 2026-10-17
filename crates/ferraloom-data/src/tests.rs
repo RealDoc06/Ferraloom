@@ -116,6 +116,10 @@ fn extracted_facts_retain_vanilla_state_variation() {
     assert!(Block::OAK_STAIRS.default_state().with(properties::WATERLOGGED, true).unwrap().data().fluid.source);
     assert!(Block::BAMBOO.default_state().data().context_dependent_shape);
     assert!(Block::MOVING_PISTON.default_state().data().context_dependent_shape);
+    for block in [Block::SCAFFOLDING, Block::POWDER_SNOW, Block::LIGHT, Block::WATER] {
+        assert!(block.default_state().data().context_dependent_shape);
+    }
+    assert_eq!(Item::AIR.data().max_stack_size, 64);
     assert_eq!(Item::DIAMOND_PICKAXE.data().max_damage, 1561);
     assert_eq!(Item::STONE.data().block, Some(Block::STONE));
     assert!(EntityType::ZOMBIE.data().attributes.iter().any(|(id, value)| *id == registries::attribute::Id::MAX_HEALTH && *value == 20.0));
