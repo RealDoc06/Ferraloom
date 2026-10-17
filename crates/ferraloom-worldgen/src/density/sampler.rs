@@ -317,10 +317,10 @@ impl DensityFunctionCompiler {
             .get(id)
             .ok_or_else(|| Error(format!("unknown noise {id}")))?;
         let noise = spec.noise();
-        if id.to_string() == "minecraft:temperature_nether"
-            || id.to_string() == "minecraft:vegetation_nether"
+        if id.to_string() == "minecraft:nether/temperature"
+            || id.to_string() == "minecraft:nether/vegetation"
         {
-            let offset = i64::from(id.path() == "vegetation_nether");
+            let offset = i64::from(id.path() == "nether/vegetation");
             Ok(
                 noise.create_for_legacy_nether_biome(&mut LegacyRandomSource::new(
                     self.seed.wrapping_add(offset),
