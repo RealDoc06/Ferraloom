@@ -2,7 +2,7 @@
 use crate::{Error, Result};
 use serde_json::{Map, Value};
 
-pub(super) fn parse(input: &str) -> Result<Value> {
+pub(crate) fn parse(input: &str) -> Result<Value> {
     let mut parser = Parser {
         input: input.trim_start_matches('\u{feff}'),
         depth: 0,
