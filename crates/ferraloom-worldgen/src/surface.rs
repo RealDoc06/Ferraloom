@@ -224,7 +224,7 @@ impl SurfaceSystem {
                         if let Some(state) = self.rule.apply(&mut context) {
                             chunk.set_block(x, y, z, state);
                             if !state.data().fluid.empty {
-                                chunk.post_processing.insert([block_x, y, block_z]);
+                                chunk.post_processing.push([block_x, y, block_z]);
                             }
                         }
                     }

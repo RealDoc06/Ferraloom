@@ -133,6 +133,12 @@ public final class WorldgenGolden {
         var surface=new JsonArray();var floor=new JsonArray();
         for(int z=0;z<16;z++)for(int x=0;x<16;x++) {surface.add(chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG,x,z)+1);floor.add(chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG,x,z)+1);}
         out.add("world_surface",surface);out.add("ocean_floor",floor);
+        var packed=new ByteArrayOutputStream();var post=new DataOutputStream(packed);
+        for(var section:chunk.getPostProcessing()) {
+            post.writeInt(section==null?0:section.size());
+            if(section!=null)for(short entry:section)post.writeShort(entry);
+        }
+        out.addProperty("post_processing",HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(packed.toByteArray())));
         return out;
     }
     static List<int[]> locations(RegistryAccess.Frozen registries,long seed,String dimension) {
@@ -365,6 +371,15 @@ public final class WorldgenGolden {
         };
         var shiftedZero=JsonParser.parseString("{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":-0.0}");
         var extended=new ArrayList<>(Arrays.asList(cases));extended.add(new String[]{"density",shiftedZero.toString()});
+        extended.add(new String[]{"noise","{\"base_octave\":1e100}"});
+        extended.add(new String[]{"noise","{\"base_octave\":4294967296.75}"});
+        extended.add(new String[]{"noise_settings","{\"min_y\":-4.294967296e9,\"height\":16}"});
+        extended.add(new String[]{"noise","{\"base_octave\":0,\"amplitude_modifiers\":[-0.0]}"});
+        extended.add(new String[]{"parameter","[-0.0,0.0]"});
+        extended.add(new String[]{"parameter","[0.0,-0.0]"});
+        extended.add(new String[]{"density","1.000000059604644775390625000001"});
+        extended.add(new String[]{"density","-1.000000059604644775390625000001"});
+        extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":1e999,\"y_scale\":1}"});
         for(var test:extended) {
             var definition=JsonParser.parseString(test[1]);
             com.mojang.serialization.Codec<?> codec=switch(test[0]) {

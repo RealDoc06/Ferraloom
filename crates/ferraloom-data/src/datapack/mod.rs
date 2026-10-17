@@ -217,9 +217,7 @@ fn strict_json(bytes: &[u8]) -> Result<Value, Error> {
     let mut decoder = serde_json::Deserializer::from_slice(bytes);
     decoder.disable_recursion_limit();
     let mut stream = decoder.into_iter::<Value>();
-    let value = stream
-        .next()
-        .ok_or_else(|| Error::InvalidData("empty JSON resource".into()))??;
+    let value = stream.next().transpose()?.unwrap_or(Value::Null);
     if !value.is_null()
         && bytes[stream.byte_offset()..]
             .iter()
