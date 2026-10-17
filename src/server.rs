@@ -1,6 +1,14 @@
 //! Socket ownership and the handshake/status/login connection state machine.
 
-use std::{io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    io,
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicI32, AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use md5::{Digest, Md5};
 use tokio::{
@@ -40,6 +48,49 @@ impl Default for ServerConfig {
 pub struct Server {
     listener: TcpListener,
     config: Arc<ServerConfig>,
+    state: Arc<ServerState>,
+}
+
+pub(crate) struct ServerState {
+    players: Arc<Semaphore>,
+    online: AtomicUsize,
+    next_entity: AtomicI32,
+}
+
+impl ServerState {
+    pub(crate) fn new(max_players: u32) -> Self {
+        Self {
+            players: Arc::new(Semaphore::new(max_players as usize)),
+            online: AtomicUsize::new(0),
+            next_entity: AtomicI32::new(1),
+        }
+    }
+    pub(crate) fn allocate_entity(&self) -> io::Result<i32> {
+        self.next_entity
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| io::Error::other("entity identifiers exhausted"))
+    }
+    pub(crate) fn admit_player(&self) -> Option<PlayerSession<'_>> {
+        let permit = Arc::clone(&self.players).try_acquire_owned().ok()?;
+        self.online.fetch_add(1, Ordering::Relaxed);
+        Some(PlayerSession {
+            _permit: permit,
+            online: &self.online,
+        })
+    }
+}
+
+pub(crate) struct PlayerSession<'a> {
+    _permit: tokio::sync::OwnedSemaphorePermit,
+    online: &'a AtomicUsize,
+}
+
+impl Drop for PlayerSession<'_> {
+    fn drop(&mut self) {
+        self.online.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 impl Server {
@@ -47,6 +98,9 @@ impl Server {
         if config.max_connections == 0
             || config.max_connections > Semaphore::MAX_PERMITS
             || config.packet_timeout.is_zero()
+            || config.max_players == 0
+            || config.max_players > i32::MAX as u32
+            || config.max_players as usize > Semaphore::MAX_PERMITS
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -55,6 +109,7 @@ impl Server {
         }
         Ok(Self {
             listener: TcpListener::bind(address).await?,
+            state: Arc::new(ServerState::new(config.max_players)),
             config: Arc::new(config),
         })
     }
@@ -81,11 +136,12 @@ impl Server {
                     let (socket, _) = match accepted { Ok(value) => value, Err(error) => break Err(error) };
                     let Ok(permit) = Arc::clone(&permits).try_acquire_owned() else { continue; };
                     let config = Arc::clone(&self.config);
+                    let state = Arc::clone(&self.state);
                     let mut stop = shutdown.clone();
                     connections.spawn(async move {
                         let _permit = permit;
                         tokio::select! {
-                            result = serve(socket, &config) => {
+                            result = serve(socket, &config, &state) => {
                                 // Malformed/disconnected peers are isolated to their connection.
                                 if let Err(error) = result {
                                     if !matches!(error.kind(), io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset | io::ErrorKind::BrokenPipe | io::ErrorKind::InvalidData | io::ErrorKind::TimedOut) {
@@ -105,14 +161,12 @@ impl Server {
     }
 }
 
-async fn serve(socket: TcpStream, config: &ServerConfig) -> io::Result<()> {
+async fn serve(socket: TcpStream, config: &ServerConfig, state: &ServerState) -> io::Result<()> {
     socket.set_nodelay(true)?;
-    timeout(config.packet_timeout * 4, serve_connection(socket, config))
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "connection setup timed out"))?
+    serve_connection(socket, config, state).await
 }
 
-async fn next_packet(
+pub(crate) async fn next_packet(
     stream: &mut (impl AsyncRead + Unpin),
     config: &ServerConfig,
 ) -> io::Result<Packet> {
@@ -129,6 +183,7 @@ fn malformed(message: &'static str) -> io::Error {
 async fn serve_connection(
     mut stream: impl AsyncRead + AsyncWrite + Unpin,
     config: &ServerConfig,
+    state: &ServerState,
 ) -> io::Result<()> {
     let handshake = next_packet(&mut stream, config).await?;
     if handshake.id != 0 {
@@ -141,8 +196,8 @@ async fn serve_connection(
     let intent = fields.var_int()?;
     fields.finish()?;
     match intent {
-        1 => status(&mut stream, config).await?,
-        2 => login(&mut stream, config, version).await?,
+        1 => status(&mut stream, config, state).await?,
+        2 => login(&mut stream, config, state, version).await?,
         _ => return Err(malformed("unsupported connection intent")),
     }
     stream.shutdown().await
@@ -151,6 +206,7 @@ async fn serve_connection(
 async fn status(
     stream: &mut (impl AsyncRead + AsyncWrite + Unpin),
     config: &ServerConfig,
+    state: &ServerState,
 ) -> io::Result<()> {
     let request = next_packet(stream, config).await?;
     if request.id != 0 || !request.payload.is_empty() {
@@ -158,7 +214,7 @@ async fn status(
     }
     let response = serde_json::json!({
         "version": { "name": MINECRAFT_VERSION, "protocol": PROTOCOL_VERSION },
-        "players": { "max": config.max_players, "online": 0, "sample": [] },
+        "players": { "max": config.max_players, "online": state.online.load(Ordering::Relaxed), "sample": [] },
         "description": { "text": config.motd },
         "enforcesSecureChat": false,
     })
@@ -187,6 +243,7 @@ pub fn offline_uuid(name: &str) -> [u8; 16] {
 async fn login(
     stream: &mut (impl AsyncRead + AsyncWrite + Unpin),
     config: &ServerConfig,
+    state: &ServerState,
     version: i32,
 ) -> io::Result<()> {
     if version != PROTOCOL_VERSION {
@@ -227,13 +284,16 @@ async fn login(
     if acknowledgement.id != 3 || !acknowledgement.payload.is_empty() {
         return Err(malformed("expected login acknowledgement"));
     }
-    // Configuration/world entry is the next implementation step. This is a
-    // typed configuration disconnect, never a fabricated successful world join.
-    let mut message = vec![8]; // Anonymous network NBT string component.
-    let reason = "Independent world configuration is not implemented yet";
-    message.extend_from_slice(&(reason.len() as u16).to_be_bytes());
-    message.extend_from_slice(reason.as_bytes());
-    write_packet(stream, 2, &message).await
+    let configured = timeout(
+        config.packet_timeout * 4,
+        crate::configuration::configure(stream, config),
+    )
+    .await
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "configuration timed out"))??;
+    if !configured {
+        return Ok(());
+    }
+    crate::play::enter(stream, config, state).await
 }
 
 fn session_uuid() -> io::Result<[u8; 16]> {

@@ -121,6 +121,26 @@ impl<'a> Reader<'a> {
         Ok(self.take(1)?[0])
     }
 
+    pub fn boolean(&mut self) -> io::Result<bool> {
+        match self.byte()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(invalid("invalid boolean")),
+        }
+    }
+
+    pub fn float(&mut self) -> io::Result<f32> {
+        Ok(f32::from_be_bytes(
+            self.take(4)?.try_into().expect("four bytes were read"),
+        ))
+    }
+
+    pub fn double(&mut self) -> io::Result<f64> {
+        Ok(f64::from_be_bytes(
+            self.take(8)?.try_into().expect("eight bytes were read"),
+        ))
+    }
+
     pub fn var_int(&mut self) -> io::Result<i32> {
         let mut value = 0u32;
         for index in 0..5 {
