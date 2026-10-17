@@ -152,6 +152,14 @@ pub trait WorldgenBlockBehavior: Sync {
         region: &WorldGenRegion<'_>,
         position: [i32; 3],
     ) -> Result<Option<[i32; 3]>, Error>;
+    fn is_outline_full_block(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: is_outline_full_block".into()))
+    }
     fn is_solid(&self, _state: BlockState) -> Result<bool, Error> {
         Err(Error("solid block behavior is unavailable".into()))
     }
@@ -307,9 +315,9 @@ impl<'a> WorldGenRegion<'a> {
             return Ok(false);
         }
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
-        if self.chunks[index].status == ChunkStatus::Full {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight {
             return Err(Error(
-                "worldgen LevelChunk mutation needs a game adapter".into(),
+                "worldgen lit chunk mutation needs a game adapter".into(),
             ));
         }
         let old = self.block(p)?;
@@ -318,9 +326,7 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index]
             .chunk
             .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
-        if in_height {
-            self.chunks[index].poi_changes.push((p, old, state));
-        }
+        self.chunks[index].poi_changes.push((p, old, state));
         if self.behavior.has_block_entity(state) {
             let mut tag = CompoundTag::new();
             for (key, value) in [("x", p[0]), ("y", p[1]), ("z", p[2])] {
@@ -421,6 +427,9 @@ impl<'a> WorldGenRegion<'a> {
     ) -> Result<(), Error> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
+    }
+    pub fn is_outline_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.is_outline_full_block(self, state, p)
     }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_solid(self.block(p)?)

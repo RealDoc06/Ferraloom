@@ -166,8 +166,21 @@ impl BlockStateProvider {
             "minecraft:dual_noise" => {
                 let (noise, seed) = NoiseState::decode(v)?;
                 let variety = field(v, "variety")?;
-                let min = int_range(field(variety, "min_inclusive")?, 1, 64)?;
-                let max = int_range(field(variety, "max_inclusive")?, 1, 64)?;
+                let (min, max) = if variety.is_number() {
+                    let n = int_range(variety, 1, 64)?;
+                    (n, n)
+                } else if variety.is_array() {
+                    let values = list(variety)?;
+                    if values.len() != 2 {
+                        return Err(Error("variety requires two bounds".into()));
+                    }
+                    (int_range(&values[0], 1, 64)?, int_range(&values[1], 1, 64)?)
+                } else {
+                    (
+                        int_range(field(variety, "min_inclusive")?, 1, 64)?,
+                        int_range(field(variety, "max_inclusive")?, 1, 64)?,
+                    )
+                };
                 if min > max {
                     return Err(Error("invalid variety range".into()));
                 }
