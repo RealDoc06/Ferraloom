@@ -171,8 +171,11 @@ impl Feature for VoidStartPlatformFeature {
                     } else {
                         Block::STONE
                     };
-                    ctx.region
-                        .set_block([x, ctx.origin[1] + 3, z], block.default_state(), 2)?;
+                    ctx.region.set_block(
+                        [x, ctx.origin[1].wrapping_add(3), z],
+                        block.default_state(),
+                        2,
+                    )?;
                 }
             }
         }

@@ -263,10 +263,16 @@ impl Feature for SteppedColumnClusterFeature {
         let count = self.column_count.sample(ctx.random);
         let mut placed = false;
         for _ in 0..count {
-            let x = ctx.origin[0] - reach + ctx.random.next_int_bound(2 * reach + 1);
+            let x = ctx.origin[0]
+                .wrapping_sub(reach)
+                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
             let y = ctx.origin[1] + ctx.random.next_int_bound(1);
-            let z = ctx.origin[2] - reach + ctx.random.next_int_bound(2 * reach + 1);
-            let h = height - (x - ctx.origin[0]).abs() - (z - ctx.origin[2]).abs();
+            let z = ctx.origin[2]
+                .wrapping_sub(reach)
+                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
+            let h = height
+                - x.wrapping_sub(ctx.origin[0]).wrapping_abs()
+                - z.wrapping_sub(ctx.origin[2]).wrapping_abs();
             if h >= 0 {
                 let r = self.column_reach.sample(ctx.random);
                 placed |= self.place_column(ctx, [x, y, z], h, r)?;
