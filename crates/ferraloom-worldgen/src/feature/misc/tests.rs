@@ -13,12 +13,7 @@ use ferraloom_data::{
 };
 use ferraloom_util::random::{RandomSource, WorldgenRandom, XoroshiroRandomSource};
 use serde_json::{Value, json};
-use std::{
-    collections::BTreeMap,
-    io::Read,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{collections::BTreeMap, io::Read, path::Path, sync::Arc};
 
 fn cases() -> Vec<Value> {
     let mut text = String::new();
@@ -114,25 +109,17 @@ fn chunks(
     }
     chunks
 }
-/// Only observes the controlled storage writes. No survival, collision, loot or
-/// entity behavior is supplied by this adapter.
-#[derive(Default)]
-struct ObserveWrites(Mutex<Vec<Value>>);
-impl WorldgenBlockBehavior for ObserveWrites {
-    fn has_block_entity(&self, state: BlockState) -> bool {
-        state.has_block_entity()
-    }
+/// Fixture storage supplies no shared game behavior. Cached block facts still
+/// follow the production WorldGenRegion path.
+struct FixtureBehavior;
+impl WorldgenBlockBehavior for FixtureBehavior {
     fn post_process_pos(
         &self,
-        state: BlockState,
+        _: BlockState,
         _: &WorldGenRegion<'_>,
-        p: [i32; 3],
+        _: [i32; 3],
     ) -> Result<Option<[i32; 3]>, Error> {
-        self.0
-            .lock()
-            .unwrap()
-            .push(json!([p[0], p[1], p[2], state.id()]));
-        Ok(None)
+        Err(Error("Unsupported: contextual post_process_pos".into()))
     }
 }
 fn missing_behavior(case: &Value) -> Option<&str> {
@@ -181,7 +168,7 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
             .entry((center, ground.protocol_id(), mode))
             .or_insert_with(|| chunks(&generator, center, ground, mode));
         let mut chunks = baseline.clone();
-        let observer = ObserveWrites::default();
+        let behavior = FixtureBehavior;
         let mut loader = FeatureLoader::new(&resources).unwrap();
         let feature = loader
             .feature(&case["config"])
@@ -193,7 +180,7 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
             &[ChunkStatus::Terrain; 3],
             2,
             None,
-            &observer,
+            &behavior,
             8675309,
             63,
         )
@@ -225,12 +212,48 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
             .iter()
             .map(|row| Value::Array(row.as_array().unwrap()[..4].to_vec()))
             .collect::<Vec<_>>();
-        let actual = observer.0.lock().unwrap();
-        // Ordered writes catch traversal changes even when the final volume agrees.
-        assert_eq!(actual.len(), expected.len(), "write count {label}");
-        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
-            assert_eq!(actual, expected, "write {index} {label}");
+        // Production chunks retain mutation order in their POI stream, without
+        // adding a test observer to the block behavior bridge.
+        let mut expected_by_chunk: BTreeMap<[i32; 2], Vec<Value>> = BTreeMap::new();
+        for row in &expected {
+            let chunk = [
+                row[0].as_i64().unwrap() as i32 >> 4,
+                row[2].as_i64().unwrap() as i32 >> 4,
+            ];
+            expected_by_chunk
+                .entry(chunk)
+                .or_default()
+                .push(row.clone());
         }
+        for cx in center[0] - 2..=center[0] + 2 {
+            for cz in center[1] - 2..=center[1] + 2 {
+                let chunk = region.chunk([cx, cz], ChunkStatus::Empty).unwrap();
+                let actual = chunk
+                    .poi_changes
+                    .iter()
+                    .map(|(p, _, state)| json!([p[0], p[1], p[2], state.id()]))
+                    .collect::<Vec<_>>();
+                let expected = expected_by_chunk.remove(&[cx, cz]).unwrap_or_default();
+                assert_eq!(
+                    actual.len(),
+                    expected.len(),
+                    "write count chunk={:?} {label}",
+                    [cx, cz]
+                );
+                for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(
+                        actual,
+                        expected,
+                        "write {index} chunk={:?} {label}",
+                        [cx, cz]
+                    );
+                }
+            }
+        }
+        assert!(
+            expected_by_chunk.is_empty(),
+            "fixture writes outside borrowed chunks: {label}"
+        );
         let mut final_blocks = BTreeMap::new();
         for row in &expected {
             let p = std::array::from_fn(|i| row[i].as_i64().unwrap() as i32);
