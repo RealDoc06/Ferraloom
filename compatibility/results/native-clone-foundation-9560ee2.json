@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "kind": "targeted-native-clone-foundation",
+  "result": "passed",
+  "target_version": "26.3",
+  "protocol": 777,
+  "data_version": 5023,
+  "actual_validation_source_commit": "9560ee2c3128203ef5fd921b75c63d5ebbf3fcbe",
+  "integrated_ROOT_source_commit": "07491820a88fa3bb6f68642a12c5b264ad9ddbaf",
+  "source_binding": {
+    "path": "compatibility/results/evidence/d54afd1a68b1302106ca2974f76a526354cb75aa45be565ac12fe1534437441d.json",
+    "sha256": "d54afd1a68b1302106ca2974f76a526354cb75aa45be565ac12fe1534437441d",
+    "bytes": 10889
+  },
+  "execution_host": "ferraloom-builder",
+  "execution_address": "10.10.10.162",
+  "submission_and_verification_host": "devbox",
+  "checks": [
+    {
+      "step": "world-core-all-targets-clippy",
+      "job_id": "20261017T191934Z-22ccb05f",
+      "exit_code": 0,
+      "elapsed_seconds": 156.021656,
+      "submission": {
+        "path": "compatibility/results/evidence/b974128385c6ddb310d16ff73afb37e4969f67756c2966b191dad833ed60f202.json",
+        "sha256": "b974128385c6ddb310d16ff73afb37e4969f67756c2966b191dad833ed60f202",
+        "bytes": 1217
+      },
+      "completion": {
+        "path": "compatibility/results/evidence/ccb4bb7d440d9dab1b6e85316ef8cd7709b3698215af39e7c42d1236eec7ad63.json",
+        "sha256": "ccb4bb7d440d9dab1b6e85316ef8cd7709b3698215af39e7c42d1236eec7ad63",
+        "bytes": 153
+      },
+      "outer_receipt": {
+        "path": "compatibility/results/evidence/d69d9dee9995254d44a23d0897284c344d75fb442cb6a0d84c5fda423bd66bfe.json",
+        "sha256": "d69d9dee9995254d44a23d0897284c344d75fb442cb6a0d84c5fda423bd66bfe",
+        "bytes": 740
+      },
+      "raw_console": {
+        "path": "compatibility/results/evidence/dd9133825496bc9f1b156b90cbba6fa7314aa4ede8b6d5ccea15bcb48541000d.log",
+        "sha256": "dd9133825496bc9f1b156b90cbba6fa7314aa4ede8b6d5ccea15bcb48541000d",
+        "bytes": 1549
+      },
+      "resource_limits": {
+        "memory": "6G",
+        "swap": "0",
+        "cpu": "200%"
+      },
+      "scope": "Affected pumpkin-world and pumpkin-core --all-targets with -D warnings; locked/offline and one Cargo job."
+    },
+    {
+      "step": "full-core-library",
+      "job_id": "20261017T192232Z-977d9707",
+      "exit_code": 0,
+      "elapsed_seconds": 1368.145591,
+      "submission": {
+        "path": "compatibility/results/evidence/74a80a58b039111b08e45c6a71563de93017fdb464340e81fc46ddbfedea64d1.json",
+        "sha256": "74a80a58b039111b08e45c6a71563de93017fdb464340e81fc46ddbfedea64d1",
+        "bytes": 1394
+      },
+      "completion": {
+        "path": "compatibility/results/evidence/0a329460fbd1213dc30a29e7219a58561ed1002a84c06a21742726245345dc85.json",
+        "sha256": "0a329460fbd1213dc30a29e7219a58561ed1002a84c06a21742726245345dc85",
+        "bytes": 153
+      },
+      "outer_receipt": {
+        "path": "compatibility/results/evidence/369c9da1c5edd89a0bf6b86dc3d1aef588aa9f61a2d7d827ad69aff29a17ca70.json",
+        "sha256": "369c9da1c5edd89a0bf6b86dc3d1aef588aa9f61a2d7d827ad69aff29a17ca70",
+        "bytes": 794
+      },
+      "raw_console": {
+        "path": "compatibility/results/evidence/de27a95cd10b8dba478f90681ea625cf46dcb0d2db1be1953e43ac755682fe20.log",
+        "sha256": "de27a95cd10b8dba478f90681ea625cf46dcb0d2db1be1953e43ac755682fe20",
+        "bytes": 90789
+      },
+      "resource_limits": {
+        "memory": "6G",
+        "swap": "0",
+        "cpu": "200%"
+      },
+      "scope": "Core --lib, two test threads, locked/offline, one Cargo job, 1800-second timeout and 30-second kill-after.",
+      "passed_tests": 888,
+      "new_foundation_controls_included": 18,
+      "existing_tests_included": 870,
+      "isolated_children": {
+        "count": 4,
+        "each_passed": 1,
+        "each_filtered_out": 887,
+        "added_to_total": false
+      }
+    }
+  ],
+  "ROOT_result": {
+    "path": "compatibility/results/evidence/e2b5abe122248ba19a141490d5989f9b4e555c26a11d13e4039d86bee21dd430.json",
+    "sha256": "e2b5abe122248ba19a141490d5989f9b4e555c26a11d13e4039d86bee21dd430",
+    "bytes": 2642
+  },
+  "builder_proof": {
+    "path": "compatibility/results/evidence/0c59c936046b36a6a088c9e9a8b03a019fe4fd929bb4cc90cc969a5f820e860d.json",
+    "sha256": "0c59c936046b36a6a088c9e9a8b03a019fe4fd929bb4cc90cc969a5f820e860d",
+    "bytes": 1086
+  },
+  "test_binary": {
+    "path": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_core-fb468feebc8a3369",
+    "sha256": "b7e05accbffc681249db38c472c5921d19c0b07ec7237048fad29dc38c92ca7d",
+    "bytes": 126201944,
+    "hash_observed_after_closed_run": true,
+    "copy_preserved": false,
+    "scope": "Core test executable hash observed after the closed run; no preserved copy or Ferraloom server executable build is established."
+  },
+  "source_review": {
+    "reviewed_source_commit": "2d26e8febf6b8f84931b7a7c4b3d3ae6e70fb839",
+    "report_sha256": "08b45a4cd584df1b802d221c16a0525f4db322bbf274524bbc046c60d28aceeb",
+    "report_bytes_published": false,
+    "verdict": "Claude2 CLEAR, zero P1/P2 for the unwired slice at 2d26e8f only",
+    "later_corrections": "ROOT inspected subsequent tiny helper-borrow, unload-guard and test-lint fixes through 9560. No later Claude review is claimed."
+  },
+  "historical_full_native_record": {
+    "path": "compatibility/results/native-checks-b58452a.json",
+    "sha256": "c1058ae84dccd5830d9912e0b1cd01eca826489e6a305849d017a8adc50aec87",
+    "source_commit": "b58452a17d9a531a93810161321fe440c8149a1e",
+    "rust": 1676,
+    "python": 168,
+    "node": 74,
+    "unchanged": true,
+    "scope": "Historical full16 only; counts are not combined with these separate targeted runs."
+  },
+  "bounds": [
+    "Affected Clippy and full Core only; not a current full16, all-crate test result, server executable build, runtime/parity or ledger promotion.",
+    "The World/BE foundation is unwired to the clone command. Complete clone behavior and menu/factory integration remain separate.",
+    "Four isolated Core children are excluded from 888; the 18 new controls are included.",
+    "The original outer receipt ended with generated test data untracked; later builder proof records identified preservation and clean source. No raw usercache bytes are published.",
+    "Tick N1 Unload-always-dirty, Save-NBT-only valid clocks and asynchronous encode/retire-window bounds remain unchanged.",
+    "The exact source binding is 9560 to 074. Later parser checks are separate; no run of combined ROOT 3839 is claimed."
+  ]
+}

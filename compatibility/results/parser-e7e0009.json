@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "kind": "targeted-native-bounded-block-predicate-parser",
+  "result": "passed",
+  "target_version": "26.3",
+  "protocol": 777,
+  "data_version": 5023,
+  "actual_validation_source_commit": "e7e0009ca7baa55a65a875c6b70fa9d34bcabb4a",
+  "integrated_ROOT_source_commit": "3839c8e3fbb39cc14c5f295afd4ccb1cd132bd3a",
+  "source_binding": {
+    "path": "compatibility/results/evidence/214d02f5ee60a893d7315103b427d0e3642a74fb45c56b7b06dd93e2bc06eb41.json",
+    "sha256": "214d02f5ee60a893d7315103b427d0e3642a74fb45c56b7b06dd93e2bc06eb41",
+    "bytes": 4216
+  },
+  "execution_host": "ferraloom-builder",
+  "execution_address": "10.10.10.162",
+  "submission_and_verification_host": "devbox",
+  "checks": [
+    {
+      "step": "command-all-targets-clippy",
+      "job_id": "20261017T195220Z-17c29767",
+      "exit_code": 0,
+      "elapsed_seconds": 5.80032,
+      "submission": {
+        "path": "compatibility/results/evidence/8c7306027e725a87621ec4206a63d17384750fab9c39a6b5ec2c90f3afd9e162.json",
+        "sha256": "8c7306027e725a87621ec4206a63d17384750fab9c39a6b5ec2c90f3afd9e162",
+        "bytes": 892
+      },
+      "completion": {
+        "path": "compatibility/results/evidence/0cda5fc017af6ea8a21b4771f145110e0201d0acd9aa98935f8df7d353e27376.json",
+        "sha256": "0cda5fc017af6ea8a21b4771f145110e0201d0acd9aa98935f8df7d353e27376",
+        "bytes": 153
+      },
+      "outer_receipt": {
+        "path": "compatibility/results/evidence/b27cec7b2d57b8e34aa10abe96469398dd12c193b2d1512f03705d9b65ac540c.json",
+        "sha256": "b27cec7b2d57b8e34aa10abe96469398dd12c193b2d1512f03705d9b65ac540c",
+        "bytes": 760
+      },
+      "raw_console": {
+        "path": "compatibility/results/evidence/ad33d6009ab84c3dbae5408d065f841497d5427e1853d64769b796ea69f2d7d9.log",
+        "sha256": "ad33d6009ab84c3dbae5408d065f841497d5427e1853d64769b796ea69f2d7d9",
+        "bytes": 1465
+      },
+      "resource_limits": {
+        "memory": "6G",
+        "swap": "0",
+        "cpu": "200%"
+      },
+      "scope": "Affected pumpkin-command --all-targets with -D warnings; locked/offline, one Cargo job, 1800-second timeout and 30-second kill-after."
+    },
+    {
+      "step": "full-command-library",
+      "job_id": "20261017T195257Z-a631ae28",
+      "exit_code": 0,
+      "elapsed_seconds": 14.009346,
+      "submission": {
+        "path": "compatibility/results/evidence/c580c2e725a2b7aa04df205c03e3499488b0299de7ccab77cc6429d701716648.json",
+        "sha256": "c580c2e725a2b7aa04df205c03e3499488b0299de7ccab77cc6429d701716648",
+        "bytes": 935
+      },
+      "completion": {
+        "path": "compatibility/results/evidence/2fab908ed5b3e6bd6777324831b5f39f6851bf1df95bdbb9320c2c00484b86a0.json",
+        "sha256": "2fab908ed5b3e6bd6777324831b5f39f6851bf1df95bdbb9320c2c00484b86a0",
+        "bytes": 153
+      },
+      "outer_receipt": {
+        "path": "compatibility/results/evidence/47a0ab2beb20c77a0fb4bab3e51a540583e8ae77a0220d68b6dff8d13c2b7954.json",
+        "sha256": "47a0ab2beb20c77a0fb4bab3e51a540583e8ae77a0220d68b6dff8d13c2b7954",
+        "bytes": 750
+      },
+      "raw_console": {
+        "path": "compatibility/results/evidence/9ed5ee70591c5b47df64afc831e25c778085d1bb9bc9fa0f4dfb55d823d8d015.log",
+        "sha256": "9ed5ee70591c5b47df64afc831e25c778085d1bb9bc9fa0f4dfb55d823d8d015",
+        "bytes": 10086
+      },
+      "resource_limits": {
+        "memory": "6G",
+        "swap": "0",
+        "cpu": "200%"
+      },
+      "scope": "Command --lib, two test threads, locked/offline, one Cargo job, 1800-second timeout and 30-second kill-after.",
+      "passed_tests": 114,
+      "new_parser_controls_included": 13,
+      "existing_tests_included": 101,
+      "isolated_children": 0
+    }
+  ],
+  "ROOT_proof": {
+    "path": "compatibility/results/evidence/324a400450360800dca904796d1c376a9c500e749145f43f438c031a415a23bb.json",
+    "sha256": "324a400450360800dca904796d1c376a9c500e749145f43f438c031a415a23bb",
+    "bytes": 2650
+  },
+  "integration_receipt": {
+    "path": "compatibility/results/evidence/f32c867084b7d5258b157396d81ca12d7d64509a4b631053ffdd67152db1c809.json",
+    "sha256": "f32c867084b7d5258b157396d81ca12d7d64509a4b631053ffdd67152db1c809",
+    "bytes": 2093
+  },
+  "test_binary": {
+    "path": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_command-6e92d1c40a23d2fc",
+    "bytes": 15100200,
+    "sha256": "e83fb28043ec41924841f275941cc5152df8379bea1c377197f87f7517d00d0f",
+    "copy_preserved": false,
+    "scope": "Command test executable hash observed after closure; no preserved copy or Ferraloom server executable build is established."
+  },
+  "source_review": {
+    "reviewed_source_commit": "892a28f3d262732472affdc2d3fa03304c20a852",
+    "report_sha256": "784818a8bee57742d82a43940d1ec1e25df6bbe95d1788feefed11a81985522e",
+    "report_bytes_published": false,
+    "original_verdict": "Claude1 NOT CLEAR: one P2 and one non-blocking P3; immutable original",
+    "P2_disposition": "ROOT added exactly two scoped deprecated-expect attributes in e7e0009. Actual affected all-targets Clippy then passed. No later Claude CLEAR verdict is claimed.",
+    "P3_disposition": "The redstone lexical-order counterexample was not substantiated: existing From<&str> delegates to round-trip i32 canonicalization. General Java Property-typed suggestion equivalence remains OPEN.",
+    "counterexample_source": {
+      "path": "vendor/pumpkin/crates/pumpkin-command/src/suggestion/mod.rs",
+      "source_commit": "e7e0009ca7baa55a65a875c6b70fa9d34bcabb4a",
+      "sha256": "597fac8256ad27f90bf4d4c99a9761feeee02eaf46a414d68565613d3323ef54"
+    }
+  },
+  "historical_full_native_record": {
+    "path": "compatibility/results/native-checks-b58452a.json",
+    "sha256": "c1058ae84dccd5830d9912e0b1cd01eca826489e6a305849d017a8adc50aec87",
+    "source_commit": "b58452a17d9a531a93810161321fe440c8149a1e",
+    "rust": 1676,
+    "python": 168,
+    "node": 74,
+    "unchanged": true,
+    "scope": "Historical full16 only; counts are not combined with these separate targeted runs."
+  },
+  "open_boundaries": [
+    "Primary resource-prefix suggestion behavior.",
+    "Canonical aliases and full SNBT equivalence.",
+    "Factory/clone-command integration and negative-zero semantics.",
+    "General Java Property-typed suggestion equivalence; the proposed lexical redstone counterexample was not substantiated."
+  ],
+  "bounds": [
+    "Command-crate Clippy and 114 library tests only: 13 new and 101 existing, without children.",
+    "Separate from foundation Core 888 and historical B584 full16. Command build inputs equal ROOT3839, but Core was not rerun after parser integration and no combined fullnative count is claimed.",
+    "No clone wiring, complete parser or clone parity, server executable build, runtime campaign or ledger promotion.",
+    "The original NOT CLEAR source review remains unchanged. ROOT addressed P2 with two scoped expect attributes and then observed actual Clippy PASS; no later Claude CLEAR verdict is claimed."
+  ],
+  "command_build_input_equality": {
+    "path": "compatibility/results/evidence/086c92a546d7c9f3ec9704849718a237580230d2eafafda6696bf4375871f78f.json",
+    "sha256": "086c92a546d7c9f3ec9704849718a237580230d2eafafda6696bf4375871f78f",
+    "bytes": 1446
+  }
+}

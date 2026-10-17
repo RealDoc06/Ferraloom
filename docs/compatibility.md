@@ -4,7 +4,28 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest [native-check record](../compatibility/results/native-checks-b58452a.json) used clean engine source
+Separate [targeted clone-foundation checks](../compatibility/results/native-clone-foundation-9560ee2.json)
+passed world/core all-targets Clippy and 888 Core library tests at `9560ee2`:
+18 new controls and 870 existing tests. Four isolated one-test/887-filtered
+child results are excluded. The same 12 patches and seven changed file
+blobs/modes were integrated at `0749182`. This covers the unwired World/BE
+foundation only; complete clone and menu/factory integration remain separate.
+
+Separate [bounded-parser checks](../compatibility/results/parser-e7e0009.json) passed
+command all-targets Clippy and 114 command-library tests at `e7e0009`: 13 new
+and 101 existing tests, without child results. Its three exact patches were
+integrated at `3839c8e`. The original source review remains NOT CLEAR; ROOT
+fixed its P2 with two scoped test expect attributes before actual Clippy PASS.
+The proposed lexical redstone counterexample was not substantiated because
+existing suggestion conversion canonicalizes round-trip i32 text; general
+Java Property-typed equivalence remains open. Resource-prefix behavior,
+canonical aliases, SNBT, factory integration and negative-zero semantics also
+remain open. Both targeted sources ran on `ferraloom-builder`; their test
+binary hashes were observed after closure, without preserved copies. These
+separate results establish no combined ROOT native run, current full16,
+server executable build, runtime/parity or ledger promotion.
+
+The latest complete [native-check record](../compatibility/results/native-checks-b58452a.json) used clean engine source
 `b58452a17d9a531a93810161321fe440c8149a1e` on the dedicated `ferraloom-builder` (`10.10.10.162`),
 with executable SHA-256 `a2d7e2397c0a811e0c460e3ead515e171bb15e10bdf969fdbb4efd0a93d0307c`.
 All 16 checks passed: 1,676 Rust tests (96 data, 141 protocol, 101 command,

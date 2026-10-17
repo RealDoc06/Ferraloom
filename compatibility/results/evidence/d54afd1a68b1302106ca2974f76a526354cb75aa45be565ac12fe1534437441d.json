@@ -1,0 +1,214 @@
+{
+  "kind": "clone-foundation-exact-source-binding",
+  "prepared_on_host": "devbox",
+  "actual_validation_source_commit": "9560ee2c3128203ef5fd921b75c63d5ebbf3fcbe",
+  "integrated_ROOT_commit": "07491820a88fa3bb6f68642a12c5b264ad9ddbaf",
+  "twelve_equal_patches": [
+    {
+      "original": "11850572a358a4229ad9a3083130d7759bf45719",
+      "integrated": "7f6aaa549b8609498a16e22557a721a200ae0ed6",
+      "patch_sha256": "29b1d111b87525c51d6032ea28a401a004fe301922de53a7e0e3f8496c453998",
+      "bytes": 10895,
+      "equal": true
+    },
+    {
+      "original": "d719406d2a74cda8b2b9babe0a9534a571d4907c",
+      "integrated": "fcd4b0da5f7749df8e9140b9743f415dfa53cf99",
+      "patch_sha256": "555e234e6e26c128b67df1f24de5d0aa8107d4d2d1beace83fb0c7f634b1bb50",
+      "bytes": 19634,
+      "equal": true
+    },
+    {
+      "original": "8d5376bfdd2cd8002937411c1ed8bf195897a80d",
+      "integrated": "b154ffb8b45f0650ef415ae6eb6f319d84a9cca9",
+      "patch_sha256": "f2dcb8b8114545fb13ff193220905be578c63f2c3ae039f736fb0e35619b1beb",
+      "bytes": 42504,
+      "equal": true
+    },
+    {
+      "original": "d0d4512b3029408550a3b885397196102bba5ffd",
+      "integrated": "1c95edfe1166be81fa2e6c181452524510e9b38b",
+      "patch_sha256": "c833fd843c008e92f43dbd89dbac796f7d54c56acdca75c7e1b48ccc7e10ec6e",
+      "bytes": 1370,
+      "equal": true
+    },
+    {
+      "original": "f2419dd217a2625db4f60e3b8361140a42872061",
+      "integrated": "7e7e44cf87ec4160142546b89878c950593f30fe",
+      "patch_sha256": "49d52a7eb4a10e5d2cb278b107558efae987914ea1dd67d479d3dbb0c26f362b",
+      "bytes": 3222,
+      "equal": true
+    },
+    {
+      "original": "cdd217b95d1f905338961da60e64c25b4b362f5f",
+      "integrated": "6d786c585830c8bbb3470569c1ab816ed0e30f65",
+      "patch_sha256": "7b2e431065917fc7a552a62e4706529f28862ec517fa1d83b812de255710ce15",
+      "bytes": 5057,
+      "equal": true
+    },
+    {
+      "original": "7194be56c3bbdcc6c08cd0be362642324338d8ff",
+      "integrated": "131236578ae0c57e2641b2341d4b2cbfaddd94ea",
+      "patch_sha256": "5e2998da2260891a16cf77905896ac16cb676eb5b735d7ac557f67752d10c872",
+      "bytes": 8849,
+      "equal": true
+    },
+    {
+      "original": "7d8906b9cdc155e8c5bb8a5981195274e01df13d",
+      "integrated": "2a62bc8c9bb3135fa9297f72326daf80b9e19e0c",
+      "patch_sha256": "5d584aaf9dbb8d01df815771d64c99d4a50ab0d469182a096e90444e6e894672",
+      "bytes": 1440,
+      "equal": true
+    },
+    {
+      "original": "2d26e8febf6b8f84931b7a7c4b3d3ae6e70fb839",
+      "integrated": "c1163cf04bae69fd4aeaa5e82352e91df5ab6285",
+      "patch_sha256": "d17b6daa04711bdcb41151d95df005cbbbbdf580d5ed8ec93926067398b15fe8",
+      "bytes": 865,
+      "equal": true
+    },
+    {
+      "original": "7ec52fca7a4bac8da649feb4fda392d5f9199cd6",
+      "integrated": "7cda56b46862317c1a12099273ae23da8d21dd72",
+      "patch_sha256": "4d017f992889113d0e545500b50bbbd062f942a82a0773966e178473b9d6dde6",
+      "bytes": 671,
+      "equal": true
+    },
+    {
+      "original": "05afa7822772d5f5e5a97a8ae8417ee52d49dae8",
+      "integrated": "ce3b62c2f4d82f075560876c17ba2464dd728696",
+      "patch_sha256": "96888595318e83ad588d9aebbfbf293ebc03f6857b0341084b3913a6d34ba1ed",
+      "bytes": 971,
+      "equal": true
+    },
+    {
+      "original": "9560ee2c3128203ef5fd921b75c63d5ebbf3fcbe",
+      "integrated": "07491820a88fa3bb6f68642a12c5b264ad9ddbaf",
+      "patch_sha256": "2e5799a44590acdb705d4fd0229ee3fcbfec71e840fa5f598c8bdb80aa43200c",
+      "bytes": 7697,
+      "equal": true
+    }
+  ],
+  "patch_hash_diff_options": [
+    "--full-index",
+    "--binary"
+  ],
+  "combined_patch_sha256": "351aa93921b0a3f7ca7a36854f96842702311da89098844a7ddd68006507303a",
+  "seven_equal_blobs_modes": [
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-core/src/block/entities/chest_like_block_entity.rs",
+      "mode": "100644",
+      "git_blob": "3e16632a996b302ce8954c8f104b82e3ba7d3374",
+      "sha256": "d3e9d37dae5645fcd8713208f8cd469de47dd7ca00e9345d5a791649dd27b2a5",
+      "bytes": 43342,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-core/src/block/entities/mod.rs",
+      "mode": "100644",
+      "git_blob": "bbd95d0a557f1298d5da3869e02e8a63c30abfc7",
+      "sha256": "3d90e559a263d6306bdc14834eaf000eea9bbbbcb7c04cf5d780a0819b510a71",
+      "bytes": 23887,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-core/src/block/registry.rs",
+      "mode": "100644",
+      "git_blob": "1671773710ce83b7ce4b89ee7cd4e80ceb648a53",
+      "sha256": "4820e56a5d2851f2dbcbf2e3a613c5f4d96ec14c769a264d76cb069251898f16",
+      "bytes": 56841,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-core/src/world/clone_tests.rs",
+      "mode": "100644",
+      "git_blob": "87c31d45dc686f6512096dfd95a05c4bdb60296e",
+      "sha256": "2cad27a0b5b95fb4c56903d0f91847f1ab8b0a0c4d5797c78ef23dc430b70955",
+      "bytes": 48578,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-core/src/world/mod.rs",
+      "mode": "100644",
+      "git_blob": "bdf1ad07338a6ffb51d8f78a7f2b553c10f7126b",
+      "sha256": "01152993bbd332f2396ae731e200c79eba7a8e9a8865c929249e244016a6830d",
+      "bytes": 370067,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-world/src/chunk/format/mod.rs",
+      "mode": "100644",
+      "git_blob": "12e75a704e0d4c099dd3f3144153f949cabf04fe",
+      "sha256": "e5ea66d87c7616018e10122c4ae5ad6fb16d52372eca8b720680b71de6d374d2",
+      "bytes": 75726,
+      "equal": true
+    },
+    {
+      "path": "vendor/pumpkin/crates/pumpkin-world/src/world.rs",
+      "mode": "100644",
+      "git_blob": "32958a8b514a31d2d8b741a2d5d1eb48b4d64479",
+      "sha256": "1fdd9bdac8579a8a8d6dd895946e590a0b61c67c147aeaa83c2741cdcd15cef5",
+      "bytes": 4769,
+      "equal": true
+    }
+  ],
+  "remaining_engine_build_input_diff_empty": true,
+  "ROOT_only_docs_evidence_paths": [
+    "README.md",
+    "compatibility/results/evidence/0fc23582bc087b93a941651b91fd76d75ba44e20a17a50768cb75e0ad024d493.json",
+    "compatibility/results/evidence/10e0c9dbce2a386b60f9fffebaaac6f540d052f3afe13dc91d35c192c6ffa05b.log",
+    "compatibility/results/evidence/1cf8ccdf6c80c377a20840a3fd8b55aff89a5097fea248e1f6f5eb2e663871d5.log",
+    "compatibility/results/evidence/1ff18ed3a846e371c35477b2e8baafdb82db07ed04f1d325b02d4e1916888508.json",
+    "compatibility/results/evidence/45a7595eb9e85dc1f8a2512c28f8602579efe9bd4d067444f2e6733abfd46e9e.py",
+    "compatibility/results/evidence/47c02a8a27deb90db20a94a24ac2d1d6beca0e0fe4c369852dd9782db4df7981.log",
+    "compatibility/results/evidence/5bb7b1f44fc113d10de364a1e373adccea5093e614211192a118f68ff402eccc.log",
+    "compatibility/results/evidence/5f563c1c1b879aea4329a5469d9d6d8ee6e65dcdebce3aa862835af48591d52c.py",
+    "compatibility/results/evidence/60880df13ecc4558cc84b09b01c7988bee94b54eecc65d28b2e73afcf16ea622.json",
+    "compatibility/results/evidence/66d9fa3b803be3eac8650aa94ae58c3edcc2363b665ae4b290f17031bdcd058a.log",
+    "compatibility/results/evidence/6ca108162e41d12d3ceb5f95a55287b2e81208deb6aadadeba611d8d8ce0a8c3.json",
+    "compatibility/results/evidence/72333e64353d739e588c4ddf7885f81bc5b5ead27c174c3a8d3f965178b09b91.txt",
+    "compatibility/results/evidence/72c81120fe4672ad0e437e8f158ca83de8d75b7e6ec94a90e44cc40663a14c67.log",
+    "compatibility/results/evidence/78ccdfa168836890a88e8af2a2765a00a20104c6838754d825eb2b06e484f8ee.log",
+    "compatibility/results/evidence/7f7ae667ef82ca8f4a001043ec3025ecd3e2a949ed7e238d14586fc29bc47e90.diff",
+    "compatibility/results/evidence/8b42cd7a843941c8640541e32eb020fd959d37f2f28627208ca82cc16d4e2419.log",
+    "compatibility/results/evidence/911355d62497bb067f2efd2497a25376a97def74ee9f8ebfcbf9d9a464a445f3.log",
+    "compatibility/results/evidence/9e899b36184ba0acffddc6efc70edc9aeaa415cfa4f8b0cfe8a192e4bdfb0095.log",
+    "compatibility/results/evidence/a61f0f75b80c2e85b0c78401674249ec5e9187d078fdf287a79c20627bb84580.py",
+    "compatibility/results/evidence/aabcc93dbf1ee9d07fdbb3dea3b39f44018ca533fa40714bfdea6a38edd578d5.json",
+    "compatibility/results/evidence/b0e023a0be259fe797cd3f6c312d9a908ddf305a31569b3740621d79b90d0123.log",
+    "compatibility/results/evidence/c2feca27356fea33998562238916a5b10cb14de592d19710b0e65fca88c66c86.json",
+    "compatibility/results/evidence/c4c3b08b09fa936251fdb9368be6c3d924d148bc62837008ba8fe6ffa24abeae.log",
+    "compatibility/results/evidence/c6c0fb1010ce1df5f7278f40d7345e07bf16e3f1877b4cb12a39b8020433ac18.log",
+    "compatibility/results/evidence/c7fb61d1aaea5f46d20c64e1a12dfdcb336d1bbde80b0addfd89a51bbcb392bf.log",
+    "compatibility/results/evidence/cab669d3a99ea45d42fea329d7086ab0eccfbfd0393fc03c27d8e69b6a89d27b.json",
+    "compatibility/results/evidence/ce1939c834ba7496ace2fe9653a20f94e27e17d356a3c9fe6b91ec27c1e67776.log",
+    "compatibility/results/evidence/e02932d1963eeca80aa53cd6e777ef0b925cc1fbbfa824901cc0cc79d3cb8cb9.txt",
+    "compatibility/results/evidence/e195e8c289226ba7621cacfb68eb18f8c0eaa802a0a7651af53ec91ee0417477.diff",
+    "compatibility/results/evidence/e541ec9e14add4088135709a6983177d52f017ca36627abb8cda2de0181f1bd0.json",
+    "compatibility/results/evidence/e72dc3fb5fdcd220a0a206da54f5351247d0c341adfc7f18daaa93644f5cabcd.json",
+    "compatibility/results/evidence/ea3cc1b53a95eeb44591dd6b9f9db89fab3d81521721e54cc99b4c50f4b12654.json",
+    "compatibility/results/evidence/ee1ca389feb0a9d23f661f2ad343e7a10c70934350b574afa9c579b9146528d0.json",
+    "compatibility/results/jukeboxes-B-J.json",
+    "compatibility/results/native-checks-b58452a.json",
+    "docs/compatibility.md"
+  ],
+  "integration_receipt": {
+    "path": "compatibility/results/evidence/213797be5ee8bfd6d82acb8f3cc3e8a2ad713e97ae5f52844ddaf830ddce4863.json",
+    "sha256": "213797be5ee8bfd6d82acb8f3cc3e8a2ad713e97ae5f52844ddaf830ddce4863",
+    "bytes": 1979
+  },
+  "original_commit_mapping": {
+    "path": "compatibility/results/evidence/a8cf8440823383e294c5b2e697e43cbedbe3f43a2983f0a4e5f463f8e6750fb4.json",
+    "sha256": "a8cf8440823383e294c5b2e697e43cbedbe3f43a2983f0a4e5f463f8e6750fb4",
+    "bytes": 2619
+  },
+  "source_review": {
+    "reviewed_source_commit": "2d26e8febf6b8f84931b7a7c4b3d3ae6e70fb839",
+    "report_sha256": "08b45a4cd584df1b802d221c16a0525f4db322bbf274524bbc046c60d28aceeb",
+    "report_bytes_published": false,
+    "verdict": "Claude2 CLEAR, zero P1/P2 for the unwired slice at 2d26e8f only",
+    "later_corrections": "ROOT inspected subsequent tiny helper-borrow, unload-guard and test-lint fixes through 9560. No later Claude review is claimed."
+  },
+  "chronology": "The original integration receipt predates Core completion and says ACTIVE; later completion and Core proof supply the completed pass.",
+  "limits": "Source equality to ROOT074 only. Parser integration at ROOT3839 and its targeted checks are separate; no combined ROOT native validation is claimed."
+}

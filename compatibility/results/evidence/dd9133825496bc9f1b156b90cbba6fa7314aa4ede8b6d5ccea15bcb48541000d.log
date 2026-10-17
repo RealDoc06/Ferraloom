@@ -1,0 +1,11 @@
+Sending 9560ee2c3128203ef5fd921b75c63d5ebbf3fcbe to ferraloom-builder
+{"builder": "ferraloom-builder", "source_commit": "9560ee2c3128203ef5fd921b75c63d5ebbf3fcbe", "receipt": "/home/doc/code/Ferraloom/.cache/remote-build-jobs/20261017T191934Z-22ccb05f.json", "command": ["env", "PUMPKIN_MINECRAFT_SERVER_JAR=/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar", "CARGO_TERM_COLOR=never", "cargo", "clippy", "--manifest-path", "vendor/pumpkin/Cargo.toml", "--locked", "--offline", "--jobs", "1", "-p", "pumpkin-world", "-p", "pumpkin-core", "--all-targets", "--target-dir", "target", "--", "-D", "warnings"]}
+warning: profile package spec `pumpkin-wasm-host` in profile `release` did not match any packages
+warning: profile package spec `pumpkin-wasm-host-common` in profile `release` did not match any packages
+warning: profile package spec `pumpkin-wasm-host-v0_1` in profile `release` did not match any packages
+warning: profile package spec `pumpkin-wasm-host-v0_2` in profile `release` did not match any packages
+   Compiling pumpkin-core v0.2.0+26.3-26.51 (/home/doc/code/Ferraloom/vendor/pumpkin/crates/pumpkin-core)
+    Checking pumpkin-world v0.2.0+26.3-26.51 (/home/doc/code/Ferraloom/vendor/pumpkin/crates/pumpkin-world)
+    Finished `dev` profile [optimized] target(s) in 2m 35s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
