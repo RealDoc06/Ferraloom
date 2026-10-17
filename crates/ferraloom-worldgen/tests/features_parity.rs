@@ -831,3 +831,44 @@ fn base_heights_and_single_block_noise_columns_match_vanilla() {
         );
     }
 }
+
+#[test]
+fn old_chunk_carving_filter_matches_vanilla_jitter_and_boundaries() {
+    use ferraloom_worldgen::blending::{Blender, BlendingData};
+    let cases = golden(include_bytes!("golden/carving_filter.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let old = case["old"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| {
+                let n = |i| entry[i].as_i64().unwrap() as i32;
+                (
+                    [n(0), n(1)],
+                    BlendingData {
+                        min_section: n(2),
+                        max_section: n(3),
+                        heights: [f32::MAX; 16],
+                        densities: std::array::from_fn(|_| None),
+                        biomes: std::array::from_fn(|_| None),
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let blender = Blender::new([0, 0], old).unwrap();
+        let mut actual = Vec::new();
+        for x in (0..16).step_by(3) {
+            for z in (0..16).step_by(3) {
+                for y in (-68..264).step_by(7) {
+                    actual.push(blender.can_carve([0, 0], x, y, z));
+                }
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            case["samples"],
+            "old generation {:?}",
+            case["old"]
+        );
+    }
+}
