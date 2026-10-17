@@ -26,8 +26,7 @@ impl PersistentValue {
     pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
         Ok(match self {
             Self::Nbt(v) => return encode_nbt(v, ops),
-            // Temporary until P1's Component::encode_ops lands. Default names have no boolean style fields.
-            Self::Component(v) => return encode_nbt(&v.to_nbt()?, ops),
+            Self::Component(v) => return v.encode_ops(ops),
             Self::Boolean(v) => ops.create_boolean(*v),
             Self::String(v) => ops.create_string_utf16(v.as_utf16()),
             Self::Int(v) => ops.create_int(*v),
