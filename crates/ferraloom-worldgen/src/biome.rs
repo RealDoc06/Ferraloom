@@ -8,6 +8,7 @@ use std::io::Read;
 #[derive(Clone, Debug)]
 pub enum BiomeSource {
     Fixed(Identifier),
+    Checkerboard { biomes: Vec<Identifier>, scale: i32 },
     MultiNoise(ParameterList<Identifier>),
     TheEnd,
 }
@@ -15,13 +16,28 @@ impl BiomeSource {
     pub fn possible_biomes(&self) -> Vec<Identifier> {
         match self {
             Self::Fixed(id) => vec![id.clone()],
-            Self::MultiNoise(parameters) => parameters
-                .values()
-                .iter()
-                .map(|(_, id)| id.clone())
-                .collect::<std::collections::BTreeSet<_>>()
-                .into_iter()
-                .collect(),
+            Self::Checkerboard { biomes, .. } => {
+                let mut seen = std::collections::BTreeSet::new();
+                let mut result = Vec::new();
+                for id in biomes {
+                    if seen.insert(id.clone()) {
+                        result.push(id.clone());
+                    }
+                }
+                result
+            }
+            Self::MultiNoise(parameters) => {
+                // BiomeSource collects into an ImmutableSet: first encounter
+                // order determines FeatureSorter's global per-step indices.
+                let mut seen = std::collections::BTreeSet::new();
+                let mut result = Vec::new();
+                for (_, id) in parameters.values() {
+                    if seen.insert(id.clone()) {
+                        result.push(id.clone());
+                    }
+                }
+                result
+            }
             Self::TheEnd => [
                 "the_end",
                 "end_highlands",
@@ -38,6 +54,35 @@ impl BiomeSource {
         match ty.to_string().as_str() {
             "minecraft:fixed" => Ok(Self::Fixed(biome_id(field(v, "biome")?, resources)?)),
             "minecraft:the_end" => Ok(Self::TheEnd),
+            "minecraft:checkerboard" => {
+                let entries = field(v, "biomes")?;
+                let biomes = if let Some(tag) = entries.as_str().and_then(|s| s.strip_prefix('#')) {
+                    let names = resources.registry("worldgen/biome");
+                    let tags = ferraloom_data::datapack::load_tags(
+                        resources,
+                        "worldgen/biome",
+                        |id, _| names.contains_key(id).then(|| id.clone()),
+                    );
+                    if !tags.diagnostics.is_empty() {
+                        return Err(Error("invalid biome source tags".into()));
+                    }
+                    tags.values
+                        .get(&tag.parse()?)
+                        .cloned()
+                        .ok_or_else(|| Error(format!("missing biome tag {tag}")))?
+                } else if entries.is_string() {
+                    vec![biome_id(entries, resources)?]
+                } else {
+                    list(entries)?
+                        .iter()
+                        .map(|v| biome_id(v, resources))
+                        .collect::<Result<_, _>>()?
+                };
+                Ok(Self::Checkerboard {
+                    biomes,
+                    scale: optional(v, "scale", 2, |v| int_range(v, 0, 62))?,
+                })
+            }
             "minecraft:multi_noise" => {
                 if let Some(biomes) = v.get("biomes") {
                     let values = list(biomes)?
@@ -79,6 +124,14 @@ impl BiomeSource {
     ) -> Identifier {
         match self {
             Self::Fixed(id) => id.clone(),
+            Self::Checkerboard { biomes, scale } => {
+                let shift = (scale + 2) as u32;
+                let index = quart[0]
+                    .wrapping_shr(shift)
+                    .wrapping_add(quart[2].wrapping_shr(shift))
+                    .rem_euclid(biomes.len() as i32);
+                biomes[index as usize].clone()
+            }
             Self::MultiNoise(parameters) => parameters
                 .find(router.sample_climate(compiler, samplers, quart), search)
                 .clone(),

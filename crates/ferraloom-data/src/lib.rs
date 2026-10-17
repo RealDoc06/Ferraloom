@@ -16,7 +16,20 @@ use std::marker::PhantomData;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockState(u16);
 
+/// Extracted identity classification of BlockBehaviour.PostProcess callbacks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PostProcess {
+    Never,
+    /// The callback returns the input position (Blocks#postProcessSelf).
+    Always,
+    /// Includes callbacks returning another position, such as postProcessAbove.
+    Context,
+}
+
 impl BlockState {
+    pub const fn post_process(self) -> PostProcess {
+        POST_PROCESS[self.0 as usize]
+    }
     pub const fn from_id(id: u16) -> Option<Self> {
         if (id as usize) < BLOCK_STATES.len() {
             Some(Self(id))
@@ -378,26 +391,6 @@ impl BlockState {
     }
 }
 
-impl Block {
-    /// Concrete vanilla Java class, extracted from the registered block object.
-    pub const fn class(self) -> BlockClass {
-        BLOCK_CLASSES[self.protocol_id() as usize]
-    }
-
-    /// Java instanceof, including transitive superclasses and interfaces.
-    pub const fn is_instance_of(self, class: BlockClass) -> bool {
-        let index = class as usize;
-        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
-    }
-}
-
-impl BlockState {
-    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
-    pub const fn is_air(self) -> bool {
-        STATE_IS_AIR[self.id() as usize]
-    }
-}
-
 impl BlockState {
     /// Port of BlockStateBase#getFaceOcclusionShape and Block#isShapeFullBlock.
     /// Direction bits follow vanilla's DOWN, UP, NORTH, SOUTH, WEST, EAST order.
@@ -441,5 +434,25 @@ impl BlockState {
             2 => Some(1),
             _ => None,
         }
+    }
+}
+
+impl Block {
+    /// Concrete vanilla Java class, extracted from the registered block object.
+    pub const fn class(self) -> BlockClass {
+        BLOCK_CLASSES[self.protocol_id() as usize]
+    }
+
+    /// Java instanceof, including transitive superclasses and interfaces.
+    pub const fn is_instance_of(self, class: BlockClass) -> bool {
+        let index = class as usize;
+        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
+    pub const fn is_air(self) -> bool {
+        STATE_IS_AIR[self.id() as usize]
     }
 }

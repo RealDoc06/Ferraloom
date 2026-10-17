@@ -84,6 +84,7 @@ pub struct FeatureLoader<'a> {
     registry: FeatureRegistry,
     loading: BTreeSet<(String, Identifier)>,
     providers: BTreeMap<Identifier, Arc<state_provider::BlockStateProvider>>,
+    next_inline: u64,
 }
 impl<'a> FeatureLoader<'a> {
     pub fn new(resources: &'a ResourceManager) -> Result<Self, Error> {
@@ -93,6 +94,7 @@ impl<'a> FeatureLoader<'a> {
             registry: FeatureRegistry::default(),
             loading: BTreeSet::new(),
             providers: BTreeMap::new(),
+            next_inline: 0,
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
         vegetation::register(&mut loader)?;
@@ -101,10 +103,15 @@ impl<'a> FeatureLoader<'a> {
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {
-        if self.factories.insert(kind.clone(), factory).is_some() {
-            return Err(Error(format!("duplicate feature decoder {kind}")));
+        match self.factories.entry(kind) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(factory);
+                Ok(())
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                Err(Error(format!("duplicate feature decoder {}", entry.key())))
+            }
         }
-        Ok(())
     }
     fn resource(&self, registry: &str, id: &Identifier) -> Result<Value, Error> {
         Ok(self
@@ -123,9 +130,11 @@ impl<'a> FeatureLoader<'a> {
             if !self.loading.insert(key.clone()) {
                 return Err(Error(format!("cyclic feature reference {id}")));
             }
-            let value = self.resource("feature", &id)?;
-            let feature = self.feature(&value)?;
+            let result = self
+                .resource("feature", &id)
+                .and_then(|value| self.feature(&value));
             self.loading.remove(&key);
+            let feature = result?;
             self.registry.features.insert(id, feature.clone());
             return Ok(feature);
         }
@@ -146,9 +155,11 @@ impl<'a> FeatureLoader<'a> {
             if !self.loading.insert(key.clone()) {
                 return Err(Error(format!("cyclic placed feature reference {id}")));
             }
-            let value = self.resource("placed_feature", &id)?;
-            let feature = Arc::new(self.decode_placed(&value, Some(id.clone()))?);
+            let result = self
+                .resource("placed_feature", &id)
+                .and_then(|value| self.decode_placed(&value, Some(id.clone())));
             self.loading.remove(&key);
+            let feature = Arc::new(result?);
             self.registry.placed.insert(id, feature.clone());
             return Ok(feature);
         }
@@ -179,9 +190,11 @@ impl<'a> FeatureLoader<'a> {
             if !self.loading.insert(key.clone()) {
                 return Err(Error(format!("cyclic state provider reference {id}")));
             }
-            let value = self.resource("block_state_provider", &id)?;
-            let provider = self.state_provider(&value)?;
+            let result = self
+                .resource("block_state_provider", &id)
+                .and_then(|value| self.state_provider(&value));
             self.loading.remove(&key);
+            let provider = result?;
             self.providers.insert(id, provider.clone());
             return Ok(provider);
         }
@@ -205,20 +218,57 @@ impl<'a> FeatureLoader<'a> {
         Ok(self.registry)
     }
     pub fn load_biome_features(&mut self) -> Result<(), Error> {
+        let named = self.data.resources.registry("worldgen/placed_feature");
+        let tags = ferraloom_data::datapack::load_tags(
+            self.data.resources,
+            "worldgen/placed_feature",
+            |id, _| named.contains_key(id).then(|| id.clone()),
+        );
+        if !tags.diagnostics.is_empty() {
+            return Err(Error("invalid placed feature tags".into()));
+        }
         for (id, resource) in self.data.resources.registry("worldgen/biome") {
             let value = resource.json()?;
-            let steps = list(field(&value, "features")?)?
-                .iter()
-                .map(|step| {
-                    if step.is_string() {
-                        return Ok(vec![crate::codec::id(step)?]);
-                    }
-                    list(step)?
-                        .iter()
-                        .map(crate::codec::id)
-                        .collect::<Result<Vec<_>, Error>>()
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+            let mut steps = Vec::new();
+            for step in list(field(&value, "features")?)? {
+                if let Some(tag) = step.as_str().and_then(|s| s.strip_prefix('#')) {
+                    steps.push(
+                        tags.values
+                            .get(&tag.parse()?)
+                            .cloned()
+                            .ok_or_else(|| Error(format!("missing placed feature tag {tag}")))?,
+                    );
+                    continue;
+                }
+                let mut entries = Vec::new();
+                // LIST_OF_LISTS_CODEC uses alwaysUseList: a bare feature holder
+                // is rejected here, although a named tag is accepted above.
+                for entry in list(step)? {
+                    let id = if entry.is_string() {
+                        let id = crate::codec::id(entry)?;
+                        if !named.contains_key(&id) {
+                            return Err(Error(format!("missing placed feature {id}")));
+                        }
+                        id
+                    } else {
+                        let id = loop {
+                            let candidate: Identifier =
+                                format!("ferraloom:__inline/{}", self.next_inline).parse()?;
+                            self.next_inline += 1;
+                            if !named.contains_key(&candidate)
+                                && !self.registry.placed.contains_key(&candidate)
+                            {
+                                break candidate;
+                            }
+                        };
+                        let feature = Arc::new(self.decode_placed(entry, Some(id.clone()))?);
+                        self.registry.placed.insert(id.clone(), feature);
+                        id
+                    };
+                    entries.push(id);
+                }
+                steps.push(entries);
+            }
             self.registry.biome_features.insert(id, steps);
         }
         Ok(())

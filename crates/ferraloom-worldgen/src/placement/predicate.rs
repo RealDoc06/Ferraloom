@@ -90,11 +90,11 @@ pub fn position(v: &Value, bound: Option<i32>) -> Result<[i32; 3], Error> {
     }
     let mut p = [0; 3];
     for i in 0..3 {
-        p[i] = if let Some(bound) = bound {
-            int_range(&values[i], -bound, bound)?
-        } else {
-            integer(&values[i])?
-        };
+        p[i] = integer(&values[i])?;
+        // Vec3i.offsetCodec uses Math.abs(int); MIN_VALUE remains negative.
+        if bound.is_some_and(|bound| p[i].wrapping_abs() > bound) {
+            return Err(Error("position offset exceeds bound".into()));
+        }
     }
     Ok(p)
 }
@@ -260,7 +260,8 @@ impl BlockPredicate {
             }
             Self::HasSturdyFace(d, face) => region.has_sturdy_face(offset(p, *d), *face)?,
             Self::WouldSurvive(d, state) => region.can_survive(*state, offset(p, *d))?,
-            Self::Unobstructed => region.is_unobstructed(Block::AIR.default_state(), p)?,
+            // Vanilla tests entity obstruction against a full unit cube.
+            Self::Unobstructed => region.is_unobstructed(Block::STONE.default_state(), p)?,
             Self::HeightRange(min, max) => {
                 let min_y = region.min_y().max(generator.settings.noise.min_y);
                 let height = region.height().min(generator.settings.noise.height);

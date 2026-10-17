@@ -473,7 +473,7 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
         assert_eq!(values.len(), state_count, "state transform table length");
         write!(
             out,
-            "const STATE_TRANSFORM_{}: [u16; {}] = [",
+            "static STATE_TRANSFORM_{}: [u16; {}] = [",
             constant(name),
             state_count
         )
@@ -540,6 +540,22 @@ fn block_classes(out: &mut String, data: &Value, block_count: usize) {
             bits[index / 64] |= 1u64 << (index % 64);
         }
         writeln!(out, "{bits:?},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
+fn post_process(out: &mut String, table: &Value, count: usize) {
+    let entries = table.as_array().expect("post-process array");
+    assert_eq!(entries.len(), count);
+    out.push_str("const POST_PROCESS: &[PostProcess] = &[\n");
+    for entry in entries {
+        let variant = match string(entry) {
+            "never" => "Never",
+            "always" => "Always",
+            "context" => "Context",
+            _ => panic!("unknown post-process classification"),
+        };
+        writeln!(out, "PostProcess::{variant},").unwrap();
     }
     out.push_str("];\n");
 }
@@ -618,6 +634,11 @@ fn main() {
         "const STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
     )
     .unwrap();
+    post_process(
+        &mut out,
+        &load(root, "post_process"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
     face_occlusion(
         &mut out,
         &load(root, "face_occlusion"),
