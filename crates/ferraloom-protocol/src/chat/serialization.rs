@@ -475,10 +475,11 @@ fn decode_profile(tag: &Tag) -> Result<ResolvableProfile> {
 }
 
 pub(super) fn encode(component: &Component) -> Result<Tag> {
-    if let Contents::Text(text) = &component.contents {
-        if component.style == Style::default() && component.extra.is_empty() {
-            return Ok(Tag::String(text.as_str().into()));
-        }
+    if let Contents::Text(text) = &component.contents
+        && component.style == Style::default()
+        && component.extra.is_empty()
+    {
+        return Ok(Tag::String(text.as_str().into()));
     }
     let mut map = Fields::new();
     match &component.contents {
@@ -816,10 +817,10 @@ pub(super) fn encode_json(component: &Component) -> Result<Value> {
                 map.insert("separator".into(), encode_json(v)?);
             }
         }
-        Contents::Object { fallback, .. } => {
-            if let Some(v) = fallback {
-                map.insert("fallback".into(), encode_json(v)?);
-            }
+        Contents::Object {
+            fallback: Some(v), ..
+        } => {
+            map.insert("fallback".into(), encode_json(v)?);
         }
         _ => {}
     }
