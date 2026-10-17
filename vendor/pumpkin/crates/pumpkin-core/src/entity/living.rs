@@ -4041,6 +4041,9 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 }
 
 #[cfg(test)]
+mod frozen_player_push_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
