@@ -108,6 +108,31 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         Ok(())
     }
 
+    /// Terminal transport cleanup after packet decoding has stopped. Discard at
+    /// most `byte_limit` bytes, including any already buffered transport input,
+    /// without framing, decryption, decompression or payload allocation. The
+    /// owner must bound the wait and must never resume decoding afterward: a
+    /// canceled frame may have consumed an arbitrary part of the cipher stream.
+    /// This keeps the underlying read half owned by this decoder until it drops.
+    pub async fn discard_after_close(&mut self, byte_limit: usize) -> std::io::Result<usize> {
+        let reader = match self.reader.as_mut() {
+            Some(DecryptionReader::Decrypt(reader)) => &mut reader.read,
+            Some(DecryptionReader::None(reader)) => reader,
+            None => return Ok(0),
+        };
+        let mut discarded = 0;
+        let mut buffer = [0; 8192];
+        while discarded < byte_limit {
+            let limit = buffer.len().min(byte_limit - discarded);
+            let read = reader.read(&mut buffer[..limit]).await?;
+            if read == 0 {
+                break;
+            }
+            discarded += read;
+        }
+        Ok(discarded)
+    }
+
     pub async fn get_raw_packet(&mut self) -> Result<RawPacket, PacketDecodeError> {
         let reader = self
             .reader

@@ -26,7 +26,7 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, MAX_PACKET_SIZE, PacketDecodeError, RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -82,6 +82,46 @@ use crate::{error::PumpkinError, server::Server};
 /// An owned continuation; the FIFO caller transfers its activity lease to the client task.
 pub(crate) type DeferredPacket = std::pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// Terminal input is discarded, never admitted. One maximum wire packet bounds
+/// the work even if a kicked peer keeps flooding instead of responding to FIN.
+const DISCONNECT_DISCARD_BYTES: usize = MAX_PACKET_SIZE as usize;
+
+/// The first kick requesting a reason fixes the deadline BEFORE sealing admission.
+/// Preparations overlap without extending it; any queued reason resolves the
+/// intent, otherwise the last preparation resolves it as a no-packet close.
+/// This bounds transport waits, not synchronous plugin execution, and does not
+/// wake a blocked packet read. Independent close/error paths remain authoritative.
+#[derive(Default)]
+struct DisconnectIntent {
+    deadline: Option<Instant>,
+    preparing: usize,
+    queued: bool,
+}
+
+/// Resolve canceled futures and unwinding callbacks too, without keeping a
+/// transport lock across serialization, translation, or a flush receipt.
+struct DisconnectPreparation<'a>(&'a JavaClient);
+
+impl Drop for DisconnectPreparation<'_> {
+    fn drop(&mut self) {
+        let close = {
+            let mut intent = self
+                .0
+                .disconnect_intent
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            intent.preparing -= 1;
+            intent.queued || intent.preparing == 0
+        };
+        self.0.disconnect_changed.notify_waiters();
+        if close {
+            // Once resolved, a later preparation cannot reopen this connection.
+            // Never seal activity or run its cleanup under the transport lock.
+            self.0.close();
+        }
+    }
+}
+
 /// A timer may run many times while a single frame is incomplete. Keep the same
 /// decode future pinned: the upstream decoder stores partial framing in it.
 async fn read_with_keep_alive<T, F, K, KF>(
@@ -132,6 +172,13 @@ pub struct JavaClient {
     rt_handle: tokio::runtime::Handle,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
+    /// Published before a kick requesting a reason seals activity. Waiting for
+    /// preparation, reader retention and writer flush share the first deadline.
+    disconnect_intent: Arc<std::sync::Mutex<DisconnectIntent>>,
+    disconnect_changed: tokio::sync::Notify,
+    /// Completion of the tracked outgoing task. At its deadline, an existing
+    /// blocking compression job can still own the encoder until that job returns.
+    writer_finished: CancellationToken,
     /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
     /// Unbounded like vanilla; `MAX_PENDING_BYTES` is the limit.
     outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
@@ -183,6 +230,9 @@ impl JavaClient {
             address: pending.address,
             connection_state: pending.connection_state,
             close_token: pending.close_token,
+            disconnect_intent: Arc::new(std::sync::Mutex::new(DisconnectIntent::default())),
+            disconnect_changed: tokio::sync::Notify::new(),
+            writer_finished: CancellationToken::new(),
             tasks: TaskTracker::new(),
             rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
@@ -297,6 +347,48 @@ impl JavaClient {
                 }
             }
         }
+
+        self.finish_packet_reader(&mut network_reader).await;
+    }
+
+    /// Sealing can end packet admission before the kick finishes preparing its
+    /// reason. Retain the decoder until that intent resolves or its deadline
+    /// expires. A queued reason then discards terminal input while flushing/FIN;
+    /// a resolved no-packet close skips the discard wait.
+    /// Dropping both halves with unread TCP input can reset the peer's stream.
+    async fn finish_packet_reader(&self, reader: &mut TCPNetworkDecoder<BufReader<OwnedReadHalf>>) {
+        let deadline = loop {
+            let changed = self.disconnect_changed.notified();
+            tokio::pin!(changed);
+            // Register before inspecting the state so resolution cannot race
+            // the wait and leave an already-aborted kick waiting until timeout.
+            changed.as_mut().enable();
+            let (deadline, queued, preparing) = {
+                let intent = self
+                    .disconnect_intent
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                (intent.deadline, intent.queued, intent.preparing)
+            };
+            let Some(deadline) = deadline else {
+                return;
+            };
+            if queued {
+                break deadline;
+            }
+            if preparing == 0 || tokio::time::timeout_at(deadline, changed).await.is_err() {
+                return;
+            }
+        };
+        let _ = tokio::time::timeout_at(deadline, async {
+            // Keep the decoder/read half alive until BOTH operations end.
+            // Hitting the byte cap never cancels an in-progress frame write.
+            let (_, ()) = tokio::join!(
+                reader.discard_after_close(DISCONNECT_DISCARD_BYTES),
+                self.writer_finished.cancelled(),
+            );
+        })
+        .await;
     }
 
     /// Admit the original wire packet before interpreting transport liveness.
@@ -674,7 +766,40 @@ impl JavaClient {
         }
     }
 
+    /// Publish before sealing: a completed decode can observe the seal before
+    /// this kick has serialized/translated anything. Never extend an earlier intent.
+    fn prepare_disconnect(&self) -> DisconnectPreparation<'_> {
+        let mut intent = self
+            .disconnect_intent
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        intent
+            .deadline
+            .get_or_insert_with(|| Instant::now() + DISCONNECT_FLUSH_TIMEOUT);
+        intent.preparing += 1;
+        DisconnectPreparation(self)
+    }
+
+    /// Resolve the prepared intent as queued. No translation/plugin callback
+    /// runs under this lock; the existing FIFO order and byte reservation remain.
+    fn queue_disconnect(&self, packet: OutgoingPacket, packet_len: usize) -> Option<Instant> {
+        let mut intent = self
+            .disconnect_intent
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.outgoing_packet_queue_send.send(packet).is_err() {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
+            return None;
+        }
+        intent.queued = true;
+        let deadline = intent.deadline;
+        drop(intent);
+        self.disconnect_changed.notify_waiters();
+        deadline
+    }
+
     pub fn try_kick(&self, reason: &TextComponent) {
+        let preparation = self.prepare_disconnect();
         self.seal_activity();
         if let Some(data) = self
             .serialize_disconnect(reason)
@@ -684,11 +809,9 @@ impl JavaClient {
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             // The writer drains and flushes it after `close()`
             if self
-                .outgoing_packet_queue_send
-                .send(OutgoingPacket::normal(data))
-                .is_err()
+                .queue_disconnect(OutgoingPacket::normal(data), packet_len)
+                .is_none()
             {
-                decrement_pending_bytes(&self.pending_bytes, packet_len);
                 // Expected: the writer task is already gone.
                 debug!(
                     "Disconnect packet for client {} dropped: outgoing packet queue closed",
@@ -698,7 +821,7 @@ impl JavaClient {
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
-        self.close();
+        drop(preparation);
     }
 
     pub async fn kick(&self, reason: TextComponent) {
@@ -706,18 +829,27 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        let preparation = send_packet.then(|| self.prepare_disconnect());
         self.seal_activity();
-        if send_packet && let Some(data) = self.serialize_disconnect(reason) {
-            // Stalled peer: never flushes -> Close anyway.
-            let _ = tokio::time::timeout(
-                DISCONNECT_FLUSH_TIMEOUT,
-                self.send_and_wait(data, OutgoingPacket::flushed),
-            )
-            .await;
+        if send_packet
+            && let Some(data) = self.serialize_disconnect(reason)
+            && let Some((data, packet_len)) = self.reserve_pending_bytes(data)
+        {
+            let (flushed, receipt) = oneshot::channel();
+            if let Some(deadline) =
+                self.queue_disconnect(OutgoingPacket::flushed(data, flushed), packet_len)
+            {
+                // The same deadline also bounds the terminal reader and writer.
+                let _ = tokio::time::timeout_at(deadline, receipt).await;
+            }
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
-        self.close();
+        if let Some(preparation) = preparation {
+            drop(preparation);
+        } else {
+            self.close();
+        }
     }
 
     pub async fn send_packet_now(&self, packet: Bytes) {
@@ -822,16 +954,38 @@ impl JavaClient {
         };
         let id = self.id;
         let suspend_flushing = self.suspend_flushing.clone();
+        let disconnect_intent = self.disconnect_intent.clone();
+        let finished = self.writer_finished.clone().drop_guard();
         self.spawn_task(async move {
-            run_outgoing_packet_writer(
+            // Declared first so completion is published after the writer future
+            // drops. An already offloaded compression job cannot be canceled.
+            let _finished = finished;
+            let write = run_outgoing_packet_writer(
                 packet_receiver,
                 writer,
-                close_token,
+                close_token.clone(),
                 suspend_flushing,
                 pending_bytes,
                 id,
-            )
-            .await;
+            );
+            tokio::pin!(write);
+            tokio::select! {
+                biased;
+                () = &mut write => {}
+                () = close_token.cancelled() => {
+                    let deadline = disconnect_intent
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .deadline;
+                    if let Some(deadline) = deadline {
+                        // Resume the SAME write future, never restart a partially
+                        // written frame. No second five-second budget after kick.
+                        let _ = tokio::time::timeout_at(deadline, write).await;
+                    } else {
+                        write.await;
+                    }
+                }
+            }
         });
     }
 
