@@ -28,12 +28,12 @@ fn tagged(item: &'static Item, count: u8) -> ItemStack {
 
 fn assert_stack(actual: &ItemStack, expected: &ItemStack) {
     if expected.is_empty() {
-        assert!(actual.is_empty(), "expected empty, got {actual:?}");
+        assert!(actual.is_empty(), "expected an empty stack");
     } else {
-        assert_eq!(actual.item_count, expected.item_count, "{actual:?}");
+        assert_eq!(actual.item_count, expected.item_count);
         assert!(
             actual.are_items_and_components_equal(expected),
-            "actual {actual:?}, expected {expected:?}"
+            "item or components differ"
         );
     }
 }

@@ -42,7 +42,11 @@ async fn real_chunk_snapshot_and_unload_save_parent_only_and_retained_parts_stay
             Some(old.get_entity().entity_uuid)
         );
         assert_eq!(saved[0].get_int("DragonPhase"), Some(6));
-        assert!(saved[0].get_list("Passengers").is_none_or(Vec::is_empty));
+        assert!(
+            saved[0]
+                .get_list("Passengers")
+                .is_none_or(|passengers| passengers.is_empty())
+        );
     }
     assert!(
         world
@@ -229,10 +233,7 @@ async fn removal_reason_is_first_wins_for_ordinary_resident_and_unpublished_clea
     assert!(world.spawn_entity(cow.clone()));
     world.remove_entity(cow.as_ref());
     world.remove_entity_with_reason(cow.as_ref(), RemovalReason::Killed);
-    assert_eq!(
-        cow.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(cow.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     assert!(world.get_entity_by_id(cow.get_entity().entity_id).is_none());
     assert!(
         world
@@ -248,16 +249,10 @@ async fn removal_reason_is_first_wins_for_ordinary_resident_and_unpublished_clea
     );
     world.remove_entity(unpublished.as_ref());
     assert!(unpublished.get_entity().is_removed());
-    assert_eq!(
-        unpublished.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(unpublished.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     world.remove_entity(fixture.player.as_ref());
     assert!(fixture.player.get_entity().is_removed());
-    assert_eq!(
-        fixture.player.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(fixture.player.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     // The existing generic remover does not own player registry/session cleanup.
     assert!(world.get_player_by_id(fixture.player.entity_id()).is_some());
     close_fixture(&fixture).await;

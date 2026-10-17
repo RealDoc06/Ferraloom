@@ -1335,7 +1335,7 @@ async fn actual_lethal_hook_and_phase_handoff_own_shared_clock_without_generic_r
             .get_fly_speed(),
         3.0
     );
-    assert_eq!(live.get_entity().pose.load(), EntityPose::Dying);
+    assert!(live.get_entity().pose.load() == EntityPose::Dying);
     assert_eq!(
         hooks.deaths.lock().unwrap().as_slice(),
         &[live.get_entity().entity_id]
@@ -1525,10 +1525,7 @@ async fn actual_death_ticks_1_20_155_180_200_award_move_and_retire_once() {
             }
         }
         assert_eq!(sounds, usize::from(!silent));
-        assert_eq!(
-            live.get_entity().removal_reason.load(),
-            Some(RemovalReason::Killed)
-        );
+        assert!(live.get_entity().removal_reason.load() == Some(RemovalReason::Killed));
         assert!(
             world
                 .entity_tracker
@@ -1617,10 +1614,7 @@ async fn ordinary_mob_twenty_tick_death_and_registered_player_respawn_second_dea
     assert!(!cow.get_entity().is_removed());
     cow.tick(cow.as_ref(), &fixture.server);
     assert!(cow.get_entity().is_removed());
-    assert_eq!(
-        cow.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(cow.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     assert!(world.get_entity_by_id(cow.get_entity().entity_id).is_none());
     assert_eq!(
         hooks
@@ -1787,10 +1781,7 @@ async fn canceled_removed_and_reentrant_same_uuid_parts_never_retarget_replaceme
             .is_some()
     );
     world.remove_entity_with_reason(old.as_ref(), RemovalReason::Killed);
-    assert_eq!(
-        old.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(old.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     assert!(std::ptr::eq(
         world
             .get_entity_by_uuid(old.get_entity().entity_uuid)
@@ -1828,10 +1819,7 @@ async fn terminal_xp_callback_replacement_keeps_new_parent_tracker_and_fight_ali
         );
     old.tick(old.as_ref(), &fixture.server);
     assert_eq!(*d.dragon_death_time.lock().unwrap(), 200);
-    assert_eq!(
-        old.get_entity().removal_reason.load(),
-        Some(RemovalReason::Discarded)
-    );
+    assert!(old.get_entity().removal_reason.load() == Some(RemovalReason::Discarded));
     assert!(!fight.lock().unwrap().dragon_killed);
     assert!(world.is_current_entity(replacement.as_ref()));
     assert!(

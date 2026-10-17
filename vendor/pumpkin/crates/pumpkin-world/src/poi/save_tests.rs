@@ -584,7 +584,7 @@ where
             io::ErrorKind::WouldBlock
         );
         live.add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Meeting.identifier(), -9)
-            .unwrap()
+            .unwrap();
     };
     assert_eq!(std::fs::read(&poi_path).unwrap(), before);
     let healthy_gate = {
@@ -635,7 +635,7 @@ where
         assert!(!live.region_is_dirty(pos));
         assert!(!live.region_is_dirty(ChunkPos::new(32, 0)));
         assert!(live.region_is_dirty(ChunkPos::new(64, 0)));
-        assert!(!folder.poi_folder.join("r.2.0.mca").exists())
+        assert!(!folder.poi_folder.join("r.2.0.mca").exists());
     };
     assert_eq!(
         disk_chunk::<S>(&folder, pos, config)
@@ -772,7 +772,7 @@ async fn managed_save_reports_real_io_and_load_refusals_after_healthy_region_wri
         let mut live = storage.lock().unwrap();
         live.add_portal(BlockPos::new(1, 0, 1)).unwrap();
         live.add_portal(BlockPos::new(513, 0, 1)).unwrap();
-        assert!(live.preload_poi_region(ChunkPos::new(64, 0)).is_err())
+        assert!(live.preload_poi_region(ChunkPos::new(64, 0)).is_err());
     };
     std::fs::create_dir(&blocked).unwrap();
     assert!(PoiStorage::save_all_managed(&storage).await.is_err());
@@ -788,7 +788,7 @@ async fn managed_save_reports_real_io_and_load_refusals_after_healthy_region_wri
     {
         let live = storage.lock().unwrap();
         assert!(live.region_is_dirty(ChunkPos::new(0, 0)));
-        assert!(!live.region_is_dirty(ChunkPos::new(32, 0)))
+        assert!(!live.region_is_dirty(ChunkPos::new(32, 0)));
     };
     std::fs::remove_dir(&blocked).unwrap();
     // Repairing IO does not clear an unrelated sticky lazy-load refusal.
@@ -846,7 +846,7 @@ fn cancelled_queued_managed_save_keeps_gate_until_actual_ack() {
                         io::ErrorKind::WouldBlock
                     );
                     live.add_with_free_tickets(position, PoiType::Home.identifier(), -17)
-                        .unwrap()
+                        .unwrap();
                 };
                 let mut next = Box::pin(PoiStorage::save_all_managed(&storage));
                 assert!(
