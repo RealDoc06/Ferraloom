@@ -316,10 +316,16 @@ async fn autosave_failure_is_retained_and_independent_world_writes_complete() {
     server.shutdown().await;
 }
 
-// UNRUN: the public managed POI API queues a real owned snapshot behind the
-// sole blocking worker. No pause hook or storage internals cross crate bounds.
+// UNRUN correction: queue the public managed POI write in its own occupied
+// blocking pool. The actual server's earlier advancement/statistics jobs must
+// remain runnable, even with no players. No storage internals cross crate bounds.
 #[test]
 fn normal_server_save_waits_for_owned_poi_and_keeps_real_errors() {
+    // Both runtimes are dropped outside async code, after their jobs finish.
+    let poi_runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
     tokio::runtime::Builder::new_current_thread()
         .max_blocking_threads(1)
         .enable_all()
@@ -328,7 +334,7 @@ fn normal_server_save_waits_for_owned_poi_and_keeps_real_errors() {
         .block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(15), async {
                 for fail_write in [false, true] {
-                    normal_save_with_queued_poi(fail_write).await;
+                    normal_save_with_queued_poi(fail_write, &poi_runtime).await;
                 }
             })
             .await
@@ -336,11 +342,35 @@ fn normal_server_save_waits_for_owned_poi_and_keeps_real_errors() {
         });
 }
 
+/// Advance the real server save only on its own wakes until its fresh scoreboard
+/// marker is durable. In this empty overworld the next pending operation is POI;
+/// suppress cooperative budget yields so they cannot masquerade as that wait.
+async fn wait_for_server_poi_gate(
+    save: std::pin::Pin<&mut impl Future<Output = Result<(), String>>>,
+    world_path: &Path,
+    objective: &str,
+) {
+    let mut save = Box::pin(tokio::task::unconstrained(save));
+    std::future::poll_fn(|cx| {
+        assert!(save.as_mut().poll(cx).is_pending());
+        if Scoreboard::load(world_path)
+            .unwrap()
+            .get_objective(objective)
+            .is_some()
+        {
+            std::task::Poll::Ready(())
+        } else {
+            std::task::Poll::Pending
+        }
+    })
+    .await;
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "Keep actual server wait, cancellation, current-version disk proof and IO failure control in one fixture."
 )]
-async fn normal_save_with_queued_poi(fail_write: bool) {
+async fn normal_save_with_queued_poi(fail_write: bool, poi_runtime: &tokio::runtime::Runtime) {
     use pumpkin_data::poi::PoiType;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_world::poi::{PoiRegion, PoiStorage};
@@ -350,6 +380,8 @@ async fn normal_save_with_queued_poi(fail_write: bool) {
     let server = server_at(folder.path(), 0).await;
     assert_eq!(server.tasks.len(), 0);
     let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    assert!(Arc::ptr_eq(&server.worlds.load()[0], &world));
+    assert!(world.entities.load().is_empty());
     assert!(world.level.live_entity_chunk_positions().is_empty());
     let storage = &world.portal_poi;
     let position = BlockPos::new(1, 0, 1);
@@ -375,29 +407,36 @@ async fn normal_save_with_queued_poi(fail_write: bool) {
     assert!(!custom.exists());
     let (entered, ready) = tokio::sync::oneshot::channel();
     let (release, released) = std::sync::mpsc::channel();
-    let blocker = tokio::task::spawn_blocking(move || {
+    let blocker = poi_runtime.spawn_blocking(move || {
         entered.send(()).unwrap();
         released
             .recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
     });
     ready.await.unwrap();
-    let mut owner = Box::pin(PoiStorage::save_all_managed(storage));
+    let mut owner = Box::pin(tokio::task::unconstrained(PoiStorage::save_all_managed(
+        storage,
+    )));
     assert!(
-        std::future::poll_fn(|cx| std::task::Poll::Ready(owner.as_mut().poll(cx)))
-            .await
-            .is_pending()
+        std::future::poll_fn(|cx| {
+            let _entered = poi_runtime.enter();
+            std::task::Poll::Ready(owner.as_mut().poll(cx))
+        })
+        .await
+        .is_pending()
     );
     assert_eq!(
         storage.try_lock().unwrap().save_all().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
-    let mut cancelled = Box::pin(server.save_all(true));
     assert!(
-        std::future::poll_fn(|cx| std::task::Poll::Ready(cancelled.as_mut().poll(cx)))
-            .await
-            .is_pending()
+        Scoreboard::load(folder.path())
+            .unwrap()
+            .get_objective("autosaved")
+            .is_none()
     );
+    let mut cancelled = Box::pin(server.save_all(true));
+    wait_for_server_poi_gate(cancelled.as_mut(), folder.path(), "autosaved").await;
     assert!(server.saving.lock.try_lock().is_err());
     assert!(world.save_lifecycle_available_for_test());
     assert!(!custom.exists());
@@ -415,12 +454,25 @@ async fn normal_save_with_queued_poi(fail_write: bool) {
         storage.try_lock().unwrap().save_all().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
-    let mut manual = Box::pin(server.save_all(true));
-    assert!(
-        std::future::poll_fn(|cx| std::task::Poll::Ready(manual.as_mut().poll(cx)))
-            .await
-            .is_pending()
+    // Require new evidence from the replacement save, not the first one's file.
+    server.scoreboard.lock().unwrap().add_objective(
+        &NoTarget,
+        ScoreboardObjective::new(
+            "after_cancel",
+            TextComponent::text("After cancel"),
+            RenderType::Integer,
+            None,
+            "dummy",
+        ),
     );
+    assert!(
+        Scoreboard::load(folder.path())
+            .unwrap()
+            .get_objective("after_cancel")
+            .is_none()
+    );
+    let mut manual = Box::pin(server.save_all(true));
+    wait_for_server_poi_gate(manual.as_mut(), folder.path(), "after_cancel").await;
     assert!(world.save_lifecycle_available_for_test());
     storage
         .try_lock()
