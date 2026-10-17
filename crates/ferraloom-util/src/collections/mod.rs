@@ -58,3 +58,5 @@ pub type HashSet<K> = JavaHashSet<K>;
 pub type LinkedHashMap<K, V> = JavaHashMap<K, V, true>;
 pub type LinkedHashSet<K> = JavaHashSet<K, true>;
 pub type IdentityHashMap<K, V> = ReferenceHashMap<K, V>;
+#[cfg(test)]
+mod tests;
