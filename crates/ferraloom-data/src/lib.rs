@@ -85,6 +85,31 @@ impl BlockState {
     }
 }
 
+impl BlockState {
+    /// Port of BlockStateBase#rotate. Tables preserve every block's override,
+    /// including stairs, rails, multi-face connections and jigsaw orientation.
+    pub const fn rotate(self, rotation: ferraloom_util::Rotation) -> Self {
+        use ferraloom_util::Rotation;
+        match rotation {
+            Rotation::None => self,
+            Rotation::Clockwise90 => Self(STATE_TRANSFORM_CLOCKWISE_90[self.0 as usize]),
+            Rotation::Clockwise180 => Self(STATE_TRANSFORM_CLOCKWISE_180[self.0 as usize]),
+            Rotation::CounterClockwise90 => {
+                Self(STATE_TRANSFORM_COUNTERCLOCKWISE_90[self.0 as usize])
+            }
+        }
+    }
+    /// Port of BlockStateBase#mirror. Apply before rotate for templates.
+    pub const fn mirror(self, mirror: ferraloom_util::Mirror) -> Self {
+        use ferraloom_util::Mirror;
+        match mirror {
+            Mirror::None => self,
+            Mirror::LeftRight => Self(STATE_TRANSFORM_LEFT_RIGHT[self.0 as usize]),
+            Mirror::FrontBack => Self(STATE_TRANSFORM_FRONT_BACK[self.0 as usize]),
+        }
+    }
+}
+
 /// A typed property key. Use the generated constants in [`properties`].
 #[derive(Clone, Copy, Debug)]
 pub struct Property<T> {
@@ -127,6 +152,7 @@ struct PropertyLayout {
     names: &'static [&'static str],
     stride: u16,
     values: &'static [u8],
+    integer_values: Option<&'static [i32]>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -291,3 +317,63 @@ impl EntityType {
 
 #[cfg(test)]
 mod tests;
+
+/// Dynamic property failures preserve the distinction needed by state providers:
+/// absent/non-integer properties skip sampling, invalid sampled values fail.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlockStatePropertyError {
+    MissingOrNonInteger,
+    InvalidValue(i32),
+}
+impl BlockState {
+    /// Port of BlockState#withPropertiesOf. Property identity includes its
+    /// allowed values; equally named properties with different ranges differ.
+    pub fn with_properties_of(mut self, other: Self) -> Self {
+        let target = self.block().data();
+        let source = other.block().data();
+        for from in source.properties {
+            if let Some(to) = target
+                .properties
+                .iter()
+                .find(|to| to.id == from.id && to.names == from.names)
+            {
+                let source_index =
+                    (other.0 - source.first_state) / from.stride % from.values.len() as u16;
+                let target_index =
+                    (self.0 - target.first_state) / to.stride % to.values.len() as u16;
+                self = Self(self.0 - target_index * to.stride + source_index * to.stride);
+            }
+        }
+        self
+    }
+    pub fn has_integer_property(self, name: &str) -> bool {
+        self.block()
+            .data()
+            .properties
+            .iter()
+            .any(|p| p.name == name && p.integer_values.is_some())
+    }
+    /// Port of StateHolder#setValue for an IntegerProperty selected by name.
+    /// Numeric values are generated from the layout; no runtime value parsing.
+    pub fn with_integer_property(
+        self,
+        name: &str,
+        value: i32,
+    ) -> Result<Self, BlockStatePropertyError> {
+        let data = self.block().data();
+        let property = data
+            .properties
+            .iter()
+            .find(|p| p.name == name)
+            .ok_or(BlockStatePropertyError::MissingOrNonInteger)?;
+        let values = property
+            .integer_values
+            .ok_or(BlockStatePropertyError::MissingOrNonInteger)?;
+        let new = values
+            .iter()
+            .position(|&v| v == value)
+            .ok_or(BlockStatePropertyError::InvalidValue(value))? as u16;
+        let old = (self.0 - data.first_state) / property.stride % values.len() as u16;
+        Ok(Self(self.0 - old * property.stride + new * property.stride))
+    }
+}
