@@ -48,8 +48,8 @@ pub trait Slot: Send + Sync {
 
     /// Callback for when an item is quick-moved from this slot.
     ///
-    /// Used to notify result slots (like crafting output) that they
-    /// need to refill their contents.
+    /// Crafting result slots record the transferred count before `on_take_item`,
+    /// which consumes ingredients and refills the output.
     ///
     /// # Note
     /// You **MUST** call this after changing the stack and releasing
@@ -57,6 +57,11 @@ pub trait Slot: Send + Sync {
     ///
     /// Also see: [`ScreenHandler::quick_move`](crate::screen_handler::ScreenHandler::quick_move)
     fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {}
+
+    /// Records output transferred to an empty hotbar/offhand slot before the take callback.
+    ///
+    /// Mojang name: `onSwapCraft`.
+    fn on_swap_crafted(&self, _count: u8) {}
 
     /// Callback for when an item is taken from this slot.
     ///

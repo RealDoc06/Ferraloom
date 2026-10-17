@@ -224,12 +224,13 @@ impl ScreenHandler for PlayerScreenHandler {
 
             let mut taken_stack = stack_prev.clone();
             taken_stack.set_count(stack_prev.item_count - stack.item_count);
+            if slot_index == 0 {
+                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
+            }
             slot.on_take_item(player, &taken_stack);
 
             if slot_index == 0 {
                 // From crafting result slot (0)
-                // Notify the result slot to refill
-                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
                 // For crafting result slot, drop any remaining items
                 if !stack.is_empty() {
                     player.drop_item(stack, false);

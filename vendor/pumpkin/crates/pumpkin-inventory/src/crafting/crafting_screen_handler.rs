@@ -15,7 +15,7 @@
 //! - Special recipes (like decorated pots)
 
 use std::any::Any;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::recipe_provider::{GenericRecipe, RecipeProvider};
@@ -47,6 +47,8 @@ pub struct ResultSlot {
     pub result: Arc<Mutex<ItemStack>>,
     /// Provider for dynamic recipes.
     pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    /// Requested removals or successful transfers awaiting the next take callback.
+    pending_crafted_count: AtomicU32,
 }
 
 pub struct RecipeResult {
@@ -458,6 +460,7 @@ impl ResultSlot {
             id: AtomicU8::new(0),
             result: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             recipe_provider: provider,
+            pending_crafted_count: AtomicU32::new(0),
         }
     }
 
@@ -487,10 +490,21 @@ impl Slot for ResultSlot {
     fn set_id(&self, id: usize) {
         self.id.store(id as u8, Ordering::Relaxed);
     }
-    fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
-        self.refill_output();
+    fn on_quick_move_crafted(&self, stack: ItemStack, stack_prev: ItemStack) {
+        // Statistics are awarded once at on_take_item. Java checks achievements here;
+        // Item.onCraftedBy/recipe-achievement callback ordering remains unported.
+        self.pending_crafted_count.fetch_add(
+            u32::from(stack_prev.item_count.saturating_sub(stack.item_count)),
+            Ordering::Relaxed,
+        );
+    }
+    fn on_swap_crafted(&self, count: u8) {
+        self.pending_crafted_count
+            .fetch_add(u32::from(count), Ordering::Relaxed);
     }
     fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        // Clear before recipe-provider or player callbacks, including stale-result rejection.
+        let crafted_count = self.pending_crafted_count.swap(0, Ordering::Relaxed);
         let Some(matched) = self.match_recipe().filter(|matched| {
             !stack.is_empty() && matched.stack().are_items_and_components_equal(stack)
         }) else {
@@ -508,11 +522,13 @@ impl Slot for ResultSlot {
                 }
             })
             .collect();
-        player.increment_stat(
-            StatisticCategory::Crafted,
-            stack.item.id as i32,
-            stack.item_count as i32,
-        );
+        if crafted_count > 0 {
+            player.increment_stat(
+                StatisticCategory::Crafted,
+                stack.item.id as i32,
+                crafted_count as i32,
+            );
+        }
         for (i, remainder) in remainders.into_iter().enumerate() {
             self.inventory.remove_stack_specific(i, 1);
             if remainder.is_empty() {
@@ -539,13 +555,17 @@ impl Slot for ResultSlot {
         false
     }
     fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
-        self.match_recipe().is_some_and(|matched| {
+        let can_take = self.match_recipe().is_some_and(|matched| {
             let current = self.get_stack();
             let expected = matched.stack();
             !current.is_empty()
                 && current.item_count == expected.item_count
                 && current.are_items_and_components_equal(&expected)
-        })
+        });
+        if !can_take {
+            self.pending_crafted_count.store(0, Ordering::Relaxed);
+        }
+        can_take
     }
     fn get_stack(&self) -> ItemStack {
         self.result
@@ -588,15 +608,15 @@ impl Slot for ResultSlot {
         }
         count
     }
-    fn take_stack(&self, _amount: u8) -> ItemStack {
+    fn take_stack(&self, amount: u8) -> ItemStack {
+        let mut result = self
+            .result
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.pending_crafted_count
+            .fetch_add(u32::from(amount.min(result.item_count)), Ordering::Relaxed);
         // ResultContainer.removeItem removes the whole output, even for a right-click half.
-        std::mem::replace(
-            &mut *self
-                .result
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            ItemStack::EMPTY.clone(),
-        )
+        std::mem::replace(&mut *result, ItemStack::EMPTY.clone())
     }
 }
 
@@ -718,10 +738,12 @@ impl ScreenHandler for CraftingTableScreenHandler {
 
             let mut taken_stack = stack_prev.clone();
             taken_stack.set_count(stack_prev.item_count - stack.item_count);
+            if slot_index == 0 {
+                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
+            }
             slot.on_take_item(player, &taken_stack);
 
             if slot_index == 0 {
-                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
                 if !stack.is_empty() {
                     player.drop_item(stack, false);
                 }

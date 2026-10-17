@@ -1165,6 +1165,7 @@ pub trait ScreenHandler: Send + Sync {
                 if button_stack.is_empty() {
                     if source_slot.can_take_items(player) {
                         player_inventory.set_stack(button as usize, source_stack.clone());
+                        source_slot.on_swap_crafted(source_stack.item_count);
                         source_slot.set_stack(ItemStack::EMPTY.clone());
                         source_slot.on_take_item(player, &source_stack);
                     }
