@@ -318,10 +318,10 @@ impl StructureProcessor {
                 }
             }
             Self::LavaSubmergedBlock => {
-                if region.block(info.position)?.block() == Block::LAVA {
-                    if !region.is_outline_full_block(info.state, info.position)? {
-                        info.state = Block::LAVA.default_state();
-                    }
+                if region.block(info.position)?.block() == Block::LAVA
+                    && !region.is_outline_full_block(info.state, info.position)?
+                {
+                    info.state = Block::LAVA.default_state();
                 }
             }
             Self::ProtectedBlocks(blocks) => {
