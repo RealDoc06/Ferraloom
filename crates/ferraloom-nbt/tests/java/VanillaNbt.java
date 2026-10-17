@@ -45,6 +45,19 @@ public class VanillaNbt {
             line("account",hex,Long.toString(quota),Integer.toString(depth),Long.toString(a.getUsage()),Integer.toString(a.getDepth()),"error",hex(cause.getMessage()));
         }
     }
+    static String hex16(String value) {StringBuilder out=new StringBuilder();for(char c:value.toCharArray())out.append(String.format("%04x",(int)c));return out.toString();}
+    static void mapLine(String operation,String key,CompoundTag c) throws Exception {
+        var out=new ByteArrayOutputStream();NbtIo.writeAnyTag(c,new DataOutputStream(out));
+        line("map",operation,hex(key),HexFormat.of().formatHex(out.toByteArray()),hex(new TextComponentTagVisitor("",TextComponentTagVisitor.PlainStyling.INSTANCE,false).visit(c).getString()));
+    }
+    static void scenario(String input,String path,String op,int index,String value) throws Exception {
+        Tag root=PARSER.parseFully(input);
+        try {
+            NbtPath p=NbtPath.of(path);
+            String result=switch(op) {case "get"->p.get(root).toString();case "set"->Integer.toString(p.set(root,PARSER.parseFully(value)));case "insert"->Integer.toString(p.insert(index,(CompoundTag)root,((ListTag)PARSER.parseFully(value)).stream().toList()));default->Integer.toString(p.remove(root));};
+            line("scenario",hex(input),hex(path),op,Integer.toString(index),hex(value),"ok",hex(result),hex(root.toString()));
+        }catch(CommandSyntaxException e) {line("scenario",hex(input),hex(path),op,Integer.toString(index),hex(value),Integer.toString(e.getCursor()),hex(e.getRawMessage().getString()),hex(root.toString()));}
+    }
     public static void main(String[] args) throws Exception {
         if(args.length>0) {for(String s:args)parse(s);return;}
         String[] cases={"{}","[]","[1,2b,foo,{a:2}]","{z:1,a:2,True:3,1:4,\"x y\":5}",
@@ -78,6 +91,24 @@ public class VanillaNbt {
             var fallback=new ByteArrayOutputStream();NbtIo.writeUnnamedTagWithFallback(StringTag.valueOf(value),new DataOutputStream(fallback));
             line("fallback",Integer.toString(length),Integer.toString(out.size()),hex(error),Integer.toString(fallback.size()),HexFormat.of().formatHex(Arrays.copyOfRange(fallback.toByteArray(),0,Math.min(5,fallback.size()))));
         }
+        CompoundTag ordered=new CompoundTag();List<String> collisionKeys=new ArrayList<>();
+        for(int i=0;i<32;i++) {StringBuilder key=new StringBuilder();for(int j=0;j<5;j++)key.append((i&(1<<j))==0?"Aa":"BB");collisionKeys.add(key.toString());}
+        for(String key:collisionKeys) {ordered.putInt(key,1);mapLine("put",key,ordered);}
+        for(int i=0;i<60;i++) {String key="key"+i;ordered.putInt(key,1);mapLine("put",key,ordered);}
+        for(String key:collisionKeys) {ordered.remove(key);mapLine("remove",key,ordered);}
+        for(int i=0;i<55;i++) {String key="key"+i;ordered.remove(key);mapLine("remove",key,ordered);}
+        ordered=ordered.copy();mapLine("copy","",ordered);
+        ordered.putInt("key0",1);mapLine("put","key0",ordered);
+        for(String input:List.of("\"\\uD800\"","{a:[\"\\uDC00\",\"\\uD800x\"]}")) {
+            Tag tag=PARSER.parseFully(input);var out=new ByteArrayOutputStream();NbtIo.writeAnyTag(tag,new DataOutputStream(out));
+            line("surrogate",hex(input),hex16(tag.toString()),hex16(new SnbtPrinterTagVisitor().visit(tag)),hex16(new TextComponentTagVisitor("",TextComponentTagVisitor.PlainStyling.INSTANCE,true).visit(tag).getString()),HexFormat.of().formatHex(out.toByteArray()));
+        }
+        for(String path:List.of("a[", "a[+1]", "a[1.0]", "a..b", "a[0]x", "a{", "a.\"x\\n\"", "\"\"", "{a:1}{b:2}", "a.", "a b", "\"x.y\"")) scenario("{a:[1,2]}",path,"get",0,"");
+        for(String path:List.of("a[]", "a[0]", "a[-2]", "a[-3]", "a[{id:1}]", "b[].x", "a[{id:9}].x")) for(String root:List.of("{a:[]}","{a:[I;1,2]}","{a:[{id:1},{id:2}]}")) scenario(root,path,"set",0,"foo");
+        for(int index:List.of(-4,-3,-2,-1,0,1,2,3))scenario("{a:[I;1,2]}","a","insert",index,"[foo,3b]");
+        scenario("{a:[[1],2]}","a[]","insert",-1,"[3]");
+        scenario("{a:[{id:1},{id:2}]}","a[{id:1}].x.y","set",0,"3");
+        for(String s:List.of("\"\\N{NULL}\"","\"\\N{CJK UNIFIED IDEOGRAPHS 4E00}\"","\"\\N{CJK UNIFIED IDEOGRAPH-4E00}\"","\"\\N{PRIVATE USE AREA E000}\"","\"\\N{HANGUL SYLLABLE GA}\"","\"\\N{latin capital letter a}\""))parse(s);
         Random random=new Random(263);
         for(int i=0;i<128;i++) {
             int bits=random.nextInt();float f=Float.intBitsToFloat(bits);

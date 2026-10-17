@@ -208,6 +208,7 @@ impl NbtPath {
         if Self::is_too_deep(value, self.nodes.len()) {
             return Err(PathError::TooDeep);
         }
+        let value = &value.copy();
         let Some(last) = self.nodes.last() else {
             return Ok(0);
         };
@@ -363,7 +364,7 @@ fn preferred(node: &Node) -> Tag {
     }
 }
 fn matches(pattern: &CompoundTag, tag: Option<&Tag>) -> bool {
-    compare_nbt(Some(&Tag::Compound(pattern.clone())), tag, true)
+    compare_nbt(Some(&Tag::Compound(pattern.copy())), tag, true)
 }
 fn actual(index: i32, len: usize) -> Option<usize> {
     let n = if index < 0 {
@@ -425,17 +426,17 @@ fn select(node: &Node, parent: &Tag) -> Vec<Option<Step>> {
 fn ensure(node: &Node, parent: &mut Tag, value: &Tag) -> Vec<Option<Step>> {
     match node {
         Node::Child(name) => {
-            if let Tag::Compound(c) = parent {
-                if c.get_key(name).is_none() {
-                    c.insert(name.clone(), value.clone());
-                }
+            if let Tag::Compound(c) = parent
+                && c.get_key(name).is_none()
+            {
+                c.insert(name.clone(), value.copy());
             }
         }
         Node::MatchObject(name, pattern) => {
-            if let Tag::Compound(c) = parent {
-                if c.get_key(name).is_none() {
-                    c.insert(name.clone(), Tag::Compound(pattern.clone()));
-                }
+            if let Tag::Compound(c) = parent
+                && c.get_key(name).is_none()
+            {
+                c.insert(name.clone(), Tag::Compound(pattern.copy()));
             }
         }
         Node::All => {
@@ -444,10 +445,10 @@ fn ensure(node: &Node, parent: &mut Tag, value: &Tag) -> Vec<Option<Step>> {
             }
         }
         Node::MatchElement(pattern) => {
-            if let Tag::List(v) = parent {
-                if !v.iter().any(|tag| matches(pattern, Some(tag))) {
-                    v.push(Tag::Compound(pattern.clone()));
-                }
+            if let Tag::List(v) = parent
+                && !v.iter().any(|tag| matches(pattern, Some(tag)))
+            {
+                v.push(Tag::Compound(pattern.copy()));
             }
         }
         _ => {}
@@ -492,7 +493,7 @@ fn set_node(node: &Node, parent: &mut Tag, value: &Tag) -> usize {
     match node {
         Node::Child(name) => {
             if let Tag::Compound(c) = parent {
-                let previous = c.insert(name.clone(), value.clone());
+                let previous = c.insert(name.clone(), value.copy());
                 usize::from(previous.as_ref() != Some(value))
             } else {
                 0
@@ -536,7 +537,7 @@ fn set_node(node: &Node, parent: &mut Tag, value: &Tag) -> usize {
                 match step {
                     Some(Step::Key(k)) => {
                         if let Tag::Compound(c) = parent {
-                            c.insert(k, value.clone());
+                            c.insert(k, value.copy());
                             changed += 1;
                         }
                     }

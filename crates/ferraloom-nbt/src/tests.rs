@@ -1,7 +1,9 @@
 use super::*;
 fn unhex(s: &str) -> Vec<u8> {
     s.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|c| u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())
         .collect()
 }
@@ -163,7 +165,9 @@ fn vanilla_modified_utf8() {
         let result = NbtIo::read_utf(&mut bytes.as_slice());
         if p[2] == "ok" {
             let units = unhex(p[3])
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|c| u16::from_be_bytes([c[0], c[1]]))
                 .collect::<Vec<_>>();
             assert_eq!(result.unwrap().as_utf16(), units, "{p:?}");
@@ -228,4 +232,84 @@ fn vanilla_floating_point_printers() {
         let value = Tag::Double(f64::from_bits(bits));
         assert_eq!(value.to_string(), text(p[2]), "double {bits:x}");
     }
+}
+
+#[test]
+fn vanilla_hash_map_iteration() {
+    let mut c = CompoundTag::new();
+    for p in vectors("map") {
+        let key = text(p[2]);
+        match p[1] {
+            "put" => {
+                c.insert(key, Tag::Int(1));
+            }
+            "remove" => {
+                c.remove(&key);
+            }
+            "copy" => {
+                c = c.copy();
+            }
+            _ => unreachable!(),
+        }
+        let tag = Tag::Compound(c.clone());
+        let mut bytes = Vec::new();
+        NbtIo::write_any_tag(&mut bytes, &tag).unwrap();
+        assert_eq!(bytes, unhex(p[3]), "{} {}", p[1], text(p[2]));
+        assert_eq!(to_text(&tag, "", false), text(p[4]));
+    }
+}
+fn utf16(s: &str) -> Vec<u16> {
+    unhex(s)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_be_bytes(*c))
+        .collect()
+}
+#[test]
+fn vanilla_surrogate_strings() {
+    for p in vectors("surrogate") {
+        let tag = parse(&text(p[1])).unwrap();
+        assert_eq!(tag.to_snbt_utf16().as_utf16(), utf16(p[2]));
+        assert_eq!(pretty_utf16(&tag).as_utf16(), utf16(p[3]));
+        assert_eq!(to_text_utf16(&tag, "", true).as_utf16(), utf16(p[4]));
+        let mut bytes = Vec::new();
+        NbtIo::write_any_tag(&mut bytes, &tag).unwrap();
+        assert_eq!(bytes, unhex(p[5]));
+    }
+}
+#[test]
+fn vanilla_path_edge_cases() {
+    let mut failures = Vec::new();
+    for p in vectors("scenario") {
+        let input = text(p[1]);
+        let path = text(p[2]);
+        let mut root = parse(&input).unwrap();
+        let value = text(p[5]);
+        let result = NbtPath::parse(&path).and_then(|path| {
+            if p[3] == "insert" {
+                let Tag::List(values) = parse(&value).unwrap() else {
+                    unreachable!()
+                };
+                path.insert(p[4].parse().unwrap(), &mut root, &values)
+                    .map(|n| n.to_string())
+            } else {
+                path_operation(&path, p[3], &value, &mut root)
+            }
+        });
+        let actual = match result {
+            Ok(result) => ("ok".to_string(), result),
+            Err(error) => (error.cursor().to_string(), error.message()),
+        };
+        if actual != (p[6].to_string(), text(p[7])) || root.to_string() != text(p[8]) {
+            failures.push(format!(
+                "{input} {path} {}: got {actual:?} {root}; expected ({}, {:?}) {}",
+                p[3],
+                p[6],
+                text(p[7]),
+                text(p[8])
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

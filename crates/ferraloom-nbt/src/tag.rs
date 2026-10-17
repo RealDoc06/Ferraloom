@@ -90,6 +90,35 @@ impl PartialEq for Tag {
 impl Eq for Tag {}
 
 impl Tag {
+    /// Port of Tag#copy. Container values are copied recursively.
+    pub fn copy(&self) -> Self {
+        match self {
+            Self::Compound(c) => Self::Compound(c.copy()),
+            Self::List(v) => Self::List(ListTag(v.iter().map(Self::copy).collect())),
+            _ => self.clone(),
+        }
+    }
+    /// Port of Tag#sizeInBytes: vanilla's heap allocation estimate.
+    pub fn size_in_bytes(&self) -> usize {
+        match self {
+            Self::End => 8,
+            Self::Byte(_) => 9,
+            Self::Short(_) => 10,
+            Self::Int(_) | Self::Float(_) => 12,
+            Self::Long(_) | Self::Double(_) => 16,
+            Self::ByteArray(v) => 24 + v.len(),
+            Self::IntArray(v) => 24 + 4 * v.len(),
+            Self::LongArray(v) => 24 + 8 * v.len(),
+            Self::String(v) => 36 + 2 * v.len(),
+            Self::List(v) => 36 + 4 * v.len() + v.iter().map(Self::size_in_bytes).sum::<usize>(),
+            Self::Compound(c) => {
+                48 + c
+                    .iter()
+                    .map(|(k, v)| 64 + 2 * k.len() + v.size_in_bytes())
+                    .sum::<usize>()
+            }
+        }
+    }
     pub fn id(&self) -> u8 {
         match self {
             Self::End => 0,
@@ -289,8 +318,7 @@ impl From<Vec<Tag>> for ListTag {
 #[derive(Clone, Debug, Default)]
 pub struct CompoundTag {
     values: BTreeMap<NbtString, Tag>,
-    insertion: Vec<NbtString>,
-    capacity: usize,
+    order: crate::key_order::KeyOrder,
 }
 impl PartialEq for CompoundTag {
     fn eq(&self, other: &Self) -> bool {
@@ -321,23 +349,19 @@ impl CompoundTag {
         self.values.get_mut(key)
     }
     pub fn remove_key(&mut self, key: &NbtString) -> Option<Tag> {
-        self.insertion.retain(|k| k != key);
+        self.order.remove(key);
         self.values.remove(key)
     }
     pub fn insert(&mut self, key: impl Into<NbtString>, value: Tag) -> Option<Tag> {
         let key = key.into();
         if !self.values.contains_key(&key) {
-            self.insertion.push(key.clone());
-            self.capacity = self.capacity.max(16);
-            if self.insertion.len() > self.capacity * 3 / 4 {
-                self.capacity *= 2;
-            }
+            self.order.insert(key.clone());
         }
         self.values.insert(key, value)
     }
     pub fn remove(&mut self, key: &str) -> Option<Tag> {
         let key = NbtString::from(key);
-        self.insertion.retain(|k| k != &key);
+        self.order.remove(&key);
         self.values.remove(&key)
     }
     pub fn contains_key(&self, key: &str) -> bool {
@@ -353,15 +377,14 @@ impl CompoundTag {
         self.values.values_mut()
     }
     pub(crate) fn java_keys(&self) -> Vec<&NbtString> {
-        let capacity = self.capacity.max(16);
-        let mut keys: Vec<_> = self.insertion.iter().collect();
-        keys.sort_by_key(|key| {
-            let hash = key.0.iter().fold(0u32, |hash, c| {
-                hash.wrapping_mul(31).wrapping_add(u32::from(*c))
-            });
-            (hash ^ (hash >> 16)) as usize & (capacity - 1)
-        });
-        keys
+        self.order.keys()
+    }
+    /// Port of CompoundTag#copy, which constructs a fresh HashMap in source iteration order.
+    pub fn copy(&self) -> Self {
+        self.java_keys()
+            .into_iter()
+            .map(|k| (k.clone(), self.get_key(k).unwrap().copy()))
+            .collect()
     }
     /// Port of `CompoundTag#merge`, recursively merging compounds and copying other values.
     pub fn merge(&mut self, source: &CompoundTag) {
@@ -369,7 +392,7 @@ impl CompoundTag {
             if let (Some(Tag::Compound(a)), Tag::Compound(b)) = (self.values.get_mut(k), v) {
                 a.merge(b);
             } else {
-                self.insert(k.clone(), v.clone());
+                self.insert(k.clone(), v.copy());
             }
         }
     }

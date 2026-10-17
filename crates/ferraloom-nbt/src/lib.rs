@@ -1,5 +1,6 @@
 //! Vanilla 26.3 NBT tags, binary IO, SNBT and command paths.
 mod binary;
+mod key_order;
 mod tag;
 
 pub use binary::{Compression, NbtAccounter, NbtError, NbtIo, RootFormat};
