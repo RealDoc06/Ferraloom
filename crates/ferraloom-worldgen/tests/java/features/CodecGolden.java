@@ -44,7 +44,12 @@ public final class CodecGolden {
             new String[]{"state","{id:'missing',type:'simple',state:'dirt'}"},
             new String[]{"state","{id:'stone',type:'simple'}"},
             new String[]{"state","{type:'dual_noise',seed:1,noise:{base_octave:0},scale:1,states:['stone'],variety:2,slow_noise:{base_octave:0},slow_scale:1}"},
-            new String[]{"state","{type:'dual_noise',seed:1,noise:{base_octave:0},scale:1,states:['stone'],variety:[2,3],slow_noise:{base_octave:0},slow_scale:1}"}
+            new String[]{"state","{type:'dual_noise',seed:1,noise:{base_octave:0},scale:1,states:['stone'],variety:[2,3],slow_noise:{base_octave:0},slow_scale:1}"},
+            new String[]{"state","{type:'noise',seed:1,noise:{base_octave:0},scale:1e1000,states:['stone']}"},
+            new String[]{"state","{type:'noise',seed:1,noise:{base_octave:0},scale:1e-46,states:['stone']}"},
+            new String[]{"state","{type:'noise',seed:1,noise:{base_octave:0},scale:1e-45,states:['stone']}"},
+            new String[]{"state","{type:'noise',seed:1,noise:{base_octave:0},scale:-0.0,states:['stone']}"},
+            new String[]{"state","{type:'dual_noise',seed:1,noise:{base_octave:0},scale:1,states:['stone'],variety:2,slow_noise:{base_octave:0},slow_scale:1e1000}"}
         );
         for(var config:configs) {var value=JsonParser.parseString(config[1]);boolean valid;try {var result=switch(config[0]) {case "int"->IntProviders.CODEC.parse(JsonOps.INSTANCE,value);case "float"->FloatProviders.CODEC.parse(JsonOps.INSTANCE,value);case "height"->HeightProvider.CODEC.parse(JsonOps.INSTANCE,value);case "predicate"->BlockPredicate.CODEC.parse(FeaturesGolden.ops(registries),value);case "placement"->PlacementModifier.CODEC.parse(FeaturesGolden.ops(registries),value);case "state"->BlockStateProvider.DIRECT_CODEC.parse(FeaturesGolden.ops(registries),value);default->throw new AssertionError();};valid=result.isSuccess();}catch(RuntimeException error){valid=false;}var item=new JsonObject();item.addProperty("kind",config[0]);item.add("config",value);item.addProperty("valid",valid);cases.add(item);}
         WorldgenGolden.write(out.resolve("feature_codecs.json.gz"),cases);

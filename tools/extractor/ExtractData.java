@@ -132,29 +132,6 @@ public final class ExtractData {
         write(dir, "state_transforms", out);
     }
 
-    /** Classify actual 26.3 PostProcess callbacks by identity, never by sampled absence.
-     * Properties' default callback always returns null; Blocks' two mushroom
-     * callbacks refer to postProcessSelf, whose body returns the input position.
-     * Other callbacks (including postProcessAbove) remain context-dependent.
-     */
-    private static void postProcess(Path dir) throws Exception {
-        var propertyField = net.minecraft.world.level.block.state.BlockBehaviour.Properties.class.getDeclaredField("postProcess");
-        propertyField.setAccessible(true);
-        var stateField = net.minecraft.world.level.block.state.BlockBehaviour.BlockStateBase.class.getDeclaredField("postProcess");
-        stateField.setAccessible(true);
-        Object never = propertyField.get(net.minecraft.world.level.block.state.BlockBehaviour.Properties.of());
-        var always = Collections.newSetFromMap(new IdentityHashMap<Object,Boolean>());
-        always.add(stateField.get(Blocks.BROWN_MUSHROOM.defaultBlockState()));
-        always.add(stateField.get(Blocks.RED_MUSHROOM.defaultBlockState()));
-        var out = new JsonArray();
-        for (var state : Block.BLOCK_STATE_REGISTRY) {
-            Object callback = stateField.get(state);
-            String classification = callback == never ? "never" : always.contains(callback) ? "always" : "context";
-            out.add(classification);
-        }
-        write(dir, "post_process", out);
-    }
-
     // Cached, state-only BlockStateBase#getFaceOcclusionShape facts.
     private static void faceOcclusion(Path dir) throws Exception {
         var faces = new JsonArray();
@@ -233,10 +210,6 @@ public final class ExtractData {
         Bootstrap.bootStrap();
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--face-occlusion-only")) { faceOcclusion(Path.of(args[0])); return; }
-        if (args.length > 1 && args[1].equals("--post-process-only")) {
-            postProcess(Path.of(args[0]));
-            return;
-        }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
@@ -274,7 +247,6 @@ public final class ExtractData {
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
         stateTransforms(dir);
-        postProcess(dir);
         faceOcclusion(dir);
         stateFacts(dir);
 

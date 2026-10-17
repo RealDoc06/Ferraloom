@@ -425,6 +425,42 @@ fn all_state_providers_match_vanilla_optional_values_and_rng() {
             case["config"]
         );
     }
+    let rotations = golden(include_bytes!("golden/rotated_state_providers.json.gz"));
+    let registry = FeatureLoader::new(&resources).unwrap().finish();
+    let mut chunks = baseline.clone();
+    let mut region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 3],
+        1,
+        None,
+        &FixtureBehavior,
+        8675309,
+        63,
+    )
+    .unwrap();
+    let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
+    let mut context = FeatureContext {
+        region: &mut region,
+        random: &mut random,
+        origin: [0, 70, 0],
+        generator: &generator,
+        registry: &registry,
+    };
+    for (i, direction) in ferraloom_util::Direction::VALUES.into_iter().enumerate() {
+        for (id, expected) in rotations[i].as_array().unwrap().iter().enumerate() {
+            let state = ferraloom_data::BlockState::from_id(id as u16).unwrap();
+            let provider = state_provider::BlockStateProvider::Rotated {
+                source: std::sync::Arc::new(state_provider::BlockStateProvider::Simple(state)),
+                direction: Some(direction),
+            };
+            assert_eq!(
+                u64::from(provider.get_state(&mut context, [0, 70, 0]).unwrap().id()),
+                expected.as_u64().unwrap(),
+                "state {id} direction {direction:?}"
+            );
+        }
+    }
 }
 #[test]
 fn feature_sorter_matches_vanilla_order_and_cycle_detection() {
@@ -625,6 +661,14 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     )
     .unwrap();
     assert!(region.block([16, 0, 0]).is_err());
+    assert!(region.block_tags().is_err());
+    region.set_block_tags(generator.data.block_tags.clone());
+    assert!(
+        region
+            .block_tags()
+            .unwrap()
+            .contains_key(ferraloom_data::tags::BlockTags::DIRT, Block::DIRT,)
+    );
     assert!(
         !region
             .set_block([16, 0, 0], Block::STONE.default_state(), 2)
@@ -671,6 +715,55 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .unwrap_err()
             .0
             .starts_with("Unsupported")
+    );
+    // These state-only answers work even when the game behavior bridge cannot
+    // answer shape queries or claims there are no block entities.
+    assert!(region.is_solid([0, 0, 0]).unwrap());
+    assert!(
+        region
+            .has_sturdy_face([0, 0, 0], ferraloom_util::Direction::Up)
+            .unwrap()
+    );
+    assert!(
+        region
+            .is_collision_full_block(Block::STONE.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    assert!(
+        !region
+            .is_collision_full_block(Block::AIR.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    region
+        .set_block([1, 0, 0], Block::CHEST.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .contains_key(&[1, 0, 0])
+    );
+    region
+        .set_block([1, 0, 0], Block::AIR.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .is_empty()
+    );
+    region
+        .set_block([2, 0, 0], Block::BROWN_MUSHROOM.default_state(), 2)
+        .unwrap();
+    assert_eq!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .chunk
+            .post_processing,
+        [[2, 0, 0]]
     );
 }
 
@@ -910,6 +1003,78 @@ fn feature_codec_boundaries_and_exclusive_alternatives_match_vanilla() {
             "{} {config}",
             case["kind"]
         );
+    }
+}
+
+#[test]
+fn all_block_predicates_match_vanilla_with_fixed_world_reads() {
+    use ferraloom_data::{Block, BlockState};
+    use ferraloom_worldgen::{
+        Error,
+        placement::predicate::{BlockPredicate, PredicateDecodeData},
+        region::{ChunkStatus, WorldGenRegion, WorldgenBlockBehavior},
+    };
+    struct PredicateBehavior;
+    impl WorldgenBlockBehavior for PredicateBehavior {
+        fn post_process_pos(
+            &self,
+            _: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(None)
+        }
+        fn can_survive(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<bool, Error> {
+            // This fixture exercises only vanilla's unconditional stone rule.
+            assert_eq!(state.block(), Block::STONE);
+            Ok(true)
+        }
+        fn is_unobstructed(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            p: [i32; 3],
+        ) -> Result<bool, Error> {
+            assert_eq!(state.block(), Block::STONE);
+            Ok(p[0] & 1 == 0)
+        }
+    }
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let data = PredicateDecodeData::load(&resources).unwrap();
+    let mut chunks = fixture_chunks(&generator, [0, 0], 1);
+    for chunk in &mut chunks {
+        generator.create_biomes(&mut chunk.chunk);
+    }
+    let region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 2],
+        0,
+        None,
+        &PredicateBehavior,
+        generator.random.seed,
+        generator.settings.sea_level,
+    )
+    .unwrap();
+    let cases = golden(include_bytes!("golden/predicates.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let predicate = BlockPredicate::decode(&case["config"], &data).unwrap();
+        for sample in case["samples"].as_array().unwrap() {
+            let p = std::array::from_fn(|i| sample["position"][i].as_i64().unwrap() as i32);
+            assert_eq!(
+                predicate.test(&region, p, &generator).unwrap(),
+                sample["result"].as_bool().unwrap(),
+                "{} at {p:?}",
+                case["config"]
+            );
+        }
     }
 }
 

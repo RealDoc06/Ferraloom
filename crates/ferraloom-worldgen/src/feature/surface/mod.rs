@@ -205,8 +205,9 @@ impl Feature for SnowAndFreezeFeature {
                     crate::biome_manager::obfuscate_seed(ctx.region.seed),
                     top,
                 );
-                let id = &ctx.generator.data.biome_names[ctx.region.noise_biome(quart)?.0 as usize];
-                let climate = &ctx.generator.data.temperatures;
+                let id =
+                    &ctx.generator.data().biome_names[ctx.region.noise_biome(quart)?.0 as usize];
+                let climate = &ctx.generator.data().temperatures;
                 if climate.should_freeze(id, ctx.region, below, false)? {
                     ctx.region.set_block(below, Block::ICE.default_state(), 2)?;
                 }

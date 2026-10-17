@@ -544,22 +544,6 @@ fn block_classes(out: &mut String, data: &Value, block_count: usize) {
     out.push_str("];\n");
 }
 
-fn post_process(out: &mut String, table: &Value, count: usize) {
-    let entries = table.as_array().expect("post-process array");
-    assert_eq!(entries.len(), count);
-    out.push_str("const POST_PROCESS: &[PostProcess] = &[\n");
-    for entry in entries {
-        let variant = match string(entry) {
-            "never" => "Never",
-            "always" => "Always",
-            "context" => "Context",
-            _ => panic!("unknown post-process classification"),
-        };
-        writeln!(out, "PostProcess::{variant},").unwrap();
-    }
-    out.push_str("];\n");
-}
-
 /// Cached face occlusion is independent of the level and block position.
 fn face_occlusion(out: &mut String, values: &Value, state_count: usize) {
     let values = values.as_array().expect("face occlusion array");
@@ -585,9 +569,54 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     out.push_str("];\n");
 }
 
+/// Tag names and registry identities are extracted separately from membership.
+fn tag_keys(root: &Path, registries: &Value) {
+    let groups = load(root, "tag_keys");
+    let mut out =
+        String::from("// Generated vanilla tag keys. Membership belongs to the loaded datapack.\n");
+    for (registry, group) in groups.as_object().unwrap() {
+        let class = string(&group["class"]);
+        let registry_path = registry.strip_prefix("minecraft:").unwrap();
+        let entry = if registries.get(registry).is_some() {
+            let entry = format!("crate::registries::{}::Id", ident(registry));
+            writeln!(out, "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
+            writeln!(out, "impl StaticTagEntry for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
+            entry
+        } else {
+            let entry = format!("{}Entry", class.trim_end_matches("Tags"));
+            writeln!(out, "/// Runtime id in the loaded {registry} registry.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] pub struct {entry}(pub u32);").unwrap();
+            writeln!(
+                out,
+                "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
+            )
+            .unwrap();
+            entry
+        };
+        writeln!(out, "pub struct {class};\nimpl {class} {{").unwrap();
+        for (ordinal, (key, name)) in group["keys"].as_object().unwrap().iter().enumerate() {
+            writeln!(
+                out,
+                "pub const {key}: TagKey<{entry}> = TagKey::vanilla({name}, {ordinal});"
+            )
+            .unwrap();
+        }
+        writeln!(out, "pub const ALL: &[TagKey<{entry}>] = &[").unwrap();
+        for key in group["keys"].as_object().unwrap().keys() {
+            writeln!(out, "Self::{key},").unwrap();
+        }
+        out.push_str("];\n}\n");
+    }
+    std::fs::write(
+        Path::new(&std::env::var("OUT_DIR").unwrap()).join("tag_keys.rs"),
+        out,
+    )
+    .unwrap();
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
+    tag_keys(root, &registries_report);
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
     let item_report = load(root, "items");
@@ -634,11 +663,6 @@ fn main() {
         "static STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
     )
     .unwrap();
-    post_process(
-        &mut out,
-        &load(root, "post_process"),
-        block_properties["states"].as_array().unwrap().len(),
-    );
     face_occlusion(
         &mut out,
         &load(root, "face_occlusion"),

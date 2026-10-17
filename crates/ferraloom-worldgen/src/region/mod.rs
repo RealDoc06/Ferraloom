@@ -356,6 +356,7 @@ pub trait WorldgenBlockBehavior: Sync {
 pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
+    block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
     chunks: &'a mut [RegionChunk],
     center: [i32; 2],
     dependencies: &'a [ChunkStatus],
@@ -414,6 +415,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            block_tags: None,
             chunks,
             center,
             dependencies,
@@ -491,6 +493,17 @@ impl<'a> WorldGenRegion<'a> {
     // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
+    }
+    pub fn set_block_tags(
+        &mut self,
+        tags: std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>,
+    ) {
+        self.block_tags = Some(tags);
+    }
+    pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, Error> {
+        self.block_tags
+            .as_deref()
+            .ok_or_else(|| Error("Unsupported: block tag context unavailable".into()))
     }
     fn distance(&self, p: [i32; 2]) -> usize {
         p[0].abs_diff(self.center[0])
@@ -636,16 +649,9 @@ impl<'a> WorldGenRegion<'a> {
             self.chunks[index].block_entities.remove(&p);
         }
         if flags & 16 == 0 {
-            let post = match state.post_process_y_offset() {
-                Some(offset) => Some([p[0], p[1].wrapping_add(offset), p[2]]),
-                None => match state.post_process() {
-                    ferraloom_data::PostProcess::Never => None,
-                    ferraloom_data::PostProcess::Always => Some(p),
-                    ferraloom_data::PostProcess::Context => {
-                        self.behavior.post_process_pos(state, self, p)?
-                    }
-                },
-            };
+            let post = state
+                .post_process_y_offset()
+                .map(|offset| [p[0], p[1].wrapping_add(offset), p[2]]);
             if let Some(post) = post {
                 self.mark_post_processing(post)?;
             }

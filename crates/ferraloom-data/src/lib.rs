@@ -9,6 +9,7 @@
 //! ```
 
 pub mod datapack;
+pub use datapack::tags;
 
 use std::marker::PhantomData;
 
@@ -16,20 +17,7 @@ use std::marker::PhantomData;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockState(u16);
 
-/// Extracted identity classification of BlockBehaviour.PostProcess callbacks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PostProcess {
-    Never,
-    /// The callback returns the input position (Blocks#postProcessSelf).
-    Always,
-    /// Includes callbacks returning another position, such as postProcessAbove.
-    Context,
-}
-
 impl BlockState {
-    pub const fn post_process(self) -> PostProcess {
-        POST_PROCESS[self.0 as usize]
-    }
     pub const fn from_id(id: u16) -> Option<Self> {
         if (id as usize) < BLOCK_STATES.len() {
             Some(Self(id))
