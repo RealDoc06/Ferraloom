@@ -835,6 +835,21 @@ fn java_hashes_match_vanilla_util_and_jdk() {
         let f = line.split_whitespace().collect::<Vec<_>>();
         let at = |i: usize| f[i].parse::<i32>().unwrap();
         match f[0] {
+            "comparable" => {
+                assert_eq!(
+                    i32::from(
+                        JavaHash::java_compare(&crate::BlockPos::ZERO, &crate::BlockPos::ZERO)
+                            .is_some()
+                    ),
+                    at(1)
+                );
+                assert_eq!(
+                    i32::from(
+                        JavaHash::java_compare(&crate::Vec3i::ZERO, &crate::Vec3i::ZERO).is_some()
+                    ),
+                    at(2)
+                );
+            }
             "string" => {
                 let i = f[1].parse::<usize>().unwrap();
                 let actual = if i == 4 {

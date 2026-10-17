@@ -9,6 +9,9 @@ public class HashOracle {
     record Pair(int value,String name) {}
     public static void main(String[] args) throws Exception {
         try(PrintWriter out=new PrintWriter(args[0])) {
+            var comparable=java.util.HashMap.class.getDeclaredMethod("comparableClassFor",Object.class);
+            comparable.setAccessible(true);
+            out.println("comparable "+(comparable.invoke(null,new BlockPos(0,0,0))==null ? 0:1)+" "+(comparable.invoke(null,new Vec3i(0,0,0))==null ? 0:1));
             String[] strings={"","abc","Aa","BB","😀\uD800","\ufffffoo"};
             for(int i=0;i<strings.length;i++)out.println("string "+i+" "+strings[i].hashCode());
             long[] longs={0,1,-1,Long.MIN_VALUE,Long.MAX_VALUE,0x123456789abcdefL,-1234567890123456L};

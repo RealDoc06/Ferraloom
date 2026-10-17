@@ -16,6 +16,6 @@ PYTHON
 (
     cd "$tmp"
     "$jdk/bin/java" --add-opens java.base/java.util=ALL-UNNAMED -cp "$tmp:$classpath" CollectionsOracle "$tmp/oracle.txt"
-    "$jdk/bin/java" -cp "$tmp:$classpath" HashOracle "$root/src/collections/hashes.txt"
+    "$jdk/bin/java" --add-opens java.base/java.util=ALL-UNNAMED -cp "$tmp:$classpath" HashOracle "$root/src/collections/hashes.txt"
 )
 python3 "$root/tests/java/collections/pack.py" "$tmp/oracle.txt" "$root/src/collections/oracle.bin"

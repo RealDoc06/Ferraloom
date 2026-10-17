@@ -1,3 +1,4 @@
+comparable 0 1
 string 0 0
 string 1 96354
 string 2 2112
