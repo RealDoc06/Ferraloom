@@ -140,3 +140,20 @@ fn vanilla_json_duplicate_keys_and_lenient_block_properties() {
             .get(crate::properties::HALF)
     );
 }
+
+#[test]
+fn identifiers_match_vanilla_empty_paths_namespace_guard_and_path_first_order() {
+    for (input, namespace, path) in [
+        ("", "minecraft", ""),
+        (":stone", "minecraft", "stone"),
+        ("test:", "test", ""),
+        ("../path", "minecraft", "../path"),
+    ] {
+        let id: Identifier = input.parse().unwrap();
+        assert_eq!((id.namespace(), id.path()), (namespace, path));
+    }
+    for invalid in ["..:stone", "Upper:stone", "minecraft:has space"] {
+        assert!(invalid.parse::<Identifier>().is_err());
+    }
+    assert!("z:a".parse::<Identifier>().unwrap() < "a:z".parse().unwrap());
+}

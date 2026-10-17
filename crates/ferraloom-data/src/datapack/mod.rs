@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Port of Identifier. Resource paths use `/` independently of the host OS.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Identifier {
     namespace: String,
     path: String,
@@ -25,9 +25,8 @@ impl Identifier {
         let namespace = namespace.into();
         let path = path.into();
         let valid = |c: u8| c.is_ascii_lowercase() || c.is_ascii_digit() || b"_.-".contains(&c);
-        if namespace.is_empty()
+        if namespace == ".."
             || !namespace.bytes().all(valid)
-            || path.is_empty()
             || !path.bytes().all(|c| valid(c) || c == b'/')
         {
             return Err(Error::InvalidIdentifier(format!("{namespace}:{path}")));
@@ -42,6 +41,18 @@ impl Identifier {
     }
     pub fn with_path(&self, path: impl Into<String>) -> Result<Self, Error> {
         Self::new(self.namespace.clone(), path)
+    }
+}
+impl Ord for Identifier {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.path
+            .cmp(&other.path)
+            .then_with(|| self.namespace.cmp(&other.namespace))
+    }
+}
+impl PartialOrd for Identifier {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 impl FromStr for Identifier {
