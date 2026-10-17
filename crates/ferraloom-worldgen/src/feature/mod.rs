@@ -17,6 +17,9 @@ use std::{
 };
 
 pub mod state_provider;
+pub mod vegetation;
+pub mod aquatic;
+pub mod surface;
 
 pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
@@ -92,6 +95,9 @@ impl<'a> FeatureLoader<'a> {
             providers: BTreeMap::new(),
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        vegetation::register(&mut loader)?;
+        aquatic::register(&mut loader)?;
+        surface::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {

@@ -59,6 +59,7 @@ fn fiddle(value: i64) -> f64 {
 pub struct BiomeClimate {
     pub temperature: f32,
     pub frozen: bool,
+    pub has_precipitation: bool,
 }
 #[derive(Clone, Debug)]
 pub struct BiomeTemperatures {
@@ -85,6 +86,7 @@ impl BiomeTemperatures {
                     BiomeClimate {
                         temperature,
                         frozen,
+                        has_precipitation: boolean(field(&v, "has_precipitation")?)?,
                     },
                 ))
             })
@@ -145,5 +147,82 @@ impl BiomeTemperatures {
         } else {
             temperature
         }
+    }
+}
+
+impl BiomeTemperatures {
+    /// Port of Biome#shouldFreeze, with real fluid and block class checks.
+    pub fn should_freeze(
+        &self,
+        id: &Identifier,
+        region: &crate::region::WorldGenRegion<'_>,
+        p: [i32; 3],
+        check_neighbors: bool,
+    ) -> Result<bool, Error> {
+        use crate::region::LightLayer;
+        use ferraloom_data::{BlockClass, registries::fluid};
+        if self.temperature(id, p, region.sea_level) >= 0.15 {
+            return Ok(false);
+        }
+        if p[1] < region.min_y()
+            || p[1] >= region.min_y() + region.height()
+            || region.brightness(LightLayer::Block, p)? >= 10
+        {
+            return Ok(false);
+        }
+        if region.fluid(p)?.fluid_type != fluid::Id::WATER
+            || !region
+                .block(p)?
+                .block()
+                .is_instance_of(BlockClass::LiquidBlock)
+        {
+            return Ok(false);
+        }
+        if !check_neighbors {
+            return Ok(true);
+        }
+        for d in [
+            ferraloom_util::Direction::West,
+            ferraloom_util::Direction::East,
+            ferraloom_util::Direction::North,
+            ferraloom_util::Direction::South,
+        ] {
+            let step = d.step();
+            let q = [p[0] + step.x, p[1] + step.y, p[2] + step.z];
+            if !matches!(
+                region.fluid(q)?.fluid_type,
+                fluid::Id::WATER | fluid::Id::FLOWING_WATER
+            ) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    /// Port of Biome#shouldSnow. Survival uses the shared game block behavior.
+    pub fn should_snow(
+        &self,
+        id: &Identifier,
+        region: &crate::region::WorldGenRegion<'_>,
+        p: [i32; 3],
+    ) -> Result<bool, Error> {
+        use ferraloom_data::Block;
+        if !self.climates[id].has_precipitation || self.temperature(id, p, region.sea_level) >= 0.15
+        {
+            return Ok(false);
+        }
+        if p[1] < region.min_y()
+            || p[1] >= region.min_y() + region.height()
+            || region.brightness(crate::region::LightLayer::Block, p)? >= 10
+        {
+            return Ok(false);
+        }
+        let state = region.block(p)?;
+        if !matches!(
+            state.block(),
+            Block::AIR | Block::CAVE_AIR | Block::VOID_AIR | Block::SNOW
+        ) {
+            return Ok(false);
+        }
+        region.can_survive(Block::SNOW.default_state(), p)
     }
 }
