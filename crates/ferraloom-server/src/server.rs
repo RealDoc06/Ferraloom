@@ -380,7 +380,7 @@ impl MinecraftServer {
                     }
                     c.push(cfg::ClientboundPacket::UpdateEnabledFeatures(
                         cfg::UpdateEnabledFeatures {
-                            features: vec![id("vanilla")],
+                            features: vec![crate::registries::id("vanilla")],
                         },
                     ));
                     c.push(cfg::ClientboundPacket::SelectKnownPacks(

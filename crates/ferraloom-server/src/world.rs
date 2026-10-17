@@ -50,12 +50,7 @@ impl SectionRegistry for RegistryAdapter {
             .as_ref()
             .into_iter()
             .flat_map(|p| p.iter())
-            .map(|(k, v)| {
-                (
-                    k.to_string_lossy().into_owned(),
-                    v.to_string_lossy().into_owned(),
-                )
-            })
+            .map(|(k, v)| (k.to_string_lossy(), v.to_string_lossy()))
             .collect::<Vec<_>>();
         BlockState::from_properties(
             block,
@@ -583,7 +578,7 @@ pub fn json_nbt(value: &serde_json::Value) -> Tag {
         serde_json::Value::Array(a) => Tag::List(ListTag(a.iter().map(json_nbt).collect())),
         serde_json::Value::Object(o) => Tag::Compound(
             o.iter()
-                .map(|(k, v)| (k.as_str().into(), json_nbt(v)))
+                .map(|(k, v)| (NbtString::from(k.as_str()), json_nbt(v)))
                 .collect(),
         ),
     }
