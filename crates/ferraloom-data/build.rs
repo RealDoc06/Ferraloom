@@ -487,22 +487,6 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
     }
 }
 
-fn post_process(out: &mut String, table: &Value, count: usize) {
-    let entries = table.as_array().expect("post-process array");
-    assert_eq!(entries.len(), count);
-    out.push_str("const POST_PROCESS: &[PostProcess] = &[\n");
-    for entry in entries {
-        let variant = match string(entry) {
-            "never" => "Never",
-            "always" => "Always",
-            "context" => "Context",
-            _ => panic!("unknown post-process classification"),
-        };
-        writeln!(out, "PostProcess::{variant},").unwrap();
-    }
-    out.push_str("];\n");
-}
-
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -535,11 +519,6 @@ fn main() {
     state_transforms(
         &mut out,
         &load(root, "state_transforms"),
-        block_properties["states"].as_array().unwrap().len(),
-    );
-    post_process(
-        &mut out,
-        &load(root, "post_process"),
         block_properties["states"].as_array().unwrap().len(),
     );
     items(&mut out, &item_report);
