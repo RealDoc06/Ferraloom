@@ -215,7 +215,7 @@ impl BlockEntity for RetiringEntity {
     }
     fn write_nbt(&self, _nbt: &mut NbtCompound) {}
     fn from_nbt(_: &NbtCompound, _: BlockPos) -> Self {
-        unreachable!()
+        panic!("RetiringEntity is constructed explicitly for real World callback controls")
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -931,6 +931,7 @@ async fn pending_refusals_preserve_actual_terrain_records_and_never_publish() {
         assert_eq!(saved(first.as_ref()), before);
         assert_eq!(pending(&world, TARGET), first_pending);
     }
+    world.remove_block_entity(&SOURCE);
     close_fixture(&fixture).await;
 }
 
@@ -982,6 +983,7 @@ async fn live_metadata_and_writerless_item_refusals_leave_live_and_pending_uncha
     assert_eq!(pending(&world, SOURCE), before_pending);
     assert!(Arc::ptr_eq(&token, &live.load_token()));
     assert_eq!(live.get_stack(0).patch.len(), 1);
+    world.remove_block_entity(&SOURCE);
     close_fixture(&fixture).await;
 }
 
