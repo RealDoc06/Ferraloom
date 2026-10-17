@@ -188,3 +188,265 @@ fn full_terrain_with_carvers_matches_vanilla() {
         );
     }
 }
+
+fn fixture_block(p: [i32; 3]) -> ferraloom_data::BlockState {
+    use ferraloom_data::{Block, properties};
+    if p == [2, 70, 2] {
+        return Block::OAK_STAIRS
+            .default_state()
+            .with(properties::WATERLOGGED, true)
+            .unwrap()
+            .with(properties::FACING, properties::Facing::East)
+            .unwrap();
+    }
+    let y = p[1];
+    if !(-64..320).contains(&y) {
+        return Block::VOID_AIR.default_state();
+    }
+    if y == -64 {
+        return Block::BEDROCK.default_state();
+    }
+    if y == 63 && p[0] & 3 == 0 {
+        return Block::WATER.default_state();
+    }
+    if (0..=63).contains(&y) || y < -10 {
+        return Block::STONE.default_state();
+    }
+    Block::AIR.default_state()
+}
+fn fixture_generator(
+    resources: &ResourceManager,
+) -> ferraloom_worldgen::generator::NoiseBasedChunkGenerator {
+    use ferraloom_worldgen::{biome::BiomeSource, generator::*, settings::NoiseGeneratorSettings};
+    let data = std::sync::Arc::new(GenerationData::load(resources).unwrap());
+    let value = resources
+        .require(&"worldgen/noise_settings/overworld.json".parse().unwrap())
+        .unwrap()
+        .json()
+        .unwrap();
+    NoiseBasedChunkGenerator::new(
+        data,
+        NoiseGeneratorSettings::decode(&value).unwrap(),
+        BiomeSource::Fixed("plains".parse().unwrap()),
+        8675309,
+    )
+    .unwrap()
+}
+fn fixture_chunks(
+    generator: &ferraloom_worldgen::generator::NoiseBasedChunkGenerator,
+    center: [i32; 2],
+    radius: i32,
+) -> Vec<ferraloom_worldgen::region::RegionChunk> {
+    use ferraloom_worldgen::region::{ChunkStatus, RegionChunk};
+    let mut chunks = Vec::new();
+    for cx in center[0] - radius..=center[0] + radius {
+        for cz in center[1] - radius..=center[1] + radius {
+            let mut chunk = generator.new_chunk([cx, cz]);
+            for x in 0..16 {
+                for z in 0..16 {
+                    for y in -64..=70 {
+                        let state =
+                            fixture_block([cx * 16 + i32::from(x), y, cz * 16 + i32::from(z)]);
+                        if state.block() != ferraloom_data::Block::AIR {
+                            chunk.set_block(x, y, z, state);
+                        }
+                    }
+                }
+            }
+            chunks.push(RegionChunk::new(chunk, ChunkStatus::Terrain));
+        }
+    }
+    chunks
+}
+struct FixtureBehavior;
+impl ferraloom_worldgen::region::WorldgenBlockBehavior for FixtureBehavior {
+    fn has_block_entity(&self, _: ferraloom_data::BlockState) -> bool {
+        false
+    }
+    fn post_process_pos(
+        &self,
+        _: ferraloom_data::BlockState,
+        _: &ferraloom_worldgen::region::WorldGenRegion<'_>,
+        _: [i32; 3],
+    ) -> Result<Option<[i32; 3]>, ferraloom_worldgen::Error> {
+        Ok(None)
+    }
+}
+#[derive(Debug)]
+struct RecordingFeature;
+impl ferraloom_worldgen::feature::Feature for RecordingFeature {
+    fn place(
+        &self,
+        context: &mut ferraloom_worldgen::feature::FeatureContext<'_, '_>,
+    ) -> Result<bool, ferraloom_worldgen::Error> {
+        let mut tag = ferraloom_nbt::CompoundTag::new();
+        tag.insert(
+            "position",
+            ferraloom_nbt::Tag::IntArray(context.origin.to_vec()),
+        );
+        tag.insert(
+            "random",
+            ferraloom_nbt::Tag::Long(context.random.next_long()),
+        );
+        context.region.add_entity(context.region.center(), tag)?;
+        Ok(context.origin[1] & 1 == 0)
+    }
+}
+#[test]
+fn placement_stack_positions_and_rng_match_vanilla() {
+    use ferraloom_util::random::Random;
+    use ferraloom_worldgen::{feature::*, region::*};
+    use serde_json::json;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let cases = golden(include_bytes!("golden/placement.json.gz"));
+    let baselines = [[0, 0], [-7, 11]].map(|center| fixture_chunks(&generator, center, 1));
+    for case in cases.as_array().unwrap() {
+        let p = std::array::from_fn::<_, 3, _>(|i| case["origin"][i].as_i64().unwrap() as i32);
+        let center = [p[0] >> 4, p[2] >> 4];
+        let mut chunks = baselines[usize::from(center != [0, 0])].clone();
+        let mut loader = FeatureLoader::new(&resources).unwrap();
+        loader
+            .register("ferraloom:record".parse().unwrap(), |_, _| {
+                Ok(std::sync::Arc::new(RecordingFeature))
+            })
+            .unwrap();
+        let placed = loader
+            .placed(&json!({"feature":{"type":"ferraloom:record"},"placement":case["placement"]}))
+            .unwrap();
+        let registry = loader.finish();
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            center,
+            &[ChunkStatus::Terrain; 2],
+            1,
+            None,
+            &FixtureBehavior,
+            8675309,
+            63,
+        )
+        .unwrap();
+        let seed = case["seed"].as_i64().unwrap();
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
+        let result = placed
+            .place(
+                &mut FeatureContext {
+                    region: &mut region,
+                    random: &mut random,
+                    origin: p,
+                    generator: &generator,
+                    registry: &registry,
+                },
+                false,
+            )
+            .unwrap();
+        assert_eq!(result, case["success"].as_bool().unwrap());
+        assert_eq!(
+            random.next_long(),
+            case["next"].as_i64().unwrap(),
+            "{} seed={seed}",
+            case["placement"]
+        );
+        let tags = &region.chunk(center, ChunkStatus::Empty).unwrap().entities;
+        let actual = tags.iter().map(|tag| json!({"position":tag.get_int_array("position").unwrap(),"random":tag.get_long("random").unwrap()})).collect::<Vec<_>>();
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            case["positions"],
+            "{} seed={seed} origin={p:?}",
+            case["placement"]
+        );
+    }
+}
+#[test]
+fn all_state_providers_match_vanilla_optional_values_and_rng() {
+    use ferraloom_util::random::Random;
+    use ferraloom_worldgen::{feature::*, region::*};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let baseline = fixture_chunks(&generator, [0, 0], 2);
+    let cases = golden(include_bytes!("golden/state_providers.json.gz"));
+    let points = [
+        [0, 70, 0],
+        [2, 70, 2],
+        [-12, -3, 16],
+        [15, 63, 15],
+        [-17, -60, -17],
+    ];
+    for case in cases.as_array().unwrap() {
+        let mut loader = FeatureLoader::new(&resources).unwrap();
+        let provider = loader.state_provider(&case["config"]).unwrap();
+        let registry = loader.finish();
+        let mut chunks = baseline.clone();
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Terrain; 3],
+            1,
+            None,
+            &FixtureBehavior,
+            8675309,
+            63,
+        )
+        .unwrap();
+        let seed = case["seed"].as_i64().unwrap();
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
+        let mut context = FeatureContext {
+            region: &mut region,
+            random: &mut random,
+            origin: [0, 70, 0],
+            generator: &generator,
+            registry: &registry,
+        };
+        for i in 0..32 {
+            let p = points[i % points.len()];
+            let optional = provider
+                .get_optional_state(&mut context, p)
+                .unwrap()
+                .map(|s| s.id());
+            assert_eq!(
+                serde_json::to_value(optional).unwrap(),
+                case["optional"][i],
+                "{} seed={seed} point={p:?}",
+                case["config"]
+            );
+            assert_eq!(
+                u64::from(provider.get_state(&mut context, p).unwrap().id()),
+                case["samples"][i].as_u64().unwrap(),
+                "{} seed={seed} point={p:?}",
+                case["config"]
+            );
+        }
+        assert_eq!(
+            random.next_long(),
+            case["next"].as_i64().unwrap(),
+            "{} seed={seed}",
+            case["config"]
+        );
+    }
+}
+#[test]
+fn feature_sorter_matches_vanilla_order_and_cycle_detection() {
+    let cases = golden(include_bytes!("golden/feature_sorter.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let sources: Vec<Vec<Vec<usize>>> =
+            serde_json::from_value(case["sources"].clone()).unwrap();
+        let sorted = ferraloom_worldgen::decoration::sorter::build_features_per_step(&sources);
+        if case["cycle"] == true {
+            assert!(sorted.is_err());
+        } else {
+            assert_eq!(
+                serde_json::to_value(
+                    sorted
+                        .unwrap()
+                        .into_iter()
+                        .map(|s| s.features)
+                        .collect::<Vec<_>>()
+                )
+                .unwrap(),
+                case["steps"]
+            );
+        }
+    }
+}

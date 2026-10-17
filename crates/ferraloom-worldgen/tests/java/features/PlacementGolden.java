@@ -19,6 +19,7 @@ import net.minecraft.world.level.levelgen.placement.*;
 public final class PlacementGolden {
     static BlockState block(BlockPos p) {
         int y=p.getY();
+        if(p.getX()==2 && y==70 && p.getZ()==2)return Blocks.OAK_STAIRS.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true).setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING,Direction.EAST);
         if(y < -64 || y > 319)return Blocks.VOID_AIR.defaultBlockState();
         if(y == -64)return Blocks.BEDROCK.defaultBlockState();
         if(y == 63 && (p.getX()&3)==0)return Blocks.WATER.defaultBlockState();
@@ -67,7 +68,7 @@ public final class PlacementGolden {
         );
         for(String config:configs)for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:new int[][]{{0,70,0},{-112,-3,176}}) {
             var value=JsonParser.parseString(config);var modifiers=new ArrayList<PlacementModifier>();
-            for(var modifier:value.getAsJsonArray())modifiers.add(PlacementModifier.CODEC.parse(JsonOps.INSTANCE,modifier).getOrThrow());
+            for(var modifier:value.getAsJsonArray())modifiers.add(PlacementModifier.CODEC.parse(FeaturesGolden.ops(registries),modifier).getOrThrow());
             var positions=new JsonArray();
             Feature feature=new Feature() {
                 public MapCodec<? extends Feature> codec() { return NoOpFeature.CODEC; }
