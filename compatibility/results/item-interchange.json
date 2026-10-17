@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "evidence_kind": "Public summary of ROOT-verified original campaign; not a raw production report.",
+  "target": {
+    "version": "26.3",
+    "protocol": 777,
+    "data_version": 5023
+  },
+  "engine_source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "client_source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "job_id": "20261017T141150Z-30c21886",
+  "actual_execution_host": "ferraloom-builder",
+  "verification_host": "devbox",
+  "reference_profile": {
+    "name": "java-reference-buffered-chunk-writes-v1",
+    "java_reference_properties": {
+      "sync-chunk-writes": "false"
+    },
+    "rust_configuration": "unchanged",
+    "claim_scope": "Configured buffered Java reference only; no default-profile or crash-durability parity claim."
+  },
+  "kind": "selected-item-interchange-index",
+  "observations": {
+    "composites_each_direction": 5,
+    "directional_rows": 10,
+    "case_counts": {
+      "java_to_rust": 5,
+      "rust_to_java": 5
+    },
+    "server_boots": 6,
+    "clients": 6,
+    "lifecycle_checkpoints": 18,
+    "clean_server_stops": 6,
+    "clean_client_stops": 6,
+    "unchanged_world_copy_runtime_witnesses": 2,
+    "final_raw_player_files_independently_decoded": 4,
+    "historical_middle_player_save_witnesses": 2,
+    "direct_client_logs_correlated": 6
+  },
+  "case_ids": [
+    "item_interchange.water_bottle",
+    "item_interchange.potion_effects",
+    "item_interchange.nested_stacks",
+    "item_interchange.fireworks",
+    "item_interchange.mutation_reload"
+  ],
+  "boot_order": [
+    "java_source",
+    "rust_destination",
+    "rust_reload",
+    "rust_source",
+    "java_destination",
+    "java_reload"
+  ],
+  "selected_behavior": {
+    "identity": "Same offline identity and current-format DataVersion 5023; no identity or path rewrite.",
+    "copy": "Two unchanged stopped-world copies are historical runtime witnesses. Current final source and destination file manifests independently match preserved raw files.",
+    "water_bottle": "Slot 0: one water potion with the explicit water name.",
+    "potion_effects": "Slots 1 and 2: one swiftness splash potion and one custom speed/luck potion, including Byte amplifier -1, Int duration 40 and named default flag controls.",
+    "nested_stacks": "Slot 3: a shulker box containing cobblestone counts 64 and default 1. Slot 4: a bundle containing cobblestone count 32. Both retain exact opaque typed custom-data trees.",
+    "fireworks": "Slots 5 and 6: four rockets with Byte flight duration 3 and one default-zero rocket, both with empty explosions.",
+    "mutation_reload": "Slot 7: cobblestone count 37 imports, a real destination item command changes it to 41, and a fresh destination process and client reload 41.",
+    "save_evidence": "Four source/final-reload player files independently decode from raw NBT. Two intermediate destination JSON snapshots remain historical witnesses because reload overwrote their raw paths."
+  },
+  "combined_campaign": {
+    "scope": "Shared item and container campaign; these counts are not additional executions.",
+    "item_rows": 10,
+    "container_rows": 52,
+    "directional_rows": 62,
+    "server_boots": 10,
+    "clients": 10,
+    "lifecycle_checkpoints": 30,
+    "clean_unforced_stops": true
+  },
+  "artifacts": {
+    "root_verification": {
+      "path": "compatibility/results/evidence/d9c8cb60979ce2d554c38ffb9876be3e8034328512416b3b914eca5dc03a9f5f.json",
+      "sha256": "d9c8cb60979ce2d554c38ffb9876be3e8034328512416b3b914eca5dc03a9f5f",
+      "bytes": 4811
+    }
+  },
+  "originals_verification": {
+    "scope": "Both suites combined; each index refers to the same verified originals.",
+    "performed_by": "ROOT",
+    "fixture_originals": 366,
+    "metadata_originals": 17,
+    "fixture_inventory_files": 488,
+    "selected_fixture_bytes": 203289292,
+    "archive_members_rehashed": 367,
+    "publication_policy": "Byte-identical safe ROOT proof only; original worlds, saves, configurations, process evidence and logs remain private."
+  },
+  "private_evidence": {
+    "availability": "Retained privately; these digests identify private originals, not published artifacts.",
+    "metadata_index": "a39281dc55296a8fa98f9de92f34ed1a14f7e5551f7c42f74ab76dcff5c86191",
+    "fixture_index": "ea70ff0b7041fa495ccfabadb1bb55e74f393503b3a04725bbacaa4686f79be7",
+    "fixture_archive": "c7829548c293f2b7000f7a5fb26ef038aadb7ffc1ea335b87300b12cf1d70bc2",
+    "completed_builder_receipt": "2d4f6439082421601850e730ae659d6fbb2d952a33a104a24b7cb31c4ca8a675",
+    "profile_seal": "ff7d983c1879cf97d2158e829f12eac65e5ccb6aeefd146b117c0fe35112cea5",
+    "offline_verifier_source": "d28a4f4d78048015a5dfb3384b39e33fe2f89117618c6444c31ae62cee0f9787",
+    "validated_report": "b7e4935bd299429e0fe0708ad2650fb190b55a79d66e629fc1a3519bb2bf125d"
+  },
+  "reused_native_checks": {
+    "record": "compatibility/results/native-checks.json",
+    "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+    "gates": 16,
+    "rust_tests": 1647,
+    "python_tests": 151,
+    "node_protocol_tests": 74,
+    "strict_typescript": "passed",
+    "execution": "Original exact-source native proof reused; no new native or light test count."
+  },
+  "bounds": {
+    "memory_bytes": 6442450944,
+    "swap_bytes": 0,
+    "cpu_percent": 200,
+    "workers": 2,
+    "startup_seconds": 180,
+    "interaction_seconds": 20,
+    "suite_seconds": 1200,
+    "outer_seconds": 7200
+  },
+  "scope": "Five selected current-format item composites in each direction, covering eight chosen stacks through source authoring, import, mutation and destination reload.",
+  "limitations": [
+    "The two intermediate destination player snapshots and world-copy manifests are historical runtime witnesses; final raw source and reloaded destination bytes are independently checked.",
+    "No component-bearing item wire decoding, rendering, general item use, equipment synchronization or opaque custom-data gameplay claim.",
+    "Books, hidden effects, nonempty firework explosions, loaded crossbow projectiles, legacy migration and complete component support remain unverified.",
+    "Buffered Java reference only; no default-profile or crash-durability parity.",
+    "The original native proof is reused without new test counts. Older failures and raw evidence are preserved; no full item-family promotion."
+  ],
+  "feature_ledger": {
+    "families": 200,
+    "partial": 27,
+    "unverified": 173,
+    "verified": 0,
+    "changed_by_this_record": false
+  }
+}

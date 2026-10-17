@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "evidence_kind": "Public summary of ROOT-verified original campaign; not a raw production report.",
+  "target": {
+    "version": "26.3",
+    "protocol": 777,
+    "data_version": 5023
+  },
+  "engine_source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "client_source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "job_id": "20261017T141150Z-30c21886",
+  "actual_execution_host": "ferraloom-builder",
+  "verification_host": "devbox",
+  "reference_profile": {
+    "name": "java-reference-buffered-chunk-writes-v1",
+    "java_reference_properties": {
+      "sync-chunk-writes": "false"
+    },
+    "rust_configuration": "unchanged",
+    "claim_scope": "Configured buffered Java reference only; no default-profile or crash-durability parity claim."
+  },
+  "kind": "selected-container-metadata-index",
+  "observations": {
+    "cases_each_server": 26,
+    "paired_rows": 52,
+    "case_counts": {
+      "java": 26,
+      "rust": 26
+    },
+    "server_boots": 4,
+    "clients": 4,
+    "lifecycle_checkpoints": 12,
+    "clean_server_stops": 4,
+    "clean_client_stops": 4,
+    "final_raw_container_chunks_independently_decoded": 2,
+    "menu_payloads_independently_decoded": 176,
+    "direct_client_logs_correlated": 4
+  },
+  "case_ids": [
+    "container_metadata.barrel_title_recursive",
+    "container_metadata.barrel_mainhand",
+    "container_metadata.barrel_offhand",
+    "container_metadata.barrel_creative",
+    "container_metadata.barrel_spectator",
+    "container_metadata.barrel_pending_loot",
+    "container_metadata.barrel_deposit",
+    "container_metadata.barrel_restart",
+    "container_metadata.chest_title_recursive",
+    "container_metadata.chest_mainhand",
+    "container_metadata.chest_offhand",
+    "container_metadata.chest_creative",
+    "container_metadata.chest_spectator",
+    "container_metadata.chest_pending_loot",
+    "container_metadata.chest_deposit",
+    "container_metadata.chest_restart",
+    "container_metadata.trapped_chest_title_recursive",
+    "container_metadata.trapped_chest_mainhand",
+    "container_metadata.trapped_chest_offhand",
+    "container_metadata.trapped_chest_creative",
+    "container_metadata.trapped_chest_spectator",
+    "container_metadata.trapped_chest_pending_loot",
+    "container_metadata.trapped_chest_deposit",
+    "container_metadata.trapped_chest_restart",
+    "container_metadata.chest_double",
+    "container_metadata.trapped_chest_double"
+  ],
+  "boot_order": [
+    "java_initial",
+    "java_restart",
+    "rust_initial",
+    "rust_restart"
+  ],
+  "selected_behavior": {
+    "containers": "Barrel, chest and trapped chest; selected literal/basic-style title and exact plain custom-name lock controls.",
+    "titles": "Plain, styled and recursively edited titles; exact menu title components and contents independently decoded from captured payloads.",
+    "main_hand": "Empty hand, wrong custom_name and matching item_name deny; the matching custom_name key and empty lock predicate open.",
+    "offhand_creative_spectator": "Offhand key alone denies, a real hand swap opens, creative empty hand denies, and spectator bypass applies only to materialized contents.",
+    "pending_loot": "Wrong key and spectator denial retain the named empty loot table and Long seed; the correct key unpacks it.",
+    "deposit_restart": "A real slot-2/hotbar-1 SWAP deposits five gold ingots and empties the player slot. Selected title, exact lock and recursively merged opaque custom data survive a clean restart; final raw MCA metadata independently matches.",
+    "double_containers": "Both mismatched halves deny from both clicked sides; RIGHT/FIRST title selection and LEFT fallback open from either side.",
+    "privacy": "Selected received chunk entries omit private container NBT. These remain runtime decoded observations; raw chunk packets were not retained.",
+    "wire_scope": "176 selected OpenScreen, contents and slot payloads independently decoded and correlated to direct client logs. Deposit SWAP raw headers match menu/state; predicted-stack hash tails are retained without decoding."
+  },
+  "combined_campaign": {
+    "scope": "Shared item and container campaign; these counts are not additional executions.",
+    "item_rows": 10,
+    "container_rows": 52,
+    "directional_rows": 62,
+    "server_boots": 10,
+    "clients": 10,
+    "lifecycle_checkpoints": 30,
+    "clean_unforced_stops": true
+  },
+  "artifacts": {
+    "root_verification": {
+      "path": "compatibility/results/evidence/d9c8cb60979ce2d554c38ffb9876be3e8034328512416b3b914eca5dc03a9f5f.json",
+      "sha256": "d9c8cb60979ce2d554c38ffb9876be3e8034328512416b3b914eca5dc03a9f5f",
+      "bytes": 4811
+    }
+  },
+  "originals_verification": {
+    "scope": "Both suites combined; each index refers to the same verified originals.",
+    "performed_by": "ROOT",
+    "fixture_originals": 366,
+    "metadata_originals": 17,
+    "fixture_inventory_files": 488,
+    "selected_fixture_bytes": 203289292,
+    "archive_members_rehashed": 367,
+    "publication_policy": "Byte-identical safe ROOT proof only; original worlds, saves, configurations, process evidence and logs remain private."
+  },
+  "private_evidence": {
+    "availability": "Retained privately; these digests identify private originals, not published artifacts.",
+    "metadata_index": "a39281dc55296a8fa98f9de92f34ed1a14f7e5551f7c42f74ab76dcff5c86191",
+    "fixture_index": "ea70ff0b7041fa495ccfabadb1bb55e74f393503b3a04725bbacaa4686f79be7",
+    "fixture_archive": "c7829548c293f2b7000f7a5fb26ef038aadb7ffc1ea335b87300b12cf1d70bc2",
+    "completed_builder_receipt": "2d4f6439082421601850e730ae659d6fbb2d952a33a104a24b7cb31c4ca8a675",
+    "profile_seal": "ff7d983c1879cf97d2158e829f12eac65e5ccb6aeefd146b117c0fe35112cea5",
+    "offline_verifier_source": "d28a4f4d78048015a5dfb3384b39e33fe2f89117618c6444c31ae62cee0f9787",
+    "validated_report": "04d01136386d55c2ed5bd93a4a1727636997c6e9063325ae2f9c900ba92c3b9f"
+  },
+  "reused_native_checks": {
+    "record": "compatibility/results/native-checks.json",
+    "source_commit": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+    "gates": 16,
+    "rust_tests": 1647,
+    "python_tests": 151,
+    "node_protocol_tests": 74,
+    "strict_typescript": "passed",
+    "execution": "Original exact-source native proof reused; no new native or light test count."
+  },
+  "bounds": {
+    "memory_bytes": 6442450944,
+    "swap_bytes": 0,
+    "cpu_percent": 200,
+    "workers": 2,
+    "startup_seconds": 180,
+    "interaction_seconds": 20,
+    "suite_seconds": 1200,
+    "outer_seconds": 7200
+  },
+  "scope": "26 selected container metadata cases on each server, with clean restart and independent final raw MCA and selected menu-payload decoding.",
+  "limitations": [
+    "Chunk privacy evidence is limited to retained runtime decoded observations; no independent raw chunk-packet verification.",
+    "Serverbound deposit SWAP headers are independently decoded and bound to menu/state; predicted-stack hash tails are retained but not decoded.",
+    "Unsupported loaded predicates remain unverified; no Java-created unsupported-predicate import or matching-key success claim.",
+    "Selected literal/basic-style titles and opaque custom-data retention establish no general rich-title support or component gameplay.",
+    "Buffered Java reference only; no default-profile, crash-durability or full container-family parity.",
+    "The original native proof is reused without new test counts. Older failures and raw evidence are preserved; no family promotion."
+  ],
+  "feature_ledger": {
+    "families": 200,
+    "partial": 27,
+    "unverified": 173,
+    "verified": 0,
+    "changed_by_this_record": false
+  }
+}

@@ -116,6 +116,10 @@ XP wire decoding, opaque-field gameplay, legacy/DFU, signed identity or full
 player-data family claim follows. The older reverse-transfer failure remains
 unchanged, and no feature family is promoted.
 
+The [current-engine item interchange](../compatibility/results/item-interchange.json) and [container metadata](../compatibility/results/container-metadata.json) used exact engine/client `b8e01b4` on `ferraloom-builder`. Items passed five composites per direction with six clean boots, six clean clients and 18 lifecycle checkpoints; containers passed 26 cases per server with four clean boots, four clean clients and 12 checkpoints: 62 rows, ten boots, ten clients and 30 checkpoints combined. The byte-identical [ROOT proof](../compatibility/results/evidence/d9c8cb60979ce2d554c38ffb9876be3e8034328512416b3b914eca5dc03a9f5f.json) follows verification of 366 fixture originals and 17 metadata originals, including independent decoding of four final raw player saves, two container chunks and 176 menu payloads.
+
+The eight selected item stacks cover water/swiftness, typed potion defaults, nested stacks, opaque custom data, fireworks and count mutation followed by reload. Two intermediate player saves and the two unchanged world-copy operations remain historical runtime witnesses; final source/reloaded player bytes and world manifests were independently checked. Container observations cover selected titles, lock controls, hand swaps, pending loot, deposits, double chests and clean restart; privacy observations have no raw chunk-packet check, and deposit prediction-hash tails were retained without decoding. Unsupported loaded predicates remain unverified, as do general item wire/gameplay and full-family compatibility; only Java used buffered chunk writes, Rust stayed unchanged, the existing native proof was reused without new test counts, and older failures and ledger statuses are unchanged.
+
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
 and Jukeboxes, imported game time, scheduled tick delays, and current-format
