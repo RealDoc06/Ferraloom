@@ -48,3 +48,6 @@ mod types;
 pub use types::*;
 pub mod clientbound;
 pub mod serverbound;
+
+#[cfg(test)]
+mod tests;
