@@ -170,10 +170,13 @@ fn scheduled_ticks_use_container_then_intra_tick_order_and_deduplicate() {
     ticks.schedule(c, Block::STONE, 3, TickPriority::Normal);
     ticks.schedule(a, Block::STONE, 0, TickPriority::ExtremelyHigh);
     // c beats a across chunks, but b cannot overtake a within its own chunk.
+    let first = ticks.collect_due(3, 1);
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0].pos, c);
     let collected = ticks.collect_due(3, 65536);
     assert_eq!(
         collected.iter().map(|tick| tick.pos).collect::<Vec<_>>(),
-        [c, a, b]
+        [a, b]
     );
     assert!(ticks.collect_due(3, 65536).is_empty());
 }
