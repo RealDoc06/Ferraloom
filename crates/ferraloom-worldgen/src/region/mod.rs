@@ -5,7 +5,7 @@ use crate::{Error, generator::GeneratedChunk};
 use ferraloom_chunk::BiomeId;
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
-use std::collections::BTreeMap;
+use std::{cell::OnceCell, collections::BTreeMap};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChunkStatus {
@@ -22,11 +22,31 @@ pub enum ChunkStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(usize)]
 pub enum Heightmap {
+    WorldSurfaceWg,
     WorldSurface,
+    OceanFloorWg,
     OceanFloor,
     MotionBlocking,
     MotionBlockingNoLeaves,
+}
+impl Heightmap {
+    pub const ALL: [Self; 6] = [
+        Self::WorldSurfaceWg,
+        Self::WorldSurface,
+        Self::OceanFloorWg,
+        Self::OceanFloor,
+        Self::MotionBlocking,
+        Self::MotionBlockingNoLeaves,
+    ];
+    fn after(self, status: ChunkStatus) -> bool {
+        if status < ChunkStatus::Terrain {
+            matches!(self, Self::WorldSurfaceWg | Self::OceanFloorWg)
+        } else {
+            !matches!(self, Self::WorldSurfaceWg | Self::OceanFloorWg)
+        }
+    }
 }
 
 /// Port of SavedTick in ProtoChunkTicks. Worldgen discards trigger times and
@@ -73,9 +93,17 @@ pub struct RegionChunk {
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
+    heightmaps: [OnceCell<[i32; 256]>; 6],
 }
 impl RegionChunk {
     pub fn new(chunk: GeneratedChunk, status: ChunkStatus) -> Self {
+        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
+        heightmaps[Heightmap::WorldSurfaceWg as usize]
+            .set(chunk.world_surface)
+            .unwrap();
+        heightmaps[Heightmap::OceanFloorWg as usize]
+            .set(chunk.ocean_floor)
+            .unwrap();
         Self {
             chunk,
             status,
@@ -84,6 +112,7 @@ impl RegionChunk {
             block_ticks: ProtoChunkTicks::default(),
             fluid_ticks: ProtoChunkTicks::default(),
             poi_changes: Vec::new(),
+            heightmaps,
         }
     }
 }
@@ -300,16 +329,15 @@ impl<'a> WorldGenRegion<'a> {
             .biome(quart))
     }
     pub fn height_at(&self, map: Heightmap, x: i32, z: i32) -> Result<i32, Error> {
-        let chunk = &self.chunk([x >> 4, z >> 4], ChunkStatus::Empty)?.chunk;
-        let index = ((z & 15) * 16 + (x & 15)) as usize;
-        Ok(match map {
-            Heightmap::WorldSurface => chunk.world_surface[index],
-            Heightmap::OceanFloor => chunk.ocean_floor[index],
-            Heightmap::MotionBlocking => chunk.motion_height((x & 15) as u8, (z & 15) as u8, false),
-            Heightmap::MotionBlockingNoLeaves => {
-                chunk.motion_height((x & 15) as u8, (z & 15) as u8, true)
-            }
-        })
+        let region_chunk = self.chunk([x >> 4, z >> 4], ChunkStatus::Empty)?;
+        let heights = region_chunk.heightmaps[map as usize].get_or_init(|| {
+            std::array::from_fn(|i| {
+                region_chunk
+                    .chunk
+                    .scan_height(map, (i & 15) as u8, (i >> 4) as u8)
+            })
+        });
+        Ok(heights[((z & 15) * 16 + (x & 15)) as usize])
     }
     pub fn ensure_can_write(&self, p: [i32; 3]) -> bool {
         self.write_radius >= 0
@@ -331,9 +359,54 @@ impl<'a> WorldGenRegion<'a> {
         let old = self.block(p)?;
         let in_height = p[1] >= self.chunks[index].chunk.min_y
             && p[1] < self.chunks[index].chunk.min_y + self.chunks[index].chunk.height;
-        self.chunks[index]
-            .chunk
-            .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        let section_y = in_height.then(|| ((p[1] - self.chunks[index].chunk.min_y) >> 4) as usize);
+        let skip_heightmaps = section_y.is_some_and(|section| {
+            self.chunks[index].chunk.sections[section].has_only_air() && state.block() == Block::AIR
+        });
+        if self.chunks[index].status >= ChunkStatus::Terrain {
+            if in_height {
+                self.set_block_in_section(p, state)?;
+            }
+        } else {
+            self.chunks[index]
+                .chunk
+                .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        }
+        if in_height && !skip_heightmaps {
+            let region_chunk = &mut self.chunks[index];
+            let column_index = ((p[2] & 15) * 16 + (p[0] & 15)) as usize;
+            for map in Heightmap::ALL
+                .into_iter()
+                .filter(|map| map.after(region_chunk.status))
+            {
+                let cache = &mut region_chunk.heightmaps[map as usize];
+                if cache.get().is_none() {
+                    cache
+                        .set(std::array::from_fn(|i| {
+                            region_chunk
+                                .chunk
+                                .scan_height(map, (i & 15) as u8, (i >> 4) as u8)
+                        }))
+                        .unwrap();
+                } else {
+                    let heights = cache.get_mut().unwrap();
+                    if region_chunk.chunk.heightmap_matches(map, state)
+                        && p[1] >= heights[column_index]
+                    {
+                        heights[column_index] = p[1] + 1;
+                    } else if p[1] == heights[column_index] - 1
+                        && !region_chunk.chunk.heightmap_matches(map, state)
+                    {
+                        heights[column_index] = region_chunk.chunk.scan_height_below(
+                            map,
+                            (p[0] & 15) as u8,
+                            (p[2] & 15) as u8,
+                            p[1],
+                        );
+                    }
+                }
+            }
+        }
         self.chunks[index].poi_changes.push((p, old, state));
         if self.behavior.has_block_entity(state) {
             let mut tag = CompoundTag::new();

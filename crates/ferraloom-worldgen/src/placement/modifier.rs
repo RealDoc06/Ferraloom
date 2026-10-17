@@ -65,8 +65,10 @@ pub enum PlacementModifier {
 }
 fn heightmap(v: &Value) -> Result<Heightmap, Error> {
     match string(v)? {
-        "WORLD_SURFACE_WG" | "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
-        "OCEAN_FLOOR_WG" | "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
+        "WORLD_SURFACE_WG" => Ok(Heightmap::WorldSurfaceWg),
+        "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
+        "OCEAN_FLOOR_WG" => Ok(Heightmap::OceanFloorWg),
+        "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
         "MOTION_BLOCKING" => Ok(Heightmap::MotionBlocking),
         "MOTION_BLOCKING_NO_LEAVES" => Ok(Heightmap::MotionBlockingNoLeaves),
         _ => Err(Error("unknown heightmap".into())),

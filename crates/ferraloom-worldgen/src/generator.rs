@@ -114,8 +114,10 @@ impl GenerationData {
     ) -> bool {
         use crate::region::Heightmap;
         match heightmap {
-            Heightmap::WorldSurface => !is_air(state),
-            Heightmap::OceanFloor => self.motion_blocking.contains(&state.block()),
+            Heightmap::WorldSurface | Heightmap::WorldSurfaceWg => !is_air(state),
+            Heightmap::OceanFloor | Heightmap::OceanFloorWg => {
+                self.motion_blocking.contains(&state.block())
+            }
             Heightmap::MotionBlocking => {
                 self.motion_blocking.contains(&state.block()) || !state.data().fluid.empty
             }
@@ -722,15 +724,37 @@ impl GeneratedChunk {
             }
         }
     }
-    pub(crate) fn motion_height(&self, x: u8, z: u8, no_leaves: bool) -> i32 {
-        let blocks = if no_leaves {
-            &self.motion_blocking_no_leaves
-        } else {
-            &self.motion_blocking
-        };
-        for y in (self.min_y..self.min_y + self.height).rev() {
-            let state = self.block(x, y, z);
-            if blocks.contains(&state.block()) || !state.data().fluid.empty {
+    pub(crate) fn heightmap_matches(
+        &self,
+        map: crate::region::Heightmap,
+        state: BlockState,
+    ) -> bool {
+        use crate::region::Heightmap;
+        match map {
+            Heightmap::WorldSurface | Heightmap::WorldSurfaceWg => !is_air(state),
+            Heightmap::OceanFloor | Heightmap::OceanFloorWg => {
+                self.motion_blocking.contains(&state.block())
+            }
+            Heightmap::MotionBlocking => {
+                self.motion_blocking.contains(&state.block()) || !state.data().fluid.empty
+            }
+            Heightmap::MotionBlockingNoLeaves => {
+                self.motion_blocking_no_leaves.contains(&state.block()) || !state.data().fluid.empty
+            }
+        }
+    }
+    pub(crate) fn scan_height(&self, map: crate::region::Heightmap, x: u8, z: u8) -> i32 {
+        self.scan_height_below(map, x, z, self.min_y + self.height)
+    }
+    pub(crate) fn scan_height_below(
+        &self,
+        map: crate::region::Heightmap,
+        x: u8,
+        z: u8,
+        top: i32,
+    ) -> i32 {
+        for y in (self.min_y..top).rev() {
+            if self.heightmap_matches(map, self.block(x, y, z)) {
                 return y + 1;
             }
         }
