@@ -5,6 +5,14 @@ import java.util.function.Consumer;
 import net.minecraft.network.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.*;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.network.chat.*;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 
 /** Executable oracle: only calls vanilla's own wire writers. */
 public final class ProtocolVectors {
@@ -33,6 +41,24 @@ public final class ProtocolVectors {
             var tag = new CompoundTag(); tag.putString("name", "network"); tag.putInt("answer", 42);
             b.writeNbt(tag);
         });
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+        var lookup = VanillaRegistries.createWorldLookup();
+        var registryOps = lookup.createSerializationContext(JsonOps.INSTANCE);
+        String[] components = {
+            "\"literal\"",
+            "{\"text\":\"root\",\"bold\":true,\"color\":\"red\",\"extra\":[{\"text\":\"child\",\"bold\":false,\"italic\":true,\"hover_event\":{\"action\":\"show_text\",\"value\":{\"translate\":\"tooltip.test\",\"with\":[\"arg\",2]}}}]}",
+            "{\"translate\":\"chat.type.text\",\"fallback\":\"%s: %s\",\"with\":[\"Doc\",{\"text\":\"hi\",\"underlined\":true}],\"shadow_color\":-16777216,\"font\":\"minecraft:default\",\"click_event\":{\"action\":\"run_command\",\"command\":\"/help\"}}",
+            "{\"nbt\":\"foo.bar\",\"storage\":\"minecraft:test\",\"plain\":true,\"separator\":\", \"}",
+            "{\"sprite\":\"minecraft:item/diamond\",\"fallback\":\"diamond\"}",
+            "{\"selector\":\"@a\",\"separator\":\", \",\"hover_event\":{\"action\":\"show_entity\",\"id\":\"minecraft:pig\",\"uuid\":\"01234567-89ab-cdef-fedc-ba9876543210\",\"name\":\"pig\"}}"
+        };
+        for (int i=0;i<components.length;i++) {
+            var component = ComponentSerialization.CODEC.parse(registryOps,JsonParser.parseString(components[i])).getOrThrow();
+            var finalComponent = component;
+            vector("component_"+i, b -> ComponentSerialization.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent));
+            Files.writeString(output.resolve("component_"+i+".json"),ComponentSerialization.CODEC.encodeStart(registryOps,component).getOrThrow().toString()+"\n");
+        }
         vector("max_string", b -> b.writeUtf("\uD83D\uDE80".repeat(16383) + "x", 32767));
     }
 }

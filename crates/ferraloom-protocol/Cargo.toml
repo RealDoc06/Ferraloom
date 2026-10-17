@@ -12,5 +12,14 @@ ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
 
+aes = "0.9.3"
+cfb8 = "0.9.1"
+rsa = "0.9"
+rand = "0.8"
+sha1 = "0.10"
+flate2 = { version = "1.1", default-features = false, features = ["zlib"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+url = "2.5"
+
 [lints]
 workspace = true
