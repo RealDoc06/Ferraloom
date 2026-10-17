@@ -43,7 +43,7 @@ EntityEvent { entity_id: i32, event_id: i8 });
 packet!(/// Port of ClientboundEntityPositionSyncPacket#STREAM_CODEC.
 EntityPositionSync { id: VarInt, position: PositionPath, y_rot: f32, x_rot: f32, on_ground: bool });
 packet!(/// Port of ClientboundForgetLevelChunkPacket#STREAM_CODEC.
-ForgetLevelChunk { pos: i64 });
+ForgetLevelChunk { pos: ChunkPos });
 packet!(/// Port of ClientboundGameEventPacket#STREAM_CODEC.
 GameEvent { event: u8, param: f32 });
 packet!(/// Port of ClientboundGameTestHighlightPosPacket#STREAM_CODEC.
@@ -87,7 +87,7 @@ ResetScore { owner: String, objective_name: Option<String> });
 packet!(/// Port of ClientboundRotateHeadPacket#STREAM_CODEC.
 RotateHead { entity_id: VarInt, y_head_rot: Angle });
 packet!(/// Port of ClientboundSectionBlocksUpdatePacket#STREAM_CODEC.
-SectionBlocksUpdate { section_pos: i64, changes: Vec<VarLong> });
+SectionBlocksUpdate { section_pos: SectionPos, changes: Vec<SectionBlockChange> });
 packet!(/// Port of ClientboundSelectAdvancementsTabPacket#STREAM_CODEC.
 SelectAdvancementsTab { tab: Option<Identifier> });
 packet!(/// Port of ClientboundSetBorderCenterPacket#STREAM_CODEC.
@@ -107,7 +107,7 @@ SetChunkCacheCenter { x: VarInt, z: VarInt });
 packet!(/// Port of ClientboundSetChunkCacheRadiusPacket#STREAM_CODEC.
 SetChunkCacheRadius { radius: VarInt });
 packet!(/// Port of ClientboundSetDisplayObjectivePacket#STREAM_CODEC.
-SetDisplayObjective { slot: VarInt, objective_name: String });
+SetDisplayObjective { slot: DisplaySlot, objective_name: String });
 packet!(/// Port of ClientboundSetEntityLinkPacket#STREAM_CODEC.
 SetEntityLink { source_id: i32, dest_id: i32 });
 packet!(/// Port of ClientboundSetEntityMotionPacket#STREAM_CODEC.
@@ -415,7 +415,7 @@ AwardStats {stats:Vec<StatValue>});
 packet!(/// Port of ClientboundDebugBlockValuePacket.
 DebugBlockValue {block_pos:BlockPos,update:DebugSubscriptionUpdate});
 packet!(/// Port of ClientboundDebugChunkValuePacket.
-DebugChunkValue {chunk_pos:i64,update:DebugSubscriptionUpdate});
+DebugChunkValue {chunk_pos:ChunkPos,update:DebugSubscriptionUpdate});
 packet!(/// Port of ClientboundDebugEntityValuePacket.
 DebugEntityValue {entity_id:VarInt,update:DebugSubscriptionUpdate});
 packet!(/// Port of ClientboundDebugEventPacket.
@@ -432,7 +432,7 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     BlockEntityData(BlockEntityData) => BlockEntityData,
     BlockEvent(BlockEvent) => BlockEvent,
     BlockUpdate(BlockUpdate) => BlockUpdate,
-    BossEvent(BossEvent) => BossEvent,
+    BossEvent(Box<BossEvent>) => BossEvent,
     ChangeDifficulty(ChangeDifficulty) => ChangeDifficulty,
     ChunkBatchFinished(ChunkBatchFinished) => ChunkBatchFinished,
     ChunkBatchStart(ChunkBatchStart) => ChunkBatchStart,
@@ -455,8 +455,8 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     DebugEvent(DebugEvent) => DebugEvent,
     DebugSample(DebugSample) => DebugSample,
     DeleteChat(DeleteChat) => DeleteChat,
-    Disconnect(Disconnect) => Disconnect,
-    DisguisedChat(DisguisedChat) => DisguisedChat,
+    Disconnect(Box<Disconnect>) => Disconnect,
+    DisguisedChat(Box<DisguisedChat>) => DisguisedChat,
     EntityEvent(EntityEvent) => EntityEvent,
     EntityPositionSync(EntityPositionSync) => EntityPositionSync,
     Explode(Explode) => Explode,
@@ -483,16 +483,16 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     MoveEntityRot(MoveEntityRot) => MoveEntityRot,
     MoveVehicle(MoveVehicle) => MoveVehicle,
     OpenBook(OpenBook) => OpenBook,
-    OpenScreen(OpenScreen) => OpenScreen,
+    OpenScreen(Box<OpenScreen>) => OpenScreen,
     OpenSignEditor(OpenSignEditor) => OpenSignEditor,
     Ping(Ping) => Ping,
     PongResponse(PongResponse) => PongResponse,
     PlaceGhostRecipe(PlaceGhostRecipe) => PlaceGhostRecipe,
     PlayerAbilities(PlayerAbilities) => PlayerAbilities,
-    PlayerChat(PlayerChat) => PlayerChat,
+    PlayerChat(Box<PlayerChat>) => PlayerChat,
     PlayerCombatEnd(PlayerCombatEnd) => PlayerCombatEnd,
     PlayerCombatEnter(PlayerCombatEnter) => PlayerCombatEnter,
-    PlayerCombatKill(PlayerCombatKill) => PlayerCombatKill,
+    PlayerCombatKill(Box<PlayerCombatKill>) => PlayerCombatKill,
     PlayerInfoRemove(PlayerInfoRemove) => PlayerInfoRemove,
     PlayerInfoUpdate(PlayerInfoUpdate) => PlayerInfoUpdate,
     PlayerLookAt(PlayerLookAt) => PlayerLookAt,
@@ -511,8 +511,8 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     RotateHead(RotateHead) => RotateHead,
     SectionBlocksUpdate(SectionBlocksUpdate) => SectionBlocksUpdate,
     SelectAdvancementsTab(SelectAdvancementsTab) => SelectAdvancementsTab,
-    ServerData(ServerData) => ServerData,
-    SetActionBarText(SetActionBarText) => SetActionBarText,
+    ServerData(Box<ServerData>) => ServerData,
+    SetActionBarText(Box<SetActionBarText>) => SetActionBarText,
     SetBorderCenter(SetBorderCenter) => SetBorderCenter,
     SetBorderLerpSize(SetBorderLerpSize) => SetBorderLerpSize,
     SetBorderSize(SetBorderSize) => SetBorderSize,
@@ -531,15 +531,15 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     SetExperience(SetExperience) => SetExperience,
     SetHealth(SetHealth) => SetHealth,
     SetHeldSlot(SetHeldSlot) => SetHeldSlot,
-    SetObjective(SetObjective) => SetObjective,
+    SetObjective(Box<SetObjective>) => SetObjective,
     SetPassengers(SetPassengers) => SetPassengers,
     SetPlayerInventory(SetPlayerInventory) => SetPlayerInventory,
-    SetPlayerTeam(SetPlayerTeam) => SetPlayerTeam,
-    SetScore(SetScore) => SetScore,
+    SetPlayerTeam(Box<SetPlayerTeam>) => SetPlayerTeam,
+    SetScore(Box<SetScore>) => SetScore,
     SetSimulationDistance(SetSimulationDistance) => SetSimulationDistance,
-    SetSubtitleText(SetSubtitleText) => SetSubtitleText,
+    SetSubtitleText(Box<SetSubtitleText>) => SetSubtitleText,
     SetTime(SetTime) => SetTime,
-    SetTitleText(SetTitleText) => SetTitleText,
+    SetTitleText(Box<SetTitleText>) => SetTitleText,
     SetTitlesAnimation(SetTitlesAnimation) => SetTitlesAnimation,
     SoundEntity(SoundEntity) => SoundEntity,
     Sound(Sound) => Sound,
@@ -547,12 +547,12 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     StopSound(StopSound) => StopSound,
     StoreCookie(StoreCookie) => StoreCookie,
     SwingAnimation(SwingAnimationPacket) => SwingAnimation,
-    SystemChat(SystemChat) => SystemChat,
-    TabList(TabList) => TabList,
+    SystemChat(Box<SystemChat>) => SystemChat,
+    TabList(Box<TabList>) => TabList,
     TagQuery(TagQuery) => TagQuery,
     TakeItemEntity(TakeItemEntity) => TakeItemEntity,
     TeleportEntity(TeleportEntity) => TeleportEntity,
-    TestInstanceBlockStatus(TestInstanceBlockStatus) => TestInstanceBlockStatus,
+    TestInstanceBlockStatus(Box<TestInstanceBlockStatus>) => TestInstanceBlockStatus,
     TickingState(TickingState) => TickingState,
     TickingStep(TickingStep) => TickingStep,
     Transfer(Transfer) => Transfer,

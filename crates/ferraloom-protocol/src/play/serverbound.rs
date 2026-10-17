@@ -73,7 +73,7 @@ RecipeBookSeenRecipe { recipe: RecipeDisplayId });
 packet!(/// Port of ServerboundRenameItemPacket#STREAM_CODEC.
 RenameItem { name: String });
 packet!(/// Port of ServerboundSelectBundleItemPacket#STREAM_CODEC.
-SelectBundleItem { slot_id: VarInt, selected_item_index: VarInt });
+SelectBundleItem { slot_id: VarInt, selected_item_index: VarInt => selected_bundle_index });
 packet!(/// Port of ServerboundSelectTradePacket#STREAM_CODEC.
 SelectTrade { item: VarInt });
 packet!(/// Port of ServerboundSetBeaconPacket#STREAM_CODEC.
@@ -288,8 +288,16 @@ state_packets!(Packet, ferraloom_data::packets::play::serverbound::Packet, {
     SignUpdate(SignUpdate) => SignUpdate,
     SpectatorAction(SpectatorAction) => SpectatorAction,
     TeleportToEntity(TeleportToEntity) => TeleportToEntity,
-    TestInstanceBlockAction(TestInstanceBlockAction) => TestInstanceBlockAction,
+    TestInstanceBlockAction(Box<TestInstanceBlockAction>) => TestInstanceBlockAction,
     UseItemOn(UseItemOn) => UseItemOn,
     UseItem(UseItem) => UseItem,
     CustomClickAction(CustomClickAction) => CustomClickAction,
 });
+
+fn selected_bundle_index(r: &mut Reader<'_>) -> Result<VarInt> {
+    let id = r.var_int()?;
+    if id < -1 {
+        return Err(Error::invalid("selected bundle index", id.to_string()));
+    }
+    Ok(VarInt(id))
+}

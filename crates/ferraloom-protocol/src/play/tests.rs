@@ -1046,3 +1046,44 @@ fn vanilla_bundle_limit_and_terminal_message() {
         Some(ClientboundMessage::Bundle(Vec::new()))
     );
 }
+
+fn normalize<T: Wire>(input: &str, expected: &str) {
+    let context = Context::new();
+    let input = bytes(input);
+    let mut r = Reader::with_context(&input, &context);
+    let value = T::decode(&mut r).unwrap();
+    r.finish().unwrap();
+    let mut w = Writer::with_context(&context);
+    value.encode(&mut w).unwrap();
+    assert_eq!(w.into_inner(), bytes(expected));
+}
+
+#[test]
+fn vanilla_common_normalization_and_custom_click_limits() {
+    normalize::<serverbound::CustomClickAction>(
+        include_str!("fixtures/serverbound_CustomClickAction_norm_trailing.input.hex"),
+        include_str!("fixtures/serverbound_CustomClickAction_norm_trailing.hex"),
+    );
+    normalize::<serverbound::ClientInformation>(
+        include_str!("fixtures/serverbound_ClientInformation_norm_wrapping.input.hex"),
+        include_str!("fixtures/serverbound_ClientInformation_norm_wrapping.hex"),
+    );
+    normalize::<clientbound::ServerLinks>(
+        include_str!("fixtures/clientbound_ServerLinks_norm_zero.input.hex"),
+        include_str!("fixtures/clientbound_ServerLinks_norm_zero.hex"),
+    );
+    normalize::<serverbound::CustomPayload>(
+        include_str!("fixtures/serverbound_CustomPayload_norm_discarded.input.hex"),
+        include_str!("fixtures/serverbound_CustomPayload_norm_discarded.hex"),
+    );
+    normalize::<clientbound::CustomPayload>(
+        include_str!("fixtures/clientbound_CustomPayload_norm_discarded.input.hex"),
+        include_str!("fixtures/clientbound_CustomPayload_norm_discarded.hex"),
+    );
+    for fixture in [
+        include_str!("fixtures/serverbound_CustomClickAction_quota.reject.hex"),
+        include_str!("fixtures/serverbound_CustomClickAction_depth.reject.hex"),
+    ] {
+        assert!(serverbound::CustomClickAction::from_bytes(&bytes(fixture)).is_err());
+    }
+}

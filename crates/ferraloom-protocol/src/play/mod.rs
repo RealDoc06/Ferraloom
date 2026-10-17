@@ -42,7 +42,7 @@ macro_rules! wire_enum {
 
 /// Tagged vanilla stream-codec dispatch with strongly typed variant payloads.
 macro_rules! wire_union {
-    ($name:ident : $tag:ident { $($variant:ident = $id:literal { $($field:ident : $ty:ty $(=> $decode:path)?),* $(,)? }),* $(,)? }) => {
+    ($name:ident : $tag:ident { $($variant:ident = $id:literal { $($field:ident : $ty:ty $(=> $decode:path)?),* $(,)? }),* $(,)? } $(, $validate:path)?) => {
         #[derive(Clone, Debug, PartialEq)]
         pub enum $name { $($variant { $($field: $ty),* }),* }
         impl $name {
@@ -58,8 +58,8 @@ macro_rules! wire_union {
             }
         }
         impl Wire for $name {
-            fn decode(r: &mut Reader<'_>) -> Result<Self> { let id = i32::from(r.$tag()?); Self::decode_variant(r,id) }
-            fn encode(&self, w: &mut Writer<'_>) -> Result<()> { w.$tag(self.tag() as _); self.encode_body(w) }
+            fn decode(r: &mut Reader<'_>) -> Result<Self> { let id = i32::from(r.$tag()?); let value=Self::decode_variant(r,id)?; $($validate(&value)?;)? Ok(value) }
+            fn encode(&self, w: &mut Writer<'_>) -> Result<()> { $($validate(self)?;)? w.$tag(self.tag() as _); self.encode_body(w) }
         }
     };
 }
@@ -96,6 +96,8 @@ mod types;
 pub use types::*;
 pub mod clientbound;
 pub mod serverbound;
+pub use clientbound::Packet as ClientboundPacket;
+pub use serverbound::Packet as ServerboundPacket;
 
 #[cfg(test)]
 mod tests;
