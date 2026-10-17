@@ -105,3 +105,152 @@ fn integer_and_entity_geometry_matches_vanilla_including_overflow() {
         }
     }
 }
+
+#[test]
+fn clipped_mult_palette_template_block_placement_matches_vanilla() {
+    use crate::{
+        region::{ChunkStatus, RegionChunk, WorldGenRegion},
+        structure::{
+            processor::{
+                StructureProcessor,
+                tests::{StaticBlocks, generator},
+            },
+            rule::BlockTags,
+        },
+    };
+    use ferraloom_nbt::ListTag;
+    use ferraloom_util::random::{
+        Algorithm, LegacyRandomSource, Random, RandomSource, WorldgenRandom,
+    };
+    use std::collections::BTreeMap;
+    let (resources, generator) = generator();
+    let tags = BlockTags::load(&resources).unwrap();
+    let mut tag = ferraloom_nbt::parse_compound("{DataVersion:5023,size:[4,3,3]}").unwrap();
+    let mut palettes = Vec::new();
+    for variant in [false, true] {
+        let states = [
+            Block::STONE,
+            Block::OAK_STAIRS,
+            Block::STONE_BRICK_SLAB,
+            Block::OAK_LOG,
+            Block::AIR,
+            if variant {
+                Block::MOSSY_COBBLESTONE
+            } else {
+                Block::STONE_BRICKS
+            },
+        ];
+        let values = states
+            .into_iter()
+            .map(|block| {
+                let mut tag = CompoundTag::new();
+                tag.insert("id", Tag::String(block.name().into()));
+                Tag::Compound(tag)
+            })
+            .collect();
+        palettes.push(Tag::List(ListTag(values)));
+    }
+    tag.insert("palettes", Tag::List(ListTag(palettes)));
+    let mut blocks = Vec::new();
+    for x in 0..4 {
+        for y in 0..3 {
+            for z in 0..3 {
+                let mut block = CompoundTag::new();
+                block.insert(
+                    "pos",
+                    Tag::List(ListTag(vec![Tag::Int(x), Tag::Int(y), Tag::Int(z)])),
+                );
+                block.insert("state", Tag::Int((x * 3 + y + z) % 6));
+                blocks.push(Tag::Compound(block));
+            }
+        }
+    }
+    tag.insert("blocks", Tag::List(ListTag(blocks)));
+    let template = StructureTemplate::from_nbt(&tag);
+    for case in golden(include_bytes!("testdata/placed_templates.json.gz"))
+        .as_array()
+        .unwrap()
+    {
+        let mut chunks = [RegionChunk::new(
+            generator.new_chunk([0, 0]),
+            ChunkStatus::Terrain,
+        )];
+        let mirror = [Mirror::None, Mirror::LeftRight, Mirror::FrontBack]
+            [case["mirror"].as_u64().unwrap() as usize];
+        let rotation = Rotation::VALUES[case["rotation"].as_u64().unwrap() as usize];
+        let mut settings = StructurePlaceSettings {
+            mirror,
+            rotation,
+            pivot: [1, 0, -2],
+            bounding_box: Some(BoundingBox::new([2, 63, 2], [13, 69, 13])),
+            known_shape: true,
+            ignore_entities: true,
+            liquid_settings: LiquidSettings::IgnoreWaterlogging,
+            ..Default::default()
+        };
+        if case["external"].as_bool().unwrap() {
+            settings.random = PlacementRandom::Fixed(Random::Legacy(LegacyRandomSource::new(91)));
+        }
+        if case["shared"].as_bool().unwrap_or(false) {
+            settings.random = PlacementRandom::Shared;
+        }
+        let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(17));
+        let result = {
+            let mut region = WorldGenRegion::new(
+                &mut chunks,
+                [0, 0],
+                &[ChunkStatus::Terrain],
+                0,
+                None,
+                &StaticBlocks,
+                0,
+                63,
+            )
+            .unwrap();
+            template
+                .place_in_world(
+                    &mut region,
+                    [7, 64, 7],
+                    [3, 65, 4],
+                    &mut settings,
+                    &[
+                        StructureProcessor::BlockIgnore(vec![Block::AIR]),
+                        StructureProcessor::BlackstoneReplace,
+                        StructureProcessor::BlockRot {
+                            integrity: 0.8,
+                            rottable: None,
+                        },
+                    ],
+                    &tags,
+                    &mut random,
+                    18,
+                )
+                .unwrap()
+        };
+        assert_eq!(result, case["result"].as_bool().unwrap());
+        let placed = chunks[0]
+            .poi_changes
+            .iter()
+            .map(|&(p, _, state)| (p, state.id()))
+            .collect::<BTreeMap<_, _>>();
+        let expected = case["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| (point(v), v[3].as_u64().unwrap() as u16))
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            placed, expected,
+            "{mirror:?} {rotation:?} external={}",
+            case["external"]
+        );
+        assert_eq!(random.next_int(), case["next"].as_i64().unwrap() as i32);
+        assert_eq!(
+            match &mut settings.random {
+                PlacementRandom::Fixed(random) => random.next_int(),
+                _ => LegacyRandomSource::new(91).next_int(),
+            },
+            case["settings_next"].as_i64().unwrap() as i32
+        );
+    }
+}
