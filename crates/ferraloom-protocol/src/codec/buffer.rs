@@ -157,13 +157,17 @@ impl<'a> Reader<'a> {
     }
     /// Port of ByteBufCodecs.tagCodec; trusted removes the heap quota, not depth limits.
     pub fn nbt(&mut self, trusted: bool) -> Result<Tag> {
-        let mut cursor = Cursor::new(self.bytes);
         let mut accounter = if trusted {
             NbtAccounter::unlimited()
         } else {
             NbtAccounter::default()
         };
-        let value = NbtIo::read_any_tag(&mut cursor, &mut accounter);
+        self.nbt_with_accounter(&mut accounter)
+    }
+    /// A packet-specific NbtAccounter, for example custom-click's 32 KiB/16 limit.
+    pub fn nbt_with_accounter(&mut self, accounter: &mut NbtAccounter) -> Result<Tag> {
+        let mut cursor = Cursor::new(self.bytes);
+        let value = NbtIo::read_any_tag(&mut cursor, accounter);
         let consumed = cursor.position() as usize;
         self.take(consumed)?;
         let value = value?;
@@ -179,6 +183,17 @@ impl<'a> Reader<'a> {
             Ok(None)
         } else {
             self.nbt(trusted).map(Some)
+        }
+    }
+    pub fn optional_nbt_with_accounter(
+        &mut self,
+        accounter: &mut NbtAccounter,
+    ) -> Result<Option<Tag>> {
+        if self.bytes.first() == Some(&0) {
+            self.take(1)?;
+            Ok(None)
+        } else {
+            self.nbt_with_accounter(accounter).map(Some)
         }
     }
     pub fn registry(&mut self, registry: &Identifier) -> Result<Identifier> {

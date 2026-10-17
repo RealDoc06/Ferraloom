@@ -129,3 +129,56 @@ pub trait RegistryContext: Send + Sync {
 
 #[cfg(test)]
 mod tests;
+
+// Packet fields normally use their Wire representation; unusual fields are
+// written out explicitly in their packet implementation.
+macro_rules! wire_struct {
+    ($(#[$meta:meta])* $name:ident { $($field:ident: $ty:ty),* $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $name { $(pub $field: $ty),* }
+        impl $crate::Wire for $name {
+            fn decode(r: &mut $crate::Reader<'_>) -> $crate::Result<Self> {
+                let _ = &r;
+                Ok(Self { $($field: <$ty as $crate::Wire>::decode(r)?),* })
+            }
+            fn encode(&self, w: &mut $crate::Writer<'_>) -> $crate::Result<()> {
+                let _ = &w;
+                $(<$ty as $crate::Wire>::encode(&self.$field, w)?;)*
+                Ok(())
+            }
+        }
+    };
+}
+pub(crate) use wire_struct;
+
+macro_rules! state_packets {
+    ($name:ident, $ids:path, { $($variant:ident($ty:ty) => $id:ident $( [ $decode:path, $encode:path ] )?),* $(,)? }) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub enum $name { $($variant($ty)),* }
+        impl $name {
+            pub fn packet_id(&self) -> u16 {
+                use $ids as Id;
+                match self { $(Self::$variant(_) => Id::$id.protocol_id()),* }
+            }
+        }
+        impl $crate::Wire for $name {
+            fn decode(r: &mut $crate::Reader<'_>) -> $crate::Result<Self> {
+                use $ids as Id;
+                let raw = r.var_int()?;
+                let id = u16::try_from(raw).ok().and_then(Id::from_protocol_id)
+                    .ok_or_else(|| $crate::Error::invalid("packet id",raw.to_string()))?;
+                match id { $(Id::$id => Ok(Self::$variant(state_packets!(@read r, $ty $(, $decode)?)))),* }
+            }
+            fn encode(&self, w: &mut $crate::Writer<'_>) -> $crate::Result<()> {
+                w.var_int(i32::from(self.packet_id()));
+                match self { $(Self::$variant(value) => state_packets!(@write w, value $(, $encode)?)),* }
+            }
+        }
+    };
+    (@read $r:ident, $ty:ty) => { <$ty as $crate::Wire>::decode($r)? };
+    (@read $r:ident, $ty:ty, $decode:path) => { $decode($r)? };
+    (@write $w:ident, $value:ident) => { $crate::Wire::encode($value,$w) };
+    (@write $w:ident, $value:ident, $encode:path) => { $encode($value,$w) };
+}
+pub(crate) use state_packets;

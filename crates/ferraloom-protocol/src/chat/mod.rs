@@ -1,6 +1,6 @@
 //! Port of net.minecraft.network.chat's component tree and serialization codecs.
 //! Components retain explicit false style flags, which override inherited styles.
-mod json;
+pub(crate) mod json;
 mod serialization;
 use crate::{Identifier, Reader, Result, Uuid, Wire, Writer};
 use ferraloom_nbt::{CompoundTag, Tag};
