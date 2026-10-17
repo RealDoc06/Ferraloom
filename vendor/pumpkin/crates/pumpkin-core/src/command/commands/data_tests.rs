@@ -309,6 +309,14 @@ impl InventoryPlayer for MenuPlayer {
 async fn barrel_data_mutates_the_open_menu_inventory_and_survives_terrain_reload() {
     let fixture = Fixture::new().await;
     let world = fixture.source.world();
+    // Manual publication needs its owning Level clock for absolute ticks.
+    let chunk = world
+        .level
+        .loaded_chunks
+        .get(&BLOCK_POS.chunk_position())
+        .unwrap();
+    world.level.bind_chunk_poi(chunk.value()).unwrap();
+    drop(chunk);
     let barrel = Arc::new(BarrelBlockEntity::new(BLOCK_POS));
     barrel.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
     barrel.set_stack(26, ItemStack::new(1, &Item::APPLE));

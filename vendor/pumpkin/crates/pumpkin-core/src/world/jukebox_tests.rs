@@ -844,6 +844,7 @@ async fn world_jukebox_comparator_disc11_insert_and_eject_complete_after_two_tic
     assert!(world.is_block_tick_scheduled(&COMPARATOR, &Block::COMPARATOR));
 
     for (elapsed, output) in [(1, 0), (2, 11)] {
+        world.tick_environment();
         world.tick_chunks(&fixture.server);
         assert_eq!(
             world.tick_block_entities(&tokio::runtime::Handle::current()),
@@ -878,6 +879,7 @@ async fn world_jukebox_comparator_disc11_insert_and_eject_complete_after_two_tic
     assert_eq!(drops[0].get_item_entity().unwrap().get_pickup_delay(), 10);
 
     for output in [11, 0] {
+        world.tick_environment();
         world.tick_chunks(&fixture.server);
         assert_eq!(
             world.tick_block_entities(&tokio::runtime::Handle::current()),

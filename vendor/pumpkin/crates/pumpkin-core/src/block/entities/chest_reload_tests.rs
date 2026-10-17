@@ -636,6 +636,14 @@ async fn chest_data_updates_retained_single_menus_and_full_saved_state() {
     for kind in CHESTS {
         let fixture = Fixture::new().await;
         let world = fixture.source.world();
+        // Manual publication needs its owning Level clock for absolute ticks.
+        let chunk = world
+            .level
+            .loaded_chunks
+            .get(&BLOCK_POS.chunk_position())
+            .unwrap();
+        world.level.bind_chunk_poi(chunk.value()).unwrap();
+        drop(chunk);
         let chest = kind.create(BLOCK_POS);
         let inventory = chest.clone().get_inventory().unwrap();
         inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
