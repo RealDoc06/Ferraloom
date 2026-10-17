@@ -53,6 +53,13 @@ impl Default for NbtAccounter {
     }
 }
 impl NbtAccounter {
+    pub const DEFAULT_NBT_QUOTA: i64 = 2_097_152;
+    pub const UNCOMPRESSED_NBT_QUOTA: i64 = 104_857_600;
+    pub const MAX_DEPTH: usize = 512;
+    pub fn account_entries(&mut self, bytes_per_entry: i64, count: i64) -> Result<()> {
+        self.account_bytes(bytes_per_entry.wrapping_mul(count))
+    }
+
     pub fn new(quota: i64, max_depth: usize) -> Self {
         Self {
             quota,
@@ -123,6 +130,7 @@ pub enum RootFormat {
 /// Port of `NbtIo`. File writes use vanilla's oversized-string fallback; network writes are strict.
 pub struct NbtIo;
 impl NbtIo {
+    /// Names are retained when valid; vanilla skips their bytes, so malformed names are ignored.
     pub fn read(
         reader: impl Read,
         compression: Compression,
@@ -142,16 +150,18 @@ impl NbtIo {
         tag: &Tag,
     ) -> Result<()> {
         match compression {
-            Compression::None => write_root(writer, root, tag),
+            Compression::None => {
+                write_root(writer, root, tag, matches!(root, RootFormat::Named(_)))
+            }
             Compression::Gzip => {
                 let mut w = GzEncoder::new(writer, flate2::Compression::default());
-                write_root(&mut w, root, tag)?;
+                write_root(&mut w, root, tag, matches!(root, RootFormat::Named(_)))?;
                 w.finish()?;
                 Ok(())
             }
             Compression::Zlib => {
                 let mut w = ZlibEncoder::new(writer, flate2::Compression::default());
-                write_root(&mut w, root, tag)?;
+                write_root(&mut w, root, tag, matches!(root, RootFormat::Named(_)))?;
                 w.finish()?;
                 Ok(())
             }
@@ -187,6 +197,14 @@ impl NbtIo {
     pub fn write_any_tag(writer: impl Write, tag: &Tag) -> Result<()> {
         Self::write(writer, Compression::None, &RootFormat::Network, tag)
     }
+    /// Port of NbtIo#writeUnnamedTag, with strict DataOutput.writeUTF failure behavior.
+    pub fn write_unnamed_tag(writer: impl Write, tag: &Tag) -> Result<()> {
+        write_root(writer, &RootFormat::Named(NbtString::default()), tag, false)
+    }
+    /// Port of NbtIo#writeUnnamedTagWithFallback, used by file writes.
+    pub fn write_unnamed_tag_with_fallback(writer: impl Write, tag: &Tag) -> Result<()> {
+        write_root(writer, &RootFormat::Named(NbtString::default()), tag, true)
+    }
     pub fn read_utf(reader: &mut impl Read) -> Result<NbtString> {
         read_utf(reader)
     }
@@ -197,7 +215,11 @@ impl NbtIo {
 fn read_root(mut r: impl Read, named: bool, a: &mut NbtAccounter) -> Result<(NbtString, Tag)> {
     let id = read_num::<1>(&mut r)?[0];
     let name = if named && id != 0 {
-        read_utf(&mut r)?
+        match read_utf(&mut r) {
+            Ok(name) => name,
+            Err(NbtError::Utf(_)) => NbtString::default(),
+            Err(e) => return Err(e),
+        }
     } else {
         NbtString::default()
     };
@@ -208,12 +230,11 @@ fn read_root(mut r: impl Read, named: bool, a: &mut NbtAccounter) -> Result<(Nbt
     };
     Ok((name, tag))
 }
-fn write_root(mut w: impl Write, root: &RootFormat, tag: &Tag) -> Result<()> {
+fn write_root(mut w: impl Write, root: &RootFormat, tag: &Tag, fallback: bool) -> Result<()> {
     w.write_all(&[tag.id()])?;
     if tag.id() == 0 {
         return Ok(());
     }
-    let fallback = matches!(root, RootFormat::Named(_));
     if let RootFormat::Named(name) = root {
         write_utf(&mut w, name, fallback)?;
     }

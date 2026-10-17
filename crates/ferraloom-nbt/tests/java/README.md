@@ -13,7 +13,17 @@ classpath="$cache/versions/26.3/server-26.3.jar:$(find "$cache/libraries" -name 
 mkdir -p /tmp/ferraloom-nbt-java
 "$jdk/javac" -cp "$classpath" -d /tmp/ferraloom-nbt-java crates/ferraloom-nbt/tests/java/VanillaNbt.java
 (cd /tmp && "$jdk/java" -cp "/tmp/ferraloom-nbt-java:$classpath" VanillaNbt) |
-  rg '^(parse|error|path|patherror|compare|compressed|account|utf|fallback|numeric|text)\t' > "$repo/crates/ferraloom-nbt/tests/java/vectors.tsv"
+  rg '^(parse|error|path|patherror|compare|compressed|account|utf|fallback|numeric|text|float|double|map|surrogate|scenario|named)\t' > "$repo/crates/ferraloom-nbt/tests/java/vectors.tsv"
 ```
 
 Passing arguments to the Java class probes individual SNBT strings.
+
+Scenario roots are copied before mutation so the Java parser's cached empty
+containers do not leak changes between vectors. Rust tags are owned trees;
+they deliberately do not reproduce Java object-identity aliasing. UTF-16
+printer vectors cover lone surrogates without passing through a lossy encoder.
+
+`VanillaNbt --names` emits the JDK 25 character-name fallback ranges and control
+names used in `src/java_names.rs`. Ordinary names come from Unicode 16 through
+`unicode_names2`; Java uses block names instead of Unicode algorithmic names
+for the ranges emitted by this probe.

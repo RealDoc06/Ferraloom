@@ -90,19 +90,9 @@ fn float_string(value: f64, single: bool) -> String {
     }
     let mut decimal = String::new();
     for digits in 1..=if single { 9 } else { 17 } {
-        let candidate = format!("{:.*e}", digits - 1, value);
-        let roundtrips = if single {
-            candidate
-                .parse::<f32>()
-                .is_ok_and(|v| v.to_bits() == (value as f32).to_bits())
-        } else {
-            candidate
-                .parse::<f64>()
-                .is_ok_and(|v| v.to_bits() == value.to_bits())
-        };
-        if roundtrips {
+        if let Some(candidate) = decimal_candidate(value, single, digits) {
             decimal = if digits == 1 {
-                format!("{value:.1e}")
+                decimal_candidate(value, single, 2).unwrap_or(candidate)
             } else {
                 candidate
             };
@@ -133,6 +123,51 @@ fn float_string(value: f64, single: bool) -> String {
     }
 }
 
+// At powers of two the rounding interval is asymmetric. If the closest
+// decimal misses that interval, its next neighbor can still round trip.
+fn decimal_candidate(value: f64, single: bool, digits: usize) -> Option<String> {
+    let nearest = format!("{:.*e}", digits - 1, value);
+    let roundtrips = |s: &str| {
+        if single {
+            s.parse::<f32>()
+                .is_ok_and(|v| v.to_bits() == (value as f32).to_bits())
+        } else {
+            s.parse::<f64>()
+                .is_ok_and(|v| v.to_bits() == value.to_bits())
+        }
+    };
+    if roundtrips(&nearest) {
+        return Some(nearest);
+    }
+    let (mantissa, exponent) = nearest.split_once('e')?;
+    let coefficient = mantissa
+        .trim_start_matches('-')
+        .replace('.', "")
+        .parse::<i64>()
+        .ok()?;
+    let scale = exponent.parse::<i32>().ok()? - digits as i32 + 1;
+    for coefficient in [coefficient - 1, coefficient + 1] {
+        if coefficient <= 0 {
+            continue;
+        }
+        let coefficient = coefficient.to_string();
+        let exponent = scale + coefficient.len() as i32 - 1;
+        let candidate = format!(
+            "{}{}.{}e{exponent}",
+            if value.is_sign_negative() { "-" } else { "" },
+            &coefficient[..1],
+            if coefficient.len() == 1 {
+                "0"
+            } else {
+                &coefficient[1..]
+            }
+        );
+        if roundtrips(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
 fn scalar(tag: &Tag) -> Option<NbtString> {
     Some(match tag {
         Tag::End => "END".into(),

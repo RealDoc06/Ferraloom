@@ -313,3 +313,29 @@ fn vanilla_path_edge_cases() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn vanilla_named_roots_and_list_wrappers() {
+    for p in vectors("named") {
+        let bytes = unhex(p[1]);
+        let (_, tag) = NbtIo::read(
+            bytes.as_slice(),
+            Compression::None,
+            true,
+            &mut NbtAccounter::unlimited(),
+        )
+        .unwrap();
+        assert_eq!(tag.to_string(), text(p[2]));
+    }
+    for p in vectors("binary") {
+        let bytes = unhex(p[1]);
+        let tag = NbtIo::read_any_tag(bytes.as_slice(), &mut NbtAccounter::unlimited()).unwrap();
+        assert_eq!(tag.to_string(), text(p[2]));
+        let mut rewritten = Vec::new();
+        NbtIo::write_any_tag(&mut rewritten, &tag).unwrap();
+        assert_eq!(
+            NbtIo::read_any_tag(rewritten.as_slice(), &mut NbtAccounter::unlimited()).unwrap(),
+            tag
+        );
+    }
+}

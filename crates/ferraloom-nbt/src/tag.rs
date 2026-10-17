@@ -192,6 +192,20 @@ impl Tag {
             None
         }
     }
+    pub fn as_compound_mut(&mut self) -> Option<&mut CompoundTag> {
+        if let Self::Compound(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+    pub fn as_list_mut(&mut self) -> Option<&mut ListTag> {
+        if let Self::List(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
     pub fn as_list(&self) -> Option<&ListTag> {
         if let Self::List(v) = self {
             Some(v)
@@ -297,6 +311,11 @@ fn java_floor(v: f64) -> i32 {
 /// Port of `ListTag`. Out-of-bounds typed getters return `None` or the supplied default.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListTag(pub Vec<Tag>);
+impl ListTag {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 impl std::ops::Deref for ListTag {
     type Target = Vec<Tag>;
     fn deref(&self) -> &Self::Target {
@@ -388,7 +407,8 @@ impl CompoundTag {
     }
     /// Port of `CompoundTag#merge`, recursively merging compounds and copying other values.
     pub fn merge(&mut self, source: &CompoundTag) {
-        for (k, v) in source.iter() {
+        for k in source.java_keys() {
+            let v = source.get_key(k).unwrap();
             if let (Some(Tag::Compound(a)), Tag::Compound(b)) = (self.values.get_mut(k), v) {
                 a.merge(b);
             } else {
@@ -397,8 +417,8 @@ impl CompoundTag {
         }
     }
 }
-impl FromIterator<(NbtString, Tag)> for CompoundTag {
-    fn from_iter<T: IntoIterator<Item = (NbtString, Tag)>>(iter: T) -> Self {
+impl<K: Into<NbtString>> FromIterator<(K, Tag)> for CompoundTag {
+    fn from_iter<T: IntoIterator<Item = (K, Tag)>>(iter: T) -> Self {
         let mut result = Self::new();
         for (k, v) in iter {
             result.insert(k, v);
@@ -439,6 +459,12 @@ macro_rules! getters {
             }
             pub fn get_list(&self, key: $key) -> Option<&ListTag> {
                 self.get(key).and_then(Tag::as_list)
+            }
+            pub fn get_compound_mut(&mut self, key: $key) -> Option<&mut CompoundTag> {
+                self.get_mut(key).and_then(Tag::as_compound_mut)
+            }
+            pub fn get_list_mut(&mut self, key: $key) -> Option<&mut ListTag> {
+                self.get_mut(key).and_then(Tag::as_list_mut)
             }
             pub fn get_byte_array(&self, key: $key) -> Option<&[i8]> {
                 self.get(key).and_then(Tag::as_byte_array)
@@ -507,5 +533,35 @@ pub fn compare_nbt(expected: Option<&Tag>, actual: Option<&Tag>, partial_lists: 
             }
         }
         _ => expected == actual,
+    }
+}
+
+macro_rules! from_tag {
+    ($($ty:ty => $variant:ident),* $(,)?) => {$(impl From<$ty> for Tag {fn from(value:$ty)->Self {Self::$variant(value)}})*};
+}
+from_tag!(i8=>Byte,i16=>Short,i32=>Int,i64=>Long,Vec<i8>=>ByteArray,Vec<i32>=>IntArray,Vec<i64>=>LongArray,NbtString=>String,ListTag=>List,CompoundTag=>Compound);
+impl From<bool> for Tag {
+    fn from(value: bool) -> Self {
+        Self::Byte(i8::from(value))
+    }
+}
+impl From<f32> for Tag {
+    fn from(value: f32) -> Self {
+        Self::Float(if value == 0.0 { 0.0 } else { value })
+    }
+}
+impl From<f64> for Tag {
+    fn from(value: f64) -> Self {
+        Self::Double(if value == 0.0 { 0.0 } else { value })
+    }
+}
+impl From<&str> for Tag {
+    fn from(value: &str) -> Self {
+        Self::String(value.into())
+    }
+}
+impl From<String> for Tag {
+    fn from(value: String) -> Self {
+        Self::String(value.into())
     }
 }

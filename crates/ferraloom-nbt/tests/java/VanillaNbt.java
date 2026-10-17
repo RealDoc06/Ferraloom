@@ -89,6 +89,15 @@ public class VanillaNbt {
         for(String bytes:List.of("00","0101","020002","0300000003","040000000000000004","053f800000","063ff0000000000000","08000161","0903000000020000000100000002","0a030001610000000100","090000000001","0901ffffffff","07ffffffff","0aff00016100","0a0a0001780000")) {
             for(long quota:List.of(0L,8L,36L,128L,1024L)) account(bytes,quota,512);
         }
+        for(String bytes:List.of("030001ff00000001","0a0004726f6f7400","03000000000001","00")) {
+            Tag tag=NbtIo.readUnnamedTag(new DataInputStream(new ByteArrayInputStream(HexFormat.of().parseHex(bytes))),NbtAccounter.unlimitedHeap());
+            line("named",bytes,hex(tag.toString()));
+        }
+        CompoundTag wrapper=new CompoundTag();wrapper.putInt("",2);
+        ListTag mixed=new ListTag();mixed.add(IntTag.valueOf(1));mixed.add(wrapper);mixed.add(TagParser.parseCompoundFully("{x:3}"));
+        var mixedBytes=new ByteArrayOutputStream();NbtIo.writeAnyTag(mixed,new DataOutputStream(mixedBytes));line("binary",HexFormat.of().formatHex(mixedBytes.toByteArray()),hex(mixed.toString()));
+        String legacy="090a000000010300000000000200";
+        line("binary",legacy,hex(NbtIo.readAnyTag(new DataInputStream(new ByteArrayInputStream(HexFormat.of().parseHex(legacy))),NbtAccounter.unlimitedHeap()).toString()));
         for(int depth:List.of(512,513)) {
             var bytes=new ByteArrayOutputStream();var data=new DataOutputStream(bytes);data.writeByte(9);
             for(int i=1;i<depth;i++) {data.writeByte(9);data.writeInt(1);}data.writeByte(0);data.writeInt(0);
@@ -128,6 +137,14 @@ public class VanillaNbt {
         scenario("{a:[[1],2]}","a[]","insert",-1,"[3]");
         scenario("{a:[{id:1},{id:2}]}","a[{id:1}].x.y","set",0,"3");
         for(String s:List.of("\"\\N{NULL}\"","\"\\N{CJK UNIFIED IDEOGRAPHS 4E00}\"","\"\\N{CJK UNIFIED IDEOGRAPH-4E00}\"","\"\\N{PRIVATE USE AREA E000}\"","\"\\N{HANGUL SYLLABLE GA}\"","\"\\N{latin capital letter a}\""))parse(s);
+        for(int exponent:List.of(-126,-100,-25,-24,-1,0,1,23,24,25,100,127)) {
+            float f=Math.scalb(1f,exponent);
+            for(float v:new float[]{Math.nextDown(f),f,Math.nextUp(f)})line("float",Integer.toUnsignedString(Float.floatToRawIntBits(v),16),hex(FloatTag.valueOf(v).toString()));
+        }
+        for(int exponent:List.of(-1022,-1000,-54,-53,-1,0,1,52,53,54,1000,1023)) {
+            double d=Math.scalb(1d,exponent);
+            for(double v:new double[]{Math.nextDown(d),d,Math.nextUp(d)})line("double",Long.toUnsignedString(Double.doubleToRawLongBits(v),16),hex(DoubleTag.valueOf(v).toString()));
+        }
         Random random=new Random(263);
         for(int i=0;i<128;i++) {
             int bits=random.nextInt();float f=Float.intBitsToFloat(bits);
