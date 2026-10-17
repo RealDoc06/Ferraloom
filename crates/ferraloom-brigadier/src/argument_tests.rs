@@ -284,3 +284,40 @@ fn escape_escapes() {
 fn escape_single_quote() {
     assert_eq!(StringArgumentType::escape_if_required("\""), "\"\\\"\"");
 }
+
+#[test]
+fn argument_node_passes_its_source_to_the_contextual_parser() {
+    struct Contextual;
+    impl ArgumentType for Contextual {
+        type Value = String;
+        fn parse(&self, reader: &mut StringReader) -> Result<String, CommandSyntaxException> {
+            reader.read_string()
+        }
+        fn parse_with_source<S: 'static>(
+            &self,
+            reader: &mut StringReader,
+            source: &S,
+        ) -> Result<String, CommandSyntaxException> {
+            let allowed = (source as &dyn std::any::Any)
+                .downcast_ref::<bool>()
+                .copied()
+                .unwrap_or(false);
+            if allowed {
+                self.parse(reader)
+            } else {
+                Err(reader.error(ExceptionKind::Custom("denied".into()), &[]))
+            }
+        }
+    }
+    let mut dispatcher = CommandDispatcher::<bool>::new();
+    dispatcher.register(argument("value", Contextual).executes(|_| Ok(1)));
+    assert_eq!(dispatcher.execute("hello", true).unwrap(), 1);
+    assert_eq!(
+        dispatcher.execute("hello", false).unwrap_err().cursor,
+        Some(0)
+    );
+    assert_eq!(
+        Contextual.parse(&mut StringReader::new("hello")).unwrap(),
+        "hello"
+    );
+}
