@@ -3,6 +3,7 @@
 //! Packet codecs operate on one unframed packet, including its VarInt packet ID.
 //! Transport layers are applied in this order: packet, compression, frame, cipher.
 pub mod codec;
+pub mod play;
 pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
 pub use ferraloom_util::{BlockPos, Uuid};
 
