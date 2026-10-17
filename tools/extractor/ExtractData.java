@@ -132,9 +132,26 @@ public final class ExtractData {
         write(dir, "state_transforms", out);
     }
 
+    // Cached, state-only BlockStateBase#getFaceOcclusionShape facts.
+    private static void faceOcclusion(Path dir) throws Exception {
+        var faces = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            int bits = 0;
+            for (var direction : Direction.values()) {
+                if (Block.isShapeFullBlock(state.getFaceOcclusionShape(direction))) bits |= 1 << direction.get3DDataValue();
+            }
+            faces.add(bits);
+        }
+        write(dir, "face_occlusion", faces);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--face-occlusion-only")) {
+            faceOcclusion(Path.of(args[0]));
+            return;
+        }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
@@ -168,6 +185,7 @@ public final class ExtractData {
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
         stateTransforms(dir);
+        faceOcclusion(dir);
 
         var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());

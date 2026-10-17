@@ -339,3 +339,16 @@ fn every_state_rotation_and_mirror_matches_vanilla_registry() {
         assert_eq!(state.mirror(Mirror::None), state);
     }
 }
+
+#[test]
+fn cached_face_occlusion_distinguishes_faces_and_non_occluding_blocks() {
+    use ferraloom_util::Direction;
+    for face in Direction::VALUES {
+        assert!(Block::STONE.default_state().is_face_occlusion_full(face));
+        assert!(!Block::AIR.default_state().is_face_occlusion_full(face));
+        assert!(!Block::GLASS.default_state().is_face_occlusion_full(face));
+    }
+    let bottom = Block::STONE_SLAB.default_state();
+    assert!(bottom.is_face_occlusion_full(Direction::Down));
+    assert!(!bottom.is_face_occlusion_full(Direction::Up));
+}

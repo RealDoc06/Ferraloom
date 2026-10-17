@@ -487,6 +487,19 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
     }
 }
 
+/// Cached face occlusion is independent of the level and block position.
+fn face_occlusion(out: &mut String, values: &Value, state_count: usize) {
+    let values = values.as_array().expect("face occlusion array");
+    assert_eq!(values.len(), state_count, "face occlusion table length");
+    write!(out, "const FACE_OCCLUSION: [u8; {state_count}] = [").unwrap();
+    for value in values {
+        let mask = number(value);
+        assert!(mask < 64);
+        write!(out, "{mask},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -519,6 +532,11 @@ fn main() {
     state_transforms(
         &mut out,
         &load(root, "state_transforms"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
+    face_occlusion(
+        &mut out,
+        &load(root, "face_occlusion"),
         block_properties["states"].as_array().unwrap().len(),
     );
     items(&mut out, &item_report);

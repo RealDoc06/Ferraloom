@@ -377,3 +377,11 @@ impl BlockState {
         Ok(Self(self.0 - old * property.stride + new * property.stride))
     }
 }
+
+impl BlockState {
+    /// Port of BlockStateBase#getFaceOcclusionShape and Block#isShapeFullBlock.
+    /// Direction bits follow vanilla's DOWN, UP, NORTH, SOUTH, WEST, EAST order.
+    pub const fn is_face_occlusion_full(self, face: ferraloom_util::Direction) -> bool {
+        FACE_OCCLUSION[self.0 as usize] & (1 << face as u8) != 0
+    }
+}
