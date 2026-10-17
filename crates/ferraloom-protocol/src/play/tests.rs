@@ -1,4 +1,56 @@
 use super::*;
+struct Context {
+    entries: Vec<(String, i32, String)>,
+}
+impl Context {
+    fn new() -> Self {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../data/generated/registries.json"))
+                .unwrap();
+        let mut entries = Vec::new();
+        for (registry, value) in data.as_object().unwrap() {
+            for (key, value) in value["entries"].as_object().unwrap() {
+                entries.push((
+                    registry.clone(),
+                    value["protocol_id"].as_i64().unwrap() as i32,
+                    key.clone(),
+                ));
+            }
+        }
+        let live: Vec<_> = include_str!("fixtures/registries.tsv")
+            .lines()
+            .map(|line| {
+                let parts: Vec<_> = line.split('\t').collect();
+                (
+                    parts[0].to_owned(),
+                    parts[1].parse().unwrap(),
+                    parts[2].to_owned(),
+                )
+            })
+            .collect();
+        entries.retain(|(registry, _, _)| !live.iter().any(|(key, _, _)| registry == key));
+        entries.extend(live);
+        Self { entries }
+    }
+}
+impl crate::codec::RegistryContext for Context {
+    fn entry_id(&self, registry: &Identifier, entry: &Identifier) -> Option<i32> {
+        self.entries
+            .iter()
+            .find(|(r, _, e)| r == registry.as_str() && e == entry.as_str())
+            .map(|(_, id, _)| *id)
+    }
+    fn entry_key(&self, registry: &Identifier, id: i32) -> Option<Identifier> {
+        self.entries
+            .iter()
+            .find(|(r, i, _)| r == registry.as_str() && *i == id)
+            .map(|(_, _, key)| Identifier::parse(key).unwrap())
+    }
+    fn has_tag(&self, _: &Identifier, _: &Identifier) -> bool {
+        true
+    }
+}
+
 fn bytes(hex: &str) -> Vec<u8> {
     let hex = hex.trim();
     (0..hex.len())
@@ -8,11 +60,22 @@ fn bytes(hex: &str) -> Vec<u8> {
 }
 fn check<T: Wire>(name: &str, hex: &str) {
     let expected = bytes(hex);
-    let value = T::from_bytes(&expected).unwrap_or_else(|e| panic!("{name}: {e}"));
-    assert_eq!(value.to_bytes().unwrap(), expected, "{name}");
+    let context = Context::new();
+    let mut r = Reader::with_context(&expected, &context);
+    let value = T::decode(&mut r).unwrap_or_else(|e| panic!("{name}: {e}"));
+    r.finish().unwrap_or_else(|e| panic!("{name}: {e}"));
+    let mut w = Writer::with_context(&context);
+    value
+        .encode(&mut w)
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    assert_eq!(w.into_inner(), expected, "{name}");
 }
 #[test]
 fn vanilla_packet_bodies() {
+    check::<clientbound::BundleDelimiter>(
+        "clientbound_BundleDelimiter",
+        include_str!("fixtures/clientbound_BundleDelimiter.hex"),
+    );
     check::<clientbound::AddEntity>(
         "clientbound_AddEntity",
         include_str!("fixtures/clientbound_AddEntity.hex"),
@@ -113,6 +176,22 @@ fn vanilla_packet_bodies() {
         "clientbound_DamageEvent",
         include_str!("fixtures/clientbound_DamageEvent.hex"),
     );
+    check::<clientbound::DebugBlockValue>(
+        "clientbound_DebugBlockValue",
+        include_str!("fixtures/clientbound_DebugBlockValue.hex"),
+    );
+    check::<clientbound::DebugChunkValue>(
+        "clientbound_DebugChunkValue",
+        include_str!("fixtures/clientbound_DebugChunkValue.hex"),
+    );
+    check::<clientbound::DebugEntityValue>(
+        "clientbound_DebugEntityValue",
+        include_str!("fixtures/clientbound_DebugEntityValue.hex"),
+    );
+    check::<clientbound::DebugEvent>(
+        "clientbound_DebugEvent",
+        include_str!("fixtures/clientbound_DebugEvent.hex"),
+    );
     check::<clientbound::DebugSample>(
         "clientbound_DebugSample",
         include_str!("fixtures/clientbound_DebugSample.hex"),
@@ -124,6 +203,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::Disconnect>(
         "clientbound_Disconnect",
         include_str!("fixtures/clientbound_Disconnect.hex"),
+    );
+    check::<clientbound::DisguisedChat>(
+        "clientbound_DisguisedChat",
+        include_str!("fixtures/clientbound_DisguisedChat.hex"),
     );
     check::<clientbound::EntityEvent>(
         "clientbound_EntityEvent",
@@ -253,6 +336,10 @@ fn vanilla_packet_bodies() {
         "clientbound_PlayerAbilities",
         include_str!("fixtures/clientbound_PlayerAbilities.hex"),
     );
+    check::<clientbound::PlayerChat>(
+        "clientbound_PlayerChat",
+        include_str!("fixtures/clientbound_PlayerChat.hex"),
+    );
     check::<clientbound::PlayerCombatEnd>(
         "clientbound_PlayerCombatEnd",
         include_str!("fixtures/clientbound_PlayerCombatEnd.hex"),
@@ -292,6 +379,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::RecipeBookRemove>(
         "clientbound_RecipeBookRemove",
         include_str!("fixtures/clientbound_RecipeBookRemove.hex"),
+    );
+    check::<clientbound::RecipeBookSettingsPacket>(
+        "clientbound_RecipeBookSettings",
+        include_str!("fixtures/clientbound_RecipeBookSettings.hex"),
     );
     check::<clientbound::RemoveEntities>(
         "clientbound_RemoveEntities",
@@ -553,6 +644,10 @@ fn vanilla_packet_bodies() {
         "clientbound_ClearDialog",
         include_str!("fixtures/clientbound_ClearDialog.hex"),
     );
+    check::<clientbound::ShowDialog>(
+        "clientbound_ShowDialog",
+        include_str!("fixtures/clientbound_ShowDialog.hex"),
+    );
     check::<serverbound::AcceptTeleportation>(
         "serverbound_AcceptTeleportation",
         include_str!("fixtures/serverbound_AcceptTeleportation.hex"),
@@ -716,6 +811,10 @@ fn vanilla_packet_bodies() {
     check::<serverbound::PlayerAbilities>(
         "serverbound_PlayerAbilities",
         include_str!("fixtures/serverbound_PlayerAbilities.hex"),
+    );
+    check::<serverbound::PlayerActionPacket>(
+        "serverbound_PlayerAction",
+        include_str!("fixtures/serverbound_PlayerAction.hex"),
     );
     check::<serverbound::PlayerCommand>(
         "serverbound_PlayerCommand",

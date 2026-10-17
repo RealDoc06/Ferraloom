@@ -88,6 +88,8 @@ mod advancement;
 pub use advancement::*;
 mod debug;
 pub use debug::*;
+mod bundle;
+pub use bundle::*;
 mod types;
 pub use types::*;
 pub mod clientbound;
