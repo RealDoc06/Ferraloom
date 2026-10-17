@@ -511,7 +511,11 @@ fn actual_vanilla_biome_decoration_matches_feature_indices_seeds_and_filters() {
     let generator = fixture_generator(&resources);
     let mut registry = FeatureRegistry::default();
     let ids = (0..6)
-        .map(|i| format!("ferraloom:test_{i}").parse().unwrap())
+        .map(|i| {
+            format!("ferraloom:test_{i}")
+                .parse::<ferraloom_worldgen::Identifier>()
+                .unwrap()
+        })
         .collect::<Vec<_>>();
     for (i, id) in ids.iter().enumerate() {
         registry.placed.insert(
