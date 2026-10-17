@@ -51,8 +51,8 @@ async fn commands(s: &mut Session) -> Result<ObservationLog> {
     let bot = s.bot(id)?;
     let mut log = ObservationLog::default();
     for (signed, message) in [
-        (false, "parity unsigned command"),
         (true, "parity signed command"),
+        (false, "parity unsigned command"),
     ] {
         let command = format!("say {message}");
         if signed {
@@ -73,7 +73,7 @@ async fn commands(s: &mut Session) -> Result<ObservationLog> {
             cb::Packet::PlayerChat(p) => {
                 ensure!(
                     signed,
-                    "unsigned ChatCommand /say must produce DisguisedChat, got PlayerChat"
+                    "unsigned ChatCommand /say must produce DisguisedChat, got PlayerChat; known server mismatch fixed by e52040c, which requires commands foundation b120a6f"
                 );
                 log.record("signed.content", &p.body.content.0)?;
                 ("PlayerChat", &p.chat_type.name, &p.chat_type.chat_type)
