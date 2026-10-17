@@ -19,7 +19,7 @@ impl Wire for MessageSignature {
 /// Port of MessageSignature.Packed. The zero discriminator introduces a full signature.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PackedMessageSignature {
-    Full(MessageSignature),
+    Full(Box<MessageSignature>),
     Cached(i32),
 }
 impl Wire for PackedMessageSignature {

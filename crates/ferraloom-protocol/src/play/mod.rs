@@ -103,3 +103,7 @@ mod tests;
 fn optional_trusted_component(r: &mut Reader<'_>) -> Result<Option<Component>> {
     r.optional(Component::decode_trusted)
 }
+
+fn optional_trusted_boxed_component(r: &mut Reader<'_>) -> Result<Option<Box<Component>>> {
+    r.optional(|r| Component::decode_trusted(r).map(Box::new))
+}

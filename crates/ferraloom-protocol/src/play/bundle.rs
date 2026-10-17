@@ -3,7 +3,7 @@ use super::{Error, Result, clientbound};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientboundMessage {
-    Packet(clientbound::Packet),
+    Packet(Box<clientbound::Packet>),
     Bundle(Vec<clientbound::Packet>),
 }
 /// Incremental bundling runs after packet decoding and before client handling.
@@ -35,7 +35,7 @@ impl BundlePacker {
             self.current = Some(Vec::new());
             Ok(None)
         } else {
-            Ok(Some(ClientboundMessage::Packet(packet)))
+            Ok(Some(ClientboundMessage::Packet(Box::new(packet))))
         }
     }
     pub fn is_bundling(&self) -> bool {
@@ -46,7 +46,7 @@ impl ClientboundMessage {
     /// Port of BundlerInfo#unbundlePacket. Framing remains the transport's job.
     pub fn into_packets(self) -> Vec<clientbound::Packet> {
         match self {
-            Self::Packet(packet) => vec![packet],
+            Self::Packet(packet) => vec![*packet],
             Self::Bundle(packets) => {
                 let mut result = Vec::with_capacity(packets.len() + 2);
                 result.push(clientbound::Packet::BundleDelimiter(
