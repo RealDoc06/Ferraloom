@@ -11,7 +11,7 @@ use ferraloom_data::{
     Block, BlockState,
     datapack::{Pack, ResourceManager},
 };
-use ferraloom_util::random::{RandomSource, WorldgenRandom, XoroshiroRandomSource};
+use ferraloom_util::random::{Random, RandomSource, WorldgenRandom, XoroshiroRandomSource};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io::Read, path::Path, sync::Arc};
 
@@ -185,8 +185,9 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
             63,
         )
         .unwrap();
-        let mut random =
-            WorldgenRandom::new(XoroshiroRandomSource::new(case["seed"].as_i64().unwrap()));
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(
+            case["seed"].as_i64().unwrap(),
+        )));
         let result = feature
             .place(&mut FeatureContext {
                 region: &mut region,
