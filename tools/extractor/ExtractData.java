@@ -173,14 +173,8 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
-        if (args.length > 1 && args[1].equals("--state-facts-only")) {
-            stateFacts(Path.of(args[0]));
-            return;
-        }
-        if (args.length > 1 && args[1].equals("--face-occlusion-only")) {
-            faceOcclusion(Path.of(args[0]));
-            return;
-        }
+        if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--face-occlusion-only")) { faceOcclusion(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
