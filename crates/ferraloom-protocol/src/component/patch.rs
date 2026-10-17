@@ -171,7 +171,10 @@ impl DataComponentPatch {
             let key = registry(component_type.name());
             let value = if delimited {
                 let bytes = r.byte_array(i32::MAX as usize)?;
-                let mut value_reader = Reader::with_context(bytes, r.context()?);
+                let mut value_reader = match r.context() {
+                    Ok(context) => Reader::with_context(bytes, context),
+                    Err(_) => Reader::new(bytes),
+                };
                 DataComponent::decode_value(&key, &mut value_reader)?
             } else {
                 DataComponent::decode_value(&key, r)?
@@ -189,7 +192,10 @@ impl DataComponentPatch {
         for value in &self.added {
             w.write(&value.component_type())?;
             if delimited {
-                let mut value_writer = Writer::with_context(w.context()?);
+                let mut value_writer = match w.context() {
+                    Ok(context) => Writer::with_context(context),
+                    Err(_) => Writer::new(),
+                };
                 value.encode_value(&mut value_writer)?;
                 w.byte_array(value_writer.as_slice(), i32::MAX as usize)?;
             } else {

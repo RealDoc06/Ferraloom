@@ -276,3 +276,18 @@ fn vanilla_stack_patch_normalization() {
         unhex(f["redundant_stack_output"].as_str().unwrap())
     );
 }
+#[test]
+fn vanilla_scalar_untrusted_patch_needs_no_registry_context() {
+    let (f, _) = fixtures();
+    let bytes = unhex(f["scalar_patch_untrusted"].as_str().unwrap());
+    let mut reader = Reader::new(&bytes);
+    let patch = DataComponentPatch::decode_delimited(&mut reader).unwrap();
+    reader.finish().unwrap();
+    assert_eq!(
+        patch.added,
+        vec![DataComponent::Damage(crate::codec::VarInt(7))]
+    );
+    let mut writer = Writer::new();
+    patch.encode_delimited(&mut writer).unwrap();
+    assert_eq!(writer.as_slice(), bytes);
+}

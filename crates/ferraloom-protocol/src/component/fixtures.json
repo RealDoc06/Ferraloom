@@ -9138,6 +9138,7 @@
       "minecraft:warm"
     ]
   },
+  "scalar_patch_untrusted": "0100030107",
   "serializers": {
     "ARMADILLO_STATE": 36,
     "BLOCK_POS": 10,
