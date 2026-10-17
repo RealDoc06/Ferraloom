@@ -102,6 +102,7 @@ impl BlockPredicate {
     /// Callers opting into NBT matching must supply the equivalent of
     /// `BlockEntity.saveWithFullMetadata`, including source identity and components.
     /// `None` means no block entity; even an empty NBT predicate requires one.
+    /// Callers own codec normalization; matching preserves the supplied float zero signs.
     #[must_use]
     pub fn test_state_with_nbt(
         &self,
@@ -603,6 +604,7 @@ mod tests {
 
     #[test]
     fn parsed_float_and_double_predicates_distinguish_signed_zero_and_width() {
+        // These Pumpkin parser fixtures do not establish vanilla parsing behavior.
         let source = state("chest");
         let values = ["0.0f", "-0.0f", "0.0d", "-0.0d"];
         for (pattern_index, pattern_value) in values.iter().enumerate() {
