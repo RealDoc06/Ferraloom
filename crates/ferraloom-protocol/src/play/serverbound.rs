@@ -191,3 +191,17 @@ packet!(/// Port of ServerboundSetGameRulePacket.
 SetGameRule {entries:Vec<GameRuleEntry>});
 packet!(/// Port of ServerboundUseItemOnPacket.
 UseItemOn {hand:InteractionHand,hit_result:BlockHitResult,sequence:VarInt});
+packet!(/// Port of ServerboundContainerClickPacket.
+ContainerClick {container_id:VarInt,state_id:VarInt,slot_num:i16,button_num:i8,container_input:ContainerInput,changed_slots:ChangedSlots,carried_item:crate::component::HashedStack});
+packet!(/// Port of ServerboundSetCreativeModeSlotPacket.
+SetCreativeModeSlot {slot_num:i16,item_stack:UntrustedItemStack});
+packet!(/// Port of ServerboundPlayerActionPacket.
+PlayerActionPacket {action:PlayerAction,pos:BlockPos,direction:DirectionByte,sequence:VarInt});
+packet!(/// Port of ServerboundSetCommandBlockPacket.
+SetCommandBlock {pos:BlockPos,command:String,mode:CommandBlockMode,flags:CommandBlockFlags});
+packet!(/// Port of ServerboundSetJigsawBlockPacket.
+SetJigsawBlock {pos:BlockPos,name:Identifier,target:Identifier,pool:Identifier,final_state:String,joint:JigsawJoint,selection_priority:VarInt,placement_priority:VarInt});
+packet!(/// Port of ServerboundSetStructureBlockPacket.
+SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:Utf8<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
+packet!(/// Port of ServerboundTestInstanceBlockActionPacket.
+TestInstanceBlockAction {pos:BlockPos,action:TestInstanceAction,data:TestInstanceData});

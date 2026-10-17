@@ -24,12 +24,12 @@ macro_rules! packet {
 }
 
 macro_rules! wire_enum {
-    ($name:ident { $($variant:ident = $id:literal),* $(,)? }) => {
+    ($name:ident { $($variant:ident = $id:literal),* $(,)? } $(, $mode:ident)?) => {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         pub enum $name { $($variant),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {
-                match r.var_int()? { $($id => Ok(Self::$variant),)* id => Err(Error::invalid(stringify!($name), id.to_string())) }
+                match r.var_int()? { $($id => Ok(Self::$variant),)* id => { const VALUES: &[$name] = &[$($name::$variant),*]; match stringify!($($mode)?) { "wrapping" => Ok(VALUES[id.rem_euclid(VALUES.len() as i32) as usize]), "zero" => Ok(VALUES[0]), _ => Err(Error::invalid(stringify!($name), id.to_string())) } } }
             }
             fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
                 w.var_int(match self { $(Self::$variant => $id),* }); Ok(())
@@ -72,6 +72,14 @@ mod boss;
 pub use boss::*;
 mod player_info;
 pub use player_info::*;
+mod inventory;
+pub use inventory::*;
+mod recipes;
+pub use recipes::*;
+mod map;
+pub use map::*;
+mod waypoint;
+pub use waypoint::*;
 mod types;
 pub use types::*;
 pub mod clientbound;

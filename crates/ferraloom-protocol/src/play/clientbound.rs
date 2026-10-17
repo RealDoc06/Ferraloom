@@ -306,3 +306,91 @@ impl Wire for PlayerInfoUpdate {
 }
 packet!(/// Port of ClientboundBossEventPacket.
 BossEvent {id:Uuid,operation:BossOperation});
+packet!(/// Port of ClientboundContainerSetContentPacket.
+ContainerSetContent {container_id:VarInt,state_id:VarInt,items:Vec<crate::component::ItemStack>,carried_item:crate::component::ItemStack});
+packet!(/// Port of ClientboundContainerSetSlotPacket.
+ContainerSetSlot {container_id:VarInt,state_id:VarInt,slot:i16,item_stack:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetCursorItemPacket.
+SetCursorItem {contents:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetPlayerInventoryPacket.
+SetPlayerInventory {slot:VarInt,contents:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetEntityDataPacket.
+SetEntityData {id:VarInt,packed_items:crate::entity_data::EntityDataItems});
+packet!(/// Port of ClientboundMerchantOffersPacket.
+MerchantOffers {container_id:VarInt,offers:Vec<MerchantOffer>,villager_level:VarInt,villager_xp:VarInt,show_progress:bool,can_restock:bool});
+packet!(/// Port of ClientboundRecipeBookSettingsPacket.
+RecipeBookSettingsPacket {book_settings:RecipeBookSettings});
+
+/// Port of ClientboundSetEquipmentPacket's continuation-bit equipment list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SetEquipment {
+    pub entity: VarInt,
+    pub slots: Vec<EquipmentEntry>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct EquipmentEntry {
+    pub slot: crate::component::EquipmentSlot,
+    pub item: crate::component::ItemStack,
+}
+impl Wire for SetEquipment {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let entity = r.read()?;
+        let mut slots = Vec::new();
+        loop {
+            let b = r.u8()?;
+            let slot = crate::component::EquipmentSlot::from_bytes(&[b & 127])?;
+            slots.push(EquipmentEntry {
+                slot,
+                item: r.read()?,
+            });
+            if b & 128 == 0 {
+                break;
+            }
+        }
+        Ok(Self { entity, slots })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        if self.slots.is_empty() {
+            return Err(Error::invalid("equipment", "at least one slot is required"));
+        }
+        self.entity.encode(w)?;
+        for (i, entry) in self.slots.iter().enumerate() {
+            let tag = entry.slot.to_bytes()?[0];
+            w.u8(tag | if i + 1 < self.slots.len() { 128 } else { 0 });
+            entry.item.encode(w)?;
+        }
+        Ok(())
+    }
+}
+packet!(/// Port of ClientboundPlaceGhostRecipePacket.
+PlaceGhostRecipe {container_id:VarInt,recipe_display:RecipeDisplay});
+packet!(/// Port of ClientboundRecipeBookAddPacket.
+RecipeBookAdd {entries:Vec<RecipeBookEntry>,replace:bool});
+packet!(/// Port of ClientboundUpdateRecipesPacket.
+UpdateRecipes {item_sets:Vec<RecipePropertySet>,stonecutter_recipes:Vec<SelectableRecipe>});
+packet!(/// Port of ClientboundLevelParticlesPacket.
+LevelParticles {particle:crate::entity_data::Particle,override_limiter:bool,always_show:bool,x:f64,y:f64,z:f64,x_dist:f32,y_dist:f32,z_dist:f32,x_max_speed:f32,y_max_speed:f32,z_max_speed:f32,count:VarInt,randomization_type:ParticleRandomization});
+packet!(/// Port of ClientboundExplodePacket.
+Explode {center:Vec3,radius:f32,block_count:i32,player_knockback:Option<Vec3>,explosion_particle:crate::entity_data::Particle,explosion_sound:SoundEventHolder,block_particles:Vec<WeightedExplosionParticle>,play_sound:bool});
+/// Port of ClientboundUpdateAttributesPacket's 128-attribute bound.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpdateAttributes {
+    pub entity_id: VarInt,
+    pub values: Vec<AttributeSnapshot>,
+}
+impl Wire for UpdateAttributes {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            entity_id: r.read()?,
+            values: r.list(128, Wire::decode)?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.entity_id.encode(w)?;
+        w.list(&self.values, 128, |w, v| v.encode(w))
+    }
+}
+packet!(/// Port of ClientboundMapItemDataPacket.
+MapItemData {map_id:VarInt,scale:i8,locked:bool,decorations:Option<Vec<MapDecoration>>,color_patch:OptionalMapPatch});
+packet!(/// Port of ClientboundTrackedWaypointPacket.
+TrackedWaypoint {operation:WaypointOperation,waypoint:TrackedWaypointData});

@@ -29,6 +29,10 @@ fn vanilla_packet_bodies() {
         "clientbound_BlockDestruction",
         include_str!("fixtures/clientbound_BlockDestruction.hex"),
     );
+    check::<clientbound::BlockEntityData>(
+        "clientbound_BlockEntityData",
+        include_str!("fixtures/clientbound_BlockEntityData.hex"),
+    );
     check::<clientbound::BlockEvent>(
         "clientbound_BlockEvent",
         include_str!("fixtures/clientbound_BlockEvent.hex"),
@@ -36,6 +40,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::BlockUpdate>(
         "clientbound_BlockUpdate",
         include_str!("fixtures/clientbound_BlockUpdate.hex"),
+    );
+    check::<clientbound::BossEvent>(
+        "clientbound_BossEvent",
+        include_str!("fixtures/clientbound_BossEvent.hex"),
     );
     check::<clientbound::ChangeDifficulty>(
         "clientbound_ChangeDifficulty",
@@ -65,9 +73,17 @@ fn vanilla_packet_bodies() {
         "clientbound_ContainerClose",
         include_str!("fixtures/clientbound_ContainerClose.hex"),
     );
+    check::<clientbound::ContainerSetContent>(
+        "clientbound_ContainerSetContent",
+        include_str!("fixtures/clientbound_ContainerSetContent.hex"),
+    );
     check::<clientbound::ContainerSetData>(
         "clientbound_ContainerSetData",
         include_str!("fixtures/clientbound_ContainerSetData.hex"),
+    );
+    check::<clientbound::ContainerSetSlot>(
+        "clientbound_ContainerSetSlot",
+        include_str!("fixtures/clientbound_ContainerSetSlot.hex"),
     );
     check::<clientbound::CookieRequest>(
         "clientbound_CookieRequest",
@@ -81,6 +97,10 @@ fn vanilla_packet_bodies() {
         "clientbound_CustomChatCompletions",
         include_str!("fixtures/clientbound_CustomChatCompletions.hex"),
     );
+    check::<clientbound::CustomPayload>(
+        "clientbound_CustomPayload",
+        include_str!("fixtures/clientbound_CustomPayload.hex"),
+    );
     check::<clientbound::DamageEvent>(
         "clientbound_DamageEvent",
         include_str!("fixtures/clientbound_DamageEvent.hex"),
@@ -93,6 +113,10 @@ fn vanilla_packet_bodies() {
         "clientbound_DeleteChat",
         include_str!("fixtures/clientbound_DeleteChat.hex"),
     );
+    check::<clientbound::Disconnect>(
+        "clientbound_Disconnect",
+        include_str!("fixtures/clientbound_Disconnect.hex"),
+    );
     check::<clientbound::EntityEvent>(
         "clientbound_EntityEvent",
         include_str!("fixtures/clientbound_EntityEvent.hex"),
@@ -100,6 +124,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::EntityPositionSync>(
         "clientbound_EntityPositionSync",
         include_str!("fixtures/clientbound_EntityPositionSync.hex"),
+    );
+    check::<clientbound::Explode>(
+        "clientbound_Explode",
+        include_str!("fixtures/clientbound_Explode.hex"),
     );
     check::<clientbound::AddTransientBlock>(
         "clientbound_AddTransientBlock",
@@ -145,6 +173,10 @@ fn vanilla_packet_bodies() {
         "clientbound_LevelEvent",
         include_str!("fixtures/clientbound_LevelEvent.hex"),
     );
+    check::<clientbound::LevelParticles>(
+        "clientbound_LevelParticles",
+        include_str!("fixtures/clientbound_LevelParticles.hex"),
+    );
     check::<clientbound::LightUpdate>(
         "clientbound_LightUpdate",
         include_str!("fixtures/clientbound_LightUpdate.hex"),
@@ -156,6 +188,14 @@ fn vanilla_packet_bodies() {
     check::<clientbound::LowDiskSpaceWarning>(
         "clientbound_LowDiskSpaceWarning",
         include_str!("fixtures/clientbound_LowDiskSpaceWarning.hex"),
+    );
+    check::<clientbound::MapItemData>(
+        "clientbound_MapItemData",
+        include_str!("fixtures/clientbound_MapItemData.hex"),
+    );
+    check::<clientbound::MerchantOffers>(
+        "clientbound_MerchantOffers",
+        include_str!("fixtures/clientbound_MerchantOffers.hex"),
     );
     check::<clientbound::MoveEntityPos>(
         "clientbound_MoveEntityPos",
@@ -181,6 +221,10 @@ fn vanilla_packet_bodies() {
         "clientbound_OpenBook",
         include_str!("fixtures/clientbound_OpenBook.hex"),
     );
+    check::<clientbound::OpenScreen>(
+        "clientbound_OpenScreen",
+        include_str!("fixtures/clientbound_OpenScreen.hex"),
+    );
     check::<clientbound::OpenSignEditor>(
         "clientbound_OpenSignEditor",
         include_str!("fixtures/clientbound_OpenSignEditor.hex"),
@@ -192,6 +236,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::PongResponse>(
         "clientbound_PongResponse",
         include_str!("fixtures/clientbound_PongResponse.hex"),
+    );
+    check::<clientbound::PlaceGhostRecipe>(
+        "clientbound_PlaceGhostRecipe",
+        include_str!("fixtures/clientbound_PlaceGhostRecipe.hex"),
     );
     check::<clientbound::PlayerAbilities>(
         "clientbound_PlayerAbilities",
@@ -205,9 +253,17 @@ fn vanilla_packet_bodies() {
         "clientbound_PlayerCombatEnter",
         include_str!("fixtures/clientbound_PlayerCombatEnter.hex"),
     );
+    check::<clientbound::PlayerCombatKill>(
+        "clientbound_PlayerCombatKill",
+        include_str!("fixtures/clientbound_PlayerCombatKill.hex"),
+    );
     check::<clientbound::PlayerInfoRemove>(
         "clientbound_PlayerInfoRemove",
         include_str!("fixtures/clientbound_PlayerInfoRemove.hex"),
+    );
+    check::<clientbound::PlayerInfoUpdate>(
+        "clientbound_PlayerInfoUpdate",
+        include_str!("fixtures/clientbound_PlayerInfoUpdate.hex"),
     );
     check::<clientbound::PlayerLookAt>(
         "clientbound_PlayerLookAt",
@@ -220,6 +276,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::PlayerRotation>(
         "clientbound_PlayerRotation",
         include_str!("fixtures/clientbound_PlayerRotation.hex"),
+    );
+    check::<clientbound::RecipeBookAdd>(
+        "clientbound_RecipeBookAdd",
+        include_str!("fixtures/clientbound_RecipeBookAdd.hex"),
     );
     check::<clientbound::RecipeBookRemove>(
         "clientbound_RecipeBookRemove",
@@ -265,6 +325,14 @@ fn vanilla_packet_bodies() {
         "clientbound_SelectAdvancementsTab",
         include_str!("fixtures/clientbound_SelectAdvancementsTab.hex"),
     );
+    check::<clientbound::ServerData>(
+        "clientbound_ServerData",
+        include_str!("fixtures/clientbound_ServerData.hex"),
+    );
+    check::<clientbound::SetActionBarText>(
+        "clientbound_SetActionBarText",
+        include_str!("fixtures/clientbound_SetActionBarText.hex"),
+    );
     check::<clientbound::SetBorderCenter>(
         "clientbound_SetBorderCenter",
         include_str!("fixtures/clientbound_SetBorderCenter.hex"),
@@ -297,6 +365,10 @@ fn vanilla_packet_bodies() {
         "clientbound_SetChunkCacheRadius",
         include_str!("fixtures/clientbound_SetChunkCacheRadius.hex"),
     );
+    check::<clientbound::SetCursorItem>(
+        "clientbound_SetCursorItem",
+        include_str!("fixtures/clientbound_SetCursorItem.hex"),
+    );
     check::<clientbound::SetDefaultSpawnPosition>(
         "clientbound_SetDefaultSpawnPosition",
         include_str!("fixtures/clientbound_SetDefaultSpawnPosition.hex"),
@@ -305,6 +377,10 @@ fn vanilla_packet_bodies() {
         "clientbound_SetDisplayObjective",
         include_str!("fixtures/clientbound_SetDisplayObjective.hex"),
     );
+    check::<clientbound::SetEntityData>(
+        "clientbound_SetEntityData",
+        include_str!("fixtures/clientbound_SetEntityData.hex"),
+    );
     check::<clientbound::SetEntityLink>(
         "clientbound_SetEntityLink",
         include_str!("fixtures/clientbound_SetEntityLink.hex"),
@@ -312,6 +388,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::SetEntityMotion>(
         "clientbound_SetEntityMotion",
         include_str!("fixtures/clientbound_SetEntityMotion.hex"),
+    );
+    check::<clientbound::SetEquipment>(
+        "clientbound_SetEquipment",
+        include_str!("fixtures/clientbound_SetEquipment.hex"),
     );
     check::<clientbound::SetExperience>(
         "clientbound_SetExperience",
@@ -329,13 +409,25 @@ fn vanilla_packet_bodies() {
         "clientbound_SetPassengers",
         include_str!("fixtures/clientbound_SetPassengers.hex"),
     );
+    check::<clientbound::SetPlayerInventory>(
+        "clientbound_SetPlayerInventory",
+        include_str!("fixtures/clientbound_SetPlayerInventory.hex"),
+    );
     check::<clientbound::SetSimulationDistance>(
         "clientbound_SetSimulationDistance",
         include_str!("fixtures/clientbound_SetSimulationDistance.hex"),
     );
+    check::<clientbound::SetSubtitleText>(
+        "clientbound_SetSubtitleText",
+        include_str!("fixtures/clientbound_SetSubtitleText.hex"),
+    );
     check::<clientbound::SetTime>(
         "clientbound_SetTime",
         include_str!("fixtures/clientbound_SetTime.hex"),
+    );
+    check::<clientbound::SetTitleText>(
+        "clientbound_SetTitleText",
+        include_str!("fixtures/clientbound_SetTitleText.hex"),
     );
     check::<clientbound::SetTitlesAnimation>(
         "clientbound_SetTitlesAnimation",
@@ -365,6 +457,14 @@ fn vanilla_packet_bodies() {
         "clientbound_SwingAnimation",
         include_str!("fixtures/clientbound_SwingAnimation.hex"),
     );
+    check::<clientbound::SystemChat>(
+        "clientbound_SystemChat",
+        include_str!("fixtures/clientbound_SystemChat.hex"),
+    );
+    check::<clientbound::TabList>(
+        "clientbound_TabList",
+        include_str!("fixtures/clientbound_TabList.hex"),
+    );
     check::<clientbound::TagQuery>(
         "clientbound_TagQuery",
         include_str!("fixtures/clientbound_TagQuery.hex"),
@@ -376,6 +476,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::TeleportEntity>(
         "clientbound_TeleportEntity",
         include_str!("fixtures/clientbound_TeleportEntity.hex"),
+    );
+    check::<clientbound::TestInstanceBlockStatus>(
+        "clientbound_TestInstanceBlockStatus",
+        include_str!("fixtures/clientbound_TestInstanceBlockStatus.hex"),
     );
     check::<clientbound::TickingState>(
         "clientbound_TickingState",
@@ -389,9 +493,17 @@ fn vanilla_packet_bodies() {
         "clientbound_Transfer",
         include_str!("fixtures/clientbound_Transfer.hex"),
     );
+    check::<clientbound::UpdateAttributes>(
+        "clientbound_UpdateAttributes",
+        include_str!("fixtures/clientbound_UpdateAttributes.hex"),
+    );
     check::<clientbound::UpdateMobEffect>(
         "clientbound_UpdateMobEffect",
         include_str!("fixtures/clientbound_UpdateMobEffect.hex"),
+    );
+    check::<clientbound::UpdateRecipes>(
+        "clientbound_UpdateRecipes",
+        include_str!("fixtures/clientbound_UpdateRecipes.hex"),
     );
     check::<clientbound::UpdateTags>(
         "clientbound_UpdateTags",
@@ -408,6 +520,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::ServerLinks>(
         "clientbound_ServerLinks",
         include_str!("fixtures/clientbound_ServerLinks.hex"),
+    );
+    check::<clientbound::TrackedWaypoint>(
+        "clientbound_Waypoint",
+        include_str!("fixtures/clientbound_Waypoint.hex"),
     );
     check::<clientbound::ClearDialog>(
         "clientbound_ClearDialog",
@@ -453,6 +569,10 @@ fn vanilla_packet_bodies() {
         "serverbound_Chat",
         include_str!("fixtures/serverbound_Chat.hex"),
     );
+    check::<serverbound::ChatSessionUpdate>(
+        "serverbound_ChatSessionUpdate",
+        include_str!("fixtures/serverbound_ChatSessionUpdate.hex"),
+    );
     check::<serverbound::ChunkBatchReceived>(
         "serverbound_ChunkBatchReceived",
         include_str!("fixtures/serverbound_ChunkBatchReceived.hex"),
@@ -481,6 +601,10 @@ fn vanilla_packet_bodies() {
         "serverbound_ContainerButtonClick",
         include_str!("fixtures/serverbound_ContainerButtonClick.hex"),
     );
+    check::<serverbound::ContainerClick>(
+        "serverbound_ContainerClick",
+        include_str!("fixtures/serverbound_ContainerClick.hex"),
+    );
     check::<serverbound::ContainerClose>(
         "serverbound_ContainerClose",
         include_str!("fixtures/serverbound_ContainerClose.hex"),
@@ -492,6 +616,10 @@ fn vanilla_packet_bodies() {
     check::<serverbound::CookieResponse>(
         "serverbound_CookieResponse",
         include_str!("fixtures/serverbound_CookieResponse.hex"),
+    );
+    check::<serverbound::CustomPayload>(
+        "serverbound_CustomPayload",
+        include_str!("fixtures/serverbound_CustomPayload.hex"),
     );
     check::<serverbound::EditBook>(
         "serverbound_EditBook",
@@ -613,13 +741,29 @@ fn vanilla_packet_bodies() {
         "serverbound_SetCarriedItem",
         include_str!("fixtures/serverbound_SetCarriedItem.hex"),
     );
+    check::<serverbound::SetCommandBlock>(
+        "serverbound_SetCommandBlock",
+        include_str!("fixtures/serverbound_SetCommandBlock.hex"),
+    );
     check::<serverbound::SetCommandMinecart>(
         "serverbound_SetCommandMinecart",
         include_str!("fixtures/serverbound_SetCommandMinecart.hex"),
     );
+    check::<serverbound::SetCreativeModeSlot>(
+        "serverbound_SetCreativeModeSlot",
+        include_str!("fixtures/serverbound_SetCreativeModeSlot.hex"),
+    );
     check::<serverbound::SetGameRule>(
         "serverbound_SetGameRule",
         include_str!("fixtures/serverbound_SetGameRule.hex"),
+    );
+    check::<serverbound::SetJigsawBlock>(
+        "serverbound_SetJigsawBlock",
+        include_str!("fixtures/serverbound_SetJigsawBlock.hex"),
+    );
+    check::<serverbound::SetStructureBlock>(
+        "serverbound_SetStructureBlock",
+        include_str!("fixtures/serverbound_SetStructureBlock.hex"),
     );
     check::<serverbound::SetTestBlock>(
         "serverbound_SetTestBlock",
@@ -637,6 +781,10 @@ fn vanilla_packet_bodies() {
         "serverbound_TeleportToEntity",
         include_str!("fixtures/serverbound_TeleportToEntity.hex"),
     );
+    check::<serverbound::TestInstanceBlockAction>(
+        "serverbound_TestInstanceBlockAction",
+        include_str!("fixtures/serverbound_TestInstanceBlockAction.hex"),
+    );
     check::<serverbound::UseItemOn>(
         "serverbound_UseItemOn",
         include_str!("fixtures/serverbound_UseItemOn.hex"),
@@ -644,5 +792,9 @@ fn vanilla_packet_bodies() {
     check::<serverbound::UseItem>(
         "serverbound_UseItem",
         include_str!("fixtures/serverbound_UseItem.hex"),
+    );
+    check::<serverbound::CustomClickAction>(
+        "serverbound_CustomClickAction",
+        include_str!("fixtures/serverbound_CustomClickAction.hex"),
     );
 }
