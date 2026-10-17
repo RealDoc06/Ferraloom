@@ -95,7 +95,8 @@ impl Launched {
         }
     }
     pub async fn stop(mut self, duration: Duration) -> Result<()> {
-        self.command("stop").await?;
+        // A scenario may already have issued /stop. Successful exit/save is authoritative.
+        let _ = self.command("stop").await;
         tokio::time::timeout(duration, async {
             match self.process {
                 Process::InProcess(server) => server.wait().await,
@@ -162,6 +163,17 @@ pub(crate) async fn launch(
         ensure!(
             matches!(options.preset, WorldPreset::Default),
             "in-process Ferraloom has not ported flat/void generators"
+        );
+        ensure!(
+            options
+                .properties
+                .get("level-type")
+                .is_none_or(|v| matches!(v.as_str(), "normal" | "minecraft:normal"))
+                && options
+                    .properties
+                    .get("generator-settings")
+                    .is_none_or(|v| v.is_empty() || v == "{}"),
+            "in-process Ferraloom does not support generator property overrides yet"
         );
         ensure!(
             options.game_rules.is_empty(),

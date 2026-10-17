@@ -75,6 +75,7 @@ pub struct BotState {
     pub containers: BTreeMap<i32, Container>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
+    pub display_objectives: Vec<cb::SetDisplayObjective>,
     pub messages: Vec<cb::Packet>,
     pub error: Option<String>,
 }
@@ -891,6 +892,18 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
                         v
                     };
                 }
+                e.rotation = [
+                    if p.relatives & 8 != 0 {
+                        e.rotation[0] + p.change.y_rot
+                    } else {
+                        p.change.y_rot
+                    },
+                    if p.relatives & 16 != 0 {
+                        e.rotation[1] + p.change.x_rot
+                    } else {
+                        p.change.x_rot
+                    },
+                ];
             }
         }
         cb::Packet::EntityPositionSync(p) => {
@@ -948,8 +961,23 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             owner != &p.owner || p.objective_name.as_ref().is_some_and(|o| o != objective)
         }),
         cb::Packet::SetObjective(p) => {
-            s.objectives
-                .insert(p.objective_name.clone(), p.operation.clone());
+            if matches!(p.operation, play::ObjectiveOperation::Remove {}) {
+                s.objectives.remove(&p.objective_name);
+                s.scores
+                    .retain(|(objective, _), _| objective != &p.objective_name);
+                s.display_objectives
+                    .retain(|display| display.objective_name != p.objective_name);
+            } else {
+                s.objectives
+                    .insert(p.objective_name.clone(), p.operation.clone());
+            }
+        }
+        cb::Packet::SetDisplayObjective(p) => {
+            s.display_objectives
+                .retain(|display| display.slot != p.slot);
+            if !p.objective_name.is_empty() {
+                s.display_objectives.push(p.clone());
+            }
         }
         cb::Packet::PlayerChat(_) | cb::Packet::SystemChat(_) | cb::Packet::DisguisedChat(_) => {
             s.messages.push(p.clone())
