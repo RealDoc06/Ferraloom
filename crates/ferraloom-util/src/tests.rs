@@ -426,3 +426,72 @@ fn xoroshiro_zero_seed_and_noise_normalization_match_vanilla() {
         );
     }
 }
+
+#[test]
+fn volume_noise_and_smeared_perlin_match_vanilla_float_bits() {
+    const POINTS: [[f64; 3]; 5] = [
+        [0.0, 0.0, 0.0],
+        [-0.125, -64.75, 17.3],
+        [30000000.25, -30000000.75, 16777216.0],
+        [-33554432.1, 0.000000001, 33554431.9],
+        [1.25e12, -1.5e12, 1234.5],
+    ];
+
+    let volume = NoiseVolume {
+        size: [2, 3, 2],
+        min: [-33554431, -65, 16777215],
+        step: [17, 3, 5],
+    };
+    for &(seed, algorithm, kind, expected, scalar) in &expected::NOISE_VOLUME {
+        let mut random = source(algorithm, seed);
+        let noise: Box<dyn Noise> = match kind {
+            0 => Box::new(PerlinNoise::new(&mut random)),
+            1 => Box::new(SmearedPerlinNoise::new(&mut random, 0.731)),
+            2 => Box::new(SimplexNoise::new(&mut random)),
+            3 => Box::new(
+                NormalNoise::new(NoiseParameters {
+                    base_octave: -5,
+                    octave_count: 4,
+                    amplitude_modifiers: vec![1.0, 0.0, 1.0, 1.0],
+                    ..NoiseParameters::default()
+                })
+                .create(&mut random),
+            ),
+            _ => {
+                let mut stack = NoiseStack::new();
+                let mut frequency = 1.0;
+                let mut amplitude = 0.9999847412109375 / (2.0_f64.powi(16) - 1.0);
+                for _ in 0..16 {
+                    stack.add(
+                        SmearedPerlinNoise::new(&mut random, 684.412 * 0.125 * 8.0 * frequency),
+                        frequency,
+                        amplitude as f32,
+                    );
+                    frequency /= 2.0;
+                    amplitude *= 2.0;
+                }
+                Box::new(stack)
+            }
+        };
+        let mut buffer = vec![0.25; volume.len()];
+        noise.add_to_volume(&mut buffer, volume, 0.33, 0.77, -0.37);
+        assert_eq!(
+            buffer.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            expected[..12],
+            "first volume seed={seed} algorithm={algorithm} kind={kind}"
+        );
+        noise.add_to_volume(&mut buffer, volume, 0.11, 0.0, 0.125);
+        assert_eq!(
+            buffer.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            expected[12..],
+            "second volume seed={seed} algorithm={algorithm} kind={kind}"
+        );
+        for (point, bits) in POINTS.into_iter().zip(scalar) {
+            assert_eq!(
+                noise.get(point[0], point[1], point[2]).to_bits(),
+                bits,
+                "scalar seed={seed} kind={kind}"
+            );
+        }
+    }
+}
