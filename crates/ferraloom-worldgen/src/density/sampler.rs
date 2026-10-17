@@ -492,7 +492,11 @@ impl DensityFunctionCompiler {
                 let y = f64::from(p[1]) * (684.412 * y_scale);
                 let z = f64::from(p[2]) * (684.412 * xz_scale);
                 let a = clamp(
-                    fbm[2].get(x / xz_factor, y / y_factor, z / xz_factor) + 0.5,
+                    fbm[2].get(
+                        f64::from(p[0]) * ((684.412 * xz_scale) / xz_factor),
+                        f64::from(p[1]) * ((684.412 * y_scale) / y_factor),
+                        f64::from(p[2]) * ((684.412 * xz_scale) / xz_factor),
+                    ) + 0.5,
                     0.0,
                     1.0,
                 );

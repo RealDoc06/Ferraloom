@@ -34,3 +34,5 @@ pub mod biome;
 
 pub mod material;
 pub mod settings;
+
+pub mod aquifer;
