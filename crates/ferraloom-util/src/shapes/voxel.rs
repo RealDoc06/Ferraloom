@@ -224,6 +224,9 @@ impl VoxelShape {
         })
     }
     pub fn closest_point_to(&self, point: Vec3) -> Option<Vec3> {
+        if self.is_empty() {
+            return None;
+        }
         let mut closest = None;
         self.for_all_boxes(|[x, y, z, u, v, w]| {
             let p = Vec3::new(
