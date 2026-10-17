@@ -97,20 +97,19 @@ impl IndexMerger {
                 break;
             }
             let chose_first = !end_first && (end_second || first.get(i) < second.get(j) + EPSILON);
-            let next;
-            if chose_first {
+            let next = if chose_first {
                 i += 1;
                 if !first_only && (j == 0 || end_second) {
                     continue;
                 }
-                next = first.get(i - 1);
+                first.get(i - 1)
             } else {
                 j += 1;
                 if !second_only && (i == 0 || end_first) {
                     continue;
                 }
-                next = second.get(j - 1);
-            }
+                second.get(j - 1)
+            };
             let pair = [i as i32 - 1, j as i32 - 1];
             if last >= next - EPSILON {
                 *indexes.last_mut().expect("merged coordinate") = pair;
