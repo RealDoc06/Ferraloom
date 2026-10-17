@@ -58,8 +58,10 @@ fn vanilla_component_streams() {
         let key = Identifier::parse(fixture["type"].as_str().unwrap()).unwrap();
         let bytes = unhex(fixture["bytes"].as_str().unwrap());
         let mut r = Reader::with_context(&bytes, &registries);
+        eprintln!("decoding {key}");
         let value =
             DataComponent::decode_value(&key, &mut r).unwrap_or_else(|e| panic!("{key}: {e}"));
+        eprintln!("encoding {key}");
         r.finish().unwrap_or_else(|e| panic!("{key}: {e}"));
         let mut w = Writer::with_context(&registries);
         value.encode_value(&mut w).unwrap();
