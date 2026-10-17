@@ -21,11 +21,7 @@ struct Shape {
 }
 impl Feature for IcebergFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let origin = [
-            ctx.origin[0],
-            ctx.generator.settings.sea_level,
-            ctx.origin[2],
-        ];
+        let origin = [ctx.origin[0], ctx.generator.sea_level(), ctx.origin[2]];
         let r = &mut *ctx.random;
         let snow = r.next_double() > 0.7;
         let angle = r.next_double() * 2.0 * std::f64::consts::PI;
