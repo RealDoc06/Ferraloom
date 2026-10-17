@@ -22,8 +22,10 @@ Engine source `b8e01b4` was [published to GitHub](../compatibility/results/evide
 on `main` and `validation/r29-cc10c5b`. The receipt records those refs before any later evidence/docs commit.
 Both recorded GitHub `Check` runs for the subsequent `0376775` docs/evidence checkpoint
 [completed successfully](../compatibility/results/evidence/efd59b90b1a7bdcbdf223f565c1a33804b68a34c7de2cc4b754a48012993a40f.json).
-The receipt contains no run of the manual vanilla-compatibility workflow.
-This does not establish further game behavior or CI completion for this later publication.
+Both `Check` runs for the later `97b584f` publication also
+[completed successfully](../compatibility/results/evidence/37733874e3bc824027b7b570b52a463890f705460eb357cf8b3c355407bdb6df.json).
+These two receipts establish CI only for the commits they name. Neither records
+a manual vanilla-compatibility run or establishes further game behavior.
 The integrated harness source `d82613a` separately
 [passed all 162 Python tests](../compatibility/results/evidence/dce064e4df04b9fcb58ef69069706fb9829ea3e63478d3231e8ee05a236a58c0.json)
 on the builder. Its engine/build inputs are identical to `b8e01b4`; the new
@@ -92,6 +94,27 @@ retains the declared verdict and complete generic dimension statuses, with
 content hashes for the private original comparison. Neither new campaign
 promotes a family or establishes default Java
 write-profile parity, crash durability or full vanilla compatibility.
+
+The [current-engine player interchange](../compatibility/results/player-interchange.json)
+used exact engine and client `b8e01b4` on the builder. All seven selected composites
+passed in each direction, Java to Rust and Rust to Java: 14 rows, four clean
+server boots, six clean clients and 12 lifecycle checkpoints. Two whole worlds
+were copied unchanged after saving and stopping each source. Selected identity,
+named inventory components, position, vitals, exact saved XP fields and
+advancement continuation passed. Actual statistics requests observed
+`open_barrel` 3 at source/import and 5 after continuation; independent stopped
+JSON retained `open_barrel` 3 to 5 and `leave_game` 2 to 3.
+
+The byte-identical [ROOT proof](../compatibility/results/evidence/2c7b1b33fb3d4574debe073d98bd0e826a61e3c70ba2f7bce879fa4a2776e309.json)
+follows checks of 260 fixture originals, 12 metadata originals and the complete
+archive, including independent decoding of four stopped player files and six
+statistics payloads corroborated by their client logs. Current stopped world
+files match the recorded manifests. Historical seed snapshots and empty
+directory lists remain runtime witnesses rather than reconstructed past bytes.
+Only the Java reference used buffered chunk writes. No third destination boot,
+XP wire decoding, opaque-field gameplay, legacy/DFU, signed identity or full
+player-data family claim follows. The older reverse-transfer failure remains
+unchanged, and no feature family is promoted.
 
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns

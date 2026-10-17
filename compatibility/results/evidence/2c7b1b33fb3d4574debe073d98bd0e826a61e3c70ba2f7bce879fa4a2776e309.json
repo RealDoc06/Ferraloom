@@ -1,0 +1,57 @@
+{
+  "kind": "offline-original-player-B-runtime-verification",
+  "result": "passed",
+  "actual_host": "ferraloom-builder",
+  "verification_host": "devbox",
+  "source_engine": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "source_client": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "job_id": "20261017T135101Z-1d6a388d",
+  "case_ids": [
+    "player_data.same_identity",
+    "player_data.inventory_components",
+    "player_data.vitals_xp",
+    "player_data.advancement_import",
+    "player_data.saved_continuation",
+    "player_data.advancement_continuation",
+    "player_data.statistics_continuation"
+  ],
+  "composites_each_direction": 7,
+  "directional_rows": 14,
+  "server_boots": 4,
+  "clients": 6,
+  "lifecycle_audits": 12,
+  "clean_unforced_stops": true,
+  "stopped_player_files_independently_decoded": 4,
+  "statistics_payloads_independently_decoded_and_direct_JSONL_correlated": 6,
+  "fixture_originals_verified": 260,
+  "metadata_originals_verified": 12,
+  "fixture_inventory_files": 341,
+  "export_sha256": {
+    "metadata-index.json": "9804b91e6df719cd1c231e6247ad12e9630880057c6748c3f860166cffdb6fde",
+    "fixture-index.json": "4d3a3fcd67c016550b808173272509568f97bba8a5bab569e0dbd111111d2849",
+    "fixture-originals.tar.gz": "90d39231dc5f01d3127ac3507ad10670a10854459b2225a10a8e6569a655b4c5"
+  },
+  "report_sha256": "2f7eaf055b25d5f81462d7c9f39049e6387665d9fb0baa81f3a30b756ada60c4",
+  "outer_sha256": "0aa9d5acf2a4fc6113900e933be06c33f1a6c423a1f4c09628a11edc60f824b3",
+  "verifier_sha256": "178b4d7a1dcbe2d7f78bea7d0f2952e46161f6bc473480003daf2b96e192423a",
+  "native_prerequisite_scope": "Original ROOT-verified exactB16/1647Rust/151Python/74Node/strictTS reused, not reexecuted here.",
+  "limits": {
+    "memory_bytes": 6442450944,
+    "swap_bytes": 0,
+    "cpu_percent": 200,
+    "workers": 2,
+    "startup_seconds": 180,
+    "interaction_seconds": 20,
+    "suite_seconds": 1200,
+    "outer_seconds": 7200
+  },
+  "remaining_limits": [
+    "Initial/reloaded seed snapshots are retained runtime JSON witnesses; their historical raw player path was overwritten.",
+    "Whole-world copy directory lists are historical runtime witnesses; exported final file bytes are independently verified, not missing empty directories.",
+    "No third destination boot, XP wire decode, opaque-field gameplay, legacy/DFU/signed identity/security or full player-data family claim.",
+    "Buffered Java sync-chunk-writes=false reference only; no default/crash-durability parity.",
+    "Older failures remain failed. No family verified promotion."
+  ],
+  "families_verified": 0
+}
