@@ -446,25 +446,60 @@ async fn latest_encoded_attack_routes_every_part_and_parent_only_observer_metada
                 .any(|bytes| bytes == expected)
     }));
     drop(reader);
-    for (index, part) in d.parts().iter().enumerate() {
-        // Increasing real attack damage crosses the ordinary hurt cooldown's
-        // differential threshold without writing its state in the test.
+    let mut expected_spawns = vec![base];
+    for (index, expected_loss) in [8.0, 8.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
+        .into_iter()
+        .enumerate()
+    {
+        // Each packet gets a fresh actual parent, so the preceding part's hit
+        // cannot be rejected by the ordinary hurt cooldown.
+        let hit_parent = if index == 0 {
+            live.clone()
+        } else {
+            let parent = spawn(&world);
+            expected_spawns.push(parent.get_entity().entity_id);
+            parent
+        };
+        let hit_dragon = dragon(&hit_parent);
+        let part = &hit_dragon.parts()[index];
+        let part_pos = part.entity.pos.load();
+        fixture
+            .player
+            .get_entity()
+            .set_pos(Vector3::new(part_pos.x, part_pos.y, part_pos.z - 2.0));
         fixture
             .player
             .living_entity
-            .set_attribute_base(&Attributes::ATTACK_DAMAGE, 8.0 * (index + 1) as f64);
+            .set_attribute_base(&Attributes::ATTACK_DAMAGE, 8.0);
         fixture
             .player
             .last_attacked_ticks
             .store(100, Ordering::Relaxed);
         let before = hooks.damage.lock().unwrap().len();
+        assert_eq!(hit_dragon.mob_entity.living_entity.health.load(), 200.0);
         attack(&fixture, part.entity.entity_id).await;
         assert_eq!(hooks.damage.lock().unwrap().len(), before + 1);
-        assert_eq!(hooks.damage.lock().unwrap().last().unwrap().0, base);
+        assert_eq!(
+            hooks.damage.lock().unwrap().last().unwrap().0,
+            hit_parent.get_entity().entity_id
+        );
+        assert_eq!(
+            hit_dragon.mob_entity.living_entity.health.load(),
+            200.0 - expected_loss,
+            "encoded attack did not commit the expected loss for {:?}",
+            part.kind
+        );
     }
     // An unknown ID leaves this connection usable for a following real attack.
     attack(&fixture, i32::MIN).await;
     let next = spawn(&world);
+    expected_spawns.push(next.get_entity().entity_id);
+    let next_head = &dragon(&next).parts()[0];
+    let part_pos = next_head.entity.pos.load();
+    fixture
+        .player
+        .get_entity()
+        .set_pos(Vector3::new(part_pos.x, part_pos.y, part_pos.z - 2.0));
     fixture
         .player
         .inventory()
@@ -473,7 +508,8 @@ async fn latest_encoded_attack_routes_every_part_and_parent_only_observer_metada
         .player
         .last_attacked_ticks
         .store(100, Ordering::Relaxed);
-    attack(&fixture, dragon(&next).parts()[0].entity.entity_id).await;
+    attack(&fixture, next_head.entity.entity_id).await;
+    assert!(dragon(&next).mob_entity.living_entity.health.load() < 200.0);
     assert!(
         fixture
             .player
@@ -484,7 +520,7 @@ async fn latest_encoded_attack_routes_every_part_and_parent_only_observer_metada
     );
     assert_eq!(
         hooks.spawns.lock().unwrap().as_slice(),
-        &[base, next.get_entity().entity_id]
+        expected_spawns.as_slice()
     );
     // This asserts the existing successful Weapon route, not unported
     // ItemStack.hurtEnemy/postHurtEnemy durability/enchantment parity.
