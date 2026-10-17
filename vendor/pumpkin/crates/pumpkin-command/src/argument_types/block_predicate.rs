@@ -387,17 +387,30 @@ impl BlockPredicateParser {
     fn suggest(&self, mut builder: SuggestionsBuilder) -> Suggestions {
         match &self.suggestions {
             PredicateSuggestions::BlockIdOrTag | PredicateSuggestions::Tag => {
-                let tags = get_latest_map(RegistryKey::Block)
-                    .keys()
-                    .map(|tag| format!("#{tag}"));
-                // Resource prefix filtering is project behavior; the Java helper is unclosed.
-                builder = builder.filter_and_suggest_iter(tags);
+                let contents = builder.remaining().to_lowercase();
+                // For the single-character '#' prefix, a nonempty common prefix is '#'.
+                let tag_contents = if contents.is_empty() {
+                    Some("")
+                } else {
+                    contents.strip_prefix('#')
+                };
+                if let Some(tag_contents) = tag_contents {
+                    for tag in get_latest_map(RegistryKey::Block).keys() {
+                        if matches_resource_id(tag_contents, tag) {
+                            builder = builder.suggest(format!("#{tag}"));
+                        }
+                    }
+                }
                 if matches!(self.suggestions, PredicateSuggestions::BlockIdOrTag) {
-                    let blocks = (0..BlockId::COUNT)
+                    for block in (0..BlockId::COUNT)
                         .filter_map(BlockId::new)
                         .map(Block::from_id)
-                        .map(|block| format!("minecraft:{}", block.name));
-                    builder = builder.filter_and_suggest_iter(blocks);
+                    {
+                        let id = format!("minecraft:{}", block.name);
+                        if matches_resource_id(&contents, &id) {
+                            builder = builder.suggest(id);
+                        }
+                    }
                 }
             }
             PredicateSuggestions::OpenPropertiesOrNbt | PredicateSuggestions::OpenNbt => {
@@ -465,6 +478,24 @@ impl BlockPredicateParser {
         }
         builder.build()
     }
+}
+
+/// Retained SharedSuggestionProvider filtering, bounded to builtin ASCII identifiers.
+fn matches_resource_id(contents: &str, id: &str) -> bool {
+    if contents.contains(':') {
+        matches_resource_substr(contents, id)
+    } else {
+        id.split_once(':').is_some_and(|(namespace, path)| {
+            matches_resource_substr(contents, namespace) || matches_resource_substr(contents, path)
+        })
+    }
+}
+
+fn matches_resource_substr(pattern: &str, input: &str) -> bool {
+    input.starts_with(pattern)
+        || input
+            .match_indices(['.', '_', '/'])
+            .any(|(index, _)| input[index + 1..].starts_with(pattern))
 }
 
 fn property_names(block: &Block) -> Vec<&'static str> {
