@@ -93,14 +93,19 @@ impl RegionChunk {
 pub trait WorldgenBlockBehavior: Sync {
     // --- tree family ---
     fn populate_worldgen_beehive(
-        &self, _region: &mut WorldGenRegion<'_>, _p: [i32; 3],
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
         _random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<(), Error> {
         Err(Error("Unsupported: populate_worldgen_beehive".into()))
     }
     fn state_has_sturdy_face(
-        &self, _region: &WorldGenRegion<'_>, _state: BlockState,
-        _query_position: [i32; 3], _face: ferraloom_util::Direction,
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _query_position: [i32; 3],
+        _face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: state_has_sturdy_face".into()))
     }
@@ -220,14 +225,20 @@ pub struct WorldGenRegion<'a> {
 impl<'a> WorldGenRegion<'a> {
     // --- tree family ---
     pub fn populate_worldgen_beehive(
-        &mut self, p: [i32; 3], random: &mut ferraloom_util::random::WorldgenRandom,
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<(), Error> {
         self.behavior.populate_worldgen_beehive(self, p, random)
     }
     pub fn state_has_sturdy_face(
-        &self, state: BlockState, query_position: [i32; 3], face: ferraloom_util::Direction,
+        &self,
+        state: BlockState,
+        query_position: [i32; 3],
+        face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
-        self.behavior.state_has_sturdy_face(self, state, query_position, face)
+        self.behavior
+            .state_has_sturdy_face(self, state, query_position, face)
     }
     // --- end tree family ---
 
@@ -367,10 +378,17 @@ impl<'a> WorldGenRegion<'a> {
         } else if in_height && self.behavior.has_block_entity(old) {
             self.chunks[index].block_entities.remove(&p);
         }
-        if flags & 16 == 0
-            && let Some(post) = self.behavior.post_process_pos(state, self, p)?
-        {
-            self.mark_post_processing(post)?;
+        if flags & 16 == 0 {
+            let post = match state.post_process() {
+                ferraloom_data::PostProcess::Never => None,
+                ferraloom_data::PostProcess::Always => Some(p),
+                ferraloom_data::PostProcess::Context => {
+                    self.behavior.post_process_pos(state, self, p)?
+                }
+            };
+            if let Some(post) = post {
+                self.mark_post_processing(post)?;
+            }
         }
         Ok(true)
     }
