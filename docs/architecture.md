@@ -62,30 +62,31 @@ start, the way Paper does. Mojang assets are never committed.
 ## Threading
 
 Vanilla runs the whole simulation on one thread. Ferraloom runs it on many
-without changing what any contraption, farm or mob observes.
+without changing what any contraption, farm or mob observes. The details are in
+[`docs/design/game-core.md`](design/game-core.md); this is the summary.
 
-- **Regions.** Each dimension is partitioned into regions of loaded chunks.
-  Regions that are far enough apart cannot affect each other within one tick,
-  so they tick in parallel on a worker pool. A region's own tick is plain,
-  single-threaded vanilla code with `&mut` access to its chunks and entities,
-  so there are no locks inside game logic.
-- **Merging.** Regions merge whenever their contents come within a
-  safety margin (larger than any per-tick interaction radius: entity movement,
-  explosions, redstone update reach, pathfinding range). They split again when
-  their contents separate.
-- **Cross-region work** (an entity crossing a boundary, a teleport, a command
-  targeting another region's entities) goes through messages applied at the
-  start of the receiving region's next tick. Global state (time, weather,
-  scoreboard, command storage, game rules) lives in a global phase that runs
-  between region ticks.
-- **Single-region mode** (`--regions off`) ticks each dimension as one region,
-  which gives vanilla order exactly. Parity tests run in both modes.
-- **Off-tick parallelism.** Chunk generation, lighting, chunk IO, packet
-  encoding, compression, encryption and pathfinding run on their own pools
-  regardless of mode.
-
-Build regions-shaped ownership from the start, even while only one region per
-dimension exists. Retrofitting ownership later is the expensive path.
+- **Regions.** Each dimension is partitioned into regions: connected closures
+  of loaded chunks around active content, inflated by an 8-chunk baseline
+  margin. A region's tick is plain single-threaded vanilla code with `&mut`
+  access to what it owns, so game logic has no locks.
+- **Phase barriers.** All regions of a dimension run each vanilla tick phase in
+  parallel and join at every phase boundary. Dimensions tick in vanilla order.
+- **Exclusive lane.** Anything that reaches beyond its region (commands with
+  global selectors, teleports, portals, synchronous chunk loads) parks at its
+  call site until the other regions finish the phase, then runs with exclusive
+  access and returns its result synchronously, as vanilla does.
+- **Region-local resources.** Each region owns deterministic forks of the
+  dimension's random streams, a share of the global mob-cap budget computed at
+  the phase barrier, and blocks of network entity ids.
+- **Accepted difference.** Within one phase, the interleaving of independent
+  regions may differ from vanilla's global order. Only operations that read
+  several regions in the same phase can observe it.
+- **Single-region mode** (`--regions off`) is the exact vanilla reference. The
+  parity suite runs in both modes.
+- **Off-tick pools.** Chunk generation, lighting, chunk IO, pathfinding, packet
+  encoding, compression and encryption run on their own pools. Their results
+  re-enter a region in request order at vanilla's polling points, never in
+  completion order.
 
 ## Testing
 
