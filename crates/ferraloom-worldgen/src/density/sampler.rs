@@ -560,7 +560,9 @@ impl DensityFunctionCompiler {
             D::Noise {
                 xz_scale, y_scale, ..
             } => {
-                if c.iter().all(|id| self.constant(*id) == Some(0.0)) {
+                if c.iter()
+                    .all(|id| self.constant(*id).is_some_and(|v| v.to_bits() == 0))
+                {
                     let mut out = vec![0.0; volume.len()];
                     node.noise
                         .as_ref()

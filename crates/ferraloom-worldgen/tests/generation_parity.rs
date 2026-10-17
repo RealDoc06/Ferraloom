@@ -111,7 +111,7 @@ fn assert_blocks(chunk: &GeneratedChunk, expected: &Value, description: &str) {
             }
         }
     }
-    for ([x, z], runs) in [[0, 0], [7, 11], [15, 15]]
+    for ([x, z], runs) in [[0, 0], [7, 11], [15, 15], [8, 8]]
         .into_iter()
         .zip(expected["columns"].as_array().unwrap())
     {

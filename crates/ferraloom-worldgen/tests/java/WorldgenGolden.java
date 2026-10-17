@@ -121,7 +121,7 @@ public final class WorldgenGolden {
         }
         out.addProperty("hash",HexFormat.of().formatHex(digest.digest()));
         var columns=new JsonArray();
-        for(int[] local:new int[][]{{0,0},{7,11},{15,15}}) {
+        for(int[] local:new int[][]{{0,0},{7,11},{15,15},{8,8}}) {
             var column=new JsonArray();int previous=-1,count=0;
             for(int y=chunk.getMinY();y<=chunk.getMaxY();y++) {
                 int id=net.minecraft.world.level.block.Block.getId(chunk.getBlockState(new BlockPos(chunk.getPos().getMinBlockX()+local[0],y,chunk.getPos().getMinBlockZ()+local[1])));
@@ -146,6 +146,15 @@ public final class WorldgenGolden {
             if(needed.remove(biome)) {locations.add(p);System.err.println("seed="+seed+" "+biome+" chunk="+Arrays.toString(p));}
         }
         if(!needed.isEmpty())throw new AssertionError("missing test biomes "+needed);
+        var generator=new NoiseBasedChunkGenerator(source(registries,dimension),Holder.direct(settings));
+        var heights=net.minecraft.world.level.LevelHeightAccessor.create(settings.noiseSettings().minY(),settings.noiseSettings().height());
+        boolean found=false;
+        for(int cx=-63;cx<=63&&!found;cx+=7)for(int cz=-63;cz<=63&&!found;cz+=7) {
+            var column=generator.getBaseColumn(cx*16+8,cz*16+8,heights,state);int water=0;
+            for(int y=-53;y<0;y++)if(column.getBlock(y).is(net.minecraft.world.level.block.Blocks.WATER))water++;
+            if(water>=5) {locations.add(new int[]{cx,cz});found=true;System.err.println("seed="+seed+" aquifer cave chunk="+cx+","+cz+" center-column water="+water);}
+        }
+        if(!found)throw new AssertionError("missing aquifer cave test area");
         return locations;
     }
     static void chunks(RegistryAccess.Frozen registries,Path directory) throws Exception {
@@ -354,7 +363,9 @@ public final class WorldgenGolden {
             {"material","{\"type\":\"minecraft:block\",\"result_state\":\"stone\"}"},
             {"material","{\"type\":\"minecraft:ore_vein\",\"ore_block\":\"iron_ore\",\"raw_ore_block\":\"raw_iron_block\",\"filler_block\":\"tuff\",\"raw_ore_chance\":1.00000001,\"density\":1,\"richness\":1,\"filler_gap\":-1}"},
         };
-        for(var test:cases) {
+        var shiftedZero=JsonParser.parseString("{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":-0.0}");
+        var extended=new ArrayList<>(Arrays.asList(cases));extended.add(new String[]{"density",shiftedZero.toString()});
+        for(var test:extended) {
             var definition=JsonParser.parseString(test[1]);
             com.mojang.serialization.Codec<?> codec=switch(test[0]) {
                 case "density" -> DensityFunction.CODEC;

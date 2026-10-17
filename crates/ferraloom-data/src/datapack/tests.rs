@@ -104,7 +104,7 @@ fn real_vanilla_pack_loads_from_bundle_or_extracted_jar() {
 }
 
 #[test]
-fn strict_json_rejects_duplicate_decoded_keys_and_block_properties_are_lenient() {
+fn vanilla_json_duplicate_keys_and_lenient_block_properties() {
     let manager = ResourceManager::new(vec![pack(
         "invalid",
         &[
@@ -112,12 +112,13 @@ fn strict_json_rejects_duplicate_decoded_keys_and_block_properties_are_lenient()
             ("valid.json", r#"{"a":"{}:\"", "nested":{"a":1}}"#),
         ],
     )]);
-    assert!(
+    assert_eq!(
         manager
             .require(&"tag.json".parse().unwrap())
             .unwrap()
             .json()
-            .is_err()
+            .unwrap()["replace"],
+        true
     );
     assert!(
         manager
