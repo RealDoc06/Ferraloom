@@ -170,7 +170,9 @@ impl StructurePoolElement {
     ) -> Result<[i32; 3], Error> {
         match self {
             Self::Empty | Self::Feature { .. } => Ok([0; 3]),
-            Self::Single { location, .. } => Ok(templates.get(location)?.rotated_size(rotation)),
+            Self::Single { location, .. } => {
+                Ok(templates.get_or_create(location).rotated_size(rotation))
+            }
             Self::List { elements, .. } => {
                 let mut size = [0; 3];
                 for element in elements {
@@ -192,7 +194,7 @@ impl StructurePoolElement {
                 "Invalid call to EmptyPoolElement.getBoundingBox".into(),
             )),
             Self::Feature { .. } => Ok(BoundingBox::point(position)),
-            Self::Single { location, .. } => Ok(templates.get(location)?.bounding_box(
+            Self::Single { location, .. } => Ok(templates.get_or_create(location).bounding_box(
                 &StructurePlaceSettings {
                     rotation,
                     ..Default::default()
@@ -238,7 +240,7 @@ impl StructurePoolElement {
                 selection_priority: 0,
             }]),
             Self::Single { location, .. } => {
-                let template = templates.get(location)?;
+                let template = templates.get_or_create(location);
                 if template.palettes.is_empty() {
                     return Ok(Vec::new());
                 }
@@ -372,7 +374,7 @@ impl StructurePoolElement {
             Self::Single { location, .. } => {
                 let (mut settings, processors) =
                     self.placement_settings(rotation, bounds, liquid, keep_jigsaws)?;
-                let template = templates.get(location)?;
+                let template = templates.get_or_create(location);
                 template.place_in_world(
                     context.region,
                     position,

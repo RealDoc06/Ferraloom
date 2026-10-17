@@ -455,13 +455,14 @@ fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
         }
         reader.skip();
     }
-    if reader.can_read() && reader.peek() == u16::from(b'{') {
-        if !matches!(
+    if reader.can_read()
+        && reader.peek() == u16::from(b'{')
+        && !matches!(
             ferraloom_nbt::parse_prefix(&reader.remaining()).ok()?.0,
             Tag::Compound(_)
-        ) {
-            return None;
-        }
+        )
+    {
+        return None;
     }
     let state =
         BlockState::from_properties(block, values.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;

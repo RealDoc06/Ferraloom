@@ -237,16 +237,27 @@ impl StructureTemplateManager {
         resources: &ResourceManager,
         ids: impl IntoIterator<Item = Identifier>,
     ) -> Result<Self, Error> {
-        let templates = ids
-            .into_iter()
-            .map(|id| {
-                Ok((
+        let mut templates = BTreeMap::new();
+        for id in ids {
+            let file = id.with_path(format!("structure/{}.nbt", id.path()))?;
+            if resources.get(&file).is_some() {
+                templates.insert(
                     id.clone(),
                     Arc::new(StructureTemplate::load(resources, &id)?),
-                ))
-            })
-            .collect::<Result<_, Error>>()?;
+                );
+            }
+        }
         Ok(Self { templates })
+    }
+    /// Port of StructureTemplateManager#getOrCreate for pool element queries.
+    /// Empty templates are immutable, so missing resources need no cache write.
+    pub fn get_or_create(&self, id: &Identifier) -> &StructureTemplate {
+        static EMPTY: StructureTemplate = StructureTemplate {
+            size: [0; 3],
+            palettes: Vec::new(),
+            entities: Vec::new(),
+        };
+        self.templates.get(id).map_or(&EMPTY, Arc::as_ref)
     }
     pub fn get(&self, id: &Identifier) -> Result<&StructureTemplate, Error> {
         self.templates
