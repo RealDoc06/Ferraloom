@@ -58,13 +58,9 @@ impl BlockState {
             let Some(layout) = data.properties.iter().find(|p| p.name == name) else {
                 continue;
             };
-            let new = if layout.integer {
-                integer_property_value(value)
-                    .and_then(|value| layout.values.iter().position(|&v| v == value))
-            } else {
-                layout.names.iter().position(|&v| v == value)
+            let Some(new) = layout.names.iter().position(|&v| v == value) else {
+                continue;
             };
-            let Some(new) = new else { continue };
             let old = (state.0 - data.first_state) / layout.stride % layout.names.len() as u16;
             state = Self(state.0 - old * layout.stride + new as u16 * layout.stride);
         }
@@ -86,6 +82,31 @@ impl BlockState {
         let new = layout.values.iter().position(|&v| v == value.index())? as u16;
         let old = (self.0 - block.first_state) / layout.stride % layout.values.len() as u16;
         Some(Self(self.0 - old * layout.stride + new * layout.stride))
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#rotate. Tables preserve every block's override,
+    /// including stairs, rails, multi-face connections and jigsaw orientation.
+    pub const fn rotate(self, rotation: ferraloom_util::Rotation) -> Self {
+        use ferraloom_util::Rotation;
+        match rotation {
+            Rotation::None => self,
+            Rotation::Clockwise90 => Self(STATE_TRANSFORM_CLOCKWISE_90[self.0 as usize]),
+            Rotation::Clockwise180 => Self(STATE_TRANSFORM_CLOCKWISE_180[self.0 as usize]),
+            Rotation::CounterClockwise90 => {
+                Self(STATE_TRANSFORM_COUNTERCLOCKWISE_90[self.0 as usize])
+            }
+        }
+    }
+    /// Port of BlockStateBase#mirror. Apply before rotate for templates.
+    pub const fn mirror(self, mirror: ferraloom_util::Mirror) -> Self {
+        use ferraloom_util::Mirror;
+        match mirror {
+            Mirror::None => self,
+            Mirror::LeftRight => Self(STATE_TRANSFORM_LEFT_RIGHT[self.0 as usize]),
+            Mirror::FrontBack => Self(STATE_TRANSFORM_FRONT_BACK[self.0 as usize]),
+        }
     }
 }
 
@@ -124,45 +145,14 @@ impl PropertyValue for u8 {
     }
 }
 
-/// Port of IntegerProperty#getValue through Integer.parseInt/Character.digit.
-fn integer_property_value(value: &str) -> Option<u8> {
-    // Java's char overload accepts BMP decimal digits, including fullwidth digits.
-    const ZEROES: &[u16] = &[
-        0x0030, 0x0660, 0x06f0, 0x07c0, 0x0966, 0x09e6, 0x0a66, 0x0ae6, 0x0b66, 0x0be6, 0x0c66,
-        0x0ce6, 0x0d66, 0x0de6, 0x0e50, 0x0ed0, 0x0f20, 0x1040, 0x1090, 0x17e0, 0x1810, 0x1946,
-        0x19d0, 0x1a80, 0x1a90, 0x1b50, 0x1bb0, 0x1c40, 0x1c50, 0xa620, 0xa8d0, 0xa900, 0xa9d0,
-        0xa9f0, 0xaa50, 0xabf0, 0xff10,
-    ];
-    let (negative, digits) = value.strip_prefix('-').map_or_else(
-        || (false, value.strip_prefix('+').unwrap_or(value)),
-        |digits| (true, digits),
-    );
-    if digits.is_empty() {
-        return None;
-    }
-    let mut result = 0i32;
-    for unit in digits.encode_utf16() {
-        let digit = ZEROES
-            .iter()
-            .find_map(|&zero| unit.checked_sub(zero).filter(|&digit| digit < 10))?;
-        result = result.checked_mul(10)?.checked_sub(i32::from(digit))?;
-    }
-    u8::try_from(if negative {
-        result
-    } else {
-        result.checked_neg()?
-    })
-    .ok()
-}
-
 #[derive(Clone, Copy, Debug)]
 struct PropertyLayout {
     id: u8,
     name: &'static str,
     names: &'static [&'static str],
-    integer: bool,
     stride: u16,
     values: &'static [u8],
+    integer_values: Option<&'static [i32]>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -224,7 +214,7 @@ pub struct SoundType {
     pub fall_sound: registries::sound_event::Id,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FluidState {
     pub fluid_type: registries::fluid::Id,
     pub amount: u8,
@@ -327,3 +317,136 @@ impl EntityType {
 
 #[cfg(test)]
 mod tests;
+
+/// Dynamic property failures preserve the distinction needed by state providers:
+/// absent/non-integer properties skip sampling, invalid sampled values fail.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlockStatePropertyError {
+    MissingOrNonInteger,
+    InvalidValue(i32),
+}
+impl BlockState {
+    /// Port of BlockState#withPropertiesOf. Property identity includes its
+    /// allowed values; equally named properties with different ranges differ.
+    pub fn with_properties_of(mut self, other: Self) -> Self {
+        let target = self.block().data();
+        let source = other.block().data();
+        for from in source.properties {
+            if let Some(to) = target
+                .properties
+                .iter()
+                .find(|to| to.id == from.id && to.names == from.names)
+            {
+                let source_index =
+                    (other.0 - source.first_state) / from.stride % from.values.len() as u16;
+                let target_index =
+                    (self.0 - target.first_state) / to.stride % to.values.len() as u16;
+                self = Self(self.0 - target_index * to.stride + source_index * to.stride);
+            }
+        }
+        self
+    }
+    pub fn has_integer_property(self, name: &str) -> bool {
+        self.block()
+            .data()
+            .properties
+            .iter()
+            .any(|p| p.name == name && p.integer_values.is_some())
+    }
+    /// Port of StateHolder#setValue for an IntegerProperty selected by name.
+    /// Numeric values are generated from the layout; no runtime value parsing.
+    pub fn with_integer_property(
+        self,
+        name: &str,
+        value: i32,
+    ) -> Result<Self, BlockStatePropertyError> {
+        let data = self.block().data();
+        let property = data
+            .properties
+            .iter()
+            .find(|p| p.name == name)
+            .ok_or(BlockStatePropertyError::MissingOrNonInteger)?;
+        let values = property
+            .integer_values
+            .ok_or(BlockStatePropertyError::MissingOrNonInteger)?;
+        let new = values
+            .iter()
+            .position(|&v| v == value)
+            .ok_or(BlockStatePropertyError::InvalidValue(value))? as u16;
+        let old = (self.0 - data.first_state) / property.stride % values.len() as u16;
+        Ok(Self(self.0 - old * property.stride + new * property.stride))
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#getFaceOcclusionShape and Block#isShapeFullBlock.
+    /// Direction bits follow vanilla's DOWN, UP, NORTH, SOUTH, WEST, EAST order.
+    pub const fn is_face_occlusion_full(self, face: ferraloom_util::Direction) -> bool {
+        FACE_OCCLUSION[self.0 as usize] & (1 << face as u8) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#isSolid, which reads initCache's legacySolid.
+    pub const fn is_solid(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & 1 != 0
+    }
+    /// Port of BlockStateBase#hasBlockEntity, a state-only EntityBlock test.
+    pub const fn has_block_entity(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & 2 != 0
+    }
+    /// Port of BlockStateBase.Cache#isFaceSturdy for SupportType.FULL.
+    /// Dynamic shapes have no cache and require the live block behavior.
+    pub const fn cached_sturdy_face(self, face: ferraloom_util::Direction) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << (3 + face as u8)) != 0)
+        }
+    }
+    /// Port of BlockStateBase.Cache#isCollisionShapeFullBlock.
+    pub const fn cached_collision_full_block(self) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << 9) != 0)
+        }
+    }
+    /// Port of BlockStateBase#getCollisionShape(BlockGetter, BlockPos): cached
+    /// states use Cache.collisionShape, initialized with EmptyBlockGetter at ZERO.
+    /// Dynamic shapes still need the level. Reuses the extracted collision shape.
+    pub fn cached_collision_empty(self) -> Option<bool> {
+        self.cached_collision_full_block()
+            .map(|_| self.data().collision.boxes().is_empty())
+    }
+    /// Vanilla's registered PostProcess callbacks are null, self, and above.
+    pub const fn post_process_y_offset(self) -> Option<i32> {
+        match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
+            1 => Some(0),
+            2 => Some(1),
+            _ => None,
+        }
+    }
+}
+
+impl Block {
+    /// Concrete vanilla Java class, extracted from the registered block object.
+    pub const fn class(self) -> BlockClass {
+        BLOCK_CLASSES[self.protocol_id() as usize]
+    }
+
+    /// Java instanceof, including transitive superclasses and interfaces.
+    pub const fn is_instance_of(self, class: BlockClass) -> bool {
+        let index = class as usize;
+        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
+    pub const fn is_air(self) -> bool {
+        STATE_IS_AIR[self.id() as usize]
+    }
+}

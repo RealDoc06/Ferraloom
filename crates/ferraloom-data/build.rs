@@ -290,10 +290,21 @@ fn blocks(
                 let property = &props[name];
                 let values = values.as_array().unwrap();
                 let indexes: Vec<_> = values.iter().map(|v| property.index(string(v))).collect();
+                let integer_values = if property.rust_type == "u8" {
+                    format!(
+                        "Some(&{:?})",
+                        values
+                            .iter()
+                            .map(|v| string(v).parse::<i32>().unwrap())
+                            .collect::<Vec<_>>()
+                    )
+                } else {
+                    "None".to_owned()
+                };
                 writeln!(
                     out,
-                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, integer: {}, stride: {stride}, values: &{indexes:?} }},",
-                    property.id, values.iter().map(string).collect::<Vec<_>>(), property.rust_type == "u8"
+                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, stride: {stride}, values: &{indexes:?}, integer_values: {integer_values} }},",
+                    property.id, values.iter().map(string).collect::<Vec<_>>()
                 )
                 .unwrap();
                 layouts.push((name, values, stride));
@@ -449,6 +460,115 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
     out.push_str("];\n");
 }
 
+/// Pure registry transforms from each block's vanilla virtual methods.
+fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
+    for name in [
+        "clockwise_90",
+        "clockwise_180",
+        "counterclockwise_90",
+        "left_right",
+        "front_back",
+    ] {
+        let values = tables[name].as_array().expect("state transform array");
+        assert_eq!(values.len(), state_count, "state transform table length");
+        write!(
+            out,
+            "static STATE_TRANSFORM_{}: [u16; {}] = [",
+            constant(name),
+            state_count
+        )
+        .unwrap();
+        for value in values {
+            let value = number(value);
+            assert!((value as usize) < state_count && value <= u16::MAX as u64);
+            write!(out, "{value},").unwrap();
+        }
+        out.push_str("];\n");
+    }
+}
+
+// Java class/interface identity is generated separately from state properties.
+fn block_classes(out: &mut String, data: &Value, block_count: usize) {
+    let classes = data["classes"].as_array().unwrap();
+    let blocks = data["blocks"].as_array().unwrap();
+    assert_eq!(blocks.len(), block_count);
+    let names = classes
+        .iter()
+        .map(|c| string(&c["name"]))
+        .collect::<Vec<_>>();
+    let variants = names
+        .iter()
+        .map(|name| pascal(name.rsplit('.').next().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        variants.iter().collect::<BTreeSet<_>>().len(),
+        variants.len(),
+        "class name collision"
+    );
+    out.push_str("/// Vanilla concrete block classes, superclasses and implemented interfaces.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]\n#[repr(u16)]\npub enum BlockClass {\n");
+    for variant in &variants {
+        writeln!(out, "{variant},").unwrap();
+    }
+    out.push_str("}\nimpl BlockClass {\npub const ALL: &[Self] = &[");
+    for variant in &variants {
+        write!(out, "Self::{variant},").unwrap();
+    }
+    out.push_str("];\npub const fn java_name(self) -> &'static str { BLOCK_CLASS_NAMES[self as usize] }\n}\n");
+    writeln!(
+        out,
+        "const BLOCK_CLASS_NAMES: [&str; {}] = {names:?};",
+        names.len()
+    )
+    .unwrap();
+    write!(out, "const BLOCK_CLASSES: [BlockClass; {block_count}] = [").unwrap();
+    for class in blocks {
+        write!(out, "BlockClass::{},", variants[number(class) as usize]).unwrap();
+    }
+    out.push_str("];\n");
+    let words = classes.len().div_ceil(64);
+    writeln!(
+        out,
+        "const BLOCK_CLASS_INSTANCES: [[u64; {words}]; {}] = [",
+        classes.len()
+    )
+    .unwrap();
+    for class in classes {
+        let mut bits = vec![0u64; words];
+        for parent in class["instances"].as_array().unwrap() {
+            let index = number(parent) as usize;
+            assert!(index < classes.len());
+            bits[index / 64] |= 1u64 << (index % 64);
+        }
+        writeln!(out, "{bits:?},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
+/// Cached face occlusion is independent of the level and block position.
+fn face_occlusion(out: &mut String, values: &Value, state_count: usize) {
+    let values = values.as_array().expect("face occlusion array");
+    assert_eq!(values.len(), state_count, "face occlusion table length");
+    write!(out, "static FACE_OCCLUSION: [u8; {state_count}] = [").unwrap();
+    for value in values {
+        let mask = number(value);
+        assert!(mask < 64);
+        write!(out, "{mask},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
+fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
+    let values = values.as_array().expect("block state facts array");
+    assert_eq!(values.len(), state_count, "block state facts table length");
+    write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
+    for value in values {
+        let bits = number(value);
+        assert!(bits < 4096);
+        write!(out, "{bits},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -474,10 +594,40 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    block_classes(
+        &mut out,
+        &load(root, "block_classes"),
+        block_properties["blocks"].as_array().unwrap().len(),
+    );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
     blocks(&mut out, &block_report, &block_properties, &props);
     shapes(&mut out, &load(root, "shapes"));
+    state_transforms(
+        &mut out,
+        &load(root, "state_transforms"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
+    let state_count = block_properties["states"].as_array().unwrap().len();
+    let mut is_air = vec![false; state_count];
+    for id in load(root, "air_states").as_array().unwrap() {
+        is_air[number(id) as usize] = true;
+    }
+    writeln!(
+        out,
+        "const STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
+    )
+    .unwrap();
+    face_occlusion(
+        &mut out,
+        &load(root, "face_occlusion"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
+    block_state_facts(
+        &mut out,
+        &load(root, "block_state_facts"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");

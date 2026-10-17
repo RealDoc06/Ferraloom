@@ -232,20 +232,6 @@ fn generic_state_properties_match_every_report_state() {
             Some(block_id.default_state())
         );
     }
-    for value in ["01", "+01", "０１", "١"] {
-        assert_eq!(
-            BlockState::from_properties(Block::WHEAT, [("age", value)]),
-            Block::WHEAT.default_state().with(properties::AGE, 1),
-            "IntegerProperty parsing: {value}"
-        );
-    }
-    for value in ["-0", "-1", "1.0", " 1", "2147483648"] {
-        assert_eq!(
-            BlockState::from_properties(Block::WHEAT, [("age", value)]),
-            Some(Block::WHEAT.default_state()),
-            "IntegerProperty fallback: {value}"
-        );
-    }
     assert_eq!(
         BlockState::from_properties(
             Block::OAK_STAIRS,
@@ -282,4 +268,178 @@ fn generic_static_registry_lookup_matches_numeric_reports() {
         registries::block::from_name("minecraft:stone"),
         Some(Block::STONE)
     );
+}
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
+}
+
+#[test]
+fn every_state_rotation_and_mirror_matches_vanilla_registry() {
+    use ferraloom_util::{Mirror, Rotation};
+    let captured: Value = serde_json::from_str(include_str!(
+        "../../../data/generated/state_transforms.json"
+    ))
+    .unwrap();
+    for id in 0..BLOCK_STATES.len() {
+        let state = BlockState::from_id(id as u16).unwrap();
+        for (name, actual) in [
+            ("clockwise_90", state.rotate(Rotation::Clockwise90)),
+            ("clockwise_180", state.rotate(Rotation::Clockwise180)),
+            (
+                "counterclockwise_90",
+                state.rotate(Rotation::CounterClockwise90),
+            ),
+            ("left_right", state.mirror(Mirror::LeftRight)),
+            ("front_back", state.mirror(Mirror::FrontBack)),
+        ] {
+            assert_eq!(
+                actual.id(),
+                captured[name][id].as_u64().unwrap() as u16,
+                "state {id} {name}"
+            );
+            assert_eq!(
+                actual.block(),
+                state.block(),
+                "state {id} {name} changed block"
+            );
+        }
+        assert_eq!(state.rotate(Rotation::None), state);
+        assert_eq!(state.mirror(Mirror::None), state);
+    }
+}
+
+#[test]
+fn cached_face_occlusion_distinguishes_faces_and_non_occluding_blocks() {
+    use ferraloom_util::Direction;
+    for face in Direction::VALUES {
+        assert!(Block::STONE.default_state().is_face_occlusion_full(face));
+        assert!(!Block::AIR.default_state().is_face_occlusion_full(face));
+        assert!(!Block::GLASS.default_state().is_face_occlusion_full(face));
+    }
+    let bottom = Block::STONE_SLAB.default_state();
+    assert!(bottom.is_face_occlusion_full(Direction::Down));
+    assert!(!bottom.is_face_occlusion_full(Direction::Up));
+}
+
+#[test]
+fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
+    use ferraloom_util::Direction;
+    assert!(Block::STONE.default_state().is_solid());
+    assert!(!Block::WATER.default_state().is_solid());
+    assert!(Block::CHEST.default_state().has_block_entity());
+    assert!(!Block::STONE.default_state().has_block_entity());
+    assert_eq!(
+        Block::STONE
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        Some(true)
+    );
+    assert_eq!(
+        Block::STONE_SLAB
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SCAFFOLDING
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        None
+    );
+    assert_eq!(
+        Block::STONE.default_state().cached_collision_full_block(),
+        Some(true)
+    );
+    assert_eq!(Block::STONE.default_state().post_process_y_offset(), None);
+    assert_eq!(
+        Block::BROWN_MUSHROOM
+            .default_state()
+            .post_process_y_offset(),
+        Some(0)
+    );
+    assert_eq!(
+        Block::MAGMA_BLOCK.default_state().post_process_y_offset(),
+        Some(1)
+    );
+}
+
+#[test]
+fn block_class_hierarchy_matches_extracted_vanilla_classes() {
+    use crate::{Block, BlockClass};
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/generated/block_classes.json")).unwrap();
+    for (&block, concrete) in crate::registries::block::ALL
+        .iter()
+        .zip(data["blocks"].as_array().unwrap())
+    {
+        let index = concrete.as_u64().unwrap() as usize;
+        assert_eq!(
+            block.class().java_name(),
+            data["classes"][index]["name"].as_str().unwrap()
+        );
+        for (class_index, &class) in BlockClass::ALL.iter().enumerate() {
+            assert_eq!(
+                block.is_instance_of(class),
+                data["classes"][index]["instances"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|id| id.as_u64().unwrap() as usize == class_index),
+                "{} {class:?}",
+                block.name()
+            );
+        }
+    }
+    assert!(Block::TALL_SEAGRASS.is_instance_of(BlockClass::DoublePlantBlock));
+    assert!(Block::PALE_MOSS_CARPET.is_instance_of(BlockClass::MossyCarpetBlock));
+    assert!(Block::OAK_STAIRS.is_instance_of(BlockClass::SimpleWaterloggedBlock));
+    assert!(!Block::STONE.is_instance_of(BlockClass::DoublePlantBlock));
+    const CONCRETE: BlockClass = Block::STONE.class();
+    const IS_BLOCK: bool = Block::STONE.is_instance_of(BlockClass::Block);
+    assert_eq!(CONCRETE, BlockClass::Block);
+    assert!(std::hint::black_box(IS_BLOCK));
+}
+
+#[test]
+fn cached_air_fact_matches_vanilla_state_registry() {
+    let ids: Vec<u16> =
+        serde_json::from_str(include_str!("../../../data/generated/air_states.json")).unwrap();
+    for id in 0..crate::BLOCK_STATES.len() {
+        let state = crate::BlockState::from_id(id as u16).unwrap();
+        assert_eq!(state.is_air(), ids.contains(&(id as u16)));
+    }
+    const AIR: bool = crate::Block::AIR.default_state().is_air();
+    assert!(std::hint::black_box(AIR));
 }
