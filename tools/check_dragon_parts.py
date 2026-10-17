@@ -640,7 +640,7 @@ def run_campaign(args: argparse.Namespace, run: Path, report: dict, original: Pa
                                 'difficulty peaceful', 'scoreboard objectives add pdprobe dummy'):
                     entry['setup'].setdefault('commands', []).append({'command': command, 'output': server.command(command)})
                 entry['setup']['floor'] = typed_predicate(server, 'if block 0 -1 2 minecraft:stone if block 0 0 2 minecraft:air')
-            client = Client(server, log_name='dragon-parts-wire', dragon_parts=True, raw_packets=True)
+            client = Client(server, log_name='dragon-parts-wire', block_data=True, dragon_parts=True, raw_packets=True)
             fixture.clients.append(client)
             entry['clients'].append({'name': client.name, 'pid': client.process.pid, 'argv': client.process.args})
             client.ready()
