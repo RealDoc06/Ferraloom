@@ -472,16 +472,9 @@ impl<'a> WorldGenRegion<'a> {
             self.chunks[index].block_entities.remove(&p);
         }
         if flags & 16 == 0 {
-            let post = match state.post_process_y_offset() {
-                Some(offset) => Some([p[0], p[1].wrapping_add(offset), p[2]]),
-                None => match state.post_process() {
-                    ferraloom_data::PostProcess::Never => None,
-                    ferraloom_data::PostProcess::Always => Some(p),
-                    ferraloom_data::PostProcess::Context => {
-                        self.behavior.post_process_pos(state, self, p)?
-                    }
-                },
-            };
+            let post = state
+                .post_process_y_offset()
+                .map(|offset| [p[0], p[1].wrapping_add(offset), p[2]]);
             if let Some(post) = post {
                 self.mark_post_processing(post)?;
             }
