@@ -122,7 +122,7 @@ macro_rules! model {
     };
 }
 
-/// Port of BlockState#CODEC: default states use a string; other states use Name/Properties.
+/// Port of BlockState#CODEC: default states use a string; other states use id/properties.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BlockStatePaletteEntry {
     pub name: Option<NbtString>,
@@ -132,10 +132,12 @@ pub struct BlockStatePaletteEntry {
     pub shorthand: bool,
 }
 impl BlockStatePaletteEntry {
+    // NbtUtils#readBlockState and StateHolder#codec accept only current keys.
+    // NbtUtils's legacy spellings require version < 5006, outside this codec's version gate.
     pub fn from_nbt(mut tag: CompoundTag) -> Result<Self> {
-        let name = tag.remove("Name").map(NbtString::from_tag).transpose()?;
+        let name = tag.remove("id").map(NbtString::from_tag).transpose()?;
         let properties = tag
-            .remove("Properties")
+            .remove("properties")
             .map(BTreeMap::<NbtString, NbtString>::from_tag)
             .transpose()?;
         Ok(Self {
@@ -147,13 +149,13 @@ impl BlockStatePaletteEntry {
     }
     pub fn to_nbt(&self) -> CompoundTag {
         let mut tag = self.extra.clone();
-        tag.remove("Name");
-        tag.remove("Properties");
+        tag.remove("id");
+        tag.remove("properties");
         if let Some(name) = &self.name {
-            tag.insert("Name", name.to_tag());
+            tag.insert("id", name.to_tag());
         }
         if let Some(properties) = &self.properties {
-            tag.insert("Properties", properties.to_tag());
+            tag.insert("properties", properties.to_tag());
         }
         tag
     }
@@ -303,8 +305,52 @@ impl PoiChunk {
 mod tests {
     use super::*;
     #[test]
+    fn block_state_keys_follow_the_current_version_without_legacy_aliases() {
+        let source=ferraloom_nbt::parse_compound(r#"{id:"minecraft:oak_stairs",properties:{facing:"east",half:"top"},Name:"legacy:ignored",Properties:{facing:"west"},future:7}"#).unwrap();
+        let entry = BlockStatePaletteEntry::from_nbt(source.clone()).unwrap();
+        assert_eq!(
+            entry.name.as_ref().unwrap().to_string_lossy(),
+            "minecraft:oak_stairs"
+        );
+        assert_eq!(
+            entry
+                .properties
+                .as_ref()
+                .unwrap()
+                .get(&"facing".into())
+                .unwrap()
+                .to_string_lossy(),
+            "east"
+        );
+        assert_eq!(entry.to_nbt(), source);
+        let fresh = BlockStatePaletteEntry {
+            name: entry.name,
+            properties: entry.properties,
+            ..Default::default()
+        }
+        .to_nbt();
+        assert!(fresh.contains_key("id"));
+        assert!(fresh.contains_key("properties"));
+        assert!(!fresh.contains_key("Name"));
+        assert!(!fresh.contains_key("Properties"));
+        // NbtUtils#packBlockState's <5006 branch is explicitly version-selected; the
+        // current chunk codec must not resolve those keys as current state fields.
+        let legacy = BlockStatePaletteEntry::from_nbt(
+            ferraloom_nbt::parse_compound(
+                r#"{Name:"minecraft:oak_stairs",Properties:{half:"top"}}"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(legacy.name.is_none());
+        assert!(legacy.properties.is_none());
+        assert!(legacy.extra.contains_key("Name"));
+        assert!(legacy.extra.contains_key("Properties"));
+    }
+
+    #[test]
     fn nested_unknown_fields_and_absence_round_trip() {
-        let tag=ferraloom_nbt::parse_compound(r#"{DataVersion:5023,xPos:-1,zPos:3,Status:"minecraft:full",sections:[{Y:-4b,block_states:{palette:[{Name:"minecraft:air",future:3}],future_palette:{nested:[1,2,3]}},future_section:4}],future_root:{opaque:[L;1L,2L]}}"#).unwrap();
+        let tag=ferraloom_nbt::parse_compound(r#"{DataVersion:5023,xPos:-1,zPos:3,Status:"minecraft:full",sections:[{Y:-4b,block_states:{palette:[{id:"minecraft:air",future:3}],future_palette:{nested:[1,2,3]}},future_section:4}],future_root:{opaque:[L;1L,2L]}}"#).unwrap();
         let parsed = SerializableChunkData::parse(tag.clone()).unwrap();
         assert_eq!(parsed.position(), ChunkPos::new(-1, 3));
         assert_eq!(parsed.write().unwrap(), tag);

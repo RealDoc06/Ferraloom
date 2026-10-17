@@ -7,6 +7,7 @@ Run: python3 tests/vanilla.py generate --jar /path/to/server.jar --java /path/to
 """
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import queue
@@ -26,6 +27,16 @@ _digest = bytearray(hashlib.md5(("OfflinePlayer:" + NAME).encode()).digest())
 _digest[6] = (_digest[6] & 15) | 48
 _digest[8] = (_digest[8] & 63) | 128
 PLAYER = uuid.UUID(bytes=bytes(_digest))
+
+
+# Fixed scenarios, independent of the NBT codec under test. Rust and vanilla both
+# assert these coordinates; the default Y-axis log also checks string shorthand.
+BLOCK_STATES = json.loads((Path(__file__).parent / "fixtures/block_states.json").read_text())
+
+
+def block_argument(case):
+    properties = ",".join(f"{key}={value}" for key, value in case["properties"].items())
+    return case["id"] + "[" + properties + "]"
 
 
 def varint(n):
@@ -164,6 +175,12 @@ def run_server(world, jar, java, generate):
         if generate:
             commands('setworldspawn 0 -60 0\nforceload add 0 0 31 15\nsetblock 1 -60 1 minecraft:barrel{Items:[{Slot:0b,id:"minecraft:diamond",count:3}]}\nsetblock 2 -60 1 minecraft:bell\nsummon minecraft:armor_stand 3 -59 1 {CustomName:{text:"Storage fixture"}}')
             wait_for("Summoned new")
+            # Contain the slab's water and keep wire powered across ordinary ticks/restarts.
+            commands("fill 8 -60 2 10 -60 4 minecraft:stone\nsetblock 11 -61 3 minecraft:redstone_block")
+            for case in BLOCK_STATES:
+                position = " ".join(map(str, case["pos"]))
+                commands(f"setblock {position} {block_argument(case)}")
+            commands('data merge block 1 -60 6 {Items:[{Slot:0b,id:"minecraft:emerald",count:4}]}\ndata merge block 7 -60 6 {Items:[{Slot:2b,id:"minecraft:iron_ingot",count:2}]}')
         client = Client(port)
         client.login(port)
         wait_for("joined the game")
@@ -175,6 +192,15 @@ def run_server(world, jar, java, generate):
             commands('execute if items block 1 -60 1 container.0 minecraft:diamond run say STORAGE_BLOCK_OK\nexecute if entity @e[type=minecraft:armor_stand,name="Storage fixture"] run say STORAGE_ENTITY_OK')
             wait_for("STORAGE_BLOCK_OK")
             wait_for("STORAGE_ENTITY_OK")
+        # These predicates run both before fixture generation and on the Rust-resaved copy.
+        for index, case in enumerate(BLOCK_STATES):
+            position = " ".join(map(str, case["pos"]))
+            commands(f"execute if block {position} {block_argument(case)} run say STORAGE_STATE_{index}_OK")
+        commands("execute if items block 1 -60 6 container.0 minecraft:emerald run say STORAGE_CHEST_OK\nexecute if items block 7 -60 6 container.2 minecraft:iron_ingot run say STORAGE_FURNACE_OK\nsay STORAGE_STATES_DONE")
+        wait_for("STORAGE_STATES_DONE")
+        for marker in [*(f"STORAGE_STATE_{i}_OK" for i in range(len(BLOCK_STATES))), "STORAGE_CHEST_OK", "STORAGE_FURNACE_OK"]:
+            if not any(marker in line for line in lines):
+                raise AssertionError("vanilla state/inventory predicate failed: " + marker)
         client.sock.close()
         commands("save-all flush")
         wait_for("Saved the game")
@@ -187,7 +213,7 @@ def run_server(world, jar, java, generate):
         bad = [line for line in lines if re.search(r"\bERROR\b|Failed to (load|read|save)|corrupt|invalid sector|wrong location", line, re.I)]
         if bad:
             raise AssertionError("vanilla storage errors:\n" + "".join(bad))
-        print(f"vanilla 26.3 accepted world, player {PLAYER}, block entity and entity; exit 0")
+        print(f"vanilla 26.3 accepted world, player {PLAYER}, {len(BLOCK_STATES)} block states, block entities and entity; exit 0")
         return scratch / "world"
     except BaseException:
         print("".join(lines))
