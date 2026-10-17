@@ -658,3 +658,18 @@ pub fn ray_intersects_aabb(start: crate::Vec3, direction: crate::Vec3, aabb: cra
     }
     (direction.x * diff.y - direction.y * diff.x).abs() < extent.x * dy + extent.y * dx
 }
+
+/// Port of Mth#mulAndTruncate, taking the fraction's numerator/denominator
+/// directly. The numerator's int product wraps before truncating division.
+#[inline]
+pub fn mul_and_truncate(numerator: i32, denominator: i32, factor: i32) -> i32 {
+    numerator.wrapping_mul(factor).wrapping_div(denominator)
+}
+#[inline]
+pub fn random_between_inclusive(random: &mut impl RandomSource, min: i32, max: i32) -> i32 {
+    random.next_int_between_inclusive(min, max)
+}
+#[inline]
+pub fn random_between(random: &mut impl RandomSource, min: f32, max: f32) -> f32 {
+    random.next_float() * (max - min) + min
+}

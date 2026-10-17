@@ -106,9 +106,9 @@ public final class VanillaVectors {
         System.out.println("];\npub const VECTORS: [[u64;3];9] = [");
         Vec3 v=new Vec3(-12.25,0.000001,30000000.3); Vec3 w=new Vec3(3.7,-9.1,11.2);
         for (Vec3 q:new Vec3[]{v.normalize(),new Vec3(0.0000001,0,0).normalize(),v.cross(w),v.lerp(w,0.37),v.xRot(0.37f),v.yRot(0.37f),v.zRot(0.37f),Vec3.directionFromRotation(-37.25f,179.3f),v.projectedOn(w)}) {doubles(q.x,q.y,q.z);System.out.println(",");}
-        System.out.println("];\npub const BOXES: [[u64;6];6] = [");
+        System.out.println("];\npub const BOXES: [[u64;6];8] = [");
         AABB b=new AABB(1,-2,3,0,4,-5); AABB c=new AABB(7,8,9,11,13,17);
-        for (AABB q:new AABB[]{b,b.intersect(c),b.inflate(-3,0.3,1.1),b.move(0.1,-1e10,17.3),b.contract(-3,0.3,1.1),b.expandTowards(-3,0.3,1.1)}) {doubles(q.minX,q.minY,q.minZ,q.maxX,q.maxY,q.maxZ);System.out.println(",");}
+        for (AABB q:new AABB[]{b,b.intersect(c),b.inflate(-3,0.3,1.1),b.move(0.1,-1e10,17.3),b.contract(-3,0.3,1.1),b.expandTowards(-3,0.3,1.1),new AABB(-0.0,-0.0,-0.0,1,1,1).expandTowards(0,Double.NaN,-0.0),new AABB(-0.0,-0.0,-0.0,1,1,1).contract(0,Double.NaN,-0.0)}) {doubles(q.minX,q.minY,q.minZ,q.maxX,q.maxY,q.maxZ);System.out.println(",");}
         System.out.println("];\npub const RAW_XOROSHIRO: [([i64;2],[i64;6]);3] = [");
         for (long[] seed:new long[][]{{0,0},{-1,1},{Long.MIN_VALUE,Long.MAX_VALUE}}) {Xoroshiro128PlusPlus r=new Xoroshiro128PlusPlus(seed[0],seed[1]); System.out.print("(");longs(seed);System.out.print(",");longs(r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong());System.out.println("),");}
         System.out.println("];\npub const NOISE_NORMALIZATION: [[u32;5];4] = [");

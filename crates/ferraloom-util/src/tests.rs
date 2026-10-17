@@ -371,6 +371,8 @@ fn vector_operations_and_box_normalization_match_vanilla() {
         b.move_by(0.1, -1e10, 17.3),
         b.contract(-3.0, 0.3, 1.1),
         b.expand_towards(-3.0, 0.3, 1.1),
+        Aabb::new(-0.0, -0.0, -0.0, 1.0, 1.0, 1.0).expand_towards(0.0, f64::NAN, -0.0),
+        Aabb::new(-0.0, -0.0, -0.0, 1.0, 1.0, 1.0).contract(0.0, f64::NAN, -0.0),
     ];
     for (b, expected) in actual.into_iter().zip(expected::BOXES) {
         assert_eq!(

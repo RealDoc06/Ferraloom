@@ -380,22 +380,22 @@ impl Aabb {
     }
     pub fn expand_towards(self, x: f64, y: f64, z: f64) -> Self {
         Self::new(
-            self.min_x + if x < 0.0 { x } else { 0.0 },
-            self.min_y + if y < 0.0 { y } else { 0.0 },
-            self.min_z + if z < 0.0 { z } else { 0.0 },
-            self.max_x + if x > 0.0 { x } else { 0.0 },
-            self.max_y + if y > 0.0 { y } else { 0.0 },
-            self.max_z + if z > 0.0 { z } else { 0.0 },
+            if x < 0.0 { self.min_x + x } else { self.min_x },
+            if y < 0.0 { self.min_y + y } else { self.min_y },
+            if z < 0.0 { self.min_z + z } else { self.min_z },
+            if x > 0.0 { self.max_x + x } else { self.max_x },
+            if y > 0.0 { self.max_y + y } else { self.max_y },
+            if z > 0.0 { self.max_z + z } else { self.max_z },
         )
     }
     pub fn contract(self, x: f64, y: f64, z: f64) -> Self {
         Self::new(
-            self.min_x - if x < 0.0 { x } else { 0.0 },
-            self.min_y - if y < 0.0 { y } else { 0.0 },
-            self.min_z - if z < 0.0 { z } else { 0.0 },
-            self.max_x - if x > 0.0 { x } else { 0.0 },
-            self.max_y - if y > 0.0 { y } else { 0.0 },
-            self.max_z - if z > 0.0 { z } else { 0.0 },
+            if x < 0.0 { self.min_x - x } else { self.min_x },
+            if y < 0.0 { self.min_y - y } else { self.min_y },
+            if z < 0.0 { self.min_z - z } else { self.min_z },
+            if x > 0.0 { self.max_x - x } else { self.max_x },
+            if y > 0.0 { self.max_y - y } else { self.max_y },
+            if z > 0.0 { self.max_z - z } else { self.max_z },
         )
     }
     #[inline]

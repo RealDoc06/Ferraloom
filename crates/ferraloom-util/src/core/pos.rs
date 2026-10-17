@@ -375,10 +375,10 @@ impl Iterator for BetweenClosed {
         if self.index == self.limit {
             return None;
         }
-        let x = self.index % self.width;
-        let remaining = self.index / self.width;
-        let y = remaining % self.height;
-        let z = remaining / self.height;
+        let x = self.index.wrapping_rem(self.width);
+        let remaining = self.index.wrapping_div(self.width);
+        let y = remaining.wrapping_rem(self.height);
+        let z = remaining.wrapping_div(self.height);
         self.index = self.index.wrapping_add(1);
         Some(self.min.offset(x, y, z))
     }
