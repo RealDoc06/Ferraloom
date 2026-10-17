@@ -9,6 +9,8 @@ use ferraloom_util::{Direction, random::RandomSource};
 use serde_json::Value;
 use std::sync::Arc;
 
+mod template;
+
 pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     for name in [
         "random_boolean_selector",
@@ -27,6 +29,7 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             loot_table: "chests/spawn_bonus_chest".parse()?,
         }))
     })?;
+    loader.register("template".parse()?, template::decode)?;
     Ok(())
 }
 /// Port of RandomBooleanSelectorFeature, RandomSelectorFeature,
