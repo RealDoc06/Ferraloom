@@ -426,3 +426,22 @@ fn vanilla_accepts_all_rust_compression_streams() {
         .unwrap();
     assert!(status.success());
 }
+
+#[test]
+#[ignore = "requires vanilla 26.3 server jar and JDK 25; run explicitly on the builder"]
+fn vanilla_observes_rust_directory_lock() {
+    let dir = Scratch::new();
+    let mut lock = DirectoryLock::create(&dir.0).unwrap();
+    for mode in ["lock", "unlocked"] {
+        if mode == "unlocked" {
+            lock.close().unwrap();
+        }
+        let status = std::process::Command::new("python3")
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vanilla.py"))
+            .arg(mode)
+            .arg(&dir.0)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+}

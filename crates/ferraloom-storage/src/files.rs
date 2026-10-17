@@ -116,3 +116,14 @@ pub(crate) fn identifier_path(root: &Path, id: &str) -> Result<PathBuf> {
     }
     Ok(root.join(namespace).join(name))
 }
+
+/// Port of Files.copy(..., COPY_ATTRIBUTES) used by PlayerDataStorage#backup.
+pub(crate) fn copy_with_attributes(from: &Path, to: &Path) -> Result<()> {
+    let metadata = fs::metadata(from)?;
+    fs::copy(from, to)?;
+    let times = fs::FileTimes::new()
+        .set_modified(metadata.modified()?)
+        .set_accessed(metadata.accessed()?);
+    OpenOptions::new().write(true).open(to)?.set_times(times)?;
+    Ok(())
+}

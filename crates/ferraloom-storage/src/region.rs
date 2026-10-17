@@ -46,6 +46,13 @@ impl RegionBitmap {
         }
     }
     pub fn allocate(&mut self, size: usize) -> usize {
+        if size == 0 {
+            return self
+                .used
+                .iter()
+                .position(|used| !used)
+                .unwrap_or(self.used.len());
+        }
         let mut start = 0;
         let mut run = 0;
         for (i, used) in self.used.iter().enumerate() {
@@ -162,11 +169,13 @@ impl RegionFile {
         let Some(bytes) = self.read_bytes(pos)? else {
             return Ok(None);
         };
-        Ok(Some(NbtIo::read_compound(
+        let tag = NbtIo::read_compound(
             bytes.as_slice(),
             Compression::None,
             &mut NbtAccounter::unlimited(),
-        )?))
+        )?;
+        crate::check_tag_version(&tag)?;
+        Ok(Some(tag))
     }
     pub fn read_bytes(&mut self, pos: ChunkPos) -> Result<Option<Vec<u8>>> {
         self.ensure_open()?;
@@ -249,6 +258,7 @@ impl RegionFile {
         result.unwrap_or(false)
     }
     pub fn write(&mut self, pos: ChunkPos, value: &CompoundTag) -> Result<()> {
+        crate::check_tag_version(value)?;
         let mut bytes = Vec::new();
         NbtIo::write_compound(&mut bytes, Compression::None, value)?;
         self.write_bytes(pos, &bytes)

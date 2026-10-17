@@ -349,7 +349,7 @@ impl PlayerDataStorage {
                     now.second()
                 );
                 let backup = self.player_path(uuid, &format!("_corrupted_{timestamp}.dat"))?;
-                if let Err(e) = fs::copy(&path, backup) {
+                if let Err(e) = files::copy_with_attributes(&path, &backup) {
                     log::warn!("Failed to back up corrupted player {uuid}: {e}");
                 }
             }

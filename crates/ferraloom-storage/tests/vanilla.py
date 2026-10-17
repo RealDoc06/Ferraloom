@@ -215,21 +215,24 @@ def compact_region(path, keep):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["generate", "verify", "compression"])
+    parser.add_argument("mode", choices=["generate", "verify", "compression", "lock", "unlocked"])
     parser.add_argument("world", nargs="?", type=Path)
     parser.add_argument("--jar", type=Path, default=os.environ.get("FERRALOOM_VANILLA_JAR"))
     parser.add_argument("--java", default=str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java")
     args = parser.parse_args()
     if args.jar is None:
         parser.error("--jar or FERRALOOM_VANILLA_JAR is required")
-    if args.mode == "compression":
+    if args.mode in ("compression", "lock", "unlocked"):
         if args.world is None:
             parser.error("compression requires an output directory")
         cache = args.jar.resolve().parent
         jars = list((cache / "libraries").rglob("*.jar")) + list((cache / "versions").rglob("*.jar"))
         if not jars:
             parser.error("vanilla jar must have been extracted in its shared cache")
-        subprocess.run([args.java, "-cp", os.pathsep.join(map(str, jars)), str(Path(__file__).parent / "CompressionVectors.java"), "verify", str(args.world)], check=True)
+        source = "CompressionVectors.java" if args.mode == "compression" else "DirectoryLockProbe.java"
+        arguments = ["verify", str(args.world)] if args.mode == "compression" else [str(args.world), str(args.mode == "lock").lower()]
+        with tempfile.TemporaryDirectory(prefix="ferraloom-storage-java-") as cwd:
+            subprocess.run([args.java, "--enable-native-access=ALL-UNNAMED", "-cp", os.pathsep.join(map(str, jars)), str((Path(__file__).parent / source).resolve()), *arguments], cwd=cwd, check=True)
         return
     if args.mode == "generate":
         world = run_server(Path("/tmp/ferraloom-storage-nonexistent-world"), args.jar.resolve(), args.java, True)
