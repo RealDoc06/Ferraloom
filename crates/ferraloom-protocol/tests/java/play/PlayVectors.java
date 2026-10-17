@@ -221,6 +221,18 @@ public final class PlayVectors {
         try{inner.writeNbt(tag);outer.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("test"));byte[] nbt=new byte[inner.readableBytes()];inner.readBytes(nbt);outer.writeByteArray(nbt);byte[] input=new byte[outer.readableBytes()];outer.readBytes(input);return input;}
         finally{inner.release();outer.release();}
     }
+    @SuppressWarnings({"rawtypes","unchecked"})
+    static void creativeRejected(Path output,String label,int count,Integer maxStackSize) throws Exception {
+        var b=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);
+        var stack=new ItemStack(Items.DIAMOND,count);
+        if(maxStackSize!=null)stack.set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE,maxStackSize);
+        b.writeShort(-1);ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC.encode(b,stack);byte[] input=new byte[b.readableBytes()];b.readBytes(input);b.readerIndex(0);
+        try {
+            try {net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket.STREAM_CODEC.decode(b);throw new AssertionError(label+" should reject");}
+            catch(io.netty.handler.codec.DecoderException expected){}
+            Files.writeString(output.resolve(label+".reject.hex"),HexFormat.of().formatHex(input)+"\n");
+        }finally{b.release();}
+    }
     static void normalizationCases(Path output) throws Exception {
         normalization(output,"serverbound_CustomClickAction_norm_trailing","net.minecraft.network.protocol.common.ServerboundCustomClickActionPacket",new byte[]{0,4,0,1,2,3});
         var b=new FriendlyByteBuf(Unpooled.buffer());
@@ -318,6 +330,9 @@ public final class PlayVectors {
         }
         edgeCases(output);
         normalizationCases(output);
+        sample(output,"serverbound_SetCreativeModeSlot_edge_count_99","ServerboundSetCreativeModeSlotPacket",b->{b.writeShort(-1);ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC.encode(b,new ItemStack(Items.DIAMOND,99));});
+        creativeRejected(output,"serverbound_SetCreativeModeSlot_count_100",100,null);
+        creativeRejected(output,"serverbound_SetCreativeModeSlot_stack_limit_0",1,0);
         Files.write(output.resolve("packets.tsv"),packetRows);
         System.out.println("Encoded "+count+" packet samples plus bundle delimiter");
     }
