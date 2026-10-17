@@ -129,6 +129,16 @@ public final class FeaturesGolden {
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
         var registries=WorldgenGolden.load();var out=Path.of(args[0]);Files.createDirectories(out);
+        if(args.length>1) {
+            switch(args[1]) {
+                case "numeric" -> NumericGolden.generate(out);
+                case "state" -> StateProviderGolden.generate(registries,out);
+                case "codec" -> CodecGolden.generate(registries,out);
+                case "predicates" -> PredicateGolden.generate(registries,out);
+                default -> throw new IllegalArgumentException("unknown fixture family "+args[1]);
+            }
+            return;
+        }
         providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);StateProviderGolden.generate(registries,out);SorterGolden.generate(registries,out);DecorationGolden.generate(registries,out);BiomeOrderGolden.generate(registries,out);BaseColumnGolden.generate(registries,out);CarvingFilterGolden.generate(registries,out);CodecGolden.generate(registries,out);HeightmapGolden.generate(registries,out);NumericGolden.generate(out);PredicateGolden.generate(registries,out);
     }
 }

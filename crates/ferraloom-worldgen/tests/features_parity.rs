@@ -425,6 +425,42 @@ fn all_state_providers_match_vanilla_optional_values_and_rng() {
             case["config"]
         );
     }
+    let rotations = golden(include_bytes!("golden/rotated_state_providers.json.gz"));
+    let registry = FeatureLoader::new(&resources).unwrap().finish();
+    let mut chunks = baseline.clone();
+    let mut region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 3],
+        1,
+        None,
+        &FixtureBehavior,
+        8675309,
+        63,
+    )
+    .unwrap();
+    let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
+    let mut context = FeatureContext {
+        region: &mut region,
+        random: &mut random,
+        origin: [0, 70, 0],
+        generator: &generator,
+        registry: &registry,
+    };
+    for (i, direction) in ferraloom_util::Direction::VALUES.into_iter().enumerate() {
+        for (id, expected) in rotations[i].as_array().unwrap().iter().enumerate() {
+            let state = ferraloom_data::BlockState::from_id(id as u16).unwrap();
+            let provider = state_provider::BlockStateProvider::Rotated {
+                source: std::sync::Arc::new(state_provider::BlockStateProvider::Simple(state)),
+                direction: Some(direction),
+            };
+            assert_eq!(
+                u64::from(provider.get_state(&mut context, [0, 70, 0]).unwrap().id()),
+                expected.as_u64().unwrap(),
+                "state {id} direction {direction:?}"
+            );
+        }
+    }
 }
 #[test]
 fn feature_sorter_matches_vanilla_order_and_cycle_detection() {

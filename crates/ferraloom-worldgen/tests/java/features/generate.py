@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
@@ -12,4 +13,4 @@ CLASSPATH = ":".join(map(str, [VANILLA / "versions/26.3/server-26.3.jar", *sorte
 with tempfile.TemporaryDirectory(prefix="ferraloom-features-java-") as directory:
     sources = [HERE.parent / "WorldgenGolden.java", *sorted(HERE.glob("*.java"))]
     subprocess.run([str(JDK / "bin/javac"), "-cp", CLASSPATH, "-d", directory, *map(str, sources)], check=True, cwd=directory)
-    subprocess.run([str(JDK / "bin/java"), "-Xmx1G", "-cp", directory + ":" + CLASSPATH, "FeaturesGolden", str(HERE.parent.parent / "golden")], check=True, cwd=directory)
+    subprocess.run([str(JDK / "bin/java"), "-Xmx1G", "-cp", directory + ":" + CLASSPATH, "FeaturesGolden", str(HERE.parent.parent / "golden"), *sys.argv[1:]], check=True, cwd=directory)
