@@ -269,3 +269,38 @@ fn generic_static_registry_lookup_matches_numeric_reports() {
         Some(Block::STONE)
     );
 }
+
+#[test]
+fn every_state_rotation_and_mirror_matches_vanilla_registry() {
+    use ferraloom_util::{Mirror, Rotation};
+    let captured: Value = serde_json::from_str(include_str!(
+        "../../../data/generated/state_transforms.json"
+    ))
+    .unwrap();
+    for id in 0..BLOCK_STATES.len() {
+        let state = BlockState::from_id(id as u16).unwrap();
+        for (name, actual) in [
+            ("clockwise_90", state.rotate(Rotation::Clockwise90)),
+            ("clockwise_180", state.rotate(Rotation::Clockwise180)),
+            (
+                "counterclockwise_90",
+                state.rotate(Rotation::CounterClockwise90),
+            ),
+            ("left_right", state.mirror(Mirror::LeftRight)),
+            ("front_back", state.mirror(Mirror::FrontBack)),
+        ] {
+            assert_eq!(
+                actual.id(),
+                captured[name][id].as_u64().unwrap() as u16,
+                "state {id} {name}"
+            );
+            assert_eq!(
+                actual.block(),
+                state.block(),
+                "state {id} {name} changed block"
+            );
+        }
+        assert_eq!(state.rotate(Rotation::None), state);
+        assert_eq!(state.mirror(Mirror::None), state);
+    }
+}
