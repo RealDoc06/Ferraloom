@@ -93,13 +93,6 @@ fn states(v: &Value) -> Result<Vec<BlockState>, Error> {
     }
     Ok(result)
 }
-fn range_float(v: &Value, min: f32, max: f32) -> Result<f32, Error> {
-    let n = float(v)?;
-    if !(min..=max).contains(&n) {
-        return Err(Error("float outside provider bounds".into()));
-    }
-    Ok(n)
-}
 fn select(states: &[BlockState], noise: f32) -> BlockState {
     let placement = mth::clamp_f32((1.0 + noise) / 2.0, 0.0, 0.9999);
     states[(placement * states.len() as f32) as usize]
@@ -160,8 +153,8 @@ impl BlockStateProvider {
             },
             "minecraft:noise_threshold" => Self::NoiseThreshold {
                 noise: NoiseState::decode(v)?.0,
-                threshold: range_float(field(v, "threshold")?, -1.0, 1.0)?,
-                high_chance: range_float(field(v, "high_chance")?, 0.0, 1.0)?,
+                threshold: float_range(field(v, "threshold")?, -1.0, 1.0)?,
+                high_chance: float_range(field(v, "high_chance")?, 0.0, 1.0)?,
                 default: decode_block_state(field(v, "default_state")?)?,
                 low: states(field(v, "low_states")?)?,
                 high: states(field(v, "high_states")?)?,
