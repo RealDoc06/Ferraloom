@@ -142,11 +142,13 @@ impl EntityDataView for animal::Cow {
     fn view(state: &EntityState) -> Option<&Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
+            EntityState::Player(_) => None,
         }
     }
     fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
+            EntityState::Player(_) => None,
         }
     }
 }

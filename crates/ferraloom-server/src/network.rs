@@ -44,12 +44,12 @@ pub enum Ingress {
 #[derive(Debug)]
 pub enum Incoming {
     Configuration(configuration::ServerboundPacket),
-    Play(Box<play::ServerboundPacket>),
+    Play(Box<play::serverbound::Packet>),
 }
 #[derive(Clone, Debug)]
 pub enum Outgoing {
     Configuration(configuration::ClientboundPacket),
-    Play(Box<play::ClientboundPacket>),
+    Play(Box<play::clientbound::Packet>),
 }
 impl Outgoing {
     fn bytes(&self) -> Result<Vec<u8>> {
@@ -59,8 +59,8 @@ impl Outgoing {
         })
     }
 }
-impl From<play::ClientboundPacket> for Outgoing {
-    fn from(p: play::ClientboundPacket) -> Self {
+impl From<play::clientbound::Packet> for Outgoing {
+    fn from(p: play::clientbound::Packet) -> Self {
         Self::Play(Box::new(p))
     }
 }
@@ -321,7 +321,7 @@ async fn connection(
                 }
                 Incoming::Configuration(packet)
             } else {
-                Incoming::Play(Box::new(play::ServerboundPacket::from_bytes(&bytes)?))
+                Incoming::Play(Box::new(play::serverbound::Packet::from_bytes(&bytes)?))
             };
             ingress
                 .send(Ingress::Packet {
