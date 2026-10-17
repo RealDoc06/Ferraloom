@@ -955,12 +955,25 @@ pub trait Mob: EntityBase + Send + Sync {
         )
     }
 
-    /// Called before damage is applied. Return `false` to cancel the damage entirely.
+    /// Called with the responsible attacker before damage is applied.
+    /// Return `false` to cancel the damage entirely.
     /// Used by endermen to dodge projectiles via teleportation.
     fn pre_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         true
     }
 
+    /// Preserve attacker-oriented hooks while allowing mixed projectile/attacker
+    /// policies to inspect both roles. `source` is direct; `cause` is responsible.
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.pre_damage(damage_type, cause.or(source))
+    }
+
+    /// Called with the responsible attacker after an accepted hit.
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
     /// Full-context owner hook. Multipart mobs can route through their typed
@@ -974,7 +987,7 @@ pub trait Mob: EntityBase + Send + Sync {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        if !self.pre_damage(damage_type, source) {
+        if !self.pre_damage_with_context(damage_type, source, cause) {
             return false;
         }
         let amount = self.modify_incoming_damage(amount, damage_type);
@@ -982,7 +995,7 @@ pub trait Mob: EntityBase + Send + Sync {
             caller, amount, damage_type, position, source, cause,
         );
         if damaged {
-            self.on_damage(damage_type, source);
+            self.on_damage(damage_type, cause.or(source));
         }
         damaged
     }

@@ -602,19 +602,27 @@ impl Mob for WitherEntity {
         self.tick_wither();
     }
 
-    fn pre_damage(&self, damage_type: DamageType, source: Option<&dyn EntityBase>) -> bool {
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
         if damage_type.has_tag(&tag::DamageType::MINECRAFT_WITHER_IMMUNE_TO) {
             return false;
         }
 
-        if let Some(src) = source {
-            let src_type = src.get_entity().entity_type;
-            if src_type == &EntityType::WITHER {
+        if let Some(attacker) = cause.or(source) {
+            let attacker_type = attacker.get_entity().entity_type;
+            if attacker_type == &EntityType::WITHER {
                 return false;
             }
-            if src_type.has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS) {
+            if attacker_type.has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS) {
                 return false;
             }
+        }
+        if let Some(direct) = source {
+            let src_type = direct.get_entity().entity_type;
             if self.is_powered()
                 && (src_type == &EntityType::ARROW
                     || src_type == &EntityType::SPECTRAL_ARROW

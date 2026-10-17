@@ -12,6 +12,7 @@ use crate::{
     },
     entity::{
         RemovalReason,
+        mob::{piglin::PiglinEntity, piglin_ai::PiglinAi},
         projectile::{
             ProjectileHit, ThrownItemEntity, arrow::ArrowEntity, trident::TridentEntity,
             wind_charge::WindChargeEntity,
@@ -798,6 +799,123 @@ fn projectile_hit(target: Arc<dyn EntityBase>) -> ProjectileHit {
         entity: target,
         normal: Vector3::new(-1.0, 0.0, 0.0),
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actual_player_arrow_hit_stops_piglin_admiration_and_commits_health() {
+    let fixture = fixture().await;
+    let world = fixture.player.world();
+    let hooks = Events::register(&fixture.server);
+    let target = crate::entity::r#type::from_type(
+        &EntityType::PIGLIN,
+        Vector3::new(3.0, 65.0, 0.5),
+        &world,
+        Uuid::new_v4(),
+    );
+    assert!(world.spawn_entity(target.clone()));
+    let piglin = target.cast_any().downcast_ref::<PiglinEntity>().unwrap();
+    piglin.mob_entity.set_no_ai(true);
+    piglin.set_dancing(true);
+    piglin.celebration_timer.store(60, Ordering::Relaxed);
+    let mut gold = ItemStack::new(1, &Item::GOLD_INGOT);
+    assert!(piglin.mob_interact(&fixture.player, &mut gold));
+    assert!(piglin.is_admiring());
+    assert_eq!(piglin.off_hand_item().item, &Item::GOLD_INGOT);
+    assert!(!piglin.is_admiring_disabled());
+
+    let arrow = Arc::new(ArrowEntity::new(
+        Entity::new(
+            world.clone(),
+            Vector3::new(1.0, 65.5, 0.5),
+            &EntityType::ARROW,
+        ),
+        Some(fixture.player.entity_id()),
+    ));
+    arrow
+        .get_entity()
+        .velocity
+        .store(Vector3::new(2.0, 0.0, 0.0));
+    assert!(world.spawn_entity(arrow.clone()));
+    let living = &piglin.mob_entity.living_entity;
+    let before = living.health.load();
+    assert!(before > 4.0);
+    arrow.on_hit(projectile_hit(target.clone()));
+
+    assert_eq!(living.health.load(), before - 4.0);
+    assert!(!living.dead.load(Ordering::Relaxed));
+    assert!(!piglin.is_admiring());
+    assert!(piglin.off_hand_item().is_empty());
+    assert!(piglin.admiring_item.lock().unwrap().is_none());
+    assert_eq!(piglin.celebration_timer.load(Ordering::Relaxed), 0);
+    assert!(!piglin.is_dancing.load(Ordering::Relaxed));
+    assert_eq!(
+        piglin.admiring_disabled_timer.load(Ordering::Relaxed),
+        PiglinAi::ADMIRING_DISABLED_DURATION
+    );
+    assert_eq!(
+        hooks.direct.lock().unwrap().as_slice(),
+        &[(target.get_entity().entity_id, arrow.get_entity().entity_id)]
+    );
+    assert_eq!(
+        living.last_hurt_by_player_id.load(Ordering::Relaxed),
+        fixture.player.entity_id()
+    );
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actual_arrow_hit_wither_separates_responsible_immunity_from_direct_projectile() {
+    let fixture = fixture().await;
+    let world = fixture.player.world();
+    for (owner_type, powered, accepted) in [
+        (&EntityType::PLAYER, false, true),
+        (&EntityType::PLAYER, true, false),
+        (&EntityType::WITHER, false, false),
+        (&EntityType::WITHER_SKELETON, false, false),
+    ] {
+        let target = crate::entity::r#type::from_type(
+            &EntityType::WITHER,
+            Vector3::new(3.0, 65.0, 0.5),
+            &world,
+            Uuid::new_v4(),
+        );
+        assert!(world.spawn_entity(target.clone()));
+        target.get_mob().unwrap().get_mob_entity().set_no_ai(true);
+        let living = target.get_living_entity().unwrap();
+        let before = living.get_max_health() * if powered { 0.5 } else { 1.0 };
+        living.set_health(before);
+        let owner: Arc<dyn EntityBase> = if owner_type == &EntityType::PLAYER {
+            fixture.player.clone()
+        } else {
+            let owner = crate::entity::r#type::from_type(
+                owner_type,
+                Vector3::new(0.5, 65.0, 0.5),
+                &world,
+                Uuid::new_v4(),
+            );
+            assert!(world.spawn_entity(owner.clone()));
+            owner
+        };
+        let arrow = Arc::new(ArrowEntity::new(
+            Entity::new(
+                world.clone(),
+                Vector3::new(1.0, 65.5, 0.5),
+                &EntityType::ARROW,
+            ),
+            Some(owner.get_entity().entity_id),
+        ));
+        arrow
+            .get_entity()
+            .velocity
+            .store(Vector3::new(2.0, 0.0, 0.0));
+        assert!(world.spawn_entity(arrow.clone()));
+        arrow.on_hit(projectile_hit(target.clone()));
+        assert_eq!(
+            living.health.load(),
+            before - if accepted { 4.0 } else { 0.0 }
+        );
+    }
+    close_fixture(&fixture).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
