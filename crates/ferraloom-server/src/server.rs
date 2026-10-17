@@ -954,21 +954,21 @@ impl MinecraftServer {
         };
         match packet {
             sb::Packet::AcceptTeleportation(p) => {
-                if let Some((pending, _, _)) = self.connections[&connection].awaiting_teleport {
-                    if p.id.0 == pending {
-                        self.connections
-                            .get_mut(&connection)
-                            .unwrap()
-                            .awaiting_teleport = None;
-                        self.movement(
-                            connection,
-                            entity,
-                            Vec3::new(p.x, p.y, p.z),
-                            (p.y_rot, p.x_rot),
-                            false,
-                        )
-                        .await?;
-                    }
+                if let Some((pending, _, _)) = self.connections[&connection].awaiting_teleport
+                    && p.id.0 == pending
+                {
+                    self.connections
+                        .get_mut(&connection)
+                        .unwrap()
+                        .awaiting_teleport = None;
+                    self.movement(
+                        connection,
+                        entity,
+                        Vec3::new(p.x, p.y, p.z),
+                        (p.y_rot, p.x_rot),
+                        false,
+                    )
+                    .await?;
                 }
             }
             sb::Packet::MovePlayerPos(p) => {
@@ -1385,10 +1385,10 @@ impl MinecraftServer {
                         .entity_mut::<ServerPlayer>(entity)
                         .map_err(game_error)?;
                     player.do_tick();
-                    if let Some((_, position, tick)) = c.awaiting_teleport {
-                        if self.tick.saturating_sub(tick) > 20 {
-                            teleport(c, position, player.yaw, player.pitch, self.tick);
-                        }
+                    if let Some((_, position, tick)) = c.awaiting_teleport
+                        && self.tick.saturating_sub(tick) > 20
+                    {
+                        teleport(c, position, player.yaw, player.pitch, self.tick);
                     }
                     let idle = self.properties.int("player-idle-timeout");
                     if idle > 0
@@ -1510,11 +1510,11 @@ impl MinecraftServer {
             {
                 continue;
             }
-            if let Some(signature) = &message.signature {
-                if let Err(e) = c.last_seen.add_pending(signature) {
-                    c.disconnect(e.to_string());
-                    continue;
-                }
+            if let Some(signature) = &message.signature
+                && let Err(e) = c.last_seen.add_pending(signature)
+            {
+                c.disconnect(e.to_string());
+                continue;
             }
             let global_index = c.next_chat_index;
             c.next_chat_index += 1;
@@ -1605,28 +1605,27 @@ impl MinecraftServer {
         ));
     }
     async fn remove_player(&mut self, connection: ConnectionId) -> Result<()> {
-        if let Some(c) = self.connections.remove(&connection) {
-            if let Phase::Play(entity) = c.phase {
-                let player = self.player(entity)?;
-                let tag = player.save();
-                let uuid = player.uuid.to_string();
-                let name = player.name.clone();
-                let access = self.world.access.clone();
-                tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag))
-                    .await??;
-                self.level.level.remove_entity(entity).map_err(game_error)?;
-                self.players.retain(|&id| id != connection);
-                self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
-                    profile_ids: vec![c.profile.id],
-                }));
-                self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                    content: Component::translatable(
-                        "multiplayer.player.left",
-                        vec![protocol::chat::Argument::String(name)],
-                    ),
-                    overlay: false,
-                })));
-            }
+        if let Some(c) = self.connections.remove(&connection)
+            && let Phase::Play(entity) = c.phase
+        {
+            let player = self.player(entity)?;
+            let tag = player.save();
+            let uuid = player.uuid.to_string();
+            let name = player.name.clone();
+            let access = self.world.access.clone();
+            tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag)).await??;
+            self.level.level.remove_entity(entity).map_err(game_error)?;
+            self.players.retain(|&id| id != connection);
+            self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
+                profile_ids: vec![c.profile.id],
+            }));
+            self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                content: Component::translatable(
+                    "multiplayer.player.left",
+                    vec![protocol::chat::Argument::String(name)],
+                ),
+                overlay: false,
+            })));
         }
         Ok(())
     }

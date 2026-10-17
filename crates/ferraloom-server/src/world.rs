@@ -306,12 +306,11 @@ impl World {
                             })
                             .collect::<Vec<_>>();
                         for section in disk.sections.as_deref().unwrap_or_default() {
-                            if let Some(y) = section.y {
-                                if (-4..20).contains(&i32::from(y)) {
-                                    if let Some(runtime) = section.to_runtime(registry.as_ref())? {
-                                        sections[(i32::from(y) + 4) as usize] = runtime;
-                                    }
-                                }
+                            if let Some(y) = section.y
+                                && (-4..20).contains(&i32::from(y))
+                                && let Some(runtime) = section.to_runtime(registry.as_ref())?
+                            {
+                                sections[(i32::from(y) + 4) as usize] = runtime;
                             }
                         }
                         let surface = surface_heights(&sections);

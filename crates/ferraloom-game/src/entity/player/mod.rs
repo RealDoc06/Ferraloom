@@ -104,16 +104,16 @@ impl ServerPlayer {
         self.received_moves = 0;
     }
     pub fn load(&mut self, tag: CompoundTag) {
-        if let Some(list) = tag.get_list("Pos") {
-            if let [Tag::Double(x), Tag::Double(y), Tag::Double(z)] = list.0.as_slice() {
-                self.position = Vec3::new(*x, *y, *z);
-            }
+        if let Some(list) = tag.get_list("Pos")
+            && let [Tag::Double(x), Tag::Double(y), Tag::Double(z)] = list.0.as_slice()
+        {
+            self.position = Vec3::new(*x, *y, *z);
         }
-        if let Some(list) = tag.get_list("Rotation") {
-            if let [Tag::Float(yaw), Tag::Float(pitch)] = list.0.as_slice() {
-                self.yaw = *yaw;
-                self.pitch = *pitch;
-            }
+        if let Some(list) = tag.get_list("Rotation")
+            && let [Tag::Float(yaw), Tag::Float(pitch)] = list.0.as_slice()
+        {
+            self.yaw = *yaw;
+            self.pitch = *pitch;
         }
         self.game_mode = GameType::from_id(tag.get_int_or("playerGameType", self.game_mode.id()));
         self.on_ground = tag.get_boolean_or("OnGround", false);

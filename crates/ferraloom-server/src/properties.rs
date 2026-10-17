@@ -170,10 +170,10 @@ impl ServerProperties {
             values.insert("generator-settings".into(), "{}".into());
         }
         values.remove("announce-player-achievements");
-        if let Some(hash) = values.remove("resource-pack-hash") {
-            if values["resource-pack-sha1"].is_empty() {
-                values.insert("resource-pack-sha1".into(), hash);
-            }
+        if let Some(hash) = values.remove("resource-pack-hash")
+            && values["resource-pack-sha1"].is_empty()
+        {
+            values.insert("resource-pack-sha1".into(), hash);
         }
         if values["management-server-secret"].is_empty() {
             use rand::Rng;
