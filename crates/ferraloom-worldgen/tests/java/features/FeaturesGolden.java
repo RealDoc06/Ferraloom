@@ -124,6 +124,6 @@ public final class FeaturesGolden {
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
         var registries=WorldgenGolden.load();var out=Path.of(args[0]);Files.createDirectories(out);
-        providers(registries,out);masks(registries,out);terrain(registries,out);
+        providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);
     }
 }

@@ -48,4 +48,5 @@ pub mod decoration;
 pub mod placement;
 pub mod region;
 
+pub mod feature;
 pub mod structure;

@@ -25,6 +25,8 @@ pub enum ChunkStatus {
 pub enum Heightmap {
     WorldSurface,
     OceanFloor,
+    MotionBlocking,
+    MotionBlockingNoLeaves,
 }
 
 /// Port of SavedTick in ProtoChunkTicks. Worldgen discards trigger times and
@@ -231,6 +233,10 @@ impl<'a> WorldGenRegion<'a> {
         Ok(match map {
             Heightmap::WorldSurface => chunk.world_surface[index],
             Heightmap::OceanFloor => chunk.ocean_floor[index],
+            Heightmap::MotionBlocking => chunk.motion_height((x & 15) as u8, (z & 15) as u8, false),
+            Heightmap::MotionBlockingNoLeaves => {
+                chunk.motion_height((x & 15) as u8, (z & 15) as u8, true)
+            }
         })
     }
     pub fn ensure_can_write(&self, p: [i32; 3]) -> bool {

@@ -24,6 +24,7 @@ pub struct GenerationData {
     pub biome_ids: BTreeMap<Identifier, BiomeId>,
     pub biome_tags: BTreeMap<Identifier, Vec<Identifier>>,
     motion_blocking: Arc<HashSet<Block>>,
+    motion_blocking_no_leaves: Arc<HashSet<Block>>,
     biome_strategy: Strategy<BiomeId>,
 }
 impl GenerationData {
@@ -76,6 +77,15 @@ impl GenerationData {
                 .copied()
                 .collect(),
         );
+        let motion_blocking_no_leaves = Arc::new(
+            block_tags
+                .values
+                .get(&"blocks_motion_in_heightmap_no_leaves".parse()?)
+                .ok_or_else(|| Error("missing heightmap no-leaves block tag".into()))?
+                .iter()
+                .copied()
+                .collect(),
+        );
         let ids = (0..biome_names.len()).map(|i| BiomeId(i as u32)).collect();
         let biome_strategy = Strategy::biomes(Arc::new(
             IdMap::new(ids).map_err(|e| Error(format!("invalid biome registry: {e:?}")))?,
@@ -90,6 +100,7 @@ impl GenerationData {
             biome_ids,
             biome_tags: biome_tags.values,
             motion_blocking,
+            motion_blocking_no_leaves,
             biome_strategy,
         })
     }
@@ -161,6 +172,7 @@ impl NoiseBasedChunkGenerator {
             default,
             self.data.biome_strategy.clone(),
             self.data.motion_blocking.clone(),
+            self.data.motion_blocking_no_leaves.clone(),
         )
     }
     pub fn new_chunk_in_dimension(
@@ -183,6 +195,7 @@ impl NoiseBasedChunkGenerator {
             default,
             self.data.biome_strategy.clone(),
             self.data.motion_blocking.clone(),
+            self.data.motion_blocking_no_leaves.clone(),
         )
     }
     pub fn create_biomes(&self, chunk: &mut GeneratedChunk) {
@@ -477,6 +490,7 @@ pub struct GeneratedChunk {
     pub ocean_floor: [i32; 256],
     pub post_processing: Vec<[i32; 3]>,
     motion_blocking: Arc<HashSet<Block>>,
+    motion_blocking_no_leaves: Arc<HashSet<Block>>,
 }
 impl GeneratedChunk {
     fn new(
@@ -485,6 +499,7 @@ impl GeneratedChunk {
         default_biome: BiomeId,
         biomes: Strategy<BiomeId>,
         motion_blocking: Arc<HashSet<Block>>,
+        motion_blocking_no_leaves: Arc<HashSet<Block>>,
     ) -> Self {
         let blocks = Strategy::<BlockState>::block_states();
         let sections = (0..height.height / 16)
@@ -499,6 +514,7 @@ impl GeneratedChunk {
             ocean_floor: [height.min_y; 256],
             post_processing: Vec::new(),
             motion_blocking,
+            motion_blocking_no_leaves,
         }
     }
     pub fn block(&self, x: u8, y: i32, z: u8) -> BlockState {
@@ -555,6 +571,20 @@ impl GeneratedChunk {
                 self.ocean_floor[index] = new;
             }
         }
+    }
+    pub(crate) fn motion_height(&self, x: u8, z: u8, no_leaves: bool) -> i32 {
+        let blocks = if no_leaves {
+            &self.motion_blocking_no_leaves
+        } else {
+            &self.motion_blocking
+        };
+        for y in (self.min_y..self.min_y + self.height).rev() {
+            let state = self.block(x, y, z);
+            if blocks.contains(&state.block()) || !state.data().fluid.empty {
+                return y + 1;
+            }
+        }
+        self.min_y
     }
     pub fn biome(&self, quart: [i32; 3]) -> BiomeId {
         let y = quart[1].clamp(self.min_y >> 2, ((self.min_y + self.height) >> 2) - 1);

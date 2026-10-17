@@ -48,3 +48,114 @@ pub trait StructureDecoration {
 }
 
 pub mod sorter;
+
+use crate::{
+    Identifier,
+    feature::{FeatureContext, FeatureRegistry},
+    generator::NoiseBasedChunkGenerator,
+};
+use ferraloom_util::random::{Random, XoroshiroRandomSource};
+use std::collections::BTreeSet;
+
+/// Precomputed global feature indices for one biome source. Immutable plans are
+/// shared across generation jobs; only the region and RNG mutate per invocation.
+#[derive(Clone, Debug)]
+pub struct DecorationPlan {
+    pub steps: Vec<sorter::StepFeatureData<Identifier>>,
+    possible_biomes: BTreeSet<Identifier>,
+}
+impl DecorationPlan {
+    pub fn new(registry: &FeatureRegistry, possible_biomes: &[Identifier]) -> Result<Self, Error> {
+        let sources = possible_biomes
+            .iter()
+            .map(|id| {
+                registry
+                    .biome_features
+                    .get(id)
+                    .cloned()
+                    .ok_or_else(|| Error(format!("missing biome generation settings {id}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            steps: sorter::build_features_per_step(&sources)?,
+            possible_biomes: possible_biomes.iter().cloned().collect(),
+        })
+    }
+    /// Port of ChunkGenerator#applyBiomeDecoration. Biomes come from all
+    /// sections in the 3x3 neighborhood; features are unioned, sorted by global
+    /// per-step indices, and seeded independently of structure count.
+    pub fn apply_biome_decoration(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        generator: &NoiseBasedChunkGenerator,
+        registry: &FeatureRegistry,
+        structures: &mut impl StructureDecoration,
+    ) -> Result<(), Error> {
+        let center = region.center();
+        let origin = [center[0] * 16, region.min_y(), center[1] * 16];
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
+        let decoration_seed = random.set_decoration_seed(region.seed, origin[0], origin[2]);
+        let mut biomes = BTreeSet::new();
+        for z in center[1] - 1..=center[1] + 1 {
+            for x in center[0] - 1..=center[0] + 1 {
+                let chunk = &region
+                    .chunk([x, z], crate::region::ChunkStatus::Empty)?
+                    .chunk;
+                for section in &chunk.sections {
+                    for x in 0..4 {
+                        for y in 0..4 {
+                            for z in 0..4 {
+                                let id = section.biomes().get(x, y, z);
+                                let name = &generator.data.biome_names[id.0 as usize];
+                                if self.possible_biomes.contains(name) {
+                                    biomes.insert(name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for step in 0..self.steps.len().max(GenerationStep::ALL.len()) {
+            if let Some(&generation_step) = GenerationStep::ALL.get(step) {
+                structures.place_step(generation_step, region, &mut random, decoration_seed)?;
+            }
+            let Some(data) = self.steps.get(step) else {
+                continue;
+            };
+            let mut features = BTreeSet::new();
+            for biome in &biomes {
+                if let Some(entries) = registry
+                    .biome_features
+                    .get(biome)
+                    .and_then(|steps| steps.get(step))
+                {
+                    for feature in entries {
+                        features.insert(*data.indices.get(feature).ok_or_else(|| {
+                            Error(format!("feature missing from sorted step: {feature}"))
+                        })?);
+                    }
+                }
+            }
+            for index in features {
+                let id = &data.features[index];
+                let feature = registry
+                    .placed
+                    .get(id)
+                    .ok_or_else(|| Error(format!("placed feature unavailable: {id}")))?;
+                random.set_feature_seed(decoration_seed, index as i32, step as i32);
+                feature.place(
+                    &mut FeatureContext {
+                        region,
+                        random: &mut random,
+                        origin,
+                        generator,
+                        registry,
+                    },
+                    true,
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
