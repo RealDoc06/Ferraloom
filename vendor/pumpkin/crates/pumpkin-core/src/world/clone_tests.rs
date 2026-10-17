@@ -53,11 +53,7 @@ async fn fixture(registry: Option<Arc<BlockRegistry>>) -> (PlayerFixture, Arc<Wo
             Arc::default(),
         ));
         world.bind_self();
-        fixture.server.worlds.rcu(|worlds| {
-            let mut worlds = (**worlds).clone();
-            worlds.push(world.clone());
-            Arc::new(worlds)
-        });
+        fixture.server.worlds.store(Arc::new(vec![world.clone()]));
         world
     } else {
         original
@@ -1074,5 +1070,187 @@ async fn restore_refuses_invalid_payload_before_commit_and_missing_target_skips_
     assert_eq!(world.get_block_state_id_if_loaded(&TARGET), state);
     assert!(pending(&world, TARGET).is_none());
     assert!(world.published_block_entity(&TARGET).is_none());
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pending_keep_packed_markers_match_live_capture_without_mutating_raw_records() {
+    let (fixture, world) = fixture(None).await;
+    for (kind, block) in CONTAINERS {
+        world.remove_block_entity(&SOURCE);
+        set_state(&world, SOURCE, block.default_state.id);
+        let mut nbt = container_nbt(kind, SOURCE, 4);
+        nbt.put_compound("components", NbtCompound::new());
+        world.add_block_entity(block_entity_from_nbt(&nbt).unwrap());
+        let live = world
+            .snapshot_block_entity_for_clone(&SOURCE)
+            .unwrap()
+            .unwrap();
+        world.remove_block_entity(&SOURCE);
+        let map_count = world.block_entities.len();
+        for marker in [0, 1] {
+            let mut raw = nbt.clone();
+            raw.put_byte("keepPacked", marker);
+            put_pending(&world, SOURCE, raw.clone());
+            let payload = world
+                .snapshot_block_entity_for_clone(&SOURCE)
+                .unwrap()
+                .unwrap();
+            assert_eq!(payload, live);
+            assert!(payload.custom.get("keepPacked").is_none());
+            assert!(payload.full_metadata(SOURCE).get("keepPacked").is_none());
+            assert_eq!(pending(&world, SOURCE), Some(raw));
+            assert_eq!(
+                world.get_block_state_id_if_loaded(&SOURCE),
+                Some(block.default_state.id)
+            );
+            assert!(world.published_block_entity(&SOURCE).is_none());
+            assert_eq!(world.block_entities.len(), map_count);
+        }
+        for marker in [
+            NbtTag::Byte(-1),
+            NbtTag::Byte(2),
+            NbtTag::Short(0),
+            NbtTag::Int(1),
+            NbtTag::String("false".into()),
+            NbtTag::Compound(NbtCompound::new()),
+        ] {
+            let mut raw = nbt.clone();
+            raw.put("keepPacked", marker);
+            put_pending(&world, SOURCE, raw.clone());
+            assert!(matches!(
+                world.snapshot_block_entity_for_clone(&SOURCE),
+                Err(BlockEntityLoadError::Unsupported(_))
+            ));
+            assert_eq!(pending(&world, SOURCE), Some(raw));
+            assert_eq!(
+                world.get_block_state_id_if_loaded(&SOURCE),
+                Some(block.default_state.id)
+            );
+            assert!(world.published_block_entity(&SOURCE).is_none());
+            assert_eq!(world.block_entities.len(), map_count);
+        }
+        // Packing is a pending chunk envelope field, never custom clone data.
+        world.remove_block_entity(&TARGET);
+        set_state(&world, TARGET, Block::AIR.default_state.id);
+        assert!(world.set_block_state_counted(&TARGET, block.default_state.id, strict_flags()));
+        let target = world.published_block_entity(&TARGET).unwrap();
+        let canonical = pending(&world, TARGET);
+        for marker in [0, 1] {
+            let mut custom_marker = live.clone();
+            custom_marker.custom.put_byte("keepPacked", marker);
+            assert!(matches!(
+                world.restore_cloned_block_entity(&TARGET, &custom_marker),
+                Err(BlockEntityLoadError::Unsupported(_))
+            ));
+            assert!(Arc::ptr_eq(
+                &world.published_block_entity(&TARGET).unwrap(),
+                &target
+            ));
+            assert_eq!(pending(&world, TARGET), canonical);
+        }
+    }
+    world.remove_block_entity(&SOURCE);
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_ownership() {
+    let (fixture, world) = fixture(None).await;
+    let state = Block::CHEST.default_state.id;
+    let mut incoming = NbtCompound::new();
+    incoming.put_int("plugin_value", 3);
+    let mut retained = NbtCompound::new();
+    retained.put_int("plugin_value", 7);
+    for field in ["PumpkinCustomData", "BukkitValues"] {
+        world.remove_block_entity(&SOURCE);
+        set_state(&world, SOURCE, state);
+        let mut raw = container_nbt("minecraft:chest", SOURCE, 4);
+        raw.put_compound(field, incoming.clone());
+        world
+            .custom_block_entity_data
+            .insert(SOURCE, retained.clone());
+        put_pending(&world, SOURCE, raw.clone());
+        let attached = world.ensure_block_entity_for_state(&SOURCE, state).unwrap();
+        assert!(attached.as_any().is::<ChestBlockEntity>());
+        assert_guards_released(&world, &SOURCE);
+        let mut canonical = saved(attached.as_ref());
+        canonical.put_compound("PumpkinCustomData", incoming.clone());
+        assert_eq!(pending(&world, SOURCE), Some(canonical));
+        assert_eq!(
+            world.custom_block_entity_data.get(&SOURCE).unwrap().value(),
+            &incoming
+        );
+        assert!(matches!(
+            world.snapshot_block_entity_for_clone(&SOURCE),
+            Err(BlockEntityLoadError::Unsupported(_))
+        ));
+
+        // An occupied allocation wins without importing a different raw cache.
+        raw.put_compound(field, retained.clone());
+        put_pending(&world, SOURCE, raw.clone());
+        let occupied = world.ensure_block_entity_for_state(&SOURCE, state).unwrap();
+        assert!(Arc::ptr_eq(&attached, &occupied));
+        assert_eq!(pending(&world, SOURCE), Some(raw));
+        assert_eq!(
+            world.custom_block_entity_data.get(&SOURCE).unwrap().value(),
+            &incoming
+        );
+        assert_guards_released(&world, &SOURCE);
+    }
+    for (kind, position) in [("minecraft:barrel", SOURCE), ("minecraft:chest", TARGET)] {
+        world.remove_block_entity(&SOURCE);
+        set_state(&world, SOURCE, state);
+        let mut raw = container_nbt(kind, position, 4);
+        raw.put_compound("PumpkinCustomData", incoming.clone());
+        world
+            .custom_block_entity_data
+            .insert(SOURCE, retained.clone());
+        put_pending(&world, SOURCE, raw.clone());
+        assert!(
+            world
+                .ensure_block_entity_for_state(&SOURCE, Block::BARREL.default_state.id)
+                .is_none()
+        );
+        assert!(
+            world
+                .ensure_block_entity_for_state(&SOURCE, state)
+                .is_none()
+        );
+        assert_eq!(world.get_block_state_id_if_loaded(&SOURCE), Some(state));
+        assert!(world.published_block_entity(&SOURCE).is_none());
+        assert_eq!(pending(&world, SOURCE), Some(raw));
+        assert_eq!(
+            world.custom_block_entity_data.get(&SOURCE).unwrap().value(),
+            &retained
+        );
+        assert_guards_released(&world, &SOURCE);
+    }
+    world.remove_block_entity(&SOURCE);
+    set_state(&world, SOURCE, state);
+    let wrong: Arc<dyn BlockEntity> = Arc::new(BarrelBlockEntity::new(SOURCE));
+    world.add_block_entity(wrong.clone());
+    let mut raw = container_nbt("minecraft:chest", SOURCE, 4);
+    raw.put_compound("PumpkinCustomData", incoming);
+    put_pending(&world, SOURCE, raw.clone());
+    world
+        .custom_block_entity_data
+        .insert(SOURCE, retained.clone());
+    assert!(
+        world
+            .ensure_block_entity_for_state(&SOURCE, state)
+            .is_none()
+    );
+    assert!(Arc::ptr_eq(
+        &world.published_block_entity(&SOURCE).unwrap(),
+        &wrong
+    ));
+    assert_eq!(pending(&world, SOURCE), Some(raw));
+    assert_eq!(
+        world.custom_block_entity_data.get(&SOURCE).unwrap().value(),
+        &retained
+    );
+    assert_guards_released(&world, &SOURCE);
+    world.remove_block_entity(&SOURCE);
     close_fixture(&fixture).await;
 }
