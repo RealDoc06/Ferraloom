@@ -17,6 +17,11 @@ import net.minecraft.world.level.levelgen.densityfunction.*;
 
 /** Our reference driver calls real 26.3 provider codecs and carver geometry. */
 public final class FeaturesGolden {
+    static net.minecraft.resources.RegistryOps<JsonElement> ops(RegistryAccess.Frozen registries) {
+        var builtin=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.registries().<HolderLookup.RegistryLookup<?>>map(e->e.value()),registries.registries().<HolderLookup.RegistryLookup<?>>map(e->e.value())));
+        return net.minecraft.resources.RegistryOps.create(JsonOps.INSTANCE,lookup);
+    }
     static final long[] SEEDS={0,1,-1,8675309,Long.MIN_VALUE,Long.MAX_VALUE};
     static JsonArray values(int... values) { var out=new JsonArray();for(int v:values)out.add(v);return out; }
     static String maskHash(CarvingMask mask) throws Exception {
@@ -124,6 +129,6 @@ public final class FeaturesGolden {
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
         var registries=WorldgenGolden.load();var out=Path.of(args[0]);Files.createDirectories(out);
-        providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);
+        providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);StateProviderGolden.generate(registries,out);SorterGolden.generate(registries,out);
     }
 }
