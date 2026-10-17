@@ -4,23 +4,23 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| server-operations.startup.cli | Honor dedicated-server command-line options and reject invalid combinations | `Main#main` | | - | todo |
-| server-operations.startup.eula | Create and enforce eula.txt before starting the dedicated server | `Eula; Main#main` | | - | todo |
+| server-operations.startup.cli | Honor dedicated-server command-line options and reject invalid combinations | `Main#main` |  | - | partial |
+| server-operations.startup.eula | Create and enforce eula.txt before starting the dedicated server | `Eula; Main#main` |  | - | partial |
 | server-operations.startup.properties | Load, normalize and persist server.properties with typed defaults | `Settings#loadFromFile; Settings#store; DedicatedServerSettings` | `properties::tests::java_properties_and_validation` | - | partial |
-| server-operations.startup.world-lock | Acquire the session lock and reject concurrent access to the same save | `DirectoryLock#create; LevelStorageSource` | | - | todo |
-| server-operations.startup.bonus-seed-preset | Apply seed parsing, world preset, generator settings and structure-generation settings | `DedicatedServerProperties#<init>; WorldOptions#parseSeed` | | - | todo |
-| server-operations.startup.initial-packs | Load configured initial enabled and disabled datapacks on new-world creation | `DedicatedServerProperties; WorldLoader` | | - | todo |
-| server-operations.ops.persist | Persist operator profiles, permission levels and player-limit bypass in ops.json | `ServerOpList; ServerOpListEntry` | | - | todo |
-| server-operations.whitelist.persist | Persist whitelist profiles and apply enforcement to existing and joining players | `UserWhiteList; PlayerList#reloadWhiteList` | | - | todo |
-| server-operations.bans.profile | Persist player bans, expiry, source and reason and reject banned profiles | `UserBanList; UserBanListEntry; PlayerList#canPlayerLogin` | | - | todo |
-| server-operations.bans.ip | Persist IP bans and reject banned addresses with expiry handling | `IpBanList; IpBanListEntry; PlayerList#canPlayerLogin` | | - | todo |
-| server-operations.users.cache | Resolve and cache names and UUIDs with expiry and offline fallback | `CachedUserNameToIdResolver` | | - | todo |
+| server-operations.startup.world-lock | Acquire the session lock and reject concurrent access to the same save | `DirectoryLock#create; LevelStorageSource` |  | - | partial |
+| server-operations.startup.bonus-seed-preset | Apply seed parsing, world preset, generator settings and structure-generation settings | `DedicatedServerProperties#<init>; WorldOptions#parseSeed` |  | - | partial |
+| server-operations.startup.initial-packs | Load configured initial enabled and disabled datapacks on new-world creation | `DedicatedServerProperties; WorldLoader` |  | - | partial |
+| server-operations.ops.persist | Persist operator profiles, permission levels and player-limit bypass in ops.json | `ServerOpList; ServerOpListEntry` |  | - | partial |
+| server-operations.whitelist.persist | Persist whitelist profiles and apply enforcement to existing and joining players | `UserWhiteList; PlayerList#reloadWhiteList` |  | - | partial |
+| server-operations.bans.profile | Persist player bans, expiry, source and reason and reject banned profiles | `UserBanList; UserBanListEntry; PlayerList#canPlayerLogin` |  | - | partial |
+| server-operations.bans.ip | Persist IP bans and reject banned addresses with expiry handling | `IpBanList; IpBanListEntry; PlayerList#canPlayerLogin` |  | - | partial |
+| server-operations.users.cache | Resolve and cache names and UUIDs with expiry and offline fallback | `CachedUserNameToIdResolver` |  | - | partial |
 | server-operations.users.legacy-conversion | Convert legacy user lists and player data to UUID-based formats | `OldUsersConverter` | | - | todo |
-| server-operations.console.input | Queue console commands on the server thread with console permissions and output | `DedicatedServer#handleConsoleInputs; ConsoleInput` | | - | todo |
+| server-operations.console.input | Queue console commands on the server thread with console permissions and output | `DedicatedServer#handleConsoleInputs; ConsoleInput` |  | - | partial |
 | server-operations.console.gui | Provide the optional dedicated-server GUI and console command entry | `MinecraftServerGui` | | - | todo |
-| server-operations.save.autosave | Autosave players and worlds on the tick-rate-aware interval with minimum interval | `MinecraftServer#autoSave; MinecraftServer#computeNextAutosaveInterval` | | - | todo |
-| server-operations.save.manual | Save all levels and players with explicit flush and save-enabled flags | `MinecraftServer#saveEverything; SaveAllCommand` | | - | todo |
-| server-operations.shutdown.flush | Disconnect players and flush world and storage state during orderly shutdown | `MinecraftServer#stopServer` | | - | todo |
+| server-operations.save.autosave | Autosave players and worlds on the tick-rate-aware interval with minimum interval | `MinecraftServer#autoSave; MinecraftServer#computeNextAutosaveInterval` |  | - | partial |
+| server-operations.save.manual | Save all levels and players with explicit flush and save-enabled flags | `MinecraftServer#saveEverything; SaveAllCommand` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
+| server-operations.shutdown.flush | Disconnect players and flush world and storage state during orderly shutdown | `MinecraftServer#stopServer` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | server-operations.watchdog.stall | Produce a crash report and terminate after max-tick-time is exceeded | `ServerWatchdog#run` | | - | todo |
 | server-operations.monitor.jmx | Expose dedicated-server tick metrics through the optional JMX bean | `MinecraftServerStatistics` | | - | todo |
 | server-operations.monitor.jfr | Start and stop flight recording and publish profiling results | `JvmProfiler; JfrCommand` | | - | todo |

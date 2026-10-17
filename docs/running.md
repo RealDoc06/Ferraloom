@@ -3,7 +3,10 @@
 This is the first playable terrain slice for **Minecraft Java 26.3**, protocol
 777. It uses a single simulation region. Structures, carvers, features and mob
 spawning are not generated yet. Block interactions and the rest of vanilla
-simulation are still being ported.
+simulation are still being ported. This runtime joins players into the overworld;
+other dimensions, chunk eviction and full ticket propagation remain incomplete.
+Player movement currently covers ordinary terrain, without vehicle, pose or
+floating checks. Recipe and advancement contents are placeholders.
 
 On devbox, build a committed checkout on the dedicated builder:
 

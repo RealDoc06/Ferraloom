@@ -130,6 +130,8 @@ struct Connection {
     network_ticks: u64,
     rate_packets: u64,
     average_packets: f32,
+    received_position_this_tick: bool,
+    received_movement_this_tick: bool,
 }
 impl Connection {
     fn push(&mut self, packet: impl Into<Outgoing>) {
@@ -406,6 +408,8 @@ impl MinecraftServer {
                         network_ticks: 0,
                         rate_packets: 0,
                         average_packets: 0.,
+                        received_position_this_tick: false,
+                        received_movement_this_tick: false,
                     };
                     c.push(cfg::ClientboundPacket::CustomPayload(
                         common_cb::CustomPayload {
@@ -952,6 +956,17 @@ impl MinecraftServer {
         let Phase::Play(entity) = self.connections[&connection].phase else {
             bail!("play packet before configuration finished");
         };
+        if matches!(
+            &packet,
+            sb::Packet::MovePlayerPos(_) | sb::Packet::MovePlayerPosRot(_)
+        ) {
+            let c = self.connections.get_mut(&connection).unwrap();
+            ensure!(
+                !c.received_position_this_tick,
+                "multiplayer.disconnect.invalid_player_movement"
+            );
+            c.received_position_this_tick = true;
+        }
         match packet {
             sb::Packet::AcceptTeleportation(p) => {
                 if let Some((pending, _, _)) = self.connections[&connection].awaiting_teleport
@@ -1187,8 +1202,19 @@ impl MinecraftServer {
             sb::Packet::CookieResponse(_) => {
                 bail!("multiplayer.disconnect.unexpected_query_response")
             }
-            sb::Packet::ClientTickEnd(_)
-            | sb::Packet::PlayerInput(_)
+            sb::Packet::ClientTickEnd(_) => {
+                let c = self.connections.get_mut(&connection).unwrap();
+                if !c.received_movement_this_tick {
+                    self.level
+                        .level
+                        .entity_mut::<ServerPlayer>(entity)
+                        .map_err(game_error)?
+                        .known_movement = Vec3::ZERO;
+                }
+                c.received_position_this_tick = false;
+                c.received_movement_this_tick = false;
+            }
+            sb::Packet::PlayerInput(_)
             | sb::Packet::CustomPayload(_)
             | sb::Packet::Pong(_)
             | sb::Packet::PlayerCommand(_)
@@ -1218,9 +1244,7 @@ impl MinecraftServer {
         if self.connections[&connection].awaiting_teleport.is_some() {
             return Ok(());
         }
-        if [target.x, target.y, target.z]
-            .iter()
-            .any(|v| !v.is_finite())
+        if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
             || !yaw.is_finite()
             || !pitch.is_finite()
         {
@@ -1273,8 +1297,16 @@ impl MinecraftServer {
                 );
             }
             MovementResult::Accepted => {
-                if target != origin {
-                    self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
+                let player = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?;
+                player.known_movement = player.position - origin;
+                let c = self.connections.get_mut(&connection).unwrap();
+                c.received_movement_this_tick = true;
+                if player.known_movement.length_sqr() > 9.999999747378752E-6 {
+                    c.last_action = Instant::now();
                 }
             }
         }

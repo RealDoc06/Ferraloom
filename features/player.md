@@ -4,14 +4,14 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| player.join.initial-state | Send login, dimension, permissions, abilities, recipes, effects, inventory and scoreboard state | `PlayerList#placeNewPlayer` | | - | todo |
-| player.movement.invalid-values | Reject NaN positions or nonfinite rotation and clamp packet coordinates | `ServerGamePacketListenerImpl#containsInvalidValues; ServerGamePacketListenerImpl#clampHorizontal; ServerGamePacketListenerImpl#clampVertical` | | - | todo |
+| player.join.initial-state | Send login, dimension, permissions, abilities, recipes, effects, inventory and scoreboard state | `PlayerList#placeNewPlayer` | `join::join_and_configuration_sequence_matches_vanilla` | - | partial |
+| player.movement.invalid-values | Reject NaN positions or nonfinite rotation and clamp packet coordinates | `ServerGamePacketListenerImpl#containsInvalidValues; ServerGamePacketListenerImpl#clampHorizontal; ServerGamePacketListenerImpl#clampVertical` |  | - | partial |
 | player.movement.too-quickly | Check packet movement against allowed velocity with elytra and movement-rule branches | `ServerGamePacketListenerImpl#handlePlayerPositionChange` |  | - | partial |
 | player.movement.collision-correction | Detect moved-wrongly and newly introduced collisions and correct authoritative position | `ServerGamePacketListenerImpl#handlePlayerPositionChange` | `player::tests::movement_sweep_cannot_tunnel_through_terrain` | - | partial |
-| player.movement.teleport-ack | Match pending teleport ids and positions and resend corrections after the timeout | `ServerGamePacketListenerImpl#handleAcceptTeleportPacket; ServerGamePacketListenerImpl#updateAwaitingTeleport` | | - | todo |
+| player.movement.teleport-ack | Match pending teleport ids and positions and resend corrections after the timeout | `ServerGamePacketListenerImpl#handleAcceptTeleportPacket; ServerGamePacketListenerImpl#updateAwaitingTeleport` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | player.movement.floating | Track floating players and vehicles and disconnect after allowed flight ticks | `ServerGamePacketListenerImpl#tick` | | - | todo |
 | player.movement.vehicle | Validate controlling passenger vehicle movement and correct invalid moves | `ServerGamePacketListenerImpl#handleMoveVehicle` | | - | todo |
-| player.movement.client-tick-end | Handle client tick-end movement tracking and known movement state | `ServerGamePacketListenerImpl#handleClientTickEnd; ServerGamePacketListenerImpl#handlePlayerKnownMovement` | | - | todo |
+| player.movement.client-tick-end | Handle client tick-end movement tracking and known movement state | `ServerGamePacketListenerImpl#handleClientTickEnd; ServerGamePacketListenerImpl#handlePlayerKnownMovement` | `join::join_and_configuration_sequence_matches_vanilla` | - | partial |
 | player.movement.pose | Update standing, crouching, swimming, gliding, crawling and sleeping poses against fit checks | `Player#updatePlayerPose` | | - | todo |
 | player.movement.sneak-edge | Clamp sneaking horizontal movement to avoid stepping off unsupported edges | `Player#maybeBackOffFromEdge` | | - | todo |
 | player.movement.sprint-exhaustion | Apply sprinting, swimming, jumping and movement exhaustion and statistics | `ServerPlayer#checkMovementStatistics; LivingEntity#jumpFromGround` | | - | todo |
@@ -23,8 +23,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.game-mode.survival | Use survival health, hunger, item consumption and tool durability | `GameType#updatePlayerAbilities; ServerPlayerGameMode` | | - | todo |
 | player.game-mode.creative | Apply instant breaking, unlimited materials, creative slot validation and flight | `GameType#updatePlayerAbilities; ServerGamePacketListenerImpl#handleSetCreativeModeSlot` | | - | todo |
 | player.game-mode.adventure | Restrict block placement and breaking using item adventure predicates | `ServerPlayerGameMode; AdventureModePredicate` | | - | todo |
-| player.game-mode.spectator | Apply no-clip, restricted interactions, spectator camera and teleport behavior | `ServerPlayer#setCamera; ServerGamePacketListenerImpl#handleSpectatorAction` | | - | todo |
-| player.abilities.synchronization | Synchronize invulnerability, flying, allowed flight, instant building and movement speeds | `Abilities; ServerPlayer#onUpdateAbilities` | | - | todo |
+| player.game-mode.spectator | Apply no-clip, restricted interactions, spectator camera and teleport behavior | `ServerPlayer#setCamera; ServerGamePacketListenerImpl#handleSpectatorAction` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
+| player.abilities.synchronization | Synchronize invulnerability, flying, allowed flight, instant building and movement speeds | `Abilities; ServerPlayer#onUpdateAbilities` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | player.hunger.exhaustion | Spend exhaustion above four on saturation first, then food outside peaceful | `FoodData#tick` | | - | todo |
 | player.hunger.fast-regeneration | Regenerate every 10 ticks at full food with saturation-dependent healing and exhaustion | `FoodData#tick` | | - | todo |
 | player.hunger.slow-regeneration | Regenerate one health every 80 ticks at food level at least 18 | `FoodData#tick` | | - | todo |

@@ -40,6 +40,7 @@ pub struct ServerPlayer {
     pub network_id: i32,
     pub position: Vec3,
     pub velocity: Vec3,
+    pub known_movement: Vec3,
     pub yaw: f32,
     pub pitch: f32,
     pub on_ground: bool,
@@ -75,6 +76,7 @@ impl ServerPlayer {
             network_id,
             position,
             velocity: Vec3::ZERO,
+            known_movement: Vec3::ZERO,
             yaw: 0.,
             pitch: 0.,
             on_ground: false,
@@ -205,9 +207,7 @@ pub fn move_player(
     pitch: f32,
     on_ground: bool,
 ) -> Result<MovementResult, LevelError> {
-    if [target.x, target.y, target.z]
-        .iter()
-        .any(|v| !v.is_finite())
+    if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
         || !yaw.is_finite()
         || !pitch.is_finite()
     {

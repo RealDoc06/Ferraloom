@@ -337,6 +337,10 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
             .await?;
         client
             .io
+            .send(&sb::Packet::ClientTickEnd(sb::ClientTickEnd {}))
+            .await?;
+        client
+            .io
             .send(&sb::Packet::PingRequest(common::serverbound::PingRequest {
                 time: i64::from(step),
             }))
