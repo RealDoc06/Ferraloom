@@ -1,4 +1,8 @@
 import io.netty.buffer.*;
+import io.netty.channel.embedded.EmbeddedChannel;
+import net.minecraft.util.Crypt;
+import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Consumer;
@@ -41,6 +45,25 @@ public final class ProtocolVectors {
             var tag = new CompoundTag(); tag.putString("name", "network"); tag.putInt("answer", 42);
             b.writeNbt(tag);
         });
+        for (int size : new int[]{255,256,257}) {
+            byte[] plain = new byte[size]; for (int j=0;j<size;j++) plain[j] = (byte)(j%13);
+            vector("compression_"+size, b -> {
+                var channel = new EmbeddedChannel(new CompressionEncoder(256));
+                channel.writeOutbound(Unpooled.wrappedBuffer(plain));
+                ByteBuf compressed = channel.readOutbound(); b.writeBytes(compressed); compressed.release(); channel.finishAndReleaseAll();
+            });
+        }
+        byte[] secret = new byte[16]; for (int i=0;i<16;i++) secret[i] = (byte)i;
+        byte[] plain = new byte[257]; for (int i=0;i<plain.length;i++) plain[i] = (byte)(i%13);
+        var key = new SecretKeySpec(secret,"AES");
+        byte[] cipher = Crypt.getCipher(1,key).doFinal(plain);
+        vector("cipher",b -> b.writeBytes(cipher));
+        var keyPair = Crypt.generateKeyPair();
+        vector("rsa_private",b -> b.writeBytes(keyPair.getPrivate().getEncoded()));
+        vector("rsa_public",b -> b.writeBytes(keyPair.getPublic().getEncoded()));
+        var encrypted = Crypt.encryptUsingKey(keyPair.getPublic(),secret);
+        vector("rsa_secret",b -> b.writeBytes(encrypted));
+        Files.writeString(output.resolve("server_hash.txt"),new BigInteger(Crypt.digestData("",keyPair.getPublic(),key)).toString(16)+"\n");
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         var lookup = VanillaRegistries.createWorldLookup();
