@@ -112,12 +112,9 @@ impl BlockPredicate {
             return false;
         }
         let (Self::Block { nbt, .. } | Self::Tag { nbt, .. }) = self;
-        match nbt {
-            None => true,
-            Some(pattern) => {
-                block_entity_nbt.is_some_and(|target| matches_nbt_compound(pattern, target))
-            }
-        }
+        nbt.as_ref().is_none_or(|pattern| {
+            block_entity_nbt.is_some_and(|target| matches_nbt_compound(pattern, target))
+        })
     }
 
     pub fn ensure_supported_nbt(&self) -> Result<(), CommandSyntaxError> {
