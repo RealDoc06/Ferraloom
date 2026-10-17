@@ -165,6 +165,7 @@ struct TreeFeature {
     replaceable: Vec<Block>,
     leaves: Vec<Block>,
     logs: Vec<Block>,
+    leaf_support: Vec<Block>,
 }
 #[derive(Default)]
 struct TreePositions {
@@ -191,6 +192,7 @@ impl TreeFeature {
             replaceable: tag(l, "replaceable_by_trees")?,
             leaves: tag(l, "leaves")?,
             logs: tag(l, "logs")?,
+            leaf_support: tag(l, "prevents_nearby_leaf_decay")?,
         })
     }
     fn valid(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
@@ -295,7 +297,7 @@ impl TreeFeature {
                 let q = step(p, dir);
                 if inside(q) && !shape.contains(&q) {
                     let s = c.region.block(q)?;
-                    let d = if self.logs.contains(&s.block()) {
+                    let d = if self.leaf_support.contains(&s.block()) {
                         Some(0)
                     } else {
                         s.get(properties::DISTANCE).map(i32::from)
@@ -347,7 +349,7 @@ fn update_shape_at_edge(
     min: Pos,
     max: Pos,
 ) -> Result<(), Error> {
-    for axes in [[0, 1, 2], [1, 2, 0], [2, 0, 1]] {
+    for axes in [[0, 1, 2], [2, 0, 1], [1, 2, 0]] {
         let [a, b, axis] = axes;
         for av in min[a]..=max[a] {
             for bv in min[b]..=max[b] {

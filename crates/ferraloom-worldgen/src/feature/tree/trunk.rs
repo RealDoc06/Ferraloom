@@ -168,8 +168,8 @@ impl TrunkPlacer {
                         let mut x = 0;
                         let mut z = 0;
                         for b in 0..5 {
-                            x = (1.5 + mth::cos(angle) * b as f32) as i32;
-                            z = (1.5 + mth::sin(angle) * b as f32) as i32;
+                            x = (1.5 + mth::cos(f64::from(angle)) * b as f32) as i32;
+                            z = (1.5 + mth::sin(f64::from(angle)) * b as f32) as i32;
                             self.log(t, c, add(o, [x, y - 3 + b / 2, z]), None, out)?;
                         }
                         attachments.push(Attachment::new(add(o, [x, y, z]), -2, false));
