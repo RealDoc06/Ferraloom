@@ -412,37 +412,63 @@ pub(crate) fn shuffle<T>(values: &mut [T], random: &mut impl RandomSource) {
         values.swap(i - 1, random.next_int_bound(i as i32) as usize);
     }
 }
+/// BlockStateParser#parseForBlock accepts a prefix; trailing command text is ignored.
 fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
-    let (state_text, nbt) = text
-        .split_once('{')
-        .map_or((text, None), |(a, b)| (a, Some(b)));
-    if let Some(nbt) = nbt {
-        ferraloom_nbt::parse_compound(&format!("{{{nbt}")).ok()?;
+    let mut reader = ferraloom_brigadier::StringReader::new(text);
+    while reader.can_read() && matches!(reader.peek(), 97..=122 | 48..=57 | 95 | 45 | 46 | 58 | 47)
+    {
+        reader.skip();
     }
-    let (name, props) = if let Some((name, props)) = state_text.split_once('[') {
-        (name, Some(props.strip_suffix(']')?))
-    } else {
-        (state_text, None)
-    };
-    let block = Block::from_name(&name.parse::<Identifier>().ok()?.to_string())?;
-    let mut values = Vec::new();
-    if let Some(props) = props {
-        for property in props.split(',').filter(|s| !s.is_empty()) {
-            let (name, value) = property.split_once('=')?;
-            if values.iter().any(|&(k, _)| k == name) {
+    let id: Identifier = reader.read_so_far().parse().ok()?;
+    let block = Block::from_name(&id.to_string())?;
+    let mut values: Vec<(String, String)> = Vec::new();
+    if reader.can_read() && reader.peek() == u16::from(b'[') {
+        reader.skip();
+        reader.skip_whitespace();
+        while reader.can_read() && reader.peek() != u16::from(b']') {
+            reader.skip_whitespace();
+            let key = reader.read_string().ok()?;
+            if values.iter().any(|(k, _)| *k == key)
+                || !block.default_state().properties().any(|(k, _)| k == key)
+            {
                 return None;
             }
-            values.push((name, value));
+            reader.skip_whitespace();
+            if !reader.can_read() || reader.read() != u16::from(b'=') {
+                return None;
+            }
+            reader.skip_whitespace();
+            values.push((key, reader.read_string().ok()?));
+            reader.skip_whitespace();
+            if reader.can_read() {
+                if reader.peek() != u16::from(b',') {
+                    if reader.peek() != u16::from(b']') {
+                        return None;
+                    }
+                    break;
+                }
+                reader.skip();
+            }
+        }
+        if !reader.can_read() {
+            return None;
+        }
+        reader.skip();
+    }
+    if reader.can_read() && reader.peek() == u16::from(b'{') {
+        if !matches!(
+            ferraloom_nbt::parse_prefix(&reader.remaining()).ok()?.0,
+            Tag::Compound(_)
+        ) {
+            return None;
         }
     }
-    let state = BlockState::from_properties(block, values.iter().copied())?;
-    if values
+    let state =
+        BlockState::from_properties(block, values.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    values
         .iter()
-        .any(|&(name, value)| !state.properties().any(|p| p == (name, value)))
-    {
-        return None;
-    }
-    Some(state)
+        .all(|(key, value)| state.properties().any(|(k, v)| k == key && v == value))
+        .then_some(state)
 }
 fn blackstone_replace(old: BlockState) -> BlockState {
     let block = match old.block() {

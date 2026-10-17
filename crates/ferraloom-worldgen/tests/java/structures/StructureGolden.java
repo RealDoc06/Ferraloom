@@ -299,8 +299,17 @@ public final class StructureGolden {
         }
         write(directory.resolve("jigsaw.json.gz"),out);
     }
+    static void replacements(RegistryAccess.Frozen registries, Path directory) throws Exception {
+        var out=new JsonArray();
+        for(var text:List.of("stone","minecraft:stone junk","stone[ ]","stone []","stone{} trailing","stone{a:[1,2]}","stone{a:"," stone","#minecraft:logs","oak_stairs[facing=east]","oak_stairs[ facing = 'east' , half = top ]","oak_stairs[\"facing\"=\"west\"]","oak_stairs[facing=north,]","oak_stairs[facing=north, ]","oak_stairs[facing=north,facing=east]","oak_stairs[facing=up]","stone[missing=true]","oak_stairs[facing=north]extra","oak_stairs[facing=north]{a:1}x","STONE","stone!","stone/unknown","structure_void","oak_stairs[half=top,waterlogged=true]","oak_stairs[facing=north")) {
+            var item=new JsonObject();item.addProperty("input",text);
+            try { var result=net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(registries.lookupOrThrow(Registries.BLOCK),text,true);item.addProperty("state",Block.getId(result.blockState())); } catch(com.mojang.brigadier.exceptions.CommandSyntaxException e) {item.add("state",JsonNull.INSTANCE);}
+            out.add(item);
+        }
+        write(directory.resolve("replacements.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);
     }
 }

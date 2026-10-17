@@ -190,3 +190,17 @@ fn every_builtin_processor_list_decodes() {
             .unwrap_or_else(|e| panic!("{id}: {e}"));
     }
 }
+
+#[test]
+fn jigsaw_replacement_parser_matches_vanilla_prefix_and_properties() {
+    for case in golden(include_bytes!("testdata/replacements.json.gz"))
+        .as_array()
+        .unwrap()
+    {
+        assert_eq!(
+            parse_jigsaw_replacement(case["input"].as_str().unwrap()).map(BlockState::id),
+            case["state"].as_u64().map(|v| v as u16),
+            "{case}"
+        );
+    }
+}
