@@ -247,6 +247,7 @@ fn unescape(value: &str) -> Result<std::string::String> {
             match chars.next() {
                 Some('u') => {
                     let digits: std::string::String = chars.by_ref().take(4).collect();
+                    anyhow::ensure!(digits.len() == 4, "malformed property unicode escape");
                     units.push(
                         u16::from_str_radix(&digits, 16)
                             .context("malformed property unicode escape")?,
@@ -271,7 +272,7 @@ fn unescape(value: &str) -> Result<std::string::String> {
 fn parse(text: &str) -> Result<BTreeMap<std::string::String, std::string::String>> {
     let mut result = BTreeMap::new();
     let mut logical = std::string::String::new();
-    for line in text.lines() {
+    for line in text.lines().chain(std::iter::once("")) {
         let line = line.trim_start_matches([' ', '\t', '\u{c}']);
         if logical.is_empty() && (line.is_empty() || line.starts_with(['#', '!'])) {
             continue;
@@ -306,9 +307,6 @@ fn parse(text: &str) -> Result<BTreeMap<std::string::String, std::string::String
         });
         result.insert(unescape(key)?, unescape(value)?);
         logical.clear();
-    }
-    if !logical.is_empty() {
-        result.insert(unescape(&logical)?, std::string::String::new());
     }
     Ok(result)
 }
@@ -345,6 +343,8 @@ mod tests {
             parse(&format!("motd={}\n", escape(p.get("motd")))).unwrap()["motd"],
             p.get("motd")
         );
+        assert_eq!(parse("motd=continued\\").unwrap()["motd"], "continued");
+        assert!(parse("motd=\\u123").is_err());
         assert!(ServerProperties::default().boolean("white-list"));
     }
 }

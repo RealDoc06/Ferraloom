@@ -624,7 +624,13 @@ impl MinecraftServer {
             let pack_id = if self.properties.get("resource-pack-id").is_empty() {
                 Uuid::from_name(url.as_bytes())
             } else {
-                protocol::codec::uuid_from_string(self.properties.get("resource-pack-id"))?
+                match protocol::codec::uuid_from_string(self.properties.get("resource-pack-id")) {
+                    Ok(id) => id,
+                    Err(error) => {
+                        eprintln!("Invalid resource-pack-id; skipping resource pack: {error}");
+                        return self.prepare_player(connection).await;
+                    }
+                }
             };
             c.push(cfg::ClientboundPacket::ResourcePackPush(
                 common_cb::ResourcePackPush {
@@ -1309,7 +1315,9 @@ impl MinecraftServer {
             leaving.sort_by_key(|p| p.pack());
             for pos in leaving {
                 if c.chunks.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk { pos }));
+                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
+                        pos: play::ChunkPos { x: pos.x, z: pos.z },
+                    }));
                 }
             }
             for &pos in desired.difference(&c.view) {
