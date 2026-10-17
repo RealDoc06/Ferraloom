@@ -1,10 +1,13 @@
 """Pure synthetic validator inputs, not executed servers or captured packet gold."""
 import base64
+from contextlib import nullcontext
 from copy import deepcopy
 import hashlib
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
@@ -68,6 +71,140 @@ def drop(item='sugar', count=3, identity=(1, 2, 3, 4)):
             'UUID': {'nbt_type': 'IntArray', 'value': list(identity)},
             'Pos': {'nbt_type': 'List', 'element_type': 6,
                     'value': [craft.atom('Double', value) for value in (4104.5, 201.5, 8.5)]}}
+
+
+class CakePreparationTests(unittest.TestCase):
+    def setUp(self):
+        # Fixed SYNTHETIC boundary replies, not packet gold or an inventory engine.
+        # Commands and clicks only record calls; they never mutate these replies.
+        self.trace = []
+        self.items = {name: index for index, name in enumerate(craft.ITEMS, 1)}
+        self.empty = state(1)
+        seeded = deepcopy(self.empty)
+        seeded['player']['slots'][45] = {'item_id': self.items['cobblestone'], 'count': 64}
+        opened = {**deepcopy(seeded), 'active': 'table', 'table': {
+            'container_id': 4, 'kind': 'table', 'state_id': 1, 'baseline_sequence': 1,
+            'revision_sequence': 10, 'slots': [None] * 46}}
+        ingredients = [{'item_id': self.items[name], 'count': 1} for name in
+            ('milk_bucket', 'milk_bucket', 'milk_bucket', 'sugar', 'egg', 'sugar', 'wheat', 'wheat', 'wheat')]
+        frames = []
+        for placed in range(10):
+            frame = deepcopy(opened)
+            frame['table']['slots'][1:10] = ingredients[:placed] + [None] * (9 - placed)
+            frame['table']['slots'][37:46] = [None] * placed + ingredients[placed:]
+            frame['player']['slots'][36:45] = [None] * placed + ingredients[placed:]
+            frames.append(frame)
+        frames[-1]['table']['slots'][0] = {'item_id': self.items['cake'], 'count': 1}
+        full = deepcopy(frames[-1])
+        full['table']['slots'][10:46] = [{'item_id': self.items['cobblestone'], 'count': 64}] * 36
+        full['player']['slots'][9:45] = deepcopy(full['table']['slots'][10:46])
+        space = deepcopy(full)
+        space['table']['slots'][45] = space['player']['slots'][44] = None
+        replies = iter((seeded, opened, frames[0], full, space))
+        fences = iter((seeded, opened, frames[0], full, space))
+        swaps = iter(zip(frames, frames[1:]))
+        zero = dict.fromkeys(craft.CRAFTED, 0)
+
+        def observe(predicate):
+            received = next(replies)
+            self.trace.append(('observe', received['active']))
+            response = {'crafting': received, 'crafting_packets': [
+                {'kind': 'open', 'container_id': 4, 'menu_type': 12, 'sequence': 11},
+                {'kind': 'content', 'container_id': 4, 'sequence': 12}]}
+            self.assertTrue(predicate(response), 'SYNTHETIC required received inventory missing')
+            return response
+
+        def fence():
+            received = next(fences)
+            self.trace.append(('fence', received['active']))
+            return {'received': received, 'after_sequence': 20}
+
+        def click(purpose, slot, action, button=0):
+            self.trace.append(('click', purpose, slot, action, button))
+            if purpose == 'grid_setup':
+                before, after = next(swaps)
+                return {'request': {'before': before}, 'received': after, 'crafted_counts': zero}
+
+        server = SimpleNamespace(directory=Path('/SYNTHETIC-cake-prepare'),
+            save_flush=Mock(side_effect=lambda: self.trace.append(('flush',))),
+            command=Mock(side_effect=lambda command: self.trace.append(('command', command)) or ['SYNTHETIC command success']))
+        self.client = SimpleNamespace(events=[], watch_statistic=Mock(), state=Mock(return_value={'packets': 10}),
+            wait_state=Mock(side_effect=observe), crafting_fence=Mock(side_effect=fence),
+            request=Mock(side_effect=lambda action, **fields: self.trace.append(('open', action)) or {'SYNTHETIC': True}))
+        fixture = SimpleNamespace(server=server,
+            report={'active_boot': 'SYNTHETIC', 'boots': {'SYNTHETIC': {'cases': {}}}})
+        self.probe = craft.Probe(fixture, self.client, {'items': self.items, 'crafted_category': 0})
+        self.probe.retain = Mock()
+        self.probe.capture = Mock(side_effect=lambda label: self.trace.append(('capture', label)) or {
+            'actual': craft.view(self.empty, self.items), 'drop_totals': {}})
+        self.probe.click = Mock(side_effect=click)
+        self.probe.check = Mock(side_effect=lambda label, expected, **fields: self.trace.append(('check', label)))
+        self.probe.reset = Mock()
+        for replacement in (
+            patch.object(craft, 'retained_player', side_effect=lambda *_: self.trace.append(('saved_baseline',)) or {
+                'SYNTHETIC': True, 'statistics': {'data': {'stats': {}}}}),
+            patch.object(craft, 'interaction_deadline', side_effect=lambda *_: nullcontext()),
+        ):
+            self.addCleanup(replacement.stop)
+            replacement.start()
+
+    def test_cake_prepare_observes_offhand_before_table_swaps_and_main_fill(self):
+        self.probe.exercise('cake_shift')
+        command = f'item replace entity {craft.NAME} weapon.offhand with minecraft:cobblestone 64'
+        self.assertEqual(self.trace[:8], [('flush',), ('saved_baseline',), ('capture', 'baseline'),
+            ('command', command), ('observe', 'player'), ('fence', 'player'), ('open', 'use_item_on'), ('observe', 'table')])
+        self.client.request.assert_called_once_with('use_item_on', **craft.TABLE)
+        self.assertEqual([row for row in self.trace if row[0] == 'click'],
+            [('click', 'grid_setup', slot, 'swap', slot - 1) for slot in range(1, 10)] +
+            [('click', 'reject_shift', 0, 'quick_move', 0), ('click', 'extract', 0, 'quick_move', 0)])
+        phases = self.probe.case['phases']
+        self.assertEqual([row['kind'] for row in phases],
+            ['inventory_setup', 'table_open', 'inventory_setup', 'inventory_setup', 'inventory_setup'])
+        self.assertTrue(all(row['complete'] for row in phases))
+        self.assertEqual(phases[0]['entries'], {40: craft.stack('cobblestone', 64)})
+        self.assertEqual(list(phases[2]['entries']), list(range(9)))
+        self.assertEqual(phases[3]['entries'], dict.fromkeys(range(36), craft.stack('cobblestone', 64)))
+        self.assertEqual(phases[4]['entries'], {8: None})
+        first_swap = self.trace.index(('click', 'grid_setup', 1, 'swap', 0))
+        prepared = self.trace.index(('check', 'prepared'))
+        reject = self.trace.index(('click', 'reject_shift', 0, 'quick_move', 0))
+        self.assertEqual(self.trace[8:first_swap], [('fence', 'table')] +
+            [('command', row['command']) for row in phases[2]['commands']] + [('observe', 'table'), ('fence', 'table')])
+        self.assertEqual(self.trace[first_swap:prepared],
+            [('click', 'grid_setup', slot, 'swap', slot - 1) for slot in range(1, 10)])
+        self.assertEqual(self.trace[prepared + 1:reject], [('command',
+            f'item replace entity {craft.NAME} ' + (f'hotbar.{index}' if index < 9 else f'inventory.{index - 9}') +
+            ' with minecraft:cobblestone 64') for index in range(36)] + [('observe', 'table'), ('fence', 'table')])
+        kind, grid, result = craft.recipe_fixture('cake_shift')
+        self.assertEqual(self.probe.check.call_args_list[0].args,
+            ('prepared', craft.expected_view(kind, grid, result=result, offhand=craft.stack('cobblestone', 64))))
+        self.assertEqual(sum('weapon.offhand' in row['command'] for phase in phases for row in phase.get('commands', [])), 1)
+
+    def test_cake_prepare_rejects_missing_player45_before_table_open(self):
+        def absent(predicate):
+            self.assertFalse(predicate({'crafting': self.empty}))
+            raise AssertionError('SYNTHETIC missing received player45')
+
+        self.client.wait_state.side_effect = absent
+        with self.assertRaisesRegex(AssertionError, 'SYNTHETIC missing received player45'):
+            self.probe.prepare('cake_shift')
+        self.client.request.assert_not_called()
+        self.client.crafting_fence.assert_not_called()
+        self.probe.click.assert_not_called()
+        self.probe.check.assert_not_called()
+        self.assertEqual(len(self.probe.case['phases']), 1)
+        self.assertFalse(self.probe.case['phases'][0]['complete'])
+        self.assertEqual(len(self.probe.case['phases'][0]['commands']), 1)
+
+    def test_cake_prepare_rechecks_player45_at_setup_fence_before_table_open(self):
+        self.client.crafting_fence.side_effect = None
+        self.client.crafting_fence.return_value = {'received': self.empty}
+        with self.assertRaises(AssertionError):
+            self.probe.prepare('cake_shift')
+        self.client.request.assert_not_called()
+        self.probe.click.assert_not_called()
+        self.probe.check.assert_not_called()
+        self.assertFalse(self.probe.case['phases'][0]['complete'])
 
 
 class CraftingValidatorTests(unittest.TestCase):

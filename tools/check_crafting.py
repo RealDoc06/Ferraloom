@@ -512,6 +512,10 @@ class Probe:
             self.client.watch_statistic(self.contract['crafted_category'], self.items[counter])
         baseline = self.capture('baseline')
         require(baseline['actual'] == expected_view('player', {}) and not baseline['drop_totals'], 'Case began with residual items')
+        offhand = stack('cobblestone', 64) if name == 'cake_shift' else None
+        if offhand is not None:
+            # Seed and observe player45 while its player menu is active.
+            self.inventory({40: offhand})
         if kind == 'table':
             before = self.client.state()['packets']
             mark = len(self.client.events)
@@ -529,7 +533,7 @@ class Probe:
                 opens = [p for p in phase['packets'] if p['kind'] == 'open']
                 require(len(opens) == 1 and opens[0]['menu_type'] == 12
                         and any(p['kind'] == 'content' and p['container_id'] == opens[0]['container_id'] for p in phase['packets']), 'Missing actual table open/content')
-                require(view(phase['fence']['received'], self.items) == expected_view('table', {}), 'Nonempty fresh table')
+                require(view(phase['fence']['received'], self.items) == expected_view('table', {}, offhand=offhand), 'Nonempty fresh table')
                 phase['complete'] = True
         self.inventory({index: value for index, value in enumerate(grid.values())})
         for index, slot in enumerate(grid):
@@ -542,7 +546,7 @@ class Probe:
             require({key: value for key, value in after.items() if key != 'result'} ==
                     {key: value for key, value in expected.items() if key != 'result'}, 'SWAP setup changed unrelated slots/cursor')
             require(phase['crafted_counts'] == self.baseline, 'Grid setup advanced crafted statistics')
-        self.check('prepared', expected_view(kind, grid, result=result))
+        self.check('prepared', expected_view(kind, grid, result=result, offhand=offhand))
         return kind, grid, result
 
     def reset(self) -> None:
@@ -595,7 +599,7 @@ class Probe:
                 self.check('extracted', expected_view(kind, {4: stack('glass_bottle')}, cursor=output, main=main), awards={'sugar': 3})
             elif name == 'cake_shift':
                 full = [stack('cobblestone', 64) for _ in range(36)]
-                self.inventory({**dict(enumerate(full)), 40: stack('cobblestone', 64)})
+                self.inventory(dict(enumerate(full)))
                 self.click('reject_shift', 0, 'quick_move')
                 self.check('rejected', expected_view(kind, grid, result=output, main=full, offhand=stack('cobblestone', 64)))
                 self.inventory({8: None})
