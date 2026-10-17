@@ -48,7 +48,7 @@ pub enum Incoming {
 }
 #[derive(Clone, Debug)]
 pub enum Outgoing {
-    Configuration(configuration::ClientboundPacket),
+    Configuration(Box<configuration::ClientboundPacket>),
     Play(Box<play::clientbound::Packet>),
 }
 impl Outgoing {
@@ -68,7 +68,7 @@ impl From<play::clientbound::Packet> for Outgoing {
 }
 impl From<configuration::ClientboundPacket> for Outgoing {
     fn from(p: configuration::ClientboundPacket) -> Self {
-        Self::Configuration(p)
+        Self::Configuration(Box::new(p))
     }
 }
 pub struct OutboundBatch {
