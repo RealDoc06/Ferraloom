@@ -182,8 +182,9 @@ fn replay(require_pending: bool) {
             Err(error) => panic!("{label}: {error}"),
         };
         let mut chunks = bases[case["terrain"].as_str().unwrap()].clone();
-        let mut random =
-            WorldgenRandom::new(XoroshiroRandomSource::new(case["seed"].as_i64().unwrap()));
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(
+            case["seed"].as_i64().unwrap(),
+        )));
         let origin = point(&case["origin"]);
         let center = [origin[0] >> 4, origin[2] >> 4];
         let mut region = WorldGenRegion::new(
