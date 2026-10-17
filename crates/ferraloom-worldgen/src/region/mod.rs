@@ -5,7 +5,7 @@ use crate::{Error, generator::GeneratedChunk};
 use ferraloom_chunk::BiomeId;
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
-use std::collections::BTreeMap;
+use std::{cell::OnceCell, collections::BTreeMap};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChunkStatus {
@@ -22,11 +22,31 @@ pub enum ChunkStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(usize)]
 pub enum Heightmap {
+    WorldSurfaceWg,
     WorldSurface,
+    OceanFloorWg,
     OceanFloor,
     MotionBlocking,
     MotionBlockingNoLeaves,
+}
+impl Heightmap {
+    pub const ALL: [Self; 6] = [
+        Self::WorldSurfaceWg,
+        Self::WorldSurface,
+        Self::OceanFloorWg,
+        Self::OceanFloor,
+        Self::MotionBlocking,
+        Self::MotionBlockingNoLeaves,
+    ];
+    fn after(self, status: ChunkStatus) -> bool {
+        if status < ChunkStatus::Terrain {
+            matches!(self, Self::WorldSurfaceWg | Self::OceanFloorWg)
+        } else {
+            !matches!(self, Self::WorldSurfaceWg | Self::OceanFloorWg)
+        }
+    }
 }
 
 /// Port of SavedTick in ProtoChunkTicks. Worldgen discards trigger times and
@@ -73,9 +93,17 @@ pub struct RegionChunk {
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
+    heightmaps: [OnceCell<[i32; 256]>; 6],
 }
 impl RegionChunk {
     pub fn new(chunk: GeneratedChunk, status: ChunkStatus) -> Self {
+        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
+        heightmaps[Heightmap::WorldSurfaceWg as usize]
+            .set(chunk.world_surface)
+            .unwrap();
+        heightmaps[Heightmap::OceanFloorWg as usize]
+            .set(chunk.ocean_floor)
+            .unwrap();
         Self {
             chunk,
             status,
@@ -84,6 +112,7 @@ impl RegionChunk {
             block_ticks: ProtoChunkTicks::default(),
             fluid_ticks: ProtoChunkTicks::default(),
             poi_changes: Vec::new(),
+            heightmaps,
         }
     }
 }
@@ -164,6 +193,26 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
     }
     // --- end ore and cave family ---
+    // --- tree family ---
+    fn populate_worldgen_beehive(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: populate_worldgen_beehive".into()))
+    }
+    fn state_has_sturdy_face(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _query_position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: state_has_sturdy_face".into()))
+    }
+    // --- end tree family ---
+
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -214,7 +263,7 @@ pub trait WorldgenBlockBehavior: Sync {
         _mirror: Mirror,
         _rotation: Rotation,
         _finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
@@ -263,7 +312,9 @@ pub trait WorldgenBlockBehavior: Sync {
     }
     // --- end nether, end and misc family ---
 
-    fn has_block_entity(&self, state: BlockState) -> bool;
+    fn has_block_entity(&self, state: BlockState) -> bool {
+        state.has_block_entity()
+    }
     fn post_process_pos(
         &self,
         state: BlockState,
@@ -277,6 +328,14 @@ pub trait WorldgenBlockBehavior: Sync {
         _p: [i32; 3],
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: is_outline_full_block".into()))
+    }
+    fn is_collision_full_block(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: is_collision_full_block".into()))
     }
     fn is_solid(&self, _state: BlockState) -> Result<bool, Error> {
         Err(Error("solid block behavior is unavailable".into()))
@@ -321,6 +380,29 @@ pub struct WorldGenRegion<'a> {
     pub sea_level: i32,
 }
 impl<'a> WorldGenRegion<'a> {
+    // --- tree family ---
+    pub fn populate_worldgen_beehive(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.populate_worldgen_beehive(self, p, random)
+    }
+    pub fn state_has_sturdy_face(
+        &self,
+        state: BlockState,
+        query_position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        match state.cached_sturdy_face(face) {
+            Some(sturdy) => Ok(sturdy),
+            None => self
+                .behavior
+                .state_has_sturdy_face(self, state, query_position, face),
+        }
+    }
+    // --- end tree family ---
+
     /// `dependencies[d]` is the maximum requested status at chessboard distance
     /// d, exactly ChunkStep.directDependencies. An upgrading center additionally
     /// restricts writes to its generation height accessor (min Y, height).
@@ -474,16 +556,15 @@ impl<'a> WorldGenRegion<'a> {
             .biome(quart))
     }
     pub fn height_at(&self, map: Heightmap, x: i32, z: i32) -> Result<i32, Error> {
-        let chunk = &self.chunk([x >> 4, z >> 4], ChunkStatus::Empty)?.chunk;
-        let index = ((z & 15) * 16 + (x & 15)) as usize;
-        Ok(match map {
-            Heightmap::WorldSurface => chunk.world_surface[index],
-            Heightmap::OceanFloor => chunk.ocean_floor[index],
-            Heightmap::MotionBlocking => chunk.motion_height((x & 15) as u8, (z & 15) as u8, false),
-            Heightmap::MotionBlockingNoLeaves => {
-                chunk.motion_height((x & 15) as u8, (z & 15) as u8, true)
-            }
-        })
+        let region_chunk = self.chunk([x >> 4, z >> 4], ChunkStatus::Empty)?;
+        let heights = region_chunk.heightmaps[map as usize].get_or_init(|| {
+            std::array::from_fn(|i| {
+                region_chunk
+                    .chunk
+                    .scan_height(map, (i & 15) as u8, (i >> 4) as u8)
+            })
+        });
+        Ok(heights[((z & 15) * 16 + (x & 15)) as usize])
     }
     pub fn ensure_can_write(&self, p: [i32; 3]) -> bool {
         self.write_radius >= 0
@@ -505,24 +586,79 @@ impl<'a> WorldGenRegion<'a> {
         let old = self.block(p)?;
         let in_height = p[1] >= self.chunks[index].chunk.min_y
             && p[1] < self.chunks[index].chunk.min_y + self.chunks[index].chunk.height;
-        self.chunks[index]
-            .chunk
-            .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        let section_y = in_height.then(|| ((p[1] - self.chunks[index].chunk.min_y) >> 4) as usize);
+        let skip_heightmaps = section_y.is_some_and(|section| {
+            self.chunks[index].chunk.sections[section].has_only_air() && state.block() == Block::AIR
+        });
+        if self.chunks[index].status >= ChunkStatus::Terrain {
+            if in_height {
+                self.set_block_in_section(p, state)?;
+            }
+        } else {
+            self.chunks[index]
+                .chunk
+                .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        }
+        if in_height && !skip_heightmaps {
+            let region_chunk = &mut self.chunks[index];
+            let column_index = ((p[2] & 15) * 16 + (p[0] & 15)) as usize;
+            for map in Heightmap::ALL
+                .into_iter()
+                .filter(|map| map.after(region_chunk.status))
+            {
+                let cache = &mut region_chunk.heightmaps[map as usize];
+                if cache.get().is_none() {
+                    cache
+                        .set(std::array::from_fn(|i| {
+                            region_chunk
+                                .chunk
+                                .scan_height(map, (i & 15) as u8, (i >> 4) as u8)
+                        }))
+                        .unwrap();
+                } else {
+                    let heights = cache.get_mut().unwrap();
+                    if region_chunk.chunk.heightmap_matches(map, state)
+                        && p[1] >= heights[column_index]
+                    {
+                        heights[column_index] = p[1] + 1;
+                    } else if p[1] == heights[column_index] - 1
+                        && !region_chunk.chunk.heightmap_matches(map, state)
+                    {
+                        heights[column_index] = region_chunk.chunk.scan_height_below(
+                            map,
+                            (p[0] & 15) as u8,
+                            (p[2] & 15) as u8,
+                            p[1],
+                        );
+                    }
+                }
+            }
+        }
         self.chunks[index].poi_changes.push((p, old, state));
-        if self.behavior.has_block_entity(state) {
+        if state.has_block_entity() {
             let mut tag = CompoundTag::new();
             for (key, value) in [("x", p[0]), ("y", p[1]), ("z", p[2])] {
                 tag.insert(key, Tag::Int(value));
             }
             tag.insert("id", Tag::String("DUMMY".into()));
             self.chunks[index].block_entities.insert(p, tag);
-        } else if in_height && self.behavior.has_block_entity(old) {
+        } else if in_height && old.has_block_entity() {
             self.chunks[index].block_entities.remove(&p);
         }
-        if flags & 16 == 0
-            && let Some(post) = self.behavior.post_process_pos(state, self, p)?
-        {
-            self.mark_post_processing(post)?;
+        if flags & 16 == 0 {
+            let post = match state.post_process_y_offset() {
+                Some(offset) => Some([p[0], p[1].wrapping_add(offset), p[2]]),
+                None => match state.post_process() {
+                    ferraloom_data::PostProcess::Never => None,
+                    ferraloom_data::PostProcess::Always => Some(p),
+                    ferraloom_data::PostProcess::Context => {
+                        self.behavior.post_process_pos(state, self, p)?
+                    }
+                },
+            };
+            if let Some(post) = post {
+                self.mark_post_processing(post)?;
+            }
         }
         Ok(true)
     }
@@ -626,12 +762,18 @@ impl<'a> WorldGenRegion<'a> {
         mirror: Mirror,
         rotation: Rotation,
         finalize: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
     pub fn is_outline_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_outline_full_block(self, state, p)
+    }
+    pub fn is_collision_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        match state.cached_collision_full_block() {
+            Some(full) => Ok(full),
+            None => self.behavior.is_collision_full_block(self, state, p),
+        }
     }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
         Ok(self.block(p)?.is_solid())
@@ -641,7 +783,11 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
-        self.behavior.has_sturdy_face(self.block(p)?, self, p, face)
+        let state = self.block(p)?;
+        match state.cached_sturdy_face(face) {
+            Some(sturdy) => Ok(sturdy),
+            None => self.behavior.has_sturdy_face(state, self, p, face),
+        }
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.can_survive(state, self, p)
