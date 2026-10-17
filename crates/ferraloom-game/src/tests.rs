@@ -9,7 +9,7 @@ use crate::{
         animal::{Cow, CowBehavior},
         hurt_unarmored,
     },
-    level::{Level, LevelError, LevelExt, Region, chunk::LevelChunk},
+    level::{Level, LevelError, Region, chunk::LevelChunk},
     ticks::{LevelTicks, TickPriority},
 };
 
@@ -19,7 +19,7 @@ const PLACED: BlockPos = BlockPos::new(-1, 64, -1);
 
 struct TestCow;
 impl Entity for TestCow {
-    fn tick(&self, entity: EntityRef, level: &mut dyn Level) -> Result<(), LevelError> {
+    fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         CowBehavior.tick(entity, level)?;
         // These borrows end before damage calls back into this active entity.
         let target = level.entity::<Cow>(entity)?.as_mob().target;
@@ -43,7 +43,7 @@ impl Entity for TestCow {
     fn hurt_server(
         &self,
         entity: EntityRef,
-        level: &mut dyn Level,
+        level: &mut Level,
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
@@ -64,7 +64,7 @@ impl Entity for TestCow {
 
 struct TurnToDirt;
 impl BlockBehavior for TurnToDirt {
-    fn tick(&self, _: BlockState, pos: BlockPos, level: &mut dyn Level) -> Result<(), LevelError> {
+    fn tick(&self, _: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
         level.set_block_state(pos, Block::DIRT.default_state())?;
         // A newly queued due tick cannot execute in the collection being drained.
         level.schedule_block_tick(pos, Block::DIRT, 1, TickPriority::Normal)
@@ -72,7 +72,7 @@ impl BlockBehavior for TurnToDirt {
 }
 struct TurnToAir;
 impl BlockBehavior for TurnToAir {
-    fn tick(&self, _: BlockState, pos: BlockPos, level: &mut dyn Level) -> Result<(), LevelError> {
+    fn tick(&self, _: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
         level.set_block_state(pos, Block::AIR.default_state())?;
         Ok(())
     }
@@ -82,10 +82,20 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
     .with_block(Block::STONE, &TurnToDirt)
     .with_block(Block::DIRT, &TurnToAir);
 
-fn region() -> Region {
-    let mut region = Region::new(&TEST_BEHAVIORS);
+fn region() -> Level {
+    let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
     region
-        .add_chunk(LevelChunk::new(ChunkPos::containing(PLACED), -4..20))
+        .add_chunk(LevelChunk::new(
+            ChunkPos::containing(PLACED),
+            -4..20,
+            ferraloom_chunk::LevelChunkSection::new(
+                ferraloom_chunk::Strategy::block_states(),
+                ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
+                    ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                )),
+                ferraloom_chunk::BiomeId(0),
+            ),
+        ))
         .unwrap();
     region
 }

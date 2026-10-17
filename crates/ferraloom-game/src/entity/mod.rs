@@ -11,14 +11,14 @@ pub struct EntityRef(pub u64);
 
 impl EntityRef {
     /// The mutable receiver is a call handle; canonical state stays in `level`.
-    pub fn tick(&mut self, level: &mut dyn Level) -> Result<(), LevelError> {
+    pub fn tick(&mut self, level: &mut Level) -> Result<(), LevelError> {
         let behavior = level.entity_behavior(*self)?;
         behavior.tick(*self, level)
     }
 
     pub fn hurt_server(
         &mut self,
-        level: &mut dyn Level,
+        level: &mut Level,
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
@@ -150,7 +150,7 @@ pub struct DamageSource {
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
     /// Subset of Entity#baseTick: finish the first tick. ServerLevel owns commonTick.
-    fn tick(&self, entity: EntityRef, level: &mut dyn Level) -> Result<(), LevelError> {
+    fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         level.entity_state_mut(entity)?.as_entity_mut().first_tick = false;
         Ok(())
     }
@@ -158,7 +158,7 @@ pub trait Entity: Sync {
     fn hurt_server(
         &self,
         entity: EntityRef,
-        level: &mut dyn Level,
+        level: &mut Level,
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
@@ -172,7 +172,7 @@ pub trait Entity: Sync {
 /// This helper must only be called after those earlier damage modifiers are applied.
 pub fn hurt_unarmored(
     entity: EntityRef,
-    level: &mut dyn Level,
+    level: &mut Level,
     source: DamageSource,
     damage: f32,
 ) -> Result<bool, LevelError> {
