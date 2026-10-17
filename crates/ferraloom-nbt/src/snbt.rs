@@ -383,7 +383,9 @@ impl Parser {
             if self.peek() == Some(92) {
                 self.pos += 1;
                 self.ws();
-                let escape = self.peek()?;
+                let Some(escape) = self.peek() else {
+                    return self.fail("Expected literal b");
+                };
                 self.pos += 1;
                 match escape {
                     98 => out.push(8),
@@ -435,6 +437,9 @@ impl Parser {
                             .is_some_and(|c| matches!(c,45|32|48..=57|65..=90|97..=122))
                         {
                             self.pos += 1;
+                        }
+                        if self.pos == start {
+                            return self.fail("Invalid Unicode character name");
                         }
                         let name = String::from_utf16_lossy(&self.text[start..self.pos]);
                         self.ch('}')?;

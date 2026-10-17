@@ -85,6 +85,7 @@ public class VanillaNbt {
             "{DataVersion:1,size:[1,2,3],data:[{nbt:{z:1},state:0,pos:[1,2,3]}],entities:[{pos:[1d,2d,3d],blockPos:[1,2,3]}],palette:[{Name:stone}],z:4}",
             "{s:\"nul\\x00é😀\",b:1b,sht:2s,i:3,l:4L,f:1.25f,d:2.5d,ba:[B;1,-2],ia:[I;3,-4],la:[L;5,-6],list:[1,foo]}"};
         for(String s:cases)parse(s);
+        for(String s:List.of("\"abc\\","\"\\N{}\"","\"\\u\"","\"\\N{A_B}\""))parse(s);
         for(String s:List.of("1__2.3__4e+0_2f","1 f","- 1","0 x FF","[B;1,2b,]","{a:1, b:2}","\"a \\n b\"","128b","256ub","32768s","2147483648","9223372036854775808L","4294967296ui","18446744073709551616ul","-1ui","1e999f"))parse(s);
         for(String bytes:List.of("00","0101","020002","0300000003","040000000000000004","053f800000","063ff0000000000000","08000161","0903000000020000000100000002","0a030001610000000100","090000000001","0901ffffffff","07ffffffff","0aff00016100","0a0a0001780000")) {
             for(long quota:List.of(0L,8L,36L,128L,1024L)) account(bytes,quota,512);
