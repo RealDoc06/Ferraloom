@@ -161,7 +161,8 @@ async fn uuid_player_lookup_crosses_dimensions_and_keeps_ordinary_entity_priorit
         12
     );
 
-    // An ordinary entity in a later world still wins over an earlier player.
+    // Preserve current Rust ordering: a later world's ordinary entity wins.
+    // Duplicate-UUID precedence here is not a vanilla guarantee.
     let entity = from_type(
         &EntityType::PIG,
         Vector3::new(0.0, 64.0, 0.0),
@@ -172,9 +173,10 @@ async fn uuid_player_lookup_crosses_dimensions_and_keeps_ordinary_entity_priorit
     fixture
         .server
         .worlds
-        .store(Arc::new(vec![overworld, nether]));
+        .store(Arc::new(vec![overworld.clone(), nether]));
     let selected = selector.find_entities(&source).unwrap();
     assert_eq!(selected.len(), 1);
     assert!(Arc::ptr_eq(&selected[0], &entity));
+    fixture.server.worlds.store(Arc::new(vec![overworld]));
     fixture.close().await;
 }
