@@ -1094,6 +1094,10 @@ impl MinecraftServer {
                 }
             }
             sb::Packet::ChatCommand(p) => {
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .command_message = None;
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
@@ -1111,11 +1115,14 @@ impl MinecraftServer {
                         .map_err(game_error)?
                         .position,
                 );
-                let action = self
+                let prepared = self
                     .commands
-                    .parse(&p.command, source)
+                    .prepare(&p.command, source)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let CommandAction::Say(content) = action {
+                if let Some(ferraloom_game::commands::arguments::ArgumentValue::Message(message)) =
+                    prepared.argument("message")
+                {
+                    let content = message.text.clone();
                     let signature = p
                         .argument_signatures
                         .0
@@ -1581,6 +1588,40 @@ impl MinecraftServer {
         }
         Ok(())
     }
+    /// Port of MessageArgument#resolveChatMessage: a missing signed argument is system chat.
+    fn broadcast_command_chat(
+        &mut self,
+        source: Option<ConnectionId>,
+        content: String,
+        chat_type: protocol::Identifier,
+    ) -> Result<()> {
+        if let Some(connection) = source {
+            if let Some(message) = self
+                .connections
+                .get_mut(&connection)
+                .and_then(|c| c.command_message.take())
+            {
+                return self.broadcast_chat(message, chat_type);
+            }
+        }
+        let name = if let Some(connection) = source {
+            let Phase::Play(entity) = self.connections[&connection].phase else {
+                bail!("command source not playing");
+            };
+            self.player(entity)?.display_name()
+        } else {
+            Component::literal("Server")
+        };
+        self.broadcast(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
+            message: Component::literal(content),
+            chat_type: ChatTypeBound {
+                chat_type: ChatTypeHolder(Holder::Reference(chat_type)),
+                name,
+                target_name: None,
+            },
+        })));
+        Ok(())
+    }
     fn broadcast(&mut self, packet: cb::Packet) {
         for c in self.connections.values_mut() {
             if matches!(c.phase, Phase::Play(_)) && !c.close {
@@ -1701,12 +1742,31 @@ impl MinecraftServer {
         } else {
             (4, Vec3::ZERO)
         };
+        let mut stack = CommandSourceStack::server(permission, position);
+        if let Some(connection) = source {
+            let c = &self.connections[&connection];
+            if let Phase::Play(entity) = c.phase {
+                stack = stack.with_entity(entity).with_source(
+                    ferraloom_game::commands::source::CommandSource::Player(entity),
+                );
+            }
+            if let Some(message) = &c.command_message {
+                stack.signing_context.arguments = Arc::from([(
+                    "message".into(),
+                    ferraloom_game::commands::source::SignedArgument {
+                        sender: message.sender,
+                        index: message.index,
+                        signature: message
+                            .signature
+                            .as_ref()
+                            .map(|signature| Arc::from(signature.0.as_slice())),
+                    },
+                )]);
+            }
+        }
         let action = self
             .commands
-            .parse(
-                text.trim_start_matches('/'),
-                CommandSourceStack::server(permission, position),
-            )
+            .parse(text, stack)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         match action {
             CommandAction::Run(command) => bail!(
@@ -1723,23 +1783,7 @@ impl MinecraftServer {
                 self.feedback(source, "Saved the game");
             }
             CommandAction::Say(content) => {
-                if let Some(source) = source {
-                    let c = self.connections.get_mut(&source).unwrap();
-                    let message = c
-                        .command_message
-                        .take()
-                        .unwrap_or_else(|| ValidatedMessage::unsigned(c.profile.id, content));
-                    self.broadcast_chat(message, id("say_command"))?;
-                } else {
-                    self.broadcast(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
-                        message: Component::literal(content),
-                        chat_type: ChatTypeBound {
-                            chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
-                            name: Component::literal("Server"),
-                            target_name: None,
-                        },
-                    })));
-                }
+                self.broadcast_command_chat(source, content, id("say_command"))?;
             }
             CommandAction::Teleport { targets, position } => {
                 self.request_area(

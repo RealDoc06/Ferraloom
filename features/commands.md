@@ -2555,3 +2555,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.source.player-display-name | Decorate player display names with tell suggestions, entity hover data and insertion; use in chat, say, join and leave | `Player#getDisplayName; Player#decorateDisplayNameComponent` | `entity::player::tests::display_name_matches_java_player_component` | pass | todo |
 
 | commands.framework.tree-packets | Dedicated command tree retains registration order, permission filtering, redirects, restriction flags and wire templates | `Commands#sendCommands; ClientboundCommandsPacket` | `commands::tree::tests::command_tree_packets_match_java_for_operator_and_non_operator` | pass | todo |
+
+| commands.framework.message-signing-context | Distinguish missing message arguments from present unsigned player arguments when selecting DisguisedChat or PlayerChat | `MessageArgument#resolveChatMessage; OutgoingChatMessage#create` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |

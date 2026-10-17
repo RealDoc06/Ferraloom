@@ -2,6 +2,7 @@
 //! Callers enter the server-exclusive lane before selector evaluation or mutation.
 pub mod arguments;
 pub mod exceptions;
+pub mod message;
 pub mod permissions;
 pub mod source;
 mod tree;
