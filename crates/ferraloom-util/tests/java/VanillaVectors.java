@@ -148,5 +148,5 @@ public final class VanillaVectors {
         }
         System.out.println("];");
     }
-    public static void main(String[] args) { randoms(); noises(); geometry(); math(); edges(); volumes(); }
+    public static void main(String[] args) { var stdout=System.out; randoms(); noises(); geometry(); math(); edges(); net.minecraft.SharedConstants.tryDetectVersion(); net.minecraft.server.Bootstrap.bootStrap(); System.setOut(stdout); volumes(); }
 }
