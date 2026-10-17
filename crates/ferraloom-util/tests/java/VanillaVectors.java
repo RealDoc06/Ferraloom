@@ -120,5 +120,33 @@ public final class VanillaVectors {
         }
         System.out.println("];");
     }
-    public static void main(String[] args) { randoms(); noises(); geometry(); math(); edges(); }
+    static void volumes() {
+        System.out.println("pub const NOISE_VOLUME: [(i64,usize,usize,[u32;24],[u32;5]);20] = [");
+        var volume = new net.minecraft.world.level.levelgen.densityfunction.DensityVolume(2,3,2,-33554431,-65,16777215,17,3,5);
+        var arena = new net.minecraft.world.level.levelgen.densityfunction.DensityBufferPool(20);
+        for (int a:new int[]{0,2}) for (long seed:new long[]{0,-1}) for (int kind=0;kind<5;kind++) {
+            Noise noise = switch(kind) {
+                case 0 -> new PerlinNoise(source(a,seed));
+                case 1 -> new SmearedPerlinNoise(source(a,seed),0.731);
+                case 2 -> new SimplexNoise(source(a,seed));
+                case 3 -> NormalNoise.builder().setBaseOctave(-5).setOctaveCount(4).setAmplitudeModifier(1,0).build().create(source(a,seed));
+                default -> new BlendedNoise(0.25,0.125,80,160,8).createFbmSet(source(a,seed)).minLimitNoise();
+            };
+            System.out.print("("+seed+","+a+","+kind+",");
+            try (var buffer=arena.acquire(12)) {
+                float[] values=new float[24];
+                buffer.fill(0.25f);
+                noise.addToVolume(buffer,volume,0.33,0.77,-0.37f);
+                for(int i=0;i<12;i++) values[i]=buffer.get(i);
+                noise.addToVolume(buffer,volume,0.11,0,0.125f);
+                for(int i=0;i<12;i++) values[i+12]=buffer.get(i);
+                floats(values);
+            }
+            System.out.print(",");
+            float[] values=new float[5]; for(int i=0;i<5;i++) { double[] q=POINTS[i];values[i]=noise.get(q[0],q[1],q[2]); }
+            floats(values);System.out.println("),");
+        }
+        System.out.println("];");
+    }
+    public static void main(String[] args) { var stdout=System.out; randoms(); noises(); geometry(); math(); edges(); net.minecraft.SharedConstants.tryDetectVersion(); net.minecraft.server.Bootstrap.bootStrap(); System.setOut(stdout); volumes(); }
 }
