@@ -550,7 +550,7 @@ impl Wire for SignText {
 }
 registry_ref!(BlockTransformerHolder, "block_transformer");
 record!(AdventureModePredicate { predicates: Vec<BlockPredicate> });
-record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePropertiesPredicate>, nbt: Option<CustomData>, components: DataComponentMatchers });
+record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePropertiesPredicate>, nbt: Option<NbtPredicate>, components: DataComponentMatchers });
 record!(PropertyMatcher { name: String, matcher: Either<String, PropertyRange> });
 record!(PropertyRange { min: Option<String>, max: Option<String> });
 record!(DataComponentMatchers { exact: Vec<super::DataComponent>, partial: BoundedList<ComponentPredicate, 64> });
@@ -644,3 +644,14 @@ persistent_wire!(
     LockCode
 );
 record!(StatePropertiesPredicate { properties:Vec<PropertyMatcher> });
+/// Port of NbtPredicate: its stream value is a compound, its persistent value is SNBT.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NbtPredicate(pub CustomData);
+impl Wire for NbtPredicate {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        CustomData::decode(r).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0.encode(w)
+    }
+}

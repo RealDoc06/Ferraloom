@@ -2447,3 +2447,17 @@ fn validate_component(value: &DataComponent) -> Result<()> {
         _ => Ok(()),
     }
 }
+impl Persistent for NbtPredicate {
+    fn from_json(v: &Json) -> Result<Self> {
+        if let Some(s) = v.as_str() {
+            let tag = ferraloom_nbt::parse_compound(s)
+                .map_err(|e| Error::invalid("NBT predicate", e.to_string()))?;
+            Ok(Self(CustomData(Tag::Compound(tag))))
+        } else {
+            CustomData::from_json(v).map(Self)
+        }
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        self.0.0.to_string().to_persistent()
+    }
+}
