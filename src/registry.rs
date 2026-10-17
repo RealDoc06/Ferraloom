@@ -20,13 +20,14 @@ struct BlockDefinition {
 #[derive(Serialize)]
 struct State {
     id: u16,
+    solid_render: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     default: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     properties: Option<BTreeMap<&'static str, &'static str>>,
 }
 
-/// Export the exact tables used by the engine, in vanilla's block report shape.
+/// Export engine identities and solidity flags alongside vanilla's block report shape.
 pub fn export(path: &Path) -> Result<()> {
     let mut blocks = BTreeMap::new();
     for raw_id in 0..BlockId::COUNT {
@@ -37,6 +38,7 @@ pub fn export(path: &Path) -> Result<()> {
             .iter()
             .map(|state| State {
                 id: state.id.as_u16(),
+                solid_render: state.is_solid_render(),
                 default: (state.id == block.default_state.id).then_some(true),
                 properties: block
                     .properties(state.id)
