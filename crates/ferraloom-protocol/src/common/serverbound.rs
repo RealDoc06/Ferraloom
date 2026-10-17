@@ -11,9 +11,9 @@ CookieResponse {key:Identifier,payload:Option<ByteArray<5120>>});
 wire_enum!(ResourcePackAction { SuccessfullyLoaded=0,Declined=1,FailedDownload=2,Accepted=3,Downloaded=4,InvalidUrl=5,FailedReload=6,Discarded=7 });
 packet!(/// Port of ServerboundResourcePackPacket.
 ResourcePack {id:Uuid,action:ResourcePackAction});
-wire_enum!(ChatVisibility {Full=0,System=1,Hidden=2});
-wire_enum!(HumanoidArm {Left=0,Right=1});
-wire_enum!(ParticleStatus {All=0,Decreased=1,Minimal=2});
+wire_enum!(ChatVisibility {Full=0,System=1,Hidden=2}, wrapping);
+wire_enum!(HumanoidArm {Left=0,Right=1}, zero);
+wire_enum!(ParticleStatus {All=0,Decreased=1,Minimal=2}, wrapping);
 packet!(/// Port of ClientInformation.
 ClientInformation {language:Utf8<16>,view_distance:i8,chat_visibility:ChatVisibility,chat_colors:bool,model_customisation:u8,main_hand:HumanoidArm,text_filtering_enabled:bool,allows_listing:bool,particle_status:ParticleStatus});
 
@@ -44,8 +44,8 @@ impl Wire for CustomClickAction {
         let id = r.read()?;
         let bytes = r.byte_array(65536)?;
         let mut body = Reader::new(bytes);
-        let payload = body.optional_nbt(false)?;
-        body.finish()?;
+        let payload =
+            body.optional_nbt_with_accounter(&mut ferraloom_nbt::NbtAccounter::new(32768, 16))?;
         Ok(Self { id, payload })
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {

@@ -181,3 +181,115 @@ impl Wire for SignUpdate {
         self.slot.encode(w)
     }
 }
+packet!(/// Port of ServerboundChatCommandSignedPacket.
+ChatCommandSigned {command:String,timestamp:i64,salt:i64,argument_signatures:ArgumentSignatures,last_seen_messages:LastSeenMessagesUpdate});
+packet!(/// Port of ServerboundChatPacket.
+Chat {message:Utf8<256>,timestamp:i64,salt:i64,signature:Option<MessageSignature>,last_seen_messages:LastSeenMessagesUpdate});
+packet!(/// Port of ServerboundChatSessionUpdatePacket.
+ChatSessionUpdate {chat_session:RemoteChatSessionData});
+packet!(/// Port of ServerboundSetGameRulePacket.
+SetGameRule {entries:Vec<GameRuleEntry>});
+packet!(/// Port of ServerboundUseItemOnPacket.
+UseItemOn {hand:InteractionHand,hit_result:BlockHitResult,sequence:VarInt});
+packet!(/// Port of ServerboundContainerClickPacket.
+ContainerClick {container_id:VarInt,state_id:VarInt,slot_num:i16,button_num:i8,container_input:ContainerInput,changed_slots:ChangedSlots,carried_item:crate::component::HashedStack});
+packet!(/// Port of ServerboundSetCreativeModeSlotPacket.
+SetCreativeModeSlot {slot_num:i16,item_stack:UntrustedItemStack});
+packet!(/// Port of ServerboundPlayerActionPacket.
+PlayerActionPacket {action:PlayerAction,pos:BlockPos,direction:DirectionByte,sequence:VarInt});
+packet!(/// Port of ServerboundSetCommandBlockPacket.
+SetCommandBlock {pos:BlockPos,command:String,mode:CommandBlockMode,flags:CommandBlockFlags});
+packet!(/// Port of ServerboundSetJigsawBlockPacket.
+SetJigsawBlock {pos:BlockPos,name:Identifier,target:Identifier,pool:Identifier,final_state:String,joint:JigsawJoint,selection_priority:VarInt,placement_priority:VarInt});
+packet!(/// Port of ServerboundSetStructureBlockPacket.
+SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:Utf8<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
+packet!(/// Port of ServerboundTestInstanceBlockActionPacket.
+TestInstanceBlockAction {pos:BlockPos,action:TestInstanceAction,data:TestInstanceData});
+/// Port of ServerboundDebugSubscriptionRequestPacket, bounded to 32 subscription IDs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DebugSubscriptionRequest {
+    pub subscriptions: Vec<VarInt>,
+}
+impl Wire for DebugSubscriptionRequest {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            subscriptions: r.list(32, Wire::decode)?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.list(&self.subscriptions, 32, |w, v| v.encode(w))
+    }
+}
+
+use crate::codec::state_packets;
+state_packets!(Packet, ferraloom_data::packets::play::serverbound::Packet, {
+    AcceptTeleportation(AcceptTeleportation) => AcceptTeleportation,
+    Attack(Attack) => Attack,
+    BlockEntityTagQuery(BlockEntityTagQuery) => BlockEntityTagQuery,
+    BundleItemSelected(SelectBundleItem) => BundleItemSelected,
+    ChangeDifficulty(ChangeDifficulty) => ChangeDifficulty,
+    ChangeGameMode(ChangeGameMode) => ChangeGameMode,
+    ChatAck(ChatAck) => ChatAck,
+    ChatCommand(ChatCommand) => ChatCommand,
+    ChatCommandSigned(ChatCommandSigned) => ChatCommandSigned,
+    Chat(Chat) => Chat,
+    ChatSessionUpdate(ChatSessionUpdate) => ChatSessionUpdate,
+    ChunkBatchReceived(ChunkBatchReceived) => ChunkBatchReceived,
+    ClientCommand(ClientCommand) => ClientCommand,
+    ClientTickEnd(ClientTickEnd) => ClientTickEnd,
+    ClientInformation(ClientInformation) => ClientInformation,
+    CommandSuggestion(CommandSuggestion) => CommandSuggestion,
+    ConfigurationAcknowledged(ConfigurationAcknowledged) => ConfigurationAcknowledged,
+    ContainerButtonClick(ContainerButtonClick) => ContainerButtonClick,
+    ContainerClick(ContainerClick) => ContainerClick,
+    ContainerClose(ContainerClose) => ContainerClose,
+    ContainerSlotStateChanged(ContainerSlotStateChanged) => ContainerSlotStateChanged,
+    CookieResponse(CookieResponse) => CookieResponse,
+    CustomPayload(CustomPayload) => CustomPayload,
+    DebugSubscriptionRequest(DebugSubscriptionRequest) => DebugSubscriptionRequest,
+    EditBook(EditBook) => EditBook,
+    EntityTagQuery(EntityTagQuery) => EntityTagQuery,
+    Interact(Interact) => Interact,
+    JigsawGenerate(JigsawGenerate) => JigsawGenerate,
+    KeepAlive(KeepAlive) => KeepAlive,
+    LockDifficulty(LockDifficulty) => LockDifficulty,
+    MovePlayerPos(MovePlayerPos) => MovePlayerPos,
+    MovePlayerPosRot(MovePlayerPosRot) => MovePlayerPosRot,
+    MovePlayerRot(MovePlayerRot) => MovePlayerRot,
+    MovePlayerStatusOnly(MovePlayerStatusOnly) => MovePlayerStatusOnly,
+    MoveVehicle(MoveVehicle) => MoveVehicle,
+    PaddleBoat(PaddleBoat) => PaddleBoat,
+    PickItemFromBlock(PickItemFromBlock) => PickItemFromBlock,
+    PickItemFromEntity(PickItemFromEntity) => PickItemFromEntity,
+    PingRequest(PingRequest) => PingRequest,
+    PlaceRecipe(PlaceRecipe) => PlaceRecipe,
+    PlayerAbilities(PlayerAbilities) => PlayerAbilities,
+    PlayerAction(PlayerActionPacket) => PlayerAction,
+    PlayerCommand(PlayerCommand) => PlayerCommand,
+    PlayerInput(PlayerInput) => PlayerInput,
+    PlayerLoaded(PlayerLoaded) => PlayerLoaded,
+    Pong(Pong) => Pong,
+    Punch(Punch) => Punch,
+    RecipeBookChangeSettings(RecipeBookChangeSettings) => RecipeBookChangeSettings,
+    RecipeBookSeenRecipe(RecipeBookSeenRecipe) => RecipeBookSeenRecipe,
+    RenameItem(RenameItem) => RenameItem,
+    ResourcePack(ResourcePack) => ResourcePack,
+    SeenAdvancements(SeenAdvancements) => SeenAdvancements,
+    SelectTrade(SelectTrade) => SelectTrade,
+    SetBeacon(SetBeacon) => SetBeacon,
+    SetCarriedItem(SetCarriedItem) => SetCarriedItem,
+    SetCommandBlock(SetCommandBlock) => SetCommandBlock,
+    SetCommandMinecart(SetCommandMinecart) => SetCommandMinecart,
+    SetCreativeModeSlot(SetCreativeModeSlot) => SetCreativeModeSlot,
+    SetGameRule(SetGameRule) => SetGameRule,
+    SetJigsawBlock(SetJigsawBlock) => SetJigsawBlock,
+    SetStructureBlock(SetStructureBlock) => SetStructureBlock,
+    SetTestBlock(SetTestBlock) => SetTestBlock,
+    SignUpdate(SignUpdate) => SignUpdate,
+    SpectatorAction(SpectatorAction) => SpectatorAction,
+    TeleportToEntity(TeleportToEntity) => TeleportToEntity,
+    TestInstanceBlockAction(TestInstanceBlockAction) => TestInstanceBlockAction,
+    UseItemOn(UseItemOn) => UseItemOn,
+    UseItem(UseItem) => UseItem,
+    CustomClickAction(CustomClickAction) => CustomClickAction,
+});

@@ -201,3 +201,370 @@ impl Wire for StopSound {
         Ok(())
     }
 }
+
+packet!(/// Port of ClientboundChunksBiomesPacket.
+ChunksBiomes {chunk_biome_data:Vec<ChunkBiomeData>});
+packet!(/// Port of ClientboundLevelChunkWithLightPacket.
+LevelChunkWithLight {x:i32,z:i32,chunk_data:LevelChunkPacketData,light_data:LightUpdatePacketData});
+packet!(/// Port of ClientboundLightUpdatePacket.
+LightUpdate {x:VarInt,z:VarInt,light_data:LightUpdatePacketData});
+packet!(/// Port of ClientboundMoveVehiclePacket.
+MoveVehicle {moving_to:PositionAndRotation});
+packet!(/// Port of ClientboundMoveEntityPacket.Pos.
+MoveEntityPos {entity_id:VarInt,delta:EntityDelta});
+packet!(/// Port of ClientboundMoveEntityPacket.PosRot.
+MoveEntityPosRot {entity_id:VarInt,delta:EntityDelta,y_rot:Angle,x_rot:Angle});
+packet!(/// Port of ClientboundMoveMinecartPacket.
+MoveMinecart {entity_id:VarInt,lerp_steps:Vec<MinecartStep>});
+packet!(/// Port of ClientboundDeleteChatPacket.
+DeleteChat {message_signature:PackedMessageSignature});
+packet!(/// Port of ClientboundLoginPacket.
+Login {player_id:i32,hardcore:bool,levels:Vec<Identifier>,max_players:VarInt,chunk_radius:VarInt,simulation_distance:VarInt,reduced_debug_info:bool,show_death_screen:bool,do_limited_crafting:bool,common_player_spawn_info:CommonPlayerSpawnInfo,online_mode:bool,enforces_secure_chat:bool});
+packet!(/// Port of ClientboundRespawnPacket.
+Respawn {common_player_spawn_info:CommonPlayerSpawnInfo,data_to_keep:u8});
+packet!(/// Port of ClientboundSetDefaultSpawnPositionPacket.
+SetDefaultSpawnPosition {respawn_data:RespawnData});
+packet!(/// Port of ClientboundSetTimePacket.
+SetTime {game_time:i64,clock_updates:Vec<ClockUpdate>});
+packet!(/// Port of ClientboundGameRuleValuesPacket.
+GameRuleValues {values:Vec<GameRuleEntry>});
+packet!(/// Port of ClientboundCommandSuggestionsPacket.
+CommandSuggestions {id:VarInt,start:VarInt,length:VarInt,suggestions:Vec<CommandSuggestion>});
+packet!(/// Port of ClientboundSetActionBarTextPacket.
+SetActionBarText {text:Component});
+packet!(/// Port of ClientboundSetTitleTextPacket.
+SetTitleText {text:Component});
+packet!(/// Port of ClientboundSetSubtitleTextPacket.
+SetSubtitleText {text:Component});
+packet!(/// Port of ClientboundTabListPacket.
+TabList {header:Component,footer:Component});
+packet!(/// Port of ClientboundSystemChatPacket.
+SystemChat {content:Component,overlay:bool});
+packet!(/// Port of ClientboundPlayerCombatKillPacket.
+PlayerCombatKill {player_id:VarInt,message:Component});
+packet!(/// Port of ClientboundServerDataPacket.
+ServerData {motd:Component,icon_bytes:Option<ByteArray>});
+packet!(/// Port of ClientboundBlockEntityDataPacket.
+BlockEntityData {pos:BlockPos,block_entity_type:BlockEntityTypeId,tag:TrustedCompoundTag});
+packet!(/// Port of ClientboundOpenScreenPacket.
+OpenScreen {container_id:VarInt,menu_type:MenuId,title:Component});
+packet!(/// Port of ClientboundSwingAnimationPacket.
+SwingAnimationPacket {entity_id:VarInt,hand:InteractionHand,animation:SwingAnimation});
+packet!(/// Port of ClientboundSoundEntityPacket.
+SoundEntity {sound:SoundEventHolder,source:SoundSource,id:VarInt,volume:f32,pitch:f32,seed:i64});
+packet!(/// Port of ClientboundSoundPacket.
+Sound {sound:SoundEventHolder,source:SoundSource,x:i32,y:i32,z:i32,volume:f32,pitch:f32,seed:i64});
+packet!(/// Port of ClientboundTestInstanceBlockStatus.
+TestInstanceBlockStatus {status:Component,size:Option<Vec3i>});
+
+/// Port of ClientboundPlayerInfoUpdatePacket. One action bitset applies to every entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayerInfoUpdate {
+    pub actions: u8,
+    pub entries: Vec<PlayerInfoEntry>,
+}
+impl Wire for PlayerInfoUpdate {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let actions = r.u8()?;
+        let entries = r.list(i32::MAX as usize, |r| {
+            let profile_id = r.read()?;
+            let mut values = Vec::new();
+            for tag in 0..8 {
+                if actions & (1 << tag) != 0 {
+                    values.push(PlayerInfoAction::decode_variant(r, tag)?);
+                }
+            }
+            Ok(PlayerInfoEntry {
+                profile_id,
+                actions: values,
+            })
+        })?;
+        Ok(Self { actions, entries })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(self.actions);
+        w.list(&self.entries, i32::MAX as usize, |w, entry| {
+            let mut values = entry.actions.iter();
+            entry.profile_id.encode(w)?;
+            for tag in 0..8 {
+                if self.actions & (1 << tag) != 0 {
+                    let value = values.next().filter(|v| v.tag() == tag).ok_or_else(|| {
+                        Error::invalid(
+                            "player info actions",
+                            "entry does not match packet mask/order",
+                        )
+                    })?;
+                    value.encode_body(w)?;
+                }
+            }
+            if values.next().is_some() {
+                return Err(Error::invalid("player info actions", "extra action"));
+            }
+            Ok(())
+        })
+    }
+}
+packet!(/// Port of ClientboundBossEventPacket.
+BossEvent {id:Uuid,operation:BossOperation});
+packet!(/// Port of ClientboundContainerSetContentPacket.
+ContainerSetContent {container_id:VarInt,state_id:VarInt,items:Vec<crate::component::ItemStack>,carried_item:crate::component::ItemStack});
+packet!(/// Port of ClientboundContainerSetSlotPacket.
+ContainerSetSlot {container_id:VarInt,state_id:VarInt,slot:i16,item_stack:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetCursorItemPacket.
+SetCursorItem {contents:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetPlayerInventoryPacket.
+SetPlayerInventory {slot:VarInt,contents:crate::component::ItemStack});
+packet!(/// Port of ClientboundSetEntityDataPacket.
+SetEntityData {id:VarInt,packed_items:crate::entity_data::EntityDataItems});
+packet!(/// Port of ClientboundMerchantOffersPacket.
+MerchantOffers {container_id:VarInt,offers:Vec<MerchantOffer>,villager_level:VarInt,villager_xp:VarInt,show_progress:bool,can_restock:bool});
+packet!(/// Port of ClientboundRecipeBookSettingsPacket.
+RecipeBookSettingsPacket {book_settings:RecipeBookSettings});
+
+/// Port of ClientboundSetEquipmentPacket's continuation-bit equipment list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SetEquipment {
+    pub entity: VarInt,
+    pub slots: Vec<EquipmentEntry>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct EquipmentEntry {
+    pub slot: crate::component::EquipmentSlot,
+    pub item: crate::component::ItemStack,
+}
+impl Wire for SetEquipment {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let entity = r.read()?;
+        let mut slots = Vec::new();
+        loop {
+            let b = r.u8()?;
+            let slot = crate::component::EquipmentSlot::from_bytes(&[b & 127])?;
+            slots.push(EquipmentEntry {
+                slot,
+                item: r.read()?,
+            });
+            if b & 128 == 0 {
+                break;
+            }
+        }
+        Ok(Self { entity, slots })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        if self.slots.is_empty() {
+            return Err(Error::invalid("equipment", "at least one slot is required"));
+        }
+        self.entity.encode(w)?;
+        for (i, entry) in self.slots.iter().enumerate() {
+            let tag = entry.slot.to_bytes()?[0];
+            w.u8(tag | if i + 1 < self.slots.len() { 128 } else { 0 });
+            entry.item.encode(w)?;
+        }
+        Ok(())
+    }
+}
+packet!(/// Port of ClientboundPlaceGhostRecipePacket.
+PlaceGhostRecipe {container_id:VarInt,recipe_display:RecipeDisplay});
+packet!(/// Port of ClientboundRecipeBookAddPacket.
+RecipeBookAdd {entries:Vec<RecipeBookEntry>,replace:bool});
+packet!(/// Port of ClientboundUpdateRecipesPacket.
+UpdateRecipes {item_sets:Vec<RecipePropertySet>,stonecutter_recipes:Vec<SelectableRecipe>});
+packet!(/// Port of ClientboundLevelParticlesPacket.
+LevelParticles {particle:crate::entity_data::Particle,override_limiter:bool,always_show:bool,x:f64,y:f64,z:f64,x_dist:f32,y_dist:f32,z_dist:f32,x_max_speed:f32,y_max_speed:f32,z_max_speed:f32,count:VarInt,randomization_type:ParticleRandomization});
+packet!(/// Port of ClientboundExplodePacket.
+Explode {center:Vec3,radius:f32,block_count:i32,player_knockback:Option<Vec3>,explosion_particle:crate::entity_data::Particle,explosion_sound:SoundEventHolder,block_particles:Vec<WeightedExplosionParticle>,play_sound:bool});
+/// Port of ClientboundUpdateAttributesPacket's 128-attribute bound.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpdateAttributes {
+    pub entity_id: VarInt,
+    pub values: Vec<AttributeSnapshot>,
+}
+impl Wire for UpdateAttributes {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            entity_id: r.read()?,
+            values: r.list(128, Wire::decode)?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.entity_id.encode(w)?;
+        w.list(&self.values, 128, |w, v| v.encode(w))
+    }
+}
+packet!(/// Port of ClientboundMapItemDataPacket.
+MapItemData {map_id:VarInt,scale:i8,locked:bool,decorations:Option<Vec<MapDecoration>>,color_patch:OptionalMapPatch});
+packet!(/// Port of ClientboundTrackedWaypointPacket.
+TrackedWaypoint {operation:WaypointOperation,waypoint:TrackedWaypointData});
+packet!(/// Port of ClientboundCommandsPacket.
+Commands {entries:Vec<CommandNode>,root_index:VarInt});
+packet!(/// Port of ClientboundSetObjectivePacket.
+SetObjective {objective_name:String,operation:ObjectiveOperation});
+packet!(/// Port of ClientboundSetPlayerTeamPacket.
+SetPlayerTeam {name:String,operation:TeamOperation});
+packet!(/// Port of ClientboundSetScorePacket.
+SetScore {owner:String,objective_name:String,score:VarInt,display:Option<Component>,number_format:Option<NumberFormat>});
+packet!(/// Port of ClientboundDisguisedChatPacket.
+DisguisedChat {message:Component,chat_type:ChatTypeBound});
+packet!(/// Port of ClientboundPlayerChatPacket.
+PlayerChat {global_index:VarInt,sender:Uuid,index:VarInt,signature:Option<MessageSignature>,body:SignedMessageBodyPacked,unsigned_content:Option<Component>,filter_mask:FilterMask,chat_type:ChatTypeBound});
+packet!(/// Port of ClientboundUpdateAdvancementsPacket.
+UpdateAdvancements {should_reset:bool,added:Vec<PositionedAdvancement>,removed:Vec<Identifier>,progress:Vec<AdvancementProgress>,show_advancements:bool});
+packet!(/// Port of Stat#STREAM_CODEC followed by the statistic count.
+StatValue {stat_type:VarInt,value:VarInt,count:VarInt});
+packet!(/// Port of ClientboundAwardStatsPacket.
+AwardStats {stats:Vec<StatValue>});
+packet!(/// Port of ClientboundDebugBlockValuePacket.
+DebugBlockValue {block_pos:BlockPos,update:DebugSubscriptionUpdate});
+packet!(/// Port of ClientboundDebugChunkValuePacket.
+DebugChunkValue {chunk_pos:i64,update:DebugSubscriptionUpdate});
+packet!(/// Port of ClientboundDebugEntityValuePacket.
+DebugEntityValue {entity_id:VarInt,update:DebugSubscriptionUpdate});
+packet!(/// Port of ClientboundDebugEventPacket.
+DebugEvent {event:DebugSubscriptionEvent});
+
+use crate::codec::state_packets;
+state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
+    BundleDelimiter(BundleDelimiter) => BundleDelimiter,
+    AddEntity(AddEntity) => AddEntity,
+    Animate(Animate) => Animate,
+    AwardStats(AwardStats) => AwardStats,
+    BlockChangedAck(BlockChangedAck) => BlockChangedAck,
+    BlockDestruction(BlockDestruction) => BlockDestruction,
+    BlockEntityData(BlockEntityData) => BlockEntityData,
+    BlockEvent(BlockEvent) => BlockEvent,
+    BlockUpdate(BlockUpdate) => BlockUpdate,
+    BossEvent(BossEvent) => BossEvent,
+    ChangeDifficulty(ChangeDifficulty) => ChangeDifficulty,
+    ChunkBatchFinished(ChunkBatchFinished) => ChunkBatchFinished,
+    ChunkBatchStart(ChunkBatchStart) => ChunkBatchStart,
+    ChunksBiomes(ChunksBiomes) => ChunksBiomes,
+    ClearTitles(ClearTitles) => ClearTitles,
+    CommandSuggestions(CommandSuggestions) => CommandSuggestions,
+    Commands(Commands) => Commands,
+    ContainerClose(ContainerClose) => ContainerClose,
+    ContainerSetContent(ContainerSetContent) => ContainerSetContent,
+    ContainerSetData(ContainerSetData) => ContainerSetData,
+    ContainerSetSlot(ContainerSetSlot) => ContainerSetSlot,
+    CookieRequest(CookieRequest) => CookieRequest,
+    Cooldown(Cooldown) => Cooldown,
+    CustomChatCompletions(CustomChatCompletions) => CustomChatCompletions,
+    CustomPayload(CustomPayload) => CustomPayload,
+    DamageEvent(DamageEvent) => DamageEvent,
+    DebugBlockValue(DebugBlockValue) => DebugBlockValue,
+    DebugChunkValue(DebugChunkValue) => DebugChunkValue,
+    DebugEntityValue(DebugEntityValue) => DebugEntityValue,
+    DebugEvent(DebugEvent) => DebugEvent,
+    DebugSample(DebugSample) => DebugSample,
+    DeleteChat(DeleteChat) => DeleteChat,
+    Disconnect(Disconnect) => Disconnect,
+    DisguisedChat(DisguisedChat) => DisguisedChat,
+    EntityEvent(EntityEvent) => EntityEvent,
+    EntityPositionSync(EntityPositionSync) => EntityPositionSync,
+    Explode(Explode) => Explode,
+    AddTransientBlock(AddTransientBlock) => AddTransientBlock,
+    ForgetLevelChunk(ForgetLevelChunk) => ForgetLevelChunk,
+    GameEvent(GameEvent) => GameEvent,
+    GameRuleValues(GameRuleValues) => GameRuleValues,
+    GameTestHighlightPos(GameTestHighlightPos) => GameTestHighlightPos,
+    MountScreenOpen(MountScreenOpen) => MountScreenOpen,
+    HurtAnimation(HurtAnimation) => HurtAnimation,
+    InitializeBorder(InitializeBorder) => InitializeBorder,
+    KeepAlive(KeepAlive) => KeepAlive,
+    LevelChunkWithLight(LevelChunkWithLight) => LevelChunkWithLight,
+    LevelEvent(LevelEvent) => LevelEvent,
+    LevelParticles(LevelParticles) => LevelParticles,
+    LightUpdate(LightUpdate) => LightUpdate,
+    Login(Login) => Login,
+    LowDiskSpaceWarning(LowDiskSpaceWarning) => LowDiskSpaceWarning,
+    MapItemData(MapItemData) => MapItemData,
+    MerchantOffers(MerchantOffers) => MerchantOffers,
+    MoveEntityPos(MoveEntityPos) => MoveEntityPos,
+    MoveEntityPosRot(MoveEntityPosRot) => MoveEntityPosRot,
+    MoveMinecartAlongTrack(MoveMinecart) => MoveMinecartAlongTrack,
+    MoveEntityRot(MoveEntityRot) => MoveEntityRot,
+    MoveVehicle(MoveVehicle) => MoveVehicle,
+    OpenBook(OpenBook) => OpenBook,
+    OpenScreen(OpenScreen) => OpenScreen,
+    OpenSignEditor(OpenSignEditor) => OpenSignEditor,
+    Ping(Ping) => Ping,
+    PongResponse(PongResponse) => PongResponse,
+    PlaceGhostRecipe(PlaceGhostRecipe) => PlaceGhostRecipe,
+    PlayerAbilities(PlayerAbilities) => PlayerAbilities,
+    PlayerChat(PlayerChat) => PlayerChat,
+    PlayerCombatEnd(PlayerCombatEnd) => PlayerCombatEnd,
+    PlayerCombatEnter(PlayerCombatEnter) => PlayerCombatEnter,
+    PlayerCombatKill(PlayerCombatKill) => PlayerCombatKill,
+    PlayerInfoRemove(PlayerInfoRemove) => PlayerInfoRemove,
+    PlayerInfoUpdate(PlayerInfoUpdate) => PlayerInfoUpdate,
+    PlayerLookAt(PlayerLookAt) => PlayerLookAt,
+    PlayerPosition(PlayerPosition) => PlayerPosition,
+    PlayerRotation(PlayerRotation) => PlayerRotation,
+    RecipeBookAdd(RecipeBookAdd) => RecipeBookAdd,
+    RecipeBookRemove(RecipeBookRemove) => RecipeBookRemove,
+    RecipeBookSettings(RecipeBookSettingsPacket) => RecipeBookSettings,
+    RemoveEntities(RemoveEntities) => RemoveEntities,
+    RemoveMobEffect(RemoveMobEffect) => RemoveMobEffect,
+    ResetScore(ResetScore) => ResetScore,
+    ResourcePackPop(ResourcePackPop) => ResourcePackPop,
+    ResourcePackPush(ResourcePackPush) => ResourcePackPush,
+    PostEffects(PostEffects) => PostEffects,
+    Respawn(Respawn) => Respawn,
+    RotateHead(RotateHead) => RotateHead,
+    SectionBlocksUpdate(SectionBlocksUpdate) => SectionBlocksUpdate,
+    SelectAdvancementsTab(SelectAdvancementsTab) => SelectAdvancementsTab,
+    ServerData(ServerData) => ServerData,
+    SetActionBarText(SetActionBarText) => SetActionBarText,
+    SetBorderCenter(SetBorderCenter) => SetBorderCenter,
+    SetBorderLerpSize(SetBorderLerpSize) => SetBorderLerpSize,
+    SetBorderSize(SetBorderSize) => SetBorderSize,
+    SetBorderWarningDelay(SetBorderWarningDelay) => SetBorderWarningDelay,
+    SetBorderWarningDistance(SetBorderWarningDistance) => SetBorderWarningDistance,
+    SetCamera(SetCamera) => SetCamera,
+    SetChunkCacheCenter(SetChunkCacheCenter) => SetChunkCacheCenter,
+    SetChunkCacheRadius(SetChunkCacheRadius) => SetChunkCacheRadius,
+    SetCursorItem(SetCursorItem) => SetCursorItem,
+    SetDefaultSpawnPosition(SetDefaultSpawnPosition) => SetDefaultSpawnPosition,
+    SetDisplayObjective(SetDisplayObjective) => SetDisplayObjective,
+    SetEntityData(SetEntityData) => SetEntityData,
+    SetEntityLink(SetEntityLink) => SetEntityLink,
+    SetEntityMotion(SetEntityMotion) => SetEntityMotion,
+    SetEquipment(SetEquipment) => SetEquipment,
+    SetExperience(SetExperience) => SetExperience,
+    SetHealth(SetHealth) => SetHealth,
+    SetHeldSlot(SetHeldSlot) => SetHeldSlot,
+    SetObjective(SetObjective) => SetObjective,
+    SetPassengers(SetPassengers) => SetPassengers,
+    SetPlayerInventory(SetPlayerInventory) => SetPlayerInventory,
+    SetPlayerTeam(SetPlayerTeam) => SetPlayerTeam,
+    SetScore(SetScore) => SetScore,
+    SetSimulationDistance(SetSimulationDistance) => SetSimulationDistance,
+    SetSubtitleText(SetSubtitleText) => SetSubtitleText,
+    SetTime(SetTime) => SetTime,
+    SetTitleText(SetTitleText) => SetTitleText,
+    SetTitlesAnimation(SetTitlesAnimation) => SetTitlesAnimation,
+    SoundEntity(SoundEntity) => SoundEntity,
+    Sound(Sound) => Sound,
+    StartConfiguration(StartConfiguration) => StartConfiguration,
+    StopSound(StopSound) => StopSound,
+    StoreCookie(StoreCookie) => StoreCookie,
+    SwingAnimation(SwingAnimationPacket) => SwingAnimation,
+    SystemChat(SystemChat) => SystemChat,
+    TabList(TabList) => TabList,
+    TagQuery(TagQuery) => TagQuery,
+    TakeItemEntity(TakeItemEntity) => TakeItemEntity,
+    TeleportEntity(TeleportEntity) => TeleportEntity,
+    TestInstanceBlockStatus(TestInstanceBlockStatus) => TestInstanceBlockStatus,
+    TickingState(TickingState) => TickingState,
+    TickingStep(TickingStep) => TickingStep,
+    Transfer(Transfer) => Transfer,
+    UpdateAdvancements(UpdateAdvancements) => UpdateAdvancements,
+    UpdateAttributes(UpdateAttributes) => UpdateAttributes,
+    UpdateMobEffect(UpdateMobEffect) => UpdateMobEffect,
+    UpdateRecipes(UpdateRecipes) => UpdateRecipes,
+    UpdateTags(UpdateTags) => UpdateTags,
+    ProjectilePower(ProjectilePower) => ProjectilePower,
+    CustomReportDetails(CustomReportDetails) => CustomReportDetails,
+    ServerLinks(ServerLinks) => ServerLinks,
+    Waypoint(TrackedWaypoint) => Waypoint,
+    ClearDialog(ClearDialog) => ClearDialog,
+    ShowDialog(ShowDialog) => ShowDialog,
+});

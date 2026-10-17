@@ -225,6 +225,7 @@ dependencies = [
  "aes",
  "base64",
  "cfb8",
+ "ferraloom-chunk",
  "ferraloom-data",
  "ferraloom-nbt",
  "ferraloom-util",

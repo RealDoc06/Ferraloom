@@ -40,7 +40,7 @@ impl Component {
         serialization::decode(tag, true)
     }
     pub fn to_nbt(&self) -> Result<Tag> {
-        serialization::encode(self)
+        self.encode_ops(&crate::ops::NbtOps)
     }
     /// Strict JSON syntax, followed by vanilla's component codec validation.
     pub fn from_json(json: &str) -> Result<Self> {
@@ -53,7 +53,7 @@ impl Component {
         serialization::decode_json(json::parse(json)?)
     }
     pub fn to_json(&self) -> Result<String> {
-        Ok(serialization::encode_json(self)?.to_string())
+        Ok(self.encode_ops(&crate::ops::JsonOps)?.to_string())
     }
     pub fn decode_trusted(input: &mut Reader<'_>) -> Result<Self> {
         Self::from_nbt(input.nbt(true)?)
@@ -287,7 +287,7 @@ impl Style {
         serialization::style_from_nbt(tag, true)
     }
     pub fn to_nbt(&self) -> Result<Tag> {
-        serialization::style_to_nbt(self)
+        self.encode_ops(&crate::ops::NbtOps)
     }
     pub fn decode_trusted(input: &mut Reader<'_>) -> Result<Self> {
         Self::from_nbt(input.nbt(true)?)
@@ -301,14 +301,7 @@ impl Style {
         serialization::style_from_json(json::parse(json)?)
     }
     pub fn to_json(&self) -> Result<String> {
-        let component = Component {
-            contents: Contents::Keybind(String::new()),
-            style: self.clone(),
-            extra: Vec::new(),
-        };
-        let mut value = serialization::encode_json(&component)?;
-        value.as_object_mut().unwrap().remove("keybind");
-        Ok(value.to_string())
+        Ok(self.encode_ops(&crate::ops::JsonOps)?.to_string())
     }
 }
 impl Wire for Style {
