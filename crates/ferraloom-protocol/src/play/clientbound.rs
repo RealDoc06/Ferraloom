@@ -394,3 +394,5 @@ packet!(/// Port of ClientboundMapItemDataPacket.
 MapItemData {map_id:VarInt,scale:i8,locked:bool,decorations:Option<Vec<MapDecoration>>,color_patch:OptionalMapPatch});
 packet!(/// Port of ClientboundTrackedWaypointPacket.
 TrackedWaypoint {operation:WaypointOperation,waypoint:TrackedWaypointData});
+packet!(/// Port of ClientboundCommandsPacket.
+Commands {entries:Vec<CommandNode>,root_index:VarInt});

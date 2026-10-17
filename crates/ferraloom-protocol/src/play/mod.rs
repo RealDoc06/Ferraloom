@@ -80,6 +80,8 @@ mod map;
 pub use map::*;
 mod waypoint;
 pub use waypoint::*;
+mod commands;
+pub use commands::*;
 mod types;
 pub use types::*;
 pub mod clientbound;
