@@ -27,6 +27,8 @@ mod context_tests;
 #[cfg(test)]
 mod dispatcher_tests;
 #[cfg(test)]
+mod parity_tests;
+#[cfg(test)]
 mod reader_tests;
 #[cfg(test)]
 mod suggestion_tests;

@@ -147,7 +147,22 @@ impl Suggestions {
                 list.push(expanded);
             }
         }
-        list.sort_by(Suggestion::compare_ignore_case);
+        // Mixed integer/text suggestions do not define a transitive comparator.
+        // Use the binary insertion ordering of JDK TimSort's small-list path;
+        // Rust's general sort requires a total order and can produce different results.
+        for index in 1..list.len() {
+            let mut left = 0;
+            let mut right = index;
+            while left < right {
+                let mid = (left + right) / 2;
+                if list[index].compare_ignore_case(&list[mid]).is_lt() {
+                    right = mid;
+                } else {
+                    left = mid + 1;
+                }
+            }
+            list[left..=index].rotate_right(1);
+        }
         Self { range, list }
     }
     pub fn merge(command: &str, mut input: Vec<Self>) -> Self {
