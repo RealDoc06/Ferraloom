@@ -44,6 +44,8 @@ public final class TreeGolden implements InvocationHandler {
         int dx=p.getX()-origin.getX(),dy=p.getY()-origin.getY(),dz=p.getZ()-origin.getZ();
         int slope=terrain.equals("slope") ? Math.floorDiv(dx,3) : 0;
         if(dy < slope)return dy==slope-1 ? ground : Blocks.STONE.defaultBlockState();
+        if(terrain.equals("cave") && dy>=4 && dy<=7)return dy==7 ? ground : Blocks.STONE.defaultBlockState();
+        if(terrain.equals("water") && dy<3)return Blocks.WATER.defaultBlockState();
         if(terrain.equals("blocked") && dy >= 1 && dy <= 30 && Math.abs(dx)<=12 && Math.abs(dz)<=12)return Blocks.STONE.defaultBlockState();
         if(terrain.equals("partial") && dy >= 3 && dy <= 8 && dx>=1 && dx<=3 && dz>=-2 && dz<=1)return Blocks.STONE.defaultBlockState();
         return Blocks.AIR.defaultBlockState();
@@ -100,6 +102,34 @@ public final class TreeGolden implements InvocationHandler {
         entities.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e->{var o=new JsonObject();o.add("position",FeaturesGolden.values(e.getKey().getX(),e.getKey().getY(),e.getKey().getZ()));o.addProperty("nbt",e.getValue().saveWithFullMetadata(registries).toString());out.add(o);});
         return out;
     }
+    static void featureSizes(Path directory,RegistryAccess.Frozen registries) throws Exception {
+        var out=new JsonArray();
+        for(String definition:List.of(
+            "{type:'two_layers_feature_size'}",
+            "{type:'two_layers_feature_size',limit:0,lower_size:16,upper_size:0,min_clipped_height:0}",
+            "{type:'two_layers_feature_size',limit:81,lower_size:0,upper_size:16,min_clipped_height:80}",
+            "{type:'three_layers_feature_size'}",
+            "{type:'three_layers_feature_size',limit:3,upper_limit:2,lower_size:2,middle_size:3,upper_size:4,min_clipped_height:5}",
+            "{type:'three_layers_feature_size',limit:80,upper_limit:80,lower_size:16,middle_size:0,upper_size:8}"
+        )) {
+            var config=JsonParser.parseString(definition);var size=net.minecraft.world.level.levelgen.feature.featuresize.FeatureSize.CODEC.parse(FeaturesGolden.ops(registries),config).getOrThrow();
+            var item=new JsonObject();item.add("config",config);var values=new JsonArray();
+            for(int height:new int[]{0,1,5,16,80})for(int y=-1;y<=height+1;y++)values.add(size.getSizeAtHeight(height,y));
+            item.add("sizes",values);out.add(item);
+        }
+        WorldgenGolden.write(directory.resolve("sizes.json.gz"),out);
+        var sets=new JsonArray();
+        for(int[] origin:new int[][]{{0,64,0},{-31,80,47}})for(int shape=0;shape<3;shape++) {
+            var input=new JsonArray();var positions=new HashSet<BlockPos>();
+            for(int y=20;y>=0;y--)for(int x=shape==0?0:-10;x<=(shape==0?1:10);x++)for(int z=shape==0?0:-10;z<=(shape==0?1:10);z++) {
+                if(shape==2 && (x*x+z*z>100 || y<10 && Math.abs(x)>3))continue;
+                var p=new BlockPos(origin[0]+x,origin[1]+y,origin[2]+z);positions.add(p);input.add(FeaturesGolden.values(p.getX(),p.getY(),p.getZ()));
+            }
+            var output=new JsonArray();for(var p:positions)output.add(FeaturesGolden.values(p.getX(),p.getY(),p.getZ()));
+            var item=new JsonObject();item.add("input",input);item.add("output",output);sets.add(item);
+        }
+        WorldgenGolden.write(directory.resolve("position_sets.json.gz"),sets);
+    }
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
         var registries=WorldgenGolden.load();var cases=new JsonArray();
@@ -113,7 +143,7 @@ public final class TreeGolden implements InvocationHandler {
         for(var entry:registries.lookupOrThrow(Registries.FEATURE).listElements().sorted(Comparator.comparing(e->e.key().identifier())).toList()) {
             var feature=entry.value();
             if(!(feature instanceof TreeFeature || feature instanceof FallenTreeFeature || feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature || feature instanceof RootSystemFeature))continue;
-            for(long seed:new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:List.of("flat","blocked","partial","slope")) {
+            for(long seed:new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:feature instanceof RootSystemFeature ? List.of("flat","blocked","partial","slope","water","cave") : List.of("flat","blocked","partial","slope","water")) {
                 var origin=new BlockPos(coordinates[0],coordinates[1],coordinates[2]);
                 var ground=feature instanceof HugeFungusFeature f ? f.validBaseState() : Blocks.GRASS_BLOCK.defaultBlockState();
                 var fixture=new TreeGolden(registries,origin,terrain,ground,generator);
@@ -126,6 +156,7 @@ public final class TreeGolden implements InvocationHandler {
             }
         }
         WorldgenGolden.write(Path.of(args[0]),cases);
+        featureSizes(Path.of(args[0]).getParent(),registries);
         System.out.println("Captured "+cases.size()+" feature cases");
         }
     }

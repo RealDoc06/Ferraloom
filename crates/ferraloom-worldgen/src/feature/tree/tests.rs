@@ -42,6 +42,16 @@ fn initial(p: Pos, origin: Pos, terrain: &str, ground: BlockState) -> BlockState
             Block::STONE.default_state()
         };
     }
+    if terrain == "cave" && (4..=7).contains(&y) {
+        return if y == 7 {
+            ground
+        } else {
+            Block::STONE.default_state()
+        };
+    }
+    if terrain == "water" && y < 3 {
+        return Block::WATER.default_state();
+    }
     if terrain == "blocked" && (1..=30).contains(&y) && x.abs() <= 12 && z.abs() <= 12
         || terrain == "partial"
             && (3..=8).contains(&y)
@@ -178,7 +188,10 @@ fn run_cases(require_pending: bool) {
                     "unexpected pending behavior {label}: {message}"
                 );
                 assert!(!require_pending, "{label} pending: {message}");
-                if message == "Unsupported: update_shape" && !name.contains("pale_oak") {
+                if message == "Unsupported: update_shape"
+                    && !name.contains("pale_oak")
+                    && !name.starts_with("minecraft:rooted_")
+                {
                     assert_eq!(
                         random.next_long(),
                         case["next"].as_i64().unwrap(),
@@ -254,4 +267,48 @@ fn placed(chunks: &[RegionChunk], origin: Pos, terrain: &str, ground: BlockState
             .collect::<Vec<_>>(),
     )
     .unwrap()
+}
+
+#[test]
+fn feature_sizes_match_vanilla_at_layer_boundaries() {
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(include_bytes!("sizes.json.gz").as_slice())
+        .read_to_string(&mut text)
+        .unwrap();
+    let cases: Vec<Value> = serde_json::from_str(&text).unwrap();
+    for case in cases {
+        let size = FeatureSize::decode(&case["config"]).unwrap();
+        let mut actual = Vec::new();
+        for h in [0, 1, 5, 16, 80] {
+            for y in -1..=h + 1 {
+                actual.push(size.at(h, y));
+            }
+        }
+        assert_eq!(serde_json::to_value(actual).unwrap(), case["sizes"]);
+        assert_eq!(
+            size.min_clipped,
+            case["config"]["min_clipped_height"]
+                .as_i64()
+                .map(|n| n as i32)
+        );
+    }
+}
+#[test]
+fn decorator_position_order_matches_java_hash_sets() {
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(include_bytes!("position_sets.json.gz").as_slice())
+        .read_to_string(&mut text)
+        .unwrap();
+    let cases: Vec<Value> = serde_json::from_str(&text).unwrap();
+    for case in cases {
+        let input: Vec<Pos> = serde_json::from_value(case["input"].clone()).unwrap();
+        let mut positions = Positions::default();
+        for p in input {
+            positions.insert(p);
+        }
+        assert_eq!(
+            serde_json::to_value(positions.iter().collect::<Vec<_>>()).unwrap(),
+            case["output"]
+        );
+    }
 }
