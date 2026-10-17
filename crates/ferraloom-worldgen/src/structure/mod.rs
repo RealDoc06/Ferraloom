@@ -1,5 +1,6 @@
 //! Vanilla structure generation. Registries and starts are immutable inputs;
 //! each generation job owns its random streams and mutable neighborhood.
+pub mod alias;
 pub mod beardifier;
 pub mod bounding_box;
 pub mod placement;

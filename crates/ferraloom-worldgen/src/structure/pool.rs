@@ -583,3 +583,7 @@ impl StructurePools {
         names
     }
 }
+
+#[cfg(test)]
+#[path = "pool_tests.rs"]
+mod tests;

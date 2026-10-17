@@ -328,18 +328,7 @@ impl StructureProcessor {
             }
             Self::LavaSubmergedBlock => {
                 if region.block(info.position)?.block() == Block::LAVA {
-                    let data = info.state.data();
-                    if data.context_dependent_shape {
-                        return Err(Error(
-                            "Unsupported: context-dependent template outline shape".into(),
-                        ));
-                    }
-                    if !data
-                        .outline
-                        .boxes()
-                        .iter()
-                        .any(|b| b.min == [0.0; 3] && b.max == [1.0; 3])
-                    {
+                    if !region.is_outline_full_block(info.state, info.position)? {
                         info.state = Block::LAVA.default_state();
                     }
                 }
@@ -499,35 +488,40 @@ fn blackstone_replace(old: BlockState) -> BlockState {
     state
 }
 fn random_stairs(block: Block, random: &mut impl RandomSource) -> BlockState {
-        let facing = match ferraloom_util::Plane::Horizontal.random_direction(random) {
-            ferraloom_util::Direction::North => properties::Facing::North,
-            ferraloom_util::Direction::East => properties::Facing::East,
-            ferraloom_util::Direction::South => properties::Facing::South,
-            ferraloom_util::Direction::West => properties::Facing::West,
-            _ => unreachable!(),
-        }
-        block
-            .default_state()
-            .with(properties::FACING, facing)
-            .unwrap()
-            .with(
-                properties::HALF,
-                if random.next_int_bound(2) == 0 {
-                    properties::Half::Top
-                } else {
-                    properties::Half::Bottom
-                },
-            )
-            .unwrap()
-    }
-fn choose(normal: [BlockState; 2], mossy: [BlockState; 2], mossiness: f32, random: &mut impl RandomSource) -> BlockState {
-        let blocks = if random.next_float() < mossiness {
-            mossy
-        } else {
-            normal
-        }
-        blocks[random.next_int_bound(2) as usize]
-    }
+    let facing = match ferraloom_util::Plane::Horizontal.random_direction(random) {
+        ferraloom_util::Direction::North => properties::Facing::North,
+        ferraloom_util::Direction::East => properties::Facing::East,
+        ferraloom_util::Direction::South => properties::Facing::South,
+        ferraloom_util::Direction::West => properties::Facing::West,
+        _ => unreachable!(),
+    };
+    block
+        .default_state()
+        .with(properties::FACING, facing)
+        .unwrap()
+        .with(
+            properties::HALF,
+            if random.next_int_bound(2) == 0 {
+                properties::Half::Top
+            } else {
+                properties::Half::Bottom
+            },
+        )
+        .unwrap()
+}
+fn choose(
+    normal: [BlockState; 2],
+    mossy: [BlockState; 2],
+    mossiness: f32,
+    random: &mut impl RandomSource,
+) -> BlockState {
+    let blocks = if random.next_float() < mossiness {
+        mossy
+    } else {
+        normal
+    };
+    blocks[random.next_int_bound(2) as usize]
+}
 
 fn age_block(
     state: BlockState,
@@ -592,3 +586,7 @@ fn age_block(
         _ => state,
     }
 }
+
+#[cfg(test)]
+#[path = "processor_tests.rs"]
+pub(crate) mod tests;
