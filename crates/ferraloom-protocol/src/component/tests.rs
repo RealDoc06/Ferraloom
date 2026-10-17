@@ -260,3 +260,19 @@ fn item_defaults_merge_with_additions_and_explicit_removals() {
         Some(DataComponent::CustomData(_))
     ));
 }
+#[test]
+fn vanilla_stack_patch_normalization() {
+    let (f, registries) = fixtures();
+    let input = unhex(f["redundant_stack_input"].as_str().unwrap());
+    let mut r = Reader::with_context(&input, &registries);
+    let stack: ItemStack = r.read().unwrap();
+    r.finish().unwrap();
+    assert!(stack.0.as_ref().unwrap().components.added.is_empty());
+    assert!(stack.0.as_ref().unwrap().components.removed.is_empty());
+    let mut w = Writer::with_context(&registries);
+    w.write(&stack).unwrap();
+    assert_eq!(
+        w.as_slice(),
+        unhex(f["redundant_stack_output"].as_str().unwrap())
+    );
+}

@@ -1416,6 +1416,10 @@ impl Persistent for ItemStackTemplate {
         )
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if !(1..=99).contains(&self.count) || self.item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack template"));
+        }
+
         let mut v = vec![("id".into(), self.item.to_persistent()?)];
         entry(&mut v, "count", &self.count, Some(1))?;
         entry(
