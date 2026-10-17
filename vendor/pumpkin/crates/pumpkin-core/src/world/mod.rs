@@ -7862,6 +7862,8 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<Option<BlockEntityCloneData>, BlockEntityLoadError> {
+        let chunk_pos = position.chunk_position();
+        let _unload = self.level.chunk_unload.access();
         if self
             .custom_block_entity_data
             .get(position)
@@ -7871,8 +7873,6 @@ impl World {
                 "clone custom plugin metadata",
             ));
         }
-        let chunk_pos = position.chunk_position();
-        let _unload = self.level.chunk_unload.access();
         let chunk = self
             .level
             .loaded_chunks
