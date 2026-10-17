@@ -355,13 +355,15 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
         (start[0] + 100.).floor() as i32 >> 4,
         start[2].floor() as i32 >> 4,
     );
-    client
-        .until(|c, p| {
-            c.chunks.contains(&target)
-                && c.unloads > 0
-                && matches!(p, cb::Packet::ChunkBatchFinished(_))
-        })
-        .await?;
+    if !client.chunks.contains(&target) || client.unloads == 0 {
+        client
+            .until(|c, p| {
+                c.chunks.contains(&target)
+                    && c.unloads > 0
+                    && matches!(p, cb::Packet::ChunkBatchFinished(_))
+            })
+            .await?;
+    }
     client.command("save-all flush").await?;
     client.until(|_,p|matches!(p,cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|s|s.contains("Saved the game")||s.contains("commands.save.success")))).await?;
     client.command("stop").await?;
