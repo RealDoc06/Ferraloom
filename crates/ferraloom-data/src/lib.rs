@@ -214,7 +214,7 @@ pub struct SoundType {
     pub fall_sound: registries::sound_event::Id,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FluidState {
     pub fluid_type: registries::fluid::Id,
     pub amount: u8,
@@ -421,5 +421,25 @@ impl BlockState {
             2 => Some(1),
             _ => None,
         }
+    }
+}
+
+impl Block {
+    /// Concrete vanilla Java class, extracted from the registered block object.
+    pub const fn class(self) -> BlockClass {
+        BLOCK_CLASSES[self.protocol_id() as usize]
+    }
+
+    /// Java instanceof, including transitive superclasses and interfaces.
+    pub const fn is_instance_of(self, class: BlockClass) -> bool {
+        let index = class as usize;
+        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
+    pub const fn is_air(self) -> bool {
+        STATE_IS_AIR[self.id() as usize]
     }
 }

@@ -267,6 +267,37 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
+    // --- vegetation family ---
+    fn vine_acceptable_neighbor(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _direction: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: VineBlock.isAcceptableNeighbour".into()))
+    }
+    fn place_double_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _flags: u32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: DoublePlantBlock.placeAt".into()))
+    }
+    // MossyCarpetBlock.placeAt uses Level#getRandom, not the feature stream.
+    fn place_mossy_carpet(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _flags: u32,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: MossyCarpetBlock.placeAt and level random".into(),
+        ))
+    }
+    // --- end vegetation family ---
+
     fn has_block_entity(&self, state: BlockState) -> bool {
         state.has_block_entity()
     }
@@ -331,6 +362,9 @@ pub struct WorldGenRegion<'a> {
     write_radius: i32,
     generation_bounds: Option<(i32, i32)>,
     behavior: &'a dyn WorldgenBlockBehavior,
+    // --- vegetation family ---
+    has_skylight: Option<bool>,
+    // --- end vegetation family ---
     pub seed: i64,
     pub sea_level: i32,
 }
@@ -386,6 +420,7 @@ impl<'a> WorldGenRegion<'a> {
             write_radius,
             generation_bounds,
             behavior,
+            has_skylight: None,
             seed,
             sea_level,
         })
@@ -743,4 +778,56 @@ impl<'a> WorldGenRegion<'a> {
     pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_unobstructed(state, self, p)
     }
+}
+
+/// The light layers queried by LevelReader during feature placement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LightLayer {
+    Block,
+    Sky,
+}
+
+impl WorldGenRegion<'_> {
+    // --- vegetation family ---
+    /// Port of BlockAndLightGetter#getBrightness before INITIALIZE_LIGHT.
+    /// No section light exists yet: block light is zero and sky storage returns 15.
+    /// A feature placing an emitter does not initialize or propagate lighting.
+    pub fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
+        let chunk = self.chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if chunk.status >= ChunkStatus::InitializeLight {
+            return Err(Error(
+                "Unsupported: initialized worldgen light storage".into(),
+            ));
+        }
+        Ok(match layer {
+            LightLayer::Block => 0,
+            LightLayer::Sky => match self.has_skylight {
+                Some(true) => 15,
+                Some(false) => 0,
+                None => return Err(Error("Unsupported: worldgen skylight context".into())),
+            },
+        })
+    }
+    pub fn set_has_skylight(&mut self, has_skylight: bool) {
+        self.has_skylight = Some(has_skylight);
+    }
+    pub fn vine_acceptable_neighbor(
+        &self,
+        p: [i32; 3],
+        direction: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.vine_acceptable_neighbor(self, p, direction)
+    }
+    pub fn place_double_plant(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        self.behavior.place_double_plant(self, state, p, flags)
+    }
+    pub fn place_mossy_carpet(&mut self, p: [i32; 3], flags: u32) -> Result<(), Error> {
+        self.behavior.place_mossy_carpet(self, p, flags)
+    }
+    // --- end vegetation family ---
 }
