@@ -23,6 +23,28 @@ impl LevelChunk {
             empty_section,
         }
     }
+    pub fn from_sections(
+        pos: ChunkPos,
+        min_section: i32,
+        sections: Vec<LevelChunkSection>,
+    ) -> Self {
+        assert!(!sections.is_empty());
+        let empty_section = sections[0].clone();
+        Self {
+            pos,
+            min_section,
+            sections: sections.into_iter().map(Some).collect(),
+            empty_section,
+        }
+    }
+    pub fn sections(&self) -> impl Iterator<Item = &LevelChunkSection> {
+        self.sections
+            .iter()
+            .map(|s| s.as_ref().unwrap_or(&self.empty_section))
+    }
+    pub fn min_section(&self) -> i32 {
+        self.min_section
+    }
     pub fn pos(&self) -> ChunkPos {
         self.pos
     }

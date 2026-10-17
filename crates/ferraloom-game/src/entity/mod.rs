@@ -3,6 +3,7 @@ use ferraloom_data::EntityType;
 use crate::level::{Level, LevelError};
 
 pub mod animal;
+pub mod player;
 
 /// Server-lifetime identity, independent of storage location and network ID.
 /// The server allocator must never reuse a value, including after removal.
@@ -80,41 +81,53 @@ pub struct AgeableMob {
 #[derive(Debug)]
 pub enum EntityState {
     Cow(animal::Cow),
+    Player(Box<player::ServerPlayer>),
 }
 
 impl EntityState {
     pub fn entity_type(&self) -> EntityType {
         match self {
             Self::Cow(_) => EntityType::COW,
+            Self::Player(_) => EntityType::PLAYER,
         }
     }
 
     pub fn as_mob(&self) -> Option<&Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob()),
+            Self::Player(_) => None,
         }
     }
 
     pub fn as_mob_mut(&mut self) -> Option<&mut Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob_mut()),
+            Self::Player(_) => None,
         }
     }
 
     pub fn as_living(&self) -> Option<&LivingEntity> {
-        self.as_mob().map(|mob| &mob.parent)
+        match self {
+            Self::Player(p) => Some(&p.parent),
+            _ => self.as_mob().map(|mob| &mob.parent),
+        }
     }
     pub fn as_living_mut(&mut self) -> Option<&mut LivingEntity> {
-        self.as_mob_mut().map(|mob| &mut mob.parent)
+        match self {
+            Self::Player(p) => Some(&mut p.parent),
+            _ => self.as_mob_mut().map(|mob| &mut mob.parent),
+        }
     }
     pub fn as_entity(&self) -> &EntityData {
         match self {
             Self::Cow(cow) => &cow.as_living().parent,
+            Self::Player(p) => &p.parent.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
         match self {
             Self::Cow(cow) => &mut cow.as_living_mut().parent,
+            Self::Player(p) => &mut p.parent.parent,
         }
     }
 }

@@ -40,3 +40,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.ticket-type.portal | `minecraft:portal` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
 | chunks.ticket-type.spawn-search | `minecraft:spawn_search` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
 | chunks.ticket-type.unknown | `minecraft:unknown` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
+
+| chunks.runtime.batch-quota | Apply PlayerChunkSender quota and acknowledgement window | `PlayerChunkSender#sendNextChunks; #onChunkBatchReceivedByClient` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial: sender state, integration pending |

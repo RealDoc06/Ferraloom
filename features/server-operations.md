@@ -6,7 +6,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 |---|---|---|---|---|---|
 | server-operations.startup.cli | Honor dedicated-server command-line options and reject invalid combinations | `Main#main` | | - | todo |
 | server-operations.startup.eula | Create and enforce eula.txt before starting the dedicated server | `Eula; Main#main` | | - | todo |
-| server-operations.startup.properties | Load, normalize and persist server.properties with typed defaults | `Settings#loadFromFile; Settings#store; DedicatedServerSettings` | | - | todo |
+| server-operations.startup.properties | Load, normalize and persist server.properties with typed defaults | `Settings#loadFromFile; Settings#store; DedicatedServerSettings` | `properties::tests::java_properties_and_validation` | - | partial: normalized keys; runtime integration pending |
 | server-operations.startup.world-lock | Acquire the session lock and reject concurrent access to the same save | `DirectoryLock#create; LevelStorageSource` | | - | todo |
 | server-operations.startup.bonus-seed-preset | Apply seed parsing, world preset, generator settings and structure-generation settings | `DedicatedServerProperties#<init>; WorldOptions#parseSeed` | | - | todo |
 | server-operations.startup.initial-packs | Load configured initial enabled and disabled datapacks on new-world creation | `DedicatedServerProperties; WorldLoader` | | - | todo |
