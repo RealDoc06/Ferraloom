@@ -61,12 +61,16 @@ impl LpVector3d {
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
         let mut low_16 = [0u8; 2];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut low_16[..1])
             .map_err(|e| ReadingError::Message(e.to_string()))?;
 
-        if low_16[0] == 0 && low_16[1] == 0 {
+        // Zero is a complete one-byte value; the next byte belongs to the next field.
+        if low_16[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+        reader
+            .read_exact(&mut low_16[1..])
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -150,6 +154,55 @@ fn from_long(quantized: i64, scale: f64) -> f64 {
 mod tests {
     use super::{LpVector3d, encode_legacy_velocity_component};
     use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn zero_vector_round_trip_consumes_one_byte() {
+        let zero = LpVector3d(Vector3::new(0.0, 0.0, 0.0));
+        let mut encoded = Vec::new();
+        zero.write(&mut encoded).unwrap();
+        assert_eq!(encoded, [0]);
+        let mut input = encoded.as_slice();
+        assert_eq!(LpVector3d::read(&mut input).unwrap(), zero);
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn raw_zero_vector_leaves_following_field_unread() {
+        for next_byte in [0, 1, 0xa5] {
+            let raw = [0, next_byte, 0x7f];
+            let mut input = raw.as_slice();
+            assert_eq!(
+                LpVector3d::read(&mut input).unwrap(),
+                LpVector3d(Vector3::new(0.0, 0.0, 0.0))
+            );
+            assert_eq!(input, &[next_byte, 0x7f]);
+        }
+    }
+
+    #[test]
+    fn nonzero_and_extended_vectors_preserve_frame_boundaries() {
+        // Exact pack/write layout: scale 1, then scale 4 with continuation tail 1.
+        for (value, raw) in [
+            (
+                Vector3::new(1.0, 0.0, -1.0),
+                &[0xf1, 0xff, 0x00, 0x00, 0xff, 0xff][..],
+            ),
+            (
+                Vector3::new(4.0, 0.0, -4.0),
+                &[0xf4, 0xff, 0x00, 0x00, 0xff, 0xff, 0x01][..],
+            ),
+        ] {
+            let vector = LpVector3d(value);
+            let mut encoded = Vec::new();
+            vector.write(&mut encoded).unwrap();
+            assert_eq!(encoded.as_slice(), raw);
+            let mut framed = raw.to_vec();
+            framed.push(0xa5);
+            let mut input = framed.as_slice();
+            assert_eq!(LpVector3d::read(&mut input).unwrap(), vector);
+            assert_eq!(input, &[0xa5]);
+        }
+    }
 
     #[test]
     fn legacy_component_is_clamped_and_scaled() {
