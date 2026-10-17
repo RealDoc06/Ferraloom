@@ -38,7 +38,7 @@ impl PathError {
             Self::NothingFound(p) => format!("Found no elements matching {p}"),
             Self::ExpectedList(t) => format!("Expected a list: got {t}"),
             Self::InvalidIndex(i) => format!("Invalid list index: {i}"),
-            Self::TooDeep => "NBT tag is too deeply nested".into(),
+            Self::TooDeep => "Resulting NBT too deeply nested".into(),
         }
     }
 }
@@ -98,7 +98,7 @@ impl NbtPath {
                 }
                 123 => {
                     if !nodes.is_empty() {
-                        return Err(syntax(pos, "Invalid node"));
+                        return Err(syntax(pos, "Invalid NBT path element"));
                     }
                     Node::MatchRoot(read_pattern(input, &mut pos)?)
                 }
@@ -111,7 +111,7 @@ impl NbtPath {
                         pos += 1;
                     }
                     if start == pos {
-                        return Err(syntax(pos, "Invalid node"));
+                        return Err(syntax(pos, "Invalid NBT path element"));
                     }
                     let name = NbtString::from_utf16(text[start..pos].to_vec());
                     object_node(input, &text, &mut pos, name)?
@@ -227,6 +227,7 @@ impl NbtPath {
         {
             return Err(PathError::TooDeep);
         }
+        let values = values.iter().map(Tag::copy).collect::<Vec<_>>();
         let paths = self.targets(root, self.nodes.len(), &Tag::List(ListTag::default()), true)?;
         let mut changed = 0;
         for path in paths {
@@ -240,7 +241,7 @@ impl NbtPath {
                     i64::from(index)
                 };
                 let mut modified = false;
-                for value in values {
+                for value in &values {
                     let compatible = matches!(parent, Tag::List(_)) || value.as_double().is_some();
                     if !compatible {
                         continue;
@@ -316,7 +317,7 @@ fn read_name(text: &[u16], pos: &mut usize) -> Result<NbtString, PathError> {
                 return Err(syntax(
                     *pos - 1,
                     format!(
-                        "Invalid escape sequence '{}' in quoted string",
+                        "Invalid escape sequence '\\{}' in quoted string",
                         char::from_u32(u32::from(e)).unwrap_or('\u{fffd}')
                     ),
                 ));
@@ -335,7 +336,7 @@ fn object_node(
     name: NbtString,
 ) -> Result<Node, PathError> {
     if name.is_empty() {
-        return Err(syntax(*pos, "Invalid node"));
+        return Err(syntax(*pos, "Invalid NBT path element"));
     }
     if text.get(*pos) == Some(&123) {
         Ok(Node::MatchObject(name, read_pattern(input, pos)?))
@@ -493,7 +494,7 @@ fn set_node(node: &Node, parent: &mut Tag, value: &Tag) -> usize {
     match node {
         Node::Child(name) => {
             if let Tag::Compound(c) = parent {
-                let previous = c.insert(name.clone(), value.copy());
+                let previous = c.insert(name.clone(), value.clone());
                 usize::from(previous.as_ref() != Some(value))
             } else {
                 0
@@ -537,7 +538,7 @@ fn set_node(node: &Node, parent: &mut Tag, value: &Tag) -> usize {
                 match step {
                     Some(Step::Key(k)) => {
                         if let Tag::Compound(c) = parent {
-                            c.insert(k, value.copy());
+                            c.insert(k, value.clone());
                             changed += 1;
                         }
                     }

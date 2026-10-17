@@ -146,14 +146,15 @@ impl Parser {
         let end = self.pos;
         if end == start {
             return self.fail(match radix {
-                2 => "Expected a binary numeral",
-                16 => "Expected a hexadecimal numeral",
-                _ => "Expected a decimal numeral",
+                2 => "Expected a binary number",
+                16 => "Expected a hexadecimal number",
+                _ => "Expected a decimal number",
             });
         }
         if self.text[start] == 95 || self.text[end - 1] == 95 {
             self.pos = start;
-            return self.fail("Underscores are not allowed at the start or end of a number");
+            return self
+                .fail("Underscore characters are not allowed at the start or end of a number");
         }
         Some(String::from_utf16_lossy(&self.text[start..end]))
     }
@@ -191,7 +192,7 @@ impl Parser {
                 radix = 2;
                 binary
             } else if self.attempt(|p| p.run(10)).is_some() {
-                return self.fail("Leading zeroes are not allowed");
+                return self.fail("Decimal numbers can't start with 0");
             } else {
                 "0".into()
             }
@@ -217,7 +218,7 @@ impl Parser {
             's' => 16,
             'i' => 32,
             'l' => 64,
-            _ => return self.fail("Expected an integer type"),
+            _ => return self.fail("Expected an integer number"),
         };
         let signed = n.signed.unwrap_or(n.radix == 10);
         if !signed && n.negative {
@@ -329,13 +330,13 @@ impl Parser {
                 if suffix == Some('f') {
                     let v = value.parse::<f32>().ok()?;
                     if !v.is_finite() {
-                        return p.fail("Infinity is not allowed");
+                        return p.fail("Non-finite numbers are not allowed");
                     }
                     Some(Tag::Float(if v == 0.0 { 0.0 } else { v }))
                 } else {
                     let v = value.parse::<f64>().ok()?;
                     if !v.is_finite() {
-                        return p.fail("Infinity is not allowed");
+                        return p.fail("Non-finite numbers are not allowed");
                     }
                     Some(Tag::Double(if v == 0.0 { 0.0 } else { v }))
                 }
@@ -362,7 +363,9 @@ impl Parser {
         }
     }
     fn quoted(&mut self) -> Option<NbtString> {
-        let quote = self.chars("\"'")? as u16;
+        let quote = self
+            .attempt(|p| p.ch('"').map(|_| '"'))
+            .or_else(|| self.ch('\'').map(|_| '\''))? as u16;
         let mut out = Vec::new();
         loop {
             let start = self.pos;
@@ -465,7 +468,7 @@ impl Parser {
         self.ch(':')?;
         let value = self.literal()?;
         if key.is_empty() {
-            return self.fail("Empty keys are not allowed");
+            return self.fail("Key cannot be empty");
         }
         Some((key, value))
     }
@@ -561,7 +564,7 @@ impl Parser {
             args = Some(values)
         }
         if name.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '.')) {
-            return self.fail("Invalid start of an unquoted string");
+            return self.fail("Unquoted strings can't start with digits 0-9, + or -");
         }
         if let Some(values) = args {
             if values.len() == 1 && name == "bool" {
@@ -632,7 +635,7 @@ fn parse_uuid(s: &str) -> Option<Vec<i32>> {
     let mut numbers = Vec::new();
     for p in parts {
         let p = p.strip_prefix('+').unwrap_or(p);
-        numbers.push(u64::from_str_radix(p, 16).ok()?)
+        numbers.push(i64::from_str_radix(p, 16).ok()? as u64)
     }
     let high =
         ((numbers[0] & 0xffffffff) << 32) | ((numbers[1] & 0xffff) << 16) | (numbers[2] & 0xffff);

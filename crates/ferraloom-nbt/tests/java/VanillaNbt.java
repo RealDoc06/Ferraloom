@@ -51,7 +51,7 @@ public class VanillaNbt {
         line("map",operation,hex(key),HexFormat.of().formatHex(out.toByteArray()),hex(new TextComponentTagVisitor("",TextComponentTagVisitor.PlainStyling.INSTANCE,false).visit(c).getString()));
     }
     static void scenario(String input,String path,String op,int index,String value) throws Exception {
-        Tag root=PARSER.parseFully(input);
+        Tag root=PARSER.parseFully(input).copy();
         try {
             NbtPath p=NbtPath.of(path);
             String result=switch(op) {case "get"->p.get(root).toString();case "set"->Integer.toString(p.set(root,PARSER.parseFully(value)));case "insert"->Integer.toString(p.insert(index,(CompoundTag)root,((ListTag)PARSER.parseFully(value)).stream().toList()));default->Integer.toString(p.remove(root));};
@@ -88,6 +88,11 @@ public class VanillaNbt {
         for(String s:List.of("1__2.3__4e+0_2f","1 f","- 1","0 x FF","[B;1,2b,]","{a:1, b:2}","\"a \\n b\"","128b","256ub","32768s","2147483648","9223372036854775808L","4294967296ui","18446744073709551616ul","-1ui","1e999f"))parse(s);
         for(String bytes:List.of("00","0101","020002","0300000003","040000000000000004","053f800000","063ff0000000000000","08000161","0903000000020000000100000002","0a030001610000000100","090000000001","0901ffffffff","07ffffffff","0aff00016100","0a0a0001780000")) {
             for(long quota:List.of(0L,8L,36L,128L,1024L)) account(bytes,quota,512);
+        }
+        for(int depth:List.of(512,513)) {
+            var bytes=new ByteArrayOutputStream();var data=new DataOutputStream(bytes);data.writeByte(9);
+            for(int i=1;i<depth;i++) {data.writeByte(9);data.writeInt(1);}data.writeByte(0);data.writeInt(0);
+            account(HexFormat.of().formatHex(bytes.toByteArray()),1_000_000,512);
         }
         account("0a0a0001780000",1024,1);
         account("0a0a0001780000",1024,0);
