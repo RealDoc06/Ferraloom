@@ -895,3 +895,55 @@ fn java_hashes_match_vanilla_util_and_jdk() {
         Some(Ordering::Less)
     );
 }
+
+#[test]
+fn reference_maps_preserve_identity_through_growth_trim_and_reinsertion() {
+    let keys = (0..160)
+        .map(|_| Rc::new("same".to_owned()))
+        .collect::<Vec<_>>();
+    let mut map = Reference2ObjectOpenHashMap::with_capacity(0);
+    let mut expected = Vec::<(usize, i32)>::new();
+    let mut state = 0x12345678abcdef_u64;
+    for step in 0..1200 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let id = if step < 160 {
+            step
+        } else {
+            (state % 160) as usize
+        };
+        match if step < 160 { 0 } else { state % 11 } {
+            0..=5 => {
+                map.insert(keys[id].clone(), step as i32);
+                if let Some((_, v)) = expected.iter_mut().find(|(k, _)| *k == id) {
+                    *v = step as i32;
+                } else {
+                    expected.push((id, step as i32));
+                }
+            }
+            6 | 7 => {
+                map.remove(&keys[id]);
+                expected.retain(|(k, _)| *k != id);
+            }
+            8 => map.trim(),
+            9 => {
+                if step % 19 == 0 {
+                    map.clear();
+                    expected.clear();
+                }
+            }
+            _ => {
+                assert_eq!(
+                    map.get(&keys[id]),
+                    expected.iter().find(|(k, _)| *k == id).map(|(_, v)| v)
+                );
+            }
+        }
+        assert_eq!(map.len(), expected.len());
+        for ((actual, v), (id, value)) in map.iter().zip(&expected) {
+            assert!(Rc::ptr_eq(actual, &keys[*id]));
+            assert_eq!(v, value);
+        }
+    }
+}

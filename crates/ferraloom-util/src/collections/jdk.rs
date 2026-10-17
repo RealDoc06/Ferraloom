@@ -290,6 +290,7 @@ impl<K: Eq + JavaHash, V, const L: bool> JavaHashMap<K, V, L> {
             if b.order.len() == 1 {
                 let dest = self.n(b.order[0]).hash as usize & (new_cap - 1);
                 self.bins[dest].order = b.order;
+                self.bins[dest].root = b.root;
             } else {
                 let (lo, hi): (Vec<_>, Vec<_>) = b
                     .order
