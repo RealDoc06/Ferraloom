@@ -141,7 +141,7 @@ fn assert_clean(observation: &PeerObservation) {
 
 async fn actual_client_close(unread_burst: bool) {
     let fixture = bounded(player_fixture()).await;
-    let result = bounded(async {
+    let result = Box::pin(bounded(async {
         let (socket, peer) = tcp_pair(unread_burst).await;
         let pending = PendingConnection::new(
             socket,
@@ -189,7 +189,7 @@ async fn actual_client_close(unread_burst: bool) {
             "writer did not frame all bytes: {observation:?}"
         );
         observation
-    })
+    }))
     .await;
     bounded(close_fixture(&fixture)).await;
     assert_clean(&result);
@@ -197,12 +197,12 @@ async fn actual_client_close(unread_burst: bool) {
 
 #[tokio::test]
 async fn actual_tcp_quiet_peer_gets_prefixes_typed_disconnect_and_fin() {
-    actual_client_close(false).await;
+    Box::pin(actual_client_close(false)).await;
 }
 
 #[tokio::test]
 async fn actual_tcp_unread_burst_gets_prefixes_typed_disconnect_and_fin() {
-    actual_client_close(true).await;
+    Box::pin(actual_client_close(true)).await;
 }
 
 /// A transparent observer below the real `BufWriter`. Successful write/flush
@@ -791,20 +791,21 @@ async fn actual_tcp_streamed_spam(route: StreamRoute) {
     let typed_spam = AtomicBool::new(false);
     let (feedback, replies) = tokio::sync::mpsc::unbounded_channel();
     let (reader, writer) = peer.into_split();
-    let (pending_bytes, producer, observation) = drive_packet_future(&fixture.server, async {
-        tokio::join!(
-            async {
-                java.progress_player_packets(&player, &fixture.server).await;
-                trace.record("server reader returned");
-                java.await_tasks().await;
-                trace.record("server client tasks joined");
-                java.pending_bytes.load(Ordering::Acquire)
-            },
-            produce_stream(writer, route, replies, &peer_done, &typed_spam, &trace),
-            observe_stream(reader, route, feedback, &peer_done, &typed_spam, &trace),
-        )
-    })
-    .await;
+    let (pending_bytes, producer, observation) =
+        Box::pin(drive_packet_future(&fixture.server, async {
+            tokio::join!(
+                async {
+                    java.progress_player_packets(&player, &fixture.server).await;
+                    trace.record("server reader returned");
+                    java.await_tasks().await;
+                    trace.record("server client tasks joined");
+                    java.pending_bytes.load(Ordering::Acquire)
+                },
+                produce_stream(writer, route, replies, &peer_done, &typed_spam, &trace),
+                observe_stream(reader, route, feedback, &peer_done, &typed_spam, &trace),
+            )
+        }))
+        .await;
     eprintln!(
         "stream route={route:?}; producer={producer:?}; producer_error={:?}; peer={observation:?}; pending_bytes={pending_bytes}; events={:#?}",
         producer.write_failure,
@@ -846,12 +847,12 @@ async fn actual_tcp_streamed_spam(route: StreamRoute) {
 
 #[tokio::test]
 async fn actual_tcp_streamed_commands_deliver_processed_prefix_and_typed_spam() {
-    actual_tcp_streamed_spam(StreamRoute::Command).await;
+    Box::pin(actual_tcp_streamed_spam(StreamRoute::Command)).await;
 }
 
 #[tokio::test]
 async fn actual_tcp_streamed_chat_delivers_processed_prefix_and_typed_spam() {
-    actual_tcp_streamed_spam(StreamRoute::Chat).await;
+    Box::pin(actual_tcp_streamed_spam(StreamRoute::Chat)).await;
 }
 
 fn connected_player(fixture: &PlayerFixture, socket: TcpStream) -> Arc<Player> {
@@ -1080,7 +1081,7 @@ mod preparation_tests {
         release.send(abort).unwrap();
         let observation = if abort {
             // The peer stays open: an aborted translation must not wait for its EOF.
-            let (_, result) = tokio::time::timeout(Duration::from_secs(1), async {
+            let ((), result) = tokio::time::timeout(Duration::from_secs(1), async {
                 tokio::join!(&mut transport, kick)
             })
             .await
@@ -1088,7 +1089,7 @@ mod preparation_tests {
             result.unwrap();
             observe_peer(peer).await
         } else {
-            let (_, result, observation) = tokio::join!(transport, kick, observe_peer(peer));
+            let ((), result, observation) = tokio::join!(transport, kick, observe_peer(peer));
             result.unwrap();
             observation
         };
@@ -1140,7 +1141,7 @@ mod preparation_tests {
             assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 1);
             reach_preparation_wait(transport.as_mut(), java, &returned).await;
             release_second.send(false).unwrap();
-            let (_, result, observation) = tokio::join!(transport, second, observe_peer(peer));
+            let ((), result, observation) = tokio::join!(transport, second, observe_peer(peer));
             result.unwrap();
             assert_clean(&observation);
             assert_eq!(
@@ -1179,7 +1180,7 @@ mod preparation_tests {
                 assert!(java.outgoing_packet_queue_send.is_closed());
                 assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 1);
                 release.send(false).unwrap();
-                let (_, result) = tokio::time::timeout(Duration::from_secs(1), async {
+                let ((), result) = tokio::time::timeout(Duration::from_secs(1), async {
                     tokio::join!(transport, kick)
                 })
                 .await
@@ -1237,7 +1238,7 @@ mod preparation_tests {
     async fn actual_tcp_canceled_explicit_kick_resolves_intent_and_keeps_queued_reason() {
         let fixture = bounded(player_fixture()).await;
         for already_eof in [false, true] {
-            bounded(async {
+            Box::pin(bounded(async {
                 let (socket, mut peer) = tcp_pair(false).await;
                 let player = connected_player(&fixture, socket);
                 let java = player.client.java().unwrap();
@@ -1256,7 +1257,7 @@ mod preparation_tests {
                 assert!(java.is_closed());
                 assert_eq!(java.disconnect_intent.lock().unwrap().preparing, 0);
                 let returned = AtomicBool::new(false);
-                let (_, observation) = tokio::time::timeout(Duration::from_secs(1), async {
+                let ((), observation) = tokio::time::timeout(Duration::from_secs(1), async {
                     tokio::join!(
                         lifecycle(&player, &fixture.server, &returned),
                         observe_peer(peer),
@@ -1265,7 +1266,7 @@ mod preparation_tests {
                 .await
                 .expect("healthy or already-EOF peer must not incur the full kick deadline");
                 assert_clean(&observation);
-            })
+            }))
             .await;
         }
         bounded(close_fixture(&fixture)).await;
@@ -1275,7 +1276,7 @@ mod preparation_tests {
     async fn actual_tcp_failed_serialization_closed_queue_and_suppressed_packet_skip_wait() {
         let fixture = bounded(player_fixture()).await;
         for case in 0..3 {
-            bounded(async {
+            Box::pin(bounded(async {
                 let (socket, peer) = tcp_pair(false).await;
                 let player = connected_player(&fixture, socket);
                 let java = player.client.java().unwrap();
@@ -1309,7 +1310,7 @@ mod preparation_tests {
                 assert_eq!(intent.deadline.is_none(), case == 2);
                 assert_eq!(java.pending_bytes.load(Ordering::Acquire), 0);
                 drop(peer);
-            })
+            }))
             .await;
         }
         bounded(close_fixture(&fixture)).await;
@@ -1345,7 +1346,7 @@ async fn actual_tcp_stalled_kicked_peer_uses_one_shared_deadline() {
 #[tokio::test]
 async fn actual_tcp_eof_and_non_kick_close_skip_terminal_wait() {
     let fixture = bounded(player_fixture()).await;
-    bounded(async {
+    Box::pin(bounded(async {
         for peer_eof in [true, false] {
             let (socket, mut peer) = tcp_pair(false).await;
             let player = connected_player(&fixture, socket);
@@ -1365,7 +1366,7 @@ async fn actual_tcp_eof_and_non_kick_close_skip_terminal_wait() {
             assert!(java.writer_finished.is_cancelled());
             assert!(player.inbound_packets.is_empty());
         }
-    })
+    }))
     .await;
     bounded(close_fixture(&fixture)).await;
 }
@@ -1373,7 +1374,7 @@ async fn actual_tcp_eof_and_non_kick_close_skip_terminal_wait() {
 #[tokio::test]
 async fn actual_tcp_terminal_flood_stops_at_byte_budget_before_deadline() {
     let fixture = bounded(player_fixture()).await;
-    bounded(async {
+    Box::pin(bounded(async {
         let (socket, mut peer) = tcp_pair(false).await;
         let player = connected_player(&fixture, socket);
         let java = player.client.java().unwrap();
@@ -1415,14 +1416,14 @@ async fn actual_tcp_terminal_flood_stops_at_byte_budget_before_deadline() {
             assert!(sent >= DISCONNECT_DISCARD_BYTES);
         };
         tokio::join!(lifecycle, flooding);
-    })
+    }))
     .await;
     bounded(close_fixture(&fixture)).await;
 }
 
 #[tokio::test]
 async fn actual_tcp_terminal_discard_bypasses_partial_encrypted_compressed_frame() {
-    bounded(async {
+    Box::pin(bounded(async {
         let (mut socket, mut peer) = tcp_pair(false).await;
         let (encoded, mut encoded_reader) = tokio::io::duplex(4096);
         let mut encoder = TCPNetworkEncoder::new(encoded);
@@ -1458,7 +1459,7 @@ async fn actual_tcp_terminal_discard_bypasses_partial_encrypted_compressed_frame
         );
         assert_eq!(decoder.discard_after_close(2).await.unwrap(), 1);
         assert_eq!(decoder.discard_after_close(1).await.unwrap(), 0);
-    })
+    }))
     .await;
 }
 
@@ -1477,7 +1478,7 @@ mod full_burst_tests {
     }
 
     /// Send all 32 commands without waiting for feedback. Keep the real 50ms
-    /// TickEnd sender active until the concurrent reader observes the typed
+    /// `TickEnd` sender active until the concurrent reader observes the typed
     /// reason or a transport end. No delays or server-side transport gates.
     async fn produce_burst(
         mut writer: OwnedWriteHalf,
@@ -1631,8 +1632,8 @@ mod full_burst_tests {
             let mut score =
                 ScoreboardScore::new("StreamedPlayer", "spamprobe", VarInt(0), None, None);
             score.locked = false;
-            scoreboard.update_score(&NoTarget, score);
-        }
+            scoreboard.update_score(&NoTarget, score)
+        };
         let trace = StreamTrace {
             started: Instant::now(),
             events: std::sync::Mutex::new(Vec::new()),
@@ -1642,27 +1643,28 @@ mod full_burst_tests {
         let (feedback, replies) = tokio::sync::mpsc::unbounded_channel();
         drop(replies);
         let (reader, writer) = peer.into_split();
-        let (pending_bytes, producer, observation) = drive_packet_future(&fixture.server, async {
-            tokio::join!(
-                async {
-                    java.progress_player_packets(&player, &fixture.server).await;
-                    trace.record("burst server reader returned");
-                    java.await_tasks().await;
-                    trace.record("burst server client tasks joined");
-                    java.pending_bytes.load(Ordering::Acquire)
-                },
-                produce_burst(writer, &peer_done, &typed_spam, &trace),
-                observe_stream(
-                    reader,
-                    StreamRoute::Command,
-                    feedback,
-                    &peer_done,
-                    &typed_spam,
-                    &trace,
-                ),
-            )
-        })
-        .await;
+        let (pending_bytes, producer, observation) =
+            Box::pin(drive_packet_future(&fixture.server, async {
+                tokio::join!(
+                    async {
+                        java.progress_player_packets(&player, &fixture.server).await;
+                        trace.record("burst server reader returned");
+                        java.await_tasks().await;
+                        trace.record("burst server client tasks joined");
+                        java.pending_bytes.load(Ordering::Acquire)
+                    },
+                    produce_burst(writer, &peer_done, &typed_spam, &trace),
+                    observe_stream(
+                        reader,
+                        StreamRoute::Command,
+                        feedback,
+                        &peer_done,
+                        &typed_spam,
+                        &trace,
+                    ),
+                )
+            }))
+            .await;
         eprintln!(
             "full burst producer={producer:?}; peer={observation:?}; pending_bytes={pending_bytes}; events={:#?}",
             trace.events.lock().unwrap()

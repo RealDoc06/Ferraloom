@@ -2317,7 +2317,7 @@ mod tests {
             assert!(
                 poi.get_all()
                     .iter()
-                    .any(|entry| entry.pos().x == cx * 16 + 1 && entry.free_tickets == 32)
+                    .any(|entry| entry.pos().0.x == cx * 16 + 1 && entry.free_tickets == 32)
             );
             writer.chunk_config.compression.level = 0;
             writer.flush().await.unwrap();
