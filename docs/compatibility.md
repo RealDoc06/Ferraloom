@@ -18,12 +18,23 @@ integrated at `3839c8e`. The original source review remains NOT CLEAR; ROOT
 fixed its P2 with two scoped test expect attributes before actual Clippy PASS.
 The proposed lexical redstone counterexample was not substantiated because
 existing suggestion conversion canonicalizes round-trip i32 text; general
-Java Property-typed equivalence remains open. Resource-prefix behavior,
-canonical aliases, SNBT, factory integration and negative-zero semantics also
-remain open. Both targeted sources ran on `ferraloom-builder`; their test
+Java Property-typed equivalence remains open. Resource-prefix behavior was
+still open at that source. Canonical aliases, SNBT, factory integration and
+negative-zero semantics remain open. Both targeted sources ran on `ferraloom-builder`; their test
 binary hashes were observed after closure, without preserved copies. These
 separate results establish no combined ROOT native run, current full16,
 server executable build, runtime/parity or ledger promotion.
+
+Separate [resource-suggestion checks](../compatibility/results/resource-suggestions-bdcbd17.json)
+passed command all-targets Clippy and all 117 command-library tests at
+`bdcbd17`: three new ASCII resource controls and 114 existing tests. Four
+successful should-panic cases are included, with no isolated children. The
+three exact patches and one changed blob/mode were integrated at `6fd0f96`.
+The bounded source review was CLEAR; its reviewer-local UNRUN statement is
+separate from ROOT's actual passing checks. Unicode, Java Property-typed
+equivalence and full parser/runtime suggestion behavior remain open. The
+`3839c8e` server executable is pre-resource history; these checks establish no
+current server build, full-native run, runtime/clone parity or ledger promotion.
 
 The latest complete [native-check record](../compatibility/results/native-checks-b58452a.json) used clean engine source
 `b58452a17d9a531a93810161321fe440c8149a1e` on the dedicated `ferraloom-builder` (`10.10.10.162`),

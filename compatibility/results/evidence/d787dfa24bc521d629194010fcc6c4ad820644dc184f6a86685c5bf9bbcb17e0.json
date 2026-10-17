@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-17T20:30:26.952556+00:00",
+  "host": "devbox10.10.10.106",
+  "base_ROOT": "c467f34cbc3fbb5be3c8167256110c6a4b8bbf83",
+  "original_base": "e7e0009ca7baa55a65a875c6b70fa9d34bcabb4a",
+  "original_head": "bdcbd17f66886b151b5636c5ced7e64d7f119695",
+  "ROOT_head": "6fd0f96c36b4430cd7dd3189e8c9bb01908a018f",
+  "mapping": [
+    {
+      "original": "85095cd91fe52f8f56155c7a39afbd55aa6a2027",
+      "integrated": "57341c7790f76852cbaed993722594704580e550",
+      "patch_sha256": "ad88935e6f3f3b75e8e4e091a6ca0ea8b1a8778e722ab24ee714da82127453e2"
+    },
+    {
+      "original": "6162bd9148d7e3dd3694aed6f736a308e908981e",
+      "integrated": "120dc0f7a86743082d3782b0660aa888f68836ca",
+      "patch_sha256": "a39c1acd0782ff36427cdde5ae8342ef9ecf26cf32141ac29e24d666a9ecc009"
+    },
+    {
+      "original": "bdcbd17f66886b151b5636c5ced7e64d7f119695",
+      "integrated": "6fd0f96c36b4430cd7dd3189e8c9bb01908a018f",
+      "patch_sha256": "f85abb766dcdc5ab8bfce2f227d0a229ef9fbf5548e1bd215524dc31be3ca88c"
+    }
+  ],
+  "combined_patch_sha256": "b2e9ff9507e885ec344f80e98f54158674d9981f20277fd192c2f1395675168a",
+  "entire_ROOT_only_delta_preserved_sha256": "9ccee46c5ec0e1b0baefb4b1de98af5124d01ae0533550e510d833814b3ead1d",
+  "exact3patches": true,
+  "exact_final_blob_mode_working_bytes": true,
+  "clean": true,
+  "review_report_sha256": "f4a178d9ba8475eda25057504e2a1365f2d956e1a4a36e6066b36e690309f4d0",
+  "review": "CLEAR bounded SOURCE scope; review117UNRUN is reviewer-local, ROOT actual117PASS separate",
+  "review_N1": "Test naming observation only; no input proves colon-split exclusion experimentally for wellformed IDs; assigning primary/source establish it. No change required.",
+  "review_actions_variance": "Reviewer admitted own-output Python JSON syntax read + jq after writing report, despite no-Python brief. No source mutation/runtime/test; report/manifest unchanged and variance recorded separately.",
+  "checks": {
+    "Clippy": {
+      "submission": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-clippy-first/submission.json",
+      "completion": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-clippy-first/completion.json",
+      "console_sha256": "aaa9eaf23c6c50779a7a3975716437d6fcbd063778a9d1a4c24682648b07782d",
+      "job": "20261017T202351Z-55ba5790",
+      "exit_code": 0,
+      "receipt_path": "/home/doc/code/Ferraloom/.cache/remote-build-jobs/20261017T202351Z-55ba5790.json",
+      "outer_sha256": "187ad62ae4c1e9b3a62ef494bd653742fa560e3e72fd63744dd57045a483f32a"
+    },
+    "Command117": {
+      "submission": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-command117-first/submission.json",
+      "completion": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-command117-first/completion.json",
+      "console_sha256": "6d8bd23bd7b78c9445ff3cdfa9d5ac2d08b78e9c6cd0e1f5d47ecb20a740ca33",
+      "job": "20261017T202510Z-571b4a27",
+      "exit_code": 0,
+      "receipt_path": "/home/doc/code/Ferraloom/.cache/remote-build-jobs/20261017T202510Z-571b4a27.json",
+      "outer_sha256": "bf20bc8cc20c387a18f0a0319e2980d92042a1f75be8cb355d09a01f5af9acee"
+    }
+  },
+  "scope": "Exact source integration after actual affectedClippy/Command117 on child. No currentROOT combinedfullnative/runtime/wholeparser/cloneparity or ledger promotion."
+}

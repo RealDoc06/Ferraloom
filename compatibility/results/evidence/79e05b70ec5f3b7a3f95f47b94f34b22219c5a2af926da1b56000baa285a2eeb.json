@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-17T20:28:04.657007+00:00",
+  "host": "ferraloom-builder",
+  "source": "bdcbd17f66886b151b5636c5ced7e64d7f119695",
+  "clean": true,
+  "build_lock_held": true,
+  "no_active_scopes": true,
+  "test_binary": {
+    "path": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_command-6e92d1c40a23d2fc",
+    "bytes": 15133736,
+    "sha256": "612b2517ac8a563c334012d637a8ae5a73fedbf6cb986552f04aac2a3420bad4",
+    "copy_preserved": false
+  },
+  "submission_host": "devbox",
+  "checks": {
+    "Clippy": {
+      "submission": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-clippy-first/submission.json",
+      "completion": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-clippy-first/completion.json",
+      "console_sha256": "aaa9eaf23c6c50779a7a3975716437d6fcbd063778a9d1a4c24682648b07782d",
+      "job": "20261017T202351Z-55ba5790",
+      "exit_code": 0,
+      "receipt_path": "/home/doc/code/Ferraloom/.cache/remote-build-jobs/20261017T202351Z-55ba5790.json",
+      "outer_sha256": "187ad62ae4c1e9b3a62ef494bd653742fa560e3e72fd63744dd57045a483f32a"
+    },
+    "Command117": {
+      "submission": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-command117-first/submission.json",
+      "completion": "/home/doc/code/Ferraloom/.cache/builder-submissions/r32-resource-bdcbd17-command117-first/completion.json",
+      "console_sha256": "6d8bd23bd7b78c9445ff3cdfa9d5ac2d08b78e9c6cd0e1f5d47ecb20a740ca33",
+      "job": "20261017T202510Z-571b4a27",
+      "exit_code": 0,
+      "receipt_path": "/home/doc/code/Ferraloom/.cache/remote-build-jobs/20261017T202510Z-571b4a27.json",
+      "outer_sha256": "bf20bc8cc20c387a18f0a0319e2980d92042a1f75be8cb355d09a01f5af9acee"
+    }
+  },
+  "command_passed": 117,
+  "new_resource_controls_passed": 3,
+  "existing_command_passed": 114,
+  "new_names": [
+    "qualified_resources_match_full_ids_without_restarting_at_the_colon",
+    "tag_resources_require_hash_for_nonempty_queries_and_match_path_suffixes",
+    "unqualified_resources_match_namespace_or_path_at_word_boundaries"
+  ],
+  "footer": "ok. 117 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+  "review_status": "INDEPENDENT_SOURCE_REVIEW_ACTIVE",
+  "ROOT_integration": "NOTYET",
+  "limits": "Affected command Clippy and full command library only; no current combined full native/runtime/parser or clone parity claim."
+}
