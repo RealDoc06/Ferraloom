@@ -76,7 +76,7 @@ pub enum BlockEntityLoadError {
 }
 
 /// One operation's supported custom/component projection, never a live entity
-/// or another persistent NBT owner. World verifies kind against loaded terrain.
+/// or another persistent NBT owner. `World` verifies kind against loaded terrain.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockEntityCloneData {
     pub(crate) kind: &'static str,
@@ -124,7 +124,7 @@ pub trait BlockEntity: Any + Send + Sync {
     }
 
     /// Decode before one state commit, publishing destination-identity NBT while
-    /// locked. The sink is pure cache work, with the same contract as edit_nbt.
+    /// locked. The sink is pure cache work, with the same contract as `edit_nbt`.
     fn restore_from_clone(
         &self,
         _data: &BlockEntityCloneData,

@@ -349,6 +349,10 @@ fn save_custom_data(
 
 struct BlockWriteOutcome {
     legacy: BlockStateId,
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     counted: bool,
 }
 
@@ -6614,6 +6618,10 @@ impl World {
     }
 
     /// Clone's changed-write result, without changing the legacy setters' policy.
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     pub(crate) fn set_block_state_counted(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -6632,6 +6640,10 @@ impl World {
             .counted
     }
 
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     pub(crate) fn is_debug(&self) -> bool {
         self.level_info
             .load()
@@ -6858,6 +6870,10 @@ impl World {
     }
 
     /// Completes clone's ordinary final walk using the pre-mutation destination.
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     pub(crate) fn update_neighbours_on_block_set(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -7836,8 +7852,12 @@ impl World {
             && level_data.difficulty != Difficulty::Peaceful
     }
 
-    /// Nonmaterializing clone capture. Live ownership is map -> ChestState;
+    /// Nonmaterializing clone capture. Live ownership is map -> `ChestState`;
     /// pending ownership is map -> pending record -> detached supported decode.
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     pub(crate) fn snapshot_block_entity_for_clone(
         &self,
         position: &BlockPos,
@@ -7914,7 +7934,11 @@ impl World {
     }
 
     /// Restore into the current destination allocation, under the same exact
-    /// map/type ownership as edit_block_entity_nbt. No source Arc is installed.
+    /// map/type ownership as `edit_block_entity_nbt`. No source Arc is installed.
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "Consumed by future clone command integration.")
+    )]
     pub(crate) fn restore_cloned_block_entity(
         self: &Arc<Self>,
         position: &BlockPos,

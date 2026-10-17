@@ -11,6 +11,10 @@ use crate::server::Server;
 
 /// The initial clone codec is deliberately limited to these three 27-slot
 /// containers. Other terrain with a BE is an explicit unsupported projection.
+#[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "Consumed by future clone command integration.")
+)]
 pub(crate) fn clone_kind(
     state: pumpkin_data::BlockStateId,
 ) -> Result<Option<&'static str>, BlockEntityLoadError> {
@@ -94,6 +98,10 @@ fn validate_clone_nbt(
     Ok(())
 }
 
+#[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "Consumed by future clone command integration.")
+)]
 pub(crate) fn snapshot_pending_for_clone(
     kind: &'static str,
     position: pumpkin_util::math::position::BlockPos,
