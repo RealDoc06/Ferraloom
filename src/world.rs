@@ -60,7 +60,7 @@ impl Chunk {
 
     pub fn packet(&self, x: i32, z: i32, biome: i32) -> Vec<u8> {
         let mut sections = Vec::new();
-        for section in self.blocks.chunks_exact(4096) {
+        for section in self.blocks.as_chunks::<4096>().0 {
             let count = section.iter().filter(|&&state| state != AIR).count() as u16;
             sections.extend_from_slice(&count.to_be_bytes());
             sections.extend_from_slice(&0u16.to_be_bytes()); // No fluids in this generator.

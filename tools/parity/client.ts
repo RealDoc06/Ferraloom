@@ -71,6 +71,35 @@ class Reader {
   string() { return this.take(this.varInt()).toString('utf8'); }
 }
 
+type KnownPack = { namespace: string; id: string; version: string };
+
+/** Opt-in known-pack negotiation only; it does not validate registry contents. */
+export function encodeKnownPacksResponse(payload: Buffer, acceptCore = false): Buffer {
+  if (!acceptCore) return varInt(0);
+  const reader = new Reader(payload);
+  if (reader.varInt() !== ids.config.knownPacks) throw new Error('Expected known-packs offer');
+  const count = reader.varInt();
+  if (count < 0 || count > 64) throw new Error('Invalid known-packs count');
+  function packString(): string {
+    const length = reader.varInt();
+    if (length < 0 || length > 32767 * 3) throw new Error('Invalid known-pack string length');
+    const bytes = reader.take(length), value = bytes.toString('utf8');
+    if (value.length > 32767 || !Buffer.from(value, 'utf8').equals(bytes)) throw new Error('Invalid known-pack UTF8');
+    return value;
+  }
+  let selected: KnownPack | null = null;
+  for (let index = 0; index < count; index++) {
+    const pack: KnownPack = { namespace: packString(), id: packString(), version: packString() };
+    if (pack.namespace === 'minecraft' && pack.id === 'core' && pack.version === VERSION) {
+      if (selected !== null) throw new Error('Duplicate known core pack');
+      selected = pack;
+    }
+  }
+  if (reader.offset !== payload.length) throw new Error('Trailing known-packs bytes');
+  return selected === null ? varInt(0)
+    : Buffer.concat([varInt(1), string(selected.namespace), string(selected.id), string(selected.version)]);
+}
+
 export type PlainStack = { item_id: number; count: number; components?: Record<string, unknown>; removed_components?: string[] } | null;
 export type ContainerPacket =
   | { kind: 'open'; packet_id: 60; container_id: number; menu_type: number; title: string;
@@ -958,7 +987,7 @@ function main() {
     'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
     'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false },
     'jukeboxes': { type: 'boolean', default: false }, 'crafting': { type: 'boolean', default: false },
-    'dragon-parts': { type: 'boolean', default: false } } });
+    'dragon-parts': { type: 'boolean', default: false }, 'known-core-pack': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   if (values.horns && !values['block-data']) throw new Error('--horns requires --block-data');
@@ -1138,7 +1167,7 @@ function main() {
           payload_base64: payload.toString('base64'), payload_sha256: createHash('sha256').update(payload).digest('hex') };
         emit({ event: 'jukebox_registry', ...state.jukebox_registry });
       }
-      if (id === ids.config.knownPacks) send(7, varInt(0));
+      if (id === ids.config.knownPacks) send(7, encodeKnownPacksResponse(payload, values['known-core-pack']));
       if (id === ids.config.conduct) send(9);
       if (id === ids.config.finish) {
         if (values.horns && state.horn_registry === null) throw new Error('Missing instrument registry before PLAY');

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, decodeContainerPacket, decodeContainerTitle, decodeStatisticsPacket, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
+import { COMMAND_ARGUMENT_TYPES, PROTOCOL, VERSION, decodeCommandTree, decodeCompressedPacket, decodeContainerPacket, decodeContainerTitle, decodeStatisticsPacket, encodeKnownPacksResponse, parseCommand, readVarInt, varInt } from '../tools/parity/client.ts';
 import { HORN_NAMES, crc32c, decodeHornContainerPacket, decodeHornCooldownPacket, decodeHornEntitySoundPacket, decodeHornLoginHeader, decodeHornRegistryPacket,
   encodeHornSelect, encodeHornStackHash, encodeHornSwap, encodeHornUse, hornRegistryEntries,
   instrumentHashPreimage, referenceName } from '../tools/parity/horns.ts';
@@ -36,6 +36,40 @@ test('VarInt decoding distinguishes partial frames, signed values, and overflow'
   assert.deepEqual(readVarInt(varInt(777)), { value: 777, bytes: 2 });
   assert.throws(() => readVarInt(Buffer.from([128, 128, 128, 128, 16])));
   assert.throws(() => readVarInt(Buffer.from([128, 128, 128, 128, 128, 0])));
+});
+
+test('known-core-pack selection is off by default and selects only an exact offered tuple', () => {
+  const core = Buffer.concat([wireString('minecraft'), wireString('core'), wireString('26.3')]);
+  const offer = Buffer.concat([Buffer.from([15, 1]), core]);
+  assert.deepEqual(encodeKnownPacksResponse(offer), Buffer.from([0]));
+  assert.deepEqual(encodeKnownPacksResponse(offer, true), Buffer.concat([Buffer.from([1]), core]));
+  assert.deepEqual(encodeKnownPacksResponse(Buffer.from([15, 0]), true), Buffer.from([0]));
+  for (const [namespace, id, version] of [
+    ['test', 'core', '26.3'], ['minecraft', 'other', '26.3'], ['minecraft', 'core', '26.2'],
+  ] as const) {
+    const wrong = Buffer.concat([wireString(namespace), wireString(id), wireString(version)]);
+    assert.deepEqual(encodeKnownPacksResponse(Buffer.concat([Buffer.from([15, 1]), wrong]), true), Buffer.from([0]));
+    assert.deepEqual(encodeKnownPacksResponse(Buffer.concat([Buffer.from([15, 2]), wrong, core]), true),
+      Buffer.concat([Buffer.from([1]), core]));
+  }
+});
+
+test('opt-in known-pack selection rejects malformed offers and duplicate exact packs', () => {
+  const core = Buffer.concat([wireString('minecraft'), wireString('core'), wireString('26.3')]);
+  const offer = Buffer.concat([Buffer.from([15, 1]), core]);
+  for (let end = 0; end < offer.length; end++) {
+    assert.throws(() => encodeKnownPacksResponse(offer.subarray(0, end), true));
+  }
+  for (const malformed of [
+    Buffer.from([14, 0]), Buffer.from([15, 65]),
+    Buffer.concat([Buffer.from([15]), varInt(-1)]),
+    Buffer.concat([Buffer.from([15, 1]), varInt(-1)]),
+    Buffer.concat([Buffer.from([15, 1]), varInt(32767 * 3 + 1)]),
+    Buffer.concat([Buffer.from([15, 1]), wireString('a'.repeat(32768)), Buffer.from([0, 0])]),
+    Buffer.from([15, 1, 1, 255, 0, 0]),
+    Buffer.concat([offer, Buffer.from([0])]),
+    Buffer.concat([Buffer.from([15, 2]), core, core]),
+  ]) assert.throws(() => encodeKnownPacksResponse(malformed, true));
 });
 
 test('compression validates declared lengths rather than accepting corrupt payloads', () => {

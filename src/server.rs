@@ -143,10 +143,9 @@ impl Server {
                         tokio::select! {
                             result = serve(socket, &config, &state) => {
                                 // Malformed/disconnected peers are isolated to their connection.
-                                if let Err(error) = result {
-                                    if !matches!(error.kind(), io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset | io::ErrorKind::BrokenPipe | io::ErrorKind::InvalidData | io::ErrorKind::TimedOut) {
+                                if let Err(error) = result
+                                    && !matches!(error.kind(), io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset | io::ErrorKind::BrokenPipe | io::ErrorKind::InvalidData | io::ErrorKind::TimedOut) {
                                         eprintln!("connection: {error}");
-                                    }
                                 }
                             }
                             _ = stop.changed() => {}
