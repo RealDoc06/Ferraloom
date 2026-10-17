@@ -963,6 +963,78 @@ fn feature_codec_boundaries_and_exclusive_alternatives_match_vanilla() {
 }
 
 #[test]
+fn all_block_predicates_match_vanilla_with_fixed_world_reads() {
+    use ferraloom_data::{Block, BlockState};
+    use ferraloom_worldgen::{
+        Error,
+        placement::predicate::{BlockPredicate, PredicateDecodeData},
+        region::{ChunkStatus, WorldGenRegion, WorldgenBlockBehavior},
+    };
+    struct PredicateBehavior;
+    impl WorldgenBlockBehavior for PredicateBehavior {
+        fn post_process_pos(
+            &self,
+            _: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(None)
+        }
+        fn can_survive(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<bool, Error> {
+            // This fixture exercises only vanilla's unconditional stone rule.
+            assert_eq!(state.block(), Block::STONE);
+            Ok(true)
+        }
+        fn is_unobstructed(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            p: [i32; 3],
+        ) -> Result<bool, Error> {
+            assert_eq!(state.block(), Block::STONE);
+            Ok(p[0] & 1 == 0)
+        }
+    }
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let data = PredicateDecodeData::load(&resources).unwrap();
+    let mut chunks = fixture_chunks(&generator, [0, 0], 1);
+    for chunk in &mut chunks {
+        generator.create_biomes(&mut chunk.chunk);
+    }
+    let region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 2],
+        0,
+        None,
+        &PredicateBehavior,
+        generator.random.seed,
+        generator.settings.sea_level,
+    )
+    .unwrap();
+    let cases = golden(include_bytes!("golden/predicates.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let predicate = BlockPredicate::decode(&case["config"], &data).unwrap();
+        for sample in case["samples"].as_array().unwrap() {
+            let p = std::array::from_fn(|i| sample["position"][i].as_i64().unwrap() as i32);
+            assert_eq!(
+                predicate.test(&region, p, &generator).unwrap(),
+                sample["result"].as_bool().unwrap(),
+                "{} at {p:?}",
+                case["config"]
+            );
+        }
+    }
+}
+
+#[test]
 fn protochunk_heightmap_priming_freezing_and_bulk_writes_match_vanilla() {
     use ferraloom_data::Block;
     use ferraloom_worldgen::region::*;
