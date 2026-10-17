@@ -1411,6 +1411,93 @@
           }
         }
       }
+    },
+    {
+      "bytes": "000e6d696e6563726166743a746573740141800000",
+      "hash": 1498343070,
+      "name": "sample",
+      "nbt": "0a080008736f756e645f6964000e6d696e6563726166743a7465737405000572616e67654180000000",
+      "type": "minecraft:break_sound",
+      "value": {
+        "range": 16.0,
+        "sound_id": "minecraft:test"
+      }
+    },
+    {
+      "bytes": "000e6d696e6563726166743a746573740a0800047465787400054d6574616c010004626f6c640100",
+      "hash": -787589590,
+      "name": "sample",
+      "nbt": "0a08000a70616c657474655f6964000e6d696e6563726166743a746573740a000b6465736372697074696f6e0800047465787400054d6574616c010004626f6c64010000",
+      "type": "minecraft:provides_trim_material",
+      "value": {
+        "description": {
+          "bold": true,
+          "text": "Metal"
+        },
+        "palette_id": "minecraft:test"
+      }
+    },
+    {
+      "bytes": "00000e6d696e6563726166743a74657374004000000041000000020a080004746578740004486f726e0100066974616c69630100",
+      "hash": -1504742915,
+      "name": "sample",
+      "nbt": "0a0a000b736f756e645f6576656e74080008736f756e645f6964000e6d696e6563726166743a74657374000300116475726162696c6974795f64616d6167650000000205000572616e6765410000000a000b6465736372697074696f6e080004746578740004486f726e0100066974616c6963010005000c7573655f6475726174696f6e4000000000",
+      "type": "minecraft:instrument",
+      "value": {
+        "description": {
+          "italic": true,
+          "text": "Horn"
+        },
+        "durability_damage": 2,
+        "range": 8.0,
+        "sound_event": {
+          "sound_id": "minecraft:test"
+        },
+        "use_duration": 2.0
+      }
+    },
+    {
+      "bytes": "01000e6d696e6563726166743a746573740b62616e6e65722e746573740e",
+      "hash": 1369697644,
+      "name": "sample",
+      "nbt": "090a00000001080005636f6c6f7200037265640a00077061747465726e08000f7472616e736c6174696f6e5f6b6579000b62616e6e65722e7465737408000861737365745f6964000e6d696e6563726166743a746573740000",
+      "type": "minecraft:banner_patterns",
+      "value": [
+        {
+          "color": "red",
+          "pattern": {
+            "asset_id": "minecraft:test",
+            "translation_key": "banner.test"
+          }
+        }
+      ]
+    },
+    {
+      "bytes": "ff0100",
+      "hash": -400630225,
+      "name": "sample",
+      "nbt": "0a01000f666c696768745f6475726174696f6eff00",
+      "type": "minecraft:fireworks",
+      "value": {
+        "flight_duration": -1
+      }
+    },
+    {
+      "bytes": "00000112ff010a0001010000",
+      "hash": 1624134081,
+      "name": "sample",
+      "nbt": "0a09000e637573746f6d5f656666656374730a000000010300086475726174696f6e0000000a01000973686f775f69636f6e01010009616d706c6966696572ff080002696400106d696e6563726166743a706f69736f6e0000",
+      "type": "minecraft:potion_contents",
+      "value": {
+        "custom_effects": [
+          {
+            "amplifier": -1,
+            "duration": 10,
+            "id": "minecraft:poison",
+            "show_icon": true
+          }
+        ]
+      }
     }
   ],
   "empty": "00",
@@ -1437,6 +1524,8 @@
   "nested": "01940301004d03019a080103010307000a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d000d012103090001ef07020000",
   "nested_hashed": "01940301014dba61558400",
   "nested_untrusted": "01940301004d3d03019a080103010307000a030006616e737765720000002a080007756e69636f6465000c68656c6c6f20eda0bcedbc8d000d012103090001ef07020000",
+  "redundant_stack_input": "019a080101030048",
+  "redundant_stack_output": "019a080000",
   "registries": {
     "minecraft:activity": [
       "minecraft:core",
@@ -9049,6 +9138,7 @@
       "minecraft:warm"
     ]
   },
+  "scalar_patch_untrusted": "0100030107",
   "serializers": {
     "ARMADILLO_STATE": 36,
     "BLOCK_POS": 10,

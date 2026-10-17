@@ -170,6 +170,12 @@ public final class ComponentFixtures {
         sample("map_decorations","{\"test\":{\"type\":\"minecraft:target_x\",\"x\":10.5,\"z\":-20.0,\"rotation\":45.5}}");
         sample("can_place_on","{\"blocks\":[\"minecraft:oak_log\"],\"state\":{\"axis\":\"y\"},\"nbt\":\"{id:\\\"minecraft:chest\\\",foo:3}\"}");
         sample("lock","{\"components\":{\"minecraft:custom_name\":{\"text\":\"key\",\"bold\":true}},\"predicates\":{\"minecraft:damage\":{\"damage\":{\"min\":1}}}}");
+        sample("break_sound","{\"sound_id\":\"minecraft:test\",\"range\":16.0}");
+        sample("provides_trim_material","{\"palette_id\":\"minecraft:test\",\"description\":{\"text\":\"Metal\",\"bold\":true}}");
+        sample("instrument","{\"sound_event\":{\"sound_id\":\"minecraft:test\"},\"use_duration\":2.0,\"range\":8.0,\"durability_damage\":2,\"description\":{\"text\":\"Horn\",\"italic\":true}}");
+        sample("banner_patterns","[{\"pattern\":{\"asset_id\":\"minecraft:test\",\"translation_key\":\"banner.test\"},\"color\":\"red\"}]");
+        sample("fireworks","{\"flight_duration\":255}");
+        sample("potion_contents","{\"custom_effects\":[{\"id\":\"minecraft:poison\",\"amplifier\":255,\"duration\":10}]}");
         fixtures.add("components",components);
         var serializers = new JsonObject();
         for (var field:EntityDataSerializers.class.getFields()) if(field.getType()==EntityDataSerializer.class) serializers.addProperty(field.getName(),EntityDataSerializers.getSerializedId((EntityDataSerializer<?>)field.get(null)));
@@ -231,6 +237,14 @@ public final class ComponentFixtures {
         metadata(allMetadata,"HUMANOID_ARM",net.minecraft.world.entity.HumanoidArm.LEFT);
         metadata(allMetadata,"DYE_COLOR",DyeColor.CYAN);
         fixtures.addProperty("all_entity_data",bytes(net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.STREAM_CODEC,new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(42,allMetadata)));
+        var rawStack = new RegistryFriendlyByteBuf(Unpooled.buffer(),access);
+        rawStack.writeVarInt(1); Item.STREAM_CODEC.encode(rawStack,Items.DIAMOND_SWORD.builtInRegistryHolder());
+        DataComponentPatch.STREAM_CODEC.encode(rawStack,DataComponentPatch.builder().set(DataComponents.DAMAGE,0).remove(DataComponents.PROFILE).build());
+        byte[] redundant = new byte[rawStack.readableBytes()];rawStack.getBytes(rawStack.readerIndex(),redundant);
+        fixtures.addProperty("redundant_stack_input",HexFormat.of().formatHex(redundant));
+        fixtures.addProperty("redundant_stack_output",bytes(ItemStack.OPTIONAL_STREAM_CODEC,ItemStack.OPTIONAL_STREAM_CODEC.decode(rawStack)));
+        rawStack.release();
+        fixtures.addProperty("scalar_patch_untrusted",bytes(DataComponentPatch.DELIMITED_STREAM_CODEC,DataComponentPatch.builder().set(DataComponents.DAMAGE,7).build()));
         var hashOps = HashOps.CRC32C_INSTANCE;
         var hashes = new JsonArray();
         for(var value:List.of(hashOps.empty(),hashOps.createBoolean(false),hashOps.createBoolean(true),hashOps.createByte((byte)-5),hashOps.createShort((short)1000),hashOps.createInt(-300),hashOps.createLong(12345678901234L),hashOps.createFloat(1.25f),hashOps.createDouble(-1.75),hashOps.createString("hello 🌍"),hashOps.createByteList(java.nio.ByteBuffer.wrap(new byte[]{-1,2,3})),hashOps.createIntList(java.util.stream.IntStream.of(-1,2,300)),hashOps.createLongList(java.util.stream.LongStream.of(-1,2,300)),hashOps.createList(java.util.stream.Stream.of(hashOps.createInt(1),hashOps.createInt(2))),hashOps.createMap(java.util.stream.Stream.of(com.mojang.datafixers.util.Pair.of(hashOps.createString("x"),hashOps.createFloat(1.5f)),com.mojang.datafixers.util.Pair.of(hashOps.createString("y"),hashOps.createBoolean(true)))))) hashes.add(value.asInt());

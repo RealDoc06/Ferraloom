@@ -26,7 +26,7 @@ impl PersistentValue {
     pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
         Ok(match self {
             Self::Nbt(v) => return encode_nbt(v, ops),
-            Self::Component(v) => return v.encode_ops(ops),
+            Self::Component(v) => return v.as_ref().encode_ops(ops),
             Self::Boolean(v) => ops.create_boolean(*v),
             Self::String(v) => ops.create_string_utf16(v.as_utf16()),
             Self::Int(v) => ops.create_int(*v),
@@ -615,7 +615,14 @@ impl Persistent for Sound {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(SoundEvent::from_json(v)?)
+            Holder::Direct(Box::new(SoundEvent::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(SoundEvent::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -630,7 +637,14 @@ impl Persistent for TrimMaterialHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimMaterial::from_json(v)?)
+            Holder::Direct(Box::new(TrimMaterial::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimMaterial::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -645,7 +659,14 @@ impl Persistent for TrimPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(TrimPattern::from_json(v)?)
+            Holder::Direct(Box::new(TrimPattern::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(TrimPattern::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -660,7 +681,14 @@ impl Persistent for InstrumentHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(Instrument::from_json(v)?)
+            Holder::Direct(Box::new(Instrument::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(Instrument::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -687,7 +715,14 @@ impl Persistent for BannerPatternHolder {
         Ok(Self(if v.is_string() {
             Holder::Reference(Identifier::from_json(v)?)
         } else {
-            Holder::Direct(BannerPattern::from_json(v)?)
+            Holder::Direct(Box::new(BannerPattern::from_json(v)?))
+        }))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(if matches!(v, Tag::String(_)) {
+            Holder::Reference(Identifier::from_nbt(v)?)
+        } else {
+            Holder::Direct(Box::new(BannerPattern::from_nbt(v)?))
         }))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1179,10 +1214,7 @@ persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
 impl Persistent for Fireworks {
     fn from_json(v: &Json) -> Result<Self> {
-        let flight_duration = field::<VarInt>(v, "flight_duration", Some(VarInt(0)))?;
-        if !(0..=255).contains(&flight_duration.0) {
-            return Err(invalid("fireworks flight duration"));
-        }
+        let flight_duration = VarInt(field::<i32>(v, "flight_duration", Some(0))? as u8 as i32);
         Ok(Self {
             flight_duration,
             explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
@@ -1384,6 +1416,10 @@ impl Persistent for ItemStackTemplate {
         )
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
+        if !(1..=99).contains(&self.count) || self.item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack template"));
+        }
+
         let mut v = vec![("id".into(), self.item.to_persistent()?)];
         entry(&mut v, "count", &self.count, Some(1))?;
         entry(
@@ -1432,7 +1468,7 @@ impl Persistent for DataComponentPatch {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = Vec::new();
-        for c in &self.added {
+        for c in self.added.iter().filter(|v| !v.is_transient()) {
             v.push((c.component_type().name().into(), c.to_persistent()?));
         }
         for c in &self.removed {
@@ -1635,7 +1671,7 @@ impl Persistent for MobEffectDetails {
     fn from_json(v: &Json) -> Result<Self> {
         let show_particles = field(v, "show_particles", Some(true))?;
         Ok(Self {
-            amplifier: field(v, "amplifier", Some(VarInt(0)))?,
+            amplifier: VarInt(field::<i32>(v, "amplifier", Some(0))? as u8 as i32),
             duration: field(v, "duration", Some(VarInt(0)))?,
             ambient: field(v, "ambient", Some(false))?,
             show_particles,
@@ -2104,7 +2140,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::UseEffects(<UseEffects as Persistent>::from_json(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_json(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_json(value)?)
@@ -2113,7 +2149,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::DamageType(<DamageType as Persistent>::from_json(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_json(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_json(value)?)
@@ -2408,10 +2444,10 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             <DecoratedPotPattern as Persistent>::from_json(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_json(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_json(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_json(value)?),
         "minecraft:cushion/color" => {
@@ -2441,7 +2477,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::UseEffects(<UseEffects as Persistent>::from_nbt(value)?)
         }
         "minecraft:custom_name" => {
-            DataComponent::CustomName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::CustomName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:minimum_attack_charge" => {
             DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_nbt(value)?)
@@ -2450,7 +2486,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::DamageType(<DamageType as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_name" => {
-            DataComponent::ItemName(<Component as Persistent>::from_nbt(value)?)
+            DataComponent::ItemName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:item_model" => {
             DataComponent::ItemModel(<Identifier as Persistent>::from_nbt(value)?)
@@ -2745,10 +2781,10 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             <DecoratedPotPattern as Persistent>::from_nbt(value)?,
         ),
         "minecraft:sign_text_front" => {
-            DataComponent::SignTextFront(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextFront(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:sign_text_back" => {
-            DataComponent::SignTextBack(<SignText as Persistent>::from_nbt(value)?)
+            DataComponent::SignTextBack(<Box<SignText> as Persistent>::from_nbt(value)?)
         }
         "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_nbt(value)?),
         "minecraft:cushion/color" => {
@@ -2951,4 +2987,51 @@ fn container_from_nbt(v: &Tag) -> Result<BoundedList<Option<ItemStackTemplate>, 
         items[slot] = Some(field_nbt(v, "item", None)?);
     }
     Ok(BoundedList(items))
+}
+impl Persistent for ItemStack {
+    fn from_json(value: &Json) -> Result<Self> {
+        let item = field(value, "id", None)?;
+        let count = field::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn from_nbt(value: &Tag) -> Result<Self> {
+        let item = field_nbt(value, "id", None)?;
+        let count = field_nbt::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field_nbt(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        let value = self
+            .0
+            .as_ref()
+            .filter(|_| !self.is_empty())
+            .ok_or_else(|| invalid("empty item stack"))?;
+        if !(1..=99).contains(&value.count) {
+            return Err(invalid("item stack count"));
+        }
+        let mut entries = vec![
+            ("id".into(), value.item.to_persistent()?),
+            ("count".into(), value.count.to_persistent()?),
+        ];
+        entry(
+            &mut entries,
+            "components",
+            &value.components,
+            Some(DataComponentPatch::default()),
+        )?;
+        Ok(PersistentValue::Map(entries))
+    }
 }

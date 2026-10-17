@@ -133,6 +133,14 @@ fn vanilla_persistent_component_hashes() {
             }
             if let Some(expected) = fixture.get("nbt").and_then(Value::as_str) {
                 let expected = unhex(expected);
+                let mut nbt_reader = Reader::new(&expected);
+                let tag = nbt_reader.nbt(false).unwrap();
+                match DataComponent::from_nbt(&key, &tag) {
+                    Ok(restored) if restored == value => {}
+                    other => mismatches.push(format!(
+                        "{key} persistent NBT decode: {other:?}, expected {value:?}"
+                    )),
+                }
                 let mut writer = Writer::new();
                 match value.to_nbt().and_then(|v| writer.nbt(&v)) {
                     Ok(()) if writer.as_slice() == expected => {}
@@ -251,4 +259,35 @@ fn item_defaults_merge_with_additions_and_explicit_removals() {
         components.get(ComponentTypeId::CUSTOM_DATA),
         Some(DataComponent::CustomData(_))
     ));
+}
+#[test]
+fn vanilla_stack_patch_normalization() {
+    let (f, registries) = fixtures();
+    let input = unhex(f["redundant_stack_input"].as_str().unwrap());
+    let mut r = Reader::with_context(&input, &registries);
+    let stack: ItemStack = r.read().unwrap();
+    r.finish().unwrap();
+    assert!(stack.0.as_ref().unwrap().components.added.is_empty());
+    assert!(stack.0.as_ref().unwrap().components.removed.is_empty());
+    let mut w = Writer::with_context(&registries);
+    w.write(&stack).unwrap();
+    assert_eq!(
+        w.as_slice(),
+        unhex(f["redundant_stack_output"].as_str().unwrap())
+    );
+}
+#[test]
+fn vanilla_scalar_untrusted_patch_needs_no_registry_context() {
+    let (f, _) = fixtures();
+    let bytes = unhex(f["scalar_patch_untrusted"].as_str().unwrap());
+    let mut reader = Reader::new(&bytes);
+    let patch = DataComponentPatch::decode_delimited(&mut reader).unwrap();
+    reader.finish().unwrap();
+    assert_eq!(
+        patch.added,
+        vec![DataComponent::Damage(crate::codec::VarInt(7))]
+    );
+    let mut writer = Writer::new();
+    patch.encode_delimited(&mut writer).unwrap();
+    assert_eq!(writer.as_slice(), bytes);
 }
