@@ -207,21 +207,21 @@ fn write_one(
     order: &mut VecDeque<ChunkPos>,
     failures: &mut Vec<String>,
 ) {
-    if let Some(pos) = order.pop_front() {
-        if let Some(pending) = pending.remove(&pos) {
-            let result = storage.write(pos, pending.data.as_ref());
-            let error = result.err().map(|e| e.to_string());
-            if let Some(error) = &error {
-                log::error!("Failed to store chunk {pos:?}: {error}");
-                failures.push(error.clone());
-            }
-            for reply in pending.replies {
-                reply.finish(
-                    error
-                        .as_ref()
-                        .map_or(Ok(()), |e| Err(Error::Invalid(e.clone()))),
-                );
-            }
+    if let Some(pos) = order.pop_front()
+        && let Some(pending) = pending.remove(&pos)
+    {
+        let result = storage.write(pos, pending.data.as_ref());
+        let error = result.err().map(|e| e.to_string());
+        if let Some(error) = &error {
+            log::error!("Failed to store chunk {pos:?}: {error}");
+            failures.push(error.clone());
+        }
+        for reply in pending.replies {
+            reply.finish(
+                error
+                    .as_ref()
+                    .map_or(Ok(()), |e| Err(Error::Invalid(e.clone()))),
+            );
         }
     }
 }

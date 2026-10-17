@@ -171,10 +171,12 @@ impl NbtField for BlockStatePaletteEntry {
         }
     }
     fn to_tag(&self) -> Tag {
-        if self.shorthand && self.properties.is_none() && self.extra.is_empty() {
-            if let Some(name) = &self.name {
-                return name.to_tag();
-            }
+        if self.shorthand
+            && self.properties.is_none()
+            && self.extra.is_empty()
+            && let Some(name) = &self.name
+        {
+            return name.to_tag();
         }
         Tag::Compound(self.to_nbt())
     }

@@ -64,10 +64,10 @@ pub(crate) fn replace(path: &Path, tmp: &Path, backup: Option<&Path>) -> Result<
         retry(&mut || fs::rename(path, backup))?;
     }
     if let Err(e) = retry(&mut || fs::rename(tmp, path)) {
-        if let Some(backup) = backup.filter(|p| p.exists()) {
-            if let Err(restore) = retry(&mut || fs::rename(backup, path)) {
-                log::error!("Failed to restore {}: {restore}", path.display());
-            }
+        if let Some(backup) = backup.filter(|p| p.exists())
+            && let Err(restore) = retry(&mut || fs::rename(backup, path))
+        {
+            log::error!("Failed to restore {}: {restore}", path.display());
         }
         return Err(e.into());
     }

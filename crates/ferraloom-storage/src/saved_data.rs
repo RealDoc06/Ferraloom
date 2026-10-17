@@ -159,14 +159,14 @@ impl SavedDataStorage {
         let mut error = None;
         for id in ids {
             let path = self.data_file(&id)?;
-            if let Some(Some(data)) = self.cache.get_mut(&id) {
-                if data.is_dirty() {
-                    match write(&path, data) {
-                        Ok(()) => data.set_dirty(false),
-                        Err(e) => {
-                            log::error!("Could not save {id}: {e}");
-                            error = Some(e);
-                        }
+            if let Some(Some(data)) = self.cache.get_mut(&id)
+                && data.is_dirty()
+            {
+                match write(&path, data) {
+                    Ok(()) => data.set_dirty(false),
+                    Err(e) => {
+                        log::error!("Could not save {id}: {e}");
+                        error = Some(e);
                     }
                 }
             }

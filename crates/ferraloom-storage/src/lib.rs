@@ -12,11 +12,12 @@ mod worker;
 
 pub use compression::RegionFileVersion;
 pub use error::{Error, Result};
+pub use ferraloom_util::ChunkPos;
 pub use level::{
     DimensionPaths, DirectoryLock, LevelData, LevelStorageAccess, LevelStorageSource, LevelSummary,
     PlayerDataStorage, PlayerJsonKind,
 };
-pub use region::{ChunkPos, RegionBitmap, RegionFile, RegionFileStorage};
+pub use region::{RegionBitmap, RegionFile, RegionFileStorage};
 pub use saved_data::{SavedData, SavedDataCodec, SavedDataStorage};
 pub use schema::*;
 pub use worker::{IoTask, IoWorker};

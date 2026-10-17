@@ -1,4 +1,4 @@
-use crate::{Error, RegionFileVersion, Result, files};
+use crate::{ChunkPos, Error, RegionFileVersion, Result, files};
 use ferraloom_nbt::{CompoundTag, Compression, NbtAccounter, NbtIo};
 use std::{
     collections::{HashMap, VecDeque},
@@ -11,22 +11,8 @@ use std::{
 const SECTOR: usize = 4096;
 const HEADER: usize = 8192;
 
-/// Port of ChunkPos's storage coordinates (arithmetic right shift handles negative chunks).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ChunkPos {
-    pub x: i32,
-    pub z: i32,
-}
-impl ChunkPos {
-    pub const fn new(x: i32, z: i32) -> Self {
-        Self { x, z }
-    }
-    pub const fn region(self) -> (i32, i32) {
-        (self.x >> 5, self.z >> 5)
-    }
-    pub const fn offset_index(self) -> usize {
-        ((self.x & 31) + (self.z & 31) * 32) as usize
-    }
+fn offset_index(pos: ChunkPos) -> usize {
+    (pos.region_local_x() + 32 * pos.region_local_z()) as usize
 }
 
 /// Port of RegionBitmap's first-fit allocation. Old sectors stay reserved until commit.
@@ -154,10 +140,10 @@ impl RegionFile {
         &self.path
     }
     pub fn offset(&self, pos: ChunkPos) -> u32 {
-        header_int(&self.header, pos.offset_index())
+        header_int(&self.header, offset_index(pos))
     }
     pub fn timestamp(&self, pos: ChunkPos) -> u32 {
-        header_int(&self.header, 1024 + pos.offset_index())
+        header_int(&self.header, 1024 + offset_index(pos))
     }
     pub fn has_chunk(&self, pos: ChunkPos) -> bool {
         self.offset(pos) != 0
@@ -304,10 +290,10 @@ impl RegionFile {
             }
             set_header_int(
                 &mut self.header,
-                pos.offset_index(),
+                offset_index(pos),
                 ((start as u32) << 8) | count as u32,
             );
-            set_header_int(&mut self.header, 1024 + pos.offset_index(), timestamp());
+            set_header_int(&mut self.header, 1024 + offset_index(pos), timestamp());
             self.write_header()?;
             if let Some(tmp) = external_tmp.as_ref() {
                 fs::rename(tmp, self.external_path(pos))?;
@@ -334,8 +320,8 @@ impl RegionFile {
         if old == 0 {
             return Ok(());
         }
-        set_header_int(&mut self.header, pos.offset_index(), 0);
-        set_header_int(&mut self.header, 1024 + pos.offset_index(), timestamp());
+        set_header_int(&mut self.header, offset_index(pos), 0);
+        set_header_int(&mut self.header, 1024 + offset_index(pos), timestamp());
         self.write_header()?;
         files::remove_if_exists(&self.external_path(pos))?;
         self.used.free((old >> 8) as usize, (old & 255) as usize);
@@ -415,7 +401,7 @@ impl RegionFileStorage {
         }
     }
     fn region(&mut self, pos: ChunkPos, create: bool) -> Result<Option<&mut RegionFile>> {
-        let key = pos.region();
+        let key = (pos.region_x(), pos.region_z());
         self.lru.retain(|k| *k != key);
         self.lru.push_front(key);
         if !self.cache.contains_key(&key)
@@ -435,12 +421,11 @@ impl RegionFileStorage {
             };
             self.cache.insert(key, entry);
         }
-        if self.cache.len() > 256 {
-            if let Some(key) = self.lru.pop_back() {
-                if let Some(Some(mut region)) = self.cache.remove(&key) {
-                    region.close()?;
-                }
-            }
+        if self.cache.len() > 256
+            && let Some(key) = self.lru.pop_back()
+            && let Some(Some(mut region)) = self.cache.remove(&key)
+        {
+            region.close()?;
         }
         Ok(self.cache.get_mut(&key).and_then(Option::as_mut))
     }
