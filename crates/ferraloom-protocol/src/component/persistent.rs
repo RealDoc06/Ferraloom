@@ -26,7 +26,7 @@ impl PersistentValue {
     pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
         Ok(match self {
             Self::Nbt(v) => return encode_nbt(v, ops),
-            Self::Component(v) => return v.encode_ops(ops),
+            Self::Component(v) => return v.as_ref().encode_ops(ops),
             Self::Boolean(v) => ops.create_boolean(*v),
             Self::String(v) => ops.create_string_utf16(v.as_utf16()),
             Self::Int(v) => ops.create_int(*v),
