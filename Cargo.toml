@@ -13,6 +13,7 @@ repository = "https://github.com/RealDoc06/Ferraloom"
 ferraloom-util = { path = "crates/ferraloom-util" }
 ferraloom-nbt = { path = "crates/ferraloom-nbt" }
 ferraloom-data = { path = "crates/ferraloom-data" }
+ferraloom-chunk = { path = "crates/ferraloom-chunk" }
 ferraloom-protocol = { path = "crates/ferraloom-protocol" }
 ferraloom-worldgen = { path = "crates/ferraloom-worldgen" }
 ferraloom-storage = { path = "crates/ferraloom-storage" }
