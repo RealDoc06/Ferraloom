@@ -30,10 +30,10 @@ registry_ids!(
     RecipeDisplayId
 );
 
-wire_enum!(InteractionHand { MainHand = 0, OffHand = 1 });
-wire_enum!(Difficulty { Peaceful = 0, Easy = 1, Normal = 2, Hard = 3 });
-wire_enum!(GameType { Survival = 0, Creative = 1, Adventure = 2, Spectator = 3 });
-wire_enum!(SignTextSlot { Back = 0, Front = 1 });
+wire_enum!(InteractionHand { MainHand = 0, OffHand = 1 }, zero);
+wire_enum!(Difficulty { Peaceful = 0, Easy = 1, Normal = 2, Hard = 3 }, wrapping);
+wire_enum!(GameType { Survival = 0, Creative = 1, Adventure = 2, Spectator = 3 }, zero);
+wire_enum!(SignTextSlot { Back = 0, Front = 1 }, zero);
 wire_enum!(SoundSource { Master = 0, Music = 1, Records = 2, Weather = 3, Blocks = 4, Hostile = 5, Neutral = 6, Players = 7, Ambient = 8, Voice = 9, Ui = 10 });
 wire_enum!(EntityAnchor { Feet = 0, Eyes = 1 });
 wire_enum!(RecipeBookType { Crafting = 0, Furnace = 1, BlastFurnace = 2, Smoker = 3 });
@@ -41,8 +41,8 @@ wire_enum!(ClientCommandAction { PerformRespawn = 0, RequestStats = 1, RequestGa
 wire_enum!(PlayerCommandAction { StopSleeping = 0, StartSprinting = 1, StopSprinting = 2, StartRidingJump = 3, StopRidingJump = 4, OpenInventory = 5, StartFallFlying = 6 });
 wire_enum!(PlayerAction { StartDestroyBlock = 0, ChangeDestroyDirection = 1, AbortDestroyBlock = 2, StopDestroyBlock = 3, DropAllItems = 4, DropItem = 5, ReleaseUseItem = 6, SwapItemWithOffhand = 7, Stab = 8 });
 wire_enum!(CommandBlockMode { Sequence = 0, Auto = 1, Redstone = 2 });
-wire_enum!(TestBlockMode { Start = 0, Log = 1, Fail = 2, Accept = 3 });
-wire_enum!(ChatCompletionAction { Add = 0, Remove = 1, Set = 2 });
+wire_enum!(TestBlockMode { Start = 0, Log = 1, Fail = 2, Accept = 3 }, zero);
+wire_enum!(ChatCompletionAction { Add = 0, Remove = 1, Set = 2 }, zero);
 wire_enum!(RemoteDebugSampleType { TickTime = 0 });
 
 packet!(/// Port of Vec3#STREAM_CODEC.
@@ -198,6 +198,228 @@ impl Wire for Input {
             | (u8::from(self.jump) << 4)
             | (u8::from(self.shift) << 5)
             | (u8::from(self.sprint) << 6));
+        Ok(())
+    }
+}
+
+/// Port of GameType#OPTIONAL_STREAM_CODEC; this is a shifted VarInt, not a boolean.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OptionalGameType(pub Option<GameType>);
+impl Wire for OptionalGameType {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        Ok(Self(if id == 0 {
+            None
+        } else {
+            Some(match id {
+                2 => GameType::Creative,
+                3 => GameType::Adventure,
+                4 => GameType::Spectator,
+                _ => GameType::Survival,
+            })
+        }))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(match self.0 {
+            None => 0,
+            Some(GameType::Survival) => 1,
+            Some(GameType::Creative) => 2,
+            Some(GameType::Adventure) => 3,
+            Some(GameType::Spectator) => 4,
+        });
+        Ok(())
+    }
+}
+packet!(/// Port of CommonPlayerSpawnInfo.
+CommonPlayerSpawnInfo {dimension_type:DimensionTypeId,dimension:Identifier,seed:i64,game_type:GameType,previous_game_type:OptionalGameType,is_debug:bool,is_flat:bool,last_death_location:Option<GlobalPos>,portal_cooldown:VarInt,sea_level:VarInt});
+packet!(/// Port of LevelData.RespawnData.
+RespawnData {global_pos:GlobalPos,yaw:f32,pitch:f32});
+packet!(/// Port of ClockNetworkState.
+ClockNetworkState {total_ticks:VarLong,partial_tick:f32,rate:f32});
+packet!(/// Port of ClientboundSetTimePacket's clock map entries.
+ClockUpdate {clock:WorldClockId,state:ClockNetworkState});
+packet!(/// Port of gamerule key/value network entries.
+GameRuleEntry {key:Identifier,value:String});
+packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
+CommandSuggestion {text:String,tooltip:Option<Component>});
+wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2}, zero);
+packet!(/// Port of SwingAnimation.
+SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});
+packet!(/// Port of SoundEvent.DIRECT_STREAM_CODEC.
+SoundEvent {location:Identifier,fixed_range:Option<f32>});
+/// Port of SoundEvent.STREAM_CODEC.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SoundEventHolder(pub crate::codec::Holder<SoundEvent>);
+impl Wire for SoundEventHolder {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        crate::codec::Holder::decode(r, &Identifier::parse("minecraft:sound_event")?).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0
+            .encode(w, &Identifier::parse("minecraft:sound_event")?)
+    }
+}
+
+/// Port of BlockHitResult's offset floats, relative to the packed block position.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockHitResult {
+    pub block_pos: BlockPos,
+    pub direction: ferraloom_util::Direction,
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub offset_z: f32,
+    pub inside: bool,
+    pub world_border_hit: bool,
+}
+impl Wire for BlockHitResult {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let block_pos = r.read()?;
+        let id = r.var_int()?;
+        let direction = match id {
+            0 => ferraloom_util::Direction::Down,
+            1 => ferraloom_util::Direction::Up,
+            2 => ferraloom_util::Direction::North,
+            3 => ferraloom_util::Direction::South,
+            4 => ferraloom_util::Direction::West,
+            5 => ferraloom_util::Direction::East,
+            _ => return Err(Error::invalid("direction", id.to_string())),
+        };
+        Ok(Self {
+            block_pos,
+            direction,
+            offset_x: r.f32()?,
+            offset_y: r.f32()?,
+            offset_z: r.f32()?,
+            inside: r.bool()?,
+            world_border_hit: r.bool()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.block_pos.encode(w)?;
+        w.var_int(self.direction as i32);
+        w.f32(self.offset_x);
+        w.f32(self.offset_y);
+        w.f32(self.offset_z);
+        w.bool(self.inside);
+        w.bool(self.world_border_hit);
+        Ok(())
+    }
+}
+
+/// Port of ByteBufCodecs.TRUSTED_COMPOUND_TAG.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrustedCompoundTag(pub ferraloom_nbt::CompoundTag);
+impl Wire for TrustedCompoundTag {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        match r.nbt(true)? {
+            ferraloom_nbt::Tag::Compound(tag) => Ok(Self(tag)),
+            _ => Err(Error::invalid("NBT", "expected compound")),
+        }
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.nbt(&ferraloom_nbt::Tag::Compound(self.0.clone()))
+    }
+}
+packet!(/// Port of Vec3i#STREAM_CODEC.
+Vec3i {x:VarInt,y:VarInt,z:VarInt});
+
+wire_enum!(ParticleRandomization {Default=0,Alternative=1,AlternativeWithSpeed=2}, zero);
+packet!(/// Port of ExplosionParticleInfo.
+ExplosionParticleInfo {particle:crate::entity_data::Particle,scaling:f32,speed:f32});
+packet!(/// Port of Weighted<ExplosionParticleInfo>.
+WeightedExplosionParticle {value:ExplosionParticleInfo,weight:VarInt});
+packet!(/// Port of ClientboundUpdateAttributesPacket.AttributeSnapshot.
+AttributeSnapshot {attribute:AttributeId,base:f64,modifiers:Vec<AttributeModifier>});
+packet!(/// Port of AttributeModifier's network form.
+AttributeModifier {id:Identifier,amount:f64,operation:crate::component::AttributeOperation});
+
+/// Port of Direction's unsigned-byte representation in player action packets.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DirectionByte(pub ferraloom_util::Direction);
+impl Wire for DirectionByte {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self(ferraloom_util::Direction::from_3d_data_value(
+            i32::from(r.u8()?),
+        )))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(self.0 as u8);
+        Ok(())
+    }
+}
+wire_enum!(StructureUpdateType {UpdateData=0,SaveArea=1,LoadArea=2,ScanArea=3});
+wire_enum!(StructureMode {Save=0,Load=1,Corner=2,Data=3});
+wire_enum!(Mirror {None=0,LeftRight=1,FrontBack=2});
+wire_enum!(Rotation {None=0,Clockwise90=1,Clockwise180=2,Counterclockwise90=3}, wrapping);
+wire_enum!(TestInstanceStatus {Cleared=0,Running=1,Finished=2}, zero);
+wire_enum!(TestInstanceAction {Init=0,Query=1,Set=2,Reset=3,Save=4,Export=5,Run=6}, zero);
+packet!(/// Port of TestInstanceBlockEntity.Data.
+TestInstanceData {test:Option<Identifier>,size:Vec3i,rotation:Rotation,ignore_entities:bool,status:TestInstanceStatus,error_message:Option<Component>});
+
+macro_rules! bit_flags {
+    ($name:ident {$($field:ident=$mask:literal),* $(,)?})=>{
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $name {$(pub $field:bool),*}
+        impl Wire for $name {
+            fn decode(r:&mut Reader<'_>)->Result<Self>{let bits=r.u8()?;Ok(Self{$($field:bits&$mask!=0),*})}
+            fn encode(&self,w:&mut Writer<'_>)->Result<()>{let mut bits=0;$(if self.$field{bits|=$mask;})*w.u8(bits);Ok(())}
+        }
+    };
+}
+bit_flags!(CommandBlockFlags {track_output=1,conditional=2,automatic=4});
+bit_flags!(StructureBlockFlags {ignore_entities=1,show_air=2,show_bounding_box=4,strict=8});
+#[derive(Clone, Debug, PartialEq)]
+pub enum JigsawJoint {
+    Rollable,
+    Aligned,
+}
+impl Wire for JigsawJoint {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(if r.string(32767)?.as_ref() == "rollable" {
+            Self::Rollable
+        } else {
+            Self::Aligned
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.string(
+            match self {
+                Self::Rollable => "rollable",
+                Self::Aligned => "aligned",
+            },
+            32767,
+        )
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct StructureCoordinates<const MIN: i8, const MAX: i8> {
+    pub x: i8,
+    pub y: i8,
+    pub z: i8,
+}
+impl<const MIN: i8, const MAX: i8> Wire for StructureCoordinates<MIN, MAX> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            x: r.i8()?.clamp(MIN, MAX),
+            y: r.i8()?.clamp(MIN, MAX),
+            z: r.i8()?.clamp(MIN, MAX),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.i8(self.x);
+        w.i8(self.y);
+        w.i8(self.z);
+        Ok(())
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct StructureIntegrity(pub f32);
+impl Wire for StructureIntegrity {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self(r.f32()?.clamp(0., 1.)))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.f32(self.0);
         Ok(())
     }
 }
