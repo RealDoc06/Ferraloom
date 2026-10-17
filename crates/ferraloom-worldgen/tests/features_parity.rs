@@ -425,6 +425,42 @@ fn all_state_providers_match_vanilla_optional_values_and_rng() {
             case["config"]
         );
     }
+    let rotations = golden(include_bytes!("golden/rotated_state_providers.json.gz"));
+    let registry = FeatureLoader::new(&resources).unwrap().finish();
+    let mut chunks = baseline.clone();
+    let mut region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 3],
+        1,
+        None,
+        &FixtureBehavior,
+        8675309,
+        63,
+    )
+    .unwrap();
+    let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
+    let mut context = FeatureContext {
+        region: &mut region,
+        random: &mut random,
+        origin: [0, 70, 0],
+        generator: &generator,
+        registry: &registry,
+    };
+    for (i, direction) in ferraloom_util::Direction::VALUES.into_iter().enumerate() {
+        for (id, expected) in rotations[i].as_array().unwrap().iter().enumerate() {
+            let state = ferraloom_data::BlockState::from_id(id as u16).unwrap();
+            let provider = state_provider::BlockStateProvider::Rotated {
+                source: std::sync::Arc::new(state_provider::BlockStateProvider::Simple(state)),
+                direction: Some(direction),
+            };
+            assert_eq!(
+                u64::from(provider.get_state(&mut context, [0, 70, 0]).unwrap().id()),
+                expected.as_u64().unwrap(),
+                "state {id} direction {direction:?}"
+            );
+        }
+    }
 }
 #[test]
 fn feature_sorter_matches_vanilla_order_and_cycle_detection() {
@@ -672,4 +708,417 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .0
             .starts_with("Unsupported")
     );
+    // These state-only answers work even when the game behavior bridge cannot
+    // answer shape queries or claims there are no block entities.
+    assert!(region.is_solid([0, 0, 0]).unwrap());
+    assert!(
+        region
+            .has_sturdy_face([0, 0, 0], ferraloom_util::Direction::Up)
+            .unwrap()
+    );
+    assert!(
+        region
+            .is_collision_full_block(Block::STONE.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    assert!(
+        !region
+            .is_collision_full_block(Block::AIR.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    region
+        .set_block([1, 0, 0], Block::CHEST.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .contains_key(&[1, 0, 0])
+    );
+    region
+        .set_block([1, 0, 0], Block::AIR.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .is_empty()
+    );
+    region
+        .set_block([2, 0, 0], Block::BROWN_MUSHROOM.default_state(), 2)
+        .unwrap();
+    assert_eq!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .chunk
+            .post_processing,
+        [[2, 0, 0]]
+    );
+}
+
+#[test]
+fn biome_source_encounter_order_and_all_builtin_feature_indices_match_vanilla() {
+    use ferraloom_worldgen::{
+        biome::BiomeSource, climate::SearchContext, decoration::DecorationPlan,
+        density::SamplerContext, feature::FeatureLoader, generator::*,
+        settings::NoiseGeneratorSettings,
+    };
+    use std::sync::Arc;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    loader.load_biome_features().unwrap();
+    let registry = loader.finish();
+    let cases = golden(include_bytes!("golden/biome_order.json.gz"));
+    let points = [
+        [0, 0, 0],
+        [-1, -64, -1],
+        [7, 25, -31],
+        [i32::MAX, 0, i32::MAX],
+        [i32::MIN, 1, -13456],
+    ];
+    for case in cases.as_array().unwrap() {
+        let source = BiomeSource::decode(&case["config"], &resources).unwrap();
+        let possible = source.possible_biomes();
+        assert_eq!(
+            serde_json::to_value(possible.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .unwrap(),
+            case["possible"]
+        );
+        let plan = DecorationPlan::new(&registry, &possible).unwrap();
+        assert_eq!(
+            serde_json::to_value(
+                plan.steps
+                    .iter()
+                    .map(|s| s
+                        .features
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>())
+                    .collect::<Vec<_>>()
+            )
+            .unwrap(),
+            case["features"],
+            "{}",
+            case["config"]
+        );
+        if possible.is_empty() {
+            continue;
+        }
+        let dimension = case["dimension"].as_str().unwrap();
+        let value = resources
+            .require(
+                &format!("worldgen/noise_settings/{dimension}.json")
+                    .parse()
+                    .unwrap(),
+            )
+            .unwrap()
+            .json()
+            .unwrap();
+        let generator = NoiseBasedChunkGenerator::new(
+            data.clone(),
+            NoiseGeneratorSettings::decode(&value).unwrap(),
+            source,
+            8675309,
+        )
+        .unwrap();
+        let mut samplers = SamplerContext::uncached();
+        let mut search = SearchContext::default();
+        for (p, expected) in points.into_iter().zip(case["samples"].as_array().unwrap()) {
+            assert_eq!(
+                generator
+                    .source
+                    .sample(
+                        &generator.random.compiler,
+                        generator.random.router,
+                        &mut samplers,
+                        &mut search,
+                        p
+                    )
+                    .to_string(),
+                expected.as_str().unwrap(),
+                "{} {p:?}",
+                case["config"]
+            );
+        }
+    }
+}
+#[test]
+fn base_heights_and_single_block_noise_columns_match_vanilla() {
+    use ferraloom_worldgen::{
+        biome::BiomeSource, generator::*, region::Heightmap, settings::NoiseGeneratorSettings,
+    };
+    use serde_json::json;
+    use std::{collections::BTreeMap, sync::Arc};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let cases = golden(include_bytes!("golden/base_columns.json.gz"));
+    let mut generators = BTreeMap::new();
+    for case in cases.as_array().unwrap() {
+        let seed = case["seed"].as_i64().unwrap();
+        let dimension = case["dimension"].as_str().unwrap();
+        let generator = generators.entry((seed,dimension.to_owned())).or_insert_with(|| {
+            let value = resources.require(&format!("worldgen/noise_settings/{dimension}.json").parse().unwrap()).unwrap().json().unwrap();
+            let source = BiomeSource::decode(&if dimension=="end" {json!({"type":"minecraft:the_end"})} else {json!({"type":"minecraft:multi_noise","preset":format!("minecraft:{dimension}")})},&resources).unwrap();
+            NoiseBasedChunkGenerator::new(data.clone(),NoiseGeneratorSettings::decode(&value).unwrap(),source,seed).unwrap()
+        });
+        let p = [
+            case["position"][0].as_i64().unwrap() as i32,
+            case["position"][1].as_i64().unwrap() as i32,
+        ];
+        let bounds = [
+            case["bounds"][0].as_i64().unwrap() as i32,
+            case["bounds"][1].as_i64().unwrap() as i32,
+        ];
+        for (i, map) in [
+            Heightmap::WorldSurface,
+            Heightmap::OceanFloor,
+            Heightmap::MotionBlocking,
+            Heightmap::MotionBlockingNoLeaves,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let height = generator
+                .get_base_height(p[0], p[1], map, bounds[0], bounds[1])
+                .unwrap();
+            assert_eq!(
+                i64::from(height),
+                case["heights"][i].as_i64().unwrap(),
+                "{dimension} seed={seed} {p:?} {bounds:?} {map:?}"
+            );
+            assert_eq!(
+                generator
+                    .get_first_free_height(p[0], p[1], map, bounds[0], bounds[1])
+                    .unwrap(),
+                height
+            );
+            assert_eq!(
+                generator
+                    .get_first_occupied_height(p[0], p[1], map, bounds[0], bounds[1])
+                    .unwrap(),
+                height - 1
+            );
+        }
+        let column = generator
+            .get_base_column(p[0], p[1], bounds[0], bounds[1])
+            .unwrap();
+        let actual = column.map(|column| {
+            (bounds[0] - 1..=bounds[0] + bounds[1])
+                .map(|y| column.get_block(y).id())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            case["column"],
+            "{dimension} seed={seed} {p:?} {bounds:?}"
+        );
+    }
+}
+
+#[test]
+fn old_chunk_carving_filter_matches_vanilla_jitter_and_boundaries() {
+    use ferraloom_worldgen::blending::{Blender, BlendingData};
+    let cases = golden(include_bytes!("golden/carving_filter.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let old = case["old"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| {
+                let n = |i| entry[i].as_i64().unwrap() as i32;
+                (
+                    [n(0), n(1)],
+                    BlendingData {
+                        min_section: n(2),
+                        max_section: n(3),
+                        heights: [f32::MAX; 16],
+                        densities: std::array::from_fn(|_| None),
+                        biomes: std::array::from_fn(|_| None),
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let blender = Blender::new([0, 0], old).unwrap();
+        let mut actual = Vec::new();
+        for x in (0..16).step_by(3) {
+            for z in (0..16).step_by(3) {
+                for y in (-68..264).step_by(7) {
+                    actual.push(blender.can_carve([0, 0], x, y, z));
+                }
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            case["samples"],
+            "old generation {:?}",
+            case["old"]
+        );
+    }
+}
+
+#[test]
+fn feature_codec_boundaries_and_exclusive_alternatives_match_vanilla() {
+    use ferraloom_worldgen::{
+        feature::FeatureLoader,
+        placement::{
+            modifier::PlacementModifier,
+            predicate::{BlockPredicate, PredicateDecodeData},
+        },
+    };
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = PredicateDecodeData::load(&resources).unwrap();
+    let cases = golden(include_bytes!("golden/feature_codecs.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let config = &case["config"];
+        let valid = match case["kind"].as_str().unwrap() {
+            "int" => IntProvider::decode(config).is_ok(),
+            "float" => FloatProvider::decode(config).is_ok(),
+            "height" => HeightProvider::decode(config).is_ok(),
+            "predicate" => BlockPredicate::decode(config, &data).is_ok(),
+            "placement" => PlacementModifier::decode(config, &data).is_ok(),
+            "state" => FeatureLoader::new(&resources)
+                .unwrap()
+                .state_provider(config)
+                .is_ok(),
+            kind => panic!("unknown codec kind {kind}"),
+        };
+        assert_eq!(
+            valid,
+            case["valid"].as_bool().unwrap(),
+            "{} {config}",
+            case["kind"]
+        );
+    }
+}
+
+#[test]
+fn all_block_predicates_match_vanilla_with_fixed_world_reads() {
+    use ferraloom_data::{Block, BlockState};
+    use ferraloom_worldgen::{
+        Error,
+        placement::predicate::{BlockPredicate, PredicateDecodeData},
+        region::{ChunkStatus, WorldGenRegion, WorldgenBlockBehavior},
+    };
+    struct PredicateBehavior;
+    impl WorldgenBlockBehavior for PredicateBehavior {
+        fn post_process_pos(
+            &self,
+            _: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(None)
+        }
+        fn can_survive(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            _: [i32; 3],
+        ) -> Result<bool, Error> {
+            // This fixture exercises only vanilla's unconditional stone rule.
+            assert_eq!(state.block(), Block::STONE);
+            Ok(true)
+        }
+        fn is_unobstructed(
+            &self,
+            state: BlockState,
+            _: &WorldGenRegion<'_>,
+            p: [i32; 3],
+        ) -> Result<bool, Error> {
+            assert_eq!(state.block(), Block::STONE);
+            Ok(p[0] & 1 == 0)
+        }
+    }
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let data = PredicateDecodeData::load(&resources).unwrap();
+    let mut chunks = fixture_chunks(&generator, [0, 0], 1);
+    for chunk in &mut chunks {
+        generator.create_biomes(&mut chunk.chunk);
+    }
+    let region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain; 2],
+        0,
+        None,
+        &PredicateBehavior,
+        generator.random.seed,
+        generator.settings.sea_level,
+    )
+    .unwrap();
+    let cases = golden(include_bytes!("golden/predicates.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let predicate = BlockPredicate::decode(&case["config"], &data).unwrap();
+        for sample in case["samples"].as_array().unwrap() {
+            let p = std::array::from_fn(|i| sample["position"][i].as_i64().unwrap() as i32);
+            assert_eq!(
+                predicate.test(&region, p, &generator).unwrap(),
+                sample["result"].as_bool().unwrap(),
+                "{} at {p:?}",
+                case["config"]
+            );
+        }
+    }
+}
+
+#[test]
+fn protochunk_heightmap_priming_freezing_and_bulk_writes_match_vanilla() {
+    use ferraloom_data::Block;
+    use ferraloom_worldgen::region::*;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let cases = golden(include_bytes!("golden/feature_heightmaps.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let mut chunk = generator.new_chunk([0, 0]);
+        chunk.set_block(0, 0, 0, Block::STONE.default_state());
+        let mut chunks = vec![RegionChunk::new(chunk, ChunkStatus::Terrain)];
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Terrain],
+            0,
+            None,
+            &FixtureBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        let mut output = Vec::new();
+        for operation in case["ops"].as_array().unwrap() {
+            if operation["op"] == "query" {
+                output.push(
+                    Heightmap::ALL
+                        .map(|map| region.height_at(map, 0, 0).unwrap())
+                        .to_vec(),
+                );
+                continue;
+            }
+            let y = operation["y"].as_i64().unwrap() as i32;
+            let block = Block::from_name(&format!(
+                "minecraft:{}",
+                operation["block"].as_str().unwrap()
+            ))
+            .unwrap();
+            if operation["op"] == "bulk" {
+                region
+                    .set_block_in_section([0, y, 0], block.default_state())
+                    .unwrap();
+            } else {
+                region
+                    .set_block([0, y, 0], block.default_state(), 16)
+                    .unwrap();
+            }
+        }
+        assert_eq!(serde_json::to_value(output).unwrap(), case["output"]);
+    }
 }

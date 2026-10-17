@@ -65,8 +65,10 @@ pub enum PlacementModifier {
 }
 fn heightmap(v: &Value) -> Result<Heightmap, Error> {
     match string(v)? {
-        "WORLD_SURFACE_WG" | "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
-        "OCEAN_FLOOR_WG" | "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
+        "WORLD_SURFACE_WG" => Ok(Heightmap::WorldSurfaceWg),
+        "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
+        "OCEAN_FLOOR_WG" => Ok(Heightmap::OceanFloorWg),
+        "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
         "MOTION_BLOCKING" => Ok(Heightmap::MotionBlocking),
         "MOTION_BLOCKING_NO_LEAVES" => Ok(Heightmap::MotionBlockingNoLeaves),
         _ => Err(Error("unknown heightmap".into())),
@@ -83,11 +85,7 @@ impl PlacementModifier {
                 Self::RarityFilter(int_range(field(v, "chance")?, 1, i32::MAX)?)
             }
             "minecraft:random_chance" => {
-                let chance = float(field(v, "chance")?)?;
-                if !(0.0..=1.0).contains(&chance) {
-                    return Err(Error("chance outside [0,1]".into()));
-                }
-                Self::RandomChance(chance)
+                Self::RandomChance(float_range(field(v, "chance")?, 0.0, 1.0)?)
             }
             "minecraft:biome" => Self::Biome,
             "minecraft:surface_relative_threshold_filter" => Self::SurfaceRelativeThreshold {

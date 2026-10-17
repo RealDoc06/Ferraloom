@@ -100,10 +100,7 @@ pub enum WorldCarver {
 impl WorldCarver {
     pub fn decode(v: &Value) -> Result<Self, Error> {
         let ty = kind(v)?;
-        let probability = float(field(v, "probability")?)?;
-        if !(0.0..=1.0).contains(&probability) {
-            return Err(Error("carver probability outside [0,1]".into()));
-        }
+        let probability = float_range(field(v, "probability")?, 0.0, 1.0)?;
         let y = HeightProvider::decode(field(v, "y")?)?;
         Ok(match ty.to_string().as_str() {
             "minecraft:cave" => Self::Cave(CaveWorldCarver {
@@ -268,7 +265,8 @@ impl CaveWorldCarver {
             if random.next_int_bound(4) == 0 {
                 let room_scale = f64::from(self.room_vertical_radius_multiplier.sample(random));
                 let thickness = 1.0 + random.next_float() * 6.0;
-                let radius = 1.5 + f64::from(mth::sin(1.5707963705062866) * thickness);
+                let radius =
+                    1.5 + f64::from(mth::sin(f64::from(std::f32::consts::FRAC_PI_2)) * thickness);
                 carve_ellipsoid(
                     chunk,
                     [x + 1.0, y, z],

@@ -26,13 +26,8 @@ pub struct NoiseState {
 }
 impl NoiseState {
     fn decode(v: &Value) -> Result<(Self, i64), Error> {
-        let seed = field(v, "seed")?
-            .as_i64()
-            .ok_or_else(|| Error("invalid noise seed".into()))?;
-        let scale = float(field(v, "scale")?)?;
-        if scale <= 0.0 {
-            return Err(Error("noise scale must be positive".into()));
-        }
+        let seed = long(field(v, "seed")?)?;
+        let scale = float_range(field(v, "scale")?, f32::from_bits(1), f32::MAX)?;
         let noise = NoiseSpec::decode(field(v, "noise")?)?
             .noise()
             .create(&mut WorldgenRandom::new(LegacyRandomSource::new(seed)));
@@ -95,25 +90,23 @@ fn states(v: &Value) -> Result<Vec<BlockState>, Error> {
     }
     Ok(result)
 }
-fn range_float(v: &Value, min: f32, max: f32) -> Result<f32, Error> {
-    let n = float(v)?;
-    if !(min..=max).contains(&n) {
-        return Err(Error("float outside provider bounds".into()));
-    }
-    Ok(n)
-}
 fn select(states: &[BlockState], noise: f32) -> BlockState {
     let placement = mth::clamp_f32((1.0 + noise) / 2.0, 0.0, 0.9999);
     states[(placement * states.len() as f32) as usize]
 }
 impl BlockStateProvider {
     pub fn decode(v: &Value, loader: &mut FeatureLoader<'_>) -> Result<Self, Error> {
-        if v.get("id").is_some() {
-            if v.get("type").is_some() {
-                return Err(Error("state provider matches both exclusive codecs".into()));
-            }
-            return Ok(Self::Simple(decode_block_state(v)?));
+        // Codec.xor tries both alternatives. Unknown/invalid typed fields do
+        // not invalidate an otherwise valid full block state, and vice versa.
+        let state = v.get("id").and_then(|_| decode_block_state(v).ok());
+        let typed = Self::decode_typed(v, loader);
+        match (state, typed) {
+            (Some(_), Ok(_)) => Err(Error("state provider matches both exclusive codecs".into())),
+            (Some(state), Err(_)) => Ok(Self::Simple(state)),
+            (None, typed) => typed,
         }
+    }
+    fn decode_typed(v: &Value, loader: &mut FeatureLoader<'_>) -> Result<Self, Error> {
         let ty = kind(v)?;
         Ok(match ty.to_string().as_str() {
             "minecraft:simple" => Self::Simple(decode_block_state(field(v, "state")?)?),
@@ -157,8 +150,8 @@ impl BlockStateProvider {
             },
             "minecraft:noise_threshold" => Self::NoiseThreshold {
                 noise: NoiseState::decode(v)?.0,
-                threshold: range_float(field(v, "threshold")?, -1.0, 1.0)?,
-                high_chance: range_float(field(v, "high_chance")?, 0.0, 1.0)?,
+                threshold: float_range(field(v, "threshold")?, -1.0, 1.0)?,
+                high_chance: float_range(field(v, "high_chance")?, 0.0, 1.0)?,
                 default: decode_block_state(field(v, "default_state")?)?,
                 low: states(field(v, "low_states")?)?,
                 high: states(field(v, "high_states")?)?,
@@ -184,10 +177,7 @@ impl BlockStateProvider {
                 if min > max {
                     return Err(Error("invalid variety range".into()));
                 }
-                let slow_scale = float(field(v, "slow_scale")?)?;
-                if slow_scale <= 0.0 {
-                    return Err(Error("slow scale must be positive".into()));
-                }
+                let slow_scale = float_range(field(v, "slow_scale")?, f32::from_bits(1), f32::MAX)?;
                 let slow = NoiseSpec::decode(field(v, "slow_noise")?)?
                     .noise()
                     .create(&mut WorldgenRandom::new(LegacyRandomSource::new(seed)));
@@ -260,8 +250,20 @@ impl BlockStateProvider {
                     Direction::West => properties::Facing::West,
                     Direction::East => properties::Facing::East,
                 };
-                state = state.with(properties::AXIS, axis).unwrap_or(state);
-                state.with(properties::FACING, facing).unwrap_or(state)
+                // Vanilla property equality includes the complete value domain.
+                // Portal's XZ axis and hopper's five-way facing are different
+                // properties from AXIS/FACING despite sharing their names.
+                if state.with(properties::AXIS, properties::Axis::Y).is_some() {
+                    state = state.with(properties::AXIS, axis).unwrap_or(state);
+                }
+                let up = state.with(properties::FACING, properties::Facing::Up);
+                let down = state.with(properties::FACING, properties::Facing::Down);
+                if (up.is_some() && down.is_some())
+                    || (up.is_none() && down.is_none() && direction.axis().is_horizontal())
+                {
+                    state = state.with(properties::FACING, facing).unwrap_or(state);
+                }
+                state
             }
             Self::RuleBased { fallback, rules } => {
                 for (predicate, then) in rules {
