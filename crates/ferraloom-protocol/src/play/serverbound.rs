@@ -92,32 +92,91 @@ UseItem { hand: InteractionHand, sequence: VarInt, y_rot: f32, x_rot: f32 });
 
 /// Port of ServerboundPlayerAbilitiesPacket.
 #[derive(Clone, Debug, PartialEq)]
-pub struct PlayerAbilities { pub is_flying: bool }
+pub struct PlayerAbilities {
+    pub is_flying: bool,
+}
 impl Wire for PlayerAbilities {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> { Ok(Self { is_flying: r.u8()? & 2 != 0 }) }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> { w.u8(if self.is_flying { 2 } else { 0 }); Ok(()) }
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            is_flying: r.u8()? & 2 != 0,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(if self.is_flying { 2 } else { 0 });
+        Ok(())
+    }
 }
 
 /// Port of ServerboundSeenAdvancementsPacket. The action selects whether a tab follows.
 #[derive(Clone, Debug, PartialEq)]
-pub enum SeenAdvancements { OpenedTab(Identifier), ClosedScreen }
+pub enum SeenAdvancements {
+    OpenedTab(Identifier),
+    ClosedScreen,
+}
 impl Wire for SeenAdvancements {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> { match r.var_int()? { 0=>Ok(Self::OpenedTab(r.read()?)),1=>Ok(Self::ClosedScreen),id=>Err(Error::invalid("advancement action",id.to_string())) } }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> { match self { Self::OpenedTab(tab)=>{w.var_int(0);tab.encode(w)},Self::ClosedScreen=>{w.var_int(1);Ok(())} } }
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        match r.var_int()? {
+            0 => Ok(Self::OpenedTab(r.read()?)),
+            1 => Ok(Self::ClosedScreen),
+            id => Err(Error::invalid("advancement action", id.to_string())),
+        }
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        match self {
+            Self::OpenedTab(tab) => {
+                w.var_int(0);
+                tab.encode(w)
+            }
+            Self::ClosedScreen => {
+                w.var_int(1);
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Port of ServerboundEditBookPacket, including the page and title limits.
 #[derive(Clone, Debug, PartialEq)]
-pub struct EditBook { pub slot: VarInt, pub pages: Vec<Utf8<1024>>, pub title: Option<Utf8<32>> }
+pub struct EditBook {
+    pub slot: VarInt,
+    pub pages: Vec<Utf8<1024>>,
+    pub title: Option<Utf8<32>>,
+}
 impl Wire for EditBook {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> { Ok(Self {slot:r.read()?,pages:r.list(100,Wire::decode)?,title:r.read()?}) }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {self.slot.encode(w)?;w.list(&self.pages,100,|w,v|v.encode(w))?;self.title.encode(w)}
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            slot: r.read()?,
+            pages: r.list(100, Wire::decode)?,
+            title: r.read()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.slot.encode(w)?;
+        w.list(&self.pages, 100, |w, v| v.encode(w))?;
+        self.title.encode(w)
+    }
 }
 
 /// Port of ServerboundSignUpdatePacket. Four strings have no list length prefix.
 #[derive(Clone, Debug, PartialEq)]
-pub struct SignUpdate {pub pos:BlockPos,pub lines:[Utf8<384>;4],pub slot:SignTextSlot}
+pub struct SignUpdate {
+    pub pos: BlockPos,
+    pub lines: [Utf8<384>; 4],
+    pub slot: SignTextSlot,
+}
 impl Wire for SignUpdate {
-    fn decode(r:&mut Reader<'_>)->Result<Self>{Ok(Self{pos:r.read()?,lines:[r.read()?,r.read()?,r.read()?,r.read()?],slot:r.read()?})}
-    fn encode(&self,w:&mut Writer<'_>)->Result<()>{self.pos.encode(w)?;for line in &self.lines{line.encode(w)?;}self.slot.encode(w)}
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            pos: r.read()?,
+            lines: [r.read()?, r.read()?, r.read()?, r.read()?],
+            slot: r.read()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.pos.encode(w)?;
+        for line in &self.lines {
+            line.encode(w)?;
+        }
+        self.slot.encode(w)
+    }
 }

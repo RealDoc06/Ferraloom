@@ -140,10 +140,34 @@ UpdateMobEffect { entity_id: VarInt, effect: MobEffectId, effect_amplifier: VarI
 
 /// Port of ClientboundPlayerAbilitiesPacket.
 #[derive(Clone, Debug, PartialEq)]
-pub struct PlayerAbilities {pub invulnerable:bool,pub is_flying:bool,pub can_fly:bool,pub instabuild:bool,pub flying_speed:f32,pub walking_speed:f32}
+pub struct PlayerAbilities {
+    pub invulnerable: bool,
+    pub is_flying: bool,
+    pub can_fly: bool,
+    pub instabuild: bool,
+    pub flying_speed: f32,
+    pub walking_speed: f32,
+}
 impl Wire for PlayerAbilities {
-    fn decode(r:&mut Reader<'_>)->Result<Self>{let b=r.u8()?;Ok(Self{invulnerable:b&1!=0,is_flying:b&2!=0,can_fly:b&4!=0,instabuild:b&8!=0,flying_speed:r.read()?,walking_speed:r.read()?})}
-    fn encode(&self,w:&mut Writer<'_>)->Result<()>{w.u8(u8::from(self.invulnerable)|(u8::from(self.is_flying)<<1)|(u8::from(self.can_fly)<<2)|(u8::from(self.instabuild)<<3));self.flying_speed.encode(w)?;self.walking_speed.encode(w)}
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let b = r.u8()?;
+        Ok(Self {
+            invulnerable: b & 1 != 0,
+            is_flying: b & 2 != 0,
+            can_fly: b & 4 != 0,
+            instabuild: b & 8 != 0,
+            flying_speed: r.read()?,
+            walking_speed: r.read()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(u8::from(self.invulnerable)
+            | (u8::from(self.is_flying) << 1)
+            | (u8::from(self.can_fly) << 2)
+            | (u8::from(self.instabuild) << 3));
+        self.flying_speed.encode(w)?;
+        self.walking_speed.encode(w)
+    }
 }
 
 packet!(/// Port of ClientboundPlayerLookAtPacket's entity target.
@@ -153,8 +177,26 @@ PlayerLookAt {from_anchor:EntityAnchor,x:f64,y:f64,z:f64,entity:Option<LookAtEnt
 
 /// Port of ClientboundStopSoundPacket. Flags select independently optional fields.
 #[derive(Clone, Debug, PartialEq)]
-pub struct StopSound {pub source:Option<SoundSource>,pub name:Option<Identifier>}
+pub struct StopSound {
+    pub source: Option<SoundSource>,
+    pub name: Option<Identifier>,
+}
 impl Wire for StopSound {
-    fn decode(r:&mut Reader<'_>)->Result<Self>{let b=r.u8()?;Ok(Self{source:if b&1!=0{Some(r.read()?)}else{None},name:if b&2!=0{Some(r.read()?)}else{None}})}
-    fn encode(&self,w:&mut Writer<'_>)->Result<()>{w.u8(u8::from(self.source.is_some())|(u8::from(self.name.is_some())<<1));if let Some(v)=&self.source{v.encode(w)?;}if let Some(v)=&self.name{v.encode(w)?;}Ok(())}
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let b = r.u8()?;
+        Ok(Self {
+            source: if b & 1 != 0 { Some(r.read()?) } else { None },
+            name: if b & 2 != 0 { Some(r.read()?) } else { None },
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(u8::from(self.source.is_some()) | (u8::from(self.name.is_some()) << 1));
+        if let Some(v) = &self.source {
+            v.encode(w)?;
+        }
+        if let Some(v) = &self.name {
+            v.encode(w)?;
+        }
+        Ok(())
+    }
 }
