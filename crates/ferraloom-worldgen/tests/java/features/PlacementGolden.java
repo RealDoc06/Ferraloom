@@ -31,7 +31,7 @@ public final class PlacementGolden {
             case "getFluidState" -> block((BlockPos)args[0]).getFluidState();
             case "getMinY" -> -64;
             case "getMaxY" -> 319;
-            case "getHeight" -> args.length == 0 ? 384 : (args[0] == Heightmap.Types.OCEAN_FLOOR || args[0] == Heightmap.Types.OCEAN_FLOOR_WG) && (((int)args[1]&3)==0) ? 63 : 64;
+            case "getHeight" -> args == null || args.length == 0 ? 384 : (args[0] == Heightmap.Types.OCEAN_FLOOR || args[0] == Heightmap.Types.OCEAN_FLOOR_WG) && (((int)args[1]&3)==0) ? 63 : 64;
             case "getSeaLevel" -> 63;
             case "getSeed" -> 8675309L;
             case "isOutsideBuildHeight" -> (int)args[0] < -64 || (int)args[0] >= 320;
