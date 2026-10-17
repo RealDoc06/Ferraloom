@@ -47,3 +47,5 @@ pub mod carver;
 pub mod decoration;
 pub mod placement;
 pub mod region;
+
+pub mod structure;
