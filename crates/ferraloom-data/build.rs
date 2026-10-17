@@ -544,6 +544,31 @@ fn block_classes(out: &mut String, data: &Value, block_count: usize) {
     out.push_str("];\n");
 }
 
+/// Cached face occlusion is independent of the level and block position.
+fn face_occlusion(out: &mut String, values: &Value, state_count: usize) {
+    let values = values.as_array().expect("face occlusion array");
+    assert_eq!(values.len(), state_count, "face occlusion table length");
+    write!(out, "static FACE_OCCLUSION: [u8; {state_count}] = [").unwrap();
+    for value in values {
+        let mask = number(value);
+        assert!(mask < 64);
+        write!(out, "{mask},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
+fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
+    let values = values.as_array().expect("block state facts array");
+    assert_eq!(values.len(), state_count, "block state facts table length");
+    write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
+    for value in values {
+        let bits = number(value);
+        assert!(bits < 4096);
+        write!(out, "{bits},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -593,6 +618,16 @@ fn main() {
         "const STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
     )
     .unwrap();
+    face_occlusion(
+        &mut out,
+        &load(root, "face_occlusion"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
+    block_state_facts(
+        &mut out,
+        &load(root, "block_state_facts"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
