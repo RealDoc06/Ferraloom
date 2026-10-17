@@ -1087,3 +1087,36 @@ fn vanilla_common_normalization_and_custom_click_limits() {
         assert!(serverbound::CustomClickAction::from_bytes(&bytes(fixture)).is_err());
     }
 }
+
+#[test]
+fn vanilla_light_masks_and_partial_chat_filter() {
+    let light = check::<clientbound::LightUpdate>(
+        "nonempty light masks",
+        include_str!("fixtures/clientbound_LightUpdate_edge_present.hex"),
+    );
+    assert!(light.light_data.sky_y_mask.0.get(0));
+    assert!(light.light_data.sky_y_mask.0.get(65));
+    assert_eq!(light.light_data.sky_updates.len(), 2);
+    assert!(
+        light
+            .light_data
+            .sky_updates
+            .iter()
+            .all(|layer| layer.0.len() == 2048)
+    );
+    assert_eq!(light.light_data.sky_updates[0].0[0], 0xa5);
+    let chat = check::<clientbound::PlayerChat>(
+        "partial chat filter",
+        include_str!("fixtures/clientbound_PlayerChat_edge_partial_filter.hex"),
+    );
+    let FilterMask::PartiallyFiltered(mask) = chat.filter_mask else {
+        panic!("expected partial filter")
+    };
+    assert!(mask.get(0) && mask.get(9) && mask.get(65));
+    assert_eq!(chat.body.last_seen.0.len(), 20);
+    assert!(
+        chat.signature.is_some()
+            && chat.unsigned_content.is_some()
+            && chat.chat_type.target_name.is_some()
+    );
+}

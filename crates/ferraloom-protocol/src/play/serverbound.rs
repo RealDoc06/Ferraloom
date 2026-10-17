@@ -202,7 +202,7 @@ SetCommandBlock {pos:BlockPos,command:String,mode:CommandBlockMode,flags:Command
 packet!(/// Port of ServerboundSetJigsawBlockPacket.
 SetJigsawBlock {pos:BlockPos,name:Identifier,target:Identifier,pool:Identifier,final_state:String,joint:JigsawJoint,selection_priority:VarInt,placement_priority:VarInt});
 packet!(/// Port of ServerboundSetStructureBlockPacket.
-SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:Utf8<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
+SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:FriendlyString<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
 packet!(/// Port of ServerboundTestInstanceBlockActionPacket.
 TestInstanceBlockAction {pos:BlockPos,action:TestInstanceAction,data:TestInstanceData});
 /// Port of ServerboundDebugSubscriptionRequestPacket, bounded to 32 subscription IDs.

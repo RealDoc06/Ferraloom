@@ -99,7 +99,7 @@ public final class PlayVectors {
             });
         }
         sample(output,"clientbound_LightUpdate_edge_present","ClientboundLightUpdatePacket",b->{
-            b.writeVarInt(-123);b.writeVarInt(456);var bits=new BitSet();bits.set(0);bits.set(65);b.writeBitSet(bits);b.writeBitSet(bits);b.writeBitSet(new BitSet());b.writeBitSet(new BitSet());
+            b.writeVarInt(-123);b.writeVarInt(456);var bits=new BitSet();bits.set(0);bits.set(65);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,new BitSet());net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,new BitSet());
             for(int j=0;j<2;j++){b.writeVarInt(2);byte[] layer=new byte[2048];Arrays.fill(layer,(byte)0xa5);b.writeByteArray(layer);b.writeByteArray(new byte[2048]);}
         });
         sample(output,"clientbound_MoveEntityPosRot_edge_stepped","ClientboundMoveEntityPacket$PosRot",b->{
@@ -189,6 +189,12 @@ public final class PlayVectors {
         sample(output,"clientbound_Commands_edge_literal","ClientboundCommandsPacket",b->{b.writeVarInt(2);b.writeByte(0);b.writeVarInt(1);b.writeVarInt(1);b.writeByte(5);b.writeVarInt(0);b.writeUtf("literal");b.writeVarInt(0);});
         sample(output,"clientbound_ForgetLevelChunk_edge_coordinates","ClientboundForgetLevelChunkPacket",b->{b.writeChunkPos(new net.minecraft.world.level.ChunkPos(-123,456));});
         sample(output,"clientbound_SectionBlocksUpdate_edge_changes","ClientboundSectionBlocksUpdatePacket",b->{b.writeLong(SectionPos.asLong(-2,-4,3));b.writeVarInt(2);b.writeVarLong(((long)net.minecraft.world.level.block.Block.getId(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())<<12)|4095);b.writeVarLong((long)net.minecraft.world.level.block.Block.getId(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())<<12);});
+        sample(output,"clientbound_PlayerChat_edge_partial_filter","ClientboundPlayerChatPacket",b->{
+            b.writeVarInt(Integer.MAX_VALUE);b.writeUUID(new UUID(123,456));b.writeVarInt(300);b.writeBoolean(true);b.writeBytes(new byte[256]);
+            b.writeUtf("m".repeat(256));b.writeLong(Long.MIN_VALUE);b.writeLong(Long.MAX_VALUE);b.writeVarInt(20);for(int i=0;i<20;i++)b.writeVarInt(i+1);
+            b.writeBoolean(true);text(b,"Unsigned");b.writeVarInt(2);var bits=new BitSet();bits.set(0);bits.set(9);bits.set(65);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);
+            b.writeVarInt(1);text(b,"Sender");b.writeBoolean(true);text(b,"Target");
+        });
         // Delimiter identity, completion, and size limits are checked against vanilla's bundler.
         var protocol=net.minecraft.network.protocol.game.GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registries));
         var in=Unpooled.wrappedBuffer(new byte[]{0});var delimiter=protocol.codec().decode(in);in.release();

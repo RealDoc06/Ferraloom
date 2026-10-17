@@ -163,7 +163,7 @@ impl Wire for LevelChunkPacketData {
 }
 
 packet!(/// Port of ClientboundLightUpdatePacketData.
-LightUpdatePacketData {sky_y_mask:BitSet,block_y_mask:BitSet,empty_sky_y_mask:BitSet,empty_block_y_mask:BitSet,sky_updates:Vec<ByteArray<2048>>,block_updates:Vec<ByteArray<2048>>});
+LightUpdatePacketData {sky_y_mask:ByteBitSet,block_y_mask:ByteBitSet,empty_sky_y_mask:ByteBitSet,empty_block_y_mask:ByteBitSet,sky_updates:Vec<ByteArray<2048>>,block_updates:Vec<ByteArray<2048>>});
 packet!(/// Port of ClientboundChunksBiomesPacket.ChunkBiomeData.
 ChunkBiomeData {pos:ChunkPos,buffer:ByteArray<2097152>});
 

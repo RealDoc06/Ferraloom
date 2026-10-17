@@ -1,7 +1,7 @@
 //! Embedded play-state network forms shared by both directions.
 use super::*;
 
-pub use crate::common::{ByteArray, OptionalNbt, OptionalVarInt, Utf8};
+pub use crate::common::{ByteArray, FriendlyString, OptionalNbt, OptionalVarInt, Utf8};
 
 macro_rules! registry_ids {
     ($($name:ident),* $(,)?) => { $(
@@ -399,5 +399,33 @@ impl Wire for StructureIntegrity {
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         w.f32(self.0);
         Ok(())
+    }
+}
+
+/// Port of ByteBufCodecs.BIT_SET. This byte-array representation differs from
+/// FriendlyByteBuf's length-prefixed array of big-endian longs.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ByteBitSet(pub BitSet);
+impl ByteBitSet {
+    pub fn encode_bits(bits: &BitSet, w: &mut Writer<'_>) -> Result<()> {
+        let len = bits.bit_length().div_ceil(8);
+        w.count(len, i32::MAX as usize)?;
+        for i in 0..len {
+            w.u8((bits.words()[i / 8] >> (i % 8 * 8)) as u8);
+        }
+        Ok(())
+    }
+}
+impl Wire for ByteBitSet {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let bytes = r.byte_array(i32::MAX as usize)?;
+        let mut words = vec![0; bytes.len().div_ceil(8)];
+        for (i, byte) in bytes.iter().enumerate() {
+            words[i / 8] |= u64::from(*byte) << (i % 8 * 8);
+        }
+        Ok(Self(BitSet::from_words(words)))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        Self::encode_bits(&self.0, w)
     }
 }
