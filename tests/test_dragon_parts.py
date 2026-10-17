@@ -9,7 +9,7 @@ from pathlib import Path
 import struct
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
@@ -100,6 +100,46 @@ class DragonValidatorTests(unittest.TestCase):
                 (['Dragon has the following entity data: 10'] * 2, 'Int')]:
             with self.subTest(lines=lines), self.assertRaises(AssertionError):
                 dragon.parse_numeric(lines, kind)
+        for literal, value in [('0.0d', 0.0), ('-0.0D', -0.0), ('0.5d', 0.5),
+                               ('5e-324d', 5e-324), ('1.7976931348623157e308d', 1.7976931348623157e308)]:
+            self.assertEqual(dragon.parse_numeric(['Dragon has the following entity data: ' + literal], 'Double'),
+                             {'nbt_type': 'Double', 'value': value, 'literal': literal})
+        for literal in ('0', '0.0', '0.0f', '0b', '0s', '0L', 'NaNd', 'Infinityd', '-Infinityd', '1e309d'):
+            with self.subTest(literal=literal), self.assertRaises(AssertionError):
+                dragon.parse_numeric(['Dragon has the following entity data: ' + literal], 'Double')
+        for lines in ([], ['No entity was found'], ['Dragon has the following entity data: 0.0d'] * 2):
+            with self.subTest(lines=lines), self.assertRaises(AssertionError):
+                dragon.parse_numeric(lines, 'Double')
+        for kind in ('Float', 'Int'):
+            with self.subTest(kind=kind), self.assertRaises(AssertionError):
+                dragon.parse_numeric(['Dragon has the following entity data: 0.0d'], kind)
+
+        probe = dragon.Probe(Mock(), Mock(), {'setup': {}})
+        identity = subject()['uuid']
+        with patch.object(probe, 'retain'):
+            for expected in ((0.0, 0.0, 0.0), dragon.PARK, (0.0, 0.0, 2.0)):
+                probe.server.command.reset_mock()
+                probe.server.command.side_effect = [['Dragon has the following entity data: ' + str(value) + 'd'] for value in expected]
+                evidence = probe.position(identity, expected)
+                self.assertTrue(evidence['verified'])
+                self.assertEqual([call.args[0] for call in probe.server.command.call_args_list],
+                                 [f'data get entity {identity} Pos[{index}]' for index in range(3)])
+                self.assertEqual([read['actual']['value'] for read in evidence['reads']], list(expected))
+                self.assertTrue(all(read['actual']['nbt_type'] == 'Double' for read in evidence['reads']))
+            for expected, literals in [((0.0, 0.0, 0.0), ('0.5d', '0.0d', '0.5d')),
+                    ((0.0, 0.0, 0.0), ('5e-324d', '0.0d', '0.0d')),
+                    ((0.0, 0.0, 2.0), ('0.0d', '2.0d', '0.0d')),
+                    ((0.0, 0.0, 2.0), ('0.0d', '0.0d', None)),
+                    ((0.0, 0.0, 2.0), ('0.0d', '0.0d', '2.0f')),
+                    ((0.0, 0.0, 2.0), ('0.0d', '0.0d', '2')),
+                    ((0.0, 0.0, 2.0), ('0.0d', '0.0d', '1e309d')),
+                    (dragon.PARK, ('8192.5d', '200.0d', '8192.5d'))]:
+                probe.server.command.side_effect = [([] if literal is None else ['Dragon has the following entity data: ' + literal])
+                                                    for literal in literals]
+                with self.subTest(expected=expected, literals=literals), self.assertRaises(AssertionError):
+                    probe.position(identity, expected)
+                self.assertNotIn('verified', probe.case['positions'][-1])
+                self.assertIn('output', probe.case['positions'][-1]['reads'][-1])
 
     def test_all_eight_part_routes_require_fresh_committed_health_and_unchanged_other_victims(self):
         for offset in range(1, 9):
@@ -130,6 +170,21 @@ class DragonValidatorTests(unittest.TestCase):
                     broken['gametime_after'] += 1
                 with self.subTest(offset=offset, defect=defect), self.assertRaises(AssertionError):
                     dragon.validate_attack(broken, offset=offset)
+
+        probe = dragon.Probe(Mock(), Mock(), {'setup': {}})
+        victim = subject()
+        probe.active = [victim]
+        probe.server.command.side_effect = [['Player has the following entity data: ' + value] for value in ('0.0d', '0.0d', '2.5d')]
+        with patch.object(probe, 'retain'), patch.object(probe, 'field', return_value=typed('Float', 200)), \
+                patch.object(dragon, 'require_frozen'), patch.object(dragon.suite, 'game_time', return_value=100), \
+                patch.object(dragon, 'typed_predicate') as player:
+            with self.assertRaisesRegex(AssertionError, 'wrong_exact_position'):
+                probe.attack(victim, 101, offset=1)
+            player.assert_called_once_with(probe.server,
+                f'if entity @a[name={dragon.NAME},nbt={{playerGameType:0,Pos:[0.0d,0.0d,2.0d]}}]')
+        probe.client.request.assert_not_called()
+        self.assertEqual([call.args[0] for call in probe.server.command.call_args_list],
+                         [f'data get entity {dragon.PLAYER_ID} Pos[{index}]' for index in range(3)])
 
     def test_unknown_signed_id_requires_unchanged_health_and_a_following_real_positive(self):
         negative = attack(negative=True)
@@ -167,6 +222,44 @@ class DragonValidatorTests(unittest.TestCase):
                 packets[1].update(envelope(b'\x4e\x02\x64'))
             with self.subTest(defect=defect), self.assertRaises(AssertionError):
                 dragon.validate_parent(victim, packets, removed=True)
+
+        # Retained first Java attempt: valid bounded header, wrong literal-origin position.
+        raw = base64.b64decode('AQYTVyRoJGgTVwAAAAAAAAABLD/gAAAAAAAAAAAAAAAAAAA/4AAAAAAAAAAAAAAA')
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), 'dc959c5f39a2416e4eadd58aca2300ab4b50983911e539074ffc937dc8a33769')
+        self.assertEqual(struct.unpack('>3d', raw[19:43]), (0.5, 0.0, 0.5))
+        half_spawn = envelope(raw, kind='spawn_header', packet_id=1, entity_id=6, uuid=victim['uuid'], entity_type=44,
+            x=0.5, y=0.0, z=0.5, sequence=142, complete=False, decoded_bytes=43, payload_bytes=len(raw),
+            undecoded_remainder_base64=base64.b64encode(raw[43:]).decode())
+        dragon.validate_packets([half_spawn])
+        with self.assertRaisesRegex(AssertionError, 'origin parent spawn'):
+            dragon.validate_parent({'uuid': victim['uuid'], 'entity_id': 6, 'spawn': half_spawn}, [half_spawn])
+
+        probe = dragon.Probe(Mock(), Mock(), {'setup': {}})
+        probe.client.state.return_value = {'packets': 9}
+        probe.client.wait_state.return_value = {'dragon_packets': [victim['spawn']]}
+        probe.server.command.side_effect = [['Summoned new Ender Dragon'],
+            *[['Dragon has the following entity data: 0.0d'] for _ in range(3)]]
+        with patch.object(probe, 'retain'), patch.object(probe, 'facts', return_value=victim['initial']), \
+                patch.object(dragon, 'typed_predicate') as predicate, patch.object(dragon, 'wait_predicate') as unloaded:
+            summoned = probe.summon('default_hover', phase=None)
+            self.assertTrue(summoned['command'].startswith('summon minecraft:ender_dragon 0.0 0.0 0.0 {'))
+            self.assertEqual(probe.server.command.call_args_list[0].args, (summoned['command'],))
+            predicate.assert_called_once_with(probe.server,
+                f'if data entity {victim["uuid"]} {{UUID:[I;324478056,610800471,0,1],Pos:[0.0d,0.0d,0.0d],NoAI:1b}}')
+            self.assertTrue(summoned['position']['verified'])
+            self.assertEqual([read['actual']['value'] for read in summoned['position']['reads']], [0.0, 0.0, 0.0])
+            probe.server.command.reset_mock()
+            probe.server.command.side_effect = [['Teleported Ender Dragon'],
+                *[['Dragon has the following entity data: ' + str(value) + 'd'] for value in dragon.PARK]]
+            parked = probe.park(summoned)
+            self.assertEqual(parked['command'], f'tp {victim["uuid"]} 8192.0 200.0 8192.0')
+            self.assertEqual(probe.server.command.call_args_list[0].args, (parked['command'],))
+            self.assertEqual(predicate.call_args.args,
+                (probe.server, f'if data entity {victim["uuid"]} {{Pos:[8192.0d,200.0d,8192.0d]}}'))
+            unloaded.assert_called_once_with(probe.server, 'unless loaded 8192 200 8192')
+            self.assertTrue(parked['position']['verified'])
+            self.assertEqual([read['actual']['value'] for read in parked['position']['reads']], list(dragon.PARK))
+            self.assertTrue(parked['verified'])
 
     def test_missing_stages_failed_expectations_and_cleanup_cannot_be_promoted(self):
         case = state_case()

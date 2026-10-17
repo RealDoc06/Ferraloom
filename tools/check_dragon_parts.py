@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Two fresh sequential exact26.3 boots, cached Java then Rust, one real client each.
 
-Frozen origin parts only: actual Attack, committed health, canonical NBT state,
+Normal difficulty, frozen NoAI origin parts only: actual Attack, committed health, canonical NBT state,
 then an actual lethal head hit and the shared 200-tick death owner. Source-derived
 expectations are not runtime gold. No fight/flight/Scanning AI or rendering claim.
 Importing this module starts no processes. ROOT alone executes this campaign.
@@ -43,13 +43,14 @@ STATE_CASES = ('default_hover', *(f'phase_{phase}' for phase in range(11)),
                'invalid_negative', 'invalid_eleven', 'nbt_fields')
 CASES = (*STATE_CASES, *(f'part_{part}' for part in PARTS), 'unknown_then_positive', 'death_200')
 POSITION = {'x': 0.0, 'y': 0.0, 'z': 2.0, 'yaw': 180.0, 'pitch': 0.0}
-PARK = (8192, 200, 8192)
+PARK = (8192.0, 200.0, 8192.0)
 OWNED = {'tools/parity/client.ts', 'tools/parity/bot.py', 'tools/parity/dragon_parts.ts',
          'tools/check_dragon_parts.py', 'tests/protocol_client.test.ts', 'tests/test_dragon_parts.py',
          'tests/test_statistics_observation.py'}
 GAPS = [
     'Source/helper units do not establish runtime acceptance; only actual observations in this execution count.',
     'Never-ticked parts at literal origin; frozen NoAI fixture is not multipart placement/rendering or AI proof.',
+    'Normal difficulty fixture only; observed Peaceful Dragon summon admission discrepancy remains OPEN, not fixed or verified.',
     'Positive committed health loss only; uncontrolled player recovery excludes exact damage multipliers.',
     'Unknown signed ID assumes a fresh allocator has not allocated two billion IDs; tracking absence alone is insufficient.',
     'Parent isPickable=false is not an attack-immunity negative: direct parent hurt maps BODY.',
@@ -134,9 +135,11 @@ def parse_numeric(output: list[str], kind: str) -> dict:
                 if (match := re.search(r' has the following entity data: (.+)$', line))]
     require(len(literals) == 1, {'missing_or_ambiguous_data_read': output})
     literal = literals[0]
-    pattern = r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fF]' if kind == 'Float' else r'-?\d+'
-    require(kind in ('Float', 'Int') and re.fullmatch(pattern, literal), {'wrong_typed_numeric_read': literal, 'expected': kind})
-    value = struct.unpack('>f', struct.pack('>f', float(literal[:-1])))[0] if kind == 'Float' else int(literal)
+    pattern = (r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?' + ('[fF]' if kind == 'Float' else '[dD]')
+               if kind in ('Float', 'Double') else r'-?\d+')
+    require(kind in ('Float', 'Int', 'Double') and re.fullmatch(pattern, literal), {'wrong_typed_numeric_read': literal, 'expected': kind})
+    value = (struct.unpack('>f', struct.pack('>f', float(literal[:-1])))[0] if kind == 'Float'
+             else float(literal[:-1]) if kind == 'Double' else int(literal))
     require(math.isfinite(value), 'Nonfinite authoritative value')
     return {'nbt_type': kind, 'value': value, 'literal': literal}
 
@@ -355,6 +358,25 @@ class Probe:
         return {field: self.field(subject, field, kind) for field, kind in
                 (('Health', 'Float'), ('DragonPhase', 'Int'), ('DragonDeathTime', 'Int'), ('sitting_damage_received', 'Float'))}
 
+    def position(self, identity: str, expected: tuple[float, float, float]) -> dict:
+        """Read ordered finite Double coordinates; compound list patterns only prove containment."""
+        evidence = {'uuid': identity, 'expected': list(expected), 'reads': []}
+        self.case.setdefault('positions', []).append(evidence)
+        self.retain()
+        for index, value in enumerate(expected):
+            field = f'Pos[{index}]'
+            read = {'command': f'data get entity {identity} {field}', 'field': field, 'expected': value}
+            evidence['reads'].append(read)
+            self.retain()
+            read['output'] = self.server.command(read['command'])
+            self.retain()
+            read['actual'] = parse_numeric(read['output'], 'Double')
+            self.retain()
+            require(read['actual']['value'] == value, {'wrong_exact_position': evidence})
+        evidence['verified'] = True
+        self.retain()
+        return deepcopy(evidence)
+
     def observations(self) -> list[dict]:
         observations = self.client.state()['dragon_packets']
         self.entry['observations'] = observations
@@ -375,13 +397,14 @@ class Probe:
                   f'DragonDeathTime:{death}', f'sitting_damage_received:{sitting}']
         if phase is not None:
             fields.append(f'DragonPhase:{phase}')
-        subject['command'] = 'summon minecraft:ender_dragon 0 0 0 {' + ','.join(fields) + '}'
+        subject['command'] = 'summon minecraft:ender_dragon 0.0 0.0 0.0 {' + ','.join(fields) + '}'
         subject['after_sequence'] = self.client.state()['packets']
         self.retain()
         subject['output'] = self.server.command(subject['command'])
         self.retain()
         subject['identity_predicate'] = typed_predicate(self.server,
             f'if data entity {identity} {{UUID:[I;324478056,610800471,0,{ordinal}],Pos:[0.0d,0.0d,0.0d],NoAI:1b}}')
+        subject['position'] = self.position(identity, (0.0, 0.0, 0.0))
         state = self.client.wait_state(lambda state: any(packet['kind'] == 'spawn_header'
             and packet['uuid'] == identity and packet['sequence'] > subject['after_sequence'] for packet in state['dragon_packets']))
         spawns = [packet for packet in state['dragon_packets'] if packet['kind'] == 'spawn_header' and packet['uuid'] == identity]
@@ -400,13 +423,14 @@ class Probe:
         entity-ticking accessibility. Failure forbids stepping old phase subjects.
         Tracking removals are checked after the safe pre-death maintenance tick.
         """
-        evidence = {'uuid': subject['uuid'], 'command': f'tp {subject["uuid"]} 8192 200 8192'}
+        evidence = {'uuid': subject['uuid'], 'command': f'tp {subject["uuid"]} 8192.0 200.0 8192.0'}
         self.case['cleanup'] = evidence
         self.retain()
         evidence['output'] = self.server.command(evidence['command'])
         self.retain()
         evidence['destination'] = typed_predicate(self.server,
             f'if data entity {subject["uuid"]} {{Pos:[8192.0d,200.0d,8192.0d]}}')
+        evidence['position'] = self.position(subject['uuid'], PARK)
         evidence['unloaded'] = wait_predicate(self.server, 'unless loaded 8192 200 8192')
         evidence['verified'] = True
         self.parked.append(subject)
@@ -423,6 +447,7 @@ class Probe:
         evidence['before'] = {other['uuid']: self.field(other, 'Health', 'Float') for other in self.active}
         evidence['player'] = typed_predicate(self.server,
             f'if entity @a[name={NAME},nbt={{playerGameType:0,Pos:[0.0d,0.0d,2.0d]}}]')
+        evidence['player_position'] = self.position(str(PLAYER_ID), (POSITION['x'], POSITION['y'], POSITION['z']))
         evidence['inventory'] = self.client.state()['player_inventory']
         self.retain()
         require(evidence['inventory'] is not None and evidence['inventory']['slots'] == [None] * 46, 'Attack needs actual empty inventory')
@@ -637,8 +662,9 @@ def run_campaign(args: argparse.Namespace, run: Path, report: dict, original: Pa
             suite.wait_loaded(server)
             with interaction_deadline(server, 'dragon_parts:origin arena'):
                 for command in ('fill -8 -1 -8 8 32 8 air', 'fill -8 -1 -8 8 -1 8 stone',
-                                'difficulty peaceful', 'scoreboard objectives add pdprobe dummy'):
+                                'difficulty normal', 'scoreboard objectives add pdprobe dummy'):
                     entry['setup'].setdefault('commands', []).append({'command': command, 'output': server.command(command)})
+                entry['setup']['difficulty'] = {'name': 'normal', 'query': command_result(server, 'difficulty', 2)}
                 entry['setup']['floor'] = typed_predicate(server, 'if block 0 -1 2 minecraft:stone if block 0 0 2 minecraft:air')
             client = Client(server, log_name='dragon-parts-wire', block_data=True, dragon_parts=True, raw_packets=True)
             fixture.clients.append(client)
