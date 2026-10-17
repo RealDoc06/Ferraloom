@@ -153,6 +153,19 @@ def validate_ejected_item(value: object, expected_disc: dict) -> None:
     require(semantic_stack(value) == semantic_stack(expected_disc), {'wrong_ejected_item': value, 'expected': expected_disc})
 
 
+def saved_position(value: object) -> tuple[float, float, float]:
+    """Read only a finite three-Double Pos, without changing the retained NBT."""
+    require(isinstance(value, dict) and set(value) == {'nbt_type', 'element_type', 'value'}
+            and value['nbt_type'] == 'List' and type(value['element_type']) is int and value['element_type'] == 6
+            and isinstance(value['value'], list) and len(value['value']) == 3, 'Invalid saved Pos list')
+    coordinates = []
+    for entry in value['value']:
+        require(isinstance(entry, dict) and set(entry) == {'nbt_type', 'value'} and entry['nbt_type'] == 'Double'
+                and type(entry['value']) is float and math.isfinite(entry['value']), 'Invalid saved Pos Double')
+        coordinates.append(entry['value'])
+    return coordinates[0], coordinates[1], coordinates[2]
+
+
 def validate_offhand_record(value: dict, expected_disc: dict, ticks: int | None) -> None:
     require(record_state(value) == {'record': semantic_stack(expected_disc), 'elapsed': ticks},
             {'offhand_changed_record': value, 'expected': expected_disc, 'expected_elapsed': ticks})
@@ -596,8 +609,18 @@ def recover(fixture: Fixture, clients: list[Client], expected_disc: dict, *, cre
     evidence['entities'] = read_fixture(server.directory / 'world', server.directory / stem, entities=True)
     drops = [entity for entity in compounds(evidence['entities']['typed']['Entities']) if entity.get('id') == 'minecraft:item']
     evidence['drops'] = drops
-    require(len(drops) == 1, 'Expected exactly one saved fixture drop')
-    drop = drops[0]
+    evidence.update(retained_player(server.directory / 'world', server.directory / stem))
+    player_position = saved_position(evidence['player']['typed'].get('Pos'))
+    x, y, z = player_position
+    # A zero-radius selector binds each axis; NBT list predicates are unordered.
+    evidence['live_player_position'] = typed_predicate(server,
+        f'at {NAME} if entity @a[name={NAME},x={x!r},y={y!r},z={z!r},distance=..0]')
+    # The entity chunk includes ambient drops. Match the live command's 3D
+    # sphere around this same flush's player, before inspecting any item data.
+    nearby = [drop for drop in drops if math.dist(saved_position(drop.get('Pos')), player_position) <= 8]
+    evidence['nearby_drops'] = nearby
+    require(len(nearby) == 1, 'Expected exactly one saved fixture drop within 8 blocks')
+    drop = nearby[0]
     identity = drop.get('UUID')
     require(isinstance(identity, dict) and set(identity) == {'nbt_type', 'value'} and identity['nbt_type'] == 'IntArray'
             and isinstance(identity['value'], list) and len(identity['value']) == 4

@@ -35,6 +35,11 @@ def inventory(*entries):
     return {'nbt_type': 'List', 'element_type': 10, 'value': list(entries)}
 
 
+def saved_pos(*coordinates):
+    return {'nbt_type': 'List', 'element_type': 6,
+            'value': [{'nbt_type': 'Double', 'value': coordinate} for coordinate in coordinates]}
+
+
 def registry():
     # Clearly synthetic envelope for composite validation, not a codec fixture.
     raw = b'SYNTHETIC VALIDATOR INPUT, NOT A SERVER PACKET'
@@ -325,8 +330,10 @@ class JukeboxCampaignTests(unittest.TestCase):
                 (discs.stack(discs.CAT), discs.stack()), (discs.stack(), discs.stack(opaque=True))):
             server = SimpleNamespace(directory=Path('/SYNTHETIC'), command=Mock(return_value=['SYNTHETIC Item']), save_flush=Mock())
             fixture = SimpleNamespace(server=server, report={'active_boot': 'java_source'})
-            entity = {'id': 'minecraft:item', 'UUID': {'nbt_type': 'IntArray', 'value': [1, 2, 3, 4]}, 'Item': actual}
+            entity = {'id': 'minecraft:item', 'UUID': {'nbt_type': 'IntArray', 'value': [1, 2, 3, 4]}, 'Item': actual,
+                      'Pos': saved_pos(4100.0, 201.0, 1.0)}
             with self.subTest(actual=actual), patch.object(discs, 'read_fixture', return_value={'typed': {'Entities': inventory(entity)}}), \
+                    patch.object(discs, 'retained_player', return_value={'player': {'typed': {'Pos': saved_pos(4098.5, 200.0, 3.5)}}}), \
                     patch.object(discs, 'typed_predicate', return_value={'synthetic': True}), patch.object(discs, 'command_result') as removal:
                 with self.assertRaises(AssertionError):
                     discs.recover.__wrapped__(fixture, [], expected, creative=True)
@@ -396,6 +403,146 @@ class JukeboxCampaignTests(unittest.TestCase):
         for raw in (None, discs.atom('Int', 0), discs.atom('Long', True), discs.atom('Long', 2**63)):
             with self.assertRaises(AssertionError):
                 discs.elapsed({'ticks_since_song_started': raw})
+
+
+class JukeboxRecoveryTests(unittest.TestCase):
+    """Synthetic saved inputs exercise the actual recovery helper, never a server."""
+
+    def setUp(self):
+        self.server = SimpleNamespace(directory=Path('/SYNTHETIC'), command=Mock(return_value=['SYNTHETIC Item']), save_flush=Mock())
+        self.fixture = SimpleNamespace(server=self.server, report={'active_boot': 'rust_import'})
+        # Deliberately differs from the initial fixture POS: recovery must use
+        # the current player from this flush, rather than the starting location.
+        self.player = {'player': {'typed': {'Pos': saved_pos(4100.5, 200.0, 2.0)}}}
+        self.entities = {'typed': {'Entities': inventory()}}
+        self.entries = self.entities['typed']['Entities']['value']
+        self.drop = {'id': 'minecraft:item', 'UUID': {'nbt_type': 'IntArray', 'value': [1, -2, 3, -4]},
+                     'Pos': saved_pos(4100.757757004915, 201.01, 1.2855519824102464), 'Item': discs.stack()}
+        self.ambient = {'id': 'minecraft:item', 'UUID': {'nbt_type': 'IntArray', 'value': [5, 6, 7, 8]},
+                        'Pos': saved_pos(4109.208270328679, 65.0, 3.056599071602812),
+                        'Item': {'id': 'minecraft:chicken', 'count': discs.atom('Int', 1)}}
+        self.read = self.enterContext(patch.object(discs, 'read_fixture', return_value=self.entities))
+        self.retained = self.enterContext(patch.object(discs, 'retained_player', return_value=self.player))
+        self.predicate = self.enterContext(patch.object(discs, 'typed_predicate', side_effect=lambda _server, command: {'predicate': command}))
+        self.validation = self.enterContext(patch.object(discs, 'validate_ejected_item', wraps=discs.validate_ejected_item))
+        self.removal = self.enterContext(patch.object(discs, 'command_result', return_value={'synthetic': True}))
+        self.advance = self.enterContext(patch.object(discs, 'advance'))
+        self.actions = Mock()
+        for name, mock in (('flush', self.server.save_flush), ('entities', self.read), ('player', self.retained),
+                           ('predicate', self.predicate), ('validate_item', self.validation), ('remove', self.removal), ('advance', self.advance)):
+            self.actions.attach_mock(mock, name)
+
+    def test_recovery_scopes_saved_drops_to_live_sphere_and_keeps_all_evidence(self):
+        chicken = {'id': 'minecraft:chicken', 'Pos': saved_pos(4101.579315597794, 57.0, 0.5620457922896476)}
+        self.entries.extend([chicken, self.ambient, self.drop])
+        original = deepcopy((self.entities, self.player))
+        for creative in (True, False):
+            with self.subTest(creative=creative):
+                self.actions.reset_mock()
+                self.server.command.reset_mock()
+                self.fixture.report['observations'] = []
+                discs.recover.__wrapped__(self.fixture, [], discs.stack(), creative=creative)
+                evidence = self.fixture.report['observations'][0]
+                self.assertIs(evidence['entities'], self.entities)
+                self.assertEqual(evidence['drops'], [self.ambient, self.drop])
+                self.assertEqual(evidence['nearby_drops'], [self.drop])
+                self.assertEqual((self.entities, self.player), original)
+                artifact = self.server.directory / 'rust_import-0001-drop.nbt'
+                self.read.assert_called_once_with(self.server.directory / 'world', artifact, entities=True)
+                self.retained.assert_called_once_with(self.server.directory / 'world', artifact)
+                self.assertEqual([action[0] for action in self.actions.mock_calls],
+                                 ['flush', 'entities', 'player', 'predicate', 'predicate', 'validate_item', 'remove']
+                                 + ([] if creative else ['advance']) + ['predicate'])
+                self.assertEqual([args[0][1] for args in self.predicate.call_args_list], [
+                    f'at {discs.NAME} if entity @a[name={discs.NAME},x=4100.5,y=200.0,z=2.0,distance=..0]',
+                    f'at {discs.NAME} if data entity @e[type=minecraft:item,distance=..8,limit=1,sort=nearest] {{UUID:[I;1,-2,3,-4]}}',
+                    f'at {discs.NAME} unless entity @e[type=minecraft:item,distance=..8]'])
+                self.validation.assert_called_once_with(self.drop['Item'], discs.stack())
+                command = (f'kill @e[type=minecraft:item,distance=..8]' if creative
+                           else f'tp @e[type=minecraft:item,distance=..8] {discs.NAME}')
+                self.removal.assert_called_once_with(self.server, f'execute at {discs.NAME} run {command}', 1)
+                if creative:
+                    self.advance.assert_not_called()
+                else:
+                    self.advance.assert_called_once_with(self.fixture, [], 20)
+                self.server.command.assert_called_once_with(
+                    f'execute at {discs.NAME} run data get entity @e[type=minecraft:item,distance=..8,limit=1,sort=nearest] Item')
+
+    def test_recovery_sphere_includes_exactly_eight_blocks_from_current_saved_player(self):
+        # This item is outside eight blocks of the initial POS, but exactly
+        # eight blocks above the current player saved by this recovery flush.
+        self.drop['Pos'] = saved_pos(4100.5, 208.0, 2.0)
+        self.entries.extend([self.ambient, self.drop])
+        discs.recover.__wrapped__(self.fixture, [], discs.stack(), creative=True)
+        self.assertEqual(self.fixture.report['observations'][0]['nearby_drops'], [self.drop])
+        self.validation.assert_called_once_with(self.drop['Item'], discs.stack())
+        self.removal.assert_called_once()
+
+    def test_recovery_rejects_zero_or_multiple_nearby_items_before_removal(self):
+        boundary = {**self.drop, 'Pos': saved_pos(4100.5, 208.0, 2.0)}
+        diagonal = {**self.drop, 'Pos': saved_pos(4106.5, 206.0, 2.0)}
+        just_outside = {**self.drop, 'Pos': saved_pos(4100.5, 208.000001, 2.0)}
+        for entries in ([], [self.ambient], [diagonal], [just_outside], [self.ambient, self.drop, boundary]):
+            with self.subTest(entries=entries), self.assertRaisesRegex(AssertionError, 'exactly one saved fixture drop within 8 blocks'):
+                self.entries[:] = entries
+                discs.recover.__wrapped__(self.fixture, [], discs.stack(), creative=True)
+            self.validation.assert_not_called()
+            self.removal.assert_not_called()
+            self.advance.assert_not_called()
+            self.assertEqual(self.fixture.report['observations'][-1]['drops'], entries)
+
+    def test_recovery_rejects_nearby_wrong_items_even_with_expected_item_outside(self):
+        for actual, expected in (
+                ({'id': 'minecraft:stone', 'count': discs.atom('Int', 1)}, discs.stack()),
+                ({**discs.stack(), 'count': discs.atom('Int', 2)}, discs.stack()),
+                (discs.stack(discs.CAT), discs.stack()), (discs.stack(), discs.stack(opaque=True)),
+                (discs.stack(opaque=True), discs.stack())):
+            with self.subTest(actual=actual, expected=expected):
+                self.actions.reset_mock()
+                self.entries[:] = [{**self.ambient, 'Item': expected}, {**self.drop, 'Item': actual}]
+                with self.assertRaises(AssertionError):
+                    discs.recover.__wrapped__(self.fixture, [], expected, creative=True)
+                self.validation.assert_called_once_with(actual, expected)
+                self.assertIn('UUID:[I;1,-2,3,-4]', self.predicate.call_args[0][1])
+                self.removal.assert_not_called()
+                self.advance.assert_not_called()
+                self.assertEqual(self.fixture.report['observations'][-1]['drops'], self.entries)
+
+    def test_recovery_rejects_malformed_or_nonfinite_player_and_drop_positions_before_removal(self):
+        valid = self.player['player']['typed']['Pos']
+        malformed = (None, [4100.5, 200.0, 2.0], {**valid, 'element_type': 5},
+                     {**valid, 'element_type': 6.0}, saved_pos(4100.5, 200.0), saved_pos(4100.5, 200.0, 2.0, 0.0),
+                     {**valid, 'value': [discs.atom('Float', 4100.5), *valid['value'][1:]]},
+                     {**valid, 'extra': True}, saved_pos(4100, 200.0, 2.0), saved_pos(True, 200.0, 2.0),
+                     saved_pos('4100.5', 200.0, 2.0), saved_pos(float('nan'), 200.0, 2.0),
+                     saved_pos(4100.5, float('inf'), 2.0), saved_pos(4100.5, 200.0, -float('inf')))
+        for subject in ('player', 'drop', 'ambient'):
+            for position in malformed:
+                with self.subTest(subject=subject, position=position):
+                    self.player['player']['typed']['Pos'] = position if subject == 'player' else valid
+                    self.entries[:] = [{**self.ambient, **({'Pos': position} if subject == 'ambient' else {})},
+                                       {**self.drop, **({'Pos': position} if subject == 'drop' else {})}]
+                    with self.assertRaisesRegex(AssertionError, 'Invalid saved Pos'):
+                        discs.recover.__wrapped__(self.fixture, [], discs.stack(), creative=True)
+                    self.validation.assert_not_called()
+                    self.removal.assert_not_called()
+                    self.advance.assert_not_called()
+
+    def test_recovery_refuses_failed_live_player_or_uuid_binding_before_removal(self):
+        self.entries.extend([self.ambient, self.drop])
+        for failure in ('distance=..0', 'UUID:'):
+            def predicate(_server, command):
+                if failure in command:
+                    raise AssertionError('SYNTHETIC live binding mismatch')
+                return {'predicate': command}
+
+            with self.subTest(failure=failure):
+                self.predicate.side_effect = predicate
+                with self.assertRaisesRegex(AssertionError, 'live binding mismatch'):
+                    discs.recover.__wrapped__(self.fixture, [], discs.stack(), creative=True)
+                self.validation.assert_not_called()
+                self.removal.assert_not_called()
+                self.advance.assert_not_called()
 
 
 if __name__ == '__main__':
