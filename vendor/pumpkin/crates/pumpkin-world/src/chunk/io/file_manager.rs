@@ -1814,7 +1814,7 @@ mod tests {
                         )
                         .unwrap();
                     storage.save_all().unwrap();
-                }
+                };
                 let path = folder.region_folder.join(S::get_chunk_key(&pos));
                 let poi_path = folder.poi_folder.join("r.0.0.mca");
                 let terrain_before = std::fs::read(&path).unwrap();
@@ -1868,7 +1868,7 @@ mod tests {
                     .find(|entry| entry.pos() == BlockPos::new(1, 0, 1))
                     .unwrap();
                 assert_eq!(entry.poi_type, PoiType::Home.identifier());
-                assert_eq!(entry.free_tickets, if aba { 1 } else { 0 });
+                assert_eq!(entry.free_tickets, i32::from(aba));
                 assert!(!source.is_dirty());
                 assert!(loader.unapplied.lock().await.is_empty());
                 assert!(
@@ -1958,7 +1958,7 @@ mod tests {
                             .unwrap();
                     }
                     storage.save_all().unwrap();
-                }
+                };
                 let poi_a_before = std::fs::read(&poi_a).unwrap();
                 let poi_b_before = std::fs::read(&poi_b).unwrap();
                 if explicit_flush {
@@ -2116,7 +2116,7 @@ mod tests {
                             .unwrap();
                     }
                     storage.save_all().unwrap();
-                }
+                };
                 writer.watch_chunks(&folder, &positions).await;
                 sources[0].set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
                 sources[1].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);

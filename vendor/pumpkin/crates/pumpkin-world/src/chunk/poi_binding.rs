@@ -23,7 +23,7 @@ pub struct PoiRuntime {
 /// One exact-source pause at real backend admission, after encoding/compression.
 /// The slot and every production ownership guard are released before waiting.
 #[cfg(test)]
-pub(crate) struct CaptureAdmissionGate {
+pub struct CaptureAdmissionGate {
     source: Weak<ChunkData>,
     entered: tokio::sync::oneshot::Sender<()>,
     resume: std::sync::mpsc::Receiver<()>,

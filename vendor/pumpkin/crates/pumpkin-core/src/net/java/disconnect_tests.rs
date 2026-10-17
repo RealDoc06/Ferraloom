@@ -1632,7 +1632,7 @@ mod full_burst_tests {
             let mut score =
                 ScoreboardScore::new("StreamedPlayer", "spamprobe", VarInt(0), None, None);
             score.locked = false;
-            scoreboard.update_score(&NoTarget, score)
+            scoreboard.update_score(&NoTarget, score);
         };
         let trace = StreamTrace {
             started: Instant::now(),

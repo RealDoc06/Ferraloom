@@ -810,7 +810,7 @@ mod stale_save_deferral {
                         )
                         .unwrap();
                     storage.save_all().unwrap();
-                }
+                };
                 let terrain_path = level
                     .level_folder
                     .region_folder
@@ -991,7 +991,7 @@ mod stale_save_deferral {
                         .unwrap();
                 }
                 storage.save_all().unwrap();
-            }
+            };
             chunks[0].mark_dirty(true);
             level.set_block_state(
                 &BlockPos::new(bx * 16 + 1, 0, 1),
