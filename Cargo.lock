@@ -229,6 +229,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferraloom-light"
+version = "0.1.0"
+dependencies = [
+ "ferraloom-chunk",
+ "ferraloom-data",
+ "ferraloom-util",
+]
+
+[[package]]
 name = "ferraloom-nbt"
 version = "0.1.0"
 dependencies = [
