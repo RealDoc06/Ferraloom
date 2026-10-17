@@ -164,7 +164,9 @@ public final class NetherEndGolden {
             "{type:'sequence',features:["+island+","+yes+","+island+"]}",
             "{type:'no_op'}",
             "{type:'stepped_column_cluster',block:{id:'basalt'},can_replace:{type:'matching_block_tag',tag:'air'},continue_through:{type:'matching_blocks',blocks:'basalt'},cannot_place_on:'#cannot_place_basalt_pillar_on',cluster_reach:5,column_count:50,column_reach:2,height:{type:'uniform',min_inclusive:5,max_inclusive:10}}",
-            "{type:'end_spike',spikes:[{centerX:8,centerZ:8,radius:3,height:79,guarded:true}],crystal_invulnerable:true,crystal_beam_target:[1,99,2]}"
+            "{type:'end_spike',spikes:[{centerX:8,centerZ:8,radius:3,height:79,guarded:true}],crystal_invulnerable:true,crystal_beam_target:[1,99,2]}",
+            "{type:'simple_random_selector',features:"+island+"}",
+            "{type:'sequence',features:"+island+"}"
         );
         for(int i=0;i<configs.size();i++){
             var config=JsonParser.parseString(configs.get(i));var feature=Feature.DIRECT_CODEC.parse(ops,config).getOrThrow();

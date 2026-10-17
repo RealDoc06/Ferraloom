@@ -72,7 +72,7 @@ fn placed_set(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Vec<Arc<PlacedFeat
         ids.iter()
             .map(|id| Value::String(id.to_string()))
             .collect::<Vec<_>>()
-    } else if v.is_string() {
+    } else if v.is_string() || v.is_object() {
         vec![v.clone()]
     } else {
         list(v)?.to_vec()
