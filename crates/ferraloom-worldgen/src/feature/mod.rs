@@ -16,10 +16,10 @@ use std::{
     sync::Arc,
 };
 
-pub mod state_provider;
-pub mod vegetation;
 pub mod aquatic;
+pub mod state_provider;
 pub mod surface;
+pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
