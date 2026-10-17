@@ -220,6 +220,11 @@ fn replay(require_pending: bool) {
             case["next"].as_i64().unwrap(),
             "random {label}"
         );
+        assert_eq!(
+            XoroshiroRandomSource::new(7331).next_long(),
+            case["level_next"].as_i64().unwrap(),
+            "level random {label}"
+        );
         let mut blocks = BTreeMap::new();
         let mut ticks = Vec::new();
         let mut fluid_ticks = Vec::new();

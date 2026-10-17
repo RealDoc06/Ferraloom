@@ -18,6 +18,7 @@ import net.minecraft.world.ticks.*;
 
 /** Real feature and block implementations on an exclusive, unlit proto-level. */
 public final class VegetationGolden {
+    static net.minecraft.server.level.ServerLevel serverLevel;
     static final Set<String> TYPES=Set.of("bamboo","block_column","block_pile","blue_ice","coral_claw","coral_tree","iceberg","freeze_top_layer","vines","random_neighbor_spread","projected_random_patchy_square","overlay","single_block_pillar","simple_block","spike","fill_layer","block_blob");
     static final Comparator<BlockPos> ORDER=Comparator.<BlockPos>comparingInt(p->p.getX()).thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ);
     static JsonArray pos(BlockPos p) {return WorldgenGolden.array(p.getX(),p.getY(),p.getZ());}
@@ -57,6 +58,7 @@ public final class VegetationGolden {
                         public boolean isDifficultyLocked() {return false;}
                     };
                     case "getSeed" -> 8675309L;
+                    case "getLevel" -> serverLevel;
                     case "nextSubTickCount" -> subTick++;
                     case "registryAccess" -> registries;
                     case "getBiome" -> registries.lookupOrThrow(Registries.BIOME).getOrThrow(ResourceKey.create(Registries.BIOME,Identifier.withDefaultNamespace(terrain.equals("snow")?"snowy_plains":"plains")));
@@ -114,7 +116,7 @@ public final class VegetationGolden {
     }
     static JsonElement config(RegistryAccess.Frozen r,Feature f) {return Feature.DIRECT_CODEC.encodeStart(ops(r),f).getOrThrow();}
     static void capture(JsonArray cases, RegistryAccess.Frozen r,ChunkGenerator generator,String name,Feature feature,JsonElement config) {
-        for(String terrain:List.of("land","water","slope","snow"))for(long seed:new long[]{0,1,-1})for(int[] xyz:new int[][]{{0,64,0},{15,62,15},{-1,70,-1}}) {
+        for(String terrain:List.of("land","water","slope","snow"))for(long seed:new long[]{0,1,-1})for(int[] xyz:new int[][]{{0,64,0},{15,62,15},{-1,70,-1},{0,62,1}}) {
             var controlled=new Controlled(r,terrain);
             var random=new WorldgenRandom(new XoroshiroRandomSource(seed));
             var item=new JsonObject();item.addProperty("name",name);item.add("config",config);item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("origin",WorldgenGolden.point(xyz));
@@ -130,6 +132,16 @@ public final class VegetationGolden {
         var r=WorldgenGolden.load();var cases=new JsonArray();
         var settings=r.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace("overworld"));
         var generator=new NoiseBasedChunkGenerator(WorldgenGolden.source(r,"overworld"),Holder.direct(settings));
+        var location=new net.minecraft.server.packs.PackLocationInfo("vanilla",net.minecraft.network.chat.Component.literal("vanilla"),net.minecraft.server.packs.repository.PackSource.BUILT_IN,Optional.empty());
+        var pack=new net.minecraft.server.packs.VanillaPackResourcesBuilder().pushJarResources().exposeNamespace("minecraft").build(location).fullResources();
+        try(var resources=new net.minecraft.server.packs.resources.MultiPackResourceManager(net.minecraft.server.packs.PackType.SERVER_DATA,List.of(pack));
+            var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("fixture-worlds")).createAccess("vegetation")) {
+        var manager=new net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager(resources,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
+        org.mockito.stubbing.Answer<Object> forbidden=call->{throw new UnsupportedOperationException("Unapproved server mock call: "+call.getMethod());};
+        serverLevel=org.mockito.Mockito.mock(net.minecraft.server.level.ServerLevel.class,forbidden);
+        var server=org.mockito.Mockito.mock(net.minecraft.server.MinecraftServer.class,forbidden);
+        org.mockito.Mockito.doReturn(server).when(serverLevel).getServer();
+        org.mockito.Mockito.doReturn(manager).when(server).getStructureTemplateManager();
         for(var holder:r.lookupOrThrow(Registries.FEATURE).listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList()) {
             var f=holder.value();var c=config(r,f);if(!TYPES.contains(c.getAsJsonObject().get("type").getAsString().replace("minecraft:","")))continue;
             System.err.println(holder.getRegisteredName());capture(cases,r,generator,holder.getRegisteredName(),f,c);
@@ -149,5 +161,6 @@ public final class VegetationGolden {
         WorldgenGolden.write(Path.of(args[0]),cases);
         UnlitLightGolden.generate(r,Path.of(args[0]).resolveSibling("unlit_light.json.gz"));
         System.err.println("captured "+cases.size()+" cases");
+        }
     }
 }
