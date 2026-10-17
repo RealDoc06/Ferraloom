@@ -897,8 +897,26 @@ impl EnderDragonEntity {
     }
 
     pub fn ai_step(&self) {
-        if self.mob_entity.living_entity.entity.is_removed()
-            || self.mob_entity.living_entity.health.load() <= 0.0
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load_full();
+        if !world.is_current_entity(self) {
+            return;
+        }
+        // Loaded/adopted dragons acquire only their world's matching fight.
+        // Release its guard before phase, healing or other callback paths.
+        if self.attached_fight().is_none()
+            && let Some(fight) = &world.dragon_fight
+        {
+            let matches = fight
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .dragon_uuid
+                == Some(entity.entity_uuid);
+            if matches && world.is_current_entity(self) {
+                self.attach_fight(fight);
+            }
+        }
+        if self.mob_entity.living_entity.health.load() <= 0.0
             || self.mob_entity.living_entity.dead.load(Ordering::Relaxed)
         {
             return;
