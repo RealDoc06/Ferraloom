@@ -143,9 +143,9 @@ impl Connection {
                     reason,
                 }))
             }
-            Phase::Play(_) => self.push(play::clientbound::Packet::Disconnect(
+            Phase::Play(_) => self.push(play::clientbound::Packet::Disconnect(Box::new(
                 common_cb::Disconnect { reason },
-            )),
+            ))),
         };
         self.close = true;
     }
@@ -815,18 +815,18 @@ impl MinecraftServer {
             entries: Vec::new(),
             replace: true,
         }));
-        self.broadcast(cb::Packet::SystemChat(cb::SystemChat {
+        self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
             content: Component::translatable(
                 "multiplayer.player.joined",
                 vec![protocol::chat::Argument::String(c.profile.name.clone())],
             ),
             overlay: false,
-        }));
+        })));
         teleport(&mut c, pos, yaw, pitch, self.tick);
-        c.push(cb::Packet::ServerData(cb::ServerData {
+        c.push(cb::Packet::ServerData(Box::new(cb::ServerData {
             motd: Component::literal(self.properties.get("motd")),
             icon_bytes: self.favicon.clone().map(common::ByteArray),
-        }));
+        })));
         let existing = self
             .players
             .iter()
@@ -1309,9 +1309,7 @@ impl MinecraftServer {
             leaving.sort_by_key(|p| p.pack());
             for pos in leaving {
                 if c.chunks.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
-                        pos: pos.pack(),
-                    }));
+                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk { pos }));
                 }
             }
             for &pos in desired.difference(&c.view) {
@@ -1517,7 +1515,7 @@ impl MinecraftServer {
             let global_index = c.next_chat_index;
             c.next_chat_index += 1;
             let body = c.signature_cache.pack(&message);
-            c.push(cb::Packet::PlayerChat(cb::PlayerChat {
+            c.push(cb::Packet::PlayerChat(Box::new(cb::PlayerChat {
                 global_index: VarInt(global_index),
                 sender: message.sender,
                 index: VarInt(message.index),
@@ -1530,7 +1528,7 @@ impl MinecraftServer {
                     name: Component::literal(name.clone()),
                     target_name: None,
                 },
-            }));
+            })));
         }
         Ok(())
     }
@@ -1601,13 +1599,13 @@ impl MinecraftServer {
                 self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                     profile_ids: vec![c.profile.id],
                 }));
-                self.broadcast(cb::Packet::SystemChat(cb::SystemChat {
+                self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
                     content: Component::translatable(
                         "multiplayer.player.left",
                         vec![protocol::chat::Argument::String(name)],
                     ),
                     overlay: false,
-                }));
+                })));
             }
         }
         Ok(())
@@ -1668,14 +1666,14 @@ impl MinecraftServer {
                         .unwrap_or_else(|| ValidatedMessage::unsigned(c.profile.id, content));
                     self.broadcast_chat(message, id("say_command"))?;
                 } else {
-                    self.broadcast(cb::Packet::DisguisedChat(cb::DisguisedChat {
+                    self.broadcast(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
                         message: Component::literal(content),
                         chat_type: ChatTypeBound {
                             chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
                             name: Component::literal("Server"),
                             target_name: None,
                         },
-                    }));
+                    })));
                 }
             }
             CommandAction::Teleport { targets, position } => {
@@ -1767,10 +1765,10 @@ impl MinecraftServer {
     fn feedback(&mut self, source: Option<ConnectionId>, message: &str) {
         if let Some(source) = source {
             if let Some(c) = self.connections.get_mut(&source) {
-                c.push(cb::Packet::SystemChat(cb::SystemChat {
+                c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
                     content: Component::literal(message),
                     overlay: false,
-                }));
+                })));
             }
         } else {
             println!("{message}");
@@ -1941,17 +1939,17 @@ fn light_packet(light: Option<&ChunkLight>) -> LightUpdatePacketData {
         }
     }
     LightUpdatePacketData {
-        sky_y_mask: BitSet::from_words(vec![sky_mask]),
-        block_y_mask: BitSet::from_words(vec![block_mask]),
-        empty_sky_y_mask: BitSet::from_words(vec![empty_sky]),
-        empty_block_y_mask: BitSet::from_words(vec![empty_block]),
+        sky_y_mask: play::ByteBitSet(BitSet::from_words(vec![sky_mask])),
+        block_y_mask: play::ByteBitSet(BitSet::from_words(vec![block_mask])),
+        empty_sky_y_mask: play::ByteBitSet(BitSet::from_words(vec![empty_sky])),
+        empty_block_y_mask: play::ByteBitSet(BitSet::from_words(vec![empty_block])),
         sky_updates,
         block_updates,
     }
 }
 fn client_information() -> common::serverbound::ClientInformation {
     common::serverbound::ClientInformation {
-        language: common::Utf8("en_us".into()),
+        language: common::FriendlyString("en_us".into()),
         view_distance: 2,
         chat_visibility: common::serverbound::ChatVisibility::Full,
         chat_colors: true,

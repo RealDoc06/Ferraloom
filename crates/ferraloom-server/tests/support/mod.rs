@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, ensure};
+use ferraloom_data::packets as packet_types;
 use ferraloom_protocol::{
     self as p, Reader, Uuid, Wire,
     codec::{BitSet, VarInt},
@@ -31,10 +32,13 @@ pub fn properties(root: &Path) -> Result<()> {
 }
 #[derive(Debug, PartialEq, Eq)]
 pub struct Sequence {
-    pub login: Vec<u16>,
-    pub configuration: Vec<(u16, Option<String>)>,
+    pub login: Vec<packet_types::login::clientbound::Packet>,
+    pub configuration: Vec<(
+        packet_types::configuration::clientbound::Packet,
+        Option<String>,
+    )>,
     pub registries: Vec<(String, Vec<String>)>,
-    pub join: Vec<u16>,
+    pub join: Vec<packet_types::play::clientbound::Packet>,
 }
 pub struct Outcome {
     pub sequence: Sequence,
@@ -79,7 +83,10 @@ impl Client {
         };
         loop {
             let packet = login::ClientboundPacket::from_bytes(&io.read().await?)?;
-            sequence.login.push(packet.packet_id());
+            sequence.login.push(
+                packet_types::login::clientbound::Packet::from_protocol_id(packet.packet_id())
+                    .context("unknown login packet type")?,
+            );
             match packet {
                 login::ClientboundPacket::Compression(p) => io.compression(p.threshold.0),
                 login::ClientboundPacket::LoginFinished(p) => {
@@ -101,7 +108,7 @@ impl Client {
         .await?;
         io.send(&cfg::ServerboundPacket::ClientInformation(
             common::serverbound::ClientInformation {
-                language: common::Utf8("en_us".into()),
+                language: common::FriendlyString("en_us".into()),
                 view_distance: 2,
                 chat_visibility: common::serverbound::ChatVisibility::Full,
                 chat_colors: true,
@@ -125,7 +132,13 @@ impl Client {
                 None
             };
             if !matches!(packet, cfg::ClientboundPacket::KeepAlive(_)) {
-                sequence.configuration.push((packet.packet_id(), registry));
+                sequence.configuration.push((
+                    packet_types::configuration::clientbound::Packet::from_protocol_id(
+                        packet.packet_id(),
+                    )
+                    .context("unknown configuration packet type")?,
+                    registry,
+                ));
             }
             match packet {
                 cfg::ClientboundPacket::SelectKnownPacks(p) => {
@@ -190,7 +203,10 @@ impl Client {
         let packet = cb::Packet::decode(&mut reader)?;
         reader.finish()?;
         if self.joining {
-            self.sequence.join.push(packet.packet_id());
+            self.sequence.join.push(
+                packet_types::play::clientbound::Packet::from_protocol_id(packet.packet_id())
+                    .context("unknown play packet type")?,
+            );
             if matches!(packet, cb::Packet::SetEntityData(_)) {
                 self.joining = false;
             }
@@ -234,7 +250,13 @@ impl Client {
             cb::Packet::LevelChunkWithLight(chunk) => {
                 ensure!(chunk.chunk_data.sections.len() == 24, "overworld sections");
                 ensure!(
-                    chunk.light_data.sky_y_mask.words().iter().any(|&v| v != 0),
+                    chunk
+                        .light_data
+                        .sky_y_mask
+                        .0
+                        .words()
+                        .iter()
+                        .any(|&v| v != 0),
                     "chunk lacks sky light"
                 );
                 self.chunks.insert((chunk.x, chunk.z));

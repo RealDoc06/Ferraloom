@@ -21,9 +21,9 @@ cd "$HOME/ferraloom-world"
 /path/to/ferraloom --regions off nogui
 ```
 
-The first run writes `eula.txt` and stops. Read the linked Minecraft EULA and,
-if you accept it, change `eula=false` to `eula=true`. Run the command again to
-create `server.properties` and the world. The official 26.3 server jar supplies
+The first run writes `server.properties` and `eula.txt`, then stops. Read the
+linked Minecraft EULA and, if you accept it, change `eula=false` to `eula=true`.
+Run the command again to create the world. The official 26.3 server jar supplies
 vanilla data. Ferraloom downloads it into `.cache/vanilla/26.3/server.jar` and
 verifies its pinned SHA-1. You can reuse an existing verified bundle:
 
@@ -47,8 +47,8 @@ simulation-distance=2
 Offline mode accepts names without Mojang authentication. Use it only on the
 trusted test LAN. The default whitelist is enabled in vanilla 26.3; either add
 your profile to `whitelist.json` or explicitly disable it as above. Keep online
-mode enabled for an authenticated server. Signed chat validation is not yet
-complete in this slice.
+mode enabled for an authenticated server. Signed chat certificates, message
+chains and acknowledgments are validated; online client parity is still unverified.
 
 Connect a 26.3 client to **the server host's LAN IP** and port 25565. If you run
 it on devbox, that is `10.10.10.106:25565`. If you copy it elsewhere, use that
