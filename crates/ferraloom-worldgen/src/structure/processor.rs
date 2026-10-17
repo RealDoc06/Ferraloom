@@ -210,15 +210,20 @@ impl StructureProcessor {
             "minecraft:blackstone_replace" => Ok(Self::BlackstoneReplace),
             "minecraft:gravity" => {
                 let heightmap =
-                    optional(v, "heightmap", Heightmap::WorldSurface, |v| {
-                        match string(v)? {
-                            "WORLD_SURFACE_WG" | "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
-                            "OCEAN_FLOOR_WG" | "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
+                    optional(
+                        v,
+                        "heightmap",
+                        Heightmap::WorldSurfaceWg,
+                        |v| match string(v)? {
+                            "WORLD_SURFACE_WG" => Ok(Heightmap::WorldSurfaceWg),
+                            "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
+                            "OCEAN_FLOOR_WG" => Ok(Heightmap::OceanFloorWg),
+                            "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
                             "MOTION_BLOCKING" => Ok(Heightmap::MotionBlocking),
                             "MOTION_BLOCKING_NO_LEAVES" => Ok(Heightmap::MotionBlockingNoLeaves),
                             s => Err(Error(format!("unknown heightmap {s}"))),
-                        }
-                    })?;
+                        },
+                    )?;
                 Ok(Self::Gravity {
                     heightmap,
                     offset: optional(v, "offset", 0, integer)?,
@@ -318,10 +323,10 @@ impl StructureProcessor {
                 }
             }
             Self::LavaSubmergedBlock => {
-                if region.block(info.position)?.block() == Block::LAVA {
-                    if !region.is_outline_full_block(info.state, info.position)? {
-                        info.state = Block::LAVA.default_state();
-                    }
+                if region.block(info.position)?.block() == Block::LAVA
+                    && !region.is_outline_full_block(info.state, info.position)?
+                {
+                    info.state = Block::LAVA.default_state();
                 }
             }
             Self::ProtectedBlocks(blocks) => {

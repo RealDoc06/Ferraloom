@@ -27,10 +27,7 @@ pub struct NoiseState {
 impl NoiseState {
     fn decode(v: &Value) -> Result<(Self, i64), Error> {
         let seed = long(field(v, "seed")?)?;
-        let scale = float(field(v, "scale")?)?;
-        if scale <= 0.0 {
-            return Err(Error("noise scale must be positive".into()));
-        }
+        let scale = float_range(field(v, "scale")?, f32::from_bits(1), f32::MAX)?;
         let noise = NoiseSpec::decode(field(v, "noise")?)?
             .noise()
             .create(&mut WorldgenRandom::new(LegacyRandomSource::new(seed)));
@@ -180,10 +177,7 @@ impl BlockStateProvider {
                 if min > max {
                     return Err(Error("invalid variety range".into()));
                 }
-                let slow_scale = float(field(v, "slow_scale")?)?;
-                if slow_scale <= 0.0 {
-                    return Err(Error("slow scale must be positive".into()));
-                }
+                let slow_scale = float_range(field(v, "slow_scale")?, f32::from_bits(1), f32::MAX)?;
                 let slow = NoiseSpec::decode(field(v, "slow_noise")?)?
                     .noise()
                     .create(&mut WorldgenRandom::new(LegacyRandomSource::new(seed)));
@@ -256,8 +250,20 @@ impl BlockStateProvider {
                     Direction::West => properties::Facing::West,
                     Direction::East => properties::Facing::East,
                 };
-                state = state.with(properties::AXIS, axis).unwrap_or(state);
-                state.with(properties::FACING, facing).unwrap_or(state)
+                // Vanilla property equality includes the complete value domain.
+                // Portal's XZ axis and hopper's five-way facing are different
+                // properties from AXIS/FACING despite sharing their names.
+                if state.with(properties::AXIS, properties::Axis::Y).is_some() {
+                    state = state.with(properties::AXIS, axis).unwrap_or(state);
+                }
+                let up = state.with(properties::FACING, properties::Facing::Up);
+                let down = state.with(properties::FACING, properties::Facing::Down);
+                if (up.is_some() && down.is_some())
+                    || (up.is_none() && down.is_none() && direction.axis().is_horizontal())
+                {
+                    state = state.with(properties::FACING, facing).unwrap_or(state);
+                }
+                state
             }
             Self::RuleBased { fallback, rules } => {
                 for (predicate, then) in rules {
