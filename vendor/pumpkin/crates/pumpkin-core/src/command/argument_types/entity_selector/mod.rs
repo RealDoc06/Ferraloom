@@ -109,9 +109,16 @@ impl EntitySelector {
             Ok(player.map_or_else(Vec::new, |p| vec![p as Arc<dyn EntityBase>]))
         } else if let Some(uuid) = self.entity_uuid.as_ref() {
             // Try to get an entity by UUID.
-            for world in source.server().worlds.load().iter() {
+            let worlds = source.server().worlds.load();
+            for world in worlds.iter() {
                 if let Some(entity) = world.get_entity_by_uuid(*uuid) {
                     return Ok(vec![entity]);
+                }
+            }
+            // Players are registered separately from ordinary entities.
+            for world in worlds.iter() {
+                if let Some(player) = world.get_player_by_uuid(*uuid) {
+                    return Ok(vec![player as Arc<dyn EntityBase>]);
                 }
             }
             Ok(Vec::new())
@@ -581,6 +588,10 @@ impl EntitySelectorPredicate {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod uuid_tests;
 
 #[cfg(test)]
 mod tests {
