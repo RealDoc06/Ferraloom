@@ -207,13 +207,9 @@ async fn scoped_death_height_and_actual_vertical_clipping_preserve_ordinary_move
             d.mob_entity.living_entity.health.load(),
             if alive { 1.0 } else { 0.0 }
         );
-        assert_eq!(*d.dragon_death_time.lock().unwrap(), 0);
-        assert_eq!(
-            d.phase_manager
-                .get_phase(EnderDragonPhase::Dying)
-                .get_fly_speed(),
-            3.0
-        );
+        let mut saved = NbtCompound::new();
+        EntityBase::write_nbt(live.as_ref(), &mut saved);
+        assert_eq!(saved.get_int("DragonDeathTime"), Some(0));
         world.remove_entity(live.as_ref());
     }
     close_fixture(&fixture).await;

@@ -1088,6 +1088,12 @@ async fn actual_lethal_hook_and_phase_handoff_own_shared_clock_without_generic_r
     assert_eq!(d.mob_entity.living_entity.health.load(), 1.0);
     assert!(!d.mob_entity.living_entity.dead.load(Ordering::Relaxed));
     assert_eq!(d.current_phase(), EnderDragonPhase::Dying);
+    assert_eq!(
+        d.phase_manager
+            .get_phase(EnderDragonPhase::Dying)
+            .get_fly_speed(),
+        3.0
+    );
     assert_eq!(live.get_entity().pose.load(), EntityPose::Dying);
     assert_eq!(
         hooks.deaths.lock().unwrap().as_slice(),
