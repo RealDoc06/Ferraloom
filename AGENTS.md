@@ -1,5 +1,13 @@
 # Ferraloom development
 
+Ferraloom's server engine must be implemented independently in Rust. Do not
+depend on, port, or embed another Minecraft server implementation. Ordinary
+runtime, networking, compression and cryptography libraries are allowed. Use the
+official pinned server as a behavioral reference and test oracle. The previous
+Pumpkin prototype is preserved on `archive/pumpkin-prototype-ee7`; its evidence
+does not establish coverage of the independent engine. Keep plugins deferred
+until vanilla compatibility is established.
+
 In Doc's managed environment, run heavy Rust builds, native checks and worktree
 checks on the dedicated `ferraloom-builder`. Keep devbox for editing and
 lightweight work. Identify the actual execution host in validation reports.
@@ -7,7 +15,7 @@ lightweight work. Identify the actual execution host in validation reports.
 From a clean, committed Ferraloom checkout on devbox:
 
 ```sh
-/home/doc/.local/bin/ferraloom-build -- cargo check --manifest-path vendor/pumpkin/Cargo.toml --locked --offline --jobs 1 -p pumpkin-core --lib --target-dir target
+/home/doc/.local/bin/ferraloom-build -- cargo check --locked --offline --jobs 1 --all-targets --target-dir target
 ```
 
 The helper sends the exact Git HEAD to `/home/doc/code/Ferraloom` on the builder,
