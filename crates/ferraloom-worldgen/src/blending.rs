@@ -1,5 +1,5 @@
 //! Port of Blender's height, density and biome blending. Historical chunk IO
-//! supplies BlendingData; carving masks and border ticks belong to later stages.
+//! supplies BlendingData; border ticks belong to later stages.
 use crate::{Error, Identifier, density::DensityVolume};
 use ferraloom_util::{
     mth,
@@ -127,6 +127,32 @@ impl Blender {
             height_order,
             density_order,
             shift,
+        })
+    }
+    /// Port of Blender#createAroundOldChunksCarvingMaskFilter. The vanilla
+    /// filter admits samples within four jittered blocks of old generation.
+    pub fn can_carve(&self, center: [i32; 2], x: u8, y: i32, z: u8) -> bool {
+        let old = self
+            .data
+            .iter()
+            .filter(|(p, _)| (p[0] - center[0]).abs() <= 1 && (p[1] - center[1]).abs() <= 1)
+            .collect::<Vec<_>>();
+        if old.is_empty() {
+            return true;
+        }
+        let (x, y, z) = (f64::from(x), f64::from(y), f64::from(z));
+        let shifted = [
+            x + 0.5 + f64::from(self.shift.get(x, y, z) * 4.0),
+            y + 0.5 + f64::from(self.shift.get(y, z, x) * 4.0),
+            z + 0.5 + f64::from(self.shift.get(z, x, y) * 4.0),
+        ];
+        old.iter().any(|(p, data)| {
+            let radius_y = f64::from((data.max_section - data.min_section) * 16) / 2.0;
+            let center_y = f64::from(data.min_section * 16) + radius_y;
+            let dx = ((shifted[0] - 8.0 - f64::from((p[0] - center[0]) * 16)).abs() - 8.0).max(0.0);
+            let dy = ((shifted[1] - center_y).abs() - radius_y).max(0.0);
+            let dz = ((shifted[2] - 8.0 - f64::from((p[1] - center[1]) * 16)).abs() - 8.0).max(0.0);
+            (dx * dx + dy * dy + dz * dz).sqrt() < 4.0
         })
     }
     pub fn is_empty(&self) -> bool {
