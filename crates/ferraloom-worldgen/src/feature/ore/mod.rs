@@ -54,7 +54,7 @@ fn decode(
         targets: replacements(v)?,
         tags: BlockTags(loader.data.block_tags.clone()),
         size: int_range(field(v, "size")?, 0, 64)?,
-        discard: bounded(field(v, "discard_chance_on_air_exposure")?, 0.0, 1.0)? as f32,
+        discard: float_range(field(v, "discard_chance_on_air_exposure")?, 0.0, 1.0)?,
         scattered,
     }))
 }

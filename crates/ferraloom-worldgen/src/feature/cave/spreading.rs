@@ -43,9 +43,7 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             block,
             range: optional(v, "search_range", 10, |v| int_range(v, 1, 64))?,
             directions,
-            chance: optional(v, "chance_of_spreading", 0.5, |v| {
-                Ok(bounded(v, 0.0, 1.0)? as f32)
-            })?,
+            chance: optional(v, "chance_of_spreading", 0.5, |v| float_range(v, 0.0, 1.0))?,
             support: l.data.blocks(field(v, "can_be_placed_on")?)?,
         }))
     })?;

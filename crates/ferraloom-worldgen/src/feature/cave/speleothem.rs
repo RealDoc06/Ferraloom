@@ -99,16 +99,16 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
         Ok(Arc::new(SpeleothemFeature {
             blocks: SpeleothemBlocks::decode(v, l)?,
             taller: optional(v, "chance_of_taller_generation", 0.2, |v| {
-                Ok(bounded(v, 0.0, 1.0)? as f32)
+                float_range(v, 0.0, 1.0)
             })?,
             spread: optional(v, "chance_of_directional_spread", 0.7, |v| {
-                Ok(bounded(v, 0.0, 1.0)? as f32)
+                float_range(v, 0.0, 1.0)
             })?,
             radius2: optional(v, "chance_of_spread_radius2", 0.5, |v| {
-                Ok(bounded(v, 0.0, 1.0)? as f32)
+                float_range(v, 0.0, 1.0)
             })?,
             radius3: optional(v, "chance_of_spread_radius3", 0.5, |v| {
-                Ok(bounded(v, 0.0, 1.0)? as f32)
+                float_range(v, 0.0, 1.0)
             })?,
         }))
     })?;
@@ -130,11 +130,11 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             )?,
             density: FloatProvider::decode_bounded(field(v, "density")?, 0.0, 2.0)?,
             wetness: FloatProvider::decode_bounded(field(v, "wetness")?, 0.0, 2.0)?,
-            edge_chance: bounded(
+            edge_chance: float_range(
                 field(v, "chance_of_speleothem_at_max_distance_from_center")?,
                 0.0,
                 1.0,
-            )? as f32,
+            )?,
             edge_distance: int_range(
                 field(v, "max_distance_from_edge_affecting_chance_of_speleothem")?,
                 1,
@@ -158,11 +158,11 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             })?,
             radius: IntProvider::decode_bounded(field(v, "column_radius")?, 1, 16)?,
             scale: FloatProvider::decode_bounded(field(v, "height_scale")?, 0.0, 20.0)?,
-            ratio: bounded(
+            ratio: float_range(
                 field(v, "max_column_radius_to_cave_height_ratio")?,
                 0.1,
                 1.0,
-            )? as f32,
+            )?,
             stalactite: FloatProvider::decode_bounded(
                 field(v, "stalactite_bluntness")?,
                 0.1,
@@ -175,7 +175,7 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             )?,
             wind: FloatProvider::decode_bounded(field(v, "wind_speed")?, 0.0, 2.0)?,
             wind_radius: int_range(field(v, "min_radius_for_wind")?, 0, 100)?,
-            wind_bluntness: bounded(field(v, "min_bluntness_for_wind")?, 0.0, 5.0)? as f32,
+            wind_bluntness: float_range(field(v, "min_bluntness_for_wind")?, 0.0, 5.0)?,
         }))
     })
 }

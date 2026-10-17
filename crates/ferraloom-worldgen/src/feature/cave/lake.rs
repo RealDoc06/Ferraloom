@@ -138,9 +138,26 @@ impl Feature for LakeFeature {
         if fluid.data().fluid.fluid_type == fluid::Id::WATER
             || fluid.data().fluid.fluid_type == fluid::Id::FLOWING_WATER
         {
-            return Err(Error(
-                "Unsupported: Biome#shouldFreeze for LakeFeature".into(),
-            ));
+            for x in 0..16 {
+                for z in 0..16 {
+                    let p = offset(origin, [x, 4, z]);
+                    let quart = crate::biome_manager::zoom_quart(
+                        crate::biome_manager::obfuscate_seed(ctx.region.seed),
+                        p,
+                    );
+                    let biome = ctx.region.noise_biome(quart)?;
+                    let biome = &ctx.generator.data.biome_names[biome.0 as usize];
+                    if ctx
+                        .generator
+                        .data
+                        .temperatures
+                        .should_freeze(biome, ctx.region, p, false)?
+                        && self.replace_fluid.test(ctx.region, p, ctx.generator)?
+                    {
+                        ctx.region.set_block(p, Block::ICE.default_state(), 2)?;
+                    }
+                }
+            }
         }
         Ok(true)
     }

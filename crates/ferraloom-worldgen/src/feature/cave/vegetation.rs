@@ -39,11 +39,11 @@ fn decode(
         vegetation: l.placed(field(v, "vegetation_feature")?)?,
         direction,
         depth: IntProvider::decode_bounded(field(v, "depth")?, 1, 128)?,
-        extra_bottom: bounded(field(v, "extra_bottom_block_chance")?, 0.0, 1.0)? as f32,
+        extra_bottom: float_range(field(v, "extra_bottom_block_chance")?, 0.0, 1.0)?,
         range: int_range(field(v, "vertical_range")?, 1, 256)?,
-        chance: bounded(field(v, "vegetation_chance")?, 0.0, 1.0)? as f32,
+        chance: float_range(field(v, "vegetation_chance")?, 0.0, 1.0)?,
         radius: IntProvider::decode(field(v, "xz_radius")?)?,
-        extra_edge: bounded(field(v, "extra_edge_column_chance")?, 0.0, 1.0)? as f32,
+        extra_edge: float_range(field(v, "extra_edge_column_chance")?, 0.0, 1.0)?,
         waterlogged,
     }))
 }

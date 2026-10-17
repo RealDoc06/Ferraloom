@@ -86,11 +86,11 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
         Ok(Arc::new(UnderwaterMagmaFeature {
             range: int_range(field(v, "floor_search_range")?, 0, 512)?,
             radius: int_range(field(v, "placement_radius_around_floor")?, 0, 64)?,
-            probability: bounded(
+            probability: float_range(
                 field(v, "placement_probability_per_valid_position")?,
                 0.0,
                 1.0,
-            )? as f32,
+            )?,
         }))
     })?;
     speleothem::register(loader)?;

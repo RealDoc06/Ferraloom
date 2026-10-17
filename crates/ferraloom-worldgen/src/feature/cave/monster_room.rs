@@ -149,13 +149,20 @@ impl Feature for MonsterRoomFeature {
             }
         }
         self.safe_set(ctx, ctx.origin, Block::SPAWNER.default_state())?;
-        let mob = [
-            EntityType::SKELETON,
-            EntityType::ZOMBIE,
-            EntityType::ZOMBIE,
-            EntityType::SPIDER,
-        ][ctx.random.next_int_bound(4) as usize];
-        ctx.region.set_spawner_entity(ctx.origin, mob, ctx.random)?;
+        // The placed vanilla spawner always creates a SpawnerBlockEntity.
+        // A protected replacement can leave a different block in the origin;
+        // vanilla then skips both mob selection and spawner initialization.
+        if ctx.region.block(ctx.origin)?.block() == Block::SPAWNER
+            && ctx.region.block_entity(ctx.origin)?.is_some()
+        {
+            let mob = [
+                EntityType::SKELETON,
+                EntityType::ZOMBIE,
+                EntityType::ZOMBIE,
+                EntityType::SPIDER,
+            ][ctx.random.next_int_bound(4) as usize];
+            ctx.region.set_spawner_entity(ctx.origin, mob, ctx.random)?;
+        }
         Ok(true)
     }
 }
