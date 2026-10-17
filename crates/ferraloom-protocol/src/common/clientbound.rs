@@ -15,9 +15,9 @@ Transfer { host: String, port: VarInt });
 packet!(/// Port of ClientboundResourcePackPopPacket.
 ResourcePackPop { id: Option<Uuid> });
 packet!(/// Port of ClientboundResourcePackPushPacket.
-ResourcePackPush { id: Uuid, url: String, hash: Utf8<40>, required: bool, prompt: Option<Component> });
+ResourcePackPush { id: Uuid, url: String, hash: Utf8<40>, required: bool, prompt: Option<Component> => optional_trusted_component });
 packet!(/// Port of ClientboundDisconnectPacket.
-Disconnect { reason: Component });
+Disconnect { reason: Component => Component::decode_trusted });
 packet!(/// Port of ClientboundPostEffectsPacket.
 PostEffects { post_effects: Vec<Identifier> });
 packet!(/// Port of ClientboundClearDialogPacket.
@@ -25,7 +25,7 @@ ClearDialog {});
 
 wire_enum!(KnownLinkType { BugReport=0, CommunityGuidelines=1, Support=2, Status=3, Feedback=4, Community=5, Website=6, Forums=7, News=8, Announcements=9 }, zero);
 packet!(/// Port of ServerLinks.UntrustedEntry.
-ServerLink { link_type: Either<KnownLinkType, Component>, link: String });
+ServerLink { link_type: Either<KnownLinkType, Component> => server_link_type, link: String });
 packet!(/// Port of ClientboundServerLinksPacket.
 ServerLinks { links: Vec<ServerLink> });
 
@@ -111,5 +111,13 @@ impl Wire for CustomPayload {
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         self.payload.encode(w, 1048576)
+    }
+}
+
+fn server_link_type(r: &mut Reader<'_>) -> Result<Either<KnownLinkType, Component>> {
+    if r.bool()? {
+        Ok(Either::Left(r.read()?))
+    } else {
+        Ok(Either::Right(Component::decode_trusted(r)?))
     }
 }

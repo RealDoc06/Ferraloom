@@ -129,7 +129,7 @@ impl Wire for FilterMask {
 
 wire_enum!(ChatDecorationParameter {Sender=0,Target=1,Content=2},zero);
 packet!(/// Port of ChatTypeDecoration.
-ChatTypeDecoration {translation_key:String,parameters:Vec<ChatDecorationParameter>,style:crate::chat::Style});
+ChatTypeDecoration {translation_key:String,parameters:Vec<ChatDecorationParameter>,style:crate::chat::Style => crate::chat::Style::decode_trusted});
 packet!(/// Port of ChatType.DIRECT_STREAM_CODEC.
 ChatType {chat:ChatTypeDecoration,narration:ChatTypeDecoration});
 #[derive(Clone, Debug, PartialEq)]
@@ -143,4 +143,4 @@ impl Wire for ChatTypeHolder {
     }
 }
 packet!(/// Port of ChatType.Bound.
-ChatTypeBound {chat_type:ChatTypeHolder,name:Component,target_name:Option<Component>});
+ChatTypeBound {chat_type:ChatTypeHolder,name:Component => Component::decode_trusted,target_name:Option<Component> => optional_trusted_component});

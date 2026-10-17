@@ -18,7 +18,7 @@ wire_union!(PlayerInfoAction:var_int {
     UpdateGameMode=2 {game_mode:GameType},
     UpdateListed=3 {listed:bool},
     UpdateLatency=4 {latency:VarInt},
-    UpdateDisplayName=5 {display_name:Option<Component>},
+    UpdateDisplayName=5 {display_name:Option<Component> => optional_trusted_component},
     UpdateListOrder=6 {list_order:VarInt},
     UpdateHat=7 {show_hat:bool}
 });
