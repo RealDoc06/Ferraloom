@@ -106,7 +106,7 @@ fn put_pending(world: &World, position: BlockPos, nbt: NbtCompound) {
                 .pending_block_entities
                 .lock()
                 .unwrap()
-                .insert(position, nbt);
+                .insert(position, nbt.clone());
         })
         .unwrap();
 }
