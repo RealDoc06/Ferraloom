@@ -19,6 +19,9 @@ use crate::entity::{
 pub mod flight_history;
 pub mod phase;
 
+#[cfg(test)]
+mod tests;
+
 use flight_history::DragonFlightHistory;
 use phase::{EnderDragonPhase, PhaseManager};
 

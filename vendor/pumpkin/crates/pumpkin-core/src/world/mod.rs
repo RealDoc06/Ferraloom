@@ -29,6 +29,8 @@ mod block_entity_update_tests;
 #[cfg(test)]
 mod block_event_tests;
 mod block_events;
+#[cfg(test)]
+mod dragon_part_tests;
 pub mod brightness;
 pub mod chunker;
 pub mod explosion;
