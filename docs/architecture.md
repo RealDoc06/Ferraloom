@@ -14,6 +14,7 @@ compile in parallel.
 | `ferraloom-util` | `Mth`, `BlockPos`/`Vec3`/`AABB`/`Direction`, `RandomSource` impls (`LegacyRandomSource`, `XoroshiroRandomSource`, positional factories), noise primitives | none |
 | `ferraloom-nbt` | NBT binary, SNBT, `NbtOps`-style codec helpers | none |
 | `ferraloom-data` | Generated registries: blocks and block states, items, entity types, sounds, particles, menus, packet ids, built-in tags. Loader for the vanilla datapack (`data/minecraft/**`) | util, nbt |
+| `ferraloom-chunk` | `PalettedContainer`, palettes, bit storage, `LevelChunkSection`, shared by worldgen, storage, protocol and game | util, data |
 | `ferraloom-protocol` | Every 26.3 packet in every state, both directions, plus text components and item data component codecs | util, nbt, data |
 | `ferraloom-worldgen` | Noise router, density functions, biome source, surface rules, aquifers, carvers, features, structures | util, nbt, data |
 | `ferraloom-storage` | Anvil region files, chunk and entity serialization, `level.dat`, player data, data fixing of older saves | util, nbt, data |
