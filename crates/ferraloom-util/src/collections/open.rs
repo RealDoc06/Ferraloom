@@ -140,12 +140,20 @@ impl<K: Eq, V, H: OpenHashKey<K>, const L: bool> OpenHashMap<K, V, H, L> {
         self.remove_index(pos, true)
     }
     pub(super) fn remove_index(&mut self, pos: usize, shrink: bool) -> Option<(K, V)> {
+        self.remove_index_with(pos, shrink, |_| {})
+    }
+    fn remove_index_with(
+        &mut self,
+        pos: usize,
+        shrink: bool,
+        on_wrap: impl FnMut(&K),
+    ) -> Option<(K, V)> {
         self.table[pos].as_ref()?;
         self.detach(pos);
         let b = self.table[pos].take().unwrap();
         self.size -= 1;
         if pos != self.capacity() {
-            self.shift_keys(pos);
+            self.shift_keys(pos, on_wrap);
         }
         let n = self.capacity();
         if shrink
@@ -158,7 +166,7 @@ impl<K: Eq, V, H: OpenHashKey<K>, const L: bool> OpenHashMap<K, V, H, L> {
         Some((b.key, b.value))
     }
     /// Port of shiftKeys, including chains that wrap past slot zero.
-    fn shift_keys(&mut self, mut gap: usize) {
+    fn shift_keys(&mut self, mut gap: usize, mut on_wrap: impl FnMut(&K)) {
         let mask = self.capacity() - 1;
         loop {
             let mut pos = (gap + 1) & mask;
@@ -175,6 +183,9 @@ impl<K: Eq, V, H: OpenHashKey<K>, const L: bool> OpenHashMap<K, V, H, L> {
                     break;
                 }
                 pos = (pos + 1) & mask;
+            }
+            if pos < gap {
+                on_wrap(&self.table[pos].as_ref().unwrap().key);
             }
             self.table[gap] = self.table[pos].take();
             if L {
@@ -308,17 +319,31 @@ impl<K: Eq, V, H: OpenHashKey<K>, const L: bool> OpenHashMap<K, V, H, L> {
     pub fn values(&self) -> impl DoubleEndedIterator<Item = &V> + ExactSizeIterator {
         self.iter().map(|(_, v)| v)
     }
-    /// A removable Java-style iterator. Keys are snapshotted so backward shifts
-    /// cannot skip/revisit wrapped keys. Removal never shrinks, like fastutil iterators.
+    /// A removable Java-style iterator. Unlinked cursors track wrapped probe
+    /// chains just like fastutil, including normal removal's shrink when deleting
+    /// wrapped entries. Linked cursors snapshot keys to survive shifted slot indices.
     pub fn cursor(&mut self) -> Cursor<'_, K, V, H, L>
     where
         K: Clone,
     {
-        let keys = self.keys().cloned().collect::<Vec<_>>().into_iter();
+        let keys = if L {
+            self.keys().cloned().collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        }
+        .into_iter();
+        let remaining = self.size;
+        let scan = self.capacity();
+        let null_pending = self.table[scan].is_some();
         Cursor {
             map: self,
             keys,
             current: None,
+            scan,
+            remaining,
+            null_pending,
+            wrapped: Vec::new(),
+            wrapped_index: 0,
         }
     }
 }
@@ -448,19 +473,72 @@ impl<K: Eq, V, H: OpenHashKey<K>, const L: bool> Extend<(K, V)> for OpenHashMap<
         }
     }
 }
+enum Current<K> {
+    Linked(K),
+    Slot(usize),
+    Wrapped(K),
+}
 pub struct Cursor<'a, K, V, H, const L: bool> {
     map: &'a mut OpenHashMap<K, V, H, L>,
     keys: std::vec::IntoIter<K>,
-    current: Option<K>,
+    current: Option<Current<K>>,
+    scan: usize,
+    remaining: usize,
+    null_pending: bool,
+    wrapped: Vec<K>,
+    wrapped_index: usize,
 }
 impl<K: Eq + Clone, V, H: OpenHashKey<K>, const L: bool> Cursor<'_, K, V, H, L> {
     pub fn next_entry(&mut self) -> Option<(&K, &V)> {
-        self.current = self.keys.next();
-        self.map.get_key_value(self.current.as_ref()?)
+        if self.remaining == 0 {
+            self.current = None;
+            return None;
+        }
+        self.remaining -= 1;
+        let pos = if L {
+            let key = self.keys.next().unwrap();
+            let pos = self.map.slot(&key);
+            self.current = Some(Current::Linked(key));
+            pos
+        } else if self.null_pending {
+            self.null_pending = false;
+            let pos = self.map.capacity();
+            self.current = Some(Current::Slot(pos));
+            pos
+        } else {
+            let mut found = None;
+            while self.scan > 0 {
+                self.scan -= 1;
+                if self.map.table[self.scan].is_some() {
+                    found = Some(self.scan);
+                    break;
+                }
+            }
+            if let Some(pos) = found {
+                self.current = Some(Current::Slot(pos));
+                pos
+            } else {
+                let key = self.wrapped[self.wrapped_index].clone();
+                self.wrapped_index += 1;
+                let pos = self.map.slot(&key);
+                self.current = Some(Current::Wrapped(key));
+                pos
+            }
+        };
+        let b = self.map.table[pos].as_ref().unwrap();
+        Some((&b.key, &b.value))
     }
     pub fn remove(&mut self) -> Option<(K, V)> {
-        let pos = self.map.slot(&self.current.take()?);
-        self.map.remove_index(pos, false)
+        match self.current.take()? {
+            Current::Linked(key) => {
+                let pos = self.map.slot(&key);
+                self.map.remove_index(pos, false)
+            }
+            Current::Slot(pos) => self
+                .map
+                .remove_index_with(pos, false, |k| self.wrapped.push(k.clone())),
+            Current::Wrapped(key) => self.map.remove_entry(&key),
+        }
     }
 }
 
