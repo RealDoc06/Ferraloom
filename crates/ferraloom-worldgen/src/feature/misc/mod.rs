@@ -222,3 +222,6 @@ impl Feature for BonusChestFeature {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+mod tests;
