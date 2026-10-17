@@ -1,6 +1,7 @@
 //! Dedicated server runtime, separate from region-owned gameplay.
 pub mod access;
 pub mod assets;
+pub mod chat;
 pub mod commands;
 pub mod jobs;
 pub mod network;

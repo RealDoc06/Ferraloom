@@ -2,6 +2,10 @@
 use crate::{
     access::AccessLists,
     assets,
+    chat::{
+        ChatSession, LastSeenMessagesValidator, MessageSignatureCache, ServicesKeySet,
+        ValidatedMessage,
+    },
     commands::{CommandAction, CommandSourceStack, Commands},
     network::{self, ConnectionId, Incoming, Ingress, OutboundBatch, Outgoing},
     properties::{self, ServerProperties},
@@ -118,6 +122,10 @@ struct Connection {
     last_action: Instant,
     chat_spam: i32,
     command_spam: i32,
+    session: Option<ChatSession>,
+    last_seen: LastSeenMessagesValidator,
+    signature_cache: MessageSignatureCache,
+    command_message: Option<ValidatedMessage>,
 }
 impl Connection {
     fn push(&mut self, packet: impl Into<Outgoing>) {
@@ -160,6 +168,8 @@ pub struct MinecraftServer {
     global_chat_index: i32,
     code_of_conduct: BTreeMap<String, String>,
     favicon: Option<Vec<u8>>,
+    services: ServicesKeySet,
+    enforces_secure_chat: bool,
 }
 impl MinecraftServer {
     pub async fn start(options: ServerOptions) -> Result<RunningServer> {
@@ -196,7 +206,27 @@ impl MinecraftServer {
             );
         }
         let conduct = load_conduct(&options.root, &properties)?;
-        let initial_status = make_status(&properties, 0, Vec::new(), favicon.clone());
+        let services = if properties.boolean("online-mode") {
+            match ServicesKeySet::fetch().await {
+                Ok(keys) => keys,
+                Err(e) => {
+                    eprintln!("Failed to request Minecraft Services public key: {e}");
+                    ServicesKeySet::default()
+                }
+            }
+        } else {
+            ServicesKeySet::default()
+        };
+        let enforces_secure_chat = properties.boolean("online-mode")
+            && properties.boolean("enforce-secure-profile")
+            && services.can_validate();
+        let initial_status = make_status(
+            &properties,
+            0,
+            Vec::new(),
+            favicon.clone(),
+            enforces_secure_chat,
+        );
         let (status, status_rx) = watch::channel(initial_status);
         let (shutdown, shutdown_rx) = watch::channel(false);
         let (send, ingress) = mpsc::channel(8192);
@@ -262,6 +292,8 @@ impl MinecraftServer {
             global_chat_index: 0,
             code_of_conduct: conduct,
             favicon,
+            services,
+            enforces_secure_chat,
         };
         let task = tokio::spawn(server.run());
         Ok(RunningServer {
@@ -360,6 +392,10 @@ impl MinecraftServer {
                         last_action: Instant::now(),
                         chat_spam: 0,
                         command_spam: 0,
+                        session: None,
+                        last_seen: LastSeenMessagesValidator::default(),
+                        signature_cache: MessageSignatureCache::default(),
+                        command_message: None,
                     };
                     c.push(cfg::ClientboundPacket::CustomPayload(
                         common_cb::CustomPayload {
@@ -733,8 +769,7 @@ impl MinecraftServer {
                 sea_level: VarInt(63),
             },
             online_mode: self.properties.boolean("online-mode"),
-            enforces_secure_chat: self.properties.boolean("online-mode")
-                && self.properties.boolean("enforce-secure-profile"),
+            enforces_secure_chat: self.enforces_secure_chat,
         }));
         c.push(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: match self.properties.get("difficulty") {
@@ -994,16 +1029,11 @@ impl MinecraftServer {
                         .any(|c| c < ' ' || c == '§' || c == '\u{7f}'),
                     "multiplayer.disconnect.illegal_characters"
                 );
-                ensure!(
-                    p.signature.is_none(),
-                    "Signed chat validation is not yet implemented"
-                );
-                ensure!(
-                    !(self.properties.boolean("online-mode")
-                        && self.properties.boolean("enforce-secure-profile")),
-                    "multiplayer.disconnect.missing_public_key"
-                );
                 let c = self.connections.get_mut(&connection).unwrap();
+                let last_seen = c
+                    .last_seen
+                    .apply(&p.last_seen_messages)
+                    .context("multiplayer.disconnect.chat_validation_failed")?;
                 c.last_action = Instant::now();
                 c.chat_spam += 20;
                 ensure!(
@@ -1015,42 +1045,115 @@ impl MinecraftServer {
                         || self.access.permission(c.profile.id) > 0,
                     "disconnect.spam"
                 );
-                let sender = c.profile.id;
-                let name = c.profile.name.clone();
-                let index = self.global_chat_index;
-                self.global_chat_index += 1;
-                println!("<{name}> {}", p.message.0);
-                self.broadcast(cb::Packet::PlayerChat(cb::PlayerChat {
-                    global_index: VarInt(index),
-                    sender,
-                    index: VarInt(index),
-                    signature: None,
-                    body: SignedMessageBodyPacked {
-                        content: p.message,
-                        timestamp: p.timestamp,
-                        salt: p.salt,
-                        last_seen: LastSeenMessagesPacked(Vec::new()),
-                    },
-                    unsigned_content: None,
-                    filter_mask: FilterMask::PassThrough,
-                    chat_type: ChatTypeBound {
-                        chat_type: ChatTypeHolder(Holder::Reference(id("chat"))),
-                        name: Component::literal(name),
-                        target_name: None,
-                    },
-                }));
+                let message = if let Some(session) = &mut c.session {
+                    session.unpack(
+                        c.profile.id,
+                        p.message.0,
+                        p.timestamp,
+                        p.salt,
+                        p.signature,
+                        last_seen,
+                    )
+                } else if self.enforces_secure_chat {
+                    Err(anyhow::anyhow!("chat.disabled.missingProfileKey"))
+                } else {
+                    Ok(ValidatedMessage::unsigned(c.profile.id, p.message.0))
+                };
+                match message {
+                    Ok(message) => self.broadcast_chat(message, id("chat"))?,
+                    Err(e) => self.feedback(Some(connection), &e.to_string()),
+                }
             }
             sb::Packet::ChatCommand(p) => {
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
-                ensure!(
-                    p.argument_signatures.0.is_empty(),
-                    "Signed command validation is not yet implemented"
-                );
+                let c = self.connections.get_mut(&connection).unwrap();
+                let last_seen = c
+                    .last_seen
+                    .apply(&p.last_seen_messages)
+                    .context("multiplayer.disconnect.chat_validation_failed")?;
+                let permission = self.access.permission(c.profile.id);
+                let source = CommandSourceStack {
+                    permission,
+                    position: self
+                        .level
+                        .level
+                        .entity::<ServerPlayer>(entity)
+                        .map_err(game_error)?
+                        .position,
+                };
+                let action = self
+                    .commands
+                    .parse(&p.command, source)
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                if let CommandAction::Say(content) = action {
+                    let signature = p
+                        .argument_signatures
+                        .0
+                        .iter()
+                        .find(|argument| argument.name.0 == "message")
+                        .map(|argument| argument.signature.clone());
+                    c.command_message = Some(if let Some(session) = &mut c.session {
+                        session.unpack(
+                            c.profile.id,
+                            content,
+                            p.timestamp,
+                            p.salt,
+                            signature,
+                            last_seen,
+                        )?
+                    } else {
+                        ensure!(
+                            !self.enforces_secure_chat,
+                            "chat.disabled.missingProfileKey"
+                        );
+                        ValidatedMessage::unsigned(c.profile.id, content)
+                    });
+                } else {
+                    ensure!(
+                        p.argument_signatures.0.is_empty(),
+                        "unexpected signed command arguments"
+                    );
+                }
                 self.execute_command(Some(connection), &p.command).await?;
             }
-            sb::Packet::ChatSessionUpdate(_) => {}
+            sb::Packet::ChatSessionUpdate(p) => {
+                if self.services.can_validate() {
+                    let c = self.connections.get_mut(&connection).unwrap();
+                    if c.session.as_ref().is_none_or(|session| {
+                        session.data.profile_public_key != p.chat_session.profile_public_key
+                    }) {
+                        if let Some(old) = &c.session {
+                            ensure!(
+                                p.chat_session.profile_public_key.expires_at
+                                    >= old.data.profile_public_key.expires_at,
+                                "multiplayer.disconnect.expired_public_key"
+                            );
+                        }
+                        let session =
+                            ChatSession::new(c.profile.id, p.chat_session, &self.services)?;
+                        let data = session.data.clone();
+                        let profile_id = c.profile.id;
+                        c.session = Some(session);
+                        self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
+                            actions: 2,
+                            entries: vec![PlayerInfoEntry {
+                                profile_id,
+                                actions: vec![PlayerInfoAction::InitializeChat {
+                                    session: Some(data),
+                                }],
+                            }],
+                        }));
+                    }
+                }
+            }
+            sb::Packet::ChatAck(p) => self
+                .connections
+                .get_mut(&connection)
+                .unwrap()
+                .last_seen
+                .offset(p.offset.0)?,
             sb::Packet::PlayerAbilities(p) => {
                 let player = self
                     .level
@@ -1076,7 +1179,6 @@ impl MinecraftServer {
             | sb::Packet::PlayerInput(_)
             | sb::Packet::CustomPayload(_)
             | sb::Packet::Pong(_)
-            | sb::Packet::ChatAck(_)
             | sb::Packet::PlayerCommand(_)
             | sb::Packet::RecipeBookChangeSettings(_)
             | sb::Packet::RecipeBookSeenRecipe(_)
@@ -1366,6 +1468,45 @@ impl MinecraftServer {
             }
         }
     }
+    fn broadcast_chat(
+        &mut self,
+        message: ValidatedMessage,
+        chat_type: protocol::Identifier,
+    ) -> Result<()> {
+        let name = self
+            .connections
+            .values()
+            .find(|c| c.profile.id == message.sender)
+            .map(|c| c.profile.name.clone())
+            .unwrap_or_default();
+        println!("<{name}> {}", message.content);
+        let global_index = self.global_chat_index;
+        self.global_chat_index += 1;
+        for c in self.connections.values_mut() {
+            if !matches!(c.phase, Phase::Play(_)) || c.close {
+                continue;
+            }
+            if let Some(signature) = &message.signature {
+                c.last_seen.add_pending(signature)?;
+            }
+            let body = c.signature_cache.pack(&message);
+            c.push(cb::Packet::PlayerChat(cb::PlayerChat {
+                global_index: VarInt(global_index),
+                sender: message.sender,
+                index: VarInt(message.index),
+                signature: message.signature.clone(),
+                body,
+                unsigned_content: None,
+                filter_mask: FilterMask::PassThrough,
+                chat_type: ChatTypeBound {
+                    chat_type: ChatTypeHolder(Holder::Reference(chat_type.clone())),
+                    name: Component::literal(name.clone()),
+                    target_name: None,
+                },
+            }));
+        }
+        Ok(())
+    }
     fn broadcast(&mut self, packet: cb::Packet) {
         for c in self.connections.values_mut() {
             if matches!(c.phase, Phase::Play(_)) && !c.close {
@@ -1415,6 +1556,7 @@ impl MinecraftServer {
             self.players.len() as i32,
             sample,
             self.favicon.clone(),
+            self.enforces_secure_chat,
         ));
     }
     async fn remove_player(&mut self, connection: ConnectionId) -> Result<()> {
@@ -1490,19 +1632,24 @@ impl MinecraftServer {
                 self.save_all(flush).await?;
                 self.feedback(source, "Saved the game");
             }
-            CommandAction::Say(message) => {
-                let name = source
-                    .and_then(|id| self.connections.get(&id))
-                    .map_or("Server", |c| c.profile.name.as_str())
-                    .to_owned();
-                self.broadcast(cb::Packet::DisguisedChat(cb::DisguisedChat {
-                    message: Component::literal(message),
-                    chat_type: ChatTypeBound {
-                        chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
-                        name: Component::literal(name),
-                        target_name: None,
-                    },
-                }));
+            CommandAction::Say(content) => {
+                if let Some(source) = source {
+                    let c = self.connections.get_mut(&source).unwrap();
+                    let message = c
+                        .command_message
+                        .take()
+                        .unwrap_or_else(|| ValidatedMessage::unsigned(c.profile.id, content));
+                    self.broadcast_chat(message, id("say_command"))?;
+                } else {
+                    self.broadcast(cb::Packet::DisguisedChat(cb::DisguisedChat {
+                        message: Component::literal(content),
+                        chat_type: ChatTypeBound {
+                            chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
+                            name: Component::literal("Server"),
+                            target_name: None,
+                        },
+                    }));
+                }
             }
             CommandAction::Teleport { targets, position } => {
                 self.request_area(
@@ -1793,6 +1940,7 @@ fn make_status(
     online: i32,
     sample: Vec<status::NameAndId>,
     favicon: Option<Vec<u8>>,
+    enforces_secure_chat: bool,
 ) -> status::ServerStatus {
     status::ServerStatus {
         description: Component::literal(properties.get("motd")),
@@ -1806,8 +1954,7 @@ fn make_status(
             protocol: protocol::PROTOCOL_VERSION,
         }),
         favicon: favicon.map(|icon_bytes| status::Favicon { icon_bytes }),
-        enforces_secure_chat: properties.boolean("online-mode")
-            && properties.boolean("enforce-secure-profile"),
+        enforces_secure_chat,
     }
 }
 fn load_conduct(root: &Path, properties: &ServerProperties) -> Result<BTreeMap<String, String>> {
