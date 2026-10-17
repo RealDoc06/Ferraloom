@@ -148,3 +148,33 @@ impl RegistrySet {
         Ok(packets)
     }
 }
+impl ferraloom_protocol::codec::RegistryContext for RegistrySet {
+    fn entry_id(&self, registry: &Identifier, entry: &Identifier) -> Option<i32> {
+        if let Some(names) = self.entries.get(registry.as_str()) {
+            names
+                .iter()
+                .position(|name| name == entry.as_str())
+                .map(|id| id as i32)
+        } else {
+            ferraloom_data::registry_entries(registry.as_str())?
+                .iter()
+                .position(|name| *name == entry.as_str())
+                .map(|id| id as i32)
+        }
+    }
+    fn entry_key(&self, registry: &Identifier, number: i32) -> Option<Identifier> {
+        let index = usize::try_from(number).ok()?;
+        if let Some(names) = self.entries.get(registry.as_str()) {
+            Identifier::parse(names.get(index)?).ok()
+        } else {
+            Identifier::parse(ferraloom_data::registry_entries(registry.as_str())?.get(index)?).ok()
+        }
+    }
+    fn has_tag(&self, registry: &Identifier, tag: &Identifier) -> bool {
+        self.tags
+            .tags
+            .iter()
+            .find(|tags| &tags.registry == registry)
+            .is_some_and(|tags| tags.tags.iter().any(|entry| &entry.name == tag))
+    }
+}

@@ -52,11 +52,13 @@ pub enum Outgoing {
     Play(Box<play::clientbound::Packet>),
 }
 impl Outgoing {
-    fn bytes(&self) -> Result<Vec<u8>> {
-        Ok(match self {
-            Self::Configuration(p) => p.to_bytes()?,
-            Self::Play(p) => p.to_bytes()?,
-        })
+    fn bytes(&self, registries: &crate::registries::RegistrySet) -> Result<Vec<u8>> {
+        let mut writer = protocol::Writer::with_context(registries);
+        match self {
+            Self::Configuration(p) => p.encode(&mut writer)?,
+            Self::Play(p) => p.encode(&mut writer)?,
+        }
+        Ok(writer.into_inner())
     }
 }
 impl From<play::clientbound::Packet> for Outgoing {
@@ -157,6 +159,7 @@ pub struct NetworkOptions {
     pub keys: LoginKeyPair,
     pub session_id: Uuid,
     pub status: watch::Receiver<status::ServerStatus>,
+    pub registries: Arc<crate::registries::RegistrySet>,
 }
 /// Port of ServerConnectionListener. The listener only touches its bound socket.
 pub async fn listen(
@@ -195,12 +198,8 @@ async fn connection(
         return Ok(());
     }
     if first[0] == 0xfe {
-        legacy_ping(
-            &mut socket,
-            &options.status.borrow().clone(),
-            &first[..count],
-        )
-        .await?;
+        let snapshot = options.status.borrow().clone();
+        legacy_ping(&mut socket, &snapshot, &first[..count]).await?;
         return Ok(());
     }
     let mut io = PacketIo::new(socket);
@@ -321,7 +320,9 @@ async fn connection(
                 }
                 Incoming::Configuration(packet)
             } else {
-                Incoming::Play(Box::new(play::serverbound::Packet::from_bytes(&bytes)?))
+                Incoming::Play(Box::new(play::serverbound::Packet::decode(
+                    &mut protocol::Reader::with_context(&bytes, options.registries.as_ref()),
+                )?))
             };
             ingress
                 .send(Ingress::Packet {
@@ -341,7 +342,13 @@ async fn connection(
             ensure!(batch.sequence == expected, "outbound order mismatch");
             expected += 1;
             for packet in batch.packets {
-                write_frame(&mut write, &mut encoder, &mut encrypt, &packet.bytes()?).await?;
+                write_frame(
+                    &mut write,
+                    &mut encoder,
+                    &mut encrypt,
+                    &packet.bytes(options.registries.as_ref())?,
+                )
+                .await?;
             }
             write.flush().await?;
             if batch.close {
@@ -446,7 +453,7 @@ async fn authenticate(
     }
     let profile: Profile = response.error_for_status()?.json().await?;
     Ok(login::GameProfile {
-        id: protocol::codec::uuid_from_string(&profile.id)?,
+        id: session_profile_uuid(&profile.id)?,
         name: profile.name,
         properties: profile
             .properties
@@ -487,4 +494,13 @@ async fn legacy_ping(
     socket.write_all(&response).await?;
     socket.shutdown().await?;
     Ok(())
+}
+
+fn session_profile_uuid(text: &str) -> Result<Uuid> {
+    ensure!(
+        text.len() == 32 && text.bytes().all(|b| b.is_ascii_hexdigit()),
+        "invalid session profile UUID"
+    );
+    let number = u128::from_str_radix(text, 16)?;
+    Ok(Uuid::from_byte_array(number.to_be_bytes()))
 }

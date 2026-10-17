@@ -5,7 +5,7 @@ use crate::{
     commands::{CommandAction, CommandSourceStack, Commands},
     network::{self, ConnectionId, Incoming, Ingress, OutboundBatch, Outgoing},
     properties::{self, ServerProperties},
-    registries::{self, RegistrySet, core_pack, id},
+    registries::{RegistrySet, core_pack, id},
     world::{ChunkLight, World, heightmap, surface_heights},
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -24,7 +24,6 @@ use ferraloom_game::{
         distance_manager::tracking_view, server_level::ServerLevel,
     },
 };
-use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{
     self as protocol, Uuid,
     chat::Component,
@@ -215,6 +214,7 @@ impl MinecraftServer {
             keys: protocol::transport::LoginKeyPair::generate()?,
             session_id: random_uuid(),
             status: status_rx,
+            registries: Arc::new(registries.clone()),
         });
         let net_send = send.clone();
         tokio::spawn(async move {
@@ -733,7 +733,8 @@ impl MinecraftServer {
                 sea_level: VarInt(63),
             },
             online_mode: self.properties.boolean("online-mode"),
-            enforces_secure_chat: self.properties.boolean("enforce-secure-profile"),
+            enforces_secure_chat: self.properties.boolean("online-mode")
+                && self.properties.boolean("enforce-secure-profile"),
         }));
         c.push(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: match self.properties.get("difficulty") {
@@ -1033,9 +1034,7 @@ impl MinecraftServer {
                     unsigned_content: None,
                     filter_mask: FilterMask::PassThrough,
                     chat_type: ChatTypeBound {
-                        chat_type: ChatTypeHolder(Holder::Reference(
-                            self.registries.numeric("chat_type", "chat"),
-                        )),
+                        chat_type: ChatTypeHolder(Holder::Reference(id("chat"))),
                         name: Component::literal(name),
                         target_name: None,
                     },
@@ -1059,7 +1058,7 @@ impl MinecraftServer {
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
                 if matches!(player.game_mode, GameType::Creative | GameType::Spectator) {
-                    player.flying = p.flying;
+                    player.flying = p.is_flying;
                 }
             }
             sb::Packet::PingRequest(p) => {
@@ -1499,9 +1498,7 @@ impl MinecraftServer {
                 self.broadcast(cb::Packet::DisguisedChat(cb::DisguisedChat {
                     message: Component::literal(message),
                     chat_type: ChatTypeBound {
-                        chat_type: ChatTypeHolder(Holder::Reference(
-                            self.registries.numeric("chat_type", "say_command"),
-                        )),
+                        chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
                         name: Component::literal(name),
                         target_name: None,
                     },

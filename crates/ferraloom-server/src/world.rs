@@ -10,7 +10,7 @@ use ferraloom_storage::{
     self as storage, ByteArray, ChunkSection, IoWorker, LevelData, LevelStorageAccess, LongArray,
     SavedData, SavedDataStorage, SectionRegistry, SerializableChunkData,
 };
-use ferraloom_util::{BlockPos, ChunkPos, SectionPos};
+use ferraloom_util::{BlockPos, ChunkPos};
 use ferraloom_worldgen::{
     biome::BiomeSource,
     generator::{GenerationData, NoiseBasedChunkGenerator},
