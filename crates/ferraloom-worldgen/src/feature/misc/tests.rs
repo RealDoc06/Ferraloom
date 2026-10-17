@@ -336,7 +336,7 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
                 assert!(actual.get("beam_target").is_none(), "{label}");
             } else {
                 assert_eq!(
-                    actual.get_int_array("beam_target").unwrap().as_slice(),
+                    actual.get_int_array("beam_target").unwrap(),
                     &std::array::from_fn::<_, 3, _>(
                         |i| expected["beam"][i].as_i64().unwrap() as i32
                     ),
