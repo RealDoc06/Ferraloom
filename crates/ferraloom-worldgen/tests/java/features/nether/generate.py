@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-nether-java-') as directory:
     for path, name in artifacts:
         urllib.request.urlretrieve(f'https://repo.maven.apache.org/maven2/{path}/{name}', directory / name)
     classpath = ':'.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar')), *sorted(directory.glob('*.jar'))]))
-    sources = [HERE.parent.parent / 'WorldgenGolden.java', HERE.parent / 'FeaturesGolden.java', HERE.parent / 'PlacementGolden.java', HERE.parent / 'StateProviderGolden.java', HERE.parent / 'SorterGolden.java', HERE / 'NetherEndGolden.java']
+    sources = [HERE.parent.parent / 'WorldgenGolden.java', *sorted(HERE.parent.glob('*.java')), HERE / 'NetherEndGolden.java']
     subprocess.run([str(JDK / 'bin/javac'), '-cp', classpath, '-d', str(directory), *map(str, sources)], check=True, cwd=directory)
     out = HERE.parents[3] / 'src/feature/misc/testdata'
     out.mkdir(exist_ok=True)

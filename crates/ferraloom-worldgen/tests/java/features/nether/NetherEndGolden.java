@@ -129,6 +129,7 @@ public final class NetherEndGolden {
         Mockito.when(templates.getOrCreate(Mockito.any())).thenAnswer(call->{
             Identifier id=call.getArgument(0);var template=new net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate();
             if(id.getNamespace().equals("ferraloom")){
+                if(id.getPath().equals("missing"))return template;
                 var tag=net.minecraft.nbt.TagParser.parseCompoundFully(Files.readString(Path.of(args[1])));
                 if(id.getPath().equals("empty"))tag.put("blocks",new net.minecraft.nbt.ListTag());
                 template.load(BuiltInRegistries.BLOCK,tag);return template;
@@ -147,6 +148,7 @@ public final class NetherEndGolden {
             String name=entry.key().identifier().toString();boolean cross=COMPOSITES.contains(type)&&!name.contains("basalt_columns");
             String ground=type.equals("chorus_plant")?"end_stone":"netherrack";
             for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:ORIGINS)for(int mode:new int[]{0,1})run(cases,name,config,entry.value(),generator,ground,mode,origin,seed,cross);
+            if(type.equals("delta_feature"))for(long seed:new long[]{0,1,-1,8675309})for(int mode:new int[]{0,1})run(cases,name,config,entry.value(),generator,ground,mode,new int[]{8,63,8},seed,false);
         }
         var empty="{feature:{type:'no_op'},placement:[{type:'random_chance',chance:0.0}]}";
         var island="{feature:{type:'end_island'},placement:[{type:'offset',x:1,y:0,z:-1}]}";
@@ -168,8 +170,8 @@ public final class NetherEndGolden {
             var config=JsonParser.parseString(configs.get(i));var feature=Feature.DIRECT_CODEC.parse(ops,config).getOrThrow();
             for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:ORIGINS)for(int mode:new int[]{0,1})run(cases,"custom:"+i,config,feature,generator,"netherrack",mode,origin,seed,false);
         }
-        for(String name:List.of("empty","solid")){
-            var config=JsonParser.parseString("{type:'template',templates:[{data:{id:'ferraloom:"+name+"'},weight:2},{data:{id:'ferraloom:"+name+"',rotations:['clockwise_90','180']},weight:3}]}");
+        for(String name:List.of("empty","solid","missing")){
+            var config=JsonParser.parseString("{type:'template',templates:[{data:{id:'ferraloom:missing',rotations:[]},weight:0},{data:{id:'ferraloom:"+name+"'},weight:2},{data:{id:'ferraloom:"+name+"',rotations:['clockwise_90','180']},weight:3}]}");
             var feature=Feature.DIRECT_CODEC.parse(ops,config).getOrThrow();
             for(long seed:new long[]{0,1,-1,8675309})for(int[] origin:ORIGINS)for(int mode:new int[]{0,1})run(cases,"custom:template_"+name,config,feature,generator,"netherrack",mode,origin,seed,false);
         }
