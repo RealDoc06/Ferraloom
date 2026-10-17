@@ -1,9 +1,10 @@
 //! Typed nested predicates used by lock and adventure-mode component codecs.
 use super::persistent::{
-    entry, field, object, persistent_record, set_from_json, set_value, tag_json,
+    entry, field, field_nbt, object, persistent_record, set_from_json, set_value,
 };
 use super::*;
 use crate::{Identifier, Reader, Result, Wire, Writer, chat::Component, codec::HolderSet};
+use ferraloom_nbt::Tag;
 use serde_json::Value as Json;
 
 /// Port of DamagePredicate#CODEC.
@@ -299,6 +300,58 @@ impl ComponentPredicate {
             }
         })
     }
+    pub fn from_key_nbt(key: &Identifier, value: &Tag) -> Result<Self> {
+        Ok(match key.as_str() {
+            "minecraft:damage" => Self::Damage(<DamagePredicate as Persistent>::from_nbt(value)?),
+            "minecraft:enchantments" => {
+                Self::Enchantments(<Vec<EnchantmentPredicate> as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:stored_enchantments" => Self::StoredEnchantments(
+                <Vec<EnchantmentPredicate> as Persistent>::from_nbt(value)?,
+            ),
+            "minecraft:potion_contents" => {
+                Self::Potions(<PotionsPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:custom_data" => {
+                Self::CustomData(<NbtPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:container" => {
+                Self::Container(<ContainerPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:bundle_contents" => {
+                Self::BundleContents(<ContainerPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:firework_explosion" => {
+                Self::FireworkExplosion(<FireworkPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:fireworks" => {
+                Self::Fireworks(<FireworksPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:writable_book_content" => {
+                Self::WritableBook(<WritableBookPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:written_book_content" => {
+                Self::WrittenBook(<WrittenBookPredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:attribute_modifiers" => Self::AttributeModifiers(
+                <AttributeModifiersPredicate as Persistent>::from_nbt(value)?,
+            ),
+            "minecraft:trim" => Self::Trim(<TrimPredicate as Persistent>::from_nbt(value)?),
+            "minecraft:jukebox_playable" => {
+                Self::JukeboxPlayable(<JukeboxPlayablePredicate as Persistent>::from_nbt(value)?)
+            }
+            "minecraft:villager/variant" => {
+                Self::VillagerType(<HolderSet as Persistent>::from_nbt(value)?)
+            }
+            _ => {
+                Unit::from_nbt(value)?;
+                Self::AnyValue(
+                    ComponentTypeId::from_name(key.as_str())
+                        .ok_or_else(|| invalid("component predicate type"))?,
+                )
+            }
+        })
+    }
     pub fn to_persistent(&self) -> Result<PersistentValue> {
         match self {
             Self::AnyValue(_) => Unit.to_persistent(),
@@ -325,7 +378,7 @@ impl Wire for ComponentPredicate {
         if r.bool()? {
             let key = r.registry(&registry("data_component_predicate_type"))?;
             let tag = r.nbt(false)?;
-            Self::from_key(&key, &tag_json(&tag))
+            Self::from_key_nbt(&key, &tag)
         } else {
             let id = r.read()?;
             Unit::from_nbt(&r.nbt(false)?)?;

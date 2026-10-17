@@ -609,3 +609,13 @@ impl Wire for NbtPredicate {
         self.0.encode(w)
     }
 }
+
+// Shared indirection codec; needed by recursive effects and rare text payloads.
+impl<T: Wire> Wire for Box<T> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        T::decode(r).map(Box::new)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        (**self).encode(w)
+    }
+}
