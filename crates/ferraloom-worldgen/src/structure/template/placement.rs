@@ -246,12 +246,14 @@ impl StructureTemplate {
             if tag.contains_key("block_pos") {
                 tag.insert("block_pos", Tag::IntArray(block_pos.to_vec()));
             }
-            region.finalize_template_entity(
+            if !region.finalize_template_entity(
                 &mut tag,
                 settings.mirror,
                 settings.rotation,
                 settings.finalize_entities,
-            )?;
+            )? {
+                continue;
+            }
             region.add_entity(
                 [(pos[0].floor() as i32) >> 4, (pos[2].floor() as i32) >> 4],
                 tag,

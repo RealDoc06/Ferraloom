@@ -3,6 +3,7 @@
 pub mod alias;
 pub mod beardifier;
 pub mod bounding_box;
+pub mod jigsaw;
 pub mod placement;
 pub mod pool;
 pub mod processor;
