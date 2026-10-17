@@ -346,7 +346,7 @@ impl<R: RandomSource, H: FnMut(i32, i32, Heightmap) -> Result<i32, Error>> Place
                                 base_height = Some((self.height)(
                                     jigsaw.position[0],
                                     jigsaw.position[2],
-                                    Heightmap::WorldSurface,
+                                    Heightmap::WorldSurfaceWg,
                                 )?);
                             }
                             base_height.unwrap() - target_local_y
@@ -381,7 +381,7 @@ impl<R: RandomSource, H: FnMut(i32, i32, Heightmap) -> Result<i32, Error>> Place
                                 base_height = Some((self.height)(
                                     jigsaw.position[0],
                                     jigsaw.position[2],
-                                    Heightmap::WorldSurface,
+                                    Heightmap::WorldSurfaceWg,
                                 )?);
                             }
                             base_height.unwrap() + delta_y / 2

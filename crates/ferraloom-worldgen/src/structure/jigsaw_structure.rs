@@ -99,8 +99,10 @@ impl JigsawStructure {
             project_start: v
                 .get("project_start_to_heightmap")
                 .map(|v| match string(v)? {
-                    "WORLD_SURFACE_WG" | "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
-                    "OCEAN_FLOOR_WG" | "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
+                    "WORLD_SURFACE_WG" => Ok(Heightmap::WorldSurfaceWg),
+                    "WORLD_SURFACE" => Ok(Heightmap::WorldSurface),
+                    "OCEAN_FLOOR_WG" => Ok(Heightmap::OceanFloorWg),
+                    "OCEAN_FLOOR" => Ok(Heightmap::OceanFloor),
                     "MOTION_BLOCKING" => Ok(Heightmap::MotionBlocking),
                     "MOTION_BLOCKING_NO_LEAVES" => Ok(Heightmap::MotionBlockingNoLeaves),
                     s => Err(Error(format!("unknown heightmap {s}"))),

@@ -79,11 +79,11 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
             settings.random =
                 PlacementRandom::Fixed(Random::Legacy(LegacyRandomSource::new(12345)));
         }
-        let mut chunks = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
-            .map(|p| RegionChunk::new(generator.new_chunk(p), ChunkStatus::Terrain));
-        for chunk in &mut chunks {
-            chunk.chunk.world_surface = [67; 256];
-        }
+        let mut chunks = [[-1, -1], [-1, 0], [0, -1], [0, 0]].map(|p| {
+            let mut chunk = generator.new_chunk(p);
+            chunk.world_surface = [67; 256];
+            RegionChunk::new(chunk, ChunkStatus::Terrain)
+        });
         if case["lava"].as_bool().unwrap() {
             for sample in case["samples"].as_array().unwrap() {
                 let p = point(&sample["pos"]);
@@ -98,9 +98,6 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
                     Block::LAVA.default_state(),
                 );
             }
-        }
-        for chunk in &mut chunks {
-            chunk.chunk.world_surface = [67; 256];
         }
         let region = WorldGenRegion::new(
             &mut chunks,
