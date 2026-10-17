@@ -132,9 +132,55 @@ public final class ExtractData {
         write(dir, "state_transforms", out);
     }
 
+    // Cached, state-only BlockStateBase#getFaceOcclusionShape facts.
+    private static void faceOcclusion(Path dir) throws Exception {
+        var faces = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            int bits = 0;
+            for (var direction : Direction.values()) {
+                if (Block.isShapeFullBlock(state.getFaceOcclusionShape(direction))) bits |= 1 << direction.get3DDataValue();
+            }
+            faces.add(bits);
+        }
+        write(dir, "face_occlusion", faces);
+    }
+
+    // initCache stores legacySolid, faceSturdy and isCollisionShapeFullBlock.
+    // A cache exists exactly when !hasDynamicShape. The only PostProcess
+    // implementations in Blocks are constant null, self, or above callbacks.
+    private static void stateFacts(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            int bits = (state.isSolid() ? 1 : 0) | (state.hasBlockEntity() ? 2 : 0);
+            if (!state.getBlock().hasDynamicShape()) {
+                bits |= 4;
+                for (var direction : Direction.values()) {
+                    if (state.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, direction)) bits |= 1 << (3 + direction.get3DDataValue());
+                }
+                if (state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 1 << 9;
+            }
+            var post = state.getPostProcessPos(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            if (post != null) {
+                if (post.equals(BlockPos.ZERO)) bits |= 1 << 10;
+                else if (post.equals(BlockPos.ZERO.above())) bits |= 2 << 10;
+                else throw new IllegalStateException("Unknown post process offset: " + state);
+            }
+            table.add(bits);
+        }
+        write(dir, "block_state_facts", table);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--state-facts-only")) {
+            stateFacts(Path.of(args[0]));
+            return;
+        }
+        if (args.length > 1 && args[1].equals("--face-occlusion-only")) {
+            faceOcclusion(Path.of(args[0]));
+            return;
+        }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
@@ -168,6 +214,8 @@ public final class ExtractData {
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
         stateTransforms(dir);
+        faceOcclusion(dir);
+        stateFacts(dir);
 
         var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());

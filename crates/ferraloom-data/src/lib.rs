@@ -377,3 +377,49 @@ impl BlockState {
         Ok(Self(self.0 - old * property.stride + new * property.stride))
     }
 }
+
+impl BlockState {
+    /// Port of BlockStateBase#getFaceOcclusionShape and Block#isShapeFullBlock.
+    /// Direction bits follow vanilla's DOWN, UP, NORTH, SOUTH, WEST, EAST order.
+    pub const fn is_face_occlusion_full(self, face: ferraloom_util::Direction) -> bool {
+        FACE_OCCLUSION[self.0 as usize] & (1 << face as u8) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#isSolid, which reads initCache's legacySolid.
+    pub const fn is_solid(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & 1 != 0
+    }
+    /// Port of BlockStateBase#hasBlockEntity, a state-only EntityBlock test.
+    pub const fn has_block_entity(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & 2 != 0
+    }
+    /// Port of BlockStateBase.Cache#isFaceSturdy for SupportType.FULL.
+    /// Dynamic shapes have no cache and require the live block behavior.
+    pub const fn cached_sturdy_face(self, face: ferraloom_util::Direction) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << (3 + face as u8)) != 0)
+        }
+    }
+    /// Port of BlockStateBase.Cache#isCollisionShapeFullBlock.
+    pub const fn cached_collision_full_block(self) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << 9) != 0)
+        }
+    }
+    /// Vanilla's registered PostProcess callbacks are null, self, and above.
+    pub const fn post_process_y_offset(self) -> Option<i32> {
+        match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
+            1 => Some(0),
+            2 => Some(1),
+            _ => None,
+        }
+    }
+}

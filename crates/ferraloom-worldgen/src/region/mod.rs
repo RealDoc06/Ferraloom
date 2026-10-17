@@ -99,6 +99,71 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: destroy_block".into()))
     }
+    // --- ore and cave family ---
+    fn multiface_state_for_placement(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _block: Block,
+        _old: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        Err(Error("Unsupported: multiface_state_for_placement".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: multiface_spread".into()))
+    }
+    fn sculk_can_spread_from(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: sculk_can_spread_from".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn sculk_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _origin: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _charge_count: i32,
+        _amount_per_charge: i32,
+        _spread_attempts: i32,
+        _growth_rounds: i32,
+        _spread_rounds: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: sculk_spread".into()))
+    }
+    fn set_loot_table(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: RandomizableContainer#setBlockEntityLootTable".into(),
+        ))
+    }
+    fn set_spawner_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _kind: ferraloom_data::EntityType,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
+    }
+    // --- end ore and cave family ---
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -300,6 +365,70 @@ impl<'a> WorldGenRegion<'a> {
             sea_level,
         })
     }
+    // --- ore and cave family ---
+    pub fn multiface_state_for_placement(
+        &self,
+        block: Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        self.behavior
+            .multiface_state_for_placement(self, block, old, p, face)
+    }
+    pub fn multiface_spread(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .multiface_spread(self, state, p, face, random, mark_post_processing)
+    }
+    pub fn sculk_can_spread_from(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.sculk_can_spread_from(self, p)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn sculk_spread(
+        &mut self,
+        origin: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        charge_count: i32,
+        amount_per_charge: i32,
+        spread_attempts: i32,
+        growth_rounds: i32,
+        spread_rounds: i32,
+    ) -> Result<(), Error> {
+        self.behavior.sculk_spread(
+            self,
+            origin,
+            random,
+            charge_count,
+            amount_per_charge,
+            spread_attempts,
+            growth_rounds,
+            spread_rounds,
+        )
+    }
+    pub fn set_loot_table(
+        &mut self,
+        p: [i32; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_loot_table(self, p, table, random)
+    }
+    pub fn set_spawner_entity(
+        &mut self,
+        p: [i32; 3],
+        kind: ferraloom_data::EntityType,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_spawner_entity(self, p, kind, random)
+    }
+    // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
     }
@@ -517,7 +646,7 @@ impl<'a> WorldGenRegion<'a> {
         self.behavior.is_outline_full_block(self, state, p)
     }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_solid(self.block(p)?)
+        Ok(self.block(p)?.is_solid())
     }
     pub fn has_sturdy_face(
         &self,
