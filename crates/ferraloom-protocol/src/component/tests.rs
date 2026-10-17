@@ -85,6 +85,35 @@ fn vanilla_stacks_removals_nesting_and_untrusted_delimiters() {
     }
 }
 #[test]
+fn vanilla_validated_creative_stacks() {
+    let (fixtures, registries) = fixtures();
+    for fixture in fixtures["validated_stacks"].as_array().unwrap() {
+        let name = fixture["name"].as_str().unwrap();
+        let bytes = unhex(fixture["bytes"].as_str().unwrap());
+        let accepted = fixture["accepted"].as_bool().unwrap();
+        let mut reader = Reader::with_context(&bytes, &registries);
+        let stack = OPTIONAL_UNTRUSTED_ITEM_STACK.decode(&mut reader).unwrap();
+        reader.finish().unwrap();
+        assert_eq!(stack.validate_persistent().is_ok(), accepted, "{name}");
+        if !stack.is_empty() {
+            // The same persistent encoders constrain storage, JSON and hashes.
+            assert_eq!(stack.to_nbt().is_ok(), accepted, "NBT: {name}");
+            assert_eq!(stack.to_json().is_ok(), accepted, "JSON: {name}");
+            assert_eq!(stack.hash().is_ok(), accepted, "hash: {name}");
+        }
+        let mut reader = Reader::with_context(&bytes, &registries);
+        let result = VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK.decode(&mut reader);
+        assert_eq!(result.is_ok(), accepted, "{name}: {result:?}");
+        reader.finish().unwrap();
+        // Vanilla does not validate on the encode path, even for rejected stacks.
+        let mut writer = Writer::with_context(&registries);
+        VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK
+            .encode(&mut writer, &stack)
+            .unwrap();
+        assert_eq!(writer.as_slice(), bytes, "{name}");
+    }
+}
+#[test]
 fn vanilla_entity_data_list() {
     let (f, registries) = fixtures();
     let bytes = unhex(f["entity_data"].as_str().unwrap());

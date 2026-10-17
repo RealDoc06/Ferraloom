@@ -5,6 +5,7 @@ One class row per bootstrapped runtime Item class, listing every item id assigne
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
 | items.stack.components | Merge item default components with patches and preserve removals during serialization | `ItemStack; DataComponentPatch; PatchedDataComponentMap` | `ferraloom-protocol::component::tests::vanilla_stacks_removals_nesting_and_untrusted_delimiters`; `all_extracted_item_defaults_are_typed` | pass | partial |
+| items.stack.creative-validation | Validate creative-slot stacks through the persistent item codec, including nested component constraints | `ItemStack#validatedStreamCodec; ServerboundSetCreativeModeSlotPacket` | `ferraloom-protocol::component::tests::vanilla_validated_creative_stacks` | pass | pass |
 | items.stack.count-limits | Respect per-stack maximum count and split, merge and copy component-bearing stacks | `ItemStack` | | - | todo |
 | items.stack.damage-break | Apply durability, unbreaking processing, break events and replacement stacks | `ItemStack#hurtAndBreak` | | - | todo |
 | items.use.consume-duration | Apply item-use duration and completion with food and consume effects | `Consumable; LivingEntity#completeUsingItem` | | - | todo |
