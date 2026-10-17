@@ -144,11 +144,23 @@ fn decode_contents(map: &Fields, kind: &str, nbt: bool) -> Result<Contents> {
                                 | Tag::Long(_)
                                 | Tag::Float(_)
                                 | Tag::Double(_) => {
-                                    let number = match tag {
-                                        Tag::Long(v) => serde_json::Number::from(v),
-                                        Tag::Int(v) => serde_json::Number::from(v),
-                                        _ => serde_json::Number::from_f64(tag.as_double().unwrap())
-                                            .ok_or_else(|| error("Non-finite argument"))?,
+                                    let number = if nbt {
+                                        Numeric::from_nbt(&tag).unwrap()
+                                    } else {
+                                        let value = tag.as_double().unwrap();
+                                        if value == (value as i8) as f64 {
+                                            Numeric::Byte(value as i8)
+                                        } else if value == (value as i16) as f64 {
+                                            Numeric::Short(value as i16)
+                                        } else if value == (value as i32) as f64 {
+                                            Numeric::Int(value as i32)
+                                        } else if let Tag::Long(value) = tag {
+                                            Numeric::Long(value)
+                                        } else if value == (value as f32) as f64 {
+                                            Numeric::Float(value as f32)
+                                        } else {
+                                            Numeric::Double(value)
+                                        }
                                     };
                                     Argument::Number(number)
                                 }
@@ -487,9 +499,7 @@ pub(super) fn encode(component: &Component) -> Result<Tag> {
                         Ok(match arg {
                             Argument::String(v) => Tag::String(v.as_str().into()),
                             Argument::Boolean(v) => Tag::Byte(i8::from(*v)),
-                            Argument::Number(v) => Tag::Double(
-                                v.as_f64().ok_or_else(|| error("Invalid argument number"))?,
-                            ),
+                            Argument::Number(v) => v.to_nbt(),
                             Argument::Component(v) => encode(v)?,
                         })
                     })
@@ -782,18 +792,18 @@ fn tag_to_json(tag: Tag, key: &str) -> Result<Value> {
 }
 pub(super) fn encode_json(component: &Component) -> Result<Value> {
     let mut value = tag_to_json(encode(component)?, "")?;
-    // Preserve the primitive kind of translation arguments in JsonOps.
-    if let (Contents::Translatable { args, .. }, Value::Object(map)) =
-        (&component.contents, &mut value)
-    {
-        if !args.is_empty() {
+    let Value::Object(map) = &mut value else {
+        return Ok(value);
+    };
+    match &component.contents {
+        Contents::Translatable { args, .. } if !args.is_empty() => {
             map.insert(
                 "with".into(),
                 Value::Array(
                     args.iter()
                         .map(|a| match a {
                             Argument::String(v) => Ok(Value::String(v.clone())),
-                            Argument::Number(v) => Ok(Value::Number(v.clone())),
+                            Argument::Number(v) => tag_to_json(v.to_nbt(), ""),
                             Argument::Boolean(v) => Ok(Value::Bool(*v)),
                             Argument::Component(v) => encode_json(v),
                         })
@@ -801,6 +811,112 @@ pub(super) fn encode_json(component: &Component) -> Result<Value> {
                 ),
             );
         }
+        Contents::Selector { separator, .. } | Contents::Nbt { separator, .. } => {
+            if let Some(v) = separator {
+                map.insert("separator".into(), encode_json(v)?);
+            }
+        }
+        Contents::Object { fallback, .. } => {
+            if let Some(v) = fallback {
+                map.insert("fallback".into(), encode_json(v)?);
+            }
+        }
+        _ => {}
     }
-    Ok(value)
+    if !component.extra.is_empty() {
+        map.insert(
+            "extra".into(),
+            Value::Array(
+                component
+                    .extra
+                    .iter()
+                    .map(encode_json)
+                    .collect::<Result<_>>()?,
+            ),
+        );
+    }
+    if let Some(hover) = &component.style.hover_event {
+        let mut event = match map.remove("hover_event").unwrap() {
+            Value::Object(v) => v,
+            _ => unreachable!(),
+        };
+        match hover {
+            HoverEvent::ShowText(v) => {
+                event.insert("value".into(), encode_json(v)?);
+            }
+            HoverEvent::ShowEntity { name: Some(v), .. } => {
+                event.insert("name".into(), encode_json(v)?);
+            }
+            _ => {}
+        }
+        map.insert(
+            "hover_event".into(),
+            Value::Object(ordered(
+                event,
+                &[
+                    "value",
+                    "id",
+                    "count",
+                    "components",
+                    "uuid",
+                    "name",
+                    "action",
+                ],
+            )),
+        );
+    }
+    if let Some(Value::Object(event)) = map.remove("click_event") {
+        map.insert(
+            "click_event".into(),
+            Value::Object(ordered(
+                event,
+                &[
+                    "url", "command", "page", "value", "id", "payload", "dialog", "action",
+                ],
+            )),
+        );
+    }
+    let fields = match &component.contents {
+        Contents::Text(_) => vec!["text"],
+        Contents::Translatable { .. } => vec!["translate", "fallback", "with"],
+        Contents::Keybind(_) => vec!["keybind"],
+        Contents::Score { .. } => vec!["score"],
+        Contents::Selector { .. } => vec!["selector", "separator"],
+        Contents::Nbt { .. } => vec![
+            "nbt",
+            "interpret",
+            "plain",
+            "separator",
+            "entity",
+            "block",
+            "storage",
+        ],
+        Contents::Object { .. } => vec!["atlas", "sprite", "player", "hat", "fallback"],
+    };
+    let mut order = fields;
+    order.extend([
+        "extra",
+        "color",
+        "shadow_color",
+        "bold",
+        "italic",
+        "underlined",
+        "strikethrough",
+        "obfuscated",
+        "click_event",
+        "hover_event",
+        "insertion",
+        "font",
+    ]);
+    Ok(Value::Object(ordered(std::mem::take(map), &order)))
+}
+fn ordered(mut map: Map<String, Value>, order: &[&str]) -> Map<String, Value> {
+    let mut result = Map::new();
+    for name in order {
+        if let Some(value) = map.remove(*name) {
+            result.insert((*name).into(), value);
+        }
+    }
+    result.extend(map);
+    result
 }

@@ -100,9 +100,42 @@ pub enum Contents {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Argument {
     String(String),
-    Number(serde_json::Number),
+    Number(Numeric),
     Boolean(bool),
     Component(Box<Component>),
+}
+/// Primitive number kinds retained by ExtraCodecs.JAVA and JavaOps.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Numeric {
+    Byte(i8),
+    Short(i16),
+    Int(i32),
+    Long(i64),
+    Float(f32),
+    Double(f64),
+}
+impl Numeric {
+    pub fn to_nbt(self) -> Tag {
+        match self {
+            Self::Byte(v) => Tag::Byte(v),
+            Self::Short(v) => Tag::Short(v),
+            Self::Int(v) => Tag::Int(v),
+            Self::Long(v) => Tag::Long(v),
+            Self::Float(v) => Tag::Float(v),
+            Self::Double(v) => Tag::Double(v),
+        }
+    }
+    pub fn from_nbt(tag: &Tag) -> Option<Self> {
+        Some(match tag {
+            Tag::Byte(v) => Self::Byte(*v),
+            Tag::Short(v) => Self::Short(*v),
+            Tag::Int(v) => Self::Int(*v),
+            Tag::Long(v) => Self::Long(*v),
+            Tag::Float(v) => Self::Float(*v),
+            Tag::Double(v) => Self::Double(*v),
+            _ => return None,
+        })
+    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataSource {
