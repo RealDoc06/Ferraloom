@@ -582,7 +582,7 @@ pub fn decode_block_state(value: &Value) -> Result<BlockState, Error> {
                     "top" => Some(properties::Type::Top),
                     _ => None,
                 })
-                .and_then(|v| state.with(properties::TYPE, v)),
+                .and_then(|v| state.with(properties::TYPE_, v)),
                 "unstable" => (match value {
                     "false" => Some(false),
                     "true" => Some(true),

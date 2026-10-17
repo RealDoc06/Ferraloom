@@ -1,0 +1,127 @@
+# Ticking, game events and vibrations
+
+Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
+
+| ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
+|---|---|---|---|---|---|
+| ticking.server.packet-phase | Process queued packets before the server tick | `MinecraftServer#processPacketsAndTick` | | - | todo |
+| ticking.server.rate-phase | Advance the server tick count and tick-rate manager before child ticks | `MinecraftServer#tickServer` | | - | todo |
+| ticking.server.function-phase | Tick command functions before clocks and dimensions | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.clock-phase | Advance global world clocks only when simulation runs normally | `MinecraftServer#tickChildren; ServerClockManager#tick` | | - | todo |
+| ticking.server.time-sync | Send periodic world-time synchronization before dimension ticks | `MinecraftServer#tickChildren; MinecraftServer#forceGameTimeSynchronization` | | - | todo |
+| ticking.server.dimension-phase | Update effective respawn data and tick dimensions in server iteration order | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.connection-phase | Tick network connections after dimensions | `MinecraftServer#tickChildren; MinecraftServer#tickConnection` | | - | todo |
+| ticking.server.player-phase | Tick player-list maintenance after connections | `MinecraftServer#tickChildren; PlayerList#tick` | | - | todo |
+| ticking.server.debug-phase | Tick debug subscribers after player-list maintenance | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.gametest-phase | Tick GameTests after debug subscribers when simulation is running | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.gui-phase | Run registered GUI tickables after GameTests | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.chunk-send-phase | Send pending chunk batches and resume connection flushing after tickables | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.activity-phase | Tick the server activity monitor after chunk sending | `MinecraftServer#tickChildren` | | - | todo |
+| ticking.server.status-autosave-phase | Refresh expired server status and perform due autosave after child ticks | `MinecraftServer#tickServer` | | - | todo |
+| ticking.server.task-budget | Run queued tasks with vanilla tick-age and remaining-time rules | `MinecraftServer#shouldRun; MinecraftServer#pollTask` | | - | todo |
+| ticking.server.freeze-step-sprint | Apply freeze, stepping, sprinting and changed tick rates to simulation eligibility | `ServerTickRateManager; TickRateManager` | | - | todo |
+| ticking.level.environment-cache | Invalidate environment-attribute tick cache before world work | `ServerLevel#tick` | | - | todo |
+| ticking.level.border-weather | Tick world border before weather when simulation runs normally | `ServerLevel#tick` | | - | todo |
+| ticking.level.sleep | Resolve deep-sleep threshold, clock wake-up marker and weather reset before sky brightness | `ServerLevel#tick` | | - | todo |
+| ticking.level.sky-time | Update sky brightness before game time and scheduled functions | `ServerLevel#tick; ServerLevel#tickTime` | | - | todo |
+| ticking.level.scheduled-blocks | Run scheduled block ticks before scheduled fluid ticks with a 65536 tick budget each | `ServerLevel#tick` | | - | todo |
+| ticking.level.raid-phase | Tick raids after scheduled ticks and before chunk source | `ServerLevel#tick` | | - | todo |
+| ticking.level.chunk-phase | Tick the chunk source after raids | `ServerLevel#tick` | | - | todo |
+| ticking.level.block-events | Run block events after chunk source and before entity ticking | `ServerLevel#tick; ServerLevel#runBlockEvents` | | - | todo |
+| ticking.level.empty-time | Stop entity and block-entity ticking after the empty-time threshold without active tickets | `ServerLevel#tick` | | - | todo |
+| ticking.level.dragon-phase | Tick the dragon fight before the world entity tick list | `ServerLevel#tick` | | - | todo |
+| ticking.level.entity-order | Check removal, freezing, despawning and entity-ticking range before ticking each nonpassenger | `ServerLevel#tick` | | - | todo |
+| ticking.level.passenger-order | Tick passengers recursively after their vehicle and detach invalid riding links | `ServerLevel#tickNonPassenger; ServerLevel#tickPassenger` | | - | todo |
+| ticking.level.block-entity-phase | Tick block entities after entities with pending ticker additions deferred | `Level#tickBlockEntities; ServerLevel#tick` | | - | todo |
+| ticking.level.entity-management | Tick persistent entity section management after entity and block-entity work | `ServerLevel#tick` | | - | todo |
+| ticking.level.debug-gc-phase | Tick debug synchronizers and collect unused random-state cache entries last | `ServerLevel#tick` | | - | todo |
+| ticking.chunk.ticket-phase | Purge stale tickets, then run distance-manager updates before chunk work | `ServerChunkCache#tick` | | - | todo |
+| ticking.chunk.spawn-state | Count natural spawning state and determine eligible categories before selecting chunks | `ServerChunkCache#tickChunks` | | - | todo |
+| ticking.chunk.spawn-shuffle | Collect and shuffle spawning chunks before inhabited-time, thunder and spawn processing | `ServerChunkCache#tickChunks; ServerChunkCache#tickSpawningChunk` | | - | todo |
+| ticking.chunk.random-phase | Run random block and fluid ticks in block-ticking chunks after natural spawning | `ServerChunkCache#tickChunks; ServerLevel#tickChunk` | | - | todo |
+| ticking.chunk.custom-spawner-phase | Run custom spawners after random ticks when mob spawning is enabled | `ServerChunkCache#tickChunks; ServerLevel#tickCustomSpawners` | | - | todo |
+| ticking.chunk.broadcast-phase | Broadcast changed chunks after simulation, including when simulation is frozen | `ServerChunkCache#tickChunks; ServerChunkCache#broadcastChangedChunks` | | - | todo |
+| ticking.chunk.map-unload-phase | Tick chunk map and unload work, then clear lookup cache | `ServerChunkCache#tick` | | - | todo |
+| ticking.scheduled.order | Order each chunk tick queue by trigger time, priority and sub-tick order | `ScheduledTick#DRAIN_ORDER; LevelChunkTicks` | | - | todo |
+| ticking.scheduled.deduplicate | Deduplicate scheduled ticks for the same position and type | `LevelChunkTicks#schedule` | | - | todo |
+| ticking.scheduled.loaded-only | Run ticks only for eligible ticking chunks and defer unloaded containers | `LevelTicks#tick; LevelTicks#sortContainersToTick` | | - | todo |
+| ticking.scheduled.stale-type | Skip a scheduled tick if the block or fluid at its position no longer matches | `ServerLevel#tickBlock; ServerLevel#tickFluid` | | - | todo |
+| ticking.scheduled.persist-delay | Preserve scheduled delays and relative ordering across chunk unload and reload | `LevelChunkTicks#pack; LevelChunkTicks#unpack; SavedTick` | | - | todo |
+| ticking.scheduled.copy-clear | Copy and clear pending ticks with block-area clone operations and preserve ordering | `LevelTicks#copyAreaFrom; LevelTicks#clearArea` | | - | todo |
+| ticking.block-events.queue | Deduplicate and process queued block events, including events queued by another event | `ServerLevel#blockEvent; ServerLevel#runBlockEvents` | | - | todo |
+| ticking.block-events.retry | Defer events outside ticking chunks and reject events whose block has changed | `ServerLevel#runBlockEvents; ServerLevel#doBlockEvent` | | - | todo |
+| ticking.random.section-selection | Sample positions per randomly ticking section using the level random-position sequence | `ServerLevel#tickChunk; Level#getBlockRandomPos` | | - | todo |
+| ticking.random.block-fluid-order | Invoke the sampled block random tick before its fluid random tick | `ServerLevel#tickChunk` | | - | todo |
+| ticking.game-event.dispatch | Dispatch events to section listeners within event notification radius | `GameEventDispatcher#post; EuclideanGameEventListenerRegistry` | | - | todo |
+| ticking.game-event.distance-order | Process distance-ordered listeners using source-to-listener distance | `GameEventDispatcher#post; GameEvent.ListenerInfo#compareTo` | | - | todo |
+| ticking.vibration.frequency | Map game events and resonance events to vibration frequencies | `VibrationSystem#getGameEventFrequency` | | - | todo |
+| ticking.vibration.selection | Choose pending vibrations using tick, distance and frequency tie-breaking | `VibrationSelector` | | - | todo |
+| ticking.vibration.occlusion | Reject vibrations occluded by tagged blocks using the directional ray checks | `VibrationSystem.Listener#isOccluded` | | - | todo |
+| ticking.vibration.sneaking | Filter tagged sneaking events and dampened source entities | `VibrationSystem.User#isValidVibration` | | - | todo |
+| ticking.vibration.travel | Deliver vibrations after floored travel distance and restore travel state after reload | `VibrationSystem.Ticker#tick; VibrationSystem.Data` | | - | todo |
+| ticking.vibration.adjacent-chunks | Defer delivery when a listener requires surrounding chunks to be ticking | `VibrationSystem.Ticker#areAdjacentChunksTicking` | | - | todo |
+| ticking.vibration.signal-distance | Compute listener redstone strength from distance with minimum power one | `VibrationSystem#getRedstoneStrengthForDistance` | | - | todo |
+| ticking.scheduled.cross-chunk-drain | Merge due chunk queues by priority and sub-tick order, excluding trigger time from the cross-chunk comparator | `ScheduledTick#INTRA_TICK_DRAIN_ORDER; LevelTicks#drainFromCurrentContainer` | | - | todo |
+| ticking.game-event.block-activate | `minecraft:block_activate` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-attach | `minecraft:block_attach` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-change | `minecraft:block_change` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-close | `minecraft:block_close` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-deactivate | `minecraft:block_deactivate` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-destroy | `minecraft:block_destroy` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-detach | `minecraft:block_detach` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-open | `minecraft:block_open` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.block-place | `minecraft:block_place` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.bounce | `minecraft:bounce` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.container-close | `minecraft:container_close` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.container-open | `minecraft:container_open` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.drink | `minecraft:drink` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.eat | `minecraft:eat` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.elytra-glide | `minecraft:elytra_glide` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-action | `minecraft:entity_action` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-damage | `minecraft:entity_damage` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-die | `minecraft:entity_die` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-dismount | `minecraft:entity_dismount` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-interact | `minecraft:entity_interact` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-mount | `minecraft:entity_mount` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.entity-place | `minecraft:entity_place` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.equip | `minecraft:equip` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.explode | `minecraft:explode` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.flap | `minecraft:flap` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.fluid-pickup | `minecraft:fluid_pickup` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.fluid-place | `minecraft:fluid_place` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.hit-ground | `minecraft:hit_ground` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.instrument-play | `minecraft:instrument_play` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.item-interact-finish | `minecraft:item_interact_finish` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.item-interact-start | `minecraft:item_interact_start` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.jukebox-play | `minecraft:jukebox_play` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.jukebox-stop-play | `minecraft:jukebox_stop_play` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.lightning-strike | `minecraft:lightning_strike` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.note-block-play | `minecraft:note_block_play` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.prime-fuse | `minecraft:prime_fuse` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.projectile-land | `minecraft:projectile_land` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.projectile-shoot | `minecraft:projectile_shoot` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-1 | `minecraft:resonate_1` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-10 | `minecraft:resonate_10` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-11 | `minecraft:resonate_11` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-12 | `minecraft:resonate_12` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-13 | `minecraft:resonate_13` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-14 | `minecraft:resonate_14` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-15 | `minecraft:resonate_15` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-2 | `minecraft:resonate_2` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-3 | `minecraft:resonate_3` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-4 | `minecraft:resonate_4` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-5 | `minecraft:resonate_5` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-6 | `minecraft:resonate_6` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-7 | `minecraft:resonate_7` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-8 | `minecraft:resonate_8` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.resonate-9 | `minecraft:resonate_9` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.sculk-sensor-tendrils-clicking | `minecraft:sculk_sensor_tendrils_clicking` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.shear | `minecraft:shear` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.shriek | `minecraft:shriek` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.splash | `minecraft:splash` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.step | `minecraft:step` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.swim | `minecraft:swim` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.teleport | `minecraft:teleport` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.game-event.unequip | `minecraft:unequip` (game event) | `net.minecraft.world.level.gameevent.GameEvent#bootstrap; net.minecraft.world.level.gameevent.GameEvent` | | - | todo |
+| ticking.position-source-type.block | `minecraft:block` (position source type) | `net.minecraft.world.level.gameevent.PositionSourceType#register` | | - | todo |
+| ticking.position-source-type.entity | `minecraft:entity` (position source type) | `net.minecraft.world.level.gameevent.PositionSourceType#register` | | - | todo |
