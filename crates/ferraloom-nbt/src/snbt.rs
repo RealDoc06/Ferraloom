@@ -50,7 +50,6 @@ pub(crate) struct Parser {
     text: Vec<u16>,
     pub(crate) pos: usize,
     best: Option<ParseError>,
-    depth: usize,
 }
 #[derive(Clone)]
 struct Integer {
@@ -66,7 +65,6 @@ impl Parser {
             text: input.encode_utf16().collect(),
             pos,
             best: None,
-            depth: 0,
         }
     }
     fn error(&self, message: impl Into<String>) -> ParseError {
@@ -437,10 +435,16 @@ impl Parser {
                         }
                         let name = String::from_utf16_lossy(&self.text[start..self.pos]);
                         self.ch('}')?;
-                        let Some(c) = unicode_names2::character(&name) else {
+                        let Some(c) = named_codepoint(&name) else {
                             return self.fail("Invalid Unicode character name");
                         };
-                        out.extend(c.encode_utf16(&mut [0; 2]).iter().copied());
+                        if c <= 65535 {
+                            out.push(c as u16);
+                        } else {
+                            let c = c - 0x10000;
+                            out.push((0xd800 + (c >> 10)) as u16);
+                            out.push((0xdc00 + (c & 1023)) as u16);
+                        }
                     }
                     _ => return self.record(self.pos - 1, "Expected literal b"),
                 }
@@ -589,13 +593,7 @@ impl Parser {
     }
     fn literal(&mut self) -> Option<Tag> {
         self.ws();
-        if self.depth >= 512 {
-            return self.fail("NBT value is too deeply nested");
-        }
-        self.depth += 1;
-        let result = self.literal_inner();
-        self.depth -= 1;
-        result
+        self.literal_inner()
     }
     fn literal_inner(&mut self) -> Option<Tag> {
         if self
@@ -645,4 +643,34 @@ fn parse_uuid(s: &str) -> Option<Vec<i32>> {
         (low >> 32) as i32,
         low as i32,
     ])
+}
+
+// Character.codePointOf uses Java block names for ranges with algorithmic Unicode names.
+fn named_codepoint(name: &str) -> Option<u32> {
+    use crate::java_names::{CONTROLS, RANGES};
+    let name = name.trim().to_ascii_uppercase();
+    if let Some((cp, _)) = CONTROLS.iter().find(|(_, n)| *n == name) {
+        return Some(*cp);
+    }
+    if let Some((block, hex)) = name.rsplit_once(' ') {
+        if let Ok(cp) = u32::from_str_radix(hex, 16) {
+            if RANGES
+                .iter()
+                .any(|(first, last, n)| *first <= cp && cp <= *last && *n == block)
+                && name == format!("{block} {cp:X}")
+            {
+                return Some(cp);
+            }
+        }
+    }
+    let c = unicode_names2::character(&name)?;
+    let cp = u32::from(c);
+    if RANGES
+        .iter()
+        .any(|(first, last, _)| *first <= cp && cp <= *last)
+        || CONTROLS.iter().any(|(control, _)| *control == cp)
+    {
+        return None;
+    }
+    (unicode_names2::name(c)?.to_string() == name).then_some(cp)
 }

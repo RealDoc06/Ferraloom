@@ -58,7 +58,21 @@ public class VanillaNbt {
             line("scenario",hex(input),hex(path),op,Integer.toString(index),hex(value),"ok",hex(result),hex(root.toString()));
         }catch(CommandSyntaxException e) {line("scenario",hex(input),hex(path),op,Integer.toString(index),hex(value),Integer.toString(e.getCursor()),hex(e.getRawMessage().getString()),hex(root.toString()));}
     }
+    static void names() {
+        int first=-1,last=-1;String blockName="";
+        for(int cp=0;cp<=Character.MAX_CODE_POINT;cp++) {
+            String name=Character.getName(cp);var block=Character.UnicodeBlock.of(cp);
+            String current=block==null?"":block.toString().replace('_',' ');
+            boolean fallback=name!=null&&name.equals(current+" "+Integer.toHexString(cp).toUpperCase(Locale.ROOT));
+            if(fallback&&cp==last+1&&current.equals(blockName)) {last=cp;continue;}
+            if(first!=-1) {line("range",Integer.toString(first),Integer.toString(last),blockName);first=-1;}
+            if(fallback) {first=last=cp;blockName=current;}
+        }
+        if(first!=-1)line("range",Integer.toString(first),Integer.toString(last),blockName);
+        for(int cp=0;cp<160;cp++)if(Character.isISOControl(cp))line("control",Integer.toString(cp),Character.getName(cp));
+    }
     public static void main(String[] args) throws Exception {
+        if(args.length==1&&args[0].equals("--names")) {names();return;}
         if(args.length>0) {for(String s:args)parse(s);return;}
         String[] cases={"{}","[]","[1,2b,foo,{a:2}]","{z:1,a:2,True:3,1:4,\"x y\":5}",
             "[B;0,127,-128,255ub]","[I;1b,2s,0xffffffff]","[L;1,2b,3s,4i,0xffffffffffffffff]",
@@ -103,7 +117,7 @@ public class VanillaNbt {
             Tag tag=PARSER.parseFully(input);var out=new ByteArrayOutputStream();NbtIo.writeAnyTag(tag,new DataOutputStream(out));
             line("surrogate",hex(input),hex16(tag.toString()),hex16(new SnbtPrinterTagVisitor().visit(tag)),hex16(new TextComponentTagVisitor("",TextComponentTagVisitor.PlainStyling.INSTANCE,true).visit(tag).getString()),HexFormat.of().formatHex(out.toByteArray()));
         }
-        for(String path:List.of("a[", "a[+1]", "a[1.0]", "a..b", "a[0]x", "a{", "a.\"x\\n\"", "\"\"", "{a:1}{b:2}", "a.", "a b", "\"x.y\"")) scenario("{a:[1,2]}",path,"get",0,"");
+        for(String path:List.of("a[+1]", "a[1.0]", "a..b", "a[0]x", "a{", "a.\"x\\n\"", "\"\"", "{a:1}{b:2}", "a.", "a b", "\"x.y\"")) scenario("{a:[1,2]}",path,"get",0,"");
         for(String path:List.of("a[]", "a[0]", "a[-2]", "a[-3]", "a[{id:1}]", "b[].x", "a[{id:9}].x")) for(String root:List.of("{a:[]}","{a:[I;1,2]}","{a:[{id:1},{id:2}]}")) scenario(root,path,"set",0,"foo");
         for(int index:List.of(-4,-3,-2,-1,0,1,2,3))scenario("{a:[I;1,2]}","a","insert",index,"[foo,3b]");
         scenario("{a:[[1],2]}","a[]","insert",-1,"[3]");

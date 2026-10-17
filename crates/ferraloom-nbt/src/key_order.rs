@@ -62,7 +62,8 @@ impl KeyOrder {
         }
         let index = hash(key) as usize & (self.buckets.len() - 1);
         if self.buckets[index].remove(key) {
-            self.len -= 1
+            self.len -= 1;
+            self.buckets[index].compact();
         }
     }
     fn resize(&mut self) {
@@ -327,17 +328,44 @@ impl Bucket {
         self.front();
         true
     }
-    fn split(self, bit: usize) -> (Self, Self) {
+    fn compact(&mut self) {
+        if self.nodes.len() <= self.order.len() * 2 + 8 {
+            return;
+        }
+        let mut indices = vec![None; self.nodes.len()];
+        for (new, old) in self.order.iter().enumerate() {
+            indices[*old] = Some(new);
+        }
+        let nodes = self
+            .order
+            .iter()
+            .map(|old| {
+                let mut node = self.nodes[*old].clone();
+                node.parent = node.parent.and_then(|i| indices[i]);
+                node.children = node.children.map(|i| i.and_then(|i| indices[i]));
+                node
+            })
+            .collect();
+        self.root = self.root.and_then(|i| indices[i]);
+        self.nodes = nodes;
+        self.order = (0..self.nodes.len()).collect();
+    }
+    fn split(mut self, bit: usize) -> (Self, Self) {
         let (low, high): (Vec<_>, Vec<_>) = self
             .order
             .iter()
             .copied()
             .partition(|i| self.nodes[*i].hash as usize & bit == 0);
-        if low.is_empty() {
-            return (Self::default(), self);
-        }
-        if high.is_empty() {
-            return (self, Self::default());
+        if low.is_empty() || high.is_empty() {
+            if self.order.len() <= 6 {
+                self.tree = false;
+                self.root = None;
+            }
+            return if low.is_empty() {
+                (Self::default(), self)
+            } else {
+                (self, Self::default())
+            };
         }
         let build = |order: Vec<usize>| {
             let mut b = Self::default();
