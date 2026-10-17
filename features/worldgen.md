@@ -24,6 +24,7 @@ Includes all worldgen type registries, built-in JSON entries and NBT structure t
 | worldgen.features.placement-chain | Apply placement modifiers in order and honor biome filtering and generation heightmaps | `PlacedFeature; PlacementModifier` | | - | todo |
 | worldgen.features.trees | Generate trunks, foliage, roots and decorations with replaceability and size checks | `TreeFeature` | | - | todo |
 | worldgen.structures.placement | Select structure sets using weighted choices, separation, exclusion and placement frequency | `ChunkGeneratorStructureState; StructurePlacement` | | - | todo |
+| worldgen.structures.terrain-adaptation | Structure terrain density for none, bury, beard thin, beard box and encapsulate, including junctions and volume bounds | `Beardifier; NoiseChunk` | `structure::beardifier::tests::scalar_and_volume_terrain_adjustments_match_vanilla_bits; marker_is_job_local_and_replacing_it_invalidates_cached_wrappers` | pass | pass |
 | worldgen.structures.references | Create and persist cross-chunk structure starts and references | `ChunkGenerator#createStructures; ChunkGenerator#createReferences` | | - | todo |
 | worldgen.structures.jigsaw | Expand template pools using connectors, rotation, collision bounds, depth and fallback pools | `JigsawPlacement` | | - | todo |
 | worldgen.structures.processors | Apply processor lists in order to transformed structure blocks and block entities | `StructureTemplate#placeInWorld; StructureProcessor` | | - | todo |
