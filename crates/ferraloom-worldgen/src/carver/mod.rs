@@ -268,7 +268,8 @@ impl CaveWorldCarver {
             if random.next_int_bound(4) == 0 {
                 let room_scale = f64::from(self.room_vertical_radius_multiplier.sample(random));
                 let thickness = 1.0 + random.next_float() * 6.0;
-                let radius = 1.5 + f64::from(mth::sin(1.5707963705062866) * thickness);
+                let radius =
+                    1.5 + f64::from(mth::sin(f64::from(std::f32::consts::FRAC_PI_2)) * thickness);
                 carve_ellipsoid(
                     chunk,
                     [x + 1.0, y, z],

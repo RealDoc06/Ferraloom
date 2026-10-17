@@ -90,11 +90,11 @@ pub fn position(v: &Value, bound: Option<i32>) -> Result<[i32; 3], Error> {
     }
     let mut p = [0; 3];
     for i in 0..3 {
-        p[i] = if let Some(bound) = bound {
-            int_range(&values[i], -bound, bound)?
-        } else {
-            integer(&values[i])?
-        };
+        p[i] = integer(&values[i])?;
+        // Vec3i.offsetCodec uses Math.abs(int); MIN_VALUE remains negative.
+        if bound.is_some_and(|bound| p[i].wrapping_abs() > bound) {
+            return Err(Error("position offset exceeds bound".into()));
+        }
     }
     Ok(p)
 }

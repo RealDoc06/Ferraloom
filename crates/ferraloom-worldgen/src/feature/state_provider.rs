@@ -108,12 +108,17 @@ fn select(states: &[BlockState], noise: f32) -> BlockState {
 }
 impl BlockStateProvider {
     pub fn decode(v: &Value, loader: &mut FeatureLoader<'_>) -> Result<Self, Error> {
-        if v.get("id").is_some() {
-            if v.get("type").is_some() {
-                return Err(Error("state provider matches both exclusive codecs".into()));
-            }
-            return Ok(Self::Simple(decode_block_state(v)?));
+        // Codec.xor tries both alternatives. Unknown/invalid typed fields do
+        // not invalidate an otherwise valid full block state, and vice versa.
+        let state = v.get("id").and_then(|_| decode_block_state(v).ok());
+        let typed = Self::decode_typed(v, loader);
+        match (state, typed) {
+            (Some(_), Ok(_)) => Err(Error("state provider matches both exclusive codecs".into())),
+            (Some(state), Err(_)) => Ok(Self::Simple(state)),
+            (None, typed) => typed,
         }
+    }
+    fn decode_typed(v: &Value, loader: &mut FeatureLoader<'_>) -> Result<Self, Error> {
         let ty = kind(v)?;
         Ok(match ty.to_string().as_str() {
             "minecraft:simple" => Self::Simple(decode_block_state(field(v, "state")?)?),

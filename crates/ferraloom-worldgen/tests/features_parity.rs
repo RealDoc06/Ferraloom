@@ -872,3 +872,39 @@ fn old_chunk_carving_filter_matches_vanilla_jitter_and_boundaries() {
         );
     }
 }
+
+#[test]
+fn feature_codec_boundaries_and_exclusive_alternatives_match_vanilla() {
+    use ferraloom_worldgen::{
+        feature::FeatureLoader,
+        placement::{
+            modifier::PlacementModifier,
+            predicate::{BlockPredicate, PredicateDecodeData},
+        },
+    };
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = PredicateDecodeData::load(&resources).unwrap();
+    let cases = golden(include_bytes!("golden/feature_codecs.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let config = &case["config"];
+        let valid = match case["kind"].as_str().unwrap() {
+            "int" => IntProvider::decode(config).is_ok(),
+            "float" => FloatProvider::decode(config).is_ok(),
+            "height" => HeightProvider::decode(config).is_ok(),
+            "predicate" => BlockPredicate::decode(config, &data).is_ok(),
+            "placement" => PlacementModifier::decode(config, &data).is_ok(),
+            "state" => FeatureLoader::new(&resources)
+                .unwrap()
+                .state_provider(config)
+                .is_ok(),
+            kind => panic!("unknown codec kind {kind}"),
+        };
+        assert_eq!(
+            valid,
+            case["valid"].as_bool().unwrap(),
+            "{} {config}",
+            case["kind"]
+        );
+    }
+}
