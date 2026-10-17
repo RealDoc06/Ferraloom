@@ -1103,15 +1103,14 @@ impl MinecraftServer {
                     .apply(&p.last_seen_messages)
                     .context("multiplayer.disconnect.chat_validation_failed")?;
                 let permission = self.access.permission(c.profile.id);
-                let source = CommandSourceStack {
+                let source = CommandSourceStack::server(
                     permission,
-                    position: self
-                        .level
+                    self.level
                         .level
                         .entity::<ServerPlayer>(entity)
                         .map_err(game_error)?
                         .position,
-                };
+                );
                 let action = self
                     .commands
                     .parse(&p.command, source)
@@ -1706,13 +1705,14 @@ impl MinecraftServer {
             .commands
             .parse(
                 text.trim_start_matches('/'),
-                CommandSourceStack {
-                    permission,
-                    position,
-                },
+                CommandSourceStack::server(permission, position),
             )
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         match action {
+            CommandAction::Run(command) => bail!(
+                "Command '{}' is registered but pending implementation",
+                command.command
+            ),
             CommandAction::Stop => {
                 self.feedback(source, "Stopping the server");
                 self.stop = true;

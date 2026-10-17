@@ -5,6 +5,8 @@
 
 pub mod block;
 pub mod entity;
+pub mod commands;
+pub mod gamerules;
 pub mod level;
 pub mod ticks;
 

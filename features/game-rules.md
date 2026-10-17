@@ -66,3 +66,5 @@ Every report rule has its type and bootstrapped default. Feature-gated entries a
 | game-rules.game-rule.tnt-explosion-drop-decay | `minecraft:tnt_explosion_drop_decay` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
 | game-rules.game-rule.universal-anger | `minecraft:universal_anger` (game rule); type `Boolean`, default `false` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
 | game-rules.game-rule.water-source-conversion | `minecraft:water_source_conversion` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | | - | todo |
+
+| game-rules.values.native-saved-data | Persist typed game-rule values at data/minecraft/game_rules.dat in 26.3 | `GameRuleMap#TYPE` | `gamerules::tests::native_saved_data_round_trip_and_feature_filtering` | pass | todo |
