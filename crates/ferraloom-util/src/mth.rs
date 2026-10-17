@@ -362,7 +362,7 @@ pub fn ceil_log2(n: i32) -> i32 {
     } else {
         smallest_encompassing_power_of_two(n)
     };
-    TABLE[((i64::from(n) * 125613361 >> 27) & 31) as usize]
+    TABLE[(((i64::from(n) * 125613361) >> 27) & 31) as usize]
 }
 #[inline]
 pub fn log2(n: i32) -> i32 {

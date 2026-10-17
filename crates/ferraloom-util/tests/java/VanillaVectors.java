@@ -77,5 +77,48 @@ public final class VanillaVectors {
         for (String name:new String[]{"","abc","minecraft:overworld","\ud83d\ude00\u00e9"}) {RandomSupport.Seed128bit seed=RandomSupport.seedFromHashOf(name);System.out.print("(\""+name+"\","+name.hashCode()+",");longs(seed.seedLo(),seed.seedHi());System.out.print(",");ints(UUIDUtil.uuidToIntArray(UUIDUtil.createOfflinePlayerUUID(name)));System.out.println("),");}
         System.out.println("];");
     }
-    public static void main(String[] args) { randoms(); noises(); geometry(); math(); }
+
+    static void edges() {
+        System.out.println("pub const DIRECTIONS: [[i32;17];6] = [");
+        for (Direction d:Direction.values()) {
+            ints(d.get3DDataValue(),d.get2DDataValue(),d.getOpposite().get3DDataValue(),d.getClockWise(Direction.Axis.X).get3DDataValue(),d.getClockWise(Direction.Axis.Y).get3DDataValue(),d.getClockWise(Direction.Axis.Z).get3DDataValue(),d.getCounterClockWise(Direction.Axis.X).get3DDataValue(),d.getCounterClockWise(Direction.Axis.Y).get3DDataValue(),d.getCounterClockWise(Direction.Axis.Z).get3DDataValue(),Rotation.CLOCKWISE_90.rotate(d).get3DDataValue(),Rotation.CLOCKWISE_180.rotate(d).get3DDataValue(),Rotation.COUNTERCLOCKWISE_90.rotate(d).get3DDataValue(),Mirror.LEFT_RIGHT.mirror(d).get3DDataValue(),Mirror.FRONT_BACK.mirror(d).get3DDataValue(),d.getStepX(),d.getStepY(),d.getStepZ()); System.out.println(",");
+        }
+        System.out.println("];\npub const NEAREST: [([i32;3],i32,i32);8] = [");
+        for (int[] v:new int[][]{{0,0,0},{1,1,1},{-1,-1,0},{2,1,1},{0,-2,1},{0,1,-2},{Integer.MIN_VALUE,0,0},{Integer.MAX_VALUE,Integer.MAX_VALUE-1,0}}) {
+            Direction exact=Direction.getNearest(v[0],v[1],v[2],null); Direction approx=Direction.getApproximateNearest(v[0],v[1],v[2]);
+            System.out.print("("); ints(v); System.out.println(","+(exact==null?-1:exact.get3DDataValue())+","+approx.get3DDataValue()+"),");
+        }
+        System.out.println("];\npub const DIVISION: [([i32;2],[i32;8]);8] = [");
+        for (int[] v:new int[][]{{-7,3},{7,-3},{-7,-3},{Integer.MIN_VALUE,-1},{Integer.MAX_VALUE,17},{-1,32},{0,-8},{12345,1}}) {
+            int a=v[0],b=v[1];System.out.print("(");ints(v);System.out.print(",");ints(Math.floorDiv(a,b),Math.floorMod(a,b),a>>b,a>>>b,a<<b,Mth.positiveCeilDiv(a,b),Mth.roundToward(a,b),Mth.wrapDegrees(a));System.out.println("),");
+        }
+        System.out.println("];\npub const INTERPOLATION: [(u64,[u64;6],[u32;9],[i32;2]);8] = [");
+        for (double x:new double[]{-1.25,-0.000001,0,0.125,0.3333333333333333,0.99999999,1.25,Double.NaN}) {
+            System.out.printf("(0x%016x,",Double.doubleToRawLongBits(x));
+            doubles(Mth.lerp(x,-7.3,11.1),Mth.clampedLerp(x,-7.3,11.1),Mth.inverseLerp(x,-0.3,2.7),Mth.map(x,-0.3,2.7,-7.3,11.1),Mth.clampedMap(x,-0.3,2.7,-7.3,11.1),Mth.rotLerp(x,179.3,-179.7));System.out.print(",");
+            float f=(float)x;
+            floats(Mth.lerp(f,-7.3f,11.1f),Mth.clampedLerp(f,-7.3f,11.1f),Mth.inverseLerp(f,-0.3f,2.7f),Mth.smoothstep(f),Mth.smoothstepDerivative(f),Mth.fastInvCubeRoot(f),Mth.invSqrt(f),Mth.rotLerpRad(f,3.1f,-3.1f),Mth.catmullrom(f,-3f,7f,-11f,13f));System.out.print(",");ints(Mth.lerpInt(f,Integer.MAX_VALUE,-98765),Mth.lerpDiscrete(f,7,-11));System.out.println("),");
+        }
+        System.out.println("];\npub const ATAN2: [([u64;2],u64);12] = [");
+        for (double[] q:new double[][]{{0,0},{-0.0,1},{1,0},{0,-1},{1,1},{-0.7,3.4},{30000.25,-0.00001},{-12,-7},{1e-15,1e-17},{1e10,1e8},{Double.NaN,1},{Double.POSITIVE_INFINITY,1}}) {
+            System.out.print("(");doubles(q);System.out.printf(",0x%016x),%n",Double.doubleToRawLongBits(Mth.atan2(q[0],q[1])));
+        }
+        System.out.println("];\npub const VECTORS: [[u64;3];9] = [");
+        Vec3 v=new Vec3(-12.25,0.000001,30000000.3); Vec3 w=new Vec3(3.7,-9.1,11.2);
+        for (Vec3 q:new Vec3[]{v.normalize(),new Vec3(0.0000001,0,0).normalize(),v.cross(w),v.lerp(w,0.37),v.xRot(0.37f),v.yRot(0.37f),v.zRot(0.37f),Vec3.directionFromRotation(-37.25f,179.3f),v.projectedOn(w)}) {doubles(q.x,q.y,q.z);System.out.println(",");}
+        System.out.println("];\npub const BOXES: [[u64;6];6] = [");
+        AABB b=new AABB(1,-2,3,0,4,-5); AABB c=new AABB(7,8,9,11,13,17);
+        for (AABB q:new AABB[]{b,b.intersect(c),b.inflate(-3,0.3,1.1),b.move(0.1,-1e10,17.3),b.contract(-3,0.3,1.1),b.expandTowards(-3,0.3,1.1)}) {doubles(q.minX,q.minY,q.minZ,q.maxX,q.maxY,q.maxZ);System.out.println(",");}
+        System.out.println("];\npub const RAW_XOROSHIRO: [([i64;2],[i64;6]);3] = [");
+        for (long[] seed:new long[][]{{0,0},{-1,1},{Long.MIN_VALUE,Long.MAX_VALUE}}) {Xoroshiro128PlusPlus r=new Xoroshiro128PlusPlus(seed[0],seed[1]); System.out.print("(");longs(seed);System.out.print(",");longs(r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong(),r.nextLong());System.out.println("),");}
+        System.out.println("];\npub const NOISE_NORMALIZATION: [[u32;5];4] = [");
+        for (int mode=0;mode<4;mode++) {
+            NormalNoise.Builder builder=NormalNoise.builder().setBaseOctave(-5).setOctaveCount(4).setBaseAmplitude(1.7).setAmplitudeModifier(1,0).setAmplitudeModifier(2,0.3);
+            if (mode==0) builder.setNormalize(false); else if (mode==2) builder.setLegacyNormalization(); else if (mode==3) for (int i=0;i<4;i++) builder.setAmplitudeModifier(i,0);
+            NormalNoise n=builder.build(); Noise stack=n.create(new XoroshiroRandomSource(-1));
+            floats(n.range().min(),n.range().max(),stack.range().min(),stack.range().max(),stack.get(-33554432.1,0.000000001,33554431.9));System.out.println(",");
+        }
+        System.out.println("];");
+    }
+    public static void main(String[] args) { randoms(); noises(); geometry(); math(); edges(); }
 }

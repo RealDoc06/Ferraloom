@@ -241,3 +241,186 @@ fn java_string_md5_and_uuid_word_order_match_vanilla() {
         assert_eq!(Uuid::from_byte_array(id.to_byte_array()), id);
     }
 }
+
+#[test]
+fn directions_rotations_and_nearest_ties_match_vanilla() {
+    for (d, expected) in Direction::VALUES.into_iter().zip(expected::DIRECTIONS) {
+        let n = d.step();
+        assert_eq!(
+            [
+                d.data_3d(),
+                d.data_2d(),
+                d.opposite().data_3d(),
+                d.clockwise_axis(Axis::X).data_3d(),
+                d.clockwise_axis(Axis::Y).data_3d(),
+                d.clockwise_axis(Axis::Z).data_3d(),
+                d.counter_clockwise_axis(Axis::X).data_3d(),
+                d.counter_clockwise_axis(Axis::Y).data_3d(),
+                d.counter_clockwise_axis(Axis::Z).data_3d(),
+                Rotation::Clockwise90.rotate(d).data_3d(),
+                Rotation::Clockwise180.rotate(d).data_3d(),
+                Rotation::CounterClockwise90.rotate(d).data_3d(),
+                Mirror::LeftRight.mirror(d).data_3d(),
+                Mirror::FrontBack.mirror(d).data_3d(),
+                n.x,
+                n.y,
+                n.z
+            ],
+            expected
+        );
+    }
+    for &([x, y, z], nearest, approximate) in &expected::NEAREST {
+        assert_eq!(
+            Direction::get_nearest(x, y, z, None).map_or(-1, Direction::data_3d),
+            nearest
+        );
+        assert_eq!(
+            Direction::get_approximate_nearest(f64::from(x), f64::from(y), f64::from(z)).data_3d(),
+            approximate
+        );
+    }
+}
+#[test]
+fn java_division_and_masked_shifts_match_vanilla() {
+    for &([a, b], expected) in &expected::DIVISION {
+        assert_eq!(
+            [
+                java::floor_div(a, b),
+                java::floor_mod(a, b),
+                java::shr(a, b),
+                java::ushr(a, b),
+                java::shl(a, b),
+                mth::positive_ceil_div(a, b),
+                mth::round_toward(a, b),
+                mth::wrap_degrees_int(a)
+            ],
+            expected
+        );
+    }
+}
+#[test]
+fn interpolation_and_approximate_trigonometry_match_vanilla_rounding() {
+    for &(input, doubles, floats, ints) in &expected::INTERPOLATION {
+        let x = f64::from_bits(input);
+        let f = x as f32;
+        let actual = [
+            mth::lerp(x, -7.3, 11.1),
+            mth::clamped_lerp(x, -7.3, 11.1),
+            mth::inverse_lerp(x, -0.3, 2.7),
+            mth::map(x, -0.3, 2.7, -7.3, 11.1),
+            mth::clamped_map(x, -0.3, 2.7, -7.3, 11.1),
+            mth::rot_lerp(x, 179.3, -179.7),
+        ];
+        for (actual, expected) in actual.into_iter().zip(doubles) {
+            assert_double(actual, expected);
+        }
+        let actual = [
+            mth::lerp_f32(f, -7.3, 11.1),
+            mth::clamped_lerp_f32(f, -7.3, 11.1),
+            mth::inverse_lerp_f32(f, -0.3, 2.7),
+            mth::smoothstep_f32(f),
+            mth::smoothstep_derivative_f32(f),
+            mth::fast_inv_cube_root(f),
+            mth::inv_sqrt_f32(f),
+            mth::rot_lerp_rad(f, 3.1, -3.1),
+            mth::catmullrom(f, -3.0, 7.0, -11.0, 13.0),
+        ];
+        for (actual, expected) in actual.into_iter().zip(floats) {
+            if f32::from_bits(expected).is_nan() {
+                assert!(actual.is_nan());
+            } else {
+                assert_eq!(actual.to_bits(), expected, "input={f}");
+            }
+        }
+        assert_eq!(
+            [
+                mth::lerp_int(f, i32::MAX, -98765),
+                mth::lerp_discrete(f, 7, -11)
+            ],
+            ints
+        );
+    }
+    for &([yb, xb], expected) in &expected::ATAN2 {
+        assert_double(mth::atan2(f64::from_bits(yb), f64::from_bits(xb)), expected);
+    }
+}
+#[test]
+fn vector_operations_and_box_normalization_match_vanilla() {
+    let v = Vec3::new(-12.25, 0.000001, 30000000.3);
+    let w = Vec3::new(3.7, -9.1, 11.2);
+    let actual = [
+        v.normalize(),
+        Vec3::new(0.0000001, 0.0, 0.0).normalize(),
+        v.cross(w),
+        v.lerp(w, 0.37),
+        v.x_rot(0.37),
+        v.y_rot(0.37),
+        v.z_rot(0.37),
+        Vec3::direction_from_rotation(-37.25, 179.3),
+        v.projected_on(w),
+    ];
+    for (v, expected) in actual.into_iter().zip(expected::VECTORS) {
+        assert_eq!([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()], expected);
+    }
+    let b = Aabb::new(1.0, -2.0, 3.0, 0.0, 4.0, -5.0);
+    let c = Aabb::new(7.0, 8.0, 9.0, 11.0, 13.0, 17.0);
+    let actual = [
+        b,
+        b.intersect(c),
+        b.inflate(-3.0, 0.3, 1.1),
+        b.move_by(0.1, -1e10, 17.3),
+        b.contract(-3.0, 0.3, 1.1),
+        b.expand_towards(-3.0, 0.3, 1.1),
+    ];
+    for (b, expected) in actual.into_iter().zip(expected::BOXES) {
+        assert_eq!(
+            [
+                b.min_x.to_bits(),
+                b.min_y.to_bits(),
+                b.min_z.to_bits(),
+                b.max_x.to_bits(),
+                b.max_y.to_bits(),
+                b.max_z.to_bits()
+            ],
+            expected
+        );
+    }
+}
+#[test]
+fn xoroshiro_zero_seed_and_noise_normalization_match_vanilla() {
+    for &([lo, hi], expected) in &expected::RAW_XOROSHIRO {
+        let mut r = Xoroshiro128PlusPlus::new(lo, hi);
+        assert_eq!(std::array::from_fn::<_, 6, _>(|_| r.next_long()), expected);
+    }
+    for (mode, expected) in expected::NOISE_NORMALIZATION.into_iter().enumerate() {
+        let n = NormalNoise::new(NoiseParameters {
+            base_amplitude: 1.7,
+            base_octave: -5,
+            octave_count: 4,
+            amplitude_modifiers: if mode == 3 {
+                vec![0.0; 4]
+            } else {
+                vec![1.0, 0.0, 0.3, 1.0]
+            },
+            normalize: match mode {
+                0 => Normalization::Disabled,
+                2 => Normalization::Legacy,
+                _ => Normalization::Enabled,
+            },
+        });
+        let stack = n.create(&mut XoroshiroRandomSource::new(-1));
+        let [nmin, nmax] = n.range();
+        let [smin, smax] = stack.range();
+        assert_eq!(
+            [
+                nmin,
+                nmax,
+                smin,
+                smax,
+                stack.get(-33554432.1, 0.000000001, 33554431.9)
+            ]
+            .map(f32::to_bits),
+            expected
+        );
+    }
+}
