@@ -56,7 +56,7 @@ mod item_admission_tests;
 
 /// Refuse saved inventories that the infallible container reader would reduce.
 /// This is admission protection, not support for unmodeled item components.
-fn validate_saved_container_items(
+pub fn validate_saved_container_items(
     nbt: &NbtCompound,
     position: BlockPos,
 ) -> Result<(), ChunkParsingError> {

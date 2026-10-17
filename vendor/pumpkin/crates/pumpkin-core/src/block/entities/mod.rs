@@ -75,6 +75,29 @@ pub enum BlockEntityLoadError {
     NotPublished,
 }
 
+/// One operation's supported custom/component projection, never a live entity
+/// or another persistent NBT owner. World verifies kind against loaded terrain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockEntityCloneData {
+    pub(crate) kind: &'static str,
+    pub(crate) custom: NbtCompound,
+    pub(crate) components: NbtCompound,
+}
+
+impl BlockEntityCloneData {
+    /// Canonical predicate metadata from the same capture. Empty components are
+    /// explicit, including when the source's ordinary disk writer omitted them.
+    pub(crate) fn full_metadata(&self, source_pos: BlockPos) -> NbtCompound {
+        let mut nbt = self.custom.clone();
+        nbt.put_compound("components", self.components.clone());
+        nbt.put_string("id", self.kind.to_owned());
+        nbt.put_int("x", source_pos.0.x);
+        nbt.put_int("y", source_pos.0.y);
+        nbt.put_int("z", source_pos.0.z);
+        nbt
+    }
+}
+
 /// A detached edit either commits completely or leaves live state untouched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NbtEditDecision {
@@ -92,6 +115,21 @@ pub trait BlockEntity: Any + Send + Sync {
     /// Implementations must decode before committing and must not call world callbacks.
     /// The supplied id and coordinates never determine the live entity's identity.
     fn load_nbt(&self, _nbt: &NbtCompound) -> Result<(), BlockEntityLoadError> {
+        Err(BlockEntityLoadError::Unsupported(self.resource_location()))
+    }
+
+    /// Pure coherent capture. Unsupported types must never become a missing BE.
+    fn snapshot_for_clone(&self) -> Result<BlockEntityCloneData, BlockEntityLoadError> {
+        Err(BlockEntityLoadError::Unsupported(self.resource_location()))
+    }
+
+    /// Decode before one state commit, publishing destination-identity NBT while
+    /// locked. The sink is pure cache work, with the same contract as edit_nbt.
+    fn restore_from_clone(
+        &self,
+        _data: &BlockEntityCloneData,
+        _publish: &mut dyn FnMut(NbtCompound),
+    ) -> Result<(), BlockEntityLoadError> {
         Err(BlockEntityLoadError::Unsupported(self.resource_location()))
     }
 

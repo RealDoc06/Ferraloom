@@ -1,5 +1,7 @@
 use crate::block::entities::{
-    BlockEntity, BlockEntityLoadError, NbtEditDecision, block_entity_from_nbt,
+    BlockEntity, BlockEntityCloneData, BlockEntityLoadError, NbtEditDecision,
+    block_entity_from_nbt,
+    chest_like_block_entity::{clone_kind, snapshot_pending_for_clone},
 };
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
@@ -7819,6 +7821,146 @@ impl World {
         level_data.game_rules.spawn_mobs
             && level_data.game_rules.spawn_monsters
             && level_data.difficulty != Difficulty::Peaceful
+    }
+
+    /// Nonmaterializing clone capture. Live ownership is map -> ChestState;
+    /// pending ownership is map -> pending record -> detached supported decode.
+    pub(crate) fn snapshot_block_entity_for_clone(
+        &self,
+        position: &BlockPos,
+    ) -> Result<Option<BlockEntityCloneData>, BlockEntityLoadError> {
+        if self
+            .custom_block_entity_data
+            .get(position)
+            .is_some_and(|data| !data.is_empty())
+        {
+            return Err(BlockEntityLoadError::Unsupported(
+                "clone custom plugin metadata",
+            ));
+        }
+        let chunk_pos = position.chunk_position();
+        let _unload = self.level.chunk_unload.access();
+        let chunk = self
+            .level
+            .loaded_chunks
+            .get(&chunk_pos)
+            .map(|entry| entry.value().clone())
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        let state = self
+            .get_block_state_id_if_loaded(position)
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        let kind = clone_kind(state)?;
+        let published = self.block_entities.get(&chunk_pos);
+        let live = published
+            .as_ref()
+            .and_then(|entities| entities.get(position));
+        let data = if let Some(entity) = live {
+            let kind = kind.ok_or(BlockEntityLoadError::Unsupported(
+                "clone entity on non-BE terrain",
+            ))?;
+            if entity.resource_location() != kind
+                || entity.get_position() != *position
+                || entity.get_id() != u32::from(state.to_state().block_entity_type)
+            {
+                return Err(BlockEntityLoadError::Unsupported(
+                    "clone live entity identity",
+                ));
+            }
+            let data = entity.snapshot_for_clone()?;
+            if data.kind != kind {
+                return Err(BlockEntityLoadError::Unsupported("clone snapshot kind"));
+            }
+            Some(data)
+        } else {
+            let pending = chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match (kind, pending.get(position)) {
+                (None, None) => None,
+                (Some(kind), Some(nbt)) => Some(snapshot_pending_for_clone(kind, *position, nbt)?),
+                _ => {
+                    return Err(BlockEntityLoadError::Unsupported(
+                        "clone missing/mismatched BE record",
+                    ));
+                }
+            }
+        };
+        // Terrain writes are not globally atomic with BE publication. Refuse a
+        // detected replacement/unload rather than combining two identities.
+        if self.get_block_state_id_if_loaded(position) != Some(state)
+            || !self
+                .level
+                .loaded_chunks
+                .get(&chunk_pos)
+                .is_some_and(|current| Arc::ptr_eq(current.value(), &chunk))
+        {
+            return Err(BlockEntityLoadError::NotPublished);
+        }
+        Ok(data)
+    }
+
+    /// Restore into the current destination allocation, under the same exact
+    /// map/type ownership as edit_block_entity_nbt. No source Arc is installed.
+    pub(crate) fn restore_cloned_block_entity(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        data: &BlockEntityCloneData,
+    ) -> Result<bool, BlockEntityLoadError> {
+        let chunk_pos = position.chunk_position();
+        let custom_data = self
+            .custom_block_entity_data
+            .get(position)
+            .map(|data| data.clone());
+        let mut unload = self.level.chunk_unload.access();
+        let Some(chunk) = self
+            .level
+            .loaded_chunks
+            .get(&chunk_pos)
+            .map(|entry| entry.value().clone())
+        else {
+            return Ok(false);
+        };
+        let Some(published) = self.block_entities.get(&chunk_pos) else {
+            return Ok(false);
+        };
+        let Some(expected) = published.get(position).cloned() else {
+            return Ok(false);
+        };
+        let state = self
+            .get_block_state_id_if_loaded(position)
+            .ok_or(BlockEntityLoadError::NotPublished)?;
+        if expected.get_position() != *position
+            || u32::from(state.to_state().block_entity_type) != expected.get_id()
+            || clone_kind(state)? != Some(data.kind)
+            || expected.resource_location() != data.kind
+        {
+            return Err(BlockEntityLoadError::Unsupported(
+                "clone destination identity",
+            ));
+        }
+        expected.restore_from_clone(data, &mut |nbt| {
+            Self::stage_block_entity_snapshot(&chunk, *position, custom_data.as_ref(), nbt);
+        })?;
+        unload.mark_live(chunk_pos);
+        drop(published);
+        drop(unload);
+        expected.after_nbt_commit(self);
+        if !self
+            .published_block_entity(position)
+            .is_some_and(|live| Arc::ptr_eq(&live, &expected))
+        {
+            return Ok(true);
+        }
+        expected.clear_comparator_dirty();
+        self.update_neighbour_for_output_signal(position, self.get_block(position));
+        if self
+            .published_block_entity(position)
+            .is_some_and(|live| Arc::ptr_eq(&live, &expected))
+        {
+            self.register_block_change(*position, self.get_block_state_id(position));
+        }
+        Ok(true)
     }
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {

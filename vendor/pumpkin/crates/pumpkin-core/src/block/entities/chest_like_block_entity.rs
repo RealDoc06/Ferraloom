@@ -6,7 +6,102 @@ use pumpkin_util::text::TextComponent;
 
 use std::sync::{Arc, Weak};
 
+use super::{BlockEntityCloneData, BlockEntityLoadError};
 use crate::server::Server;
+
+/// The initial clone codec is deliberately limited to these three 27-slot
+/// containers. Other terrain with a BE is an explicit unsupported projection.
+pub(crate) fn clone_kind(
+    state: pumpkin_data::BlockStateId,
+) -> Result<Option<&'static str>, BlockEntityLoadError> {
+    let block = state.to_block();
+    if block == &pumpkin_data::Block::CHEST {
+        Ok(Some("minecraft:chest"))
+    } else if block == &pumpkin_data::Block::TRAPPED_CHEST {
+        Ok(Some("minecraft:trapped_chest"))
+    } else if block == &pumpkin_data::Block::BARREL {
+        Ok(Some("minecraft:barrel"))
+    } else if state.to_state().block_entity_type == u16::MAX {
+        Ok(None)
+    } else {
+        Err(BlockEntityLoadError::Unsupported("clone block entity type"))
+    }
+}
+
+/// Validate the exact pending record before the infallible supported decoder
+/// can discard fields. Callers retain their pending-record guard throughout.
+fn validate_clone_nbt(
+    kind: &'static str,
+    position: pumpkin_util::math::position::BlockPos,
+    nbt: &NbtCompound,
+) -> Result<(), BlockEntityLoadError> {
+    if nbt.get_string("id") != Some(kind)
+        || nbt.get_int("x") != Some(position.0.x)
+        || nbt.get_int("y") != Some(position.0.y)
+        || nbt.get_int("z") != Some(position.0.z)
+    {
+        return Err(BlockEntityLoadError::Unsupported(
+            "clone block entity identity",
+        ));
+    }
+    pumpkin_world::chunk::format::validate_saved_container_items(nbt, position)
+        .map_err(|_| BlockEntityLoadError::Unsupported("clone container items"))?;
+    if nbt.child_tags.keys().any(|key| {
+        !matches!(
+            key.as_ref(),
+            "id" | "x"
+                | "y"
+                | "z"
+                | "CustomName"
+                | "components"
+                | "Items"
+                | "LootTable"
+                | "LootTableSeed"
+        )
+    }) {
+        return Err(BlockEntityLoadError::Unsupported(
+            "clone container metadata",
+        ));
+    }
+    ContainerMetadata::from_nbt(nbt).validate_clone()?;
+    if nbt.get("LootTable").is_some()
+        && nbt
+            .get_string("LootTable")
+            .and_then(|key| Identifier::parse(key).ok())
+            .is_none()
+    {
+        return Err(BlockEntityLoadError::Unsupported(
+            "clone deferred loot table",
+        ));
+    }
+    if nbt.get("LootTableSeed").is_some_and(|tag| {
+        !matches!(
+            tag,
+            NbtTag::Byte(_)
+                | NbtTag::Short(_)
+                | NbtTag::Int(_)
+                | NbtTag::Long(_)
+                | NbtTag::Float(_)
+                | NbtTag::Double(_)
+        )
+    }) {
+        return Err(BlockEntityLoadError::Unsupported(
+            "clone deferred loot seed",
+        ));
+    }
+    pumpkin_world::nbt_io::encode_compound(nbt.clone())
+        .map_err(|_| BlockEntityLoadError::Unsupported("clone NBT encoding"))?;
+    Ok(())
+}
+
+pub(crate) fn snapshot_pending_for_clone(
+    kind: &'static str,
+    position: pumpkin_util::math::position::BlockPos,
+    nbt: &NbtCompound,
+) -> Result<BlockEntityCloneData, BlockEntityLoadError> {
+    validate_clone_nbt(kind, position, nbt)?;
+    ChestState::<27>::from_nbt(nbt).snapshot_for_clone(kind, position)
+}
 
 /// Preserve the original tags even when the runtime only understands a subset.
 /// 26.3 `BaseContainerBlockEntity` uses `CustomName`/lock; `BlockEntity` separately
@@ -85,6 +180,30 @@ impl ContainerLock {
 }
 
 impl ContainerMetadata {
+    /// Clone is a fresh destination load: opaque values cannot be retained just
+    /// because ordinary in-place edits permit unchanged source metadata.
+    fn validate_clone(&self) -> Result<(), BlockEntityLoadError> {
+        if self
+            .custom_name
+            .as_ref()
+            .is_some_and(|name| !matches!(name, NbtTag::String(_)))
+        {
+            return Err(BlockEntityLoadError::Unsupported(
+                "clone container CustomName",
+            ));
+        }
+        if self.lock.is_some() {
+            return Err(BlockEntityLoadError::Unsupported("clone container lock"));
+        }
+        if self.components.as_ref().is_some_and(
+            |components| !matches!(components, NbtTag::Compound(map) if map.is_empty()),
+        ) {
+            return Err(BlockEntityLoadError::Unsupported(
+                "clone block entity components",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn from_nbt(nbt: &NbtCompound) -> Self {
         Self {
             custom_name: nbt.get("CustomName").cloned(),
@@ -237,6 +356,57 @@ pub(super) struct ChestState<const N: usize> {
 }
 
 impl<const N: usize> ChestState<N> {
+    /// Caller owns one live read lock, or this is a detached pending decode.
+    /// Never consult inventory, pending NBT or a second metadata/state version.
+    pub(super) fn snapshot_for_clone(
+        &self,
+        kind: &'static str,
+        position: pumpkin_util::math::position::BlockPos,
+    ) -> Result<BlockEntityCloneData, BlockEntityLoadError> {
+        self.metadata.validate_clone()?;
+        if self.loot.key.is_none() {
+            for item in &self.items {
+                pumpkin_data::item_stack::admission::validate_runtime_item_stack(item)
+                    .map_err(|error| BlockEntityLoadError::Unsupported(error.reason()))?;
+            }
+        }
+        let mut custom = NbtCompound::new();
+        self.write_nbt(&mut custom);
+        custom.child_tags.remove("components");
+        let data = BlockEntityCloneData {
+            kind,
+            custom,
+            components: NbtCompound::new(),
+        };
+        // Literal names, admitted static item codecs and the empty component map
+        // need no contextual registry lookup. Rich/contextual forms refuse above.
+        validate_clone_nbt(kind, position, &data.full_metadata(position))?;
+        pumpkin_world::nbt_io::encode_compound(data.custom.clone())
+            .map_err(|_| BlockEntityLoadError::Unsupported("clone custom encoding"))?;
+        pumpkin_world::nbt_io::encode_compound(data.components.clone())
+            .map_err(|_| BlockEntityLoadError::Unsupported("clone component encoding"))?;
+        Ok(data)
+    }
+
+    pub(super) fn from_clone(
+        data: &BlockEntityCloneData,
+        kind: &'static str,
+        position: pumpkin_util::math::position::BlockPos,
+    ) -> Result<Self, BlockEntityLoadError> {
+        if data.kind != kind
+            || !data.components.is_empty()
+            || ["id", "x", "y", "z", "components"]
+                .iter()
+                .any(|key| data.custom.get(key).is_some())
+        {
+            return Err(BlockEntityLoadError::Unsupported(
+                "clone payload identity/components",
+            ));
+        }
+        let nbt = data.full_metadata(position);
+        validate_clone_nbt(kind, position, &nbt)?;
+        Ok(Self::from_nbt(&nbt))
+    }
     /// Pure serializer: never accesses Inventory or unpacks deferred loot.
     pub fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.metadata.write_nbt(nbt);
@@ -381,6 +551,40 @@ macro_rules! impl_block_entity_for_chest {
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .write_nbt(nbt);
+            }
+
+            fn snapshot_for_clone(
+                &self,
+            ) -> Result<
+                $crate::block::entities::BlockEntityCloneData,
+                $crate::block::entities::BlockEntityLoadError,
+            > {
+                self.state
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .snapshot_for_clone(Self::ID, self.position)
+            }
+
+            fn restore_from_clone(
+                &self,
+                data: &$crate::block::entities::BlockEntityCloneData,
+                publish: &mut dyn FnMut(pumpkin_nbt::compound::NbtCompound),
+            ) -> Result<(), $crate::block::entities::BlockEntityLoadError> {
+                let decoded = $crate::block::entities::chest_like_block_entity::ChestState::<
+                    { Self::INVENTORY_SIZE },
+                >::from_clone(data, Self::ID, self.position)?;
+                let canonical = decoded.snapshot(Self::ID, self.position);
+                let mut state = self
+                    .state
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                state.items = decoded.items;
+                state.loot = decoded.loot;
+                state.metadata = decoded.metadata;
+                state.load_token = std::sync::Arc::new(());
+                <Self as pumpkin_inventory::Inventory>::mark_dirty(self);
+                publish(canonical);
+                Ok(())
             }
 
             fn snapshot_nbt(&self, publish: &mut dyn FnMut(pumpkin_nbt::compound::NbtCompound)) {
