@@ -14,6 +14,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | lighting.storage.network | Round-trip nibble arrays and expose correct empty and nonempty light masks | `DataLayer; ClientboundLightUpdatePacketData` | | - | todo |
 | lighting.thread.order | Order pending light tasks against chunk generation and block changes | `ThreadedLevelLightEngine` | | - | todo |
 | lighting.dimension.no-skylight | Disable skylight storage and propagation in dimensions without skylight | `LevelLightEngine` | `ferraloom-light: lifecycle` | pass | implemented; parity pending builder |
-
 | lighting.storage.nibbles | Lazy/default nibble allocation, fill and byte indexing | `DataLayer` | `ferraloom-light: lazy_fill_and_nibble_order; scenario arrays` | pass | implemented; parity pending builder |
 | lighting.occlusion.faces | Every ordered occlusion-shape pair on all six faces | `LightEngine; Shapes` | `ferraloom-light: all_occlusion_face_pairs_match_vanilla` | pass | implemented; parity pending builder |

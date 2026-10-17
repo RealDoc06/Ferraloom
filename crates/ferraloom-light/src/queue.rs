@@ -45,7 +45,7 @@ impl QueueEntry {
     pub fn empty(self) -> bool {
         self.0 & Self::EMPTY != 0
     }
-    pub fn from_emission(self) -> bool {
+    pub fn is_from_emission(self) -> bool {
         self.0 & Self::EMISSION != 0
     }
     pub fn allows(self, direction: Direction) -> bool {

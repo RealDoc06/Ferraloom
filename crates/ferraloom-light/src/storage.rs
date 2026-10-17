@@ -97,10 +97,6 @@ impl Storage {
     pub fn top(&self, chunk: ChunkPos) -> i32 {
         self.tops.get(&chunk.pack()).copied().unwrap_or(self.bottom)
     }
-    pub fn above_data(&self, pos: SectionPos) -> bool {
-        let top = self.top(pos.chunk());
-        top == self.bottom || pos.y >= top
-    }
     pub fn stored(&self, pos: BlockPos) -> u8 {
         self.updating[&SectionPos::from_block(pos).as_long()].get(
             (pos.x & 15) as u8,

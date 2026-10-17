@@ -103,7 +103,7 @@ impl LayerEngine {
         }
         while let Some((pos, entry)) = self.increases.pop_front() {
             let mut level = self.storage.stored(pos);
-            if entry.from_emission() && level < entry.level() {
+            if entry.is_from_emission() && level < entry.level() {
                 self.storage.set(pos, entry.level());
                 level = entry.level();
             }
@@ -199,7 +199,7 @@ impl LayerEngine {
                     QueueEntry::increase_skip(new, is_empty_shape(state), direction.opposite()),
                 ));
             }
-            self.from_empty_sections(to, direction, new, true, empty_below);
+            self.propagate_from_empty_sections(to, direction, new, true, empty_below);
         }
     }
     fn decrease<W: LightWorld + ?Sized>(&mut self, world: &W, from: BlockPos, entry: QueueEntry) {
@@ -233,7 +233,7 @@ impl LayerEngine {
                     self.increases
                         .push_back((to, QueueEntry::emission(emission, is_empty_shape(state))));
                 }
-                self.from_empty_sections(to, direction, level, false, empty_below);
+                self.propagate_from_empty_sections(to, direction, level, false, empty_below);
             } else {
                 self.increases
                     .push_back((to, QueueEntry::only(level, direction.opposite())));
@@ -256,7 +256,7 @@ impl LayerEngine {
         }
         count
     }
-    fn from_empty_sections(
+    fn propagate_from_empty_sections(
         &mut self,
         to: BlockPos,
         direction: Direction,
