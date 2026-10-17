@@ -801,14 +801,17 @@ impl ChunkData {
         root_compound.put_list("sections", sections_list);
 
         // The phase check, clock read and block snapshot must share the poll lock.
-        let block_ticks = {
+        let (block_ticks, tick_game_time) = {
             let queue = self.block_ticks.lock();
             if self.block_tick_phase_owners.load(Ordering::Acquire) != 0 {
                 return Err(crate::poi::PoiReconcileError::StaleSaveCapture.into());
             }
             match self.poi_runtime() {
-                Ok(runtime) => queue.pack(runtime.tick_clock.load(Ordering::Acquire)),
-                Err(error) => queue.pack_unbound().ok_or(error)?,
+                Ok(runtime) => {
+                    let now = runtime.tick_clock.load(Ordering::Acquire);
+                    (queue.pack(now), Some(now))
+                }
+                Err(error) => (queue.pack_unbound().ok_or(error)?, None),
             }
         };
         root_compound.put_list(
@@ -821,9 +824,11 @@ impl ChunkData {
 
         let fluid_ticks = {
             let queue = self.fluid_ticks.lock();
-            match self.poi_runtime() {
-                Ok(runtime) => queue.pack(runtime.tick_clock.load(Ordering::Acquire)),
-                Err(error) => queue.pack_unbound().ok_or(error)?,
+            match tick_game_time {
+                Some(now) => queue.pack(now),
+                None => queue
+                    .pack_unbound()
+                    .ok_or(crate::poi::PoiReconcileError::UnboundChunk)?,
             }
         };
         root_compound.put_list(

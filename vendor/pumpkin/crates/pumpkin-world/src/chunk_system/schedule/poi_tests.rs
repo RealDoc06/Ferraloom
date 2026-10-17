@@ -1276,7 +1276,7 @@ async fn prepared_retirement_fixes_both_delay_lists_before_deferred_backend_writ
 }
 
 #[tokio::test]
-async fn retirement_redirties_after_inflight_capture_for_retained_receipt_recapture() {
+async fn clean_retirement_preserves_earlier_capture_without_resubmission() {
     let (_directory, level, mut schedule, mut workers) = fixture().await;
     let pos = ChunkPos::new(0, 0);
     let chunk = publish(&mut schedule, &level, pos);
@@ -1306,12 +1306,66 @@ async fn retirement_redirties_after_inflight_capture_for_retained_receipt_recapt
     level.set_tick_game_time(140);
     schedule = unload(schedule, level.clone()).await;
     assert!(!level.loaded_chunks.contains_key(&pos));
-    // Without the post-mutation dirty store this clean Prepared source has no
-    // queued retirement save and its older receipt cannot carry a recapture.
+    // Representation packing must preserve the already accepted clean save.
+    assert!(!chunk.is_dirty());
+    assert!(workers.write.try_recv().is_err());
+    level.set_tick_game_time(1_000_140);
+    resume.send(()).unwrap();
+    saving.await.unwrap();
+    level.chunk_saver.flush().await.unwrap();
+    assert!(!chunk.is_dirty());
+    assert_eq!(
+        fresh_retired_tick_delays(&level, pos).await,
+        (vec![200], vec![250])
+    );
+    assert!(schedule.chunk_map.is_empty());
+}
+
+#[tokio::test]
+async fn logical_tick_mutation_during_capture_recaptures_retired_delays() {
+    use crate::tick::TickPriority;
+    let (_directory, level, mut schedule, mut workers) = fixture().await;
+    let pos = ChunkPos::new(0, 0);
+    let chunk = publish(&mut schedule, &level, pos);
+    level.set_tick_game_time(100);
+    schedule_retirement_ticks(&level);
+    schedule.unload_chunks.insert(pos);
+    schedule = unload(schedule, level.clone()).await;
+    assert!(level.chunk_unload.access().requests().is_empty());
+    assert!(level.loaded_chunks.contains_key(&pos));
+    let stamp = level.prepare_chunk_poi(&chunk).unwrap();
+    level
+        .chunk_saver
+        .watch_chunks(&level.level_folder, &[pos])
+        .await;
+    let (entered, resume) = level.poi_runtime.pause_capture_admission(&chunk);
+    let mut saving = Box::pin(
+        level
+            .chunk_saver
+            .save_chunks(&level.level_folder, vec![(pos, chunk.clone())]),
+    );
+    tokio::select! {
+        result = &mut saving => panic!("older capture bypassed admission gate: {result:?}"),
+        result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+    }
+    assert!(!chunk.is_dirty());
+    level.set_tick_game_time(140);
+    level.schedule_block_tick(
+        &Block::STONE,
+        BlockPos::new(3, 64, 1),
+        40,
+        TickPriority::Normal,
+    );
+    assert!(chunk.is_dirty());
+    assert_eq!(chunk.block_ticks.get_all().len(), 2);
+    assert_eq!(level.prepare_chunk_poi(&chunk).unwrap(), stamp);
+    schedule = unload(schedule, level.clone()).await;
+    assert!(!level.loaded_chunks.contains_key(&pos));
     assert!(chunk.is_dirty());
     let WriteRequest::Chunks(saved) = workers.write.try_recv().unwrap() else {
         panic!("expected frozen terrain source")
     };
+    assert_eq!(saved.len(), 1);
     let Chunk::Level(source) = &saved[0].1 else {
         panic!("expected Full terrain")
     };
@@ -1319,15 +1373,16 @@ async fn retirement_redirties_after_inflight_capture_for_retained_receipt_recapt
     level.set_tick_game_time(1_000_140);
     resume.send(()).unwrap();
     saving.await.unwrap();
-    // No new submission: complete the older bytes, then use their retained
-    // dirty source for the existing next-flush recapture path.
+    // Do not submit the queued retirement source: the completed older receipt
+    // must retain the logically dirty source for the existing recapture path.
     level.chunk_saver.flush().await.unwrap();
     assert!(chunk.is_dirty());
     level.chunk_saver.flush().await.unwrap();
     assert!(!chunk.is_dirty());
     assert_eq!(
         fresh_retired_tick_delays(&level, pos).await,
-        (vec![160], vec![210])
+        (vec![160, 40], vec![210])
     );
+    assert!(chunk.read_for_poi().is_capture_current(&stamp));
     assert!(schedule.chunk_map.is_empty());
 }

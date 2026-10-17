@@ -712,8 +712,9 @@ impl ChunkSections {
 impl ChunkData {
     /// Retain terminal retirement's tick snapshot in the existing pending form.
     /// Caller owns the exact exclusive map entry after counter/stamp validation.
-    /// Java copies accepted save data synchronously; this representation keeps
-    /// that capture time through Rust's later backend encoding and recaptures.
+    /// Java fixes accepted save delays synchronously. This Rust representation
+    /// retains dirty sources' delays through deferred encoding and recaptures;
+    /// clean sources keep their earlier accepted snapshot without another save.
     pub(crate) fn pack_tick_delays_for_retirement(
         &self,
     ) -> Result<(), crate::poi::PoiReconcileError> {
@@ -723,7 +724,6 @@ impl ChunkData {
         fn pack<T: Copy + Eq + std::hash::Hash>(
             scheduler: &ChunkTickScheduler<T>,
             now: Option<i64>,
-            dirty: &AtomicBool,
         ) -> Result<(), PoiReconcileError> {
             let mut queue = scheduler.lock();
             let Some(now) = now else {
@@ -733,11 +733,7 @@ impl ChunkData {
                     Err(PoiReconcileError::UnboundChunk)
                 };
             };
-            if queue.pack_for_retirement(now) {
-                // An older capture may already have cleared dirty and released
-                // its lifecycle read guard before async backend admission.
-                dirty.store(true, Ordering::Release);
-            }
+            queue.pack_for_retirement(now);
             Ok(())
         }
 
@@ -746,8 +742,8 @@ impl ChunkData {
             Err(PoiReconcileError::UnboundChunk) => None,
             Err(error) => return Err(error),
         };
-        pack(&self.block_ticks, now, &self.dirty)?;
-        pack(&self.fluid_ticks, now, &self.dirty)
+        pack(&self.block_ticks, now)?;
+        pack(&self.fluid_ticks, now)
     }
 
     #[must_use]
