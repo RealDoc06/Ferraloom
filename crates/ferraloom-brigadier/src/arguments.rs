@@ -79,17 +79,53 @@ macro_rules! numeric_argument {
             }
             fn examples(&self) -> Vec<String> { vec![$($example.into()),*] }
         }
-    }
-}
-// Java's floating-point messages include a decimal point for integral values.
-fn java_number<T: std::fmt::Display + Any>(value: T) -> String {
-    let mut text = value.to_string();
-    if (&value as &dyn Any).is::<f32>() || (&value as &dyn Any).is::<f64>() {
-        if !text.contains(['.', 'e', 'E']) && !text.contains("inf") && text != "NaN" {
-            text.push_str(".0");
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let name = match $label { "Integer" => "integer", "Long" => "long", "Float" => "float", _ => "double" };
+                if self.minimum == <$ty>::MIN && self.maximum == <$ty>::MAX { write!(f, "{name}()") }
+                else if self.maximum == <$ty>::MAX { write!(f, "{name}({})", java_number(self.minimum)) }
+                else { write!(f, "{name}({}, {})", java_number(self.minimum), java_number(self.maximum)) }
+            }
         }
     }
-    text
+}
+// Java uses scientific notation outside [1e-3, 1e7), and always prints a fraction.
+fn java_number<T: std::fmt::Display + Any>(value: T) -> String {
+    fn floating(value: f64, plain: String, scientific: String) -> String {
+        if value.is_nan() {
+            return "NaN".into();
+        }
+        if value.is_infinite() {
+            return if value.is_sign_negative() {
+                "-Infinity"
+            } else {
+                "Infinity"
+            }
+            .into();
+        }
+        if value != 0.0 && !(1e-3..1e7).contains(&value.abs()) {
+            let (mantissa, exponent) = scientific.split_once('e').unwrap();
+            return format!(
+                "{}{}E{}",
+                mantissa,
+                if mantissa.contains('.') { "" } else { ".0" },
+                exponent
+            );
+        }
+        if plain.contains('.') {
+            plain
+        } else {
+            format!("{plain}.0")
+        }
+    }
+    let any = &value as &dyn Any;
+    if let Some(v) = any.downcast_ref::<f32>() {
+        floating(f64::from(*v), v.to_string(), format!("{v:e}"))
+    } else if let Some(v) = any.downcast_ref::<f64>() {
+        floating(*v, v.to_string(), format!("{v:e}"))
+    } else {
+        value.to_string()
+    }
 }
 numeric_argument!(
     IntegerArgumentType,
@@ -196,5 +232,11 @@ impl ArgumentType for StringArgumentType {
                 "\"and symbols\"".into(),
             ],
         }
+    }
+}
+
+impl std::fmt::Display for StringArgumentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("string()")
     }
 }

@@ -22,13 +22,13 @@ fn record(d: &mut CommandDispatcher<i32>) -> Arc<Mutex<Vec<(i32, bool, i32)>>> {
 }
 #[test]
 fn create_and_execute_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").executes(command));
     assert_eq!(d.execute("foo", 0).unwrap(), 42);
 }
 #[test]
 fn create_and_execute_offset_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").executes(command));
     let mut reader = StringReader::new("/foo");
     reader.set_cursor(1);
@@ -40,7 +40,7 @@ fn create_and_execute_offset_command() {
 }
 #[test]
 fn create_and_merge_commands() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     for child in ["foo", "bar"] {
         d.register(literal("base").then(literal(child).executes(command)));
     }
@@ -50,38 +50,38 @@ fn create_and_merge_commands() {
 }
 #[test]
 fn execute_unknown_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("bar"));
     d.register(literal("baz"));
     error(&d, "foo", ExceptionKind::UnknownCommand, 0);
 }
 #[test]
 fn execute_impermissible_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").requires(|_| false));
     error(&d, "foo", ExceptionKind::UnknownCommand, 0);
 }
 #[test]
 fn execute_empty_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal(""));
     error(&d, "", ExceptionKind::UnknownCommand, 0);
 }
 #[test]
 fn execute_unknown_subcommand() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").executes(command));
     error(&d, "foo bar", ExceptionKind::UnknownArgument, 4);
 }
 #[test]
 fn execute_incorrect_literal() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").executes(command).then(literal("bar")));
     error(&d, "foo baz", ExceptionKind::UnknownArgument, 4);
 }
 #[test]
 fn execute_ambiguous_incorrect_argument() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo")
             .executes(command)
@@ -92,7 +92,7 @@ fn execute_ambiguous_incorrect_argument() {
 }
 #[test]
 fn execute_subcommand() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo")
             .then(literal("a"))
@@ -104,7 +104,7 @@ fn execute_subcommand() {
 }
 #[test]
 fn parse_incomplete_literal() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("foo").then(literal("bar").executes(command)));
     let p = d.parse("foo ", 0);
     assert_eq!(p.reader.remaining(), " ");
@@ -112,7 +112,7 @@ fn parse_incomplete_literal() {
 }
 #[test]
 fn parse_incomplete_argument() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo").then(argument("bar", IntegerArgumentType::default()).executes(command)),
     );
@@ -135,20 +135,20 @@ fn ambiguous(d: &mut CommandDispatcher<i32>) -> NodeId {
 }
 #[test]
 fn execute_ambiguous_parent_subcommand() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     ambiguous(&mut d);
     assert_eq!(d.execute("test 1 2", 0).unwrap(), 100);
 }
 #[test]
 fn execute_ambiguous_parent_subcommand_via_redirect() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let target = ambiguous(&mut d);
     d.register(literal("redirect").redirect(target));
     assert_eq!(d.execute("redirect 1 2", 0).unwrap(), 100);
 }
 #[test]
 fn execute_redirected_multiple_times() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let actual = d.register(literal("actual").executes(command));
     let root = d.root();
     let redirect = d.register(literal("redirected").redirect(root));
@@ -186,7 +186,7 @@ fn source_redirects(d: &mut CommandDispatcher<i32>) {
 }
 #[test]
 fn correct_execute_context_after_redirect() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     source_redirects(&mut d);
     for (input, source, result) in [
         ("run", 0, 0),
@@ -203,7 +203,7 @@ fn correct_execute_context_after_redirect() {
 }
 #[test]
 fn shared_redirect_and_execute_nodes() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let root = d.root();
     d.register(
         literal("add").then(
@@ -221,7 +221,7 @@ fn shared_redirect_and_execute_nodes() {
 }
 #[test]
 fn execute_redirected() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     let actual = d.register(literal("actual").executes(command));
     let root = d.root();
@@ -248,7 +248,7 @@ fn incomplete_tree(d: &mut CommandDispatcher<i32>) -> NodeId {
 }
 #[test]
 fn incomplete_redirect_should_throw() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let foo = incomplete_tree(&mut d);
     d.register(literal("baz").redirect(foo));
     assert_eq!(
@@ -258,14 +258,14 @@ fn incomplete_redirect_should_throw() {
 }
 #[test]
 fn redirect_modifier_empty_result() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let foo = incomplete_tree(&mut d);
     d.register(literal("baz").fork(foo, |_| Ok(vec![])));
     assert_eq!(d.execute("baz bar 100", 0).unwrap(), 0);
 }
 #[test]
 fn execute_orphaned_subcommand() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo")
             .then(argument("bar", IntegerArgumentType::default()))
@@ -275,14 +275,14 @@ fn execute_orphaned_subcommand() {
 }
 #[test]
 fn execute_invalid_other() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(literal("w").executes(|_| panic!("wrong literal")));
     d.register(literal("world").executes(command));
     assert_eq!(d.execute("world", 0).unwrap(), 42);
 }
 #[test]
 fn parse_no_space_separator() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo").then(argument("bar", IntegerArgumentType::default()).executes(command)),
     );
@@ -290,7 +290,7 @@ fn parse_no_space_separator() {
 }
 #[test]
 fn execute_invalid_subcommand() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     d.register(
         literal("foo")
             .then(argument("bar", IntegerArgumentType::default()))
@@ -305,13 +305,13 @@ fn path_tree(d: &mut CommandDispatcher<i32>) -> NodeId {
 }
 #[test]
 fn get_path() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let bar = path_tree(&mut d);
     assert_eq!(d.get_path(bar), ["foo", "bar"]);
 }
 #[test]
 fn find_node_exists() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let bar = path_tree(&mut d);
     assert_eq!(d.find_node(&["foo", "bar"]), Some(bar));
 }
@@ -322,7 +322,7 @@ fn find_node_doesnt_exist() {
 }
 #[test]
 fn result_consumer_in_non_error_run() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("foo").executes(|_| Ok(5)));
     assert_eq!(d.execute("foo", 0).unwrap(), 5);
@@ -330,7 +330,7 @@ fn result_consumer_in_non_error_run() {
 }
 #[test]
 fn result_consumer_in_forked_non_error_run() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("foo").executes(|c| Ok(*c.source)));
     let root = d.root();
@@ -343,7 +343,7 @@ fn result_consumer_in_forked_non_error_run() {
 }
 #[test]
 fn exception_in_non_forked_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("crash").executes(|_| Err(fail())));
     assert_eq!(
@@ -354,7 +354,7 @@ fn exception_in_non_forked_command() {
 }
 #[test]
 fn exception_in_non_forked_redirected_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("crash").executes(|_| Err(fail())));
     let root = d.root();
@@ -370,7 +370,7 @@ fn exception_in_non_forked_redirected_command() {
 }
 #[test]
 fn exception_in_forked_redirected_command() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("crash").executes(|_| Err(fail())));
     let root = d.root();
@@ -380,7 +380,7 @@ fn exception_in_forked_redirected_command() {
 }
 #[test]
 fn exception_in_non_forked_redirect() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("noop").executes(|_| panic!("should not execute")));
     let root = d.root();
@@ -396,7 +396,7 @@ fn exception_in_non_forked_redirect() {
 }
 #[test]
 fn exception_in_forked_redirect() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("noop").executes(|_| panic!("should not execute")));
     let root = d.root();
@@ -406,7 +406,7 @@ fn exception_in_forked_redirect() {
 }
 #[test]
 fn partial_exception_in_forked_redirect() {
-    let mut d = CommandDispatcher::new();
+    let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
     d.register(literal("run").executes(|_| Ok(3)));
     let root = d.root();

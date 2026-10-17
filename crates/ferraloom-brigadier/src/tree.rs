@@ -92,6 +92,29 @@ impl<S> CommandNode<S> {
             _ => self.name.encode_utf16().cmp(other.name.encode_utf16()),
         }
     }
+    /// Port of CommandNode#createBuilder. Child edges are intentionally not copied.
+    pub fn create_builder(&self) -> ArgumentBuilder<S> {
+        assert!(
+            self.kind != NodeKind::Root,
+            "Cannot convert root into a builder"
+        );
+        ArgumentBuilder {
+            node: CommandNode {
+                name: self.name.clone(),
+                kind: self.kind,
+                children: Vec::new(),
+                command: self.command.clone(),
+                requirement: self.requirement.clone(),
+                redirect: self.redirect,
+                modifier: self.modifier.clone(),
+                forks: self.forks,
+                argument: self.argument.clone(),
+                suggestions: self.suggestions.clone(),
+            },
+            children: Vec::new(),
+            child_handles: Vec::new(),
+        }
+    }
     /// Commands-packet flags: node kind, executable, redirect and custom suggestions.
     pub fn flags(&self) -> u8 {
         let kind = match self.kind {

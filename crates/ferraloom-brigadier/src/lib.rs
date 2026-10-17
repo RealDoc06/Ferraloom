@@ -29,4 +29,6 @@ mod reader_tests;
 #[cfg(test)]
 mod suggestion_tests;
 #[cfg(test)]
+mod tree_tests;
+#[cfg(test)]
 mod usage_tests;

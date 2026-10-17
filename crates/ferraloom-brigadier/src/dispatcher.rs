@@ -247,7 +247,7 @@ impl<S: 'static> CommandDispatcher<S> {
         let context = CommandContext::new(source, reader.string(), self.root(), reader.cursor());
         self.parse_nodes(self.root(), reader, context)
     }
-    fn parse_node(
+    pub fn parse_node(
         &self,
         id: NodeId,
         reader: &mut StringReader,
@@ -395,34 +395,43 @@ impl<S: 'static> CommandDispatcher<S> {
         context.input = input.clone();
         let mut results = Vec::new();
         for id in &self.node(suggestion.parent).children {
-            let node = self.node(*id);
-            let mut builder = SuggestionsBuilder::new(&input, start);
-            let result = match node.kind {
-                NodeKind::Root => Ok(Suggestions::default()),
-                NodeKind::Literal => {
-                    if node
-                        .name
-                        .to_lowercase()
-                        .starts_with(&builder.remaining_lower_case())
-                    {
-                        builder.suggest(&node.name);
-                    }
-                    Ok(builder.build())
-                }
-                NodeKind::Argument => {
-                    if let Some(provider) = &node.suggestions {
-                        provider(&context, builder)
-                    } else {
-                        node.argument
-                            .as_ref()
-                            .unwrap()
-                            .list_suggestions(&context, builder)
-                    }
-                }
-            };
+            let builder = SuggestionsBuilder::new(&input, start);
+            let result = self.list_suggestions(*id, &context, builder);
             results.push(result.unwrap_or_default());
         }
         Suggestions::merge(parse.reader.string(), results)
+    }
+    /// Port of CommandNode#listSuggestions.
+    pub fn list_suggestions(
+        &self,
+        id: NodeId,
+        context: &CommandContext<S>,
+        mut builder: SuggestionsBuilder,
+    ) -> Result<Suggestions, CommandSyntaxException> {
+        let node = self.node(id);
+        match node.kind {
+            NodeKind::Root => Ok(Suggestions::default()),
+            NodeKind::Literal => {
+                if node
+                    .name
+                    .to_lowercase()
+                    .starts_with(&builder.remaining_lower_case())
+                {
+                    builder.suggest(&node.name);
+                }
+                Ok(builder.build())
+            }
+            NodeKind::Argument => {
+                if let Some(provider) = &node.suggestions {
+                    provider(context, builder)
+                } else {
+                    node.argument
+                        .as_ref()
+                        .unwrap()
+                        .list_suggestions(context, builder)
+                }
+            }
+        }
     }
     pub fn find_node(&self, path: &[impl AsRef<str>]) -> Option<NodeId> {
         path.iter()

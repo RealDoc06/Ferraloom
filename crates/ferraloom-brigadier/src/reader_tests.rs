@@ -24,7 +24,7 @@ fn get_remaining_length() {
 }
 #[test]
 fn can_read_length() {
-    let mut reader = StringReader::new("abc");
+    let reader = StringReader::new("abc");
     assert_eq!(reader.can_read_length(1), true);
     assert_eq!(reader.can_read_length(2), true);
     assert_eq!(reader.can_read_length(3), true);

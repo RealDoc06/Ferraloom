@@ -154,8 +154,8 @@ mod float {
             "float(-100.0, 100.0)"
         );
         assert_eq!(
-            FloatArgumentType::new(FloatArgumentType::default().minimum, 100.0).to_string(),
-            "float(-3.4028235E38, 100.0)"
+            FloatArgumentType::new(i32::MIN as f32, 100.0).to_string(),
+            "float(-2.1474836E9, 100.0)"
         );
     }
 }
@@ -210,8 +210,8 @@ mod double {
             "double(-100.0, 100.0)"
         );
         assert_eq!(
-            DoubleArgumentType::new(DoubleArgumentType::default().minimum, 100.0).to_string(),
-            "double(-1.7976931348623157E308, 100.0)"
+            DoubleArgumentType::new(f64::from(i32::MIN), 100.0).to_string(),
+            "double(-2.147483648E9, 100.0)"
         );
     }
 }
