@@ -1,0 +1,16 @@
+[package]
+name = "ferraloom-protocol"
+description = "Minecraft Java 26.3 network protocol (777)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ferraloom-util.workspace = true
+ferraloom-nbt.workspace = true
+ferraloom-data.workspace = true
+
+[lints]
+workspace = true

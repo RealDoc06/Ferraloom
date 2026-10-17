@@ -1,45 +1,37 @@
-[package]
-name = "ferraloom"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
-description = "A Minecraft Java server built on the multithreaded Pumpkin Rust engine"
 license = "GPL-3.0-only"
+repository = "https://github.com/RealDoc06/Ferraloom"
 
-[dependencies]
-anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
-pumpkin-core = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310" }
-pumpkin-config = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310" }
-pumpkin-data = { git = "https://github.com/Pumpkin-MC/Pumpkin.git", rev = "5b53f064af8708ba33fcaa533b81ca29a53a3310", features = ["packet"] }
-rayon = "1.12"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.53", features = ["rt-multi-thread", "signal"] }
-toml = "1.1"
-tracing = "0.1"
+[workspace.dependencies]
+ferraloom-util = { path = "crates/ferraloom-util" }
+ferraloom-nbt = { path = "crates/ferraloom-nbt" }
+ferraloom-data = { path = "crates/ferraloom-data" }
+ferraloom-protocol = { path = "crates/ferraloom-protocol" }
+ferraloom-worldgen = { path = "crates/ferraloom-worldgen" }
+ferraloom-storage = { path = "crates/ferraloom-storage" }
+ferraloom-brigadier = { path = "crates/ferraloom-brigadier" }
+ferraloom-game = { path = "crates/ferraloom-game" }
 
-[target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1", features = ["fs"] }
+[workspace.lints.rust]
+unsafe_code = "deny"
 
-[dev-dependencies]
-tempfile = "3.27"
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
 
 [profile.dev]
 debug = 0
 opt-level = 1
 
+[profile.dev.package."*"]
+opt-level = 2
+
 [profile.release]
-debug = 0
 lto = "thin"
-
-
-[patch."https://github.com/Pumpkin-MC/Pumpkin.git"]
-pumpkin-core = { path = "vendor/pumpkin/crates/pumpkin-core" }
-pumpkin-world = { path = "vendor/pumpkin/crates/pumpkin-world" }
-pumpkin-command = { path = "vendor/pumpkin/crates/pumpkin-command" }
-pumpkin-data = { path = "vendor/pumpkin/crates/pumpkin-data" }
-pumpkin-protocol = { path = "vendor/pumpkin/crates/pumpkin-protocol" }
-pumpkin-gametest = { path = "vendor/pumpkin/crates/pumpkin-gametest" }
-pumpkin-inventory = { path = "vendor/pumpkin/crates/pumpkin-inventory" }
+codegen-units = 16

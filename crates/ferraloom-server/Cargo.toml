@@ -1,0 +1,25 @@
+[package]
+name = "ferraloom-server"
+description = "Ferraloom dedicated server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ferraloom"
+path = "src/main.rs"
+
+[dependencies]
+ferraloom-util.workspace = true
+ferraloom-nbt.workspace = true
+ferraloom-data.workspace = true
+ferraloom-protocol.workspace = true
+ferraloom-worldgen.workspace = true
+ferraloom-storage.workspace = true
+ferraloom-brigadier.workspace = true
+ferraloom-game.workspace = true
+
+[lints]
+workspace = true

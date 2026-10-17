@@ -1,9 +1,0 @@
-warning: profile package spec `pumpkin-wasm-host` in profile `release` did not match any packages
-warning: profile package spec `pumpkin-wasm-host-common` in profile `release` did not match any packages
-warning: profile package spec `pumpkin-wasm-host-v0_1` in profile `release` did not match any packages
-warning: profile package spec `pumpkin-wasm-host-v0_2` in profile `release` did not match any packages
-    Checking pumpkin-world v0.2.0+26.3-26.51 (/home/doc/code/Ferraloom/vendor/pumpkin/crates/pumpkin-world)
-    Checking pumpkin-gametest v0.2.0+26.3-26.51 (/home/doc/code/Ferraloom/vendor/pumpkin/crates/pumpkin-gametest)
-    Finished `dev` profile [optimized] target(s) in 11.88s
-warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
-note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
