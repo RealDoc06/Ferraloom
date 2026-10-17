@@ -8,13 +8,9 @@ use ferraloom_protocol::{
         RemoteChatSessionData, SignedMessageBodyPacked,
     },
 };
-use rsa::{
-    Pkcs1v15Sign, RsaPublicKey,
-    pkcs8::DecodePublicKey,
-    sha1::{Digest, Sha1},
-    sha2::Sha256,
-};
+use rsa::{Pkcs1v15Sign, RsaPublicKey, pkcs8::DecodePublicKey, sha2::Sha256};
 use serde::Deserialize;
+use sha1::{Digest, Sha1};
 use std::time::Duration;
 
 #[derive(Default)]

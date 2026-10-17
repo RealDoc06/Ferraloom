@@ -29,7 +29,12 @@ impl LevelChunk {
         sections: Vec<LevelChunkSection>,
     ) -> Self {
         assert!(!sections.is_empty());
-        let empty_section = sections[0].clone();
+        let first = &sections[0];
+        let empty_section = LevelChunkSection::new(
+            first.states().strategy().clone(),
+            first.biomes().strategy().clone(),
+            first.biomes().get(0, 0, 0),
+        );
         Self {
             pos,
             min_section,

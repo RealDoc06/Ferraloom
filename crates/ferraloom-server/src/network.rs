@@ -160,6 +160,7 @@ pub struct NetworkOptions {
     pub session_id: Uuid,
     pub status: watch::Receiver<status::ServerStatus>,
     pub registries: Arc<crate::registries::RegistrySet>,
+    pub encoding: Arc<crate::jobs::JobPool>,
 }
 /// Port of ServerConnectionListener. The listener only touches its bound socket.
 pub async fn listen(
@@ -169,19 +170,30 @@ pub async fn listen(
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<()> {
     let mut next_id = 0;
+    let mut connections = tokio::task::JoinSet::new();
     loop {
         tokio::select! {
+            _=connections.join_next(), if !connections.is_empty()=>{},
             changed=shutdown.changed()=> { if changed.is_err() || *shutdown.borrow() {break;} },
             accepted=listener.accept()=> {
                 let (socket,address)=accepted?;socket.set_nodelay(true)?;
                 let id=next_id;next_id+=1;
                 let options=options.clone();let ingress=ingress.clone();
-                tokio::spawn(async move {
+                connections.spawn(async move {
                     if let Err(e)=connection(socket,address,id,options,ingress.clone()).await { eprintln!("Connection {id} ({address}): {e:#}"); }
                     let _=ingress.send(Ingress::Closed{id}).await;
                 });
             }
         }
+    }
+    if tokio::time::timeout(Duration::from_secs(3), async {
+        while connections.join_next().await.is_some() {}
+    })
+    .await
+    .is_err()
+    {
+        connections.abort_all();
+        while connections.join_next().await.is_some() {}
     }
     Ok(())
 }
@@ -320,9 +332,7 @@ async fn connection(
                 }
                 Incoming::Configuration(packet)
             } else {
-                Incoming::Play(Box::new(play::serverbound::Packet::decode(
-                    &mut protocol::Reader::with_context(&bytes, options.registries.as_ref()),
-                )?))
+                Incoming::Play(Box::new(decode_play(&bytes, options.registries.as_ref())?))
             };
             ingress
                 .send(Ingress::Packet {
@@ -341,15 +351,29 @@ async fn connection(
         while let Some(batch) = batches.recv().await {
             ensure!(batch.sequence == expected, "outbound order mismatch");
             expected += 1;
-            for packet in batch.packets {
-                write_frame(
-                    &mut write,
-                    &mut encoder,
-                    &mut encrypt,
-                    &packet.bytes(options.registries.as_ref())?,
-                )
-                .await?;
+            let registries = options.registries.clone();
+            let (returned, mut bytes) = options
+                .encoding
+                .run(move || -> Result<_> {
+                    let mut bytes = Vec::new();
+                    for packet in batch.packets {
+                        let encoded = FrameEncoder::encode(
+                            &encoder.encode(&packet.bytes(registries.as_ref())?)?,
+                        )?;
+                        ensure!(
+                            bytes.len() + encoded.len() <= 16 * 1024 * 1024,
+                            "outbound batch exceeds byte limit"
+                        );
+                        bytes.extend_from_slice(&encoded);
+                    }
+                    Ok((encoder, bytes))
+                })
+                .await??;
+            encoder = returned;
+            if let Some(cipher) = &mut encrypt {
+                cipher.encrypt(&mut bytes);
             }
+            write.write_all(&bytes).await?;
             write.flush().await?;
             if batch.close {
                 break;
@@ -503,4 +527,14 @@ fn session_profile_uuid(text: &str) -> Result<Uuid> {
     );
     let number = u128::from_str_radix(text, 16)?;
     Ok(Uuid::from_byte_array(number.to_be_bytes()))
+}
+
+fn decode_play(
+    bytes: &[u8],
+    registries: &crate::registries::RegistrySet,
+) -> Result<play::serverbound::Packet> {
+    let mut reader = protocol::Reader::with_context(bytes, registries);
+    let packet = play::serverbound::Packet::decode(&mut reader)?;
+    reader.finish()?;
+    Ok(packet)
 }

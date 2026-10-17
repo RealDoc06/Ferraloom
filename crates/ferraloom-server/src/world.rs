@@ -127,6 +127,7 @@ pub struct World {
     pub io: IoWorker,
     generator: Arc<NoiseBasedChunkGenerator>,
     generation: Arc<JobPool>,
+    saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
@@ -268,6 +269,7 @@ impl World {
             io,
             generator,
             generation: Arc::new(JobPool::new("ferraloom-worldgen", 2)?),
+            saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
             light_tx,
             light_rx,
@@ -376,61 +378,33 @@ impl World {
         self.saved.insert(terrain.pos.pack(), terrain.disk);
         Ok(LevelChunk::from_sections(terrain.pos, -4, terrain.sections))
     }
-    pub fn capture_chunk(
+    /// Capture owned sections here; palette/NBT encoding runs in the save pool.
+    pub fn capture_chunk(&self, chunk: &LevelChunk, game_time: i64) -> ChunkSaveSnapshot {
+        ChunkSaveSnapshot {
+            pos: chunk.pos(),
+            sections: chunk.sections().cloned().collect(),
+            disk: self.saved[&chunk.pos().pack()].clone(),
+            light: self.lights.get(&chunk.pos().pack()).cloned(),
+            game_time,
+            light_correct: self.ready.contains(&chunk.pos()),
+        }
+    }
+    pub async fn encode_saves(
         &self,
-        chunk: &LevelChunk,
-        game_time: i64,
-    ) -> Result<SerializableChunkData> {
-        let pos = chunk.pos();
-        let mut disk = self.saved[&pos.pack()].clone();
-        let mut sections = Vec::new();
-        let light = self.lights.get(&pos.pack());
-        for (index, runtime) in chunk.sections().enumerate() {
-            let y = -4 + index as i32;
-            let mut section = ChunkSection {
-                y: Some(y as i8),
-                ..Default::default()
-            };
-            section.update_from_runtime(runtime, self.registry.as_ref())?;
-            section.sky_light = light
-                .and_then(|l| l.sky.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
-            section.block_light = light
-                .and_then(|l| l.block.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
-            sections.push(section);
-        }
-        for y in [-5, 20] {
-            if let Some(light) = light {
-                let sky = light.sky.get(&y);
-                let block = light.block.get(&y);
-                if sky.is_some() || block.is_some() {
-                    sections.push(ChunkSection {
-                        y: Some(y as i8),
-                        sky_light: sky.map(|v| ByteArray(v.iter().map(|v| *v as i8).collect())),
-                        block_light: block.map(|v| ByteArray(v.iter().map(|v| *v as i8).collect())),
-                        ..Default::default()
-                    });
-                }
-            }
-        }
-        disk.sections = Some(sections);
-        disk.last_update = Some(game_time);
-        disk.heightmaps = Some(BTreeMap::from([
-            (
-                "WORLD_SURFACE".into(),
-                LongArray(heightmap(&surface_heights(
-                    &chunk.sections().cloned().collect::<Vec<_>>(),
-                ))),
-            ),
-            (
-                "MOTION_BLOCKING".into(),
-                LongArray(heightmap(&surface_heights(
-                    &chunk.sections().cloned().collect::<Vec<_>>(),
-                ))),
-            ),
-        ]));
-        Ok(disk)
+        snapshots: Vec<ChunkSaveSnapshot>,
+    ) -> Result<Vec<(ChunkPos, CompoundTag)>> {
+        let registry = self.registry.clone();
+        self.saving
+            .run(move || {
+                snapshots
+                    .into_iter()
+                    .map(|snapshot| {
+                        let pos = snapshot.pos;
+                        Ok((pos, snapshot.encode(registry.as_ref())?))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .await?
     }
     pub async fn save_level_and_players(
         &mut self,
@@ -457,15 +431,79 @@ impl World {
         self.level_data.data.insert("spawn", Tag::Compound(spawn));
         let access = self.access.clone();
         let level = self.level_data.clone();
-        tokio::task::spawn_blocking(move || -> Result<()> {
-            for (uuid, tag) in players {
-                access.player_data().save(&uuid, &tag)?;
-            }
-            access.save_level_data(&level)?;
-            Ok(())
-        })
-        .await??;
+        self.saving
+            .run(move || -> Result<()> {
+                for (uuid, tag) in players {
+                    access.player_data().save(&uuid, &tag)?;
+                }
+                access.save_level_data(&level)?;
+                Ok(())
+            })
+            .await??;
         Ok(())
+    }
+}
+pub struct ChunkSaveSnapshot {
+    pos: ChunkPos,
+    sections: Vec<LevelChunkSection>,
+    disk: SerializableChunkData,
+    light: Option<ChunkLight>,
+    game_time: i64,
+    light_correct: bool,
+}
+impl ChunkSaveSnapshot {
+    fn encode(mut self, registry: &RegistryAdapter) -> Result<CompoundTag> {
+        let mut existing = self
+            .disk
+            .sections
+            .take()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|section| section.y.map(|y| (y, section)))
+            .collect::<BTreeMap<_, _>>();
+        let mut sections = Vec::new();
+        for (index, runtime) in self.sections.iter().enumerate() {
+            let y = -4 + index as i32;
+            let mut section = existing.remove(&(y as i8)).unwrap_or_default();
+            section.y = Some(y as i8);
+            section.update_from_runtime(runtime, registry)?;
+            section.sky_light = self
+                .light
+                .as_ref()
+                .and_then(|l| l.sky.get(&y))
+                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            section.block_light = self
+                .light
+                .as_ref()
+                .and_then(|l| l.block.get(&y))
+                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            sections.push(section);
+        }
+        for y in [-5, 20] {
+            if let Some(light) = &self.light {
+                let sky = light.sky.get(&y);
+                let block = light.block.get(&y);
+                if sky.is_some() || block.is_some() {
+                    let mut section = existing.remove(&(y as i8)).unwrap_or_default();
+                    section.y = Some(y as i8);
+                    section.sky_light =
+                        sky.map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+                    section.block_light =
+                        block.map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+                    sections.push(section);
+                }
+            }
+        }
+        sections.extend(existing.into_values());
+        sections.sort_by_key(|s| s.y);
+        self.disk.sections = Some(sections);
+        self.disk.last_update = Some(self.game_time);
+        self.disk.is_light_on = Some(self.light_correct);
+        let surface = LongArray(heightmap(&surface_heights(&self.sections)));
+        let maps = self.disk.heightmaps.get_or_insert_with(BTreeMap::new);
+        maps.insert("WORLD_SURFACE".into(), surface.clone());
+        maps.insert("MOTION_BLOCKING".into(), surface);
+        Ok(self.disk.write()?)
     }
 }
 pub fn surface_heights(sections: &[LevelChunkSection]) -> [i32; 256] {

@@ -108,6 +108,9 @@ impl ServerProperties {
             Err(e) => return Err(e).context("reading server.properties"),
         };
         let properties = Self::from_values(values);
+        let _: serde_json::Map<std::string::String, serde_json::Value> =
+            serde_json::from_str(properties.get("generator-settings"))
+                .context("invalid generator-settings JSON object")?;
         properties.store(path)?;
         Ok(properties)
     }
@@ -134,7 +137,13 @@ impl ServerProperties {
                     input
                         .parse::<i32>()
                         .ok()
-                        .map(|n| names[n.rem_euclid(4) as usize])
+                        .map(|n| {
+                            names[if matches!(kind, Difficulty) {
+                                n.rem_euclid(4) as usize
+                            } else {
+                                usize::try_from(n).ok().filter(|&n| n < 4).unwrap_or(0)
+                            }]
+                        })
                         .or_else(|| names.iter().copied().find(|&n| n == input))
                         .unwrap_or(default)
                         .to_owned()
@@ -153,6 +162,12 @@ impl ServerProperties {
                     .unwrap_or_else(|_| default.into()),
             };
             values.insert(key.into(), value);
+        }
+        values
+            .entry("level-type".into())
+            .and_modify(|value| *value = value.to_lowercase());
+        if values["generator-settings"].is_empty() {
+            values.insert("generator-settings".into(), "{}".into());
         }
         values.remove("announce-player-achievements");
         if let Some(hash) = values.remove("resource-pack-hash") {

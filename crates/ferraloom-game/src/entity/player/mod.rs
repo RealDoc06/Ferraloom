@@ -218,7 +218,7 @@ pub fn move_player(
         target.y.clamp(-20_000_000., 20_000_000.),
         target.z.clamp(-30_000_000., 30_000_000.),
     );
-    let (from, spectator, too_quickly) = {
+    let (from, mode, too_quickly) = {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
         player.received_moves += 1;
         let packets = if player.received_moves > 5 {
@@ -228,7 +228,7 @@ pub fn move_player(
         };
         (
             player.position,
-            player.game_mode == GameType::Spectator,
+            player.game_mode,
             target.distance_to_sqr(player.first_good) - player.velocity.length_sqr()
                 > 100. * f64::from(packets),
         )
@@ -236,9 +236,46 @@ pub fn move_player(
     if too_quickly {
         return Ok(MovementResult::TooQuickly);
     }
-    // Vanilla's AABB terrain collision path, with no vehicles or step-up yet.
-    if !spectator && collides(level, target)? && !collides(level, from)? {
-        return Ok(MovementResult::Wrongly);
+    // Entity#collideBoundingBox clips the swept movement before the listener
+    // checks its horizontal discrepancy and newly introduced terrain collisions.
+    if mode != GameType::Spectator {
+        let shapes = terrain_shapes(level, from, target)?;
+        let old = player_box(from);
+        let requested = player_box(target);
+        let mut clipped = old;
+        let mut delta = [target.x - from.x, target.y - from.y, target.z - from.z];
+        let horizontal = if delta[0].abs() < delta[2].abs() {
+            [2, 0]
+        } else {
+            [0, 2]
+        };
+        for axis in [1, horizontal[0], horizontal[1]] {
+            for shape in &shapes {
+                if (0..3)
+                    .filter(|&i| i != axis)
+                    .all(|i| clipped.1[i] > shape.0[i] + 1e-7 && clipped.0[i] < shape.1[i] - 1e-7)
+                {
+                    if delta[axis] > 0. && clipped.1[axis] <= shape.0[axis] + 1e-7 {
+                        delta[axis] = delta[axis].min(shape.0[axis] - clipped.1[axis]);
+                    } else if delta[axis] < 0. && clipped.0[axis] >= shape.1[axis] - 1e-7 {
+                        delta[axis] = delta[axis].max(shape.1[axis] - clipped.0[axis]);
+                    }
+                }
+            }
+            clipped.0[axis] += delta[axis];
+            clipped.1[axis] += delta[axis];
+        }
+        let dx = target.x - from.x - delta[0];
+        let dz = target.z - from.z - delta[2];
+        // Vanilla 26.3's listener clears the vertical discrepancy unconditionally.
+        let wrongly = dx * dx + dz * dz > 0.0625 && mode != GameType::Creative;
+        let old_collides = shapes.iter().any(|shape| intersects(old, *shape));
+        let new_collision = shapes
+            .iter()
+            .any(|shape| intersects(requested, *shape) && !intersects(old, *shape));
+        if (wrongly && !old_collides) || new_collision {
+            return Ok(MovementResult::Wrongly);
+        }
     }
     let player = level.entity_mut::<ServerPlayer>(entity)?;
     player.position = target;
@@ -248,33 +285,104 @@ pub fn move_player(
     player.last_good = target;
     Ok(MovementResult::Accepted)
 }
-fn collides(level: &Level, position: Vec3) -> Result<bool, LevelError> {
-    let min = [
-        position.x - 0.3 + 1e-5,
-        position.y + 1e-5,
-        position.z - 0.3 + 1e-5,
-    ];
-    let max = [
-        position.x + 0.3 - 1e-5,
-        position.y + 1.8 - 1e-5,
-        position.z + 0.3 - 1e-5,
-    ];
+type CollisionBox = ([f64; 3], [f64; 3]);
+fn player_box(position: Vec3) -> CollisionBox {
+    (
+        [
+            position.x - 0.3 + 1e-5,
+            position.y + 1e-5,
+            position.z - 0.3 + 1e-5,
+        ],
+        [
+            position.x + 0.3 - 1e-5,
+            position.y + 1.8 - 1e-5,
+            position.z + 0.3 - 1e-5,
+        ],
+    )
+}
+fn intersects(a: CollisionBox, b: CollisionBox) -> bool {
+    (0..3).all(|i| a.1[i] > b.0[i] && a.0[i] < b.1[i])
+}
+fn terrain_shapes(level: &Level, from: Vec3, to: Vec3) -> Result<Vec<CollisionBox>, LevelError> {
+    let a = player_box(from);
+    let b = player_box(to);
+    let min = std::array::from_fn::<_, 3, _>(|i| a.0[i].min(b.0[i]));
+    let max = std::array::from_fn::<_, 3, _>(|i| a.1[i].max(b.1[i]));
+    let mut shapes = Vec::new();
     for x in mth::floor(min[0])..=mth::floor(max[0]) {
         for y in mth::floor(min[1])..=mth::floor(max[1]) {
             for z in mth::floor(min[2])..=mth::floor(max[2]) {
                 let state = level.get_block_state(BlockPos::new(x, y, z))?;
+                let offset = [f64::from(x), f64::from(y), f64::from(z)];
                 for shape in state.data().collision.boxes() {
-                    let offset = [f64::from(x), f64::from(y), f64::from(z)];
-                    if (0..3).all(|i| {
-                        max[i] > shape.min[i] + offset[i] && min[i] < shape.max[i] + offset[i]
-                    }) {
-                        return Ok(true);
-                    }
+                    shapes.push((
+                        std::array::from_fn(|i| shape.min[i] + offset[i]),
+                        std::array::from_fn(|i| shape.max[i] + offset[i]),
+                    ));
                 }
             }
         }
     }
-    Ok(false)
+    Ok(shapes)
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Behaviors,
+        entity::{EntityRef, EntityState},
+        level::{Region, chunk::LevelChunk},
+    };
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use ferraloom_data::Block;
+    use std::sync::Arc;
+    #[test]
+    fn movement_sweep_cannot_tunnel_through_terrain() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
+        let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        level
+            .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))
+            .unwrap();
+        for y in 64..67 {
+            level
+                .set_block_state(BlockPos::new(4, y, 1), Block::STONE.default_state())
+                .unwrap();
+        }
+        let entity = EntityRef(1);
+        let player = ServerPlayer::new(
+            Uuid::NIL,
+            "Walker".into(),
+            1,
+            Vec3::new(1.5, 64., 1.5),
+            GameType::Survival,
+        );
+        level
+            .add_entity(entity, EntityState::Player(Box::new(player)))
+            .unwrap();
+        assert_eq!(
+            move_player(&mut level, entity, Vec3::new(7.5, 64., 1.5), 0., 0., true).unwrap(),
+            MovementResult::Wrongly
+        );
+        assert_eq!(
+            level.entity::<ServerPlayer>(entity).unwrap().position.x,
+            1.5
+        );
+        assert_eq!(
+            move_player(
+                &mut level,
+                entity,
+                Vec3::new(f64::NAN, 64., 1.5),
+                0.,
+                0.,
+                true
+            )
+            .unwrap(),
+            MovementResult::Invalid
+        );
+    }
+}

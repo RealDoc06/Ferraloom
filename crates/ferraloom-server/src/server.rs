@@ -126,6 +126,10 @@ struct Connection {
     last_seen: LastSeenMessagesValidator,
     signature_cache: MessageSignatureCache,
     command_message: Option<ValidatedMessage>,
+    next_chat_index: i32,
+    network_ticks: u64,
+    rate_packets: u64,
+    average_packets: f32,
 }
 impl Connection {
     fn push(&mut self, packet: impl Into<Outgoing>) {
@@ -165,17 +169,17 @@ pub struct MinecraftServer {
     empty_ticks: i32,
     was_paused: bool,
     autosave: i32,
-    global_chat_index: i32,
     code_of_conduct: BTreeMap<String, String>,
     favicon: Option<Vec<u8>>,
     services: ServicesKeySet,
     enforces_secure_chat: bool,
+    listener_task: Option<JoinHandle<Result<()>>>,
 }
 impl MinecraftServer {
     pub async fn start(options: ServerOptions) -> Result<RunningServer> {
         std::fs::create_dir_all(&options.root)?;
-        properties::check_eula(&options.root)?;
         let mut properties = ServerProperties::load(&options.root.join("server.properties"))?;
+        properties::check_eula(&options.root)?;
         if let Some(port) = options.port {
             properties.set("server-port", port);
         }
@@ -245,13 +249,15 @@ impl MinecraftServer {
             session_id: random_uuid(),
             status: status_rx,
             registries: Arc::new(registries.clone()),
+            encoding: Arc::new(crate::jobs::JobPool::new("ferraloom-packet-encode", 2)?),
         });
         let net_send = send.clone();
-        tokio::spawn(async move {
-            if let Err(e) = network::listen(listener, options_net, net_send, shutdown_rx).await {
-                eprintln!("Listener failed: {e:#}");
-            }
-        });
+        let listener_task = tokio::spawn(network::listen(
+            listener,
+            options_net,
+            net_send,
+            shutdown_rx,
+        ));
         if options.console {
             let console = send.clone();
             std::thread::Builder::new()
@@ -289,11 +295,11 @@ impl MinecraftServer {
             empty_ticks: 0,
             was_paused: false,
             autosave: 6000,
-            global_chat_index: 0,
             code_of_conduct: conduct,
             favicon,
             services,
             enforces_secure_chat,
+            listener_task: Some(listener_task),
         };
         let task = tokio::spawn(server.run());
         Ok(RunningServer {
@@ -396,6 +402,10 @@ impl MinecraftServer {
                         last_seen: LastSeenMessagesValidator::default(),
                         signature_cache: MessageSignatureCache::default(),
                         command_message: None,
+                        next_chat_index: 0,
+                        network_ticks: 0,
+                        rate_packets: 0,
+                        average_packets: 0.,
                     };
                     c.push(cfg::ClientboundPacket::CustomPayload(
                         common_cb::CustomPayload {
@@ -1318,6 +1328,17 @@ impl MinecraftServer {
             if c.close {
                 continue;
             }
+            c.network_ticks += 1;
+            if c.network_ticks.is_multiple_of(20) {
+                let received = (c.incoming_sequence - c.rate_packets) as f32;
+                c.rate_packets = c.incoming_sequence;
+                c.average_packets = received + 0.75 * (c.average_packets - received);
+                let limit = self.properties.int("rate-limit");
+                if limit > 0 && c.average_packets > limit as f32 {
+                    c.disconnect("disconnect.exceeded_packet_rate");
+                    continue;
+                }
+            }
             c.chat_spam = (c.chat_spam - 1).max(0);
             c.command_spam = (c.command_spam - 1).max(0);
             if now.duration_since(c.last_keepalive) >= Duration::from_secs(15) {
@@ -1480,15 +1501,21 @@ impl MinecraftServer {
             .map(|c| c.profile.name.clone())
             .unwrap_or_default();
         println!("<{name}> {}", message.content);
-        let global_index = self.global_chat_index;
-        self.global_chat_index += 1;
         for c in self.connections.values_mut() {
-            if !matches!(c.phase, Phase::Play(_)) || c.close {
+            if !matches!(c.phase, Phase::Play(_))
+                || c.close
+                || c.information.chat_visibility != common::serverbound::ChatVisibility::Full
+            {
                 continue;
             }
             if let Some(signature) = &message.signature {
-                c.last_seen.add_pending(signature)?;
+                if let Err(e) = c.last_seen.add_pending(signature) {
+                    c.disconnect(e.to_string());
+                    continue;
+                }
             }
+            let global_index = c.next_chat_index;
+            c.next_chat_index += 1;
             let body = c.signature_cache.pack(&message);
             c.push(cb::Packet::PlayerChat(cb::PlayerChat {
                 global_index: VarInt(global_index),
@@ -1750,14 +1777,17 @@ impl MinecraftServer {
         }
     }
     async fn save_all(&mut self, flush: bool) -> Result<()> {
-        for holder in self.level.chunks.holders.values() {
-            if let Some(chunk) = self.level.level.chunk(holder.position) {
-                let disk = self.world.capture_chunk(chunk, self.level.game_time)?;
-                self.world
-                    .io
-                    .store(holder.position, Some(disk.write()?))
-                    .await?;
-            }
+        let snapshots = self
+            .level
+            .chunks
+            .holders
+            .values()
+            .filter_map(|holder| self.level.level.chunk(holder.position))
+            .map(|chunk| self.world.capture_chunk(chunk, self.level.game_time))
+            .collect();
+        let encoded = self.world.encode_saves(snapshots).await?;
+        for (pos, tag) in encoded {
+            self.world.io.store(pos, Some(tag)).await?;
         }
         let players = self
             .players
@@ -1782,7 +1812,6 @@ impl MinecraftServer {
         Ok(())
     }
     async fn stop_server(&mut self) -> Result<()> {
-        self.shutdown.send_replace(true);
         for c in self.connections.values_mut() {
             c.disconnect("multiplayer.disconnect.server_shutdown");
         }
@@ -1790,6 +1819,10 @@ impl MinecraftServer {
         self.flush_outbound();
         // Writers consume their ordered shutdown batch before channels are released.
         self.connections.clear();
+        self.shutdown.send_replace(true);
+        if let Some(listener) = self.listener_task.take() {
+            listener.await??;
+        }
         self.world.io.shutdown().await?;
         println!(
             "Server stopped; world and players saved to {}",
