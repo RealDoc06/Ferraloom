@@ -146,10 +146,10 @@ impl Feature for LakeFeature {
                         p,
                     );
                     let biome = ctx.region.noise_biome(quart)?;
-                    let biome = &ctx.generator.data.biome_names[biome.0 as usize];
+                    let biome = &ctx.generator.data().biome_names[biome.0 as usize];
                     if ctx
                         .generator
-                        .data
+                        .data()
                         .temperatures
                         .should_freeze(biome, ctx.region, p, false)?
                         && self.replace_fluid.test(ctx.region, p, ctx.generator)?
