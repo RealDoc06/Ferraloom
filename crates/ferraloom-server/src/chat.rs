@@ -31,8 +31,8 @@ impl ServicesKeySet {
             keys: Vec<Key>,
         }
         let response: Response = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(15))
+            .connect_timeout(Duration::from_secs(5))
+            .read_timeout(Duration::from_secs(5))
             .build()?
             .get("https://api.minecraftservices.com/publickeys")
             .send()

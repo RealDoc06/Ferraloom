@@ -442,8 +442,8 @@ async fn authenticate(
     let hash = server_id_hash("", &secret, options.keys.public_key_der());
     io.encryption(&secret);
     let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(15))
+        .connect_timeout(Duration::from_secs(5))
+        .read_timeout(Duration::from_secs(5))
         .build()?;
     let mut request = client
         .get("https://sessionserver.mojang.com/session/minecraft/hasJoined")

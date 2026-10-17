@@ -7,8 +7,8 @@ use ferraloom_game::level::chunk::LevelChunk;
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtString, Tag};
 use ferraloom_storage::{
-    self as storage, ByteArray, ChunkSection, IoWorker, LevelData, LevelStorageAccess, LongArray,
-    SavedData, SavedDataStorage, SectionRegistry, SerializableChunkData,
+    self as storage, ByteArray, IoWorker, LevelData, LevelStorageAccess, LongArray, SavedData,
+    SavedDataStorage, SectionRegistry, SerializableChunkData,
 };
 use ferraloom_util::{BlockPos, ChunkPos};
 use ferraloom_worldgen::{

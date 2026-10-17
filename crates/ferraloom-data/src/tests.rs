@@ -217,12 +217,13 @@ fn generic_state_properties_match_every_report_state() {
         for row in block["states"].as_array().unwrap() {
             let state = BlockState::from_id(row["id"].as_u64().unwrap() as u16).unwrap();
             let actual: Vec<_> = state.properties().collect();
-            let expected: Vec<_> = row["properties"]
+            let mut expected: Vec<_> = row["properties"]
                 .as_object()
                 .into_iter()
                 .flat_map(|p| p.iter())
                 .map(|(k, v)| (k.as_str(), v.as_str().unwrap()))
                 .collect();
+            expected.sort_unstable_by_key(|(name, _)| *name);
             assert_eq!(actual, expected, "{name}");
             assert_eq!(BlockState::from_properties(block_id, actual), Some(state));
         }
