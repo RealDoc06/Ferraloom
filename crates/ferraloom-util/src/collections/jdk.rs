@@ -222,14 +222,12 @@ impl<K: Eq + JavaHash, V, const L: bool> JavaHashMap<K, V, L> {
         let pos = self.bins[bin].order.iter().position(|&p| p == id)?;
         self.bins[bin].order.remove(pos);
         if let Some(root) = self.bins[bin].root {
-            if self.bins[bin].order.is_empty() {
-                self.bins[bin].root = None;
-            } else if movable
+            let too_small = movable
                 && (self.child(root, true).is_none()
                     || self
                         .child(root, false)
-                        .is_none_or(|left| self.child(left, false).is_none()))
-            {
+                        .is_none_or(|left| self.child(left, false).is_none()));
+            if self.bins[bin].order.is_empty() || too_small {
                 self.bins[bin].root = None;
             } else {
                 let root = self.delete_tree(root, id);
@@ -588,10 +586,10 @@ impl<K: Eq + JavaHash, V, const L: bool> JavaHashMap<K, V, L> {
             remaining: self.size,
         }
     }
-    pub fn keys(&self) -> impl Iterator<Item = &K> + ExactSizeIterator {
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> {
         self.iter().map(|(k, _)| k)
     }
-    pub fn values(&self) -> impl Iterator<Item = &V> + ExactSizeIterator {
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &V> {
         self.iter().map(|(_, v)| v)
     }
     /// Removals through Java iterators never resize or move a tree root to front.
@@ -640,11 +638,11 @@ impl<K: Eq + JavaHash, V> JavaHashMap<K, V, true> {
     pub fn insert_last(&mut self, key: K, value: V) -> Option<V> {
         let existing = self.find(&key);
         let old = self.insert(key, value);
-        if let Some(id) = existing {
-            if self.last != Some(id) {
-                self.unlink(id);
-                self.link_last(id);
-            }
+        if let Some(id) = existing
+            && self.last != Some(id)
+        {
+            self.unlink(id);
+            self.link_last(id);
         }
         old
     }
@@ -787,7 +785,7 @@ impl<K: Eq + JavaHash, const L: bool> JavaHashSet<K, L> {
     pub fn clear(&mut self) {
         self.0.clear();
     }
-    pub fn iter(&self) -> impl Iterator<Item = &K> + ExactSizeIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &K> {
         self.0.keys()
     }
     pub fn cursor(&mut self) -> JavaCursor<'_, K, (), L> {
