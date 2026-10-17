@@ -274,7 +274,10 @@ impl Feature for BlockPileFeature {
                             let allowed = if ctx.region.block(below)?.block() == Block::DIRT_PATH {
                                 ctx.random.next_boolean()
                             } else {
-                                ctx.region.has_sturdy_face(below, Direction::Up)?
+                                match ctx.region.block(below)?.cached_sturdy_face(Direction::Up) {
+                                    Some(sturdy) => sturdy,
+                                    None => ctx.region.has_sturdy_face(below, Direction::Up)?,
+                                }
                             };
                             if allowed {
                                 let state = self.state.get_state(ctx, p)?;

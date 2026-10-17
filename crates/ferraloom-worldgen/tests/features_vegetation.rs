@@ -1,6 +1,6 @@
 //! Real-jar placement fixtures. Unsupported game behavior is explicitly pending.
 use ferraloom_data::{
-    Block, BlockClass, BlockState,
+    Block, BlockState,
     datapack::{Pack, ResourceManager},
 };
 use ferraloom_util::random::{RandomSource, WorldgenRandom, XoroshiroRandomSource};
@@ -20,7 +20,7 @@ use std::{collections::BTreeMap, io::Read, path::Path, sync::Arc};
 struct ControlledStorage;
 impl WorldgenBlockBehavior for ControlledStorage {
     fn has_block_entity(&self, state: BlockState) -> bool {
-        state.block().is_instance_of(BlockClass::EntityBlock)
+        state.has_block_entity()
     }
     fn post_process_pos(
         &self,
