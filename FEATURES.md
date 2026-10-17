@@ -3,7 +3,7 @@
 Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the linked files as the porting checklist: stable IDs identify concrete behaviors or registry entries, Vanilla source identifies the implementation or built-in resource, and Test links the focused parity scenario. An empty Test cell, Vanilla `-` and Ferraloom `todo` mean untested, regardless of existing Rust code. Run each scenario against vanilla before recording the Ferraloom result; use `pass`, `partial` or `fail` for measured results. Ferraloom passes require agreement in single-region and parallel-region modes. Optional bundled datapacks and integrated-only command entries are labeled. Registry rows were extracted from the official reports and bootstrapped runtime; resource rows enumerate the bundled datapack; mechanics rows come from reading the decompiled source. Run `python3 features/counts.py` after edits, or add `--check` to validate the index.
 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
-|---|---:|---:|---:|---:|
+|---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1930 | 1930 | 0 | 0 | 0 |
 | [Block entities](features/block-entities.md) | 70 | 70 | 0 | 0 | 0 |
 | [Blocks](features/blocks.md) | 316 | 316 | 0 | 0 | 0 |

@@ -23,7 +23,7 @@ intro = (
     'mechanics rows come from reading the decompiled source. '
     'Run `python3 features/counts.py` after edits, or add `--check` to validate the index.\n\n'
     '| Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |\n'
-    '|---|---:|---:|---:|---:|\n'
+    '|---|---:|---:|---:|---:|---:|\n'
 )
 lines = [intro.rstrip()]
 seen = set()
