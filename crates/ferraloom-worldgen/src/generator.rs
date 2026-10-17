@@ -181,6 +181,68 @@ pub struct NoiseBasedChunkGenerator {
     pub source: BiomeSource,
     pub random: RandomState,
 }
+/// Port of ChunkGenerator's shared feature and column-query interface.
+pub trait ChunkGeneratorAccess: std::fmt::Debug + Send + Sync {
+    fn data(&self) -> &GenerationData;
+    fn biome_source(&self) -> &BiomeSource;
+    fn min_y(&self) -> i32;
+    fn gen_depth(&self) -> i32;
+    fn sea_level(&self) -> i32;
+    fn get_base_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error>;
+    fn get_base_column(
+        &self,
+        x: i32,
+        z: i32,
+        min_y: i32,
+        height: i32,
+    ) -> Result<Option<NoiseColumn>, Error>;
+    fn get_spawn_height(&self, _min_y: i32, _height: i32) -> i32 {
+        64
+    }
+}
+impl ChunkGeneratorAccess for NoiseBasedChunkGenerator {
+    fn data(&self) -> &GenerationData {
+        &self.data
+    }
+    fn biome_source(&self) -> &BiomeSource {
+        &self.source
+    }
+    fn min_y(&self) -> i32 {
+        self.settings.noise.min_y
+    }
+    fn gen_depth(&self) -> i32 {
+        self.settings.noise.height
+    }
+    fn sea_level(&self) -> i32 {
+        self.settings.sea_level
+    }
+    fn get_base_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error> {
+        self.get_base_height(x, z, heightmap, min_y, height)
+    }
+    fn get_base_column(
+        &self,
+        x: i32,
+        z: i32,
+        min_y: i32,
+        height: i32,
+    ) -> Result<Option<NoiseColumn>, Error> {
+        self.get_base_column(x, z, min_y, height)
+    }
+}
 impl NoiseBasedChunkGenerator {
     pub fn new(
         data: Arc<GenerationData>,

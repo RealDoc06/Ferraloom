@@ -52,7 +52,7 @@ pub mod sorter;
 use crate::{
     Identifier,
     feature::{FeatureContext, FeatureRegistry},
-    generator::NoiseBasedChunkGenerator,
+    generator::ChunkGeneratorAccess,
 };
 use ferraloom_util::random::{Random, XoroshiroRandomSource};
 use std::collections::BTreeSet;
@@ -87,11 +87,11 @@ impl DecorationPlan {
     pub fn apply_biome_decoration(
         &self,
         region: &mut WorldGenRegion<'_>,
-        generator: &NoiseBasedChunkGenerator,
+        generator: &dyn ChunkGeneratorAccess,
         registry: &FeatureRegistry,
         structures: &mut impl StructureDecoration,
     ) -> Result<(), Error> {
-        region.set_block_tags(generator.data.block_tags.clone());
+        region.set_block_tags(generator.data().block_tags.clone());
         let center = region.center();
         let origin = [center[0] * 16, region.min_y(), center[1] * 16];
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
@@ -107,7 +107,7 @@ impl DecorationPlan {
                         for y in 0..4 {
                             for z in 0..4 {
                                 let id = section.biomes().get(x, y, z);
-                                let name = &generator.data.biome_names[id.0 as usize];
+                                let name = &generator.data().biome_names[id.0 as usize];
                                 if self.possible_biomes.contains(name) {
                                     biomes.insert(name.clone());
                                 }

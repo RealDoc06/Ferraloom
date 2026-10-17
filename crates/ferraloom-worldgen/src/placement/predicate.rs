@@ -217,7 +217,7 @@ impl BlockPredicate {
         &self,
         region: &WorldGenRegion<'_>,
         p: [i32; 3],
-        generator: &crate::generator::NoiseBasedChunkGenerator,
+        generator: &dyn crate::generator::ChunkGeneratorAccess,
     ) -> Result<bool, Error> {
         Ok(match self {
             Self::True => true,
@@ -245,7 +245,7 @@ impl BlockPredicate {
                 values.contains(&region.fluid(offset(p, *d))?.fluid_type)
             }
             Self::MatchingBiomes(values) => values.contains(
-                &generator.data.biome_names[region
+                &generator.data().biome_names[region
                     .noise_biome(crate::biome_manager::zoom_quart(
                         crate::biome_manager::obfuscate_seed(region.seed),
                         p,
@@ -263,10 +263,10 @@ impl BlockPredicate {
             // Vanilla tests entity obstruction against a full unit cube.
             Self::Unobstructed => region.is_unobstructed(Block::STONE.default_state(), p)?,
             Self::HeightRange(min, max) => {
-                let min_y = region.min_y().max(generator.settings.noise.min_y);
-                let height = region.height().min(generator.settings.noise.height);
-                p[1] >= min.resolve(min_y, height, generator.settings.sea_level)
-                    && p[1] <= max.resolve(min_y, height, generator.settings.sea_level)
+                let min_y = region.min_y().max(generator.min_y());
+                let height = region.height().min(generator.gen_depth());
+                p[1] >= min.resolve(min_y, height, generator.sea_level())
+                    && p[1] <= max.resolve(min_y, height, generator.sea_level())
             }
             Self::VolumeMatch {
                 min,
