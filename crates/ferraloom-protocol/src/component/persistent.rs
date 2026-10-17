@@ -1432,7 +1432,7 @@ impl Persistent for DataComponentPatch {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = Vec::new();
-        for c in &self.added {
+        for c in self.added.iter().filter(|v| !v.is_transient()) {
             v.push((c.component_type().name().into(), c.to_persistent()?));
         }
         for c in &self.removed {
@@ -2951,4 +2951,51 @@ fn container_from_nbt(v: &Tag) -> Result<BoundedList<Option<ItemStackTemplate>, 
         items[slot] = Some(field_nbt(v, "item", None)?);
     }
     Ok(BoundedList(items))
+}
+impl Persistent for ItemStack {
+    fn from_json(value: &Json) -> Result<Self> {
+        let item = field(value, "id", None)?;
+        let count = field::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn from_nbt(value: &Tag) -> Result<Self> {
+        let item = field_nbt(value, "id", None)?;
+        let count = field_nbt::<i32>(value, "count", Some(1))?;
+        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field_nbt(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        let value = self
+            .0
+            .as_ref()
+            .filter(|_| !self.is_empty())
+            .ok_or_else(|| invalid("empty item stack"))?;
+        if !(1..=99).contains(&value.count) {
+            return Err(invalid("item stack count"));
+        }
+        let mut entries = vec![
+            ("id".into(), value.item.to_persistent()?),
+            ("count".into(), value.count.to_persistent()?),
+        ];
+        entry(
+            &mut entries,
+            "components",
+            &value.components,
+            Some(DataComponentPatch::default()),
+        )?;
+        Ok(PersistentValue::Map(entries))
+    }
 }

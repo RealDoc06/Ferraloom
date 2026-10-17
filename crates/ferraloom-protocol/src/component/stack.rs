@@ -15,6 +15,11 @@ impl ItemStack {
         if count <= 0 || item == ferraloom_data::Item::AIR {
             Self::default()
         } else {
+            let mut components = components;
+            components.sanitize(
+                super::DataComponentMap::item_defaults(item)
+                    .expect("generated vanilla item prototype"),
+            );
             Self(Some(ItemStackContents {
                 item,
                 count,
@@ -244,7 +249,7 @@ impl ItemStack {
             return Ok(super::DataComponentMap::default());
         }
         let value = self.0.as_ref().expect("nonempty");
-        let mut defaults = super::DataComponentMap::from_item_defaults(value.item)?;
+        let mut defaults = super::DataComponentMap::item_defaults(value.item)?.clone();
         defaults.apply(&value.components);
         Ok(defaults)
     }

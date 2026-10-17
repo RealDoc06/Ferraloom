@@ -52,3 +52,20 @@ impl DataComponentMap {
         ))
     }
 }
+impl DataComponentMap {
+    /// Resolve each extracted prototype once; the game can retain this immutable typed map.
+    pub fn item_defaults(item: Item) -> Result<&'static Self> {
+        type Cached = std::sync::OnceLock<std::result::Result<DataComponentMap, String>>;
+        static DEFAULTS: std::sync::OnceLock<Vec<Cached>> = std::sync::OnceLock::new();
+        let defaults = DEFAULTS.get_or_init(|| {
+            ferraloom_data::registries::item::ALL
+                .iter()
+                .map(|_| Cached::new())
+                .collect()
+        });
+        defaults[item.protocol_id() as usize]
+            .get_or_init(|| Self::from_item_defaults(item).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(|e| crate::Error::invalid("item defaults", e.clone()))
+    }
+}

@@ -237,3 +237,19 @@ impl Wire for DataComponent {
         self.encode_value(w)
     }
 }
+impl DataComponentPatch {
+    /// Port of PatchedDataComponentMap#fromPatch: discard redundant sets and absent removals.
+    pub fn sanitize(&mut self, prototype: &DataComponentMap) {
+        self.added
+            .retain(|v| prototype.get(v.component_type()) != Some(v));
+        self.removed.retain(|id| prototype.get(*id).is_some());
+    }
+}
+impl DataComponent {
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::CreativeSlotLock(_) | Self::AdditionalTradeCost(_) | Self::MapPostProcessing(_)
+        )
+    }
+}

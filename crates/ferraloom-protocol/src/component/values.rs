@@ -191,13 +191,130 @@ impl Wire for PlayerModelType {
     }
 }
 wire_enum!(FoxVariant { Red = 0, Snow = 1 });
-wire_enum!(SalmonVariant { Small = 0, Medium = 1, Large = 2 });
-wire_enum!(ParrotVariant { RedBlue = 0, Blue = 1, Green = 2, YellowBlue = 3, Gray = 4 });
+/// Port of SalmonVariant's ByIdMap fallback policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SalmonVariant {
+    Small = 0,
+    Medium = 1,
+    Large = 2,
+}
+impl Wire for SalmonVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let v = r.var_int()?;
+        Ok(match v.clamp(0, 2) {
+            0 => Self::Small,
+            1 => Self::Medium,
+            2 => Self::Large,
+            _ => unreachable!(),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(*self as i32);
+        Ok(())
+    }
+}
+/// Port of ParrotVariant's ByIdMap fallback policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParrotVariant {
+    RedBlue = 0,
+    Blue = 1,
+    Green = 2,
+    YellowBlue = 3,
+    Gray = 4,
+}
+impl Wire for ParrotVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let v = r.var_int()?;
+        Ok(match v.clamp(0, 4) {
+            0 => Self::RedBlue,
+            1 => Self::Blue,
+            2 => Self::Green,
+            3 => Self::YellowBlue,
+            4 => Self::Gray,
+            _ => unreachable!(),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(*self as i32);
+        Ok(())
+    }
+}
 wire_enum!(TropicalFishPattern { Kob = 0, Sunstreak = 256, Snooper = 512, Dasher = 768, Brinely = 1024, Spotty = 1280, Flopper = 1, Stripey = 257, Glitter = 513, Blockfish = 769, Betty = 1025, Clayfish = 1281 });
-wire_enum!(MooshroomVariant { Red = 0, Brown = 1 });
+/// Port of MooshroomVariant's ByIdMap fallback policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MooshroomVariant {
+    Red = 0,
+    Brown = 1,
+}
+impl Wire for MooshroomVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let v = r.var_int()?;
+        Ok(match v.clamp(0, 1) {
+            0 => Self::Red,
+            1 => Self::Brown,
+            _ => unreachable!(),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(*self as i32);
+        Ok(())
+    }
+}
 wire_enum!(RabbitVariant { Brown = 0, White = 1, Black = 2, WhiteSplotched = 3, Gold = 4, Salt = 5, Evil = 99 });
-wire_enum!(HorseVariant { White = 0, Creamy = 1, Chestnut = 2, Brown = 3, Black = 4, Gray = 5, DarkBrown = 6 });
-wire_enum!(LlamaVariant { Creamy = 0, White = 1, Brown = 2, Gray = 3 });
+/// Port of HorseVariant's ByIdMap fallback policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HorseVariant {
+    White = 0,
+    Creamy = 1,
+    Chestnut = 2,
+    Brown = 3,
+    Black = 4,
+    Gray = 5,
+    DarkBrown = 6,
+}
+impl Wire for HorseVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let v = r.var_int()?;
+        Ok(match v.rem_euclid(7) {
+            0 => Self::White,
+            1 => Self::Creamy,
+            2 => Self::Chestnut,
+            3 => Self::Brown,
+            4 => Self::Black,
+            5 => Self::Gray,
+            6 => Self::DarkBrown,
+            _ => unreachable!(),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(*self as i32);
+        Ok(())
+    }
+}
+/// Port of LlamaVariant's ByIdMap fallback policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LlamaVariant {
+    Creamy = 0,
+    White = 1,
+    Brown = 2,
+    Gray = 3,
+}
+impl Wire for LlamaVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let v = r.var_int()?;
+        Ok(match v.clamp(0, 3) {
+            0 => Self::Creamy,
+            1 => Self::White,
+            2 => Self::Brown,
+            3 => Self::Gray,
+            _ => unreachable!(),
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(*self as i32);
+        Ok(())
+    }
+}
 wire_enum!(AxolotlVariant { Lucy = 0, Wild = 1, Gold = 2, Cyan = 3, Blue = 4 });
 record!(SoundEvent { location: Identifier, fixed_range: Option<f32> });
 record!(TrimMaterial {
