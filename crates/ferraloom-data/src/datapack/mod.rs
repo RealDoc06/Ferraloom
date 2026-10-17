@@ -1,6 +1,9 @@
 //! Immutable server-data resources and generic registry tag loading.
 
 use serde_json::Value;
+mod block_state;
+pub use block_state::decode_block_state;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, fs,
@@ -68,6 +71,7 @@ pub enum Error {
     Json(serde_json::Error),
     InvalidIdentifier(String),
     InvalidTag(String),
+    InvalidData(String),
     MissingResource(Identifier),
 }
 impl fmt::Display for Error {
@@ -77,6 +81,7 @@ impl fmt::Display for Error {
             Self::Zip(e) => e.fmt(f),
             Self::Json(e) => e.fmt(f),
             Self::InvalidIdentifier(s) => write!(f, "invalid resource identifier: {s}"),
+            Self::InvalidData(s) => write!(f, "invalid resource data: {s}"),
             Self::InvalidTag(s) => write!(f, "invalid tag: {s}"),
             Self::MissingResource(id) => write!(f, "missing resource: {id}"),
         }

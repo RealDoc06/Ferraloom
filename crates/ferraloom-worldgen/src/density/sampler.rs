@@ -488,9 +488,9 @@ impl DensityFunctionCompiler {
                 ..
             } => {
                 let fbm = node.blended.as_ref().unwrap();
-                let x = f64::from(p[0]) * 684.412 * xz_scale;
-                let y = f64::from(p[1]) * 684.412 * y_scale;
-                let z = f64::from(p[2]) * 684.412 * xz_scale;
+                let x = f64::from(p[0]) * (684.412 * xz_scale);
+                let y = f64::from(p[1]) * (684.412 * y_scale);
+                let z = f64::from(p[2]) * (684.412 * xz_scale);
                 let a = clamp(
                     fbm[2].get(x / xz_factor, y / y_factor, z / xz_factor) + 0.5,
                     0.0,

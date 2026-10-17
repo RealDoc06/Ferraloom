@@ -46,7 +46,7 @@ public final class WorldgenGolden {
             }
             out.add(entry.getKey().id().toString(),values);
         }
-        write(directory.resolve("presets.json.gz"),out);
+        write(directory.resolve("../../src/biome_presets.json.gz"),out);
     }
     static void densities(RegistryAccess.Frozen registries,Path directory) throws Exception {
         var definitions=registries.lookupOrThrow(Registries.DENSITY_FUNCTION);

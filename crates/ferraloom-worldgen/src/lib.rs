@@ -29,3 +29,8 @@ impl From<serde_json::Error> for Error {
 pub mod router;
 
 pub mod climate;
+
+pub mod biome;
+
+pub mod material;
+pub mod settings;
