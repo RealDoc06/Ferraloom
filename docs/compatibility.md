@@ -20,7 +20,14 @@ resource scope, final binary and original command logs by content hash.
 This checkpoint applies to tested engine `b8e01b4`; this docs/evidence update was not native-checked.
 Engine source `b8e01b4` was [published to GitHub](../compatibility/results/evidence/3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f.json)
 on `main` and `validation/r29-cc10c5b`. The receipt records those refs before any later evidence/docs commit.
-CI completion is unknown. Broader Dragon and REA acceptance remain open; no verified family is claimed.
+Both recorded GitHub `Check` runs for the subsequent `0376775` docs/evidence checkpoint
+[completed successfully](../compatibility/results/evidence/efd59b90b1a7bdcbdf223f565c1a33804b68a34c7de2cc4b754a48012993a40f.json).
+The receipt contains no run of the manual vanilla-compatibility workflow.
+This does not establish further game behavior or CI completion for this later publication.
+The integrated harness source `d82613a` separately
+[passed all 162 Python tests](../compatibility/results/evidence/dce064e4df04b9fcb58ef69069706fb9829ea3e63478d3231e8ee05a236a58c0.json)
+on the builder. Its engine/build inputs are identical to `b8e01b4`; the new
+check is a Python unit result, not another full native or runtime campaign.
 
 The [selected paired crafting campaign](../compatibility/results/crafting.json)
 used that same engine, client source and executable on `ferraloom-builder`.
@@ -41,6 +48,50 @@ their hashes accordingly. This evidence establishes only the selected campaign.
 It does not promote a feature family, REA or the ledger, or establish full
 gameplay, default Java write-profile parity or crash durability. Earlier failed
 crafting evidence and historical results remain unchanged.
+
+The [selected Dragon campaign](../compatibility/results/dragon-parts.json)
+used engine `b8e01b4`, the same executable and client harness `b2be7cb` on
+`ferraloom-builder`. All 25 bounded composites passed: 25 Java and 25 Rust rows
+across four fresh boots and four clients, with 12 boot-audit checkpoints.
+All servers and clients exited with code zero without forced cleanup;
+runtime errors were empty. Frozen Normal-difficulty NoAI fixtures cover
+phase/NBT reads and attacks against eight parts at the literal origin. The
+comparison requires positive, unchanged or lethal health-loss classes, not
+exact damage magnitudes. Separate fresh death fixtures observe the shared
+clock and removal at tick 200. These are state reads, not persistence/restart
+tests. Moving part geometry, full flight/fight/Scanning AI, natural Holding
+initialization, Peaceful admission, XP totals, crystals, rendering and
+advancements remain open. The byte-identical
+[ROOT proof](../compatibility/results/evidence/2110215ba955be582bf432debd44a368319e15a55306bfdba148aaf9e9cacbd8.json)
+was produced only after checking all 50 archived originals and 43 production-manifest
+files, including typed command/wire lineage and the bounded comparison, and pins
+their private index. Raw reports,
+configurations, worlds and process data remain private.
+
+The [genuine REA selected crafting comparison](../compatibility/results/rea-crafting.json)
+used REA 6.5.0 with `rea-process` v3 and `node-pty`, engine/client `b8e01b4`
+and bridge `ec8da88`. Two fresh captures matched the declared
+`table_offset_right` gameplay file trace, with five retained checkpoints each,
+requested result removal of two and whole physical output of three. Both
+servers and clients exited cleanly. The reference used buffered Java chunk
+writes; Rust configuration was unchanged. The model was defined after
+discovery and is not a pristine oracle.
+
+The complete generic REA comparison remains **changed**, with status, terminal,
+exit and filesystem dimensions changed, interaction unchanged and process
+unknown. Its 16 limitations and each capture's environment/network/process
+unknowns are retained. The accepted result applies only to the declared trace;
+it does not establish generic REA equivalence. No actual terminal-metadata
+fallback occurred in this successful run; eight synthetic controls do not
+prove the earlier failed PID's historical state. ROOT verified 118 selected
+original files, while 129 world/JAR/binary payloads remain on the builder and
+are checked here by retained metadata only. Earlier failed attempts remain
+failed. The byte-identical
+[ROOT proof](../compatibility/results/evidence/c97a9ab488346ccf7b8c363e166d4ee183de2a55c40862f3dc5352b8cde5d306.json)
+retains the declared verdict and complete generic dimension statuses, with
+content hashes for the private original comparison. Neither new campaign
+promotes a family or establishes default Java
+write-profile parity, crash durability or full vanilla compatibility.
 
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
@@ -71,7 +122,8 @@ transfer, `save-all flush` timed out and the console reported
 The seven reverse-transfer cases share that failed save prerequisite; the Java
 destination never booted. All three started servers and five clients exited with
 code zero and no forced cleanup. The save failure remains an observed failure of that historical build. Fresh
-paired acceptance for `b8e01b4` is not established by its native pass. Item interchange,
+paired acceptance for `b8e01b4` is not established by its native pass alone;
+the selected campaigns above have their own separate evidence. Item interchange,
 container metadata, chat throttling and goat horns did not start.
 
 Earlier 24-boot/44-client regression passes at engine `6401924` apply to that

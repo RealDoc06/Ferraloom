@@ -1,0 +1,122 @@
+{
+  "actual_captures": 2,
+  "actual_clients": 2,
+  "actual_execution_host": "ferraloom-builder",
+  "actual_outcome_sha256": {
+    "java": "7e6004bd7190f94d48bfc6b445b72dc47c0e0e960108fb2c5ddd5d65e261c027",
+    "rust": "7e6004bd7190f94d48bfc6b445b72dc47c0e0e960108fb2c5ddd5d65e261c027"
+  },
+  "actual_requested_result_removal": 2,
+  "actual_servers": 2,
+  "actual_token_observations_per_capture": 3,
+  "actual_whole_physical_result": 3,
+  "archive_sha256": "55f692510b7d9b325631717604cea601710a975aa37ef371b6cd6e0a15659a50",
+  "binary_sha256": "145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f",
+  "bounds": {
+    "capture_cli_seconds": 950,
+    "comparison_cli_seconds": 120,
+    "minimum_free_bytes": 2147483648,
+    "outer_kill_after_seconds": 15,
+    "outer_timeout_seconds": 2670,
+    "total_seconds": 2600
+  },
+  "clean_unforced_client_exits": 2,
+  "clean_unforced_server_exits": 2,
+  "client_source": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "comparison_evidence_links": [
+    "ev_04ceecd1f89751ca62e2c81f29b27d80bbf553c5e6996ae91e0e9f163c3ae9b3",
+    "ev_a926862d166f9a9499097779ce853d1f2c89cf30a1aa8cfdb394f1d674e4338f"
+  ],
+  "complete_original_generic_result_sha256": "82abe691d5d49a321e9456ff14b249bc4b7dcf47b4fb6eb4c97fc7e0006ce8d2",
+  "declared_trace": {
+    "left": "pass",
+    "right": "pass",
+    "variant": "table_offset_right",
+    "verdict": "equivalent"
+  },
+  "engine_source": "b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb",
+  "evidence_ids": {
+    "comparison": "ev_7eefc8025efffdac10760bc667916f2969fb29f874747ac82b90bca518268919",
+    "java": "ev_04ceecd1f89751ca62e2c81f29b27d80bbf553c5e6996ae91e0e9f163c3ae9b3",
+    "rust": "ev_a926862d166f9a9499097779ce853d1f2c89cf30a1aa8cfdb394f1d674e4338f"
+  },
+  "exact_observer_synthetic_tests": 8,
+  "excluded_payload_metadata_only": 129,
+  "execution_file_pins_per_pass": 127,
+  "execution_inputs_sha256": "5fd741b50aead443416ee24cef8a1dc48445418726256c509c744b5e5d8f29d8",
+  "full_remote_inventory_rows": 247,
+  "harness_source": "ec8da8816c510914f2840421b938e295f76cfa18",
+  "index_sha256": "ebb415808a66ff6dde500b122ff776fd69fcb7fbb00f63d2b7760fa8718619c8",
+  "job_id": "20261017T124236Z-f02cbe91",
+  "kind": "ROOT-original-genuine-REA-third-verification",
+  "limitations": [
+    "Generic comparison is changed; process dimension is unknown",
+    "Capture residual process/environment/network unknowns are retained",
+    "Post-discovery model is not a pristine oracle",
+    "No full generic/environment/vanilla-family equivalence",
+    "No family or ledger promotion; no whole-goal completion",
+    "129 world/JAR/binary payloads remain remote; only original metadata is checked for them",
+    "Earlier failed attempts remain failed; this is a fresh third attempt, not reuse or relabeling"
+  ],
+  "model_sha256": "7e6004bd7190f94d48bfc6b445b72dc47c0e0e960108fb2c5ddd5d65e261c027",
+  "model_timing": "post-discovery, not pristine pre-observation",
+  "native_receipt_sha256": "0d2cb9a1bdd58986df1974805ef528b4775bb73b559ee4262ab2a9d1fe3c93ee",
+  "original_aggregate_pin_checkpoints": 6,
+  "original_complete_timing_passes": 6,
+  "original_generic_limitations_count": 16,
+  "original_generic_statuses": {
+    "exit": "changed",
+    "filesystem": "changed",
+    "interaction": "unchanged",
+    "process": "unknown",
+    "status": "changed",
+    "terminal": "changed"
+  },
+  "package_files_per_pass": 7128,
+  "producer_model_argument_or_environment_supplied": false,
+  "provider": {
+    "id": "rea-process",
+    "pty_backend": "node-pty",
+    "rea_version": "6.5.0",
+    "version": "3"
+  },
+  "released_REA_payload_files_per_pass": 7138,
+  "residual_unknowns": {
+    "java": {
+      "count": 4,
+      "limitations_count": 4,
+      "scopes": [
+        "environment",
+        "network",
+        "process"
+      ]
+    },
+    "rust": {
+      "count": 4,
+      "limitations_count": 4,
+      "scopes": [
+        "environment",
+        "network",
+        "process"
+      ]
+    }
+  },
+  "resource_limits": {
+    "cpu_percent": 200,
+    "memory_bytes": 6442450944,
+    "swap_bytes": 0
+  },
+  "result": "declared-gameplay-trace-matched",
+  "retained_gameplay_checkpoints": 10,
+  "scope": "Fresh genuine selected table_offset_right declared gameplay file trace only; buffered Java reference",
+  "seed_sha256": "cd765d9d4f5690aa7c2d19abaaa55e76dc79eaf76336961430ae6efba6182a0e",
+  "selected_originals_rehashed": 118,
+  "source_seal_sha256": "541af6dd973ab24ce1a719d5ee8ada553cb9f0fae266b131d220a1c13a9365ea",
+  "spec_sha256": "87d5798ecf1f1db43bd0982873d37b569099d70e026871528014117684dc7575",
+  "terminal_metadata_fallback_diagnostic_events": 0,
+  "timing_job_id": "20261017T124121Z-f49375d6",
+  "timing_outer_sha256": "7f6981b606c71e416e57f47b4da9703ddb7e472b8b3b23b8b830caebeda703d1",
+  "timing_receipt_sha256": "00c7c7ab064ea1ceb9c81a882f7b533bed3979335dccc270f0e3c3f9bf5c3414",
+  "verification_host": "devbox",
+  "verifier_sha256": "34cc8fa213f49689b410df0a36325ab076f463427d6e18196d42b9fd20baf597"
+}

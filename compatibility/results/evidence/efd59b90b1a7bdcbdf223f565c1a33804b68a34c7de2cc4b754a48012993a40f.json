@@ -1,0 +1,44 @@
+{
+  "kind": "ROOT-actual-GitHub-CI-observation",
+  "at": "2026-10-17T12:29:08.747285+00:00",
+  "actual_host": "devbox",
+  "argv": [
+    "gh",
+    "run",
+    "list",
+    "--repo",
+    "RealDoc06/Ferraloom",
+    "--commit",
+    "0376775dc983a806fb5a67696662a8ec80f8d641",
+    "--limit",
+    "10",
+    "--json",
+    "databaseId,name,status,conclusion,headSha,url,createdAt,updatedAt"
+  ],
+  "exit_code": 0,
+  "original_sha256": "0afb6ddf06354d56c9540cc481cb0f36bd101f6e392b489c7164f7ca008f48f0",
+  "commit": "0376775dc983a806fb5a67696662a8ec80f8d641",
+  "workflows": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-17T11:55:36Z",
+      "databaseId": 39030536354,
+      "headSha": "0376775dc983a806fb5a67696662a8ec80f8d641",
+      "name": "Check",
+      "status": "completed",
+      "updatedAt": "2026-10-17T12:18:11Z",
+      "url": "https://github.com/RealDoc06/Ferraloom/actions/runs/39030536354"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-17T11:55:36Z",
+      "databaseId": 39030536421,
+      "headSha": "0376775dc983a806fb5a67696662a8ec80f8d641",
+      "name": "Check",
+      "status": "completed",
+      "updatedAt": "2026-10-17T12:25:25Z",
+      "url": "https://github.com/RealDoc06/Ferraloom/actions/runs/39030536421"
+    }
+  ],
+  "scope": "Actual GitHub workflow conclusions for docs/evidence publication; does not establish additional compatibility behavior."
+}
