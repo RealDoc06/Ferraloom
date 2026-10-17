@@ -1,4 +1,4 @@
-use super::{ItemStackTemplate, invalid, registry};
+use super::{ComponentPredicate, ItemStackTemplate, invalid, registry};
 use crate::chat::Component;
 use crate::{
     Identifier, Reader, Result, Uuid, Wire, Writer,
@@ -70,14 +70,6 @@ macro_rules! wire_enum {
             fn encode(&self, w: &mut Writer<'_>) -> Result<()> { w.var_int(*self as i32); Ok(()) }
         }
     };
-}
-impl<T: Wire> Wire for Box<T> {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        T::decode(r).map(Box::new)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        (**self).encode(w)
-    }
 }
 /// Port of Unit#STREAM_CODEC: zero bytes, unlike its persistent empty map.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -234,7 +226,33 @@ record!(BannerPattern {
     asset_id: Identifier,
     translation_key: String
 });
-record!(PaintingVariant { width: VarInt, height: VarInt, asset_id: Identifier, title: Option<Component>, author: Option<Component> });
+/// Port of PaintingVariant's direct codec, with boolean-prefixed optional text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PaintingVariant {
+    pub width: VarInt,
+    pub height: VarInt,
+    pub asset_id: Identifier,
+    pub title: Option<Component>,
+    pub author: Option<Component>,
+}
+impl Wire for PaintingVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            width: r.read()?,
+            height: r.read()?,
+            asset_id: r.read()?,
+            title: r.optional(Component::decode_trusted)?,
+            author: r.optional(Component::decode_trusted)?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.write(&self.width)?;
+        w.write(&self.height)?;
+        w.write(&self.asset_id)?;
+        w.optional(&self.title, |w, v| w.write(v))?;
+        w.optional(&self.author, |w, v| w.write(v))
+    }
+}
 record!(UseEffects {
     can_sprint: bool,
     interact_vibrations: bool,
@@ -365,7 +383,7 @@ impl Wire for ItemEnchantments {
 pub enum AttributeDisplay {
     Default,
     Hidden,
-    Override(Component),
+    Override(Box<Component>),
 }
 impl Wire for AttributeDisplay {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
@@ -532,56 +550,10 @@ impl Wire for SignText {
 }
 registry_ref!(BlockTransformerHolder, "block_transformer");
 record!(AdventureModePredicate { predicates: Vec<BlockPredicate> });
-record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePropertiesPredicate>, nbt: Option<CustomData>, components: DataComponentMatchers });
+record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePropertiesPredicate>, nbt: Option<NbtPredicate>, components: DataComponentMatchers });
 record!(PropertyMatcher { name: String, matcher: Either<String, PropertyRange> });
 record!(PropertyRange { min: Option<String>, max: Option<String> });
 record!(DataComponentMatchers { exact: Vec<super::DataComponent>, partial: BoundedList<ComponentPredicate, 64> });
-registry_ref!(ComponentPredicateType, "data_component_predicate_type");
-/// Port of DataComponentPredicate.Single. Vanilla's persistent codec transports the predicate as NBT.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ComponentPredicate {
-    pub predicate_type: Either<ComponentPredicateType, ComponentType>,
-    pub value: Tag,
-}
-impl Wire for ComponentPredicate {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Self {
-            predicate_type: r.read()?,
-            value: r.read()?,
-        })
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.write(&self.predicate_type)?;
-        w.write(&self.value)
-    }
-}
-
-impl Wire for ferraloom_data::Item {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let id = r.var_int()?;
-        u16::try_from(id)
-            .ok()
-            .and_then(Self::from_protocol_id)
-            .ok_or_else(|| invalid("item id"))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.var_int(self.protocol_id().into());
-        Ok(())
-    }
-}
-impl Wire for super::ComponentTypeId {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let id = r.var_int()?;
-        u16::try_from(id)
-            .ok()
-            .and_then(Self::from_protocol_id)
-            .ok_or_else(|| invalid("component type id"))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.var_int(self.protocol_id().into());
-        Ok(())
-    }
-}
 /// Port of the components whose default network codec is their persistent NBT codec.
 macro_rules! persistent_wire {
  ($($ty:ty),* $(,)?) => {$(impl Wire for $ty {
@@ -626,3 +598,50 @@ persistent_wire!(
     LockCode
 );
 record!(StatePropertiesPredicate { properties:Vec<PropertyMatcher> });
+/// Port of NbtPredicate: its stream value is a compound, its persistent value is SNBT.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NbtPredicate(pub CustomData);
+impl Wire for NbtPredicate {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        CustomData::decode(r).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0.encode(w)
+    }
+}
+
+// Shared indirection codec; needed by recursive effects and rare text payloads.
+impl<T: Wire> Wire for Box<T> {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        T::decode(r).map(Box::new)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        (**self).encode(w)
+    }
+}
+impl Wire for ferraloom_data::Item {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        u16::try_from(id)
+            .ok()
+            .and_then(Self::from_protocol_id)
+            .ok_or_else(|| invalid("item id"))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(self.protocol_id().into());
+        Ok(())
+    }
+}
+impl Wire for super::ComponentTypeId {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        u16::try_from(id)
+            .ok()
+            .and_then(Self::from_protocol_id)
+            .ok_or_else(|| invalid("component type id"))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(self.protocol_id().into());
+        Ok(())
+    }
+}

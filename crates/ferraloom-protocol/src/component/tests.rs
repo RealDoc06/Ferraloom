@@ -117,25 +117,42 @@ fn empty_stack_and_template_rules() {
 #[test]
 fn vanilla_persistent_component_hashes() {
     let (fixtures, registries) = fixtures();
+    let mut mismatches = Vec::new();
     for fixture in fixtures["components"].as_array().unwrap() {
         let key = Identifier::parse(fixture["type"].as_str().unwrap()).unwrap();
         let bytes = unhex(fixture["bytes"].as_str().unwrap());
         let mut r = Reader::with_context(&bytes, &registries);
         let value = DataComponent::decode_value(&key, &mut r).unwrap();
         if let Some(expected) = fixture.get("hash") {
-            assert_eq!(
-                value.hash().unwrap_or_else(|e| panic!("{key}: {e}")),
-                expected.as_i64().unwrap() as i32,
-                "{key}, persistent {:?}",
-                value.to_json()
-            );
-            let restored = DataComponent::from_json(&key, &fixture["value"])
-                .unwrap_or_else(|e| panic!("{key}: {e}"));
-            if !matches!(value, DataComponent::CustomData(_)) {
-                assert_eq!(value, restored, "{key}");
+            match value.hash() {
+                Ok(actual) if i64::from(actual) == expected.as_i64().unwrap() => {}
+                other => mismatches.push(format!(
+                    "{key} hash: {other:?}, expected {expected}, persistent {:?}",
+                    value.to_json()
+                )),
+            }
+            if let Some(expected) = fixture.get("nbt").and_then(Value::as_str) {
+                let expected = unhex(expected);
+                let mut writer = Writer::new();
+                match value.to_nbt().and_then(|v| writer.nbt(&v)) {
+                    Ok(()) if writer.as_slice() == expected => {}
+                    other => mismatches.push(format!(
+                        "{key} persistent NBT: {other:?}, actual {:x?}, expected {:x?}",
+                        writer.as_slice(),
+                        expected
+                    )),
+                }
+            }
+            match DataComponent::from_json(&key, &fixture["value"]) {
+                Ok(restored)
+                    if matches!(value, DataComponent::CustomData(_)) || value == restored => {}
+                other => mismatches.push(format!(
+                    "{key} persistent decode: {other:?}, expected {value:?}"
+                )),
             }
         }
     }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 #[test]
 fn all_extracted_item_defaults_are_typed() {
@@ -160,4 +177,78 @@ fn vanilla_hashed_stack_validation() {
                 .unwrap()
         );
     }
+}
+
+#[test]
+fn every_vanilla_entity_data_serializer() {
+    let (f, registries) = fixtures();
+    let bytes = unhex(f["all_entity_data"].as_str().unwrap());
+    let mut r = Reader::with_context(&bytes, &registries);
+    assert_eq!(r.var_int().unwrap(), 42);
+    let values: EntityDataItems = r.read().unwrap();
+    r.finish().unwrap();
+    assert_eq!(values.0.len(), 44);
+    for (i, v) in values.0.iter().enumerate() {
+        assert_eq!(v.id as usize, i);
+        assert_eq!(v.value.serializer() as usize, i);
+    }
+    let mut w = Writer::with_context(&registries);
+    w.var_int(42);
+    w.write(&values).unwrap();
+    assert_eq!(w.as_slice(), bytes);
+}
+#[test]
+fn vanilla_hash_ops_scalar_kinds_arrays_and_map_order() {
+    use crate::ops::{EncodeOps, HashOps};
+    let (f, _) = fixtures();
+    let ops = HashOps;
+    let hashes = vec![
+        ops.empty(),
+        ops.create_boolean(false),
+        ops.create_boolean(true),
+        ops.create_byte(-5),
+        ops.create_short(1000),
+        ops.create_int(-300),
+        ops.create_long(12345678901234),
+        ops.create_float(1.25),
+        ops.create_double(-1.75),
+        ops.create_string("hello 🌍"),
+        ops.create_byte_list(&[-1, 2, 3]),
+        ops.create_int_list(&[-1, 2, 300]),
+        ops.create_long_list(&[-1, 2, 300]),
+        ops.create_list(vec![ops.create_int(1), ops.create_int(2)]),
+        ops.create_map(vec![
+            (ops.create_string("x"), ops.create_float(1.5)),
+            (ops.create_string("y"), ops.create_boolean(true)),
+        ])
+        .unwrap(),
+    ];
+    assert_eq!(
+        hashes.iter().map(|h| i64::from(h.0)).collect::<Vec<_>>(),
+        f["hash_ops"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_i64().unwrap())
+            .collect::<Vec<_>>()
+    );
+}
+#[test]
+fn item_defaults_merge_with_additions_and_explicit_removals() {
+    let (f, registries) = fixtures();
+    let stack: ItemStack = roundtrip(f["sword"].as_str().unwrap(), &registries);
+    let components = stack.components().unwrap();
+    assert_eq!(
+        components.get(ComponentTypeId::MAX_DAMAGE),
+        Some(&DataComponent::MaxDamage(crate::codec::VarInt(1561)))
+    );
+    assert_eq!(
+        components.get(ComponentTypeId::DAMAGE),
+        Some(&DataComponent::Damage(crate::codec::VarInt(7)))
+    );
+    assert!(components.get(ComponentTypeId::ITEM_NAME).is_none());
+    assert!(matches!(
+        components.get(ComponentTypeId::CUSTOM_DATA),
+        Some(DataComponent::CustomData(_))
+    ));
 }
