@@ -55,3 +55,18 @@ fn lenient_syntax_and_strict_discriminators() {
         .is_err()
     );
 }
+
+#[test]
+fn vanilla_standalone_style_codec() {
+    for fixture in [
+        include_str!("../../tests/fixtures/style_1.hex"),
+        include_str!("../../tests/fixtures/style_2.hex"),
+    ] {
+        let bytes = hex(fixture);
+        let style = Style::from_bytes(&bytes).unwrap();
+        assert_eq!(style.to_bytes().unwrap(), bytes);
+        assert_eq!(Style::from_json(&style.to_json().unwrap()).unwrap(), style);
+    }
+    assert_eq!(Style::from_json("{}").unwrap(), Style::default());
+    assert!(Style::from_json(r#"{"bold":0}"#).is_err());
+}

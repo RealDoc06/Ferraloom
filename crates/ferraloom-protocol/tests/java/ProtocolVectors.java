@@ -79,6 +79,7 @@ public final class ProtocolVectors {
         for (int i=0;i<components.length;i++) {
             var component = ComponentSerialization.CODEC.parse(registryOps,JsonParser.parseString(components[i])).getOrThrow();
             var finalComponent = component;
+            if (i == 1 || i == 2) vector("style_"+i,b -> Style.Serializer.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent.getStyle()));
             vector("component_"+i, b -> ComponentSerialization.TRUSTED_STREAM_CODEC.encode(new RegistryFriendlyByteBuf(b, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), finalComponent));
             Files.writeString(output.resolve("component_"+i+".json"),ComponentSerialization.CODEC.encodeStart(registryOps,component).getOrThrow().toString()+"\n");
         }
