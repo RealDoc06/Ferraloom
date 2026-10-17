@@ -182,3 +182,6 @@ macro_rules! state_packets {
     (@write $w:ident, $value:ident, $encode:path) => { $encode($value,$w) };
 }
 pub(crate) use state_packets;
+
+#[cfg(test)]
+mod packet_tests;

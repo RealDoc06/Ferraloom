@@ -122,7 +122,7 @@ impl<'a> Reader<'a> {
     /// Port of Utf8String#read. Malformed UTF-8 is replaced, as by Netty/Java.
     pub fn string(&mut self, max_utf16: usize) -> Result<Cow<'a, str>> {
         let bytes = self.byte_array(max_utf16.saturating_mul(3))?;
-        let text = String::from_utf8_lossy(bytes);
+        let text = java_utf8(bytes);
         let length = text.encode_utf16().count();
         if length > max_utf16 {
             return Err(Error::Length {
@@ -358,4 +358,54 @@ impl<'a> Writer<'a> {
     pub fn write<T: Wire>(&mut self, value: &T) -> Result<()> {
         value.encode(self)
     }
+}
+
+/// CharsetDecoder groups a UTF-8 surrogate sequence into one replacement,
+/// unlike Rust's from_utf8_lossy. Valid input still takes the borrowed fast path.
+fn java_utf8(bytes: &[u8]) -> Cow<'_, str> {
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return Cow::Borrowed(text);
+    }
+    let mut text = String::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let first = bytes[offset];
+        let tail = &bytes[offset..];
+        let continuation = |index: usize| tail.get(index).is_some_and(|b| b & 0xc0 == 0x80);
+        let expected = match first {
+            0..=127 => 1,
+            0xc2..=0xdf => 2,
+            0xe0..=0xef => 3,
+            0xf0..=0xf4 => 4,
+            _ => 0,
+        };
+        if expected == 1 {
+            text.push(first as char);
+            offset += 1;
+            continue;
+        }
+        let valid_second = continuation(1)
+            && !(first == 0xe0 && tail[1] < 0xa0
+                || first == 0xf0 && tail[1] < 0x90
+                || first == 0xf4 && tail[1] >= 0x90);
+        let mut consumed = 1;
+        if expected >= 2 && valid_second {
+            consumed = 2;
+            if expected >= 3 && continuation(2) {
+                consumed = 3;
+                if expected == 4 && continuation(3) {
+                    consumed = 4;
+                }
+            }
+        }
+        if expected > 0 && consumed == expected && !(first == 0xed && tail[1] >= 0xa0) {
+            let sequence = &tail[..consumed];
+            // Bounds and UTF-8 validity follow from the checks above.
+            text.push_str(std::str::from_utf8(sequence).unwrap());
+        } else {
+            text.push('\u{fffd}');
+        }
+        offset += consumed;
+    }
+    Cow::Owned(text)
 }
