@@ -232,6 +232,20 @@ fn generic_state_properties_match_every_report_state() {
             Some(block_id.default_state())
         );
     }
+    for value in ["01", "+01", "０１", "١"] {
+        assert_eq!(
+            BlockState::from_properties(Block::WHEAT, [("age", value)]),
+            Block::WHEAT.default_state().with(properties::AGE, 1),
+            "IntegerProperty parsing: {value}"
+        );
+    }
+    for value in ["-0", "-1", "1.0", " 1", "2147483648"] {
+        assert_eq!(
+            BlockState::from_properties(Block::WHEAT, [("age", value)]),
+            Some(Block::WHEAT.default_state()),
+            "IntegerProperty fallback: {value}"
+        );
+    }
     assert_eq!(
         BlockState::from_properties(
             Block::OAK_STAIRS,

@@ -58,9 +58,13 @@ impl BlockState {
             let Some(layout) = data.properties.iter().find(|p| p.name == name) else {
                 continue;
             };
-            let Some(new) = layout.names.iter().position(|&v| v == value) else {
-                continue;
+            let new = if layout.integer {
+                integer_property_value(value)
+                    .and_then(|value| layout.values.iter().position(|&v| v == value))
+            } else {
+                layout.names.iter().position(|&v| v == value)
             };
+            let Some(new) = new else { continue };
             let old = (state.0 - data.first_state) / layout.stride % layout.names.len() as u16;
             state = Self(state.0 - old * layout.stride + new as u16 * layout.stride);
         }
@@ -120,11 +124,43 @@ impl PropertyValue for u8 {
     }
 }
 
+/// Port of IntegerProperty#getValue through Integer.parseInt/Character.digit.
+fn integer_property_value(value: &str) -> Option<u8> {
+    // Java's char overload accepts BMP decimal digits, including fullwidth digits.
+    const ZEROES: &[u16] = &[
+        0x0030, 0x0660, 0x06f0, 0x07c0, 0x0966, 0x09e6, 0x0a66, 0x0ae6, 0x0b66, 0x0be6, 0x0c66,
+        0x0ce6, 0x0d66, 0x0de6, 0x0e50, 0x0ed0, 0x0f20, 0x1040, 0x1090, 0x17e0, 0x1810, 0x1946,
+        0x19d0, 0x1a80, 0x1a90, 0x1b50, 0x1bb0, 0x1c40, 0x1c50, 0xa620, 0xa8d0, 0xa900, 0xa9d0,
+        0xa9f0, 0xaa50, 0xabf0, 0xff10,
+    ];
+    let (negative, digits) = value.strip_prefix('-').map_or_else(
+        || (false, value.strip_prefix('+').unwrap_or(value)),
+        |digits| (true, digits),
+    );
+    if digits.is_empty() {
+        return None;
+    }
+    let mut result = 0i32;
+    for unit in digits.encode_utf16() {
+        let digit = ZEROES
+            .iter()
+            .find_map(|&zero| unit.checked_sub(zero).filter(|&digit| digit < 10))?;
+        result = result.checked_mul(10)?.checked_sub(i32::from(digit))?;
+    }
+    u8::try_from(if negative {
+        result
+    } else {
+        result.checked_neg()?
+    })
+    .ok()
+}
+
 #[derive(Clone, Copy, Debug)]
 struct PropertyLayout {
     id: u8,
     name: &'static str,
     names: &'static [&'static str],
+    integer: bool,
     stride: u16,
     values: &'static [u8],
 }

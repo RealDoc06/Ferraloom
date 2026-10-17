@@ -292,8 +292,8 @@ fn blocks(
                 let indexes: Vec<_> = values.iter().map(|v| property.index(string(v))).collect();
                 writeln!(
                     out,
-                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, stride: {stride}, values: &{indexes:?} }},",
-                    property.id, values.iter().map(string).collect::<Vec<_>>()
+                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, integer: {}, stride: {stride}, values: &{indexes:?} }},",
+                    property.id, values.iter().map(string).collect::<Vec<_>>(), property.rust_type == "u8"
                 )
                 .unwrap();
                 layouts.push((name, values, stride));
