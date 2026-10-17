@@ -553,14 +553,7 @@ impl Persistent for BlockTransformerHolder {
         self.0.to_persistent()
     }
 }
-impl Persistent for ComponentPredicateType {
-    fn from_json(v: &Json) -> Result<Self> {
-        Identifier::from_json(v).map(Self)
-    }
-    fn to_persistent(&self) -> Result<PersistentValue> {
-        self.0.to_persistent()
-    }
-}
+
 impl Persistent for BlockSet {
     fn from_json(v: &Json) -> Result<Self> {
         set_from_json(v).map(Self)

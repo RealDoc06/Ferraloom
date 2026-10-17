@@ -1,4 +1,4 @@
-use super::{ItemStackTemplate, invalid, registry};
+use super::{ComponentPredicate, ItemStackTemplate, invalid, registry};
 use crate::chat::Component;
 use crate::{
     Identifier, Reader, Result, Uuid, Wire, Writer,
@@ -617,5 +617,31 @@ impl<T: Wire> Wire for Box<T> {
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         (**self).encode(w)
+    }
+}
+impl Wire for ferraloom_data::Item {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        u16::try_from(id)
+            .ok()
+            .and_then(Self::from_protocol_id)
+            .ok_or_else(|| invalid("item id"))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(self.protocol_id().into());
+        Ok(())
+    }
+}
+impl Wire for super::ComponentTypeId {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        u16::try_from(id)
+            .ok()
+            .and_then(Self::from_protocol_id)
+            .ok_or_else(|| invalid("component type id"))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(self.protocol_id().into());
+        Ok(())
     }
 }
