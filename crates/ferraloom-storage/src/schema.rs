@@ -123,7 +123,7 @@ macro_rules! model {
 }
 
 model! {/// Port of NbtUtils#writeBlockState, preserving registry names and properties.
-BlockStatePaletteEntry {name:NbtString=>"Name",properties:BTreeMap<NbtString,NbtString>=>"Properties"}}
+BlockStatePaletteEntry {name:NbtString=>"Name",properties:BTreeMap<NbtString,NbtString> =>"Properties"}}
 
 /// Port of PalettedContainer's disk codec. Values remain names until registries are available.
 #[derive(Clone, Debug, PartialEq)]
@@ -162,29 +162,29 @@ impl<T: NbtField> NbtField for PackedPalette<T> {
 
 model! {/// Port of SerializableChunkData.SectionData (light-only sections have no palettes).
 ChunkSection {
-    y:i8=>"Y",block_states:PackedPalette<BlockStatePaletteEntry>=>"block_states",biomes:PackedPalette<NbtString>=>"biomes",
+    y:i8=>"Y",block_states:PackedPalette<BlockStatePaletteEntry> =>"block_states",biomes:PackedPalette<NbtString> =>"biomes",
     block_light:ByteArray=>"BlockLight",sky_light:ByteArray=>"SkyLight"
 }}
 model! {/// Port of SavedTick#codec. Priority is vanilla's -3..3 integer representation.
 SavedTick {id:NbtString=>"i",x:i32=>"x",y:i32=>"y",z:i32=>"z",delay:i32=>"t",priority:i32=>"p"}}
 model! {/// Port of UpgradeData#write.
-UpgradeData {indices:BTreeMap<NbtString,IntArray>=>"Indices",sides:i8=>"Sides",neighbor_block_ticks:Vec<SavedTick>=>"neighbor_block_ticks",neighbor_fluid_ticks:Vec<SavedTick>=>"neighbor_fluid_ticks"}}
+UpgradeData {indices:BTreeMap<NbtString,IntArray> =>"Indices",sides:i8=>"Sides",neighbor_block_ticks:Vec<SavedTick> =>"neighbor_block_ticks",neighbor_fluid_ticks:Vec<SavedTick> =>"neighbor_fluid_ticks"}}
 model! {/// Port of BlendingData.Packed#CODEC.
-BlendingData {min_section:i32=>"min_section",max_section:i32=>"max_section",heights:Vec<f32>=>"heights"}}
+BlendingData {min_section:i32=>"min_section",max_section:i32=>"max_section",heights:Vec<f32> =>"heights"}}
 model! {/// Port of BelowZeroRetrogen#CODEC.
 BelowZeroRetrogen {target_status:NbtString=>"target_status",missing_bedrock:LongArray=>"missing_bedrock"}}
 model! {/// Port of SerializableChunkData#packStructureData. Structure starts stay opaque.
-StructureData {starts:BTreeMap<NbtString,CompoundTag>=>"starts",references:BTreeMap<NbtString,LongArray>=>"References"}}
+StructureData {starts:BTreeMap<NbtString,CompoundTag> =>"starts",references:BTreeMap<NbtString,LongArray> =>"References"}}
 
 model! {/// Exact disk fields written by SerializableChunkData#write in 26.3.
 /// Carving masks are no longer written by this version; any inherited mask tags stay in extra.
 SerializableChunkData {
     data_version:i32=>"DataVersion",x_pos:i32=>"xPos",y_pos:i32=>"yPos",z_pos:i32=>"zPos",
     last_update:i64=>"LastUpdate",inhabited_time:i64=>"InhabitedTime",status:NbtString=>"Status",
-    sections:Vec<ChunkSection>=>"sections",is_light_on:bool=>"isLightOn",
-    heightmaps:BTreeMap<NbtString,LongArray>=>"Heightmaps",block_entities:Vec<CompoundTag>=>"block_entities",
-    entities:Vec<CompoundTag>=>"entities",block_ticks:Vec<SavedTick>=>"block_ticks",fluid_ticks:Vec<SavedTick>=>"fluid_ticks",
-    structures:StructureData=>"structures",post_processing:Vec<Vec<i16>>=>"PostProcessing",
+    sections:Vec<ChunkSection> =>"sections",is_light_on:bool=>"isLightOn",
+    heightmaps:BTreeMap<NbtString,LongArray> =>"Heightmaps",block_entities:Vec<CompoundTag> =>"block_entities",
+    entities:Vec<CompoundTag> =>"entities",block_ticks:Vec<SavedTick> =>"block_ticks",fluid_ticks:Vec<SavedTick> =>"fluid_ticks",
+    structures:StructureData=>"structures",post_processing:Vec<Vec<i16>> =>"PostProcessing",
     upgrade_data:UpgradeData=>"UpgradeData",blending_data:BlendingData=>"blending_data",below_zero_retrogen:BelowZeroRetrogen=>"below_zero_retrogen"
 }}
 impl SerializableChunkData {
@@ -206,7 +206,7 @@ impl SerializableChunkData {
     }
 }
 model! {/// Port of EntityStorage#storeEntities. Position is ChunkPos.CODEC's two-int array.
-EntityChunk {data_version:i32=>"DataVersion",position:IntArray=>"Position",entities:Vec<CompoundTag>=>"Entities"}}
+EntityChunk {data_version:i32=>"DataVersion",position:IntArray=>"Position",entities:Vec<CompoundTag> =>"Entities"}}
 impl EntityChunk {
     pub fn parse(tag: CompoundTag) -> Result<Self> {
         check_tag_version(&tag)?;
@@ -227,9 +227,9 @@ impl EntityChunk {
 model! {/// Port of PoiRecord.Packed#CODEC.
 PoiRecord {position:IntArray=>"pos",poi_type:NbtString=>"type",free_tickets:i32=>"free_tickets"}}
 model! {/// Port of PoiSection.Packed#CODEC.
-PoiSection {valid:bool=>"Valid",records:Vec<PoiRecord>=>"Records"}}
+PoiSection {valid:bool=>"Valid",records:Vec<PoiRecord> =>"Records"}}
 model! {/// Port of SectionStorage#writeChunk for POI sections, keyed by signed section Y.
-PoiChunk {data_version:i32=>"DataVersion",sections:BTreeMap<NbtString,PoiSection>=>"Sections"}}
+PoiChunk {data_version:i32=>"DataVersion",sections:BTreeMap<NbtString,PoiSection> =>"Sections"}}
 impl PoiChunk {
     pub fn parse(tag: CompoundTag) -> Result<Self> {
         check_tag_version(&tag)?;

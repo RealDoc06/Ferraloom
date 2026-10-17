@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""Generate storage fixtures, or boot a Rust-rewritten world with vanilla 26.3.
+
+Uses only loopback networking and a temporary world. No server jar is committed.
+Run: python3 tests/vanilla.py generate --jar /path/to/server.jar --java /path/to/java
+     python3 tests/vanilla.py verify /path/to/rewritten/world --jar ... --java ...
+"""
+import argparse
+import hashlib
+import os
+from pathlib import Path
+import queue
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import tempfile
+import threading
+import time
+import uuid
+import zlib
+
+NAME = "StorageFixture"
+_digest = bytearray(hashlib.md5(("OfflinePlayer:" + NAME).encode()).digest())
+_digest[6] = (_digest[6] & 15) | 48
+_digest[8] = (_digest[8] & 63) | 128
+PLAYER = uuid.UUID(bytes=bytes(_digest))
+
+
+def varint(n):
+    out = bytearray()
+    while n >= 128:
+        out.append((n & 127) | 128)
+        n >>= 7
+    return bytes(out + bytes([n]))
+
+
+def read_varint(read):
+    n = 0
+    for i in range(5):
+        b = read(1)[0]
+        n |= (b & 127) << (7 * i)
+        if not b & 128:
+            return n
+    raise ValueError("oversized VarInt")
+
+
+def string(s):
+    data = s.encode()
+    return varint(len(data)) + data
+
+
+class Client:
+    def __init__(self, port):
+        self.sock = socket.create_connection(("127.0.0.1", port), timeout=20)
+        self.compression = -1
+
+    def exact(self, count):
+        data = bytearray()
+        while len(data) < count:
+            part = self.sock.recv(count - len(data))
+            if not part:
+                raise EOFError("vanilla closed the client connection")
+            data.extend(part)
+        return bytes(data)
+
+    def send(self, packet, data=b""):
+        data = varint(packet) + data
+        if self.compression >= 0:
+            data = varint(len(data)) + zlib.compress(data) if len(data) >= self.compression else b"\0" + data
+        self.sock.sendall(varint(len(data)) + data)
+
+    def receive(self):
+        import io
+        data = self.exact(read_varint(self.exact))
+        if self.compression >= 0:
+            stream = io.BytesIO(data)
+            size = read_varint(stream.read)
+            data = zlib.decompress(stream.read()) if size else stream.read()
+        stream = io.BytesIO(data)
+        return read_varint(stream.read), stream.read()
+
+    def login(self, port):
+        import io
+        self.send(0, varint(777) + string("localhost") + struct.pack(">H", port) + varint(2))
+        self.send(0, string(NAME) + PLAYER.bytes)
+        while True:
+            packet, data = self.receive()
+            if packet == 3:
+                self.compression = read_varint(io.BytesIO(data).read)
+            elif packet == 2:
+                self.send(3)
+                break
+            elif packet == 0:
+                raise AssertionError("login disconnect: " + repr(data))
+            else:
+                raise AssertionError("unexpected login packet " + str(packet))
+        while True:
+            packet, data = self.receive()
+            if packet == 15:
+                self.send(7, b"\0")  # no cached registry packs
+            elif packet == 3:
+                self.send(3)
+                break
+            elif packet == 4:
+                self.send(4, data)
+            elif packet == 5:
+                self.send(5, data)
+            elif packet == 2:
+                raise AssertionError("configuration disconnect: " + repr(data))
+        # The first play packet proves that configuration completed.
+        self.receive()
+
+
+def run_server(world, jar, java, generate):
+    scratch = Path(tempfile.mkdtemp(prefix="ferraloom-storage-server-"))
+    shutil.copytree(world, scratch / "world") if world.exists() else None
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    (scratch / "eula.txt").write_text("eula=true\n")
+    (scratch / "server.properties").write_text(
+        f"server-ip=127.0.0.1\nserver-port={port}\nonline-mode=false\nwhite-list=false\n"
+        "level-name=world\nlevel-seed=12345\nlevel-type=minecraft:flat\n"
+        'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains","structure_overrides":[]}\n'
+        "view-distance=2\nsimulation-distance=2\nspawn-chunk-radius=0\n"
+        "sync-chunk-writes=true\nmax-tick-time=-1\n"
+    )
+    # Use the shared cache for extracted libraries; world and logs remain in /tmp.
+    proc = subprocess.Popen(
+        [java, "-Xms128M", "-Xmx1G", "-XX:ActiveProcessorCount=2",
+         "--enable-native-access=ALL-UNNAMED", f"-DbundlerRepoDir={jar.parent}",
+         "-jar", str(jar), "--nogui"],
+        cwd=scratch, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, text=True, bufsize=1,
+    )
+    lines, events = [], queue.Queue()
+
+    def reader():
+        for line in proc.stdout:
+            lines.append(line)
+            events.put(line)
+        events.put(None)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    def wait_for(needle, timeout=90):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            line = events.get(timeout=max(0.1, deadline - time.monotonic()))
+            if line is None:
+                raise AssertionError("vanilla exited before " + needle + "\n" + "".join(lines))
+            if needle in line:
+                return
+        raise TimeoutError("vanilla did not report " + needle)
+
+    def commands(text):
+        proc.stdin.write(text + "\n")
+        proc.stdin.flush()
+
+    try:
+        wait_for("Done (")
+        if generate:
+            commands('setworldspawn 0 -60 0\nforceload add 0 0 31 15\nsetblock 1 -60 1 minecraft:barrel{Items:[{Slot:0b,id:"minecraft:diamond",count:3}]}\nsetblock 2 -60 1 minecraft:bell\nsummon minecraft:armor_stand 3 -59 1 {CustomName:{text:"Storage fixture"}}')
+            wait_for("Summoned new")
+        client = Client(port)
+        client.login(port)
+        wait_for("joined the game")
+        if generate:
+            commands(f"give {NAME} minecraft:stone 5\nadvancement grant {NAME} only minecraft:story/root")
+            wait_for("advancement")
+        else:
+            # Command predicates prove the rewritten block entity and entity loaded.
+            commands('execute if items block 1 -60 1 container.0 minecraft:diamond run say STORAGE_BLOCK_OK\nexecute if entity @e[type=minecraft:armor_stand,name="Storage fixture"] run say STORAGE_ENTITY_OK')
+            wait_for("STORAGE_BLOCK_OK")
+            wait_for("STORAGE_ENTITY_OK")
+        client.sock.close()
+        commands("save-all flush")
+        wait_for("Saved the game")
+        commands("stop")
+        proc.wait(timeout=60)
+        if proc.returncode:
+            raise AssertionError("vanilla exit status " + str(proc.returncode))
+        text = "".join(lines)
+        # Unrelated auth discovery/network warnings are harmless; storage errors are not.
+        bad = [line for line in lines if re.search(r"\bERROR\b|Failed to (load|read|save)|corrupt|invalid sector|wrong location", line, re.I)]
+        if bad:
+            raise AssertionError("vanilla storage errors:\n" + "".join(bad))
+        print(f"vanilla 26.3 accepted world, player {PLAYER}, block entity and entity; exit 0")
+        return scratch / "world"
+    except BaseException:
+        print("".join(lines))
+        raise
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=["generate", "verify"])
+    parser.add_argument("world", nargs="?", type=Path)
+    parser.add_argument("--jar", type=Path, default=os.environ.get("FERRALOOM_VANILLA_JAR"))
+    parser.add_argument("--java", default=str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java")
+    args = parser.parse_args()
+    if args.jar is None:
+        parser.error("--jar or FERRALOOM_VANILLA_JAR is required")
+    if args.mode == "generate":
+        world = run_server(Path("/tmp/ferraloom-storage-nonexistent-world"), args.jar.resolve(), args.java, True)
+        destination = Path(__file__).parent / "fixtures/world"
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.mkdir(parents=True)
+        for source in world.rglob("*"):
+            if source.is_file() and source.name != "session.lock":
+                relative = source.relative_to(world)
+                target = destination / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+        print("Generated fixtures:", destination)
+    else:
+        if args.world is None:
+            parser.error("verify requires the rewritten world path")
+        run_server(args.world, args.jar.resolve(), args.java, False)
+
+
+if __name__ == "__main__":
+    main()

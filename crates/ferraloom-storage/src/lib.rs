@@ -37,3 +37,6 @@ pub fn check_data_version(version: i32) -> Result<()> {
 pub(crate) fn check_tag_version(tag: &ferraloom_nbt::CompoundTag) -> Result<()> {
     check_data_version(tag.get_int_or("DataVersion", -1))
 }
+
+#[cfg(test)]
+mod tests;
