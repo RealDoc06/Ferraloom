@@ -578,7 +578,7 @@ impl<'a> WorldGenRegion<'a> {
         self.behavior.is_outline_full_block(self, state, p)
     }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_solid(self.block(p)?)
+        Ok(self.block(p)?.is_solid())
     }
     pub fn has_sturdy_face(
         &self,

@@ -352,3 +352,45 @@ fn cached_face_occlusion_distinguishes_faces_and_non_occluding_blocks() {
     assert!(bottom.is_face_occlusion_full(Direction::Down));
     assert!(!bottom.is_face_occlusion_full(Direction::Up));
 }
+
+#[test]
+fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
+    use ferraloom_util::Direction;
+    assert!(Block::STONE.default_state().is_solid());
+    assert!(!Block::WATER.default_state().is_solid());
+    assert!(Block::CHEST.default_state().has_block_entity());
+    assert!(!Block::STONE.default_state().has_block_entity());
+    assert_eq!(
+        Block::STONE
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        Some(true)
+    );
+    assert_eq!(
+        Block::STONE_SLAB
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SCAFFOLDING
+            .default_state()
+            .cached_sturdy_face(Direction::Up),
+        None
+    );
+    assert_eq!(
+        Block::STONE.default_state().cached_collision_full_block(),
+        Some(true)
+    );
+    assert_eq!(Block::STONE.default_state().post_process_y_offset(), None);
+    assert_eq!(
+        Block::BROWN_MUSHROOM
+            .default_state()
+            .post_process_y_offset(),
+        Some(0)
+    );
+    assert_eq!(
+        Block::MAGMA_BLOCK.default_state().post_process_y_offset(),
+        Some(1)
+    );
+}
