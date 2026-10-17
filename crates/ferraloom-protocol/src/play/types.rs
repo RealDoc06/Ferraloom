@@ -241,7 +241,7 @@ ClockUpdate {clock:WorldClockId,state:ClockNetworkState});
 packet!(/// Port of gamerule key/value network entries.
 GameRuleEntry {key:Identifier,value:String});
 packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
-CommandSuggestion {text:String,tooltip:Option<Component>});
+CommandSuggestion {text:String,tooltip:Option<Component> => optional_trusted_component});
 wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2}, zero);
 packet!(/// Port of SwingAnimation.
 SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});

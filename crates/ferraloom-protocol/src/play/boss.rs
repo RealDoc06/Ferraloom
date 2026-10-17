@@ -25,10 +25,10 @@ impl Wire for BossProperties {
     }
 }
 wire_union!(BossOperation:var_int {
-    Add=0 {name:Component,progress:f32,color:BossBarColor,overlay:BossBarOverlay,properties:BossProperties},
+    Add=0 {name:Component => Component::decode_trusted,progress:f32,color:BossBarColor,overlay:BossBarOverlay,properties:BossProperties},
     Remove=1 {},
     UpdateProgress=2 {progress:f32},
-    UpdateName=3 {name:Component},
+    UpdateName=3 {name:Component => Component::decode_trusted},
     UpdateStyle=4 {color:BossBarColor,overlay:BossBarOverlay},
     UpdateProperties=5 {properties:BossProperties}
 });
