@@ -3,7 +3,7 @@ use super::{Feature, FeatureContext, FeatureLoader};
 use crate::{
     Error,
     codec::*,
-    material::is_air,
+    generator::is_air,
     placement::predicate::move_direction,
     region::Heightmap,
     structure::rule::{BlockTags, RuleTest},

@@ -1,6 +1,6 @@
 use super::*;
 use crate::placement::providers::FloatProvider;
-use ferraloom_data::properties::{self, Thickness, TipDirection};
+use ferraloom_data::properties::{self, Thickness, VerticalDirection};
 use ferraloom_util::mth;
 
 /// Port of SpeleothemUtils' state-only operations. The supplied states configure
@@ -55,15 +55,15 @@ impl SpeleothemBlocks {
                 Thickness::Middle
             };
             let direction = if direction == Direction::Up {
-                TipDirection::Up
+                VerticalDirection::Up
             } else {
-                TipDirection::Down
+                VerticalDirection::Down
             };
             let mut state = self
                 .pointed
                 .default_state()
-                .with(properties::TIP_DIRECTION, direction)
-                .ok_or_else(|| Error("pointed block lacks tip_direction".into()))?
+                .with(properties::VERTICAL_DIRECTION, direction)
+                .ok_or_else(|| Error("pointed block lacks vertical_direction".into()))?
                 .with(properties::THICKNESS, thickness)
                 .ok_or_else(|| Error("pointed block lacks thickness".into()))?;
             // 26.3 applies waterlogging to pointed_block, including sulfur spikes.
@@ -76,7 +76,11 @@ impl SpeleothemBlocks {
                 )
                 .ok_or_else(|| Error("pointed block lacks waterlogged".into()))?;
             ctx.region.set_block(p, state, 2)?;
-            p[1] += if direction == TipDirection::Up { 1 } else { -1 };
+            p[1] += if direction == VerticalDirection::Up {
+                1
+            } else {
+                -1
+            };
         }
         Ok(())
     }

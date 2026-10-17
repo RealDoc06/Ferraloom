@@ -4,7 +4,7 @@ use super::{Feature, FeatureContext, FeatureLoader, state_provider::BlockStatePr
 use crate::{
     Error,
     codec::*,
-    material::is_air,
+    generator::is_air,
     placement::{
         predicate::{BlockPredicate, move_direction, offset},
         providers::IntProvider,
@@ -154,6 +154,9 @@ fn scan(
         if edge(region.block(p)?) {
             ends[i] = Some(p[1]);
         }
+    }
+    if matches!((ends[0], ends[1]), (Some(floor), Some(ceiling)) if ceiling - floor - 1 < 0) {
+        return Err(Error("Column of negative height".into()));
     }
     Ok(Some(Column {
         floor: ends[0],
