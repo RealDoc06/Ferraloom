@@ -348,7 +348,11 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
 }
 #[test]
 fn nether_end_blocks_results_and_rng_match_real_vanilla() {
-    check_cases(|case| missing_behavior(case).is_none());
+    check_cases(|case| missing_behavior(case).is_none() && case["config"]["type"] != "template");
+}
+#[test]
+fn template_empty_placement_uses_shared_selection_and_palette_rng() {
+    check_cases(|case| missing_behavior(case).is_none() && case["config"]["type"] == "template");
 }
 #[test]
 #[ignore = "Needs shared game chorus, loot, collision, gateway, end crystal/fire and destroyBlock behaviors; cross-family children"]
