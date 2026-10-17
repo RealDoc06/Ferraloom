@@ -76,7 +76,12 @@ fn registries(out: &mut String, reports: &Value) {
         let entries = ordered_entries(&report["entries"]);
         assert!(entries.len() <= u16::MAX as usize);
         writeln!(out, "pub mod {} {{", ident(registry)).unwrap();
-        writeln!(out, "pub const REGISTRY_PROTOCOL_ID: u16 = {};", report["protocol_id"]).unwrap();
+        writeln!(
+            out,
+            "pub const REGISTRY_PROTOCOL_ID: u16 = {};",
+            report["protocol_id"]
+        )
+        .unwrap();
         writeln!(out, "#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] pub struct Id(pub(crate) u16);").unwrap();
         writeln!(out, "impl Id {{").unwrap();
         for (name, id) in &entries {
@@ -86,7 +91,12 @@ fn registries(out: &mut String, reports: &Value) {
         out.push_str("pub const fn from_protocol_id(id: u16) -> Option<Self> { if (id as usize) < NAMES.len() { Some(Self(id)) } else { None } }\n");
         out.push_str("pub const fn name(self) -> &'static str { NAMES[self.0 as usize] }\n");
         out.push_str("/// Cold-path identifier parsing; hot paths use protocol IDs.\npub fn from_name(name: &str) -> Option<Self> { NAMES.iter().position(|&n| n == name).map(|i| Self(i as u16)) }\n}\n");
-        writeln!(out, "pub const NAMES: &[&str] = &{:?};", entries.iter().map(|(name, _)| *name).collect::<Vec<_>>()).unwrap();
+        writeln!(
+            out,
+            "pub const NAMES: &[&str] = &{:?};",
+            entries.iter().map(|(name, _)| *name).collect::<Vec<_>>()
+        )
+        .unwrap();
         out.push_str("pub const ALL: &[Id] = &[");
         for (_, id) in &entries {
             write!(out, "Id({id}),").unwrap();
@@ -96,7 +106,13 @@ fn registries(out: &mut String, reports: &Value) {
     out.push_str("}\npub use registries::{block::Id as Block, item::Id as Item, entity_type::Id as EntityType};\n");
     out.push_str("pub const REGISTRIES: &[RegistryInfo] = &[\n");
     for (name, report) in reports.as_object().unwrap() {
-        writeln!(out, "RegistryInfo {{ name: {name:?}, protocol_id: {}, count: {} }},", report["protocol_id"], report["entries"].as_object().unwrap().len()).unwrap();
+        writeln!(
+            out,
+            "RegistryInfo {{ name: {name:?}, protocol_id: {}, count: {} }},",
+            report["protocol_id"],
+            report["entries"].as_object().unwrap().len()
+        )
+        .unwrap();
     }
     out.push_str("];\n");
 }
@@ -116,7 +132,9 @@ fn packets(out: &mut String, reports: &Value) {
             for (name, id) in &entries {
                 writeln!(out, "{id} => Some(Self::{}),", pascal(name)).unwrap();
             }
-            out.push_str("_ => None, } }\npub const fn name(self) -> &'static str { match self {\n");
+            out.push_str(
+                "_ => None, } }\npub const fn name(self) -> &'static str { match self {\n",
+            );
             for (name, _) in &entries {
                 writeln!(out, "Self::{} => {name:?},", pascal(name)).unwrap();
             }
@@ -142,7 +160,13 @@ impl Property {
         match self.rust_type.as_str() {
             "bool" => u8::from(value == "true"),
             "u8" => value.parse().unwrap(),
-            _ => self.values.iter().position(|v| v == value).unwrap().try_into().unwrap(),
+            _ => self
+                .values
+                .iter()
+                .position(|v| v == value)
+                .unwrap()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -152,7 +176,13 @@ fn properties(out: &mut String, reports: &Value) -> BTreeMap<String, Property> {
     for report in reports.as_object().unwrap().values() {
         if let Some(props) = report["properties"].as_object() {
             for (name, allowed) in props {
-                values.entry(name.clone()).or_default().extend(allowed.as_array().unwrap().iter().map(|v| string(v).to_owned()));
+                values.entry(name.clone()).or_default().extend(
+                    allowed
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| string(v).to_owned()),
+                );
             }
         }
     }
@@ -179,20 +209,41 @@ fn properties(out: &mut String, reports: &Value) -> BTreeMap<String, Property> {
                 writeln!(out, "{i} => Some(Self::{}),", pascal(value)).unwrap();
             }
             out.push_str("_ => None, } } }\n");
-            writeln!(out, "impl {ty} {{ pub const fn as_str(self) -> &'static str {{ match self {{").unwrap();
+            writeln!(
+                out,
+                "impl {ty} {{ pub const fn as_str(self) -> &'static str {{ match self {{"
+            )
+            .unwrap();
             for value in &allowed {
                 writeln!(out, "Self::{} => {value:?},", pascal(value)).unwrap();
             }
             out.push_str("} } }\n");
         }
-        writeln!(out, "pub const {}: Property<{ty}> = Property {{ id: {id}, marker: PhantomData }};", constant(&name)).unwrap();
-        result.insert(name, Property { id, values: allowed, rust_type: ty });
+        writeln!(
+            out,
+            "pub const {}: Property<{ty}> = Property {{ id: {id}, marker: PhantomData }};",
+            constant(&name)
+        )
+        .unwrap();
+        result.insert(
+            name,
+            Property {
+                id,
+                values: allowed,
+                rust_type: ty,
+            },
+        );
     }
     out.push_str("}\n");
     result
 }
 
-fn blocks(out: &mut String, reports: &Value, extracted: &Value, props: &BTreeMap<String, Property>) {
+fn blocks(
+    out: &mut String,
+    reports: &Value,
+    extracted: &Value,
+    props: &BTreeMap<String, Property>,
+) {
     let blocks = extracted["blocks"].as_array().unwrap();
     let states = extracted["states"].as_array().unwrap();
     assert!(states.len() <= u16::MAX as usize + 1);
@@ -205,8 +256,19 @@ fn blocks(out: &mut String, reports: &Value, extracted: &Value, props: &BTreeMap
         let first = number(&states[0]["id"]);
         let default = states.iter().find(|s| s["default"] == true).unwrap();
         assert_eq!(default["id"], block["default_state"]);
-        write!(out, "BlockData {{ default_state: BlockState({}), first_state: {first}, state_count: {},", block["default_state"], states.len()).unwrap();
-        for field in ["explosion_resistance", "friction", "speed_factor", "jump_factor"] {
+        write!(
+            out,
+            "BlockData {{ default_state: BlockState({}), first_state: {first}, state_count: {},",
+            block["default_state"],
+            states.len()
+        )
+        .unwrap();
+        for field in [
+            "explosion_resistance",
+            "friction",
+            "speed_factor",
+            "jump_factor",
+        ] {
             write!(out, "{field}: {},", float(&block[field])).unwrap();
         }
         out.push_str("properties: &[\n");
@@ -218,7 +280,12 @@ fn blocks(out: &mut String, reports: &Value, extracted: &Value, props: &BTreeMap
                 let property = &props[name];
                 let values = values.as_array().unwrap();
                 let indexes: Vec<_> = values.iter().map(|v| property.index(string(v))).collect();
-                writeln!(out, "PropertyLayout {{ id: {}, stride: {stride}, values: &{indexes:?} }},", property.id).unwrap();
+                writeln!(
+                    out,
+                    "PropertyLayout {{ id: {}, stride: {stride}, values: &{indexes:?} }},",
+                    property.id
+                )
+                .unwrap();
                 layouts.push((name, values, stride));
                 stride *= values.len();
             }
@@ -228,7 +295,10 @@ fn blocks(out: &mut String, reports: &Value, extracted: &Value, props: &BTreeMap
         for (offset, state) in states.iter().enumerate() {
             assert_eq!(number(&state["id"]), first + offset as u64);
             for (name, values, stride) in &layouts {
-                assert_eq!(state["properties"][*name], values[offset / stride % values.len()]);
+                assert_eq!(
+                    state["properties"][*name],
+                    values[offset / stride % values.len()]
+                );
             }
         }
         out.push_str("] },\n");
@@ -245,23 +315,58 @@ fn blocks(out: &mut String, reports: &Value, extracted: &Value, props: &BTreeMap
     out.push_str("pub const SOUND_TYPES: &[SoundType] = &[\n");
     for (json, _) in ordered_sounds {
         let sound: Value = serde_json::from_str(json).unwrap();
-        write!(out, "SoundType {{ name: {:?}, volume: {}, pitch: {},", string(&sound["name"]), float(&sound["volume"]), float(&sound["pitch"])).unwrap();
+        write!(
+            out,
+            "SoundType {{ name: {:?}, volume: {}, pitch: {},",
+            string(&sound["name"]),
+            float(&sound["volume"]),
+            float(&sound["pitch"])
+        )
+        .unwrap();
         for field in ["break", "step", "place", "hit", "fall"] {
-            write!(out, "{field}_sound: registries::sound_event::Id({}),", sound[field]).unwrap();
+            write!(
+                out,
+                "{field}_sound: registries::sound_event::Id({}),",
+                sound[field]
+            )
+            .unwrap();
         }
         out.push_str("},\n");
     }
     out.push_str("];\npub const BLOCK_STATES: &[BlockStateData] = &[\n");
     for (id, state) in states.iter().enumerate() {
         assert_eq!(number(&state["id"]), id as u64);
-        write!(out, "BlockStateData {{ block: Block({}), destroy_time: {},", state["block"], float(&state["destroy_time"])).unwrap();
-        for field in ["light_emission", "context_dependent_shape", "solid_render", "opacity", "propagates_skylight", "use_shape_for_light_occlusion", "map_color", "requires_correct_tool", "random_ticking", "replaceable"] {
+        write!(
+            out,
+            "BlockStateData {{ block: Block({}), destroy_time: {},",
+            state["block"],
+            float(&state["destroy_time"])
+        )
+        .unwrap();
+        for field in [
+            "light_emission",
+            "context_dependent_shape",
+            "solid_render",
+            "opacity",
+            "propagates_skylight",
+            "use_shape_for_light_occlusion",
+            "map_color",
+            "requires_correct_tool",
+            "random_ticking",
+            "replaceable",
+        ] {
             write!(out, "{field}: {},", state[field]).unwrap();
         }
         for field in ["collision", "outline", "occlusion"] {
             write!(out, "{field}: ShapeId({}),", state[field]).unwrap();
         }
-        write!(out, "push_reaction: PushReaction::{}, sound: &SOUND_TYPES[{}],", pascal(string(&state["push_reaction"])), sounds[&serde_json::to_string(&state["sound"]).unwrap()]).unwrap();
+        write!(
+            out,
+            "push_reaction: PushReaction::{}, sound: &SOUND_TYPES[{}],",
+            pascal(string(&state["push_reaction"])),
+            sounds[&serde_json::to_string(&state["sound"]).unwrap()]
+        )
+        .unwrap();
         let fluid = &state["fluid"];
         write!(out, "fluid: FluidState {{ fluid_type: registries::fluid::Id({}), amount: {}, source: {}, empty: {}, falling: {} }}", fluid["type"], fluid["amount"], fluid["source"], fluid["empty"], fluid["state"]["properties"]["falling"] == "true").unwrap();
         out.push_str("},\n");
@@ -278,7 +383,12 @@ fn shapes(out: &mut String, shapes: &Value) {
         for aabb in shape.as_array().unwrap() {
             let c: Vec<_> = aabb.as_array().unwrap().iter().map(float).collect();
             assert_eq!(c.len(), 6);
-            write!(out, "Aabb {{ min: [{},{},{}], max: [{},{},{}] }},", c[0], c[1], c[2], c[3], c[4], c[5]).unwrap();
+            write!(
+                out,
+                "Aabb {{ min: [{},{},{}], max: [{},{},{}] }},",
+                c[0], c[1], c[2], c[3], c[4], c[5]
+            )
+            .unwrap();
         }
         out.push_str("],\n");
     }
@@ -289,7 +399,9 @@ fn items(out: &mut String, items: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
         assert_eq!(number(&item["id"]), id as u64);
-        let block = item["block"].as_u64().map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
+        let block = item["block"]
+            .as_u64()
+            .map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
         writeln!(out, "ItemData {{ max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
     }
     out.push_str("];\n");
@@ -303,10 +415,21 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
         for field in ["width", "height", "eye_height"] {
             write!(out, "{field}: {},", float(&entity[field])).unwrap();
         }
-        for field in ["fixed_dimensions", "tracking_range", "update_interval", "fire_immune", "summonable"] {
+        for field in [
+            "fixed_dimensions",
+            "tracking_range",
+            "update_interval",
+            "fire_immune",
+            "summonable",
+        ] {
             write!(out, "{field}: {},", entity[field]).unwrap();
         }
-        write!(out, "category: MobCategory::{}, attributes: &[", pascal(string(&entity["category"]))).unwrap();
+        write!(
+            out,
+            "category: MobCategory::{}, attributes: &[",
+            pascal(string(&entity["category"]))
+        )
+        .unwrap();
         for (name, value) in entity["attributes"].as_object().unwrap() {
             let id = number(&registries["minecraft:attribute"]["entries"][name]["protocol_id"]);
             write!(out, "(registries::attribute::Id({id}), {}),", float(value)).unwrap();
@@ -323,8 +446,21 @@ fn main() {
     let block_properties = load(root, "block_properties");
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
-    for (name, count) in [("block", block_properties["blocks"].as_array().unwrap().len()), ("item", item_report.as_array().unwrap().len()), ("entity_type", entity_report.as_array().unwrap().len())] {
-        assert_eq!(registries_report[format!("minecraft:{name}")]["entries"].as_object().unwrap().len(), count);
+    for (name, count) in [
+        (
+            "block",
+            block_properties["blocks"].as_array().unwrap().len(),
+        ),
+        ("item", item_report.as_array().unwrap().len()),
+        ("entity_type", entity_report.as_array().unwrap().len()),
+    ] {
+        assert_eq!(
+            registries_report[format!("minecraft:{name}")]["entries"]
+                .as_object()
+                .unwrap()
+                .len(),
+            count
+        );
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);

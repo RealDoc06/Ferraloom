@@ -31,8 +31,14 @@ fn check_property<T: PropertyValue + Debug>(
 
 #[test]
 fn tricky_state_properties_match_every_reported_state() {
-    let blocks: Value = serde_json::from_str(include_str!("../../../data/generated/blocks.json")).unwrap();
-    for block in [Block::REDSTONE_WIRE, Block::OAK_STAIRS, Block::NOTE_BLOCK, Block::CHISELED_BOOKSHELF] {
+    let blocks: Value =
+        serde_json::from_str(include_str!("../../../data/generated/blocks.json")).unwrap();
+    for block in [
+        Block::REDSTONE_WIRE,
+        Block::OAK_STAIRS,
+        Block::NOTE_BLOCK,
+        Block::CHISELED_BOOKSHELF,
+    ] {
         let report = &blocks[block.name()];
         for row in report["states"].as_array().unwrap() {
             let state = BlockState::from_id(row["id"].as_u64().unwrap() as u16).unwrap();
@@ -42,10 +48,14 @@ fn tricky_state_properties_match_every_reported_state() {
             }
             macro_rules! check {
                 ($property:ident, $name:literal) => {
-                    check_property(state, properties::$property, $name, report, |v| v.to_string());
+                    check_property(state, properties::$property, $name, report, |v| {
+                        v.to_string()
+                    });
                 };
                 ($property:ident, $name:literal, enum) => {
-                    check_property(state, properties::$property, $name, report, |v| v.as_str().to_owned());
+                    check_property(state, properties::$property, $name, report, |v| {
+                        v.as_str().to_owned()
+                    });
                 };
             }
             match block {
@@ -81,18 +91,35 @@ fn tricky_state_properties_match_every_reported_state() {
         }
     }
     assert_eq!(Block::STONE.default_state().get(properties::POWERED), None);
-    assert_eq!(Block::OAK_STAIRS.default_state().with(properties::FACING, properties::Facing::Up), None);
-    assert_eq!(Block::REDSTONE_WIRE.default_state().with(properties::POWER, 16), None);
+    assert_eq!(
+        Block::OAK_STAIRS
+            .default_state()
+            .with(properties::FACING, properties::Facing::Up),
+        None
+    );
+    assert_eq!(
+        Block::REDSTONE_WIRE
+            .default_state()
+            .with(properties::POWER, 16),
+        None
+    );
 }
 
 #[test]
 fn registry_counts_and_protocol_ids_match_reports() {
-    let report: Value = serde_json::from_str(include_str!("../../../data/generated/registries.json")).unwrap();
+    let report: Value =
+        serde_json::from_str(include_str!("../../../data/generated/registries.json")).unwrap();
     assert_eq!(REGISTRIES.len(), 95);
     for registry in REGISTRIES {
         let expected = &report[registry.name];
-        assert_eq!(registry.count, expected["entries"].as_object().unwrap().len());
-        assert_eq!(u64::from(registry.protocol_id), expected["protocol_id"].as_u64().unwrap());
+        assert_eq!(
+            registry.count,
+            expected["entries"].as_object().unwrap().len()
+        );
+        assert_eq!(
+            u64::from(registry.protocol_id),
+            expected["protocol_id"].as_u64().unwrap()
+        );
     }
     assert_eq!(BLOCKS.len(), registries::block::ALL.len());
     assert_eq!(ITEMS.len(), registries::item::ALL.len());
@@ -100,7 +127,10 @@ fn registry_counts_and_protocol_ids_match_reports() {
     for id in registries::block::ALL {
         assert_eq!(Block::from_protocol_id(id.protocol_id()), Some(*id));
         assert_eq!(Block::from_name(id.name()), Some(*id));
-        assert_eq!(report["minecraft:block"]["entries"][id.name()]["protocol_id"].as_u64(), Some(u64::from(id.protocol_id())));
+        assert_eq!(
+            report["minecraft:block"]["entries"][id.name()]["protocol_id"].as_u64(),
+            Some(u64::from(id.protocol_id()))
+        );
     }
     assert!(BlockState::from_id(u16::MAX).is_none());
 }
@@ -109,31 +139,70 @@ fn registry_counts_and_protocol_ids_match_reports() {
 fn extracted_facts_retain_vanilla_state_variation() {
     assert!(Block::WATER.default_state().data().fluid.source);
     assert!(!Block::WATER.default_state().data().fluid.falling);
-    let falling_water = Block::WATER.default_state().with(properties::LEVEL, 8).unwrap();
+    let falling_water = Block::WATER
+        .default_state()
+        .with(properties::LEVEL, 8)
+        .unwrap();
     assert!(falling_water.data().fluid.falling);
     assert_eq!(Block::AIR.default_state().data().collision.boxes(), &[]);
-    assert_eq!(Block::SAND.default_state().data().collision.boxes().len(), 1);
-    assert!(Block::OAK_STAIRS.default_state().with(properties::WATERLOGGED, true).unwrap().data().fluid.source);
+    assert_eq!(
+        Block::SAND.default_state().data().collision.boxes().len(),
+        1
+    );
+    assert!(
+        Block::OAK_STAIRS
+            .default_state()
+            .with(properties::WATERLOGGED, true)
+            .unwrap()
+            .data()
+            .fluid
+            .source
+    );
     assert!(Block::BAMBOO.default_state().data().context_dependent_shape);
-    assert!(Block::MOVING_PISTON.default_state().data().context_dependent_shape);
-    for block in [Block::SCAFFOLDING, Block::POWDER_SNOW, Block::LIGHT, Block::WATER] {
+    assert!(
+        Block::MOVING_PISTON
+            .default_state()
+            .data()
+            .context_dependent_shape
+    );
+    for block in [
+        Block::SCAFFOLDING,
+        Block::POWDER_SNOW,
+        Block::LIGHT,
+        Block::WATER,
+    ] {
         assert!(block.default_state().data().context_dependent_shape);
     }
     assert_eq!(Item::AIR.data().max_stack_size, 64);
     assert_eq!(Item::DIAMOND_PICKAXE.data().max_damage, 1561);
     assert_eq!(Item::STONE.data().block, Some(Block::STONE));
-    assert!(EntityType::ZOMBIE.data().attributes.iter().any(|(id, value)| *id == registries::attribute::Id::MAX_HEALTH && *value == 20.0));
+    assert!(
+        EntityType::ZOMBIE
+            .data()
+            .attributes
+            .iter()
+            .any(|(id, value)| *id == registries::attribute::Id::MAX_HEALTH && *value == 20.0)
+    );
 }
 
 #[test]
 fn packet_ids_match_protocol_state_and_direction() {
-    let report: Value = serde_json::from_str(include_str!("../../../data/generated/packets.json")).unwrap();
+    let report: Value =
+        serde_json::from_str(include_str!("../../../data/generated/packets.json")).unwrap();
     use packets::{handshake, login, play};
     let keep_alive = play::clientbound::Packet::KeepAlive;
-    assert_eq!(u64::from(keep_alive.protocol_id()), report["play"]["clientbound"][keep_alive.name()]["protocol_id"].as_u64().unwrap());
+    assert_eq!(
+        u64::from(keep_alive.protocol_id()),
+        report["play"]["clientbound"][keep_alive.name()]["protocol_id"]
+            .as_u64()
+            .unwrap()
+    );
     assert_eq!(handshake::serverbound::Packet::Intention.protocol_id(), 0);
     assert_eq!(login::clientbound::Packet::LoginDisconnect.protocol_id(), 0);
     for &packet in play::clientbound::ALL {
-        assert_eq!(play::clientbound::Packet::from_protocol_id(packet.protocol_id()), Some(packet));
+        assert_eq!(
+            play::clientbound::Packet::from_protocol_id(packet.protocol_id()),
+            Some(packet)
+        );
     }
 }
