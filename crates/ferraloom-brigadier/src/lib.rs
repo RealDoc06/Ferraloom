@@ -17,3 +17,8 @@ pub use exceptions::*;
 pub use reader::StringReader;
 pub use suggestion::*;
 pub use tree::*;
+
+#[cfg(test)]
+mod dispatcher_tests;
+#[cfg(test)]
+mod reader_tests;
