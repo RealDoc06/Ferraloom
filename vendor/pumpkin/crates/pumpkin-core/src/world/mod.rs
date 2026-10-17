@@ -29,10 +29,10 @@ mod block_entity_update_tests;
 #[cfg(test)]
 mod block_event_tests;
 mod block_events;
-#[cfg(test)]
-mod dragon_part_tests;
 pub mod brightness;
 pub mod chunker;
+#[cfg(test)]
+mod dragon_part_tests;
 pub mod explosion;
 pub mod generation_cache;
 #[cfg(test)]
@@ -3811,16 +3811,21 @@ impl World {
     pub(crate) fn dragon_death_target(&self, origin: BlockPos) -> Vector3<f64> {
         let x = origin.0.x;
         let z = origin.0.z;
-        let y = if !(-30_000_000..30_000_000).contains(&x)
-            || !(-30_000_000..30_000_000).contains(&z)
-        {
-            self.sea_level + 1
-        } else {
-            self.level.read_chunk_sync(&Vector2::new(x >> 4, z >> 4), |chunk| {
-                chunk.heightmap.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get(ChunkHeightmapType::MotionBlocking, x, z, self.min_y) + 1
-            }).unwrap_or(self.min_y)
-        };
+        let y =
+            if !(-30_000_000..30_000_000).contains(&x) || !(-30_000_000..30_000_000).contains(&z) {
+                self.sea_level + 1
+            } else {
+                self.level
+                    .read_chunk_sync(&Vector2::new(x >> 4, z >> 4), |chunk| {
+                        chunk
+                            .heightmap
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .get(ChunkHeightmapType::MotionBlocking, x, z, self.min_y)
+                            + 1
+                    })
+                    .unwrap_or(self.min_y)
+            };
         // Vec3.atBottomCenterOf: lower corner + (0.5, 0, 0.5).
         Vector3::new(f64::from(x) + 0.5, f64::from(y), f64::from(z) + 0.5)
     }
@@ -5680,9 +5685,11 @@ impl World {
         let entity = expected.get_entity();
         !entity.is_removed()
             && std::ptr::eq(entity.world.load_full().as_ref(), self)
-            && self.entities.load().iter().any(|resident| {
-                std::ptr::eq(resident.get_entity(), entity)
-            })
+            && self
+                .entities
+                .load()
+                .iter()
+                .any(|resident| std::ptr::eq(resident.get_entity(), entity))
     }
 
     /// Multipart lookup is derived from one ordinary resident snapshot. Parts
@@ -5692,7 +5699,8 @@ impl World {
         let residents = self.entities.load_full();
         if let Some(entity) = residents.iter().find(|entity| {
             let entity = entity.get_entity();
-            entity.entity_id == id && !entity.is_removed()
+            entity.entity_id == id
+                && !entity.is_removed()
                 && std::ptr::eq(entity.world.load_full().as_ref(), self)
         }) {
             return Some(entity.clone());
@@ -5707,7 +5715,8 @@ impl World {
             }
             if let Some(dragon) = resident.cast_any().downcast_ref::<EnderDragonEntity>()
                 && let Some(part) = dragon.parts().iter().find(|part| {
-                    part.entity.entity_id == id && !part.entity.is_removed()
+                    part.entity.entity_id == id
+                        && !part.entity.is_removed()
                         && dragon.owns_part(part)
                         && std::ptr::eq(part.entity.world.load_full().as_ref(), self)
                 })
@@ -5732,13 +5741,15 @@ impl World {
         for resident in residents.iter() {
             if let Some(dragon) = resident.cast_any().downcast_ref::<EnderDragonEntity>() {
                 let entity = resident.get_entity();
-                if entity.is_removed() || Some(entity.entity_id) == except
+                if entity.is_removed()
+                    || Some(entity.entity_id) == except
                     || !std::ptr::eq(entity.world.load_full().as_ref(), self)
                 {
                     continue;
                 }
                 for part in dragon.parts() {
-                    if !part.entity.is_removed() && Some(part.entity.entity_id) != except
+                    if !part.entity.is_removed()
+                        && Some(part.entity.entity_id) != except
                         && dragon.owns_part(part)
                         && std::ptr::eq(part.entity.world.load_full().as_ref(), self)
                         && part.entity.bounding_box.load().intersects(aabb)

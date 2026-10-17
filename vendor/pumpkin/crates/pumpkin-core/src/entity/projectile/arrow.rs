@@ -751,7 +751,8 @@ impl EntityBase for ArrowEntity {
         // Entity collisions
         let candidates = world.get_projectile_entities_at_box(
             &search_box,
-            self.owner_id.filter(|_| entity.age.load(Ordering::Relaxed) < 5),
+            self.owner_id
+                .filter(|_| entity.age.load(Ordering::Relaxed) < 5),
         );
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {

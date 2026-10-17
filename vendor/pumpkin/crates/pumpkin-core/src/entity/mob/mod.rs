@@ -786,7 +786,10 @@ impl MobEntity {
 
 pub trait Mob: EntityBase + Send + Sync {
     fn mob_handle_killing_blow(&self) {
-        self.get_mob_entity().living_entity.dead.store(true, Relaxed);
+        self.get_mob_entity()
+            .living_entity
+            .dead
+            .store(true, Relaxed);
     }
 
     fn mob_tick_death(&self) {
@@ -992,7 +995,12 @@ pub trait Mob: EntityBase + Send + Sync {
         }
         let amount = self.modify_incoming_damage(amount, damage_type);
         let damaged = self.get_mob_entity().living_entity.damage_with_context(
-            caller, amount, damage_type, position, source, cause,
+            caller,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
         );
         if damaged {
             self.on_damage(damage_type, cause.or(source));

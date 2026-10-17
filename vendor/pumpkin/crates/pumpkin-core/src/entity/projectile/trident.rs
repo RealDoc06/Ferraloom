@@ -263,7 +263,8 @@ impl EntityBase for TridentEntity {
         // Entity collisions
         let candidates = world.get_projectile_entities_at_box(
             &search_box,
-            self.owner_id.filter(|_| entity.age.load(Ordering::Relaxed) < 5),
+            self.owner_id
+                .filter(|_| entity.age.load(Ordering::Relaxed) < 5),
         );
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
@@ -368,8 +369,12 @@ impl EntityBase for TridentEntity {
                 let damage_val = damage as f32;
                 let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
                 target.damage_with_context(
-                    target.as_ref(), damage_val, DamageType::TRIDENT, Some(hit_pos),
-                    Some(self), Some(owner.as_deref().unwrap_or(self)),
+                    target.as_ref(),
+                    damage_val,
+                    DamageType::TRIDENT,
+                    Some(hit_pos),
+                    Some(self),
+                    Some(owner.as_deref().unwrap_or(self)),
                 );
 
                 // Play hit sound

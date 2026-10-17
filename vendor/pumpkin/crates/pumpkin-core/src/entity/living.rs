@@ -804,7 +804,9 @@ impl LivingEntity {
         // Clamp to [0, max_health]
         let max_health = self.get_max_health();
         let clamped = health.max(0.0).min(max_health);
-        let _mutation = self.health_mutation.lock()
+        let _mutation = self
+            .health_mutation
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.health.store(clamped);
         // tell everyone entities health changed
@@ -814,12 +816,15 @@ impl LivingEntity {
 
     fn subtract_health(&self, amount: f32) -> (f32, f32) {
         let max_health = self.get_max_health();
-        let _mutation = self.health_mutation.lock()
+        let _mutation = self
+            .health_mutation
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let before = self.health.load();
         let after = (before - amount).clamp(0.0, max_health);
         self.health.store(after);
-        self.entity.set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, after);
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, after);
         (after, (before - after).max(0.0))
     }
 
@@ -857,7 +862,9 @@ impl LivingEntity {
         let new_abs = new_abs.max(0.0);
 
         {
-            let _mutation = self.health_mutation.lock()
+            let _mutation = self
+                .health_mutation
+                .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             self.absorption.store(new_abs);
         }
@@ -874,8 +881,10 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
-            self.entity
-                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, self.absorption.load());
+            self.entity.set_synced_data(
+                tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
+                self.absorption.load(),
+            );
         }
     }
 
@@ -2045,11 +2054,15 @@ impl LivingEntity {
         {
             // Preserve the existing plugin stage: lethal health is observable
             // before the owner's hook. Admission blocks reentrant duplicates.
-            let mut death_event = crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
-                self.entity.entity_id, 0,
-            );
+            let mut death_event =
+                crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
+                    self.entity.entity_id,
+                    0,
+                );
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut death_event);
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut death_event);
             }
             dyn_self.handle_killing_blow();
             self.movement_input.store(Vector3::default());
@@ -3270,7 +3283,9 @@ impl LivingEntity {
         // Vanilla parity: actuallyHurt
         let original_damage = damage_amount;
         let (dmg_to_health, absorbed_damage) = {
-            let _mutation = self.health_mutation.lock()
+            let _mutation = self
+                .health_mutation
+                .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let current_abs = self.absorption.load();
             let dmg_to_health = (original_damage - current_abs).max(0.0);
@@ -3385,20 +3400,27 @@ impl LivingEntity {
 
     /// Ordinary death animation. Virtual owners may replace this entire clock.
     pub fn tick_death(&self) {
-        let time = self.death_time
+        let time = self
+            .death_time
             .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
             .unwrap_or_else(|time| time)
             .saturating_add(1);
         if self.entity.entity_type == &EntityType::PLAYER {
             // Keep the real player resident until a client respawn request.
             if time == 10 {
-                self.entity.world.load().despawn_dead_java_player_for_bedrock(&self.entity);
+                self.entity
+                    .world
+                    .load()
+                    .despawn_dead_java_player_for_bedrock(&self.entity);
             }
             return;
         }
         // Death (3) was emitted by on_death; ordinary retirement sends POOF (60).
         if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-            self.entity.world.load().send_entity_status(&self.entity, EntityStatus::Poof, None);
+            self.entity
+                .world
+                .load()
+                .send_entity_status(&self.entity, EntityStatus::Poof, None);
             self.entity.remove();
         }
     }
@@ -3441,7 +3463,8 @@ impl EntityBase for LivingEntity {
         // from continuing to be simulated (accumulating fall_distance/velocity).
         // We allow movement during death animation (20 ticks) so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
-        let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20
+        let in_death_animation = self.health.load() <= 0.0
+            && self.death_time.load(Relaxed) < 20
             && !caller.death_tick_owns_movement();
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
         if (is_alive || in_death_animation) && !is_player {

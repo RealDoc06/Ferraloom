@@ -441,8 +441,11 @@ impl DragonFight {
                 dragon_entity.attach_fight(fight);
             }
             dragon_entity.set_fight_origin(self.origin);
-            dragon_entity.set_phase(crate::entity::boss::ender_dragon::phase::EnderDragonPhase::Circling);
-            dragon.get_entity().set_rotation(rand::random::<f32>() * 360.0, 0.0);
+            dragon_entity
+                .set_phase(crate::entity::boss::ender_dragon::phase::EnderDragonPhase::Circling);
+            dragon
+                .get_entity()
+                .set_rotation(rand::random::<f32>() * 360.0, 0.0);
         }
 
         world.spawn_entity_non_save(dragon);
@@ -475,7 +478,6 @@ impl DragonFight {
         if let Some(name) = custom_name {
             self.update_bossbar_title(world, name);
         }
-
     }
 
     pub fn set_dragon_killed(&mut self, world: &Arc<World>, killed_uuid: Uuid) {
