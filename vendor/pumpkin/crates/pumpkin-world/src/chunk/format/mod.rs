@@ -1,7 +1,6 @@
 use std::{
     path::PathBuf,
-    str::FromStr,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
 };
 
 use bytes::Bytes;
@@ -13,7 +12,6 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -24,7 +22,7 @@ use crate::{
     },
     generation::section_coords,
     level::LevelFolder,
-    tick::{ScheduledTick, TickPriority, scheduler::ChunkTickScheduler},
+    tick::{SavedTick, scheduler::ChunkTickScheduler},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -279,26 +277,6 @@ fn extract_u8_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[u8]>> {
     }
 }
 
-fn parse_scheduled_tick<T>(nbt: &pumpkin_nbt::compound::NbtCompound) -> Option<ScheduledTick<T>>
-where
-    T: FromResourceLocation,
-{
-    let x = nbt.get_int("x")?;
-    let y = nbt.get_int("y")?;
-    let z = nbt.get_int("z")?;
-    let delay = nbt.get_int("t")? as u8;
-    let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
-    let res_loc_str = nbt.get_string("i")?;
-    let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;
-    let value = T::from_resource_location(&res_loc)?;
-    Some(ScheduledTick {
-        delay,
-        priority,
-        position: BlockPos::new(x, y, z),
-        value,
-    })
-}
-
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -498,7 +476,7 @@ impl ChunkData {
         if let Some(list) = root_tag.get_list("block_ticks") {
             for tag in list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag
-                    && let Some(tick) = parse_scheduled_tick::<&'static Block>(compound)
+                    && let Some(tick) = SavedTick::<&'static Block>::from_nbt_compound(compound)
                 {
                     block_ticks.push(tick);
                 }
@@ -509,7 +487,7 @@ impl ChunkData {
         if let Some(list) = root_tag.get_list("fluid_ticks") {
             for tag in list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag
-                    && let Some(tick) = parse_scheduled_tick::<&'static Fluid>(compound)
+                    && let Some(tick) = SavedTick::<&'static Fluid>::from_nbt_compound(compound)
                 {
                     fluid_ticks.push(tick);
                 }
@@ -588,6 +566,7 @@ impl ChunkData {
             dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
+            block_tick_phase_owners: AtomicU32::new(0),
             post_processing: std::sync::Mutex::new(post_processing),
             post_processing_ready: AtomicBool::new(false),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -821,31 +800,39 @@ impl ChunkData {
         }
         root_compound.put_list("sections", sections_list);
 
-        let mut block_ticks_list = Vec::new();
-        for tick in self.block_ticks.to_vec() {
-            let mut tick_comp = NbtCompound::new();
-            tick_comp.put_int("x", tick.position.0.x);
-            tick_comp.put_int("y", tick.position.0.y);
-            tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
-            tick_comp.put_int("p", tick.priority as i32);
-            tick_comp.put_string("i", tick.value.to_resource_location());
-            block_ticks_list.push(NbtTag::Compound(tick_comp));
-        }
-        root_compound.put_list("block_ticks", block_ticks_list);
+        // The phase check, clock read and block snapshot must share the poll lock.
+        let block_ticks = {
+            let queue = self.block_ticks.lock();
+            if self.block_tick_phase_owners.load(Ordering::Acquire) != 0 {
+                return Err(crate::poi::PoiReconcileError::StaleSaveCapture.into());
+            }
+            match self.poi_runtime() {
+                Ok(runtime) => queue.pack(runtime.tick_clock.load(Ordering::Acquire)),
+                Err(error) => queue.pack_unbound().ok_or(error)?,
+            }
+        };
+        root_compound.put_list(
+            "block_ticks",
+            block_ticks
+                .iter()
+                .map(|tick| NbtTag::Compound(tick.to_nbt_compound()))
+                .collect(),
+        );
 
-        let mut fluid_ticks_list = Vec::new();
-        for tick in self.fluid_ticks.to_vec() {
-            let mut tick_comp = NbtCompound::new();
-            tick_comp.put_int("x", tick.position.0.x);
-            tick_comp.put_int("y", tick.position.0.y);
-            tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
-            tick_comp.put_int("p", tick.priority as i32);
-            tick_comp.put_string("i", tick.value.to_resource_location());
-            fluid_ticks_list.push(NbtTag::Compound(tick_comp));
-        }
-        root_compound.put_list("fluid_ticks", fluid_ticks_list);
+        let fluid_ticks = {
+            let queue = self.fluid_ticks.lock();
+            match self.poi_runtime() {
+                Ok(runtime) => queue.pack(runtime.tick_clock.load(Ordering::Acquire)),
+                Err(error) => queue.pack_unbound().ok_or(error)?,
+            }
+        };
+        root_compound.put_list(
+            "fluid_ticks",
+            fluid_ticks
+                .iter()
+                .map(|tick| NbtTag::Compound(tick.to_nbt_compound()))
+                .collect(),
+        );
 
         let mut block_entities_list = Vec::new();
         for entity_comp in block_entities_nbt {

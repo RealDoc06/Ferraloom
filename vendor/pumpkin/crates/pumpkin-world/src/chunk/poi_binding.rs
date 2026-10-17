@@ -1,7 +1,7 @@
 //! Runtime ownership uses Level's existing publication and IO fences. There is
 //! no second publication registry: a binding lives exactly as long as its chunk.
 
-use std::sync::{Arc, Mutex, RwLock, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak, atomic::AtomicI64};
 
 use dashmap::{DashMap, mapref::one::Ref};
 
@@ -13,6 +13,8 @@ use crate::{
 };
 
 pub struct PoiRuntime {
+    /// The same game-age clock owned by Level; pure capture context only.
+    pub(crate) tick_clock: Arc<AtomicI64>,
     pub(crate) storage: Arc<Mutex<PoiStorage>>,
     pub(crate) lifecycle: Arc<RwLock<()>>,
     pub(crate) chunks: Weak<DashMap<ChunkPos, SyncChunk>>,
@@ -351,6 +353,7 @@ impl TestRuntime {
     pub(crate) fn new(folder: std::path::PathBuf) -> Self {
         let chunks = Arc::new(DashMap::new());
         let runtime = Arc::new(PoiRuntime {
+            tick_clock: Arc::new(AtomicI64::new(0)),
             storage: Arc::new(Mutex::new(PoiStorage::new(folder))),
             lifecycle: Arc::new(RwLock::new(())),
             chunks: Arc::downgrade(&chunks),

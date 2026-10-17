@@ -459,25 +459,7 @@ impl GameTestWorld for ServerGameTestWorld {
             return Ok(());
         }
 
-        let min_chunk_x = min.0.x >> 4;
-        let max_chunk_x = (max.0.x - 1) >> 4;
-        let min_chunk_z = min.0.z >> 4;
-        let max_chunk_z = (max.0.z - 1) >> 4;
-
-        for chunk_x in min_chunk_x..=max_chunk_x {
-            for chunk_z in min_chunk_z..=max_chunk_z {
-                let chunk_pos = Vector2::new(chunk_x, chunk_z);
-                if let Some(chunk) = self.world.level.loaded_chunks.get(&chunk_pos) {
-                    chunk.block_ticks.clear_area(min, max);
-                    if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
-                        self.world
-                            .level
-                            .chunks_with_scheduled_ticks
-                            .remove(&chunk_pos);
-                    }
-                }
-            }
-        }
+        self.world.level.clear_block_ticks(min, max);
         Ok(())
     }
 

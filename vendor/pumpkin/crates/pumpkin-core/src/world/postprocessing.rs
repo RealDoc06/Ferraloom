@@ -451,11 +451,13 @@ mod tests {
                     *entity.command.lock().unwrap() =
                         "scoreboard objectives remove absent".to_owned();
                     world.level_time.lock().unwrap().world_age += 1;
+                    world.level.set_tick_game_time(world.get_world_age());
                     world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
                     world.tick_chunks(&server);
                     assert_eq!(entity.success_count.load(Ordering::Relaxed), 0);
                     *entity.command.lock().unwrap() = "forceload remove all".to_owned();
                     world.level_time.lock().unwrap().world_age += 1;
+                    world.level.set_tick_game_time(world.get_world_age());
                     world.schedule_block_tick(&Block::COMMAND_BLOCK, pos, 0, TickPriority::Normal);
                     world.tick_chunks(&server);
                     assert!(world.forced_chunks.lock().unwrap().is_empty());
@@ -598,13 +600,11 @@ mod tests {
             pumpkin_world::tick::TickPriority::Normal,
         );
         let requested = rustc_hash::FxHashSet::from_iter([center]);
-        assert!(
-            world
-                .level
-                .get_tick_data(&requested, &requested, 0)
-                .block_ticks
-                .is_empty()
-        );
+        world
+            .level
+            .collect_block_ticks(world.level.tick_game_time(), 65536, &requested);
+        assert!(world.level.pop_block_tick().is_none());
+        world.level.finish_block_ticks();
         assert!(world.is_block_tick_scheduled(&invalid, &Block::GLOW_LICHEN));
         {
             let loading = world.level.chunk_loading.lock().unwrap();
@@ -708,16 +708,21 @@ mod tests {
             assert_eq!(block_chunks.len(), 9);
             assert!(block_chunks.contains(&neighbor.chunk_position()));
             assert!(!block_chunks.contains(&outside.chunk_position()));
-            let ticks = world.level.get_tick_data(&entity_chunks, &block_chunks, 1);
-            assert_eq!(ticks.block_ticks.len(), 1);
-            assert_eq!(ticks.block_ticks[0].position, neighbor);
-            assert_eq!(ticks.fluid_ticks.len(), 1);
-            assert_eq!(ticks.fluid_ticks[0].position, neighbor);
+            let now = world.level.tick_game_time();
+            world.level.collect_block_ticks(now, 65536, &block_chunks);
+            let block_ticks: Vec<_> = std::iter::from_fn(|| world.level.pop_block_tick()).collect();
+            assert_eq!(block_ticks.len(), 1);
+            assert_eq!(block_ticks[0].position, neighbor);
+            world.level.finish_block_ticks();
+            let fluid_ticks = world.level.collect_fluid_ticks(now, 65536, &block_chunks);
+            assert_eq!(fluid_ticks.len(), 1);
+            assert_eq!(fluid_ticks[0].position, neighbor);
+            let ticks = world.level.get_tick_data(&entity_chunks, 1);
             assert!(ticks.random_ticks.is_empty());
             assert!(
                 !world
                     .level
-                    .get_tick_data(&block_chunks, &block_chunks, 1)
+                    .get_tick_data(&block_chunks, 1)
                     .random_ticks
                     .is_empty()
             );

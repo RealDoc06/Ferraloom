@@ -27,9 +27,13 @@ async fn world_in_dimension(dimension: Dimension) -> (tempfile::TempDir, Arc<Wor
     );
     level.shutdown().await.unwrap();
     for x in 0..=1 {
-        level
-            .loaded_chunks
-            .insert(Vector2::new(x, 0), ChunkData::empty_sync(x, 0));
+        let chunk = ChunkData::empty_sync(x, 0);
+        // This command fixture has no activation workers; its empty Full chunks
+        // are explicitly ready for the Level collector used below.
+        chunk
+            .post_processing_ready
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        level.loaded_chunks.insert(Vector2::new(x, 0), chunk);
     }
     let world = Arc::new(World::load(
         level,
@@ -576,17 +580,11 @@ async fn gate_removal_notifies_past_the_front_block() {
 fn step_fixture_block_ticks(world: &Arc<World>, steps: usize) {
     use crate::block::OnScheduledTickArgs;
     for _ in 0..steps {
-        let mut ticks = Vec::new();
-        for x in 0..=1 {
-            ticks.extend(
-                world
-                    .level
-                    .read_chunk_sync(&Vector2::new(x, 0), |chunk| chunk.block_ticks.step_tick())
-                    .unwrap(),
-            );
-        }
-        ticks.sort_unstable();
-        for tick in ticks {
+        let now = world.level.tick_game_time().wrapping_add(1);
+        world.level.set_tick_game_time(now);
+        let eligible = rustc_hash::FxHashSet::from_iter([Vector2::new(0, 0), Vector2::new(1, 0)]);
+        world.level.collect_block_ticks(now, 65536, &eligible);
+        while let Some(tick) = world.level.pop_block_tick() {
             if world.get_block(&tick.position) == tick.value
                 && let Some(behavior) = world.block_registry.get_pumpkin_block(tick.value.id)
             {
@@ -597,6 +595,7 @@ fn step_fixture_block_ticks(world: &Arc<World>, steps: usize) {
                 });
             }
         }
+        world.level.finish_block_ticks();
     }
 }
 
@@ -759,7 +758,9 @@ async fn tripwire_removal_updates_attached_hooks_and_retains_replacements() {
         } else {
             let scheduled = world
                 .level
-                .read_chunk_sync(&west.chunk_position(), |chunk| chunk.block_ticks.to_vec())
+                .read_chunk_sync(&west.chunk_position(), |chunk| {
+                    chunk.block_ticks.pack_at(world.level.tick_game_time())
+                })
                 .unwrap();
             assert!(scheduled.iter().any(|tick| tick.position == west
                 && tick.value == &Block::TRIPWIRE_HOOK

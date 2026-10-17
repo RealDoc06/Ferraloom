@@ -8,8 +8,6 @@ use pumpkin_util::{
 
 pub mod scheduler;
 
-const MAX_TICK_DELAY: usize = 1 << 8;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(i32)]
 pub enum TickPriority {
@@ -56,57 +54,59 @@ impl TryFrom<i32> for TickPriority {
     }
 }
 
-#[derive(Clone)]
+/// Runtime tick. Identity is (position, type), independently of either ordering.
+#[derive(Clone, Copy)]
 pub struct ScheduledTick<T> {
-    pub delay: u8,
-    pub priority: TickPriority,
     pub position: BlockPos,
     pub value: T,
-}
-
-#[derive(Clone)]
-pub struct OrderedTick<T> {
+    pub trigger_tick: i64,
     pub priority: TickPriority,
-    pub sub_tick_order: u64,
-
-    pub position: BlockPos,
-    pub value: T,
+    pub sub_tick_order: i64,
 }
 
-impl<T> OrderedTick<T> {
-    pub const fn new(position: BlockPos, value: T) -> Self {
-        Self {
-            priority: TickPriority::Normal,
-            sub_tick_order: 0,
-            position,
-            value,
+impl<T> ScheduledTick<T> {
+    pub(crate) fn drain_key(&self) -> (i64, TickPriority, i64) {
+        (self.trigger_tick, self.priority, self.sub_tick_order)
+    }
+
+    pub(crate) fn intra_tick_key(&self) -> (TickPriority, i64) {
+        (self.priority, self.sub_tick_order)
+    }
+}
+
+impl<T: Copy> ScheduledTick<T> {
+    pub fn to_saved_tick(&self, now: i64) -> SavedTick<T> {
+        SavedTick {
+            position: self.position,
+            value: self.value,
+            delay: self.trigger_tick.wrapping_sub(now) as i32,
+            priority: self.priority,
         }
     }
 }
 
-impl<T> PartialEq for OrderedTick<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority && self.sub_tick_order == other.sub_tick_order
+/// Disk/proto record. It stays relative until the chunk starts block ticking.
+#[derive(Clone, Copy)]
+pub struct SavedTick<T> {
+    pub position: BlockPos,
+    pub value: T,
+    pub delay: i32,
+    pub priority: TickPriority,
+}
+
+impl<T> SavedTick<T> {
+    pub fn unpack(self, now: i64, sub_tick_order: i64) -> ScheduledTick<T> {
+        ScheduledTick {
+            position: self.position,
+            value: self.value,
+            trigger_tick: now.wrapping_add(i64::from(self.delay)),
+            priority: self.priority,
+            sub_tick_order,
+        }
     }
 }
 
-impl<T> Eq for OrderedTick<T> {}
-
-impl<T> PartialOrd for OrderedTick<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(std::cmp::Ord::cmp(self, other))
-    }
-}
-
-impl<T> Ord for OrderedTick<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.priority
-            .cmp(&other.priority)
-            .then_with(|| self.sub_tick_order.cmp(&other.sub_tick_order))
-    }
-}
-
-impl<T> ScheduledTick<T>
+impl<T> SavedTick<T>
 where
     T: ToResourceLocation,
 {
@@ -116,14 +116,14 @@ where
         nbt.put_int("x", self.position.0.x);
         nbt.put_int("y", self.position.0.y);
         nbt.put_int("z", self.position.0.z);
-        nbt.put_int("t", self.delay as i32);
+        nbt.put_int("t", self.delay);
         nbt.put_int("p", self.priority as i32);
         nbt.put_string("i", self.value.to_resource_location());
         nbt
     }
 }
 
-impl<T> ScheduledTick<T>
+impl<T> SavedTick<T>
 where
     T: FromResourceLocation,
 {
@@ -132,7 +132,7 @@ where
         let x = nbt.get_int("x")?;
         let y = nbt.get_int("y")?;
         let z = nbt.get_int("z")?;
-        let delay = nbt.get_int("t")? as u8;
+        let delay = nbt.get_int("t")?;
         let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
         let res_loc_str = nbt.get_string("i")?;
         let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;

@@ -221,10 +221,6 @@ impl CommandExecutor for CloneExecutor {
             count += 1;
         }
 
-        if count == 0 {
-            return Err(FAILED_ERROR.create_without_context());
-        }
-
         let is_dest_pos = |pos: &BlockPos| {
             pos.0.x >= dest_min_x
                 && pos.0.x <= dest_max_x
@@ -247,6 +243,16 @@ impl CommandExecutor for CloneExecutor {
         }
 
         world.flush_block_updates();
+
+        world.level.copy_block_ticks_from(
+            &world.level,
+            &limit_check_pos_1,
+            &limit_check_pos_2,
+            &BlockPos::new(dest_min_x - min_x, dest_min_y - min_y, dest_min_z - min_z),
+        );
+        if count == 0 {
+            return Err(FAILED_ERROR.create_without_context());
+        }
 
         context.source.send_feedback(
             TextComponent::translate_cross(

@@ -858,13 +858,24 @@ fn setup_stdin_console(server: &Arc<Server>) {
                 .fire(&server_clone, &mut event)
                 .await;
             if !event.cancelled {
-                server_clone.command_dispatcher.load().handle_command(
-                    &command::CommandSender::Console.into_source(&server_clone),
-                    command.as_str(),
-                );
+                dispatch_console_command(&server_clone, &command);
             }
         }
     });
+}
+
+/// Console plugin events have already completed. Only synchronous dispatch owns
+/// the existing tick/packet phase; nested function commands never reacquire it.
+fn dispatch_console_command(server: &Arc<Server>, command: &str) {
+    let _phase = server
+        .packet_runner
+        .phase
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    server.command_dispatcher.load().handle_command(
+        &command::CommandSender::Console.into_source(server),
+        command,
+    );
 }
 
 fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: Arc<Server>) {
@@ -926,10 +937,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 let mut event = ServerCommandEvent::new(line.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if !event.cancelled {
-                    server.command_dispatcher.load().handle_command(
-                        &command::CommandSender::Console.into_source(&server),
-                        &line,
-                    );
+                    dispatch_console_command(&server, &line);
                 }
                 let _ = tx_reply.send(1).await;
             } else {

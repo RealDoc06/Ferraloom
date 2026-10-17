@@ -1316,7 +1316,21 @@ impl GenerationSchedule {
         else {
             return false;
         };
-        if !Arc::ptr_eq(entry.get(), chunk) || !unload.prepare_or_defer(pos, chunk) {
+        if !Arc::ptr_eq(entry.get(), chunk) {
+            return false;
+        }
+        // The exclusive entry excludes collection's Ref/counter increment. Do
+        // this before every prepare branch, including an already Prepared Arc.
+        if chunk
+            .block_tick_phase_owners
+            .load(std::sync::atomic::Ordering::Acquire)
+            != 0
+        {
+            unload.mark_live(pos);
+            unload.prepare_or_defer(pos, chunk);
+            return false;
+        }
+        if !unload.prepare_or_defer(pos, chunk) {
             return false;
         }
         entry.remove();

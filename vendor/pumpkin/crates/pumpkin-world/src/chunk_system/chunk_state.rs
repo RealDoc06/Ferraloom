@@ -9,7 +9,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 
 use crate::ProtoChunk;
 use crate::level::SyncChunk;
@@ -281,6 +281,7 @@ impl Chunk {
                 z: 0,
                 block_ticks: ChunkTickScheduler::default(),
                 fluid_ticks: ChunkTickScheduler::default(),
+                block_tick_phase_owners: AtomicU32::new(0),
                 post_processing: Mutex::default(),
                 post_processing_ready: AtomicBool::new(false),
                 pending_block_entities: Mutex::default(),
@@ -333,6 +334,7 @@ impl Chunk {
             dirty: AtomicBool::new(true),
             block_ticks: ChunkTickScheduler::default(),
             fluid_ticks: ChunkTickScheduler::from_iter(proto_chunk.fluid_ticks),
+            block_tick_phase_owners: AtomicU32::new(0),
             post_processing: Mutex::new(proto_chunk.post_processing),
             post_processing_ready: AtomicBool::new(false),
             pending_block_entities: Mutex::new(pending_block_entities),
