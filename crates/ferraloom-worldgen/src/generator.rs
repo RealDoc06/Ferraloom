@@ -106,6 +106,41 @@ impl GenerationData {
     }
 }
 
+impl GenerationData {
+    pub fn heightmap_matches(
+        &self,
+        heightmap: crate::region::Heightmap,
+        state: BlockState,
+    ) -> bool {
+        use crate::region::Heightmap;
+        match heightmap {
+            Heightmap::WorldSurface => !is_air(state),
+            Heightmap::OceanFloor => self.motion_blocking.contains(&state.block()),
+            Heightmap::MotionBlocking => {
+                self.motion_blocking.contains(&state.block()) || !state.data().fluid.empty
+            }
+            Heightmap::MotionBlockingNoLeaves => {
+                self.motion_blocking_no_leaves.contains(&state.block()) || !state.data().fluid.empty
+            }
+        }
+    }
+}
+/// Port of NoiseColumn. Queries outside the captured interval return AIR.
+#[derive(Clone, Debug)]
+pub struct NoiseColumn {
+    pub min_y: i32,
+    pub states: Vec<BlockState>,
+}
+impl NoiseColumn {
+    pub fn get_block(&self, y: i32) -> BlockState {
+        usize::try_from(y.wrapping_sub(self.min_y))
+            .ok()
+            .and_then(|y| self.states.get(y))
+            .copied()
+            .unwrap_or(Block::AIR.default_state())
+    }
+}
+
 /// Shared seed-specific state. Evaluation never mutates this graph or system.
 #[derive(Debug)]
 pub struct RandomState {
@@ -316,6 +351,121 @@ impl NoiseBasedChunkGenerator {
                 }
             }
         }
+    }
+    /// Port of NoiseBasedChunkGenerator#getBaseHeight. This samples a fresh
+    /// one-block-wide noise column, never a generated chunk or structure input.
+    pub fn get_base_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error> {
+        Ok(self
+            .iterate_noise_column(x, z, min_y, height, Some(heightmap), false)
+            .0
+            .unwrap_or(min_y))
+    }
+    /// Port of ChunkGenerator#getFirstFreeHeight.
+    pub fn get_first_free_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error> {
+        self.get_base_height(x, z, heightmap, min_y, height)
+    }
+    /// Port of ChunkGenerator#getFirstOccupiedHeight, including the empty
+    /// column result of level minimum Y minus one.
+    pub fn get_first_occupied_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error> {
+        Ok(self
+            .get_base_height(x, z, heightmap, min_y, height)?
+            .wrapping_sub(1))
+    }
+    /// Port of NoiseBasedChunkGenerator#getBaseColumn. Vanilla returns null if
+    /// the level and generation height ranges do not overlap.
+    pub fn get_base_column(
+        &self,
+        x: i32,
+        z: i32,
+        min_y: i32,
+        height: i32,
+    ) -> Result<Option<NoiseColumn>, Error> {
+        Ok(self.iterate_noise_column(x, z, min_y, height, None, true).1)
+    }
+    fn iterate_noise_column(
+        &self,
+        x: i32,
+        z: i32,
+        level_min: i32,
+        level_height: i32,
+        tester: Option<crate::region::Heightmap>,
+        capture: bool,
+    ) -> (Option<i32>, Option<NoiseColumn>) {
+        let min_y = self.settings.noise.min_y.max(level_min);
+        let height = self
+            .settings
+            .noise
+            .min_y
+            .wrapping_add(self.settings.noise.height)
+            .min(level_min.wrapping_add(level_height))
+            .wrapping_sub(min_y);
+        if height <= 0 {
+            return (None, None);
+        }
+        let volume = DensityVolume {
+            size: [1, height as usize, 1],
+            min: [x, min_y, z],
+            step: [1; 3],
+        };
+        let mut samplers = SamplerContext::cached();
+        let mut aquifer = Aquifer::new(
+            self.random.aquifer,
+            FluidPicker {
+                sea_level: self.settings.sea_level,
+                default_fluid: self.settings.default_fluid,
+            },
+            &self.random.compiler,
+            &mut samplers,
+            volume,
+        );
+        let density = self.random.compiler.sample_volume(
+            self.random.router.functions[7],
+            &mut samplers,
+            volume,
+        );
+        let mut column = capture.then(|| NoiseColumn {
+            min_y,
+            states: vec![Block::AIR.default_state(); height as usize],
+        });
+        for y in (0..height as usize).rev() {
+            let block_y = min_y + y as i32;
+            let state = aquifer
+                .compute_substance(
+                    &self.random.compiler,
+                    &mut samplers,
+                    [x, block_y, z],
+                    f64::from(density[volume.index(0, y, 0)]),
+                )
+                .unwrap_or(self.settings.default_block);
+            if let Some(column) = &mut column {
+                column.states[y] = state;
+            }
+            if tester.is_some_and(|heightmap| self.data.heightmap_matches(heightmap, state)) {
+                return (Some(block_y + 1), column);
+            }
+        }
+        (None, column)
     }
     pub fn build_surface(&self, chunk: &mut GeneratedChunk, noise: &mut NoiseChunk) {
         if noise.volume.is_empty() {
