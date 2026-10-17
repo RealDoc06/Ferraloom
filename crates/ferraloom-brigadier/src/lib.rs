@@ -19,10 +19,14 @@ pub use suggestion::*;
 pub use tree::*;
 
 #[cfg(test)]
+mod argument_tests;
+#[cfg(test)]
 mod completion_tests;
 #[cfg(test)]
 mod dispatcher_tests;
 #[cfg(test)]
 mod reader_tests;
+#[cfg(test)]
+mod suggestion_tests;
 #[cfg(test)]
 mod usage_tests;
