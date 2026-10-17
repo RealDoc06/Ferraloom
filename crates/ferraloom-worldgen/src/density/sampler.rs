@@ -370,7 +370,7 @@ impl DensityFunctionCompiler {
             }
             D::EndOuterIslands => end_islands(node.island.as_ref().unwrap(), p[0], p[2]),
             D::DistanceToPoint { point, metric } => distance(
-                point.map_with_index(|i, v| v.wrapping_sub(p[i]) as f32),
+                std::array::from_fn(|i| point[i].wrapping_sub(p[i]) as f32),
                 *metric,
             ),
             D::Gradient {
@@ -1177,13 +1177,4 @@ fn end_islands(noise: &SimplexNoise, x: i32, z: i32) -> f32 {
         }
     }
     (offset - 8.0) / 128.0
-}
-
-trait ArrayMapIndex<T, const N: usize> {
-    fn map_with_index<U>(self, f: impl FnMut(usize, T) -> U) -> [U; N];
-}
-impl<T: Copy, const N: usize> ArrayMapIndex<T, N> for [T; N] {
-    fn map_with_index<U>(self, mut f: impl FnMut(usize, T) -> U) -> [U; N] {
-        std::array::from_fn(|i| f(i, self[i]))
-    }
 }

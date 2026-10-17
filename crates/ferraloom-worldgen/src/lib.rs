@@ -25,3 +25,7 @@ impl From<serde_json::Error> for Error {
         Self(error.to_string())
     }
 }
+
+pub mod router;
+
+pub mod climate;
