@@ -296,7 +296,7 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
         .await?;
     client
         .io
-        .send(&sb::Packet::Chat(sb::Chat {
+        .send(&sb::Packet::Chat(Box::new(sb::Chat {
             message: common::Utf8("hello parity".into()),
             timestamp: time::OffsetDateTime::now_utc()
                 .unix_timestamp_nanos()
@@ -308,7 +308,7 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
                 acknowledged: BitSet::default(),
                 checksum: 0,
             },
-        }))
+        })))
         .await?;
     client
         .until(|_, p| matches!(p,cb::Packet::PlayerChat(p)if p.body.content.0=="hello parity"))

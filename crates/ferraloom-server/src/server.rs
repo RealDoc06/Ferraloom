@@ -964,8 +964,7 @@ impl MinecraftServer {
                             connection,
                             entity,
                             Vec3::new(p.x, p.y, p.z),
-                            p.y_rot,
-                            p.x_rot,
+                            (p.y_rot, p.x_rot),
                             false,
                         )
                         .await?;
@@ -979,8 +978,7 @@ impl MinecraftServer {
                     connection,
                     entity,
                     Vec3::new(p.x, p.y, p.z),
-                    yaw,
-                    pitch,
+                    (yaw, pitch),
                     p.flags.on_ground,
                 )
                 .await?;
@@ -990,8 +988,7 @@ impl MinecraftServer {
                     connection,
                     entity,
                     Vec3::new(p.x, p.y, p.z),
-                    p.y_rot,
-                    p.x_rot,
+                    (p.y_rot, p.x_rot),
                     p.flags.on_ground,
                 )
                 .await?
@@ -1002,8 +999,7 @@ impl MinecraftServer {
                     connection,
                     entity,
                     position,
-                    p.y_rot,
-                    p.x_rot,
+                    (p.y_rot, p.x_rot),
                     p.flags.on_ground,
                 )
                 .await?;
@@ -1215,10 +1211,10 @@ impl MinecraftServer {
         connection: ConnectionId,
         entity: EntityRef,
         target: Vec3,
-        yaw: f32,
-        pitch: f32,
+        rotation: (f32, f32),
         on_ground: bool,
     ) -> Result<()> {
+        let (yaw, pitch) = rotation;
         if self.connections[&connection].awaiting_teleport.is_some() {
             return Ok(());
         }
@@ -1571,18 +1567,34 @@ impl MinecraftServer {
         })
     }
     fn refresh_status(&mut self) {
+        use rand::{Rng, seq::SliceRandom};
+        let mut random = rand::thread_rng();
+        let sample_size = self.players.len().min(12);
+        let offset = random.gen_range(0..=self.players.len() - sample_size);
         let sample = if self.properties.boolean("hide-online-players") {
             Vec::new()
         } else {
-            self.players
+            let mut sample = self
+                .players
                 .iter()
+                .skip(offset)
+                .take(sample_size)
                 .filter_map(|id| self.connections.get(id))
-                .take(12)
                 .map(|c| status::NameAndId {
-                    id: c.profile.id,
-                    name: c.profile.name.clone(),
+                    id: if c.information.allows_listing {
+                        c.profile.id
+                    } else {
+                        Uuid::NIL
+                    },
+                    name: if c.information.allows_listing {
+                        c.profile.name.clone()
+                    } else {
+                        "Anonymous Player".into()
+                    },
                 })
-                .collect()
+                .collect::<Vec<_>>();
+            sample.shuffle(&mut random);
+            sample
         };
         self.status.send_replace(make_status(
             &self.properties,
