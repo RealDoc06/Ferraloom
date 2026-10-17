@@ -293,14 +293,15 @@ impl Bot {
         }));
         let sequence = Arc::new(Mutex::new(sequence));
         let writer_state = state.clone();
+        let writer_registries = registries.clone();
         let writer = tokio::spawn(async move {
             let result = async {
                 let mut encoder = CompressionEncoder::new(compression);
                 while let Some(packet) = outbound.recv().await {
+                    let mut body = p::Writer::with_context(&writer_registries);
+                    packet.encode(&mut body)?;
                     write
-                        .write_all(&FrameEncoder::encode(
-                            &encoder.encode(&packet.to_bytes()?)?,
-                        )?)
+                        .write_all(&FrameEncoder::encode(&encoder.encode(body.as_slice())?)?)
                         .await?;
                 }
                 Ok::<_, anyhow::Error>(())

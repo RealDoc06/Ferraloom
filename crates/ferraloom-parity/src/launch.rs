@@ -253,7 +253,10 @@ pub(crate) async fn launch(
                     c
                 }
                 ServerKind::FerraloomBinary(binary) => {
-                    let mut c = Command::new(binary);
+                    let mut c = Command::new(
+                        std::fs::canonicalize(binary)
+                            .with_context(|| format!("Ferraloom binary {}", binary.display()))?,
+                    );
                     c.args([
                         "nogui",
                         "--regions",

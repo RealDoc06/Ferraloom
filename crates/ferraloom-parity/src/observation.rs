@@ -34,6 +34,7 @@ impl ObservationLog {
         let mut value = serde_json::to_value(self)?;
         let mut entities = BTreeMap::new();
         let mut uuids = BTreeMap::new();
+        let mut selected = std::collections::BTreeSet::new();
         for rule in rules {
             let (pointer, kind) = match rule {
                 Normalization::EntityId(p) => (p, 0),
@@ -41,6 +42,10 @@ impl ObservationLog {
                 Normalization::Timestamp(p) => (p, 2),
                 Normalization::VaryingSeed(p) => (p, 3),
             };
+            ensure!(
+                selected.insert(pointer),
+                "duplicate normalization path {pointer}"
+            );
             let entry = value.pointer_mut(pointer).with_context(|| {
                 format!("normalization points to missing observation: {pointer}")
             })?;
