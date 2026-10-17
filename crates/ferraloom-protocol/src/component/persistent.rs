@@ -651,19 +651,16 @@ impl Persistent for InstrumentHolder {
 }
 impl Persistent for JukeboxSongHolder {
     fn from_json(v: &Json) -> Result<Self> {
-        Ok(Self(if v.is_string() {
-            Holder::Reference(Identifier::from_json(v)?)
-        } else {
-            Holder::Direct(JukeboxSong::from_json(v)?)
-        }))
+        Ok(Self(Holder::Reference(Identifier::from_json(v)?)))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
-            Holder::Direct(v) => v.to_persistent(),
+            Holder::Direct(_) => Err(invalid("unregistered holder")),
         }
     }
 }
+
 impl Persistent for BannerPatternHolder {
     fn from_json(v: &Json) -> Result<Self> {
         Ok(Self(if v.is_string() {
@@ -681,19 +678,16 @@ impl Persistent for BannerPatternHolder {
 }
 impl Persistent for PaintingVariantHolder {
     fn from_json(v: &Json) -> Result<Self> {
-        Ok(Self(if v.is_string() {
-            Holder::Reference(Identifier::from_json(v)?)
-        } else {
-            Holder::Direct(PaintingVariant::from_json(v)?)
-        }))
+        Ok(Self(Holder::Reference(Identifier::from_json(v)?)))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
-            Holder::Direct(v) => v.to_persistent(),
+            Holder::Direct(_) => Err(invalid("unregistered holder")),
         }
     }
 }
+
 impl Persistent for Rarity {
     fn from_json(v: &Json) -> Result<Self> {
         match v.as_str() {

@@ -234,7 +234,45 @@ record!(BannerPattern {
     asset_id: Identifier,
     translation_key: String
 });
-record!(PaintingVariant { width: VarInt, height: VarInt, asset_id: Identifier, title: Option<Component>, author: Option<Component> });
+/// Port of PaintingVariant's direct codec, with NBT-sentinel optional text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PaintingVariant {
+    pub width: VarInt,
+    pub height: VarInt,
+    pub asset_id: Identifier,
+    pub title: Option<Component>,
+    pub author: Option<Component>,
+}
+impl Wire for PaintingVariant {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        Ok(Self {
+            width: r.read()?,
+            height: r.read()?,
+            asset_id: r.read()?,
+            title: r.optional_nbt(true)?.map(Component::from_nbt).transpose()?,
+            author: r.optional_nbt(true)?.map(Component::from_nbt).transpose()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.write(&self.width)?;
+        w.write(&self.height)?;
+        w.write(&self.asset_id)?;
+        w.optional_nbt(
+            self.title
+                .as_ref()
+                .map(Component::to_nbt)
+                .transpose()?
+                .as_ref(),
+        )?;
+        w.optional_nbt(
+            self.author
+                .as_ref()
+                .map(Component::to_nbt)
+                .transpose()?
+                .as_ref(),
+        )
+    }
+}
 record!(UseEffects {
     can_sprint: bool,
     interact_vibrations: bool,
