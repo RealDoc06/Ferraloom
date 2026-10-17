@@ -114,3 +114,50 @@ fn empty_stack_and_template_rules() {
         .is_ok()
     );
 }
+#[test]
+fn vanilla_persistent_component_hashes() {
+    let (fixtures, registries) = fixtures();
+    for fixture in fixtures["components"].as_array().unwrap() {
+        let key = Identifier::parse(fixture["type"].as_str().unwrap()).unwrap();
+        let bytes = unhex(fixture["bytes"].as_str().unwrap());
+        let mut r = Reader::with_context(&bytes, &registries);
+        let value = DataComponent::decode_value(&key, &mut r).unwrap();
+        if let Some(expected) = fixture.get("hash") {
+            assert_eq!(
+                value.hash().unwrap_or_else(|e| panic!("{key}: {e}")),
+                expected.as_i64().unwrap() as i32,
+                "{key}, persistent {:?}",
+                value.to_json()
+            );
+            let restored = DataComponent::from_json(&key, &fixture["value"])
+                .unwrap_or_else(|e| panic!("{key}: {e}"));
+            if !matches!(value, DataComponent::CustomData(_)) {
+                assert_eq!(value, restored, "{key}");
+            }
+        }
+    }
+}
+#[test]
+fn all_extracted_item_defaults_are_typed() {
+    for &item in ferraloom_data::registries::item::ALL {
+        let defaults = DataComponentMap::from_item_defaults(item)
+            .unwrap_or_else(|e| panic!("{}: {e}", item.name()));
+        assert!(!defaults.entries.is_empty(), "{}", item.name());
+    }
+}
+#[test]
+fn vanilla_hashed_stack_validation() {
+    let (f, registries) = fixtures();
+    for name in ["empty", "stone", "sword", "nested"] {
+        let stack: ItemStack = roundtrip(f[name].as_str().unwrap(), &registries);
+        let hashed: HashedStack =
+            roundtrip(f[format!("{name}_hashed")].as_str().unwrap(), &registries);
+        assert!(hashed.matches(&stack).unwrap(), "{name}");
+        assert!(
+            HashedStack::create(&stack)
+                .unwrap()
+                .matches(&stack)
+                .unwrap()
+        );
+    }
+}

@@ -182,3 +182,70 @@ impl Wire for HashedStack {
         })
     }
 }
+impl HashedPatchMap {
+    /// Port of HashedPatchMap#create using each component's persistent codec and HashOps CRC32C.
+    pub fn create(patch: &DataComponentPatch) -> Result<Self> {
+        Ok(Self {
+            added: patch
+                .added
+                .iter()
+                .map(|v| Ok((v.component_type(), v.hash()?)))
+                .collect::<Result<_>>()?,
+            removed: patch.removed.clone(),
+        })
+    }
+    pub fn matches(&self, patch: &DataComponentPatch) -> Result<bool> {
+        if self.added.len() != patch.added.len()
+            || self.removed.len() != patch.removed.len()
+            || !self.removed.iter().all(|v| patch.removed.contains(v))
+        {
+            return Ok(false);
+        }
+        for value in &patch.added {
+            if self
+                .added
+                .iter()
+                .find(|(key, _)| *key == value.component_type())
+                .map(|(_, hash)| *hash)
+                != Some(value.hash()?)
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+impl HashedStack {
+    pub fn create(stack: &ItemStack) -> Result<Self> {
+        if stack.is_empty() {
+            return Ok(Self(None));
+        }
+        let value = stack.0.as_ref().expect("nonempty");
+        Ok(Self(Some(HashedStackContents {
+            item: value.item,
+            count: value.count,
+            components: HashedPatchMap::create(&value.components)?,
+        })))
+    }
+    pub fn matches(&self, stack: &ItemStack) -> Result<bool> {
+        match (&self.0, &stack.0) {
+            (None, _) => Ok(stack.is_empty()),
+            (Some(a), Some(b)) if !stack.is_empty() && a.item == b.item && a.count == b.count => {
+                a.components.matches(&b.components)
+            }
+            _ => Ok(false),
+        }
+    }
+}
+impl ItemStack {
+    /// Resolve vanilla item defaults before applying additions and explicit removals.
+    pub fn components(&self) -> Result<super::DataComponentMap> {
+        if self.is_empty() {
+            return Ok(super::DataComponentMap::default());
+        }
+        let value = self.0.as_ref().expect("nonempty");
+        let mut defaults = super::DataComponentMap::from_item_defaults(value.item)?;
+        defaults.apply(&value.components);
+        Ok(defaults)
+    }
+}
