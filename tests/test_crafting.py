@@ -71,6 +71,73 @@ def drop(item='sugar', count=3, identity=(1, 2, 3, 4)):
 
 
 class CraftingValidatorTests(unittest.TestCase):
+    def test_exercise_predeclares_requested_awards_and_preserves_whole_physical_output(self):
+        # Capture the real exercise's declarations only. No inventory simulation or runtime gold.
+        class DeclarationProbe(craft.Probe):
+            def __init__(self):
+                self.checks, self.clicks = [], []
+
+            def prepare(self, name):
+                self.case = {'name': name, 'timeline': []}
+                return craft.recipe_fixture(name)
+
+            def inventory(self, entries):
+                pass
+
+            def click(self, purpose, slot, action, button=0):
+                self.clicks.append((purpose, slot, action, button))
+
+            def check(self, label, expected, *, drops=None, awards=None):
+                self.checks.append((label, expected, drops or {}, awards or {}))
+
+            def retain(self):
+                pass
+
+            def reset(self):
+                pass
+
+        expected = {
+            'player_offset_left': {'sugar': 3}, 'player_offset_right': {'sugar': 2},
+            'table_offset_left': {'sugar': 3}, 'table_offset_right': {'sugar': 2},
+            'full_cursor': {'sugar': 3}, 'throw_once': {'sugar': 1}, 'throw_all': {'sugar': 9},
+            'player_four_honey': {'honey_block': 1}, 'table_four_honey': {'honey_block': 1},
+            'cake_shift': {'cake': 1}, 'offhand_partial': {'sugar': 1},
+            'offhand_spill': {'sugar': 1}, 'selected_before_offhand': {'sugar': 1},
+        }
+        self.assertEqual(tuple(expected), craft.CASES)
+        self.assertEqual(len(craft.CASES), 13)
+        totals = dict.fromkeys(craft.CRAFTED, 0)
+        for name, awards in expected.items():
+            with self.subTest(name=name):
+                probe = DeclarationProbe()
+                probe.exercise(name)
+                extracted = [row for row in probe.checks if row[0] == 'extracted']
+                self.assertEqual(len(extracted), 1)
+                _, actual, drops, declared = extracted[0]
+                self.assertEqual(declared, awards)
+                self.assertEqual(probe.clicks[-1], craft.required_clicks(name)[-1])
+                if name.endswith(('_left', '_right')) or name == 'full_cursor':
+                    self.assertEqual(actual['cursor'], craft.stack('sugar', 3))
+                if name in ('throw_once', 'offhand_partial', 'offhand_spill', 'selected_before_offhand'):
+                    self.assertEqual(drops['minecraft:sugar'], 3)
+                if name == 'throw_all':
+                    self.assertEqual(drops['minecraft:sugar'], 9)
+                for item, count in declared.items():
+                    totals[item] += count
+        self.assertEqual(totals, {'sugar': 26, 'honey_block': 2, 'cake': 1})
+
+    def test_requested_awards_reject_returned_stack_count_for_right_pickup_and_throw_zero(self):
+        zero = dict.fromkeys(craft.CRAFTED, 0)
+        for requested in (2, 1):
+            with self.subTest(requested=requested):
+                expected = craft.expected_view('player', {4: craft.stack('glass_bottle')},
+                    cursor=craft.stack('sugar', 3) if requested == 2 else None)
+                drops = {} if requested == 2 else {'minecraft:sugar': 3}
+                awards = {'sugar': requested}
+                craft.validate_outcome(expected, expected, drops, drops, zero, {**zero, **awards}, awards)
+                with self.assertRaises(AssertionError):
+                    craft.validate_outcome(expected, expected, drops, drops, zero, {**zero, 'sugar': 3}, awards)
+
     def test_exact_outcome_rejects_partial_output_missing_remainder_and_false_rejection(self):
         expected = craft.expected_view('player', {4: craft.stack('glass_bottle')}, cursor=craft.stack('sugar', 3))
         zero = {'sugar': 0, 'honey_block': 0, 'cake': 0}

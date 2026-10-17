@@ -612,26 +612,26 @@ class Probe:
                 if name == 'offhand_spill':
                     drops['minecraft:glass_bottle'] = 1
                 self.check('extracted', expected_view(kind, {4: stack('honey_bottle')}, result=output, main=full,
-                    offhand=stack('glass_bottle', 64)), drops=drops, awards={'sugar': 3})
+                    offhand=stack('glass_bottle', 64)), drops=drops, awards={'sugar': 1})
             elif name == 'selected_before_offhand':
                 self.inventory({0: stack('glass_bottle', 62), 9: stack('glass_bottle', 63), 40: stack('glass_bottle', 63)})
                 self.click('extract', 0, 'throw')
                 main = [None] * 36
                 main[0], main[9] = stack('glass_bottle', 63), stack('glass_bottle', 63)
                 self.check('extracted', expected_view(kind, {4: stack('honey_bottle')}, result=output, main=main,
-                    offhand=stack('glass_bottle', 63)), drops={'minecraft:sugar': 3}, awards={'sugar': 3})
+                    offhand=stack('glass_bottle', 63)), drops={'minecraft:sugar': 3}, awards={'sugar': 1})
             elif name in ('throw_once', 'throw_all'):
                 self.click('extract', 0, 'throw', 0 if name == 'throw_once' else 1)
                 main = [None] * 36
                 main[0] = stack('glass_bottle', 1 if name == 'throw_once' else 2)
                 once = name == 'throw_once'
                 self.check('extracted', expected_view(kind, {4: stack('honey_bottle') if once else stack('glass_bottle')},
-                    result=output if once else None, main=main), drops={'minecraft:sugar': 3 if once else 9}, awards={'sugar': 3 if once else 9})
+                    result=output if once else None, main=main), drops={'minecraft:sugar': 3 if once else 9}, awards={'sugar': 1 if once else 9})
             else:
                 self.click('extract', 0, 'pickup', 1 if name.endswith('_right') else 0)
                 bottles = {slot: stack('glass_bottle') for slot in grid}
                 self.check('extracted', expected_view(kind, bottles, cursor=output),
-                           awards={'honey_block': 1} if name.endswith('four_honey') else {'sugar': 3})
+                           awards={'honey_block': 1} if name.endswith('four_honey') else {'sugar': 2 if name.endswith('_right') else 3})
             self.case['evidence_retained'] = True
             self.case['timeline'].extend(['evidence_retained', 'assertions_passed'])
             self.case['result'] = 'passed'
@@ -730,7 +730,7 @@ def run_campaign(args: argparse.Namespace, run: Path, report: dict) -> None:
             entry['teardown'] = deepcopy(fixture.processes[-1])
             entry['saved'] = retained_player(server.directory / 'world', server.directory / 'stopped')
             require(suite.data_version(server.directory / 'world') == 5023, 'Wrong stopped DataVersion')
-            require(crafted_counts(entry['saved']['statistics']) == {'sugar': 36, 'honey_block': 2, 'cake': 1}, 'Wrong complete campaign crafted totals')
+            require(crafted_counts(entry['saved']['statistics']) == {'sugar': 26, 'honey_block': 2, 'cake': 1}, 'Wrong complete campaign crafted totals')
             require(player_items(entry['saved']['player']['typed']) == ([None] * 36, None), 'Stopped fixture retained unexpected player items')
             entry['result'] = 'passed'
         except Exception as error:
