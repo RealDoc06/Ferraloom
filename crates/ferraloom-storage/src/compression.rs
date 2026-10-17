@@ -79,8 +79,9 @@ impl RegionFileVersion {
 // lz4-java uses LZ4Block streams, not the standard LZ4 frame format.
 const MAGIC: &[u8; 8] = b"LZ4Block";
 const SEED: u32 = 0x9747_b28c;
+// StreamingXXHash32#asChecksum masks to 28 bits; Java LZ4Block streams retain that quirk.
 fn checksum(bytes: &[u8]) -> u32 {
-    twox_hash::XxHash32::oneshot(SEED, bytes)
+    twox_hash::XxHash32::oneshot(SEED, bytes) & 0x0fff_ffff
 }
 fn lz4_encode(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();

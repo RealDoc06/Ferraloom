@@ -122,8 +122,63 @@ macro_rules! model {
     };
 }
 
-model! {/// Port of NbtUtils#writeBlockState, preserving registry names and properties.
-BlockStatePaletteEntry {name:NbtString=>"Name",properties:BTreeMap<NbtString,NbtString> =>"Properties"}}
+/// Port of BlockState#CODEC: default states use a string; other states use Name/Properties.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BlockStatePaletteEntry {
+    pub name: Option<NbtString>,
+    pub properties: Option<BTreeMap<NbtString, NbtString>>,
+    pub extra: CompoundTag,
+    /// Retains whether the original palette used BlockState.CODEC's default-state shorthand.
+    pub shorthand: bool,
+}
+impl BlockStatePaletteEntry {
+    pub fn from_nbt(mut tag: CompoundTag) -> Result<Self> {
+        let name = tag.remove("Name").map(NbtString::from_tag).transpose()?;
+        let properties = tag
+            .remove("Properties")
+            .map(BTreeMap::<NbtString, NbtString>::from_tag)
+            .transpose()?;
+        Ok(Self {
+            name,
+            properties,
+            extra: tag,
+            shorthand: false,
+        })
+    }
+    pub fn to_nbt(&self) -> CompoundTag {
+        let mut tag = self.extra.clone();
+        tag.remove("Name");
+        tag.remove("Properties");
+        if let Some(name) = &self.name {
+            tag.insert("Name", name.to_tag());
+        }
+        if let Some(properties) = &self.properties {
+            tag.insert("Properties", properties.to_tag());
+        }
+        tag
+    }
+}
+impl NbtField for BlockStatePaletteEntry {
+    fn from_tag(tag: Tag) -> Result<Self> {
+        match tag {
+            Tag::String(name) => Ok(Self {
+                name: Some(name),
+                shorthand: true,
+                ..Self::default()
+            }),
+            Tag::Compound(tag) => Self::from_nbt(tag),
+            _ => Err(wrong_type("block state string or compound")),
+        }
+    }
+    fn to_tag(&self) -> Tag {
+        if self.shorthand && self.properties.is_none() && self.extra.is_empty() {
+            if let Some(name) = &self.name {
+                return name.to_tag();
+            }
+        }
+        Tag::Compound(self.to_nbt())
+    }
+}
 
 /// Port of PalettedContainer's disk codec. Values remain names until registries are available.
 #[derive(Clone, Debug, PartialEq)]
