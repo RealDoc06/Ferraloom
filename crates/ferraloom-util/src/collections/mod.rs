@@ -11,10 +11,12 @@
 mod hash;
 mod jdk;
 mod open;
+mod priority_queue;
 mod reference;
 pub use hash::*;
 pub use jdk::{JavaCursor, JavaHashMap, JavaHashSet, JavaIter};
 pub use open::{Cursor, Iter, OpenHashMap, OpenHashSet};
+pub use priority_queue::{JavaPriorityQueue, PriorityCursor};
 pub use reference::{ReferenceHashMap, ReferenceIter, ReferenceKey, ReferenceOpenHashSet};
 
 pub type LongOpenHashSet = OpenHashSet<i64, LongHash>;

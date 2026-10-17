@@ -19,3 +19,6 @@ PYTHON
     "$jdk/bin/java" --add-opens java.base/java.util=ALL-UNNAMED -cp "$tmp:$classpath" HashOracle "$root/src/collections/hashes.txt"
 )
 python3 "$root/tests/java/collections/pack.py" "$tmp/oracle.txt" "$root/src/collections/oracle.bin"
+"$jdk/bin/javac" -d "$tmp" "$root/tests/java/collections/PriorityQueueOracle.java"
+"$jdk/bin/java" --add-opens java.base/java.util=ALL-UNNAMED -cp "$tmp" PriorityQueueOracle "$tmp/priority_queue.txt"
+python3 "$root/tests/java/collections/pack_priority.py" "$tmp/priority_queue.txt" "$root/src/collections/priority_queue.bin"
