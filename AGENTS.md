@@ -30,8 +30,11 @@ writing code.
 
 - Unit tests live next to the code. Parity tests run the same scenario against
   vanilla and Ferraloom and must agree (`crates/ferraloom-parity`).
-- `FEATURES.md` lists every vanilla feature with its vanilla and Ferraloom test
-  status. Update it in the same commit that changes a feature.
+- `FEATURES.md` indexes `features/<area>.md`, which list every vanilla feature
+  with its test and its vanilla and Ferraloom status. Update the rows you cover
+  in `features/<area>.md` in the same commit that changes the feature, and add
+  rows for edge cases the inventory missed. Never edit the `FEATURES.md` index;
+  the coordinator regenerates its counts with `python3 features/counts.py`.
 - Tests must be focused. No smoke-test spam, receipts, evidence ledgers or
   hash-pinned logs. A test passes or it fails.
 

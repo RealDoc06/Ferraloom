@@ -1,0 +1,62 @@
+# Scoreboard, teams and bossbars
+
+Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
+
+| ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
+|---|---|---|---|---|---|
+| scoreboard-teams-bossbars.objectives.criteria | Create objectives with display names, render type and criterion-specific score sources | `Scoreboard; Objective; ObjectiveCriteria` | | - | todo |
+| scoreboard-teams-bossbars.scores.operations | Apply score set, add, remove, reset, operation, swap and division or modulo semantics | `ScoreboardCommand; OperationArgument` | | - | todo |
+| scoreboard-teams-bossbars.scores.trigger | Enable trigger objectives per player and consume enabled state on trigger | `TriggerCommand; ScoreAccess` | | - | todo |
+| scoreboard-teams-bossbars.scores.auto-tracking | Update statistic, death, kill, health, food, armor and experience criteria | `ServerPlayer; ObjectiveCriteria` | | - | todo |
+| scoreboard-teams-bossbars.display.slots-format | Assign objective display slots and per-objective or per-score number formatting | `ServerScoreboard; NumberFormat` | | - | todo |
+| scoreboard-teams-bossbars.teams.members | Maintain team membership, display prefix and suffix, color and visibility settings | `PlayerTeam; Scoreboard` | | - | todo |
+| scoreboard-teams-bossbars.teams.collisions | Apply collision rules, friendly fire and friendly invisibility constraints | `PlayerTeam; EntitySelector` | | - | todo |
+| scoreboard-teams-bossbars.network.sync | Send initial and incremental objective, score, team and display changes | `ServerScoreboard` | | - | todo |
+| scoreboard-teams-bossbars.bossbars.custom | Persist custom bossbar id, name, value, max, style, visibility and player set | `CustomBossEvents; CustomBossEvent` | | - | todo |
+| scoreboard-teams-bossbars.bossbars.lifecycle | Add, remove and update bossbar viewers on joins, leaves and boss encounter state | `ServerBossEvent` | | - | todo |
+| scoreboard-teams-bossbars.criterion.air | Scoreboard criterion `air` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.armor | Scoreboard criterion `armor` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.death-count | Scoreboard criterion `deathCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.dummy | Scoreboard criterion `dummy` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.food | Scoreboard criterion `food` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.health | Scoreboard criterion `health` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-aqua | Scoreboard criterion `killedByTeam.aqua` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-black | Scoreboard criterion `killedByTeam.black` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-blue | Scoreboard criterion `killedByTeam.blue` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-aqua | Scoreboard criterion `killedByTeam.dark_aqua` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-blue | Scoreboard criterion `killedByTeam.dark_blue` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-gray | Scoreboard criterion `killedByTeam.dark_gray` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-green | Scoreboard criterion `killedByTeam.dark_green` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-purple | Scoreboard criterion `killedByTeam.dark_purple` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-dark-red | Scoreboard criterion `killedByTeam.dark_red` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-gold | Scoreboard criterion `killedByTeam.gold` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-gray | Scoreboard criterion `killedByTeam.gray` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-green | Scoreboard criterion `killedByTeam.green` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-light-purple | Scoreboard criterion `killedByTeam.light_purple` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-red | Scoreboard criterion `killedByTeam.red` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-white | Scoreboard criterion `killedByTeam.white` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.killed-by-team-yellow | Scoreboard criterion `killedByTeam.yellow` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.level | Scoreboard criterion `level` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.player-kill-count | Scoreboard criterion `playerKillCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-aqua | Scoreboard criterion `teamkill.aqua` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-black | Scoreboard criterion `teamkill.black` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-blue | Scoreboard criterion `teamkill.blue` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-aqua | Scoreboard criterion `teamkill.dark_aqua` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-blue | Scoreboard criterion `teamkill.dark_blue` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-gray | Scoreboard criterion `teamkill.dark_gray` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-green | Scoreboard criterion `teamkill.dark_green` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-purple | Scoreboard criterion `teamkill.dark_purple` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-dark-red | Scoreboard criterion `teamkill.dark_red` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-gold | Scoreboard criterion `teamkill.gold` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-gray | Scoreboard criterion `teamkill.gray` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-green | Scoreboard criterion `teamkill.green` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-light-purple | Scoreboard criterion `teamkill.light_purple` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-red | Scoreboard criterion `teamkill.red` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-white | Scoreboard criterion `teamkill.white` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.teamkill-yellow | Scoreboard criterion `teamkill.yellow` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.total-kill-count | Scoreboard criterion `totalKillCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.trigger | Scoreboard criterion `trigger` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.xp | Scoreboard criterion `xp` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.number-format-type.blank | `minecraft:blank` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |
+| scoreboard-teams-bossbars.number-format-type.fixed | `minecraft:fixed` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |
+| scoreboard-teams-bossbars.number-format-type.styled | `minecraft:styled` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |

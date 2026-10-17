@@ -1,1 +1,9 @@
-//! Minecraft Java 26.3 network protocol (777)
+//! Minecraft Java 26.3 (protocol 777) wire codecs and transport primitives.
+//!
+//! Packet codecs operate on one unframed packet, including its VarInt packet ID.
+//! Transport layers are applied in this order: packet, compression, frame, cipher.
+pub mod codec;
+pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
+pub use ferraloom_util::{BlockPos, Uuid};
+
+pub const PROTOCOL_VERSION: i32 = 777;
