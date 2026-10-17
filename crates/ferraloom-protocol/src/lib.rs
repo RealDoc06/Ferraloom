@@ -6,6 +6,7 @@ pub mod chat;
 pub mod codec;
 pub mod component;
 pub mod entity_data;
+pub mod ops;
 pub use codec::{Error, Identifier, Reader, Result, Wire, Writer};
 pub use ferraloom_util::{BlockPos, Uuid};
 
