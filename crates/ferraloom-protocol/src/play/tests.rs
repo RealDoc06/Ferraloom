@@ -1120,3 +1120,20 @@ fn vanilla_light_masks_and_partial_chat_filter() {
             && chat.chat_type.target_name.is_some()
     );
 }
+
+#[test]
+fn vanilla_validated_creative_slot() {
+    check::<serverbound::SetCreativeModeSlot>(
+        "creative count 99",
+        include_str!("fixtures/serverbound_SetCreativeModeSlot_edge_count_99.hex"),
+    );
+    let context = Context::new();
+    for fixture in [
+        include_str!("fixtures/serverbound_SetCreativeModeSlot_count_100.reject.hex"),
+        include_str!("fixtures/serverbound_SetCreativeModeSlot_stack_limit_0.reject.hex"),
+    ] {
+        let input = bytes(fixture);
+        let mut reader = Reader::with_context(&input, &context);
+        assert!(serverbound::SetCreativeModeSlot::decode(&mut reader).is_err());
+    }
+}

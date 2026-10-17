@@ -505,7 +505,7 @@ state_packets!(Packet, ferraloom_data::packets::play::clientbound::Packet, {
     RemoveMobEffect(RemoveMobEffect) => RemoveMobEffect,
     ResetScore(ResetScore) => ResetScore,
     ResourcePackPop(ResourcePackPop) => ResourcePackPop,
-    ResourcePackPush(ResourcePackPush) => ResourcePackPush,
+    ResourcePackPush(Box<ResourcePackPush>) => ResourcePackPush,
     PostEffects(PostEffects) => PostEffects,
     Respawn(Respawn) => Respawn,
     RotateHead(RotateHead) => RotateHead,

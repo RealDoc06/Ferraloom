@@ -29,19 +29,19 @@ impl Wire for NonEmptyItemStack {
         crate::component::ITEM_STACK.encode(w, &self.0)
     }
 }
-/// Port of ItemStack.OPTIONAL_UNTRUSTED_STREAM_CODEC's delimited component values.
+/// Port of ItemStack#validatedStreamCodec(OPTIONAL_UNTRUSTED_STREAM_CODEC).
 #[derive(Clone, Debug, PartialEq)]
 pub struct UntrustedItemStack(pub ItemStack);
 impl Wire for UntrustedItemStack {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
         use crate::codec::StreamCodec;
-        crate::component::OPTIONAL_UNTRUSTED_ITEM_STACK
+        crate::component::VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK
             .decode(r)
             .map(Self)
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         use crate::codec::StreamCodec;
-        crate::component::OPTIONAL_UNTRUSTED_ITEM_STACK.encode(w, &self.0)
+        crate::component::VALIDATED_OPTIONAL_UNTRUSTED_ITEM_STACK.encode(w, &self.0)
     }
 }
 /// Port of MerchantOffer#writeToStream/createFromStream. Stock status derives from usage.

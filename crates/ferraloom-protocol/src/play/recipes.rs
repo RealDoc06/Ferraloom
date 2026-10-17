@@ -37,13 +37,12 @@ fn validate_recipe_display(value: &RecipeDisplay) -> Result<()> {
         ingredients,
         ..
     } = value
+        && usize::try_from(width.0.wrapping_mul(height.0)).ok() != Some(ingredients.len())
     {
-        if usize::try_from(width.0.wrapping_mul(height.0)).ok() != Some(ingredients.len()) {
-            return Err(Error::invalid(
-                "shaped recipe display",
-                "ingredient count differs from width * height",
-            ));
-        }
+        return Err(Error::invalid(
+            "shaped recipe display",
+            "ingredient count differs from width * height",
+        ));
     }
     Ok(())
 }

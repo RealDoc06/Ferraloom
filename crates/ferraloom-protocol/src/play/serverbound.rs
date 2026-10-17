@@ -232,7 +232,7 @@ state_packets!(Packet, ferraloom_data::packets::play::serverbound::Packet, {
     ChatAck(ChatAck) => ChatAck,
     ChatCommand(ChatCommand) => ChatCommand,
     ChatCommandSigned(ChatCommandSigned) => ChatCommandSigned,
-    Chat(Chat) => Chat,
+    Chat(Box<Chat>) => Chat,
     ChatSessionUpdate(ChatSessionUpdate) => ChatSessionUpdate,
     ChunkBatchReceived(ChunkBatchReceived) => ChunkBatchReceived,
     ClientCommand(ClientCommand) => ClientCommand,
