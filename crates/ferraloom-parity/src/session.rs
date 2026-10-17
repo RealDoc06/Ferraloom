@@ -22,6 +22,12 @@ impl RunMode {
         }
     }
 }
+/// A bot identity belongs to one server lifetime; stale handles fail after restart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BotId {
+    index: usize,
+    generation: u64,
+}
 /// Owns a disposable universe and independent background clients. No production paths are used.
 pub struct Session {
     root: Option<TempDir>,
@@ -29,6 +35,7 @@ pub struct Session {
     kind: ServerKind,
     options: LaunchOptions,
     bots: Vec<Bot>,
+    generation: u64,
     rules: Vec<Normalization>,
 }
 impl Session {
@@ -41,11 +48,12 @@ impl Session {
             kind,
             options,
             bots: Vec::new(),
+            generation: 0,
             rules: Vec::new(),
         })
     }
     /// Adds a separately pumped client; configure its op name in LaunchOptions::operators.
-    pub async fn join(&mut self, name: &str) -> Result<usize> {
+    pub async fn join(&mut self, name: &str) -> Result<BotId> {
         ensure!(
             !self.bots.iter().any(|bot| bot.name == name),
             "duplicate active bot name {name}"
@@ -54,11 +62,18 @@ impl Session {
         let bot = Bot::connect(server.address, name).await?;
         let id = self.bots.len();
         self.bots.push(bot);
-        Ok(id)
+        Ok(BotId {
+            index: id,
+            generation: self.generation,
+        })
     }
-    pub fn bot(&mut self, id: usize) -> Result<&mut Bot> {
+    pub fn bot(&mut self, id: BotId) -> Result<&mut Bot> {
+        ensure!(
+            id.generation == self.generation,
+            "bot handle expired after stop/restart"
+        );
         self.bots
-            .get_mut(id)
+            .get_mut(id.index)
             .context("bot id is not active (ids expire at restart)")
     }
     /// Allows simultaneous independent bot actions without borrowing the session twice.
@@ -79,6 +94,7 @@ impl Session {
         if let Some(server) = self.server.take() {
             let result = server.stop(self.options.stop_timeout).await;
             self.bots.clear();
+            self.generation += 1;
             result?;
         }
         Ok(())
@@ -140,10 +156,7 @@ where
         let log = result.with_context(|| format!("{label} scenario failed\n{diagnostics}"))?;
         stopped.with_context(|| format!("{label} stop/save failed\n{diagnostics}"))?;
         let log = log.normalized(&session.rules)?;
-        eprintln!(
-            "{label} observations: {}",
-            serde_json::to_string_pretty(&log)?
-        );
+        eprintln!("{label}: {} observations", log.0.len());
         if let Some((expected, rules)) = &expected {
             ensure!(
                 *rules == session.rules,

@@ -52,8 +52,17 @@ impl ObservationLog {
                 }
                 1 => {
                     let raw = entry.as_str().context("UUID is not a string")?.to_owned();
-                    raw.parse::<ferraloom_protocol::Uuid>()
-                        .map_err(|e| anyhow::anyhow!("invalid UUID: {e:?}"))?;
+                    ensure!(
+                        raw.len() == 36
+                            && raw.bytes().enumerate().all(|(i, b)| {
+                                if [8, 13, 18, 23].contains(&i) {
+                                    b == b'-'
+                                } else {
+                                    b.is_ascii_hexdigit()
+                                }
+                            }),
+                        "invalid UUID at {pointer}"
+                    );
                     let next = uuids.len();
                     *entry = Value::from(format!("uuid-{}", uuids.entry(raw).or_insert(next)));
                 }

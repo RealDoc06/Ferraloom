@@ -44,7 +44,7 @@ pub struct LaunchOptions {
     pub fixture: Option<PathBuf>,
     pub properties: BTreeMap<String, String>,
     pub operators: Vec<String>,
-    /// Executed on the console before any scenario bot joins. Unsupported rules fail startup.
+    /// Applied by a setup op bot before any scenario bot joins; errors fail startup.
     pub game_rules: BTreeMap<String, String>,
     pub regions: Regions,
     pub java: Option<PathBuf>,
@@ -119,7 +119,11 @@ pub(crate) fn prepare(options: &LaunchOptions) -> Result<TempDir> {
     }
     // EULA acceptance is confined to this newly-created disposable universe.
     std::fs::write(root.path().join("eula.txt"), "eula=true\n")?;
-    let ops:Vec<_>=options.operators.iter().map(|name|serde_json::json!({"uuid":Uuid::offline_player(name).to_string(),"name":name,"level":4,"bypassesPlayerLimit":true})).collect();
+    let mut operators = options.operators.clone();
+    if !options.game_rules.is_empty() {
+        operators.push("ParitySetup".into());
+    }
+    let ops:Vec<_>=operators.iter().map(|name|serde_json::json!({"uuid":Uuid::offline_player(name).to_string(),"name":name,"level":4,"bypassesPlayerLimit":true})).collect();
     std::fs::write(root.path().join("ops.json"), serde_json::to_vec(&ops)?)?;
     Ok(root)
 }
@@ -154,6 +158,16 @@ pub(crate) async fn launch(
     options: &LaunchOptions,
     root: &Path,
 ) -> Result<Launched> {
+    if matches!(kind, ServerKind::Ferraloom) {
+        ensure!(
+            matches!(options.preset, WorldPreset::Default),
+            "in-process Ferraloom has not ported flat/void generators"
+        );
+        ensure!(
+            options.game_rules.is_empty(),
+            "in-process Ferraloom has not ported /gamerule"
+        );
+    }
     let reservation = TcpListener::bind("127.0.0.1:0")?;
     let address = reservation.local_addr()?;
     let mut props: BTreeMap<String, String> = [
@@ -282,11 +296,38 @@ pub(crate) async fn launch(
             Process::External(child)
         }
     };
-    let mut launched = Launched { address, process };
-    for (rule, value) in &options.game_rules {
-        launched
-            .command(&format!("gamerule {rule} {value}"))
-            .await?;
+    let launched = Launched { address, process };
+    if !options.game_rules.is_empty() {
+        let configured = async {
+            let mut setup = crate::Bot::connect(address, "ParitySetup").await?;
+            setup.synchronize().await?;
+            for (rule, value) in &options.game_rules {
+                setup.command(&format!("gamerule {rule} {value}")).await?;
+                let packet = setup
+                    .wait_for("game rule result", crate::Ticks::DEFAULT, |_, p| {
+                        matches!(
+                            p,
+                            ferraloom_protocol::play::clientbound::Packet::SystemChat(_)
+                        )
+                    })
+                    .await?;
+                let ferraloom_protocol::play::clientbound::Packet::SystemChat(p) = packet.as_ref()
+                else {
+                    unreachable!()
+                };
+                ensure!(
+                    p.content.to_json()?.contains("commands.gamerule.set"),
+                    "game rule {rule}={value} failed: {:?}",
+                    p.content
+                );
+            }
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+        if let Err(error) = configured {
+            let _ = launched.stop(options.stop_timeout).await;
+            return Err(error);
+        }
     }
     Ok(launched)
 }

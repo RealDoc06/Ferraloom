@@ -95,7 +95,9 @@ impl BotState {
             palette.palette.first()?.0
         } else {
             let per = 64 / usize::from(palette.bits);
-            let mask = (1u64 << palette.bits) - 1;
+            let mask = 1u64
+                .checked_shl(u32::from(palette.bits))
+                .map_or(u64::MAX, |v| v - 1);
             let value = (((*palette.data.get(index / per)? as u64)
                 >> ((index % per) * usize::from(palette.bits)))
                 & mask) as usize;
@@ -419,6 +421,10 @@ impl Bot {
         })
         .await?;
         Ok(bot)
+    }
+    /// Set this after a dimension change before querying blocks in a non-overworld world.
+    pub fn set_min_section(&mut self, section: i32) {
+        self.state.lock().unwrap().min_section = section;
     }
     pub fn snapshot(&self) -> BotState {
         self.state.lock().unwrap().clone()
@@ -951,10 +957,14 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
     }
     Ok(())
 }
+/// Port of VecDeltaCodec#decode: zero axes preserve precision; Math.round ties toward +infinity.
 fn apply_delta(entity: &mut Entity, delta: &play::EntityDelta) {
     let mut apply = |x: i16, y: i16, z: i16| {
         for (i, v) in [x, y, z].into_iter().enumerate() {
-            entity.position[i] = ((entity.position[i] * 4096.).round() + f64::from(v)) / 4096.;
+            if v != 0 {
+                entity.position[i] =
+                    ((entity.position[i] * 4096. + 0.5).floor() + f64::from(v)) / 4096.;
+            }
         }
     };
     match &delta.delta {
@@ -964,5 +974,90 @@ fn apply_delta(entity: &mut Entity, delta: &play::EntityDelta) {
                 apply(step.xa, step.ya, step.za)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn entity_delta_preserves_zero_axes_and_java_negative_ties() {
+        let mut entity = Entity {
+            id: 1,
+            uuid: Uuid::NIL,
+            entity_type: 0,
+            position: [-0.5 / 4096., 12.123456789, 0.],
+            rotation: [0.; 2],
+            data: BTreeMap::new(),
+        };
+        apply_delta(
+            &mut entity,
+            &play::EntityDelta {
+                on_ground: false,
+                delta: play::VecDelta::Linear {
+                    xa: 1,
+                    ya: 0,
+                    za: -1,
+                },
+            },
+        );
+        assert_eq!(entity.position, [1. / 4096., 12.123456789, -1. / 4096.]);
+    }
+    #[test]
+    fn block_queries_distinguish_unknown_from_air_and_apply_section_updates() -> Result<()> {
+        let mut state = BotState {
+            min_section: -4,
+            ..BotState::default()
+        };
+        let pos = BlockPos::new(-1, -1, -1);
+        assert_eq!(state.block(pos), None);
+        let section = play::LevelChunkSectionData {
+            non_empty_block_count: 0,
+            fluid_count: 0,
+            states: play::PalettedContainerData {
+                bits: 0,
+                palette: vec![VarInt(i32::from(
+                    ferraloom_data::Block::AIR.default_state().id(),
+                ))],
+                data: vec![],
+            },
+            biomes: play::PalettedContainerData {
+                bits: 0,
+                palette: vec![VarInt(0)],
+                data: vec![],
+            },
+        };
+        state.sections.insert((-1, -1), vec![section; 4]);
+        state.chunks.insert((-1, -1));
+        assert_eq!(
+            state.block(pos),
+            Some(ferraloom_data::Block::AIR.default_state())
+        );
+        apply(
+            &mut state,
+            &cb::Packet::SectionBlocksUpdate(cb::SectionBlocksUpdate {
+                section_pos: play::SectionPos {
+                    x: -1,
+                    y: -1,
+                    z: -1,
+                },
+                changes: vec![play::SectionBlockChange {
+                    position: 4095,
+                    state: ferraloom_data::Block::STONE.default_state(),
+                }],
+            }),
+        )?;
+        assert_eq!(
+            state.block(pos),
+            Some(ferraloom_data::Block::STONE.default_state())
+        );
+        apply(
+            &mut state,
+            &cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
+                pos: play::ChunkPos { x: -1, z: -1 },
+            }),
+        )?;
+        assert_eq!(state.block(pos), None);
+        Ok(())
     }
 }

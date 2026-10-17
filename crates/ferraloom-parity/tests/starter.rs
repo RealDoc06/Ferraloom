@@ -16,11 +16,33 @@ async fn join_and_spawn(s: &mut Session) -> Result<ObservationLog> {
     );
     let seq = bot.sequence();
     let mut log = ObservationLog::default();
-    log.record("login", format!("{:?}", seq.login))?;
-    log.record("configuration", format!("{:?}", seq.configuration))?;
+    log.record(
+        "login",
+        seq.login
+            .iter()
+            .map(|p| format!("{p:?}"))
+            .collect::<Vec<_>>(),
+    )?;
+    log.record(
+        "configuration",
+        seq.configuration
+            .iter()
+            .map(|(p, r)| (format!("{p:?}"), r))
+            .collect::<Vec<_>>(),
+    )?;
     log.record("registries", seq.registries)?;
-    log.record("join", format!("{:?}", seq.join))?;
-    log.record("spawn", state.position)?;
+    log.record(
+        "join",
+        seq.join
+            .iter()
+            .map(|p| format!("{p:?}"))
+            .collect::<Vec<_>>(),
+    )?;
+    log.record(
+        "spawn.position_finite",
+        state.position.into_iter().all(f64::is_finite),
+    )?;
+    log.record("spawn.teleported", state.teleports > 0)?;
     log.record("game_mode", format!("{:?}", state.game_mode))?;
     Ok(log)
 }
@@ -33,12 +55,18 @@ async fn commands(s: &mut Session) -> Result<ObservationLog> {
     match packet.as_ref() {
         cb::Packet::PlayerChat(p) => {
             log.record("say.message", &p.body.content.0)?;
-            log.record("say.name", p.chat_type.name.to_json()?)?;
+            log.record(
+                "say.name",
+                serde_json::from_str::<serde_json::Value>(&p.chat_type.name.to_json()?)?,
+            )?;
             log.record("say.type", format!("{:?}", p.chat_type.chat_type))?;
         }
         cb::Packet::DisguisedChat(p) => {
             log.record("say.message", "parity command")?;
-            log.record("say.name", p.chat_type.name.to_json()?)?;
+            log.record(
+                "say.name",
+                serde_json::from_str::<serde_json::Value>(&p.chat_type.name.to_json()?)?,
+            )?;
             log.record("say.type", format!("{:?}", p.chat_type.chat_type))?;
         }
         _ => unreachable!(),
@@ -71,6 +99,7 @@ async fn chunk_loading_while_walking(s: &mut Session) -> Result<ObservationLog> 
         |_, p| matches!(p,cb::Packet::GameEvent(p) if p.event==3&&p.param==3.),
     )
     .await?;
+    bot.teleport([0.5, 150., 0.5]).await?;
     let start = bot.snapshot().position;
     let target = [start[0] + 100., start[1], start[2]];
     bot.move_to(target, false).await?;
@@ -119,7 +148,10 @@ async fn chat_formatting(s: &mut Session) -> Result<ObservationLog> {
     let mut log = ObservationLog::default();
     log.record("content", &p.body.content.0)?;
     log.record("sender", p.sender.to_string())?;
-    log.record("name", p.chat_type.name.to_json()?)?;
+    log.record(
+        "name",
+        serde_json::from_str::<serde_json::Value>(&p.chat_type.name.to_json()?)?,
+    )?;
     log.record("chat_type", format!("{:?}", p.chat_type.chat_type))?;
     log.record(
         "unsigned_content",

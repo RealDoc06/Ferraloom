@@ -10,7 +10,7 @@ pub use bot::{Bot, BotState, Container, Entity, Sequence, Ticks};
 pub use ferraloom_protocol as protocol;
 pub use launch::{LaunchOptions, Regions, ServerKind, WorldPreset};
 pub use observation::{Normalization, ObservationLog};
-pub use session::{RunMode, Session, run};
+pub use session::{BotId, RunMode, Session, run};
 pub use world::SavedWorld;
 
 /// Declare one opt-in test. FERRALOOM_PARITY_SIDE selects both (default), vanilla or ferraloom.
