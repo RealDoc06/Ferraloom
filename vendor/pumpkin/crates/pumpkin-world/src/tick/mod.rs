@@ -8,6 +8,9 @@ use pumpkin_util::{
 
 pub mod scheduler;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(i32)]
 pub enum TickPriority {

@@ -1094,3 +1094,86 @@ mod stale_save_deferral {
         .await;
     }
 }
+
+// ROOT-authorized append-only actual tick-phase retirement control. UNRUN.
+#[tokio::test]
+async fn active_block_phase_defers_already_prepared_retirement_then_retries_without_poi_changes() {
+    use crate::tick::TickPriority;
+    use rustc_hash::FxHashSet;
+    let (_directory, level, mut schedule, mut workers) = fixture().await;
+    let pos = ChunkPos::new(0, 0);
+    let chunk = publish(&mut schedule, &level, pos);
+    chunk.post_processing_ready.store(true, Relaxed);
+    level.set_tick_game_time(100);
+    level.schedule_block_tick(
+        &Block::STONE,
+        BlockPos::new(1, 64, 1),
+        0,
+        TickPriority::Normal,
+    );
+    schedule.unload_chunks.insert(pos);
+    schedule = unload(schedule, level.clone()).await;
+    // The real standalone unload pass has already prepared this exact Arc.
+    assert!(level.chunk_unload.access().requests().is_empty());
+    assert!(level.loaded_chunks.contains_key(&pos));
+    assert!(workers.write.try_recv().is_err());
+    let before = level.prepare_chunk_poi(&chunk).unwrap();
+    level.collect_block_ticks(100, 65536, &FxHashSet::from_iter([pos]));
+    assert_eq!(
+        chunk
+            .block_tick_phase_owners
+            .load(std::sync::atomic::Ordering::Acquire),
+        1
+    );
+    assert!(matches!(
+        chunk.capture_for_save(),
+        Err(ChunkSerializingError::Poi(
+            PoiReconcileError::StaleSaveCapture
+        ))
+    ));
+    schedule = unload(schedule, level.clone()).await;
+    assert!(
+        level
+            .loaded_chunks
+            .get(&pos)
+            .is_some_and(|current| Arc::ptr_eq(current.value(), &chunk))
+    );
+    assert!(workers.write.try_recv().is_err());
+    assert!(level.chunk_unload.access().is_requested(pos, &chunk));
+    assert_eq!(
+        level.pop_block_tick().unwrap().position,
+        BlockPos::new(1, 64, 1)
+    );
+    assert!(level.pop_block_tick().is_none());
+    level.finish_block_ticks();
+    assert_eq!(
+        chunk
+            .block_tick_phase_owners
+            .load(std::sync::atomic::Ordering::Acquire),
+        0
+    );
+    assert_eq!(level.prepare_chunk_poi(&chunk).unwrap(), before);
+    assert!(chunk.capture_for_save().is_ok());
+    schedule = unload(schedule, level.clone()).await; // Requested -> Prepared
+    assert!(level.loaded_chunks.contains_key(&pos));
+    schedule = unload(schedule, level.clone()).await; // actual exclusive retirement
+    assert!(!level.loaded_chunks.contains_key(&pos));
+    let WriteRequest::Chunks(saved) = workers.write.try_recv().unwrap() else {
+        panic!("expected terrain save")
+    };
+    assert_eq!(saved.len(), 1);
+    let Chunk::Level(source) = &saved[0].1 else {
+        panic!("expected Full terrain")
+    };
+    assert!(Arc::ptr_eq(source, &chunk));
+    // Consume the actual queued source through the existing backend, as the
+    // original fixture does. No phase records are a separate disk owner.
+    level
+        .chunk_saver
+        .save_chunks(&level.level_folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    level.chunk_saver.flush().await.unwrap();
+    assert!(chunk.read_for_poi().is_capture_current(&before));
+    assert!(schedule.chunk_map.is_empty());
+}

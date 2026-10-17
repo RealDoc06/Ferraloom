@@ -819,4 +819,461 @@ mod tests {
         world.process_chunk_postprocessing();
         assert_eq!(calls.lock().unwrap().len(), 2);
     }
+
+    // The controls below are source-only additions; all are UNRUN.
+    #[tokio::test]
+    async fn already_block_ready_replacement_unpacks_both_saved_containers_at_preincrement_age() {
+        use pumpkin_world::tick::{SavedTick, TickPriority};
+        let (_folder, initial) = test_world().await;
+        let level = initial.level.clone();
+        drop(initial);
+        let mut saved = LevelData::default(Seed(0));
+        saved.game_time = 400;
+        saved.day_time = 6_000;
+        let world = Arc::new(World::load(
+            level,
+            Arc::new(ArcSwap::from_pointee(saved)),
+            Dimension::OVERWORLD,
+            crate::block::registry::default_registry(),
+            Weak::new(),
+            Arc::new(std::sync::Mutex::new(
+                super::super::scoreboard::Scoreboard::new(),
+            )),
+        ));
+        assert_eq!(world.level.tick_game_time(), 400);
+        assert_eq!(world.get_world_age(), 400);
+        let early = BlockPos::new(-7, 100, 0);
+        world.schedule_block_tick(&Block::DIRT, early, 255, TickPriority::Normal);
+        assert_eq!(
+            world
+                .level
+                .loaded_chunks
+                .get(&early.chunk_position())
+                .unwrap()
+                .block_ticks
+                .get_all()[0]
+                .trigger_tick,
+            655
+        );
+        let center = Vector2::new(-1, 0);
+        world.forced_chunks.lock().unwrap().insert(center);
+        settle_simulation(&world).await;
+        assert!(world.block_ticking_chunks.read().unwrap().contains(&center));
+        let pos = BlockPos::new(-8, 100, 0);
+        let old = world
+            .level
+            .loaded_chunks
+            .get(&center)
+            .unwrap()
+            .value()
+            .clone();
+        let mut replacement = ChunkData::empty(-1, 0);
+        replacement.block_ticks = [SavedTick {
+            position: pos,
+            value: &Block::STONE,
+            delay: -1,
+            priority: TickPriority::High,
+        }]
+        .into_iter()
+        .collect();
+        replacement.fluid_ticks = [SavedTick {
+            position: pos,
+            value: &Fluid::FLOWING_WATER,
+            delay: 600,
+            priority: TickPriority::Low,
+        }]
+        .into_iter()
+        .collect();
+        replacement
+            .post_processing_ready
+            .store(true, Ordering::Relaxed);
+        let replacement = Arc::new(replacement);
+        world.level.bind_chunk_poi(&replacement).unwrap();
+        world
+            .level
+            .loaded_chunks
+            .insert(center, replacement.clone());
+        assert!(replacement.block_ticks.get_all().is_empty());
+        world.update_active_chunks();
+        assert!(world.block_ticking_chunks.read().unwrap().contains(&center));
+        assert_eq!(replacement.block_ticks.get_all()[0].trigger_tick, 399);
+        assert_eq!(replacement.fluid_ticks.get_all()[0].trigger_tick, 1_000);
+        assert!(world.level.chunks_with_scheduled_ticks.contains(&center));
+        assert_eq!(old.block_ticks.get_all()[0].trigger_tick, 655);
+        world.tick_environment();
+        assert_eq!(world.level.tick_game_time(), 401);
+        assert_eq!(world.get_world_age(), 401);
+        world.update_active_chunks();
+        assert_eq!(replacement.block_ticks.get_all()[0].trigger_tick, 399);
+        assert_eq!(replacement.fluid_ticks.get_all()[0].trigger_tick, 1_000);
+    }
+
+    #[tokio::test]
+    async fn dispatcher_clone_copies_full_tick_box_on_zero_selection_and_move_without_fluids() {
+        use crate::command::{CommandSource, node::dispatcher::CommandDispatcher};
+        use pumpkin_util::permission::PermissionRegistry;
+        use pumpkin_world::tick::{ScheduledTick, TickPriority};
+        let (_folder, world) = test_world().await;
+        let mut dispatcher = CommandDispatcher::new();
+        crate::command::commands::clone::register(&mut dispatcher, &PermissionRegistry::default());
+        let source = CommandSource::dummy().with_world(world.clone());
+        world.level.set_tick_game_time(1_000);
+        for (x, state) in [
+            (-8, Block::STONE.default_state.id),
+            (-7, Block::DIRT.default_state.id),
+        ] {
+            let pos = BlockPos::new(x, 100, 0);
+            world.level.set_block_state(&pos, state);
+        }
+        for (x, order) in [(-8, -10), (-7, 5), (-6, 20)] {
+            assert!(world.level.schedule_block_tick_absolute(ScheduledTick {
+                position: BlockPos::new(x, 100, 0),
+                value: &Block::STONE,
+                trigger_tick: 1_600,
+                priority: TickPriority::High,
+                sub_tick_order: order,
+            }));
+        }
+        world.schedule_fluid_tick(
+            &Fluid::FLOWING_WATER,
+            BlockPos::new(-8, 100, 0),
+            1,
+            TickPriority::Normal,
+        );
+        // No selected gold blocks, including a source air cell with a queued tick.
+        assert!(
+            dispatcher
+                .execute_input(
+                    "clone -8 100 0 -6 100 0 8 100 0 filtered gold_block",
+                    &source
+                )
+                .is_err()
+        );
+        let target = world
+            .level
+            .loaded_chunks
+            .get(&Vector2::new(0, 0))
+            .unwrap()
+            .value()
+            .clone();
+        let mut copied = target.block_ticks.get_all();
+        copied.sort_by_key(|tick| tick.position.0.x);
+        assert_eq!(
+            copied
+                .iter()
+                .map(|tick| (tick.position.0.x, tick.trigger_tick, tick.sub_tick_order))
+                .collect::<Vec<_>>(),
+            vec![(8, 1_600, 21), (9, 1_600, 36), (10, 1_600, 51)]
+        );
+        assert!(
+            copied
+                .iter()
+                .all(|tick| tick.priority == TickPriority::High)
+        );
+        assert!(target.fluid_ticks.get_all().is_empty());
+        assert_eq!(
+            world.get_block_state_id(&BlockPos::new(8, 100, 0)),
+            BlockStateId::AIR
+        );
+        assert_eq!(
+            dispatcher
+                .execute_input("clone -8 100 0 -6 100 0 8 100 0 replace move", &source)
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            world.get_block_state_id(&BlockPos::new(-8, 100, 0)),
+            BlockStateId::AIR
+        );
+        for x in -8..=-6 {
+            assert!(
+                world
+                    .level
+                    .is_block_tick_scheduled(&BlockPos::new(x, 100, 0), &Block::STONE)
+            );
+        }
+        assert!(
+            world
+                .level
+                .is_fluid_tick_scheduled(&BlockPos::new(-8, 100, 0), &Fluid::FLOWING_WATER)
+        );
+        assert_eq!(target.block_ticks.get_all().len(), 3);
+        assert!(target.fluid_ticks.get_all().is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn actual_block_callbacks_copy_current_pending_and_queued_then_finish_before_fluid() {
+        use crate::{
+            block::{BlockBehaviour, BlockMetadata, FluidMetadata, fluid::FluidBehaviour},
+            command::{CommandSource, node::dispatcher::CommandDispatcher},
+        };
+        use pumpkin_data::BlockId;
+        use pumpkin_util::permission::PermissionRegistry;
+        use pumpkin_world::tick::{ScheduledTick, TickPriority};
+        use std::sync::Mutex;
+        struct ObservedStone(Arc<Mutex<Vec<i32>>>);
+        impl BlockMetadata for ObservedStone {
+            fn ids() -> Box<[BlockId]> {
+                [BlockId::STONE].into()
+            }
+        }
+        impl BlockBehaviour for ObservedStone {
+            fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+                self.0.lock().unwrap().push(args.position.0.x);
+                if args.position.0.x != -8 {
+                    return;
+                }
+                assert!(
+                    args.world
+                        .level
+                        .schedule_block_tick_absolute(ScheduledTick {
+                            position: *args.position,
+                            value: &Block::STONE,
+                            trigger_tick: 4_000,
+                            priority: TickPriority::Low,
+                            sub_tick_order: 100,
+                        })
+                );
+                let snapshot = args
+                    .world
+                    .level
+                    .snapshot_block_ticks(&BlockPos::new(-8, 100, 0), &BlockPos::new(-5, 100, 0));
+                assert_eq!(
+                    snapshot
+                        .iter()
+                        .map(|tick| (tick.position.0.x, tick.sub_tick_order))
+                        .collect::<Vec<_>>(),
+                    vec![(-8, -10), (-7, 5), (-5, 8), (-6, 20), (-8, 100)]
+                );
+                let mut dispatcher = CommandDispatcher::new();
+                crate::command::commands::clone::register(
+                    &mut dispatcher,
+                    &PermissionRegistry::default(),
+                );
+                let source = CommandSource::dummy().with_world(args.world.clone());
+                assert_eq!(
+                    dispatcher
+                        .execute_input("clone -8 100 0 -5 100 0 8 100 0", &source)
+                        .unwrap(),
+                    4
+                );
+            }
+        }
+        struct ObservedWater(Arc<Mutex<Vec<i32>>>);
+        impl FluidMetadata for ObservedWater {
+            fn ids() -> Box<[u16]> {
+                [Fluid::FLOWING_WATER.id].into()
+            }
+        }
+        impl FluidBehaviour for ObservedWater {
+            fn on_scheduled_tick(&self, world: &Arc<World>, _fluid: &Fluid, pos: &BlockPos) {
+                self.0.lock().unwrap().push(pos.0.x);
+                let owners = world
+                    .level
+                    .read_chunk_sync(&Vector2::new(-1, 0), |chunk| {
+                        chunk.block_tick_phase_owners.load(Ordering::Acquire)
+                    })
+                    .unwrap();
+                assert_eq!(owners, 0);
+                assert_eq!(
+                    world
+                        .level
+                        .snapshot_block_ticks(
+                            &BlockPos::new(-8, 100, 0),
+                            &BlockPos::new(-5, 100, 0)
+                        )
+                        .len(),
+                    2
+                );
+            }
+        }
+        let (_server_folder, _folder, server, mut world) = test_server_world().await;
+        server.worlds.store(Arc::new(Vec::new()));
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry).unwrap();
+        registry.register(ObservedStone(calls.clone()));
+        registry.register_fluid(ObservedWater(calls.clone()));
+        server.worlds.store(Arc::new(vec![world.clone()]));
+        world
+            .forced_chunks
+            .lock()
+            .unwrap()
+            .insert(Vector2::new(-1, 0));
+        settle_simulation(&world).await;
+        world.level_time.lock().unwrap().world_age = 1_000;
+        world.level.set_tick_game_time(1_000);
+        for x in -8..=-5 {
+            world.level.set_block_state(
+                &BlockPos::new(x, 100, 0),
+                if x == -5 {
+                    Block::DIRT.default_state.id
+                } else {
+                    Block::STONE.default_state.id
+                },
+            );
+        }
+        for (x, trigger, order) in [
+            (-8, 1_000, -10),
+            (-7, 1_000, 5),
+            (-5, 1_000, 8),
+            (-6, 1_600, 20),
+            (9, 3_000, -500),
+        ] {
+            assert!(world.level.schedule_block_tick_absolute(ScheduledTick {
+                position: BlockPos::new(x, 100, 0),
+                value: &Block::STONE,
+                trigger_tick: trigger,
+                priority: TickPriority::Normal,
+                sub_tick_order: order,
+            }));
+        }
+        let fluid_pos = BlockPos::new(-25, 100, 0);
+        world
+            .level
+            .set_block_state(&fluid_pos, Block::WATER.default_state.id);
+        world.schedule_fluid_tick(&Fluid::FLOWING_WATER, fluid_pos, 0, TickPriority::Normal);
+        world.schedule_fluid_tick(
+            &Fluid::FLOWING_WATER,
+            BlockPos::new(-6, 100, 0),
+            255,
+            TickPriority::Normal,
+        );
+        world.tick_chunks(&server);
+        assert_eq!(*calls.lock().unwrap(), vec![-8, -7, -25]);
+        let target = world
+            .level
+            .loaded_chunks
+            .get(&Vector2::new(0, 0))
+            .unwrap()
+            .value()
+            .clone();
+        let mut copied = target.block_ticks.get_all();
+        copied.sort_by_key(|tick| tick.position.0.x);
+        assert_eq!(
+            copied
+                .iter()
+                .map(|tick| (tick.position.0.x, tick.trigger_tick, tick.sub_tick_order))
+                .collect::<Vec<_>>(),
+            vec![
+                (8, 1_000, 101),
+                (9, 3_000, -500),
+                (10, 1_600, 131),
+                (11, 1_000, 119)
+            ]
+        );
+        assert!(target.fluid_ticks.get_all().is_empty());
+        assert!(
+            world
+                .level
+                .is_block_tick_scheduled(&BlockPos::new(8, 100, 0), &Block::STONE)
+        );
+        assert!(
+            !world
+                .level
+                .chunks_with_scheduled_ticks
+                .contains(&fluid_pos.chunk_position())
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn console_dispatch_waits_while_actual_server_tick_owns_phase() {
+        use crate::block::{BlockBehaviour, BlockMetadata};
+        use pumpkin_data::BlockId;
+        use pumpkin_world::tick::TickPriority;
+        use std::{
+            sync::{Mutex, mpsc},
+            time::Duration,
+        };
+        struct HeldStone {
+            entered: Mutex<Option<mpsc::Sender<()>>>,
+            release: Mutex<mpsc::Receiver<()>>,
+        }
+        impl BlockMetadata for HeldStone {
+            fn ids() -> Box<[BlockId]> {
+                [BlockId::STONE].into()
+            }
+        }
+        impl BlockBehaviour for HeldStone {
+            fn on_scheduled_tick(&self, _args: OnScheduledTickArgs<'_>) {
+                self.entered
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap()
+                    .send(())
+                    .unwrap();
+                self.release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
+            }
+        }
+        let (_server_folder, _folder, server, mut world) = test_server_world().await;
+        server.worlds.store(Arc::new(Vec::new()));
+        let (entered, reached) = mpsc::channel();
+        let (release, resumed) = mpsc::channel();
+        let registry = Arc::get_mut(&mut Arc::get_mut(&mut world).unwrap().block_registry).unwrap();
+        registry.register(HeldStone {
+            entered: Mutex::new(Some(entered)),
+            release: Mutex::new(resumed),
+        });
+        server.worlds.store(Arc::new(vec![world.clone()]));
+        world
+            .forced_chunks
+            .lock()
+            .unwrap()
+            .insert(Vector2::new(-1, 0));
+        settle_simulation(&world).await;
+        let pos = BlockPos::new(-8, 100, 0);
+        world
+            .level
+            .set_block_state(&pos, Block::STONE.default_state.id);
+        world.schedule_block_tick(&Block::STONE, pos, 0, TickPriority::Normal);
+        let tick_server = server.clone();
+        let ticking = tokio::task::spawn_blocking(move || tick_server.tick());
+        reached.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (started, starting) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        let console_server = server.clone();
+        let console = tokio::task::spawn_blocking(move || {
+            started.send(()).unwrap();
+            crate::dispatch_console_command(&console_server, "forceload add 16 0");
+            done.send(()).unwrap();
+        });
+        starting.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            finished.recv_timeout(Duration::from_millis(50)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+        assert!(
+            !world
+                .forced_chunks
+                .lock()
+                .unwrap()
+                .contains(&Vector2::new(1, 0))
+        );
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), ticking)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), console)
+            .await
+            .unwrap()
+            .unwrap();
+        finished.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            world
+                .forced_chunks
+                .lock()
+                .unwrap()
+                .contains(&Vector2::new(1, 0))
+        );
+        world.forced_chunks.lock().unwrap().clear();
+        settle_simulation(&world).await;
+        tokio::time::timeout(Duration::from_secs(5), server.finish_tasks())
+            .await
+            .unwrap();
+    }
 }
