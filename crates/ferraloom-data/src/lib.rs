@@ -214,7 +214,7 @@ pub struct SoundType {
     pub fall_sound: registries::sound_event::Id,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FluidState {
     pub fluid_type: registries::fluid::Id,
     pub amount: u8,

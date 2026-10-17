@@ -248,9 +248,6 @@ impl<'a> WorldGenRegion<'a> {
         write_radius: i32,
         generation_bounds: Option<(i32, i32)>,
         behavior: &'a dyn WorldgenBlockBehavior,
-        // --- vegetation family ---
-        has_skylight: Option<bool>,
-        // --- end vegetation family ---
         seed: i64,
         sea_level: i32,
     ) -> Result<Self, Error> {
