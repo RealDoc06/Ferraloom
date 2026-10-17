@@ -116,7 +116,7 @@ public final class VegetationGolden {
     }
     static JsonElement config(RegistryAccess.Frozen r,Feature f) {return Feature.DIRECT_CODEC.encodeStart(ops(r),f).getOrThrow();}
     static void capture(JsonArray cases, RegistryAccess.Frozen r,ChunkGenerator generator,String name,Feature feature,JsonElement config) {
-        for(String terrain:List.of("land","water","slope","snow"))for(long seed:new long[]{0,1,-1})for(int[] xyz:new int[][]{{0,64,0},{15,62,15},{-1,70,-1},{0,62,1}}) {
+        for(String terrain:List.of("land","water","slope","snow"))for(long seed:new long[]{0,1,-1})for(int[] xyz:new int[][]{{0,64,0},{15,62,15},{-1,70,-1},{0,62,1},{0,58,1}}) {
             var controlled=new Controlled(r,terrain);
             var random=new WorldgenRandom(new XoroshiroRandomSource(seed));
             var item=new JsonObject();item.addProperty("name",name);item.add("config",config);item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("origin",WorldgenGolden.point(xyz));
@@ -150,8 +150,8 @@ public final class VegetationGolden {
             "{type:'fill_layer',height:129,state:{id:'gold_block'}}",
             "{type:'projected_random_patchy_square',block:{id:'moss_block'},project_through:{type:'matching_blocks',blocks:'air'},size:{type:'uniform',min_inclusive:1,max_inclusive:4},max_projection_height:8}",
             "{type:'single_block_pillar',block:{id:'bone_block'},can_replace:{type:'matching_blocks',blocks:'air'},direction:'up',chance_to_continue:0.7,cap_feature:{feature:{type:'fill_layer',height:132,state:{id:'gold_block'}},placement:[]}}",
-            "{type:'coral_claw',feature:{feature:{type:'block_column',layers:[{height:1,provider:{id:'brain_coral_block'}}],direction:'up',allowed_placement:{type:'matching_blocks',blocks:['air','water']},prioritize_tip:false},placement:[]}}",
-            "{type:'coral_tree',feature:{feature:{type:'block_column',layers:[{height:1,provider:{id:'fire_coral_block'}}],direction:'up',allowed_placement:{type:'matching_blocks',blocks:['air','water']},prioritize_tip:false},placement:[]}}",
+            "{type:'coral_claw',feature:{feature:{type:'block_column',layers:[{height:1,provider:{id:'brain_coral_block'}}],direction:'up',allowed_placement:{type:'matching_blocks',blocks:['air','water']},prioritize_tip:false},placement:[{type:'random_chance',chance:0.8}]}}",
+            "{type:'coral_tree',feature:{feature:{type:'block_column',layers:[{height:1,provider:{id:'fire_coral_block'}}],direction:'up',allowed_placement:{type:'matching_blocks',blocks:['air','water']},prioritize_tip:false},placement:[{type:'random_chance',chance:0.8}]}}",
             "{type:'overlay',features:[{feature:{type:'fill_layer',height:129,state:{id:'gold_block'}},placement:[]},{feature:{type:'fill_layer',height:130,state:{id:'diamond_block'}},placement:[]}]}",
             "{type:'simple_block',to_place:{id:'stone'},schedule_tick:true}",
             "{type:'projected_random_patchy_square',block:{type:'rule_based',rules:[]},project_through:{type:'matching_blocks',blocks:'air'},size:1,max_projection_height:0}"
