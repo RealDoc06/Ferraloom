@@ -3035,3 +3035,4 @@ Includes all worldgen type registries, built-in JSON entries and NBT structure t
 
 | worldgen.tree.property-identity | Leaf distance, mushroom faces and pillar axes retain vanilla property domains for every state | `LeavesBlock#getOptionalDistanceAt`; `HugeMushroomBlock`; `RotatedPillarBlock` | `feature::tree::tests::leaf_and_mushroom_property_identity_matches_every_vanilla_state` | pass | partial |
 | worldgen.json.numeric-codecs | Gson numeric truncation, overflow, direct float rounding and float range checks | `LazilyParsedNumber; Codec.floatRange` | `codec::tests::numeric_codecs_match_gson_truncation_overflow_and_float_bits` | pass | todo |
+| worldgen.tree.existing-leaf-distance | Existing logs and leaves can lower the active leaf-distance queue during neighbor traversal | `TreeFeature#updateLeaves` | `feature::tree::tests::supported_controlled_level_cases_match_vanilla` (geometry and RNG prefix; shape updates pending) | pass | partial |

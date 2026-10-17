@@ -58,6 +58,17 @@ fn initial(p: Pos, origin: Pos, terrain: &str, ground: BlockState) -> BlockState
             Block::STONE.default_state()
         };
     }
+    if terrain == "existing_leaves" {
+        if [x, y, z] == [2, 4, 0] {
+            return Block::OAK_LOG.default_state();
+        }
+        if (3..=6).contains(&y) && (1..=3).contains(&x) && (-2..=2).contains(&z) {
+            return Block::OAK_LEAVES
+                .default_state()
+                .with(properties::DISTANCE, 2)
+                .unwrap();
+        }
+    }
     if terrain == "water" && y < 3 {
         return Block::WATER.default_state();
     }

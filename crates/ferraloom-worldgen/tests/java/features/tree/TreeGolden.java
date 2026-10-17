@@ -52,6 +52,10 @@ public final class TreeGolden implements InvocationHandler {
         int slope=terrain.equals("slope") ? Math.floorDiv(dx,3) : 0;
         if(dy < slope)return dy==slope-1 ? ground : Blocks.STONE.defaultBlockState();
         if(terrain.equals("cave") && dy>=4 && dy<=7)return dy==7 ? ground : Blocks.STONE.defaultBlockState();
+        if(terrain.equals("existing_leaves")){
+            if(dx==2 && dy==4 && dz==0)return Blocks.OAK_LOG.defaultBlockState();
+            if(dy>=3 && dy<=6 && dx>=1 && dx<=3 && dz>=-2 && dz<=2)return Blocks.OAK_LEAVES.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DISTANCE,2);
+        }
         if(terrain.equals("water") && dy<3)return Blocks.WATER.defaultBlockState();
         if(terrain.equals("blocked") && dy >= 1 && dy <= 30 && Math.abs(dx)<=12 && Math.abs(dz)<=12)return Blocks.STONE.defaultBlockState();
         if(terrain.equals("partial") && dy >= 3 && dy <= 8 && dx>=1 && dx<=3 && dz>=-2 && dz<=1)return Blocks.STONE.defaultBlockState();
@@ -163,7 +167,7 @@ public final class TreeGolden implements InvocationHandler {
         for(var entry:registries.lookupOrThrow(Registries.FEATURE).listElements().sorted(Comparator.comparing(e->e.key().identifier())).toList()) {
             var feature=entry.value();
             if(!(feature instanceof TreeFeature || feature instanceof FallenTreeFeature || feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature || feature instanceof RootSystemFeature))continue;
-            for(long seed:feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature ? new long[]{0,1,-1,8,8675309} : new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:feature instanceof RootSystemFeature ? List.of("flat","blocked","partial","slope","water","cave") : List.of("flat","blocked","partial","slope","water")) {
+            for(long seed:feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature ? new long[]{0,1,-1,8,8675309} : new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:feature instanceof RootSystemFeature ? List.of("flat","blocked","partial","slope","water","cave") : entry.key().identifier().toString().equals("minecraft:oak") ? List.of("flat","blocked","partial","slope","water","existing_leaves") : List.of("flat","blocked","partial","slope","water")) {
                 var origin=new BlockPos(coordinates[0],coordinates[1],coordinates[2]);
                 var ground=feature instanceof HugeFungusFeature f ? f.validBaseState() : Blocks.GRASS_BLOCK.defaultBlockState();
                 var fixture=new TreeGolden(registries,origin,terrain,ground,generator);

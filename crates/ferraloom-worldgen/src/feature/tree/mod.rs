@@ -286,7 +286,7 @@ impl TreeFeature {
         for p in out.logs.iter() {
             queues[0].insert(p);
         }
-        while let Some(distance) = (0..7).find(|&i| !queues[i].is_empty()) {
+        while let Some(mut distance) = (0..7).find(|&i| !queues[i].is_empty()) {
             let p = queues[distance].pop_first().unwrap();
             if !inside(p) {
                 continue;
@@ -309,6 +309,8 @@ impl TreeFeature {
                         let d = d.min(distance as i32 + 1);
                         if d < 7 {
                             queues[d as usize].insert(q);
+                            // The cursor also changes for the remaining neighbors.
+                            distance = distance.min(d as usize);
                         }
                     }
                 }
