@@ -66,8 +66,8 @@ pub enum EntityDataValue {
     Long(VarLong),
     Float(f32),
     String(String),
-    Component(Component),
-    OptionalComponent(Option<Component>),
+    Component(Box<Component>),
+    OptionalComponent(Option<Box<Component>>),
     ItemStack(ItemStack),
     Boolean(bool),
     Rotations(Rotations),
@@ -164,8 +164,10 @@ impl EntityDataValue {
             2 => Self::Long(r.read()?),
             3 => Self::Float(r.read()?),
             4 => Self::String(r.read()?),
-            5 => Self::Component(Component::decode_trusted(r)?),
-            6 => Self::OptionalComponent(r.optional(Component::decode_trusted)?),
+            5 => Self::Component(Box::new(Component::decode_trusted(r)?)),
+            6 => {
+                Self::OptionalComponent(r.optional(|r| Component::decode_trusted(r).map(Box::new))?)
+            }
             7 => Self::ItemStack(r.read()?),
             8 => Self::Boolean(r.read()?),
             9 => Self::Rotations(r.read()?),

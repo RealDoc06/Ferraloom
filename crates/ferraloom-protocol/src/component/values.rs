@@ -383,7 +383,7 @@ impl Wire for ItemEnchantments {
 pub enum AttributeDisplay {
     Default,
     Hidden,
-    Override(Component),
+    Override(Box<Component>),
 }
 impl Wire for AttributeDisplay {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
@@ -554,52 +554,6 @@ record!(BlockPredicate { blocks: Option<BlockSet>, properties: Option<StatePrope
 record!(PropertyMatcher { name: String, matcher: Either<String, PropertyRange> });
 record!(PropertyRange { min: Option<String>, max: Option<String> });
 record!(DataComponentMatchers { exact: Vec<super::DataComponent>, partial: BoundedList<ComponentPredicate, 64> });
-registry_ref!(ComponentPredicateType, "data_component_predicate_type");
-/// Port of DataComponentPredicate.Single. Vanilla's persistent codec transports the predicate as NBT.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ComponentPredicate {
-    pub predicate_type: Either<ComponentPredicateType, ComponentType>,
-    pub value: Tag,
-}
-impl Wire for ComponentPredicate {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Self {
-            predicate_type: r.read()?,
-            value: r.read()?,
-        })
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.write(&self.predicate_type)?;
-        w.write(&self.value)
-    }
-}
-
-impl Wire for ferraloom_data::Item {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let id = r.var_int()?;
-        u16::try_from(id)
-            .ok()
-            .and_then(Self::from_protocol_id)
-            .ok_or_else(|| invalid("item id"))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.var_int(self.protocol_id().into());
-        Ok(())
-    }
-}
-impl Wire for super::ComponentTypeId {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let id = r.var_int()?;
-        u16::try_from(id)
-            .ok()
-            .and_then(Self::from_protocol_id)
-            .ok_or_else(|| invalid("component type id"))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.var_int(self.protocol_id().into());
-        Ok(())
-    }
-}
 /// Port of the components whose default network codec is their persistent NBT codec.
 macro_rules! persistent_wire {
  ($($ty:ty),* $(,)?) => {$(impl Wire for $ty {

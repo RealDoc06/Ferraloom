@@ -13,7 +13,7 @@ use serde_json::{Map, Value as Json};
 #[derive(Clone, Debug, PartialEq)]
 pub enum PersistentValue {
     Nbt(Tag),
-    Component(Component),
+    Component(Box<Component>),
     Boolean(bool),
     String(NbtString),
     Int(i32),
@@ -72,16 +72,16 @@ pub trait Persistent: Sized {
         Ok(self.encode_ops(&HashOps)?.0)
     }
 }
-fn object(value: &Json) -> Result<&Map<String, Json>> {
+pub(super) fn object(value: &Json) -> Result<&Map<String, Json>> {
     value.as_object().ok_or_else(|| invalid("component object"))
 }
-fn field<T: Persistent>(value: &Json, name: &str, default: Option<T>) -> Result<T> {
+pub(super) fn field<T: Persistent>(value: &Json, name: &str, default: Option<T>) -> Result<T> {
     match value.get(name) {
         Some(v) => T::from_json(v),
         None => default.ok_or_else(|| Error::invalid("component field", name)),
     }
 }
-fn entry<T: Persistent + PartialEq>(
+pub(super) fn entry<T: Persistent + PartialEq>(
     entries: &mut Vec<(String, PersistentValue)>,
     name: &str,
     value: &T,
@@ -255,10 +255,10 @@ impl Persistent for Component {
         Self::from_json(&v.to_string())
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        Ok(PersistentValue::Component(self.clone()))
+        Ok(PersistentValue::Component(Box::new(self.clone())))
     }
 }
-fn tag_json(v: &Tag) -> Json {
+pub(super) fn tag_json(v: &Tag) -> Json {
     match v {
         Tag::End => Json::Null,
         Tag::Byte(n) => Json::from(*n),
@@ -1108,7 +1108,7 @@ impl Persistent for AxolotlVariant {
     }
 }
 
-fn set_from_json(v: &Json) -> Result<HolderSet> {
+pub(super) fn set_from_json(v: &Json) -> Result<HolderSet> {
     if let Some(s) = v.as_str() {
         if let Some(tag) = s.strip_prefix('#') {
             return Ok(HolderSet::Named(Identifier::parse(tag)?));
@@ -1117,7 +1117,7 @@ fn set_from_json(v: &Json) -> Result<HolderSet> {
     }
     Ok(HolderSet::Direct(Vec::<Identifier>::from_json(v)?))
 }
-fn set_value(v: &HolderSet) -> Result<PersistentValue> {
+pub(super) fn set_value(v: &HolderSet) -> Result<PersistentValue> {
     match v {
         HolderSet::Named(k) => format!("#{k}").to_persistent(),
         HolderSet::Direct(entries) => {
@@ -1465,7 +1465,7 @@ impl Persistent for ResolvableProfile {
         Ok(PersistentValue::Map(v))
     }
 }
-fn map_entries(value: PersistentValue) -> Result<Vec<(String, PersistentValue)>> {
+pub(super) fn map_entries(value: PersistentValue) -> Result<Vec<(String, PersistentValue)>> {
     match value {
         PersistentValue::Map(v) => Ok(v),
         _ => Err(invalid("map")),
@@ -1702,16 +1702,7 @@ impl Persistent for DataComponentMatchers {
         let mut partial = Vec::new();
         if let Some(v) = v.get("predicates") {
             for (k, v) in object(v)? {
-                let key = registry(k);
-                let ty = if ComponentTypeId::from_name(key.as_str()).is_some() {
-                    Either::Right(ComponentTypeId::from_name(key.as_str()).unwrap())
-                } else {
-                    Either::Left(ComponentPredicateType(key))
-                };
-                partial.push(ComponentPredicate {
-                    predicate_type: ty,
-                    value: json_tag(v)?,
-                });
+                partial.push(ComponentPredicate::from_key(&registry(k), v)?);
             }
         }
         Ok(Self {
@@ -1739,13 +1730,7 @@ impl Persistent for DataComponentMatchers {
                     self.partial
                         .0
                         .iter()
-                        .map(|p| {
-                            let name = match &p.predicate_type {
-                                Either::Left(t) => t.0.to_string(),
-                                Either::Right(t) => t.name().to_owned(),
-                            };
-                            Ok((name, p.value.to_persistent()?))
-                        })
+                        .map(|p| Ok((p.key().to_string(), p.to_persistent()?)))
                         .collect::<Result<_>>()?,
                 ),
             ));
@@ -1753,6 +1738,7 @@ impl Persistent for DataComponentMatchers {
         Ok(PersistentValue::Map(v))
     }
 }
+
 impl Persistent for IntBounds {
     fn from_json(v: &Json) -> Result<Self> {
         if v.is_number() {
@@ -1769,10 +1755,10 @@ impl Persistent for IntBounds {
         }
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        if let (Some(min), Some(max)) = (self.min, self.max) {
-            if min == max {
-                return min.to_persistent();
-            }
+        if let (Some(min), Some(max)) = (self.min, self.max)
+            && min == max
+        {
+            return min.to_persistent();
         }
         let mut v = Vec::new();
         entry(&mut v, "min", &self.min, Some(None))?;
@@ -2461,3 +2447,5 @@ impl Persistent for NbtPredicate {
         self.0.0.to_string().to_persistent()
     }
 }
+
+pub(super) use persistent_record;
