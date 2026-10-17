@@ -308,8 +308,17 @@ public final class StructureGolden {
         }
         write(directory.resolve("replacements.json.gz"),out);
     }
+    static void decoration(RegistryAccess.Frozen registries, Path directory) throws Exception {
+        var out=new JsonArray();var registry=registries.lookupOrThrow(Registries.STRUCTURE);
+        for(long seed:new long[]{0,-1,8675309})for(var step:GenerationStep.Decoration.values()) {
+            var entries=registry.listElements().filter(h->h.value().step()==step).toList();var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("step",step.ordinal());var ids=new JsonArray();for(var e:entries)ids.add(e.key().identifier().toString());item.add("ids",ids);var next=new JsonArray();
+            for(int prefix=0;prefix<=entries.size();prefix++) {var random=new WorldgenRandom(new net.minecraft.world.level.levelgen.XoroshiroRandomSource(17));long decorationSeed=random.setDecorationSeed(seed,-112,176);for(int index=0;index<prefix;index++)random.setFeatureSeed(decorationSeed,index,step.ordinal());next.add(random.nextInt());}
+            item.add("next",next);out.add(item);
+        }
+        write(directory.resolve("decoration.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);
     }
 }

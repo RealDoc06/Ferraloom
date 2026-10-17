@@ -3,6 +3,7 @@
 pub mod alias;
 pub mod beardifier;
 pub mod bounding_box;
+pub mod decoration;
 pub mod jigsaw;
 pub mod jigsaw_structure;
 pub mod placement;

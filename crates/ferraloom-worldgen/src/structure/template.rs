@@ -262,7 +262,7 @@ pub enum LiquidSettings {
     IgnoreWaterlogging,
 }
 /// Port of StructurePlaceSettings. Processors are supplied to processing as a
-/// borrowed list; settings and its optional RNG belong to one placement job.
+/// borrowed list; settings and its RNG policy belong to one placement job.
 #[derive(Clone, Debug, Default)]
 pub struct StructurePlaceSettings {
     pub mirror: Mirror,
