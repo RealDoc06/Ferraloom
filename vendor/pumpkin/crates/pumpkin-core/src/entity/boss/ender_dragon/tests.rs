@@ -43,8 +43,8 @@ use pumpkin_protocol::{
     ClientPacket, RawPacket,
     java::{
         client::play::{
-            CEntityStatus, CKeepAlive, CRemoveEntities, CSetEntityMetadata, CSpawnEntity,
-            CWorldEvent, Metadata,
+            CDamageEvent, CEntityStatus, CKeepAlive, CRemoveEntities, CSetEntityMetadata,
+            CSpawnEntity, CWorldEvent, Metadata,
         },
         packet_decoder::TCPNetworkDecoder,
         server::play::{SAttack, SInteract},
@@ -860,6 +860,93 @@ async fn actual_player_arrow_hit_stops_piglin_admiration_and_commits_health() {
         living.last_hurt_by_player_id.load(Ordering::Relaxed),
         fixture.player.entity_id()
     );
+    close_fixture(&fixture).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actual_damage_packets_order_responsible_then_direct_with_melee_and_sourceless_controls() {
+    let mut fixture = fixture().await;
+    let world = fixture.player.world();
+    let player = fixture.player.clone();
+    let mut expected = Vec::new();
+    for kind in 0..3 {
+        let target = crate::entity::r#type::from_type(
+            &EntityType::PIGLIN,
+            Vector3::new(3.0, 65.0, 0.5),
+            &world,
+            Uuid::new_v4(),
+        );
+        assert!(world.spawn_entity(target.clone()));
+        target.get_mob().unwrap().get_mob_entity().set_no_ai(true);
+        let target_id = target.get_entity().entity_id;
+        let tracked = world.entity_tracker.get_tracked_entity(target_id).unwrap();
+        tracked.seen_by.insert(player.gameprofile.id);
+        tracked.add_pairing(&player);
+        let living = target.get_living_entity().unwrap();
+        let before = living.health.load();
+        let (damage_type, cause_id, direct_id, loss) = match kind {
+            0 => {
+                let arrow = Arc::new(ArrowEntity::new(
+                    Entity::new(
+                        world.clone(),
+                        Vector3::new(1.0, 65.5, 0.5),
+                        &EntityType::ARROW,
+                    ),
+                    Some(player.entity_id()),
+                ));
+                arrow
+                    .get_entity()
+                    .velocity
+                    .store(Vector3::new(2.0, 0.0, 0.0));
+                assert!(world.spawn_entity(arrow.clone()));
+                let direct_id = arrow.get_entity().entity_id;
+                assert_ne!(direct_id, player.entity_id());
+                arrow.on_hit(projectile_hit(target.clone()));
+                (
+                    DamageType::ARROW,
+                    player.entity_id() + 1,
+                    direct_id + 1,
+                    4.0,
+                )
+            }
+            1 => {
+                player
+                    .living_entity
+                    .set_attribute_base(&Attributes::ATTACK_DAMAGE, 4.0);
+                player.last_attacked_ticks.store(100, Ordering::Relaxed);
+                player.attack(&target);
+                (
+                    DamageType::PLAYER_ATTACK,
+                    player.entity_id() + 1,
+                    player.entity_id() + 1,
+                    4.0,
+                )
+            }
+            _ => {
+                assert!(target.damage(target.as_ref(), 2.0, DamageType::GENERIC));
+                (DamageType::GENERIC, 0, 0, 2.0)
+            }
+        };
+        assert_eq!(living.health.load(), before - loss);
+        expected.push([target_id, i32::from(damage_type.id), cause_id, direct_id]);
+    }
+    let mut reader = TCPNetworkDecoder::new(BufReader::new(&mut fixture.remote));
+    let packets = observe(&mut reader, &player).await;
+    let received: Vec<_> = packets
+        .iter()
+        .filter(|packet| packet.id == CDamageEvent::to_id(CURRENT_MC_VERSION))
+        .map(|packet| {
+            let mut payload = &packet.payload[..];
+            [
+                payload.get_var_int().unwrap().0,
+                payload.get_var_int().unwrap().0,
+                payload.get_var_int().unwrap().0,
+                payload.get_var_int().unwrap().0,
+            ]
+        })
+        .collect();
+    assert_eq!(received, expected);
+    drop(reader);
     close_fixture(&fixture).await;
 }
 

@@ -1706,6 +1706,8 @@ impl World {
     /// Broadcasts a damage event to all players tracking the specified entity,
     /// and to the entity itself if it is a player.
     /// Matching Vanilla's `ServerLevel.broadcastDamageEvent(entity, source)`.
+    /// The API takes the direct `source_entity_id`, then the responsible
+    /// `cause_entity_id`; the wire packet orders cause before direct source.
     pub fn broadcast_damage_event(
         &self,
         entity: &Entity,
@@ -1717,8 +1719,8 @@ impl World {
         let je_packet = CDamageEvent::new(
             entity.entity_id.into(),
             damage_type_id.into(),
-            source_entity_id.map(Into::into),
             cause_entity_id.map(Into::into),
+            source_entity_id.map(Into::into),
             position,
         );
         self.send_to_tracking_players_and_self(entity, &je_packet);
