@@ -40,6 +40,7 @@ public final class ComponentFixtures {
             var persistent = entry.encodeValue(lookup.createSerializationContext(JsonOps.INSTANCE)).result();
             if (persistent.isPresent()) {
                 out.add("value",persistent.get());
+                out.addProperty("nbt",bytes(ByteBufCodecs.TAG,entry.encodeValue(lookup.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE)).getOrThrow()));
                 out.addProperty("hash",entry.encodeValue(lookup.createSerializationContext(HashOps.CRC32C_INSTANCE)).getOrThrow().asInt());
             }
         }
@@ -160,6 +161,15 @@ public final class ComponentFixtures {
         component("transient",new TypedDataComponent<>(DataComponents.MAP_POST_PROCESSING,MapPostProcessing.SCALE));
         sample("consumable","{\"on_consume_effects\":[{\"type\":\"minecraft:teleport_randomly\",\"diameter\":24.0,\"directional_particles\":false},{\"type\":\"minecraft:remove_effects\",\"effects\":[\"minecraft:poison\"]},{\"type\":\"minecraft:play_sound\",\"sound\":\"minecraft:item.shield.block\"}]}");
         component("inline_painting",new TypedDataComponent<>(DataComponents.PAINTING_VARIANT,Holder.direct(new net.minecraft.world.entity.decoration.painting.PaintingVariant(2,1,net.minecraft.resources.Identifier.parse("minecraft:test"),Optional.of(net.minecraft.network.chat.Component.literal("Title")),Optional.empty()))));
+        sample("profile","{\"id\":[1,2,3,4],\"name\":\"Doc\",\"properties\":[{\"name\":\"textures\",\"value\":\"value\",\"signature\":\"signature\"}],\"texture\":\"minecraft:entity/player/wide/steve\",\"model\":\"wide\"}");
+        sample("potion_contents","{\"potion\":\"minecraft:healing\",\"custom_color\":123456,\"custom_name\":\"test\",\"custom_effects\":[{\"id\":\"minecraft:poison\",\"amplifier\":2,\"duration\":200,\"ambient\":true,\"show_particles\":false,\"show_icon\":false,\"hidden_effect\":{\"duration\":100}}]}");
+        sample("attribute_modifiers","[{\"type\":\"minecraft:attack_damage\",\"id\":\"minecraft:test\",\"amount\":1.5,\"operation\":\"add_value\",\"slot\":\"mainhand\",\"display\":{\"type\":\"override\",\"value\":{\"text\":\"custom\",\"bold\":true}}}]");
+        sample("compostable","{\"layers\":2}");
+        sample("cooking_fuel","{\"burn_time\":1000,\"speed_multiplier\":0.5}");
+        sample("brewing_fuel","{\"uses\":10,\"speed_multiplier\":1.25}");
+        sample("map_decorations","{\"test\":{\"type\":\"minecraft:target_x\",\"x\":10.5,\"z\":-20.0,\"rotation\":45.5}}");
+        sample("can_place_on","{\"blocks\":[\"minecraft:oak_log\"],\"state\":{\"axis\":\"y\"},\"nbt\":\"{id:\\\"minecraft:chest\\\",foo:3}\"}");
+        sample("lock","{\"components\":{\"minecraft:custom_name\":{\"text\":\"key\",\"bold\":true}},\"predicates\":{\"minecraft:damage\":{\"damage\":{\"min\":1}}}}");
         fixtures.add("components",components);
         var serializers = new JsonObject();
         for (var field:EntityDataSerializers.class.getFields()) if(field.getType()==EntityDataSerializer.class) serializers.addProperty(field.getName(),EntityDataSerializers.getSerializedId((EntityDataSerializer<?>)field.get(null)));

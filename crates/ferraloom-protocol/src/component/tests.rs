@@ -131,6 +131,18 @@ fn vanilla_persistent_component_hashes() {
                     value.to_json()
                 )),
             }
+            if let Some(expected) = fixture.get("nbt").and_then(Value::as_str) {
+                let expected = unhex(expected);
+                let mut writer = Writer::new();
+                match value.to_nbt().and_then(|v| writer.nbt(&v)) {
+                    Ok(()) if writer.as_slice() == expected => {}
+                    other => mismatches.push(format!(
+                        "{key} persistent NBT: {other:?}, actual {:x?}, expected {:x?}",
+                        writer.as_slice(),
+                        expected
+                    )),
+                }
+            }
             match DataComponent::from_json(&key, &fixture["value"]) {
                 Ok(restored)
                     if matches!(value, DataComponent::CustomData(_)) || value == restored => {}
@@ -220,4 +232,23 @@ fn vanilla_hash_ops_scalar_kinds_arrays_and_map_order() {
             .map(|v| v.as_i64().unwrap())
             .collect::<Vec<_>>()
     );
+}
+#[test]
+fn item_defaults_merge_with_additions_and_explicit_removals() {
+    let (f, registries) = fixtures();
+    let stack: ItemStack = roundtrip(f["sword"].as_str().unwrap(), &registries);
+    let components = stack.components().unwrap();
+    assert_eq!(
+        components.get(ComponentTypeId::MAX_DAMAGE),
+        Some(&DataComponent::MaxDamage(crate::codec::VarInt(1561)))
+    );
+    assert_eq!(
+        components.get(ComponentTypeId::DAMAGE),
+        Some(&DataComponent::Damage(crate::codec::VarInt(7)))
+    );
+    assert!(components.get(ComponentTypeId::ITEM_NAME).is_none());
+    assert!(matches!(
+        components.get(ComponentTypeId::CUSTOM_DATA),
+        Some(DataComponent::CustomData(_))
+    ));
 }

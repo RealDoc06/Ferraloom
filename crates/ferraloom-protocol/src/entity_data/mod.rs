@@ -165,9 +165,7 @@ impl EntityDataValue {
             3 => Self::Float(r.read()?),
             4 => Self::String(r.read()?),
             5 => Self::Component(Component::decode_trusted(r)?),
-            6 => {
-                Self::OptionalComponent(r.optional_nbt(true)?.map(Component::from_nbt).transpose()?)
-            }
+            6 => Self::OptionalComponent(r.optional(Component::decode_trusted)?),
             7 => Self::ItemStack(r.read()?),
             8 => Self::Boolean(r.read()?),
             9 => Self::Rotations(r.read()?),
@@ -224,9 +222,7 @@ impl EntityDataValue {
             Self::Float(v) => w.write(v),
             Self::String(v) => w.write(v),
             Self::Component(v) => w.write(v),
-            Self::OptionalComponent(v) => {
-                w.optional_nbt(v.as_ref().map(Component::to_nbt).transpose()?.as_ref())
-            }
+            Self::OptionalComponent(v) => w.optional(v, |w, v| w.write(v)),
             Self::ItemStack(v) => w.write(v),
             Self::Boolean(v) => w.write(v),
             Self::Rotations(v) => w.write(v),

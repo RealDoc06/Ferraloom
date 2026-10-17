@@ -71,14 +71,6 @@ macro_rules! wire_enum {
         }
     };
 }
-impl<T: Wire> Wire for Box<T> {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        T::decode(r).map(Box::new)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        (**self).encode(w)
-    }
-}
 /// Port of Unit#STREAM_CODEC: zero bytes, unlike its persistent empty map.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Unit;
@@ -234,7 +226,7 @@ record!(BannerPattern {
     asset_id: Identifier,
     translation_key: String
 });
-/// Port of PaintingVariant's direct codec, with NBT-sentinel optional text.
+/// Port of PaintingVariant's direct codec, with boolean-prefixed optional text.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaintingVariant {
     pub width: VarInt,
@@ -249,28 +241,16 @@ impl Wire for PaintingVariant {
             width: r.read()?,
             height: r.read()?,
             asset_id: r.read()?,
-            title: r.optional_nbt(true)?.map(Component::from_nbt).transpose()?,
-            author: r.optional_nbt(true)?.map(Component::from_nbt).transpose()?,
+            title: r.optional(Component::decode_trusted)?,
+            author: r.optional(Component::decode_trusted)?,
         })
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         w.write(&self.width)?;
         w.write(&self.height)?;
         w.write(&self.asset_id)?;
-        w.optional_nbt(
-            self.title
-                .as_ref()
-                .map(Component::to_nbt)
-                .transpose()?
-                .as_ref(),
-        )?;
-        w.optional_nbt(
-            self.author
-                .as_ref()
-                .map(Component::to_nbt)
-                .transpose()?
-                .as_ref(),
-        )
+        w.optional(&self.title, |w, v| w.write(v))?;
+        w.optional(&self.author, |w, v| w.write(v))
     }
 }
 record!(UseEffects {
