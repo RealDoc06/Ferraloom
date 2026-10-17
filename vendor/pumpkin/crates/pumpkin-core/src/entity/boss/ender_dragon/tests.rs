@@ -12,7 +12,7 @@ use crate::{
     },
     entity::{
         RemovalReason,
-        mob::{piglin::PiglinEntity, piglin_ai::PiglinAi},
+        mob::{MobEntity, piglin::PiglinEntity, piglin_ai::PiglinAi},
         projectile::{
             ProjectileHit, ThrownItemEntity, arrow::ArrowEntity, trident::TridentEntity,
             wind_charge::WindChargeEntity,
@@ -35,8 +35,8 @@ use crate::{
 };
 use futures::future::BoxFuture;
 use pumpkin_data::{
-    attributes::Attributes, entity::EntityPose, item::Item, item_stack::ItemStack,
-    packet::CURRENT_MC_VERSION,
+    attributes::Attributes, data_component_impl::EquipmentSlot, entity::EntityPose, item::Item,
+    item_stack::ItemStack, packet::CURRENT_MC_VERSION,
 };
 use pumpkin_inventory::Inventory;
 use pumpkin_protocol::{
@@ -837,6 +837,18 @@ fn projectile_hit(target: Arc<dyn EntityBase>) -> ProjectileHit {
     }
 }
 
+// Spawn armor is random; these scenarios isolate damage sources and post-hit hooks.
+fn unequip_spawn_armor(mob: &MobEntity) {
+    for slot in [
+        EquipmentSlot::HEAD,
+        EquipmentSlot::CHEST,
+        EquipmentSlot::LEGS,
+        EquipmentSlot::FEET,
+    ] {
+        let _previous = mob.set_item_slot(&slot, ItemStack::EMPTY.clone());
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn actual_player_arrow_hit_stops_piglin_admiration_and_commits_health() {
     let fixture = fixture().await;
@@ -851,6 +863,7 @@ async fn actual_player_arrow_hit_stops_piglin_admiration_and_commits_health() {
     assert!(world.spawn_entity(target.clone()));
     let piglin = target.cast_any().downcast_ref::<PiglinEntity>().unwrap();
     piglin.mob_entity.set_no_ai(true);
+    unequip_spawn_armor(&piglin.mob_entity);
     piglin.set_dancing(true);
     piglin.celebration_timer.store(60, Ordering::Relaxed);
     let mut gold = ItemStack::new(1, &Item::GOLD_INGOT);
@@ -914,6 +927,7 @@ async fn actual_damage_packets_order_responsible_then_direct_with_melee_and_sour
         );
         assert!(world.spawn_entity(target.clone()));
         target.get_mob().unwrap().get_mob_entity().set_no_ai(true);
+        unequip_spawn_armor(target.get_mob().unwrap().get_mob_entity());
         let target_id = target.get_entity().entity_id;
         let tracked = world.entity_tracker.get_tracked_entity(target_id).unwrap();
         tracked.seen_by.insert(player.gameprofile.id);
