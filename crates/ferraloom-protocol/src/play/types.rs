@@ -1,55 +1,7 @@
 //! Embedded play-state network forms shared by both directions.
 use super::*;
 
-/// Port of ByteBufCodecs.stringUtf8(maxLength).
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Utf8<const MAX: usize>(pub String);
-impl<const MAX: usize> Wire for Utf8<MAX> {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Self(r.string(MAX)?.into_owned()))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.string(&self.0, MAX)
-    }
-}
-
-/// A length-prefixed byte array, distinct from a list of structured elements.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ByteArray<const MAX: usize = { i32::MAX as usize }>(pub Vec<u8>);
-impl<const MAX: usize> Wire for ByteArray<MAX> {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Self(r.byte_array(MAX)?.to_vec()))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.byte_array(&self.0, MAX)
-    }
-}
-
-/// Port of ByteBufCodecs.optionalVarInt; zero is absent, present IDs are shifted by one.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct OptionalVarInt(pub Option<i32>);
-impl Wire for OptionalVarInt {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        let id = r.var_int()?;
-        Ok(Self((id != 0).then(|| id.wrapping_sub(1))))
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.var_int(self.0.map_or(0, |id| id.wrapping_add(1)));
-        Ok(())
-    }
-}
-
-/// Port of FriendlyByteBuf's nullable network NBT (TAG_End means absent).
-#[derive(Clone, Debug, PartialEq)]
-pub struct OptionalNbt(pub Option<ferraloom_nbt::Tag>);
-impl Wire for OptionalNbt {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        r.optional_nbt(false).map(Self)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.optional_nbt(self.0.as_ref())
-    }
-}
+pub use crate::common::{ByteArray, OptionalNbt, OptionalVarInt, Utf8};
 
 macro_rules! registry_ids {
     ($($name:ident),* $(,)?) => { $(
@@ -121,7 +73,7 @@ impl Wire for LpVec3 {
         if low & 4 != 0 {
             scale |= (r.var_int()? as u32 as u64) << 2;
         }
-        let unpack = |shift| {
+        let unpack = |shift: u32| {
             (((packed >> shift) & 32767).min(32766) as f64 * 2. / 32766. - 1.) * scale as f64
         };
         Ok(Self(Vec3 {
@@ -147,7 +99,7 @@ impl Wire for LpVec3 {
         let scale = length.ceil() as u64;
         let partial = scale > 3;
         let markers = (scale & 3) | if partial { 4 } else { 0 };
-        let pack = |v| ((v / scale as f64 * 0.5 + 0.5) * 32766. + 0.5).floor() as u64;
+        let pack = |v: f64| ((v / scale as f64 * 0.5 + 0.5) * 32766. + 0.5).floor() as u64;
         let packed = markers | (pack(x) << 3) | (pack(y) << 18) | (pack(z) << 33);
         w.u8(packed as u8);
         w.u8((packed >> 8) as u8);
