@@ -137,8 +137,41 @@ public final class StructureGolden {
         }
         out.add("positions",posCases);write(directory.resolve("rules.json.gz"),out);
     }
+    static void templates(Path directory) throws Exception {
+        var out=new JsonArray();
+        var paletteField=StructureTemplate.class.getDeclaredField("palettes");paletteField.setAccessible(true);
+        var entityField=StructureTemplate.class.getDeclaredField("entityInfoList");entityField.setAccessible(true);
+        Path jar=Path.of(Block.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        try(var zip=new java.util.zip.ZipFile(jar.toFile())) {
+            for(var entry:zip.stream().filter(e->e.getName().startsWith("data/minecraft/structure/")&&e.getName().endsWith(".nbt")).sorted(Comparator.comparing(e->e.getName())).toList()) {
+                net.minecraft.nbt.CompoundTag tag;
+                try(var in=zip.getInputStream(entry)) {tag=net.minecraft.nbt.NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.unlimitedHeap());}
+                var template=new StructureTemplate();template.load(BuiltInRegistries.BLOCK,tag);
+                var item=new JsonObject();item.addProperty("id",entry.getName().replace("data/minecraft/structure/","minecraft:").replace(".nbt",""));item.addProperty("version",tag.getIntOr("DataVersion",500));
+                var size=template.getSize();item.add("size",ints(size.getX(),size.getY(),size.getZ()));
+                item.addProperty("entities",((List<?>)entityField.get(template)).size());
+                @SuppressWarnings("unchecked") var palettes=(List<StructureTemplate.Palette>)paletteField.get(template);var values=new JsonArray();
+                for(var palette:palettes) {
+                    var value=new JsonObject();var blocks=palette.blocks();value.addProperty("size",blocks.size());value.addProperty("nbt_count",blocks.stream().filter(b->b.nbt()!=null).count());
+                    var samples=new JsonArray();var indices=new TreeSet<Integer>();for(int i=0;i<9;i++)if(!blocks.isEmpty())indices.add((blocks.size()-1)*i/8);
+                    for(int i=1;i<blocks.size();i++)if((blocks.get(i-1).nbt()==null)!=(blocks.get(i).nbt()==null)){indices.add(i-1);indices.add(i);}
+                    for(int i:indices) {var b=blocks.get(i);var sample=new JsonObject();sample.addProperty("index",i);sample.add("pos",ints(b.pos().getX(),b.pos().getY(),b.pos().getZ()));sample.addProperty("state",Block.BLOCK_STATE_REGISTRY.getId(b.state()));sample.addProperty("nbt",b.nbt()!=null);samples.add(sample);}
+                    value.add("samples",samples);values.add(value);
+                }
+                item.add("palettes",values);out.add(item);
+            }
+        }
+        write(directory.resolve("templates.json.gz"),out);
+        var geometry=new JsonArray();
+        for(var mirror:net.minecraft.world.level.block.Mirror.values())for(var rotation:net.minecraft.world.level.block.Rotation.values())for(int[] pivot:new int[][]{{0,0,0},{7,2,-11},{Integer.MAX_VALUE,0,Integer.MIN_VALUE}})for(int[] p:new int[][]{{0,0,0},{1,5,9},{-7,12,-15},{Integer.MAX_VALUE,-1,Integer.MIN_VALUE}}) {
+            var item=new JsonObject();item.addProperty("mirror",mirror.ordinal());item.addProperty("rotation",rotation.ordinal());item.add("pivot",ints(pivot));item.add("pos",ints(p));
+            var bp=new BlockPos(p[0],p[1],p[2]);var pv=new BlockPos(pivot[0],pivot[1],pivot[2]);var block=StructureTemplate.transform(bp,mirror,rotation,pv);item.add("block",ints(block.getX(),block.getY(),block.getZ()));
+            var entity=StructureTemplate.transform(new net.minecraft.world.phys.Vec3(p[0]+0.25,p[1]+0.5,p[2]+0.75),mirror,rotation,pv);var bits=new JsonArray();for(double v:new double[]{entity.x,entity.y,entity.z})bits.add(Long.toString(Double.doubleToRawLongBits(v)));item.add("entity",bits);geometry.add(item);
+        }
+        write(directory.resolve("template_geometry.json.gz"),geometry);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);
     }
 }
