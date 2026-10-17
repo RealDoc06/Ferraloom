@@ -1,0 +1,132 @@
+import java.lang.reflect.*;
+import java.nio.file.*;
+import java.util.*;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.*;
+import net.minecraft.core.registries.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.*;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.server.packs.*;
+import net.minecraft.server.packs.repository.PackSource;
+import net.minecraft.server.packs.resources.*;
+import net.minecraft.tags.TagLoader;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.state.*;
+import net.minecraft.world.level.redstone.*;
+
+/** Real CollectingNeighborUpdater callbacks on an in-memory concrete Level.
+ * Unused abstract Level services throw rather than pretending to be a server. */
+public final class NeighborVectors {
+    static RegistryAccess.Frozen load() {
+        var location=new PackLocationInfo("vanilla",Component.literal("vanilla"),PackSource.BUILT_IN,Optional.empty());
+        var pack=new VanillaPackResourcesBuilder().pushJarResources().exposeNamespace("minecraft").build(location).fullResources();
+        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));
+        var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        TagLoader.loadTagsForExistingRegistries(manager,builtins).forEach(Registry.PendingTags::apply);
+        return RegistryDataLoader.load(manager,builtins.registries().<HolderLookup.RegistryLookup<?>>map(e->e.value()).toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
+    }
+    // Run once to generate the compile-time fixture; no allocation bypass or
+    // reflection into Minecraft objects is used in the oracle itself.
+    public static void main(String[] args) throws Exception {
+        if(args.length>0 && args[0].equals("generate")) { generate(Path.of(args[1])); return; }
+        var output=System.out; var errors=System.err; SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); System.setOut(output); System.setErr(errors);
+        var registries=load();
+        Class.forName("NeighborFixture").getMethod("run", RegistryAccess.class).invoke(null,registries);
+        var mutation=Class.forName("MutationFixture").getMethod("run",RegistryAccess.class);mutation.setAccessible(true);mutation.invoke(null,registries);
+    }
+    static String type(Class<?> c) { return c.getCanonicalName(); }
+    static void generate(Path path) throws Exception {
+        var out=new StringBuilder("import net.minecraft.core.*; import net.minecraft.world.level.*; import net.minecraft.world.level.block.*; import net.minecraft.world.level.block.state.*; import net.minecraft.world.level.redstone.*; import net.minecraft.world.flag.*; import java.util.*;\nclass NeighborFixture extends Level {\n");
+        out.append("NeighborFixture(RegistryAccess r,int max){super(null,Level.OVERWORLD,r,r.lookupOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE).getOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD),false,false,0,max);}\n");
+        var seen=new HashSet<String>();
+        for(Class<?> cls=Level.class;cls!=null;cls=cls.getSuperclass()) for(var m:cls.getDeclaredMethods()) if(Modifier.isAbstract(m.getModifiers())) stub(out,m,seen);
+        for(var m:Level.class.getMethods()) if(Modifier.isAbstract(m.getModifiers())) stub(out,m,seen);
+        out.append("""
+            final Map<BlockPos,BlockState> blocks=new HashMap<>();
+            final List<String> trace=new ArrayList<>();
+            boolean nested;
+            @Override public BlockState getBlockState(BlockPos p){
+              trace.add(p.toShortString());
+              if(nested && p.equals(new BlockPos(-1,0,0))){
+                neighborUpdater.neighborChanged(new BlockPos(10,0,0),Blocks.STONE,null);
+                neighborUpdater.neighborChanged(new BlockPos(11,0,0),Blocks.STONE,null);
+              }
+              return Blocks.AIR.defaultBlockState();
+            }
+            @Override public FeatureFlagSet enabledFeatures(){return FeatureFlags.DEFAULT_FLAGS;}
+            static void scenario(RegistryAccess r,String name,int max,boolean nested,Direction skip){
+              var f=new NeighborFixture(r,max);f.nested=nested;var block=Blocks.STONE;
+              for(Direction d:Direction.values())f.blocks.put(BlockPos.ZERO.relative(d),block.defaultBlockState());
+              f.blocks.put(new BlockPos(10,0,0),block.defaultBlockState());f.blocks.put(new BlockPos(11,0,0),block.defaultBlockState());
+              f.neighborUpdater.updateNeighborsAtExceptFromFacing(BlockPos.ZERO,block,skip,null);
+              System.out.println(name+"\\t"+String.join(";",f.trace));
+            }
+            public static void run(RegistryAccess r){
+              scenario(r,"direction-order",100,false,null);
+              scenario(r,"skip-west",100,false,Direction.WEST);
+              scenario(r,"nested-layer",100,true,null);
+              scenario(r,"chain-limit",2,true,null);
+              scenario(r,"zero-limit",0,true,null);
+              var f=new NeighborFixture(r,100);f.randValue=0;
+              var positions=new ArrayList<String>();
+              for(int i=0;i<4;i++)positions.add(f.getBlockRandomPos(-16,-64,32,15).toShortString());
+              System.out.println("random-positions\\t"+String.join(";",positions));
+              System.out.println("valid-chunk-bound\\t"+net.minecraft.world.level.chunk.status.ChunkPyramid.MAX_CHUNK_COORDINATE_VALUE);
+              var sample=List.of(Blocks.AIR,Blocks.CAVE_AIR,Blocks.VOID_AIR,Blocks.STONE,Blocks.DIRT,Blocks.SAND,Blocks.GRAVEL,Blocks.WATER,Blocks.LAVA,Blocks.OBSIDIAN,Blocks.COBBLESTONE,Blocks.BASALT,Blocks.SOUL_SOIL,Blocks.BLUE_ICE,Blocks.SHORT_GRASS,Blocks.DANDELION,Blocks.BUSH,Blocks.FIRE,Blocks.SOUL_FIRE,Blocks.MAGMA_BLOCK);
+              for(var tag:List.of(net.minecraft.tags.BlockTags.SUPPORTS_VEGETATION,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.WASHED_AWAY_BY_FLUIDS,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP_NO_LEAVES,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_DRAG_DOWN,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_PUSH_UP)){
+                var names=new ArrayList<String>();for(var block:sample)if(block.defaultBlockState().is(tag))names.add(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString());
+                System.out.println("tag:"+tag.location()+"\\t"+String.join(",",names));
+              }
+
+            }
+            }
+            """);
+        out.append("""
+            final class MutationFixture extends NeighborFixture {
+              final Map<ChunkPos,net.minecraft.world.level.chunk.LevelChunk> chunks=new HashMap<>();
+              final Source source=new Source();
+              MutationFixture(RegistryAccess r){super(r,1000);}
+              final class Source extends net.minecraft.world.level.chunk.ChunkSource {
+                final net.minecraft.world.level.lighting.LevelLightEngine lights=new net.minecraft.world.level.lighting.LevelLightEngine(this,false,false);
+                @Override public net.minecraft.world.level.BlockGetter getLevel(){return MutationFixture.this;}
+                @Override public net.minecraft.world.level.chunk.ChunkAccess getChunk(int x,int z,net.minecraft.world.level.chunk.status.ChunkStatus status,boolean load){
+                  var p=new ChunkPos(x,z);return load?chunks.computeIfAbsent(p,k->new net.minecraft.world.level.chunk.LevelChunk(MutationFixture.this,k){
+                    @Override public net.minecraft.server.level.FullChunkStatus getFullStatus(){return net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING;}
+                  }):chunks.get(p);
+                }
+                @Override public void tick(java.util.function.BooleanSupplier time,boolean tick){}
+                @Override public String gatherStats(){return "fixture";}
+                @Override public int getLoadedChunksCount(){return chunks.size();}
+                @Override public net.minecraft.world.level.lighting.LevelLightEngine getLightEngine(){return lights;}
+                @Override public void onSectionEmptinessChanged(int x,int y,int z,boolean empty){trace.add("section:"+empty);}
+              }
+              @Override public net.minecraft.world.level.chunk.ChunkSource getChunkSource(){return source;}
+              @Override public BlockState getBlockState(BlockPos p){return getChunkAt(p).getBlockState(p);}
+              @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");}
+              @Override public void updatePOIOnBlockStateChange(BlockPos p,BlockState a,BlockState b){trace.add("poi");}
+              @Override public void updateNeighborsAt(BlockPos p,Block b){trace.add("neighbors");neighborUpdater.updateNeighborsAtExceptFromFacing(p,b,null,null);}
+              @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
+              public static void run(RegistryAccess r){
+                for(int flags:new int[]{0,1,2,3,4,8,16,32,64,128,256,512,816}){
+                  var f=new MutationFixture(r);
+                  boolean result=f.setBlock(new BlockPos(8,0,8),Blocks.SAND.defaultBlockState(),flags,512);
+                  var c=f.getChunk(0,0);
+                  var heights=new ArrayList<String>();
+                  for(var map:List.of(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR,net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE))heights.add(""+c.getHeight(map,8,8));
+                  System.out.println("setblock-"+flags+"\\t"+result+":"+String.join(",",f.trace)+":"+String.join(",",heights));
+                }
+              }
+            }
+            """);
+        Files.writeString(path,out);
+    }
+    static void stub(StringBuilder out,Method m,Set<String> seen){
+        var params=m.getParameterTypes(); var key=m.getName()+Arrays.toString(params);
+        if(!seen.add(key)||m.getName().equals("enabledFeatures"))return;
+        out.append("@Override public ").append(type(m.getReturnType())).append(' ').append(m.getName()).append('(');
+        for(int i=0;i<params.length;i++){if(i>0)out.append(',');out.append(type(params[i])).append(" p").append(i);}
+        out.append("){throw new UnsupportedOperationException(\"").append(m.getName()).append("\");}\n");
+    }
+}
