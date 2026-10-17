@@ -117,9 +117,28 @@ public final class ExtractData {
         Files.writeString(dir.resolve(name + ".json"), GSON.toJson(canonical(data)) + "\n", StandardCharsets.UTF_8);
     }
 
+    private static void stateTransforms(Path dir) throws Exception {
+        var out = new JsonObject();
+        for (var rotation : new Rotation[]{Rotation.CLOCKWISE_90, Rotation.CLOCKWISE_180, Rotation.COUNTERCLOCKWISE_90}) {
+            var table = new JsonArray();
+            for (var state : Block.BLOCK_STATE_REGISTRY) table.add(Block.getId(state.rotate(rotation)));
+            out.add(rotation.name().toLowerCase(Locale.ROOT), table);
+        }
+        for (var mirror : new Mirror[]{Mirror.LEFT_RIGHT, Mirror.FRONT_BACK}) {
+            var table = new JsonArray();
+            for (var state : Block.BLOCK_STATE_REGISTRY) table.add(Block.getId(state.mirror(mirror)));
+            out.add(mirror.name().toLowerCase(Locale.ROOT), table);
+        }
+        write(dir, "state_transforms", out);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--state-transforms-only")) {
+            stateTransforms(Path.of(args[0]));
+            return;
+        }
         for (var field : Arrays.stream(SoundType.class.getFields()).sorted(Comparator.comparing(java.lang.reflect.Field::getName)).toList()) {
             if (field.getType() == SoundType.class) SOUND_NAMES.putIfAbsent((SoundType) field.get(null), field.getName().toLowerCase(Locale.ROOT));
         }
@@ -148,6 +167,7 @@ public final class ExtractData {
         var shapes = new JsonArray();
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
+        stateTransforms(dir);
 
         var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());

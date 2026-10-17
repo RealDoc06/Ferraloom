@@ -85,6 +85,31 @@ impl BlockState {
     }
 }
 
+impl BlockState {
+    /// Port of BlockStateBase#rotate. Tables preserve every block's override,
+    /// including stairs, rails, multi-face connections and jigsaw orientation.
+    pub const fn rotate(self, rotation: ferraloom_util::Rotation) -> Self {
+        use ferraloom_util::Rotation;
+        match rotation {
+            Rotation::None => self,
+            Rotation::Clockwise90 => Self(STATE_TRANSFORM_CLOCKWISE_90[self.0 as usize]),
+            Rotation::Clockwise180 => Self(STATE_TRANSFORM_CLOCKWISE_180[self.0 as usize]),
+            Rotation::CounterClockwise90 => {
+                Self(STATE_TRANSFORM_COUNTERCLOCKWISE_90[self.0 as usize])
+            }
+        }
+    }
+    /// Port of BlockStateBase#mirror. Apply before rotate for templates.
+    pub const fn mirror(self, mirror: ferraloom_util::Mirror) -> Self {
+        use ferraloom_util::Mirror;
+        match mirror {
+            Mirror::None => self,
+            Mirror::LeftRight => Self(STATE_TRANSFORM_LEFT_RIGHT[self.0 as usize]),
+            Mirror::FrontBack => Self(STATE_TRANSFORM_FRONT_BACK[self.0 as usize]),
+        }
+    }
+}
+
 /// A typed property key. Use the generated constants in [`properties`].
 #[derive(Clone, Copy, Debug)]
 pub struct Property<T> {

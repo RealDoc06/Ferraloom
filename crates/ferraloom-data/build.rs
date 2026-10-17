@@ -460,6 +460,33 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
     out.push_str("];\n");
 }
 
+/// Pure registry transforms from each block's vanilla virtual methods.
+fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
+    for name in [
+        "clockwise_90",
+        "clockwise_180",
+        "counterclockwise_90",
+        "left_right",
+        "front_back",
+    ] {
+        let values = tables[name].as_array().expect("state transform array");
+        assert_eq!(values.len(), state_count, "state transform table length");
+        write!(
+            out,
+            "const STATE_TRANSFORM_{}: [u16; {}] = [",
+            constant(name),
+            state_count
+        )
+        .unwrap();
+        for value in values {
+            let value = number(value);
+            assert!((value as usize) < state_count && value <= u16::MAX as u64);
+            write!(out, "{value},").unwrap();
+        }
+        out.push_str("];\n");
+    }
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -489,6 +516,11 @@ fn main() {
     let props = properties(&mut out, &block_report);
     blocks(&mut out, &block_report, &block_properties, &props);
     shapes(&mut out, &load(root, "shapes"));
+    state_transforms(
+        &mut out,
+        &load(root, "state_transforms"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
