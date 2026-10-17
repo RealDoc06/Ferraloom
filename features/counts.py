@@ -16,13 +16,13 @@ intro = (
     'Use the linked files as the porting checklist: stable IDs identify concrete behaviors or registry entries, '
     'Vanilla source identifies the implementation or built-in resource, and Test links the focused parity scenario. '
     'An empty Test cell, Vanilla `-` and Ferraloom `todo` mean untested, regardless of existing Rust code. '
-    'Run each scenario against vanilla before recording the Ferraloom result; use `pass` or `fail` for measured results. '
+    'Run each scenario against vanilla before recording the Ferraloom result; use `pass`, `partial` or `fail` for measured results. '
     'Ferraloom passes require agreement in single-region and parallel-region modes. '
     'Optional bundled datapacks and integrated-only command entries are labeled. '
     'Registry rows were extracted from the official reports and bootstrapped runtime; resource rows enumerate the bundled datapack; '
     'mechanics rows come from reading the decompiled source. '
     'Run `python3 features/counts.py` after edits, or add `--check` to validate the index.\n\n'
-    '| Area | Rows | Ferraloom todo | Ferraloom pass | Ferraloom fail |\n'
+    '| Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |\n'
     '|---|---:|---:|---:|---:|\n'
 )
 lines = [intro.rstrip()]
@@ -44,14 +44,14 @@ for file in sorted((root / 'features').glob('*.md')):
         assert feature_id not in seen, f'duplicate ID: {feature_id}'
         assert feature and source, feature_id
         assert vanilla in {'-', 'pass', 'fail'}, feature_id
-        assert status in {'todo', 'pass', 'fail'}, feature_id
+        assert status in {'todo', 'partial', 'pass', 'fail'}, feature_id
         seen.add(feature_id)
         counts[status] += 1
     count = counts.total()
     assert count, f'{file}: empty inventory'
     totals.update(counts)
-    lines.append(f'| [{title}](features/{file.name}) | {count} | {counts["todo"]} | {counts["pass"]} | {counts["fail"]} |')
-lines.append(f'| **Total** | **{totals.total()}** | **{totals["todo"]}** | **{totals["pass"]}** | **{totals["fail"]}** |')
+    lines.append(f'| [{title}](features/{file.name}) | {count} | {counts["todo"]} | {counts["partial"]} | {counts["pass"]} | {counts["fail"]} |')
+lines.append(f'| **Total** | **{totals.total()}** | **{totals["todo"]}** | **{totals["partial"]}** | **{totals["pass"]}** | **{totals["fail"]}** |')
 expected = '\n'.join(lines) + '\n'
 index = root / 'FEATURES.md'
 if args.check:
