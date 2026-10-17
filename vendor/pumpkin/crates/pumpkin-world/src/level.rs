@@ -1473,11 +1473,10 @@ impl Level {
                 if !Arc::ptr_eq(other.value(), &next.owner) || !other.is_post_processing_ready() {
                     return None;
                 }
-                let key = scheduler(&other)
+                scheduler(&other)
                     .lock()
                     .peek()
-                    .map(|tick| tick.intra_tick_key());
-                key
+                    .map(|tick| tick.intra_tick_key())
             });
             let Some(current) = self.loaded_chunks.get(&head.position) else {
                 // Every-ready-Arc unpack repairs a concurrent publication's
@@ -1518,14 +1517,14 @@ impl Level {
                 }
                 current.dirty.store(true, Ordering::Release);
             }
-            if result.len() < budget {
-                if let Some(next) = queue.peek().filter(|tick| tick.trigger_tick <= now) {
-                    heads.push(ContainerHead {
-                        owner: current.value().clone(),
-                        position: head.position,
-                        key: next.intra_tick_key(),
-                    });
-                }
+            if result.len() < budget
+                && let Some(next) = queue.peek().filter(|tick| tick.trigger_tick <= now)
+            {
+                heads.push(ContainerHead {
+                    owner: current.value().clone(),
+                    position: head.position,
+                    key: next.intra_tick_key(),
+                });
             }
             drop(queue);
             self.remove_empty_tick_index(head.position, &current);
@@ -1548,8 +1547,8 @@ impl Level {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             assert!(!phase.active, "previous block phase must finish normally");
-            phase.active = true;
-        }
+            phase.active = true
+        };
         // Never hold phase while acquiring map/scheduler locks.
         let (ticks, owners) =
             self.collect_ticks(now, budget, eligible, |chunk| &chunk.block_ticks, true);
@@ -1691,7 +1690,7 @@ impl Level {
         }
     }
 
-    /// GameTest's existing half-open bounds. Clone never calls this operation.
+    /// `GameTest`'s existing half-open bounds. Clone never calls this operation.
     pub fn clear_block_ticks(&self, min: &BlockPos, max: &BlockPos) {
         if max.0.x <= min.0.x || max.0.y <= min.0.y || max.0.z <= min.0.z {
             return;
@@ -1711,8 +1710,8 @@ impl Level {
                     && pos.z < max.0.z
             };
             phase.pending.retain(|tick| !contains(tick));
-            phase.already_run.retain(|tick| !contains(tick));
-        }
+            phase.already_run.retain(|tick| !contains(tick))
+        };
         for x in (min.0.x >> 4)..=((max.0.x - 1) >> 4) {
             for z in (min.0.z >> 4)..=((max.0.z - 1) >> 4) {
                 let pos = Vector2::new(x, z);

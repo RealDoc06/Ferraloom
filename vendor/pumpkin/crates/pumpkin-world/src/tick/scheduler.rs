@@ -68,7 +68,7 @@ impl<T: Copy + Hash + Eq> ChunkTickScheduler<T> {
     }
 }
 
-impl<'a, T: Hash + Eq> ChunkTickScheduler<&'a T> {
+impl<T: Hash + Eq> ChunkTickScheduler<&T> {
     #[must_use]
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
         self.lock().keys.contains(&(pos, value))
