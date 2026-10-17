@@ -1,8 +1,5 @@
 //! Aquatic feature geometry. 26.3 kelp/seagrass/pickles use general features.
-use super::{
-    Feature, FeatureContext, FeatureLoader, PlacedFeature,
-    vegetation::{is_air, relative},
-};
+use super::{Feature, FeatureContext, FeatureLoader, PlacedFeature, vegetation::relative};
 use crate::{Error, codec::*, placement::predicate::offset};
 use ferraloom_data::Block;
 use ferraloom_util::{Direction, core::Plane, random::RandomSource};
@@ -63,7 +60,7 @@ impl Feature for BlueIceFeature {
                     ],
                 );
                 let state = ctx.region.block(q)?;
-                if is_air(state)
+                if state.is_air()
                     || matches!(state.block(), Block::WATER | Block::PACKED_ICE | Block::ICE)
                 {
                     for d in Direction::VALUES {

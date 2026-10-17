@@ -127,12 +127,6 @@ pub(crate) fn relative(p: [i32; 3], d: Direction) -> [i32; 3] {
     let s = d.step();
     offset(p, [s.x, s.y, s.z])
 }
-pub(crate) fn is_air(state: BlockState) -> bool {
-    matches!(
-        state.block(),
-        Block::AIR | Block::CAVE_AIR | Block::VOID_AIR
-    )
-}
 fn bamboo(leaves: &str, stage: &str) -> BlockState {
     BlockState::from_properties(
         Block::BAMBOO,
@@ -149,7 +143,7 @@ struct BambooFeature {
 impl Feature for BambooFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = ctx.origin;
-        if !is_air(ctx.region.block(origin)?) {
+        if !ctx.region.block(origin)?.is_air() {
             return Ok(false);
         }
         if ctx
@@ -179,7 +173,7 @@ impl Feature for BambooFeature {
             }
             let mut p = origin;
             for _ in 0..height {
-                if !is_air(ctx.region.block(p)?) {
+                if !ctx.region.block(p)?.is_air() {
                     break;
                 }
                 ctx.region.set_block(p, bamboo("none", "0"), 2)?;
@@ -275,7 +269,7 @@ impl Feature for BlockPileFeature {
                         <= ctx.random.next_float() * 10.0 - ctx.random.next_float() * 6.0;
                     if selected || f64::from(ctx.random.next_float()) < 0.031 {
                         let p = offset(ctx.origin, [x, y, z]);
-                        if is_air(ctx.region.block(p)?) {
+                        if ctx.region.block(p)?.is_air() {
                             let below = relative(p, Direction::Down);
                             let allowed = if ctx.region.block(below)?.block() == Block::DIRT_PATH {
                                 ctx.random.next_boolean()
@@ -311,7 +305,7 @@ impl Feature for SimpleBlockFeature {
         }
         if state.block().is_instance_of(BlockClass::DoublePlantBlock) {
             let above = ctx.region.block(relative(p, Direction::Up))?;
-            if !is_air(above)
+            if !above.is_air()
                 && (state.data().fluid != above.data().fluid || !above.data().replaceable)
             {
                 return Ok(false);
@@ -337,7 +331,7 @@ impl Feature for SimpleBlockFeature {
 struct VinesFeature;
 impl Feature for VinesFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if !is_air(ctx.region.block(ctx.origin)?) {
+        if !ctx.region.block(ctx.origin)?.is_air() {
             return Ok(false);
         }
         for d in Direction::VALUES {

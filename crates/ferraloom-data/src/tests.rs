@@ -376,3 +376,15 @@ fn block_class_hierarchy_matches_extracted_vanilla_classes() {
     assert_eq!(CONCRETE, BlockClass::Block);
     assert!(std::hint::black_box(IS_BLOCK));
 }
+
+#[test]
+fn cached_air_fact_matches_vanilla_state_registry() {
+    let ids: Vec<u16> =
+        serde_json::from_str(include_str!("../../../data/generated/air_states.json")).unwrap();
+    for id in 0..crate::BLOCK_STATES.len() {
+        let state = crate::BlockState::from_id(id as u16).unwrap();
+        assert_eq!(state.is_air(), ids.contains(&(id as u16)));
+    }
+    const AIR: bool = crate::Block::AIR.default_state().is_air();
+    assert!(std::hint::black_box(AIR));
+}

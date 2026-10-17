@@ -138,7 +138,7 @@ impl Shape {
                 return Ok(());
             }
             let state = level.block(p)?;
-            if is_air(state)
+            if state.is_air()
                 || matches!(state.block(), Block::SNOW_BLOCK | Block::ICE | Block::WATER)
             {
                 let randomness = !self.ellipse || r.next_double() > 0.05;
@@ -174,7 +174,7 @@ impl Shape {
                     let p = offset(self.origin, [x, y, z]);
                     let state = level.block(p)?;
                     if iceberg_state(state) || state.block() == Block::SNOW {
-                        if is_air(level.block(relative(p, Direction::Down))?) {
+                        if level.block(relative(p, Direction::Down))?.is_air() {
                             level.set_block(p, Block::AIR.default_state(), 3)?;
                             level.set_block(
                                 relative(p, Direction::Up),

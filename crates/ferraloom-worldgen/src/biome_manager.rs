@@ -217,10 +217,7 @@ impl BiomeTemperatures {
             return Ok(false);
         }
         let state = region.block(p)?;
-        if !matches!(
-            state.block(),
-            Block::AIR | Block::CAVE_AIR | Block::VOID_AIR | Block::SNOW
-        ) {
+        if !state.is_air() && state.block() != Block::SNOW {
             return Ok(false);
         }
         region.can_survive(Block::SNOW.default_state(), p)

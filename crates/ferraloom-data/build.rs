@@ -583,6 +583,16 @@ fn main() {
         &load(root, "state_transforms"),
         block_properties["states"].as_array().unwrap().len(),
     );
+    let state_count = block_properties["states"].as_array().unwrap().len();
+    let mut is_air = vec![false; state_count];
+    for id in load(root, "air_states").as_array().unwrap() {
+        is_air[number(id) as usize] = true;
+    }
+    writeln!(
+        out,
+        "const STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
+    )
+    .unwrap();
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");

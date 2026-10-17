@@ -1,8 +1,5 @@
 //! Surface feature records and their vanilla geometry.
-use super::{
-    Feature, FeatureContext, FeatureLoader,
-    vegetation::{is_air, relative},
-};
+use super::{Feature, FeatureContext, FeatureLoader, vegetation::relative};
 use crate::{
     Error,
     codec::*,
@@ -59,7 +56,7 @@ impl Feature for FillLayerFeature {
                     ctx.region.min_y() + self.height,
                     ctx.origin[2] + z,
                 ];
-                if is_air(ctx.region.block(p)?) {
+                if ctx.region.block(p)?.is_air() {
                     ctx.region.set_block(p, self.state, 2)?;
                 }
             }
@@ -122,7 +119,7 @@ struct SpikeFeature {
 impl Feature for SpikeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut origin = ctx.origin;
-        while is_air(ctx.region.block(origin)?) && origin[1] > ctx.region.min_y() + 2 {
+        while ctx.region.block(origin)?.is_air() && origin[1] > ctx.region.min_y() + 2 {
             origin[1] -= 1;
         }
         if !self.can_place_on.test(ctx.region, origin, ctx.generator)? {
@@ -146,14 +143,14 @@ impl Feature for SpikeFeature {
                             || ctx.random.next_float() <= 0.75)
                     {
                         let p = offset(origin, [x, y, z]);
-                        if is_air(ctx.region.block(p)?)
+                        if ctx.region.block(p)?.is_air()
                             || self.can_replace.test(ctx.region, p, ctx.generator)?
                         {
                             ctx.region.set_block(p, self.state, 3)?;
                         }
                         if y != 0 && radius > 1 {
                             let p = offset(origin, [x, -y, z]);
-                            if is_air(ctx.region.block(p)?)
+                            if ctx.region.block(p)?.is_air()
                                 || self.can_replace.test(ctx.region, p, ctx.generator)?
                             {
                                 ctx.region.set_block(p, self.state, 3)?;
@@ -174,7 +171,7 @@ impl Feature for SpikeFeature {
                 };
                 while p[1] > 50 {
                     let state = ctx.region.block(p)?;
-                    if !is_air(state)
+                    if !state.is_air()
                         && !self.can_replace.test(ctx.region, p, ctx.generator)?
                         && state != self.state
                     {

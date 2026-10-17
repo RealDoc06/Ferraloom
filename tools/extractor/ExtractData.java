@@ -161,6 +161,12 @@ public final class ExtractData {
         write(dir, "block_classes", out);
     }
 
+    private static void airStates(Path dir) throws Exception {
+        var ids = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) if (state.isAir()) ids.add(Block.getId(state));
+        write(dir, "air_states", ids);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
@@ -168,6 +174,8 @@ public final class ExtractData {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        airStates(Path.of(args[0]));
+        if (args.length > 1 && args[1].equals("--air-states-only")) return;
         blockClasses(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--block-classes-only")) return;
         for (var field : Arrays.stream(SoundType.class.getFields()).sorted(Comparator.comparing(java.lang.reflect.Field::getName)).toList()) {

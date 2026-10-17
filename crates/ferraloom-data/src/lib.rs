@@ -390,3 +390,10 @@ impl Block {
         BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
     }
 }
+
+impl BlockState {
+    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
+    pub const fn is_air(self) -> bool {
+        STATE_IS_AIR[self.id() as usize]
+    }
+}
