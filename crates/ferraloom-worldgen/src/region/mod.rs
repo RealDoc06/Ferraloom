@@ -91,6 +91,21 @@ impl RegionChunk {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    // --- tree family ---
+    fn populate_worldgen_beehive(
+        &self, _region: &mut WorldGenRegion<'_>, _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: populate_worldgen_beehive".into()))
+    }
+    fn state_has_sturdy_face(
+        &self, _region: &WorldGenRegion<'_>, _state: BlockState,
+        _query_position: [i32; 3], _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: state_has_sturdy_face".into()))
+    }
+    // --- end tree family ---
+
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -195,6 +210,19 @@ pub struct WorldGenRegion<'a> {
     pub sea_level: i32,
 }
 impl<'a> WorldGenRegion<'a> {
+    // --- tree family ---
+    pub fn populate_worldgen_beehive(
+        &mut self, p: [i32; 3], random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.populate_worldgen_beehive(self, p, random)
+    }
+    pub fn state_has_sturdy_face(
+        &self, state: BlockState, query_position: [i32; 3], face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.state_has_sturdy_face(self, state, query_position, face)
+    }
+    // --- end tree family ---
+
     /// `dependencies[d]` is the maximum requested status at chessboard distance
     /// d, exactly ChunkStep.directDependencies. An upgrading center additionally
     /// restricts writes to its generation height accessor (min Y, height).
