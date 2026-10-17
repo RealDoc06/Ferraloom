@@ -1,0 +1,19 @@
+{
+  "result": "passed",
+  "failed": [],
+  "fixture": "/home/doc/code/Ferraloom/.cache/runs/jukeboxes-n4xzx85c",
+  "case_counts": {
+    "composites": 12
+  },
+  "server_boots": 4,
+  "clients": 8,
+  "whole_world_copies": 2,
+  "play_record": 36,
+  "boot_audit": {
+    "actual_boots": 4,
+    "checkpoints": 12,
+    "before_start_after_start_after_stop": true
+  },
+  "report_sha256": "a71970f636e010ecffb05e6436f54efb460f8785bbde30e2c0bef450129f2cf8",
+  "scope": "Selected production composites only; no verified-family or full-parity claim"
+}

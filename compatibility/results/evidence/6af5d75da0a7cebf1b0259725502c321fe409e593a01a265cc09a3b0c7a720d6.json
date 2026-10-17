@@ -1,0 +1,357 @@
+{
+  "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+  "resource_limits": {
+    "memory.max": "6442450944",
+    "memory.swap.max": "0",
+    "cpu.max": "200000 100000"
+  },
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/r28-equipment-all15-second.scope",
+  "build_environment": {
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "1"
+  },
+  "steps": [
+    {
+      "step": "fmt-root",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.115,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-fmt-root.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "fmt-vendor",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.582,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-fmt-vendor.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "python",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.668,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-python.log",
+      "log_sha256": "81804450ed16ddd9453b569b31075d587005a60e7533927e992735c26f3a202a",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "vendor-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "--keep-going",
+        "--workspace",
+        "--all-targets",
+        "--target-dir",
+        "target",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 166.678,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-vendor-clippy.log",
+      "log_sha256": "0d15d9b8b54e3ab27b337243a2405ca63701feec099a79a3f57858498269ca5c",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "data",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-data",
+        "--lib",
+        "--target-dir",
+        "target"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.666,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-data.log",
+      "log_sha256": "3518512997c9bb0479b8b90eac5badaa98d70b663852f876c2dc2620c8c48526",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "protocol",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-protocol",
+        "--lib",
+        "--tests",
+        "--target-dir",
+        "target"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.466,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-protocol.log",
+      "log_sha256": "3924c450bbbe2ef7cc12087ebc66cf03fdadd79c8a1b8342593fa160475cf193",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "command",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-command",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.516,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-command.log",
+      "log_sha256": "1ec40d96aec07d964cdd590c2b5afff7ae796098b9ae1163da4589273c6cd3c2",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "world",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-world",
+        "--lib",
+        "--target-dir",
+        "target",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 122.884,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-world.log",
+      "log_sha256": "07a77861cfa5409e50a9b6a05c18d18a37e44a7006465b832325135045615ed7",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "core",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-core",
+        "--lib",
+        "--target-dir",
+        "target",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 970.94,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-core.log",
+      "log_sha256": "ee4cfac650ca0070a41b60b5753f1f2456e307a8efb36fa2e09509d8c7768c63",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "gametest-compile",
+      "command": [
+        "cargo",
+        "check",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-gametest",
+        "--all-targets",
+        "--target-dir",
+        "target"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.466,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-gametest-compile.log",
+      "log_sha256": "8d3dd828ae91fdfca8926f9bd0e8b51895f9868c7ce419f6a757f56eae022ab5",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 70.968,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-clippy.log",
+      "log_sha256": "e639389a860c0818441a6a292406b19e1f3681a0e82a9480744036f72d6aa12a",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "wrapper",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 406.426,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-wrapper.log",
+      "log_sha256": "b4ae9c849b34553c68f2f536de1f736293337a100f34dca8c5a091f3a26749e3",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "node-protocol",
+      "command": [
+        "npm",
+        "run",
+        "test:protocol"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.117,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-node-protocol.log",
+      "log_sha256": "f3a66ac5f01ebcfb91358205019326bdd3cb9c8381958db1f57ca6732c114dd9",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "typescript",
+      "command": [
+        "npm",
+        "run",
+        "check:protocol"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.119,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-typescript.log",
+      "log_sha256": "81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd",
+      "execution_gate_passed": true
+    },
+    {
+      "step": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 472.391,
+      "log": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-build.log",
+      "log_sha256": "d2630f7564a9249a027d746ad552870678602bd75adc07d9b599cd1445eaed6f",
+      "execution_gate_passed": true
+    }
+  ],
+  "execution_checks": {
+    "data": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_data-83107b7148bfe9b9",
+        "expected_passed": 96
+      }
+    ],
+    "protocol": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_protocol-f00792e07eb290c1",
+        "expected_passed": 126
+      },
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/item_name-e32afe192bca1234",
+        "expected_passed": 12
+      }
+    ],
+    "command": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_command-360d8a4b35ed9561",
+        "expected_passed": 92
+      }
+    ],
+    "world": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_world-947b32cae519f5bc",
+        "expected_passed": 405
+      }
+    ],
+    "core": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/pumpkin_core-3dc4e186d44a82d1",
+        "expected_passed": 800
+      }
+    ],
+    "wrapper": [
+      {
+        "binary": "/home/doc/code/Ferraloom/target/debug/deps/ferraloom-0a79f3fbe2e8446e",
+        "expected_passed": 12
+      }
+    ]
+  },
+  "scope": "All six vendored crates plus wrapper, Python, Node and TypeScript. GameTest compile only, zero standalone behavior tests. No parity promotion.",
+  "elapsed_seconds": 2226.236,
+  "preserved_generated_test_artifact": {
+    "path": "/home/doc/code/Ferraloom/.cache/review27-all15-equipment-second-generated-data/usercache.json",
+    "sha256": "c00547f436442375aac97fb7b7922a5a2f02a1fb70e956c347371b1c43c4b8bc"
+  },
+  "binary_sha256": "57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670",
+  "full_source_clean": true
+}

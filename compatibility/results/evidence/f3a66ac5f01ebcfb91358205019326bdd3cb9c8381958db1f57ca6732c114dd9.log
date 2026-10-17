@@ -1,0 +1,68 @@
+
+> test:protocol
+> node --test tests/protocol_client.test.ts tests/block_data_protocol.test.ts
+
+✔ 26.3 container packets decode item identities, counts, cursor and signed-short slot (3.23334ms)
+✔ focused decoder fails closed on components, invalid counts, truncation and trailing bytes (0.557675ms)
+✔ UseItemOn encodes packed signed coordinates and modern two-boolean hit result (0.456247ms)
+✔ SWAP uses hashed optional stacks, container revision and menu hotbar index 54 (0.965552ms)
+✔ metadata menu mode retains selected styled title, native extras and untouched NBT (1.6541ms)
+✔ metadata item patch decodes only pinned custom_name=6/item_name=9 NBT and refuses guessed codecs (1.156246ms)
+✔ received player inventory keeps exact hand components and ignores unrelated menu contents (0.628356ms)
+✔ 26.3 locked sound observes ID+1 holder, fixed positions, source, volume/pitch and exact boundary (0.857662ms)
+✔ first unsigned offline chat uses Instant, absent signature and exact 20-bit update plus checksum (0.551975ms)
+✔ strict offline delivery consumes the whole unsigned body, pass-through filter and registered chat decoration (1.927046ms)
+✔ only an explicit typed spam negative case can arm expected-disconnect IPC (0.663211ms)
+✔ 26.3 actual hand swap sends PlayerAction ordinal 7 with packed origin, byte face and sequence (0.302731ms)
+✔ 26.3 sign update is position, four bounded UTF strings, then BACK0/FRONT1 VarInt (1.231916ms)
+✔ editor uses a trailing slot VarInt and BEData reads direct component strings and wax (2.450428ms)
+✔ sign codecs fail closed on truncated, trailing, malformed NBT and unsupported rich/filter state (31.447339ms)
+✔ chunk BE metadata decodes packed local XZ, signed Y and optional compound without terrain decoding (1.333525ms)
+✔ chunk probe rejects unsupported metadata, missing sign compounds, truncation and light overflows (0.823307ms)
+✔ sign interactions use physical SOUTH/NORTH hit faces while retaining the container default (0.443453ms)
+✔ rich observation decodes actual heterogeneous ListTag envelopes without parsing literal JSON (1.542804ms)
+✔ rich mode retains the original strict plain projection and byte boolean defaults (0.408748ms)
+✔ rich list unwrapping is one level at the entry boundary and never inside components (0.755452ms)
+✔ rich sign mode rejects truncated and trailing wire data, malformed lists and flags (1.995694ms)
+✔ nonop trigger IPC encodes the existing command packet payload and rejects injection/overflow (0.679049ms)
+✔ system chat preserves fresh disabled-action overlay and permission-denial component identity (0.551453ms)
+✔ probe version matches the repository compatibility target (1.887634ms)
+✔ IPC rejects malformed commands and unsafe movement without executing input (1.703472ms)
+✔ VarInt decoding distinguishes partial frames, signed values, and overflow (0.486062ms)
+✔ compression validates declared lengths rather than accepting corrupt payloads (1.554215ms)
+✔ 26.3 award_stats retains received triples, including unmapped numeric IDs (0.636592ms)
+✔ award_stats fails closed on truncated, unbounded, negative, duplicate or trailing data (0.598421ms)
+✔ plain barrel title retains its translation key without a rendering claim (0.518042ms)
+✔ horn CRC32C uses independent known inputs and the exact typed UTF16 preimage (0.386918ms)
+✔ horn reference IDs follow the captured registry order on each connection (0.837244ms)
+✔ horn registry refuses duplicate, missing, unknown and overridden builtin profiles (0.819862ms)
+✔ horn configuration requires present complete profiles and consumes exactly the packet (5.577571ms)
+✔ horn registry retains generated Double widths and rejects nonfinite or truncated Double fields (5.169353ms)
+✔ horn slot codec binds holders and preserves removal while generic decoding stays off (2.395335ms)
+✔ horn cooldown and use actions retain exact fields and reject malformed boundaries (1.430775ms)
+✔ horn named control components remain opaque or typed and reject altered profiles (2.576081ms)
+✔ horn entity sound118 consumes holder category entity floats seed and rejects direct or truncated data (1.028248ms)
+✔ horn predictions use one fixed-width instrument checksum and never hash opaque controls (0.89443ms)
+✔ horn Login header retains signed fixed-width entity ID and an explicitly undecoded remainder (0.57611ms)
+✔ 26.3 command decoder preserves restricted flags, suggestions, long bounds and legal root redirects (2.275724ms)
+✔ all 62 official 26.3 parser IDs consume their exact property layouts (3.156548ms)
+✔ command tree rejects invalid references, graph cycles, trailing bytes and truncation (1.221127ms)
+✔ command parser properties reject unsupported IDs, truncated fields and invalid enum/identifier values (0.618088ms)
+✔ command path expansion is explicitly bounded rather than truncating a tree (2.664415ms)
+✔ Java-accepted unused nodes, duplicate children and root children are observations rather than failures (1.190329ms)
+✔ Java masking and UTF-8 replacement preserve unusual accepted values without lossy JSON bounds (1.004554ms)
+✔ jukebox registry binds all 22 identities to the received order and refuses direct holders (452.359489ms)
+✔ jukebox profiles reject custom fields, namespaces, duplicate names and nonfinite lengths (1.996796ms)
+✔ jukebox Identifier aliases hash as canonical strings, opaque controls cannot be predicted (0.810644ms)
+✔ jukebox inventory reads reference patches, default elision and removal without a generic decoder (2.455116ms)
+✔ jukebox level_event uses fixed Int32 and raw song IDs, never coordinate/entity sound (2.509257ms)
+✔ jukebox UseItemOn encodes actual hand and bounded anonymous hit codec fields (0.766332ms)
+✔ jukebox live BE requires compound and preserves leaked signed elapsed before privacy assertions (1.207531ms)
+ℹ tests 56
+ℹ suites 0
+ℹ pass 56
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 923.922727

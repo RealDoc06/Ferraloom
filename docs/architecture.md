@@ -1,6 +1,6 @@
 # Architecture and completion contract
 
-Ferraloom builds on a pinned Pumpkin core, with independent tests against the official Minecraft Java 26.3 server. Core, world, command, data and protocol modules are maintained locally so observed compatibility defects can be fixed in this repository. Other engine dependencies remain pinned to the shared upstream revision. Engine attribution stays visible in startup logs, dependency metadata, and this repository.
+Ferraloom builds on a pinned Pumpkin core, with independent tests against the official Minecraft Java 26.3 server. Core, world, command, data, protocol and GameTest modules are maintained locally so observed compatibility defects can be fixed in this repository. Other engine dependencies remain pinned to the shared upstream revision. Engine attribution stays visible in startup logs, dependency metadata, and this repository.
 
 The runtime initializes named Tokio network workers and Rayon CPU workers. The engine parallelizes world, player, entity, and chunk work, with a ticker coordinating simulation phases. Chunk generation has additional engine-owned pools. `--workers` describes the two configurable pools, not a process-wide thread limit. Correctness under different schedules and measured throughput remain separate acceptance gates.
 
@@ -37,11 +37,13 @@ Replacement admission waits for the previous session's leave callbacks and all t
 saves, with a bounded wait and client-close cancellation. Cleanup removes the
 exact Player instance. Advancement snapshots and atomic JSON writes currently
 share a server-wide gate; a blocking writer retains that gate after cancellation,
-and admission waits for pending writes before reading. Some command, chat and
-respawn handlers still spawn server-owned work outside the client task tracker.
-Complete packet ordering and draining all mutations before final saves remain
-unfinished. Per-player parallel saves
-and the existing chunk-coordinator lock latency remain performance work.
+and admission waits for pending writes before reading. Java input runs through a
+bounded per-session FIFO and an owned ready lane. Explicit mutation continuations
+and their server descendants retain admission until completion; session close
+seals new work and drains admitted work before final saves. Terrain readiness and
+transfer stages keep their own lifetime guards. Complete packet-ordering and
+gameplay coverage still require paired evidence. Per-player parallel saves and
+the existing chunk-coordinator lock latency remain performance work.
 
 Statistics use Java's `players/stats/<uuid>.json`, with namespaced identifiers
 separate from runtime numeric IDs. Capture and atomic replacement share a manager

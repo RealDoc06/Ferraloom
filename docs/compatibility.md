@@ -4,7 +4,54 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The most recent targeted runs used source and harness commit
+The latest [native-check record](../compatibility/results/native-checks.json) used clean source
+`97db9ed5885df6d2392599a7d8e1b477c8ef7035`, with executable SHA-256
+`57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670`. All 15 checks passed:
+1,543 Rust tests (96 data, 138 protocol, 92 command, 405 world, 800 core and
+12 wrapper), 103 Python tests, 56 Node tests, strict TypeScript, both formatting
+checks, Clippy for the wrapper and all six vendored crates, and the build.
+GameTest compiled only and contributes zero standalone behavior tests. The
+[raw receipt](../compatibility/results/evidence/6af5d75da0a7cebf1b0259725502c321fe409e593a01a265cc09a3b0c7a720d6.json)
+and every command log are retained by content hash.
+
+Recent changes cover owned Java input continuations through final saves,
+terrain-read refusal and item admission, POI persistence fences, builtin horns
+and Jukeboxes, imported game time, scheduled tick delays, and current-format
+equipment saves. The earlier
+[Jukebox campaign](../compatibility/results/evidence/b0bde8d313a377be1616f7f1adf1f17cec84d784181076e1f2642e54c33e0ea0.json)
+at `79a5baa` failed during Rust import while inspecting a legacy `Inventory`
+entry with slot `-106`. The equipment writer was corrected in `acb8bcd`; its
+native persistence tests pass in the record above. The subsequent
+[paired Jukebox campaign](../compatibility/results/jukeboxes.json) on `97db9ed`
+passed all 12 selected composites: Java authoring, Rust import, Rust restart and
+Java return, with eight clients and two unchanged whole-world copies. All four
+servers and eight clients exited cleanly without forced stops. The campaign
+recorded 36 `play_record` events and completed in 457.961 seconds under supervision.
+
+The selected campaign covers all 22 builtin song identities in transfer and
+selected disc 11/Cat gameplay through both hands and survival/creative modes.
+Only disc 11 reaches its natural duration. Custom song profiles, advancement
+criteria, sculk/vibration, recipient boundaries, natural clean-chunk autosave,
+and elapsed-only reentrant timing remain open. The exact gaps and raw artifact
+hashes are retained in the result index.
+
+The [latest five-suite regression attempt](../compatibility/results/regression-checks.json)
+on the same source and binary failed in its first suite, player interchange.
+All seven Java-to-Rust composites passed. In the fresh Rust source for reverse
+transfer, `save-all flush` timed out and the console reported
+`Failed to save portal POI: POI region write is already pending`.
+The seven reverse-transfer cases share that failed save prerequisite; the Java
+destination never booted. All three started servers and five clients exited with
+code zero and no forced cleanup. The save failure remains unresolved in this
+tested build, with a fix and fresh acceptance pending. Item interchange,
+container metadata, chat throttling and goat horns did not start.
+
+Earlier 24-boot/44-client regression passes at engine `6401924` apply to that
+older engine. The current native and Jukebox passes coexist with the failed
+player report; the ledger remains at 27 partial, 173 unverified and zero verified
+families.
+
+Earlier targeted runs used source and harness commit
 `a868ebcf565e4566718c68e2b3fae845cd7f61b3`, with executable SHA-256
 `68bc35698bea128fa88aae227aa7075c268f55d253ca23c8a144b6809db4de27`.
 
@@ -78,9 +125,9 @@ advancement and statistics saves, atomic persistence-write failures, and renewed
 tickets protecting live inventories. Remaining work includes command branches,
 other redstone behavior, additional block-entity types and fields, general inventory
 transactions, dynamic sign components, full multiplayer and gameplay coverage,
-generation ordering, and measured multicore performance. Some asynchronous packet
-handlers are outside the session task drain; complete input ordering and draining
-all mutations before final saves remain unfinished.
+generation ordering, and measured multicore performance. The owned Java packet
+lane now retains admitted continuations through session draining and the final
+saves; complete input-ordering and gameplay coverage still need paired evidence.
 Duplicate-login replacement
 currently starts after configuration; vanilla begins it before configuration.
 
