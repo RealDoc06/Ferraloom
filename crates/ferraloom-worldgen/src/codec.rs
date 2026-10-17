@@ -52,9 +52,16 @@ pub(crate) fn noise_value(v: &Value) -> Result<f32, Error> {
         Err(Error("noise value outside [-1000000,1000000]".into()))
     }
 }
-/// Port of LazilyParsedNumber#intValue: BigDecimal truncation with low-32-bit
-/// overflow, followed by Codec.intRange's bounds check.
+/// Port of LazilyParsedNumber#intValue, preserving decimal truncation and
+/// low-32-bit overflow. Both integer codecs use BigDecimal's low-bit result.
 pub(crate) fn integer(v: &Value) -> Result<i32, Error> {
+    Ok(decimal_integer(v)? as i32)
+}
+/// Port of LazilyParsedNumber#longValue (Codec.LONG under JsonOps).
+pub(crate) fn long(v: &Value) -> Result<i64, Error> {
+    Ok(decimal_integer(v)? as i64)
+}
+fn decimal_integer(v: &Value) -> Result<u64, Error> {
     let Value::Number(number) = v else {
         return Err(Error("expected number".into()));
     };
@@ -62,25 +69,30 @@ pub(crate) fn integer(v: &Value) -> Result<i32, Error> {
     let negative = text.starts_with('-');
     let text = text.trim_start_matches('-');
     let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
-    let exponent = exponent.parse::<i64>().unwrap_or_else(|_| {
-        if exponent.starts_with('-') {
-            i64::MIN
-        } else {
-            i64::MAX
-        }
-    });
+    let exponent = exponent
+        .parse::<i64>()
+        .map_err(|_| Error("decimal exponent overflow".into()))?;
     let integer_digits = mantissa.find('.').unwrap_or(mantissa.len()) as i64;
+    let fractional_digits =
+        mantissa.len() as i64 - integer_digits - i64::from(mantissa.contains('.'));
+    // BigDecimal rejects exponents/scales beyond its signed 32-bit scale.
+    if exponent.unsigned_abs() > i32::MAX as u64
+        || !(i64::from(i32::MIN)..=i64::from(i32::MAX))
+            .contains(&fractional_digits.saturating_sub(exponent))
+    {
+        return Err(Error("decimal scale overflow".into()));
+    }
     let length = integer_digits.saturating_add(exponent);
     if length <= 0 {
         return Ok(0);
     }
     let digits = mantissa.bytes().filter(|&b| b != b'.').collect::<Vec<_>>();
     let take = (length as u64).min(digits.len() as u64) as usize;
-    let mut value = digits[..take].iter().fold(0u32, |value, b| {
-        value.wrapping_mul(10).wrapping_add(u32::from(b - b'0'))
+    let mut value = digits[..take].iter().fold(0u64, |value, b| {
+        value.wrapping_mul(10).wrapping_add(u64::from(b - b'0'))
     });
     let zeros = length.saturating_sub(digits.len() as i64);
-    if zeros >= 32 {
+    if zeros >= 64 {
         return Ok(0);
     }
     for _ in 0..zeros {
@@ -90,7 +102,7 @@ pub(crate) fn integer(v: &Value) -> Result<i32, Error> {
         value.wrapping_neg()
     } else {
         value
-    } as i32)
+    })
 }
 pub(crate) fn int_range(v: &Value, min: i32, max: i32) -> Result<i32, Error> {
     let n = integer(v)?;
@@ -115,5 +127,36 @@ pub(crate) fn optional<T>(
     match v.get(name) {
         Some(v) => decode(v),
         None => Ok(default),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+    #[test]
+    fn numeric_codecs_match_gson_truncation_overflow_and_float_bits() {
+        let mut json = String::new();
+        flate2::read::GzDecoder::new(
+            include_bytes!("../tests/golden/numeric_codecs.json.gz").as_slice(),
+        )
+        .read_to_string(&mut json)
+        .unwrap();
+        let cases: Value = serde_json::from_str(&json).unwrap();
+        for case in cases.as_array().unwrap() {
+            let value = &case["input"];
+            for (kind, actual) in [
+                ("int", integer(value).map(|v| v.to_string())),
+                ("long", long(value).map(|v| v.to_string())),
+                ("float", float(value).map(|v| v.to_bits().to_string())),
+                ("double", double(value).map(|v| v.to_bits().to_string())),
+            ] {
+                assert_eq!(
+                    actual.ok().as_deref(),
+                    case[kind].as_str(),
+                    "{kind} input={value}"
+                );
+            }
+        }
     }
 }
