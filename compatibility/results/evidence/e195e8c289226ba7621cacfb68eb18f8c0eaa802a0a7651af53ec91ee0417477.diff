@@ -1,0 +1,11 @@
+--- .cache/reviews/r31-tick-native-original-verification-ROOT-prepare/export.py
++++ .cache/reviews/r31-tick-native-original-verification-ROOT-final/export.py
+@@ -21,7 +21,7 @@
+ DEST = ROOT / '.cache/reviews/r31-tick-integrated-native-first-export'
+ 
+ 
+-ROOT_EXECUTION_ENABLED = False
++ROOT_EXECUTION_ENABLED = True
+ assert ROOT_EXECUTION_ENABLED, 'UNRUN preparation; ROOT must observe completed exit0 and bind execution'
+ 
+ def sha(path):

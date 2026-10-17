@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-17T18:28:37.260004+00:00",
+  "host": "ferraloom-builder",
+  "source": "b58452a17d9a531a93810161321fe440c8149a1e",
+  "command": [
+    "/home/doc/.local/bin/ferraloom-build",
+    "--",
+    "python3",
+    "-E",
+    "-s",
+    "-B",
+    "/home/doc/code/Ferraloom/.cache/reviews/r31-tick-integrated-native-final-first/run-tick-integrated-all-sixteen.py",
+    "b58452a17d9a531a93810161321fe440c8149a1e",
+    "review31-tick-integrated-builder-first"
+  ],
+  "helper_sha256": "45a7595eb9e85dc1f8a2512c28f8602579efe9bd4d067444f2e6733abfd46e9e",
+  "expected_Rust": 1676,
+  "expected_Core": 870,
+  "expected_World": 432,
+  "expected_Python": 168,
+  "expected_Node": 74,
+  "expected_ordered_steps": 16,
+  "B_J_archive_sha256": "84c0d1d67eddd0b365034dfbbbb6cbe168ee4914758295183b722d7380da7e54",
+  "B_J_index_sha256": "4102fd7c998b04a96dea6a05a4399455af9cdf46515ebf0ae5090692f087f6ca",
+  "prior_actuals": "B584affectedClippyPASSandfocused3PASS/867filtered;B12world432PASS/all20newPASS/core867PASS3oldfixtureFAIL; nofullcurrentnativeyet.",
+  "scope": "Exact original full16algorithms/commands/gates/timeouts; source-bound counts updated from staticinventory. No parity or ledgerpromotion."
+}

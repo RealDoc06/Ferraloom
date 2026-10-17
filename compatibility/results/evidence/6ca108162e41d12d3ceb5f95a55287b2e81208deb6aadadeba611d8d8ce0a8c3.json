@@ -1,0 +1,22 @@
+{
+  "host": "ferraloom-builder",
+  "source_commit": "b58452a17d9a531a93810161321fe440c8149a1e",
+  "command": [
+    "python3",
+    "-E",
+    "-s",
+    "-B",
+    "/home/doc/code/Ferraloom/.cache/reviews/r31-tick-integrated-native-final-first/run-tick-integrated-all-sixteen.py",
+    "b58452a17d9a531a93810161321fe440c8149a1e",
+    "review31-tick-integrated-builder-first"
+  ],
+  "cwd": "/home/doc/code/Ferraloom",
+  "resource_limits": {
+    "memory": "6G",
+    "swap": "0",
+    "cpu": "200%"
+  },
+  "exit_code": 0,
+  "elapsed_seconds": 1836.08613,
+  "source_status_after": ""
+}

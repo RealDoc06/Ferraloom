@@ -1,0 +1,10 @@
+{
+  "host": "ferraloom-builder",
+  "source_commit": "b58452a17d9a531a93810161321fe440c8149a1e",
+  "path": "/home/doc/code/Ferraloom/.cache/validated-binaries/b58452a17d9a531a93810161321fe440c8149a1e/ferraloom",
+  "mode": "0555",
+  "sha256": "a2d7e2397c0a811e0c460e3ead515e171bb15e10bdf969fdbb4efd0a93d0307c",
+  "bytes": 124573272,
+  "actual_job_id": "20261017T182838Z-2dbbef08",
+  "scope": "Binary/evidence preservation only; independent full-log verification remains required."
+}

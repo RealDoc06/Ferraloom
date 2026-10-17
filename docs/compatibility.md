@@ -4,20 +4,52 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest [native-check record](../compatibility/results/native-checks.json) used clean engine source
-`b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb` on the dedicated `ferraloom-builder` (`10.10.10.162`),
-with executable SHA-256 `145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f`.
-All 16 checks passed: 1,647 Rust tests (96 data, 141 protocol, 92 command,
-416 world, 24 inventory, 866 core and 12 wrapper), 151 Python tests, 74 Node
+The latest [native-check record](../compatibility/results/native-checks-b58452a.json) used clean engine source
+`b58452a17d9a531a93810161321fe440c8149a1e` on the dedicated `ferraloom-builder` (`10.10.10.162`),
+with executable SHA-256 `a2d7e2397c0a811e0c460e3ead515e171bb15e10bdf969fdbb4efd0a93d0307c`.
+All 16 checks passed: 1,676 Rust tests (96 data, 141 protocol, 101 command,
+432 world, 24 inventory, 870 core and 12 wrapper), 168 Python tests, 74 Node
 tests, strict TypeScript, both formatting checks, Clippy for the wrapper and all
-seven vendored crates, and the final build. Four inherited filtered Core child
-results are retained separately and are not added to the total. GameTest compiled
+seven vendored crates, and the final build. The 20 new absolute-tick controls
+are included in that Rust total. Four inherited Core child results each passed
+one test with 869 filtered out and are not added to the total. GameTest compiled
 only and contributes zero standalone behavior tests. The
+[original native receipt](../compatibility/results/evidence/c2feca27356fea33998562238916a5b10cb14de592d19710b0e65fca88c66c86.json),
+[completed builder receipt](../compatibility/results/evidence/6ca108162e41d12d3ceb5f95a55287b2e81208deb6aadadeba611d8d8ce0a8c3.json) and
+[ROOT verification](../compatibility/results/evidence/e72dc3fb5fdcd220a0a206da54f5351247d0c341adfc7f18daaa93644f5cabcd.json) bind the actual source, host,
+resource scope, final binary and all original command logs by content hash.
+Native execution occurred on the builder; ROOT verified the exported originals
+on `devbox`. The original job used direct `python3 -E -s -B` argv, with the
+unchanged 1,800-second per-step limits and no old outer timeout wrapper.
+
+The [source publication receipt](../compatibility/results/evidence/0fc23582bc087b93a941651b91fd76d75ba44e20a17a50768cb75e0ad024d493.json)
+records `main` and `validation/r29-cc10c5b` at `3ce0503`, which contains tested
+`b58452a` as an ancestor with unchanged engine/build inputs. The refs were not
+observed at `b58452a` exactly. CI completion for `3ce0503` is unobserved.
+This checkpoint applies to tested engine `b58452a`; no native run for this
+evidence/docs update is claimed.
+
+These native controls do not establish a paired clone or runtime campaign at
+`b58452a`, complete clone behavior or full vanilla parity. N1 remains open:
+`prepare_poi` marks every Unload preparation dirty, so the common production
+path can rewrite a previously clean chunk at retirement. General clean-unload
+tick parity is not established. The retained valid clock witnesses completed
+Save NBT encoding and its own validation, not later backend publication or
+durability. A newer or pre-submitted asynchronous Save still unresolved at
+retirement can encode bytes different from the retained pending list; that
+encode/retire window remains approximate.
+
+The [earlier B native record](../compatibility/results/native-checks.json) remains unchanged:
+all 16 checks passed at clean engine `b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb` with executable
+SHA-256 `145f50241cf971dee01860281614e7f1ab1c8f10c75615bdb8154ae6275afe3f`,
+1,647 Rust tests (96 data, 141 protocol, 92 command, 416 world, 24 inventory,
+866 core and 12 wrapper), 151 Python tests and 74 Node tests. Its
 [original native receipt](../compatibility/results/evidence/0d2cb9a1bdd58986df1974805ef528b4775bb73b559ee4262ab2a9d1fe3c93ee.json),
 [completed builder receipt](../compatibility/results/evidence/9ff973e5b879ad6f197ee0a10eb7887b5a0b3630eb2ec720ae2f5347e90dd0c8.json) and
-[ROOT verification](../compatibility/results/evidence/fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b.json) bind actual source, host,
-resource scope, final binary and original command logs by content hash.
-This checkpoint applies to tested engine `b8e01b4`; this docs/evidence update was not native-checked.
+[ROOT verification](../compatibility/results/evidence/fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b.json)
+remain historical B evidence. The selected B runtime campaigns below retain that
+engine/binary and their separate client or bridge commits, including Jukebox
+B/J. Their selected outcomes do not automatically apply to `b58452a`.
 Engine source `b8e01b4` was [published to GitHub](../compatibility/results/evidence/3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f.json)
 on `main` and `validation/r29-cc10c5b`. The receipt records those refs before any later evidence/docs commit.
 Both recorded GitHub `Check` runs for the subsequent `0376775` docs/evidence checkpoint
