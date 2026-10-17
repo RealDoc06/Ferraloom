@@ -743,10 +743,8 @@ impl ScreenHandler for CraftingTableScreenHandler {
             }
             slot.on_take_item(player, &taken_stack);
 
-            if slot_index == 0 {
-                if !stack.is_empty() {
-                    player.drop_item(stack, false);
-                }
+            if slot_index == 0 && !stack.is_empty() {
+                player.drop_item(stack, false);
             }
             return stack_prev;
         }

@@ -421,6 +421,7 @@ impl BedrockClient {
                                 created_item = Some(total_crafted);
 
                                 for _ in 0..repetitions {
+                                    output_slot.on_swap_crafted(output_stack.item_count);
                                     output_slot.on_take_item(player.as_ref(), &output_stack);
                                 }
                                 crafting_inputs_consumed = true;
