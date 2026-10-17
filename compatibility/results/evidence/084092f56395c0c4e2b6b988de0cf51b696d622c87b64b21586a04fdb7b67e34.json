@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "kind": "regression-checks-index",
+  "result": "failed",
+  "target": {
+    "version": "26.3",
+    "protocol": 777,
+    "data_version": 5023
+  },
+  "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+  "source_worktree_clean": true,
+  "binary_sha256": "57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670",
+  "test_suite_sha256": "d47ffc5164188e5fe3e3d2e6d8c5d28ead5e60acf983a3888d8454d99315e76a",
+  "created_at": "2026-10-17T00:31:05.040891+00:00",
+  "finished": "2026-10-17T00:32:47.165677+00:00",
+  "supervised_elapsed_seconds": 102.084,
+  "selected_suites": [
+    "player-data",
+    "item-interchange",
+    "container-metadata",
+    "chat-throttle",
+    "goat-horns"
+  ],
+  "started_suites": [
+    "player-data"
+  ],
+  "not_started_suites": [
+    "item-interchange",
+    "container-metadata",
+    "chat-throttle",
+    "goat-horns"
+  ],
+  "player_data": {
+    "result": "failed",
+    "vanilla_to_rust": {
+      "result": "passed",
+      "passing_composites": 7,
+      "case_ids": [
+        "player_data.same_identity",
+        "player_data.inventory_components",
+        "player_data.vitals_xp",
+        "player_data.advancement_import",
+        "player_data.saved_continuation",
+        "player_data.advancement_continuation",
+        "player_data.statistics_continuation"
+      ]
+    },
+    "rust_to_vanilla": {
+      "result": "failed",
+      "failure_stage": "source_seed_reloaded_save",
+      "java_destination_booted": false,
+      "unreached_composites": 7,
+      "unreached_case_ids": [
+        "player_data.same_identity",
+        "player_data.inventory_components",
+        "player_data.vitals_xp",
+        "player_data.advancement_import",
+        "player_data.saved_continuation",
+        "player_data.advancement_continuation",
+        "player_data.statistics_continuation"
+      ],
+      "interpretation": "The seven recorded failures share the failed Rust-source save prerequisite; the reverse-transfer cases were not reached."
+    },
+    "save_failure": {
+      "command": "save-all flush",
+      "stage_error": "TimeoutError: save-all flush did not report completion",
+      "console_error": "ERROR Failed to save minecraft:overworld: Failed to save portal POI: POI region write is already pending",
+      "fix_status": "Pending. This record includes no corrected build or successful rerun."
+    },
+    "process_teardown": {
+      "server_boots": 3,
+      "server_exit_code_zero": 3,
+      "forced_server_stops": 0,
+      "clients": 5,
+      "client_exit_code_zero": 5,
+      "forced_client_closes": 0,
+      "harness_exit_code": 1,
+      "supervision_failure": null,
+      "note": "Process teardown succeeded; the save assertion and report failed."
+    }
+  },
+  "artifacts": {
+    "report": {
+      "path": "compatibility/results/evidence/36e07b187bd1edfadc61c8b769c08dd8fd6e1e8cc71ffb67a90ea0bb40f94bd3.json",
+      "sha256": "36e07b187bd1edfadc61c8b769c08dd8fd6e1e8cc71ffb67a90ea0bb40f94bd3",
+      "bytes": 446739
+    },
+    "controller_summary": {
+      "path": "compatibility/results/evidence/a0c48e06e8807637c4b09ec69ca9b0ebe5492b6cdbc9427766dc723c77c45690.json",
+      "sha256": "a0c48e06e8807637c4b09ec69ca9b0ebe5492b6cdbc9427766dc723c77c45690",
+      "bytes": 22716
+    },
+    "supervision": {
+      "path": "compatibility/results/evidence/ee276ba5491a609f80da8e5b5aa1ffd91f802427c3195fe1adb95ea3a6141cba.json",
+      "sha256": "ee276ba5491a609f80da8e5b5aa1ffd91f802427c3195fe1adb95ea3a6141cba",
+      "bytes": 4616
+    },
+    "fixture_preflight": {
+      "path": "compatibility/results/evidence/3f352af024024330c1bde3093cfec71f5cef45c91572f8d5904eb627a42bf5c4.jsonl",
+      "sha256": "3f352af024024330c1bde3093cfec71f5cef45c91572f8d5904eb627a42bf5c4",
+      "bytes": 7019
+    },
+    "worker_log": {
+      "path": "compatibility/results/evidence/7ca28a16df649e9f85a5e43a5a91cb8ce6713025eb64f7d3e24a663151231c70.log",
+      "sha256": "7ca28a16df649e9f85a5e43a5a91cb8ce6713025eb64f7d3e24a663151231c70",
+      "bytes": 725
+    },
+    "policy": {
+      "path": "compatibility/results/evidence/537f27443674f8b07a27b00382d4d408c0de7f5b9fa08720e482a91356f10815.json",
+      "sha256": "537f27443674f8b07a27b00382d4d408c0de7f5b9fa08720e482a91356f10815",
+      "bytes": 13795
+    },
+    "events": {
+      "path": "compatibility/results/evidence/eeb2f0513f690509709ae7b4560fd5992c47848b299b7b8ad68f2d8f09cf31e5.jsonl",
+      "sha256": "eeb2f0513f690509709ae7b4560fd5992c47848b299b7b8ad68f2d8f09cf31e5",
+      "bytes": 1442
+    },
+    "rust_source_console": {
+      "path": "compatibility/results/evidence/b0d43b9d9297aebafe27fae91cbafd8b975006833b27bcec8d28ded3c9018269.log",
+      "sha256": "b0d43b9d9297aebafe27fae91cbafd8b975006833b27bcec8d28ded3c9018269",
+      "bytes": 6069
+    },
+    "rust_source_commands": {
+      "path": "compatibility/results/evidence/5777fff0114987e5b0245bdb3c026e8b613c45024c1abe01731767b9aab2a35b.jsonl",
+      "sha256": "5777fff0114987e5b0245bdb3c026e8b613c45024c1abe01731767b9aab2a35b",
+      "bytes": 8331
+    }
+  },
+  "same_source_passes": {
+    "native_checks": "compatibility/results/native-checks.json",
+    "jukeboxes": "compatibility/results/jukeboxes.json"
+  },
+  "historical_regressions": {
+    "engine_commit": "64019246a38915ce15dd63409d6ace2ee9bb3a39",
+    "server_boots": 24,
+    "clients": 44,
+    "scope": "Earlier engine only; not current-build acceptance."
+  },
+  "feature_ledger": {
+    "families": 200,
+    "partial": 27,
+    "unverified": 173,
+    "verified": 0,
+    "changed_by_this_record": false
+  }
+}

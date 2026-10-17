@@ -1,0 +1,170 @@
+{
+  "kind": "root-original-evidence-native-verification",
+  "result": "all16-passed",
+  "actual_host": "ferraloom-builder",
+  "verification_host": "devbox",
+  "engine_source": "a951d03e175831d5220fbd741ad488bfc9b6745e",
+  "job_id": "20261017T072541Z-065f4129",
+  "prefix": "review29-all16-builder-fourth",
+  "rust_tests": 1637,
+  "submission_json": "/home/doc/code/Ferraloom/.cache/builder-submissions/runtime-builder-r29-all16-fourth/submission.json",
+  "submission_sha256": "8bc4d49e965f49accb31906a84379430b132f29a4246f52715c884f531a475ff",
+  "python_tests": 128,
+  "node_tests": 70,
+  "per_binary": {
+    "data": [
+      96
+    ],
+    "protocol": [
+      129,
+      12
+    ],
+    "command": [
+      92
+    ],
+    "world": [
+      416
+    ],
+    "inventory": [
+      24
+    ],
+    "core": [
+      856
+    ],
+    "wrapper": [
+      12
+    ]
+  },
+  "isolated_subprocess_summaries_not_added_to_total": {
+    "core": [
+      [
+        "ok",
+        "1",
+        "0",
+        "0",
+        "0",
+        "855"
+      ],
+      [
+        "ok",
+        "1",
+        "0",
+        "0",
+        "0",
+        "855"
+      ],
+      [
+        "ok",
+        "1",
+        "0",
+        "0",
+        "0",
+        "855"
+      ],
+      [
+        "ok",
+        "1",
+        "0",
+        "0",
+        "0",
+        "855"
+      ]
+    ]
+  },
+  "helper_sha256": "769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c",
+  "verifier_sha256": "09ea796a97a461db8606d1732f17863f053b34f411d6246b118d087cb4109db5",
+  "archive_sha256": "5363256fdff38dba078e0e95e10a45599a9203d5fd6d77914c6e42a89db9a31e",
+  "native_sha256": "beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3",
+  "outer_sha256": "51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443",
+  "binary": {
+    "host": "ferraloom-builder",
+    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
+    "path": "/home/doc/code/Ferraloom/.cache/validated-binaries/a951d03e175831d5220fbd741ad488bfc9b6745e/ferraloom",
+    "mode": "0555",
+    "sha256": "b1f0902c006a175be892c6b4781fb1a59fb4ce830f7aebe246f8ef2df7384f35",
+    "bytes": 124665752,
+    "actual_job_id": "20261017T072541Z-065f4129",
+    "scope": "Binary/evidence preservation only; independent full-log verification remains required."
+  },
+  "full_source_clean": true,
+  "all_original_raw_log_hashes_checked": true,
+  "files": {
+    ".cache/review29-all16-builder-fourth-native.json": {
+      "bytes": 10831,
+      "sha256": "beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3"
+    },
+    ".cache/remote-build-jobs/20261017T072541Z-065f4129.json": {
+      "bytes": 590,
+      "sha256": "51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443"
+    },
+    ".cache/review29-all16-builder-fourth-fmt-root.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    ".cache/review29-all16-builder-fourth-fmt-vendor.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    ".cache/review29-all16-builder-fourth-python.log": {
+      "bytes": 510,
+      "sha256": "ade647ffb7aa899f822e3fa37e790a66276c8888861b6845bcbea5a7c6199ccc"
+    },
+    ".cache/review29-all16-builder-fourth-vendor-clippy.log": {
+      "bytes": 829,
+      "sha256": "783407910aeea4ffdbe8a75564de5982451ced180301736ee8a3dac317318a98"
+    },
+    ".cache/review29-all16-builder-fourth-data.log": {
+      "bytes": 7784,
+      "sha256": "18012bb8f63c35f78c575980e5723316ddafabb673f6fd646d0115016f51809d"
+    },
+    ".cache/review29-all16-builder-fourth-protocol.log": {
+      "bytes": 12938,
+      "sha256": "c76e28650314f8d619d12da438ca4ecf485ede38fa163dcb1cdf5ca4886f8765"
+    },
+    ".cache/review29-all16-builder-fourth-command.log": {
+      "bytes": 6230,
+      "sha256": "eb30aeece9f39905fb1678eff4f62218e17fc93bbd9df69c36fe8337d562b529"
+    },
+    ".cache/review29-all16-builder-fourth-world.log": {
+      "bytes": 38557,
+      "sha256": "b198c10c06da2450dcabbe8a18b9fb01f58f0315117fb848397c03f7fc9156fd"
+    },
+    ".cache/review29-all16-builder-fourth-inventory.log": {
+      "bytes": 2984,
+      "sha256": "d110fb23666474111959122b0aaf68f54aaee8bbf60b38b4ad6d4685cc732a3e"
+    },
+    ".cache/review29-all16-builder-fourth-core.log": {
+      "bytes": 86286,
+      "sha256": "cb2d71df512ae5eb3497ea5d454864e84bb5345f110e04f4f1a81b3a3b8b48b5"
+    },
+    ".cache/review29-all16-builder-fourth-gametest-compile.log": {
+      "bytes": 945,
+      "sha256": "4f0db75995f8c2c53324c5d0e141975ac265437a4e00c4409c5343f87bbf3dd8"
+    },
+    ".cache/review29-all16-builder-fourth-clippy.log": {
+      "bytes": 1041,
+      "sha256": "26ef21c95c5d8fd78e172157b4a7c8a7aa0af896784f2f31d4b6c7fd5b775148"
+    },
+    ".cache/review29-all16-builder-fourth-wrapper.log": {
+      "bytes": 2037,
+      "sha256": "bd5c6bae469dffa1eb17f48928b6c1c43fc47b8264a8d21516db9ad82178b1cc"
+    },
+    ".cache/review29-all16-builder-fourth-node-protocol.log": {
+      "bytes": 7400,
+      "sha256": "0f1a24e8d19092a1015c7121a010f3357f31060c27b138733c82ab74c7f699b1"
+    },
+    ".cache/review29-all16-builder-fourth-typescript.log": {
+      "bytes": 208,
+      "sha256": "81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd"
+    },
+    ".cache/review29-all16-builder-fourth-build.log": {
+      "bytes": 371,
+      "sha256": "3f66122d95f710bb9234efac87fa955de6eda54c10d2efe7a5e4cffbb831a874"
+    },
+    ".cache/review29-all16-builder-fourth-generated-data/usercache.json": {
+      "bytes": 116,
+      "sha256": "d1636a654c4bc59dcf98996249837f54b6ead7a48533060ed8c6cb6edd6b9755"
+    }
+  },
+  "bounds": "Native validation only. No paired runtime, REA capture or compatibility promotion."
+}

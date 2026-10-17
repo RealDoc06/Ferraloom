@@ -4,15 +4,22 @@ Ferraloom targets **Minecraft Java Edition 26.3**, the stable release returned b
 
 The machine-readable ledger is [compatibility/features.json](../compatibility/features.json). It contains 200 feature families: 191 vanilla server families, seven additional concurrency and performance requirements, and two deferred plugin families. **No family is currently verified.** Partial rows retain selected paired observations; the [checklist](features.md) shows each implementation's results. This inventory and its validator do not establish complete implementation of those families.
 
-The latest [native-check record](../compatibility/results/native-checks.json) used clean source
-`97db9ed5885df6d2392599a7d8e1b477c8ef7035`, with executable SHA-256
-`57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670`. All 15 checks passed:
-1,543 Rust tests (96 data, 138 protocol, 92 command, 405 world, 800 core and
-12 wrapper), 103 Python tests, 56 Node tests, strict TypeScript, both formatting
-checks, Clippy for the wrapper and all six vendored crates, and the build.
-GameTest compiled only and contributes zero standalone behavior tests. The
-[raw receipt](../compatibility/results/evidence/6af5d75da0a7cebf1b0259725502c321fe409e593a01a265cc09a3b0c7a720d6.json)
-and every command log are retained by content hash.
+The latest [native-check record](../compatibility/results/native-checks.json) used clean engine source
+`a951d03e175831d5220fbd741ad488bfc9b6745e` on the dedicated `ferraloom-builder` (`10.10.10.162`),
+with executable SHA-256 `b1f0902c006a175be892c6b4781fb1a59fb4ce830f7aebe246f8ef2df7384f35`.
+All 16 checks passed: 1,637 Rust tests (96 data, 141 protocol, 92 command,
+416 world, 24 inventory, 856 core and 12 wrapper), 128 Python tests, 70 Node
+tests, strict TypeScript, both formatting checks, Clippy for the wrapper and all
+seven vendored crates, and the final build. Four inherited filtered Core child
+results are retained separately and are not added to the total. GameTest compiled
+only and contributes zero standalone behavior tests. The
+[original native receipt](../compatibility/results/evidence/beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3.json),
+[completed builder receipt](../compatibility/results/evidence/51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443.json) and
+[ROOT verification](../compatibility/results/evidence/c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce.json) bind the actual source, host,
+resource scope, final binary and original command logs by content hash.
+This checkpoint applies to the tested engine commit, not a later evidence/docs
+commit. Fresh paired runtime and REA acceptance remain separate; no new runtime
+or verified-family result is claimed here.
 
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
@@ -35,20 +42,21 @@ criteria, sculk/vibration, recipient boundaries, natural clean-chunk autosave,
 and elapsed-only reentrant timing remain open. The exact gaps and raw artifact
 hashes are retained in the result index.
 
-The [latest five-suite regression attempt](../compatibility/results/regression-checks.json)
-on the same source and binary failed in its first suite, player interchange.
+The [historical five-suite regression attempt](../compatibility/results/regression-checks.json)
+on `97db9ed` and its recorded binary failed in its first suite, player interchange.
 All seven Java-to-Rust composites passed. In the fresh Rust source for reverse
 transfer, `save-all flush` timed out and the console reported
 `Failed to save portal POI: POI region write is already pending`.
 The seven reverse-transfer cases share that failed save prerequisite; the Java
 destination never booted. All three started servers and five clients exited with
-code zero and no forced cleanup. The save failure remains unresolved in this
-tested build, with a fix and fresh acceptance pending. Item interchange,
+code zero and no forced cleanup. The save failure remains an observed failure of that historical build. Fresh
+paired acceptance for `a951d03` is not established by its native pass. Item interchange,
 container metadata, chat throttling and goat horns did not start.
 
 Earlier 24-boot/44-client regression passes at engine `6401924` apply to that
-older engine. The current native and Jukebox passes coexist with the failed
-player report; the ledger remains at 27 partial, 173 unverified and zero verified
+older engine. The new native checkpoint and historical Jukebox pass do not
+replace the failed `97db9ed` player report; the ledger remains at 27 partial,
+173 unverified and zero verified
 families.
 
 Earlier targeted runs used source and harness commit

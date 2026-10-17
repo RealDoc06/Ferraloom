@@ -127,7 +127,7 @@
     }
   },
   "same_source_passes": {
-    "native_checks": "compatibility/results/native-checks.json",
+    "native_checks": "compatibility/results/evidence/bfb49e6f63e958f60df4eafa0c65a86abd96812b7e276e549545af9305a9ceaa.json",
     "jukeboxes": "compatibility/results/jukeboxes.json"
   },
   "historical_regressions": {

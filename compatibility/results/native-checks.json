@@ -3,19 +3,68 @@
   "kind": "native-checks",
   "result": "passed",
   "target_version": "26.3",
-  "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+  "protocol": 777,
+  "data_version": 5023,
+  "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
   "source_worktree_clean": true,
-  "binary_sha256": "57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670",
+  "binary_sha256": "b1f0902c006a175be892c6b4781fb1a59fb4ce830f7aebe246f8ef2df7384f35",
+  "binary_bytes": 124665752,
   "receipt": {
-    "path": "compatibility/results/evidence/6af5d75da0a7cebf1b0259725502c321fe409e593a01a265cc09a3b0c7a720d6.json",
-    "sha256": "6af5d75da0a7cebf1b0259725502c321fe409e593a01a265cc09a3b0c7a720d6",
-    "bytes": 9949
+    "path": "compatibility/results/evidence/beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3.json",
+    "sha256": "beac0f97ffc664f0f17f4fd498f5557171d6ee9f89f50f42f4e4a842fa0ecea3",
+    "bytes": 10831
+  },
+  "completed_outer_receipt": {
+    "path": "compatibility/results/evidence/51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443.json",
+    "sha256": "51358ee1554666525f31b4cb77e75753e223856241c34760cac9967876d2a443",
+    "bytes": 590
+  },
+  "root_verification": {
+    "path": "compatibility/results/evidence/c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce.json",
+    "sha256": "c8af6a475ea10a663530e3cfc51b26a696efd89b00d6442a6b1bd5f8ca071cce",
+    "bytes": 5703
+  },
+  "binary_preservation_metadata": {
+    "path": "compatibility/results/evidence/53a847679d0992a1f3c99b7037518d14064c3a4484b20c61a369176028c7a1cd.json",
+    "sha256": "53a847679d0992a1f3c99b7037518d14064c3a4484b20c61a369176028c7a1cd",
+    "bytes": 481
+  },
+  "exact_native_helper": {
+    "path": "compatibility/results/evidence/769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c.py",
+    "sha256": "769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c",
+    "bytes": 7301
+  },
+  "exact_root_verifier": {
+    "path": "compatibility/results/evidence/09ea796a97a461db8606d1732f17863f053b34f411d6246b118d087cb4109db5.py",
+    "sha256": "09ea796a97a461db8606d1732f17863f053b34f411d6246b118d087cb4109db5",
+    "bytes": 9839
+  },
+  "actual_wrapper_submission": {
+    "path": "compatibility/results/evidence/8bc4d49e965f49accb31906a84379430b132f29a4246f52715c884f531a475ff.json",
+    "sha256": "8bc4d49e965f49accb31906a84379430b132f29a4246f52715c884f531a475ff",
+    "bytes": 922
+  },
+  "export_metadata": {
+    "path": "compatibility/results/evidence/837db2e7264d2df8decc8e869ec5509895de63e5f417171de026e3e11ee93f6a.json",
+    "sha256": "837db2e7264d2df8decc8e869ec5509895de63e5f417171de026e3e11ee93f6a",
+    "bytes": 3808
+  },
+  "original_archive": {
+    "sha256": "5363256fdff38dba078e0e95e10a45599a9203d5fd6d77914c6e42a89db9a31e",
+    "bytes": 215040,
+    "members": 19,
+    "publication_scope": "All original members are materialized separately by content hash; archive and executable bytes are not published."
   },
   "execution_host": {
-    "hostname": "devbox",
-    "address": "10.10.10.106",
-    "repository": "/home/doc/code/Ferraloom"
+    "hostname": "ferraloom-builder",
+    "address": "10.10.10.162",
+    "repository": "/home/doc/code/Ferraloom",
+    "scope": "Dedicated unprivileged CT107 on nodo-3; distinct from devbox and GitHub Actions."
   },
+  "verification_host": "devbox",
+  "job_id": "20261017T072541Z-065f4129",
+  "prefix": "review29-all16-builder-fourth",
+  "outer_elapsed_seconds": 1645.178262,
   "resource_limits": {
     "memory.max": "6442450944",
     "memory.swap.max": "0",
@@ -26,24 +75,42 @@
     "CARGO_BUILD_JOBS": "1"
   },
   "passed_tests": {
-    "rust": 1543,
-    "python": 103,
-    "node": 56
+    "rust": 1637,
+    "python": 128,
+    "node": 70
   },
   "rust_test_breakdown": {
     "data": 96,
-    "protocol_library": 126,
-    "protocol_item_name": 12,
+    "protocol_library": 129,
+    "protocol_integration": 12,
     "command": 92,
-    "world": 405,
-    "core": 800,
+    "world": 416,
+    "inventory": 24,
+    "core": 856,
     "wrapper": 12
+  },
+  "isolated_core_subprocesses": {
+    "count": 4,
+    "each_passed": 1,
+    "each_filtered_out": 855,
+    "added_to_rust_total": false,
+    "authoritative_outer_passed": 856,
+    "authoritative_outer_failed": 0,
+    "authoritative_outer_filtered_out": 0
   },
   "checks": [
     {
       "step": "fmt-root",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "elapsed_seconds": 0.265,
       "log": {
         "path": "compatibility/results/evidence/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -54,6 +121,16 @@
       "step": "fmt-vendor",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "elapsed_seconds": 8.031,
       "log": {
         "path": "compatibility/results/evidence/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -64,20 +141,49 @@
       "step": "python",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "elapsed_seconds": 1.918,
       "log": {
-        "path": "compatibility/results/evidence/81804450ed16ddd9453b569b31075d587005a60e7533927e992735c26f3a202a.log",
-        "sha256": "81804450ed16ddd9453b569b31075d587005a60e7533927e992735c26f3a202a",
-        "bytes": 485
+        "path": "compatibility/results/evidence/ade647ffb7aa899f822e3fa37e790a66276c8888861b6845bcbea5a7c6199ccc.log",
+        "sha256": "ade647ffb7aa899f822e3fa37e790a66276c8888861b6845bcbea5a7c6199ccc",
+        "bytes": 510
       },
-      "passed_tests": 103
+      "passed_tests": 128
     },
     {
       "step": "vendor-clippy",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "--keep-going",
+        "--workspace",
+        "--all-targets",
+        "--target-dir",
+        "target",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "elapsed_seconds": 142.768,
       "log": {
-        "path": "compatibility/results/evidence/0d15d9b8b54e3ab27b337243a2405ca63701feec099a79a3f57858498269ca5c.log",
-        "sha256": "0d15d9b8b54e3ab27b337243a2405ca63701feec099a79a3f57858498269ca5c",
+        "path": "compatibility/results/evidence/783407910aeea4ffdbe8a75564de5982451ced180301736ee8a3dac317318a98.log",
+        "sha256": "783407910aeea4ffdbe8a75564de5982451ced180301736ee8a3dac317318a98",
         "bytes": 829
       }
     },
@@ -85,9 +191,25 @@
       "step": "data",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-data",
+        "--lib",
+        "--target-dir",
+        "target"
+      ],
+      "elapsed_seconds": 0.415,
       "log": {
-        "path": "compatibility/results/evidence/3518512997c9bb0479b8b90eac5badaa98d70b663852f876c2dc2620c8c48526.log",
-        "sha256": "3518512997c9bb0479b8b90eac5badaa98d70b663852f876c2dc2620c8c48526",
+        "path": "compatibility/results/evidence/18012bb8f63c35f78c575980e5723316ddafabb673f6fd646d0115016f51809d.log",
+        "sha256": "18012bb8f63c35f78c575980e5723316ddafabb673f6fd646d0115016f51809d",
         "bytes": 7784
       },
       "passed_tests": 96
@@ -96,20 +218,49 @@
       "step": "protocol",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-protocol",
+        "--lib",
+        "--tests",
+        "--target-dir",
+        "target"
+      ],
+      "elapsed_seconds": 0.415,
       "log": {
-        "path": "compatibility/results/evidence/3924c450bbbe2ef7cc12087ebc66cf03fdadd79c8a1b8342593fa160475cf193.log",
-        "sha256": "3924c450bbbe2ef7cc12087ebc66cf03fdadd79c8a1b8342593fa160475cf193",
-        "bytes": 12676
+        "path": "compatibility/results/evidence/c76e28650314f8d619d12da438ca4ecf485ede38fa163dcb1cdf5ca4886f8765.log",
+        "sha256": "c76e28650314f8d619d12da438ca4ecf485ede38fa163dcb1cdf5ca4886f8765",
+        "bytes": 12938
       },
-      "passed_tests": 138
+      "passed_tests": 141
     },
     {
       "step": "command",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-command",
+        "--lib"
+      ],
+      "elapsed_seconds": 0.565,
       "log": {
-        "path": "compatibility/results/evidence/1ec40d96aec07d964cdd590c2b5afff7ae796098b9ae1163da4589273c6cd3c2.log",
-        "sha256": "1ec40d96aec07d964cdd590c2b5afff7ae796098b9ae1163da4589273c6cd3c2",
+        "path": "compatibility/results/evidence/eb30aeece9f39905fb1678eff4f62218e17fc93bbd9df69c36fe8337d562b529.log",
+        "sha256": "eb30aeece9f39905fb1678eff4f62218e17fc93bbd9df69c36fe8337d562b529",
         "bytes": 6230
       },
       "passed_tests": 92
@@ -118,53 +269,155 @@
       "step": "world",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-world",
+        "--lib",
+        "--target-dir",
+        "target",
+        "--",
+        "--test-threads=2"
+      ],
+      "elapsed_seconds": 167.985,
       "log": {
-        "path": "compatibility/results/evidence/07a77861cfa5409e50a9b6a05c18d18a37e44a7006465b832325135045615ed7.log",
-        "sha256": "07a77861cfa5409e50a9b6a05c18d18a37e44a7006465b832325135045615ed7",
-        "bytes": 37323
+        "path": "compatibility/results/evidence/b198c10c06da2450dcabbe8a18b9fb01f58f0315117fb848397c03f7fc9156fd.log",
+        "sha256": "b198c10c06da2450dcabbe8a18b9fb01f58f0315117fb848397c03f7fc9156fd",
+        "bytes": 38557
       },
-      "passed_tests": 405
+      "passed_tests": 416
+    },
+    {
+      "step": "inventory",
+      "result": "passed",
+      "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-inventory",
+        "--lib",
+        "--target-dir",
+        "target"
+      ],
+      "elapsed_seconds": 0.566,
+      "log": {
+        "path": "compatibility/results/evidence/d110fb23666474111959122b0aaf68f54aaee8bbf60b38b4ad6d4685cc732a3e.log",
+        "sha256": "d110fb23666474111959122b0aaf68f54aaee8bbf60b38b4ad6d4685cc732a3e",
+        "bytes": 2984
+      },
+      "passed_tests": 24
     },
     {
       "step": "core",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-core",
+        "--lib",
+        "--target-dir",
+        "target",
+        "--",
+        "--test-threads=2"
+      ],
+      "elapsed_seconds": 599.815,
       "log": {
-        "path": "compatibility/results/evidence/ee4cfac650ca0070a41b60b5753f1f2456e307a8efb36fa2e09509d8c7768c63.log",
-        "sha256": "ee4cfac650ca0070a41b60b5753f1f2456e307a8efb36fa2e09509d8c7768c63",
-        "bytes": 79972
+        "path": "compatibility/results/evidence/cb2d71df512ae5eb3497ea5d454864e84bb5345f110e04f4f1a81b3a3b8b48b5.log",
+        "sha256": "cb2d71df512ae5eb3497ea5d454864e84bb5345f110e04f4f1a81b3a3b8b48b5",
+        "bytes": 86286
       },
-      "passed_tests": 800
+      "passed_tests": 856
     },
     {
       "step": "gametest-compile",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "check",
+        "--manifest-path",
+        "vendor/pumpkin/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "-p",
+        "pumpkin-gametest",
+        "--all-targets",
+        "--target-dir",
+        "target"
+      ],
+      "elapsed_seconds": 11.941,
       "log": {
-        "path": "compatibility/results/evidence/8d3dd828ae91fdfca8926f9bd0e8b51895f9868c7ce419f6a757f56eae022ab5.log",
-        "sha256": "8d3dd828ae91fdfca8926f9bd0e8b51895f9868c7ce419f6a757f56eae022ab5",
-        "bytes": 722
+        "path": "compatibility/results/evidence/4f0db75995f8c2c53324c5d0e141975ac265437a4e00c4409c5343f87bbf3dd8.log",
+        "sha256": "4f0db75995f8c2c53324c5d0e141975ac265437a4e00c4409c5343f87bbf3dd8",
+        "bytes": 945
       },
-      "scope": "Compile only; no standalone behavior tests."
+      "scope": "Compile only; no standalone behavior tests.",
+      "standalone_behavior_tests": 0
     },
     {
       "step": "clippy",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "elapsed_seconds": 73.12,
       "log": {
-        "path": "compatibility/results/evidence/e639389a860c0818441a6a292406b19e1f3681a0e82a9480744036f72d6aa12a.log",
-        "sha256": "e639389a860c0818441a6a292406b19e1f3681a0e82a9480744036f72d6aa12a",
-        "bytes": 477
+        "path": "compatibility/results/evidence/26ef21c95c5d8fd78e172157b4a7c8a7aa0af896784f2f31d4b6c7fd5b775148.log",
+        "sha256": "26ef21c95c5d8fd78e172157b4a7c8a7aa0af896784f2f31d4b6c7fd5b775148",
+        "bytes": 1041
       }
     },
     {
       "step": "wrapper",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1"
+      ],
+      "elapsed_seconds": 549.474,
       "log": {
-        "path": "compatibility/results/evidence/b4ae9c849b34553c68f2f536de1f736293337a100f34dca8c5a091f3a26749e3.log",
-        "sha256": "b4ae9c849b34553c68f2f536de1f736293337a100f34dca8c5a091f3a26749e3",
-        "bytes": 1587
+        "path": "compatibility/results/evidence/bd5c6bae469dffa1eb17f48928b6c1c43fc47b8264a8d21516db9ad82178b1cc.log",
+        "sha256": "bd5c6bae469dffa1eb17f48928b6c1c43fc47b8264a8d21516db9ad82178b1cc",
+        "bytes": 2037
       },
       "passed_tests": 12
     },
@@ -172,17 +425,29 @@
       "step": "node-protocol",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "npm",
+        "run",
+        "test:protocol"
+      ],
+      "elapsed_seconds": 1.067,
       "log": {
-        "path": "compatibility/results/evidence/f3a66ac5f01ebcfb91358205019326bdd3cb9c8381958db1f57ca6732c114dd9.log",
-        "sha256": "f3a66ac5f01ebcfb91358205019326bdd3cb9c8381958db1f57ca6732c114dd9",
-        "bytes": 6023
+        "path": "compatibility/results/evidence/0f1a24e8d19092a1015c7121a010f3357f31060c27b138733c82ab74c7f699b1.log",
+        "sha256": "0f1a24e8d19092a1015c7121a010f3357f31060c27b138733c82ab74c7f699b1",
+        "bytes": 7400
       },
-      "passed_tests": 56
+      "passed_tests": 70
     },
     {
       "step": "typescript",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "npm",
+        "run",
+        "check:protocol"
+      ],
+      "elapsed_seconds": 2.119,
       "log": {
         "path": "compatibility/results/evidence/81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd.log",
         "sha256": "81fb73c424863c18994696dff715f5ed0466a3d48987a0335623bbb44c0fefcd",
@@ -193,50 +458,85 @@
       "step": "build",
       "result": "passed",
       "exit_code": 0,
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--jobs",
+        "1"
+      ],
+      "elapsed_seconds": 84.072,
       "log": {
-        "path": "compatibility/results/evidence/d2630f7564a9249a027d746ad552870678602bd75adc07d9b599cd1445eaed6f.log",
-        "sha256": "d2630f7564a9249a027d746ad552870678602bd75adc07d9b599cd1445eaed6f",
-        "bytes": 477
+        "path": "compatibility/results/evidence/3f66122d95f710bb9234efac87fa955de6eda54c10d2efe7a5e4cffbb831a874.log",
+        "sha256": "3f66122d95f710bb9234efac87fa955de6eda54c10d2efe7a5e4cffbb831a874",
+        "bytes": 371
       }
     }
   ],
-  "scope": [
-    "All 15 recorded commands passed at the same clean source commit and final executable digest.",
-    "Rust totals count the full executed test binaries once; repeated isolated Core subprocess checks are not added.",
-    "Strict TypeScript, both formatting checks, root and all-six-vendored-crate Clippy, and the executable build passed.",
-    "GameTest compiled only and contributes zero standalone behavior tests.",
-    "These are native and harness checks. Paired runtime acceptance is recorded separately; no feature family is promoted."
-  ],
-  "historical_jukebox_failure": {
-    "source_commit": "79a5baac3d062dc2315c13c6c8bb9670953d57d5",
-    "result": "failed",
-    "completed_boots": [
-      "java_source"
-    ],
-    "active_boot_at_failure": "rust_import",
-    "observed_error": "AssertionError: {'expected_type': 'Byte', 'actual': {'nbt_type': 'Byte', 'value': -106}}",
-    "report": {
-      "path": "compatibility/results/evidence/b0bde8d313a377be1616f7f1adf1f17cec84d784181076e1f2642e54c33e0ea0.json",
-      "sha256": "b0bde8d313a377be1616f7f1adf1f17cec84d784181076e1f2642e54c33e0ea0",
-      "bytes": 4263980
+  "generated_test_artifact": {
+    "artifact": {
+      "path": "compatibility/results/evidence/d1636a654c4bc59dcf98996249837f54b6ead7a48533060ed8c6cb6edd6b9755.json",
+      "sha256": "d1636a654c4bc59dcf98996249837f54b6ead7a48533060ed8c6cb6edd6b9755",
+      "bytes": 116
     },
-    "controller_summary": {
-      "path": "compatibility/results/evidence/afe46dbbb3546f4ff80adabe0fdb8c341d2953a4c8ff28cab5f97dfe016fa4be.json",
-      "sha256": "afe46dbbb3546f4ff80adabe0fdb8c341d2953a4c8ff28cab5f97dfe016fa4be",
-      "bytes": 26327
+    "scope": "Synthetic QueuedPlayer/UUID66 unit-test usercache only, preserved from the original run; no world or real player data."
+  },
+  "CI": {
+    "result": "success",
+    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
+    "run_id": 39012929138,
+    "url": "https://github.com/RealDoc06/Ferraloom/actions/runs/39012929138",
+    "original_run_metadata": {
+      "path": "compatibility/results/evidence/b22498af43f0151483b6236e33d377f6b16c7c86c70eab457834235c23cd4a3f.json",
+      "sha256": "b22498af43f0151483b6236e33d377f6b16c7c86c70eab457834235c23cd4a3f",
+      "bytes": 3778
     },
-    "supervision": {
-      "path": "compatibility/results/evidence/12d88301be9958c27ffc8b26fe8e5e0a0bcd77b9e6bf2f55ac15fcfaf838ad93.json",
-      "sha256": "12d88301be9958c27ffc8b26fe8e5e0a0bcd77b9e6bf2f55ac15fcfaf838ad93",
-      "bytes": 3701
+    "scope": "Actual GitHub Actions completion for this engine commit; distinct from the dedicated builder run and any later evidence/docs commit."
+  },
+  "engine_source_publication": {
+    "source_commit": "a951d03e175831d5220fbd741ad488bfc9b6745e",
+    "branch": "main",
+    "result": "fast-forward-published",
+    "receipt": {
+      "path": "compatibility/results/evidence/c382d8d6ce982298fdae9f33ab08fa0f8676d039eb072539fa1494c6ae2098c7.json",
+      "sha256": "c382d8d6ce982298fdae9f33ab08fa0f8676d039eb072539fa1494c6ae2098c7",
+      "bytes": 734
     },
-    "log": {
-      "path": "compatibility/results/evidence/37b4e677c9b5fcb401cbf7b446343dee6c8f4e54220a703c3b6df5fa467c012f.log",
-      "sha256": "37b4e677c9b5fcb401cbf7b446343dee6c8f4e54220a703c3b6df5fa467c012f",
-      "bytes": 213
+    "scope": "Engine source only; no subsequent evidence/docs commit is claimed tested or published by this receipt."
+  },
+  "previous_native_record": {
+    "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+    "exact_index": {
+      "path": "compatibility/results/evidence/bfb49e6f63e958f60df4eafa0c65a86abd96812b7e276e549545af9305a9ceaa.json",
+      "sha256": "bfb49e6f63e958f60df4eafa0c65a86abd96812b7e276e549545af9305a9ceaa",
+      "bytes": 10473
     },
-    "subsequent_equipment_writer_fix": "acb8bcdd6c69de125b87af605c3d27059edd4e58",
-    "note": "The subsequent writer stores main slots in Inventory and named equipment in equipment. Native persistence checks and the subsequent same-source four-boot Jukebox campaign pass at the recorded current source."
+    "scope": "Original 97db native index archived byte-for-byte before updating this latest pointer."
+  },
+  "historical_runtime": {
+    "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
+    "binary_sha256": "57c41a203d46f5d5c00b8b9d486b0840d8cbf7648ea9b7eb7f535a7efc866670",
+    "jukeboxes": {
+      "result": "passed",
+      "index": "compatibility/results/jukeboxes.json",
+      "modified_by_this_record": false
+    },
+    "regression_attempt": {
+      "result": "failed",
+      "index": "compatibility/results/regression-checks.json",
+      "original_exact_index": {
+        "path": "compatibility/results/evidence/084092f56395c0c4e2b6b988de0cf51b696d622c87b64b21586a04fdb7b67e34.json",
+        "sha256": "084092f56395c0c4e2b6b988de0cf51b696d622c87b64b21586a04fdb7b67e34",
+        "bytes": 5525
+      },
+      "only_proposed_change": "same_source_passes.native_checks navigation now identifies the archived97db native index."
+    },
+    "scope": "These historical results remain bound to 97db; they are not a951 paired acceptance."
+  },
+  "paired_runtime_for_this_source": {
+    "status": "not established by this native record",
+    "scope": "Fresh paired runtime, crafting, Dragon and REA acceptance remain separate. No current in-progress run is interpreted here."
   },
   "feature_ledger": {
     "families": 200,
@@ -245,33 +545,20 @@
     "verified": 0,
     "changed_by_this_record": false
   },
+  "scope": [
+    "All 16 recorded commands passed at the same clean a951 engine source and completed executable digest.",
+    "Rust totals count each full executed binary once; four inherited filtered Core child summaries are retained but not added.",
+    "Strict TypeScript, both formatting checks, root and all seven vendored-crate Clippy checks, and the final executable build passed.",
+    "GameTest compiled only and contributes zero standalone behavior tests.",
+    "Native evidence applies to engine source a951, not an unknown later evidence/docs commit. This publication proposal changes no engine or build inputs.",
+    "No paired runtime, REA capture, complete compatibility, performance or verified-family promotion follows from this record."
+  ],
   "open_gaps": [
-    "Resolve the current player-data POI save failure, rerun both transfer directions and complete the four unstarted regression suites.",
-    "Full vanilla feature coverage, command-tree comparison and generation ordering.",
+    "Fresh paired runtime and REA evidence for this engine remains separate from these native checks.",
+    "Full vanilla feature coverage, command-tree behavior and generation ordering.",
     "Complete inventory/gameplay/multiplayer coverage and measured multicore performance.",
+    "Full Dragon AI/fight/XP and inherited geometry or damage hooks remain bounded by their explicit source/runtime gaps.",
     "Jukebox advancement, sculk/vibration, custom song profiles, recipient boundaries and elapsed-only reentrant timing.",
     "Java plugin integration is deferred."
-  ],
-  "paired_runtime": {
-    "result": "passed",
-    "suite": "jukeboxes",
-    "index": "compatibility/results/jukeboxes.json",
-    "report": {
-      "path": "compatibility/results/evidence/a71970f636e010ecffb05e6436f54efb460f8785bbde30e2c0bef450129f2cf8.json",
-      "sha256": "a71970f636e010ecffb05e6436f54efb460f8785bbde30e2c0bef450129f2cf8",
-      "bytes": 9147312
-    },
-    "source_commit": "97db9ed5885df6d2392599a7d8e1b477c8ef7035",
-    "note": "Twelve selected Jukebox composites, four boots, eight clients and two whole-world copies passed. The subsequent five-suite regression attempt failed during player-data setup; see regression_checks."
-  },
-  "regression_checks": {
-    "result": "failed",
-    "index": "compatibility/results/regression-checks.json",
-    "report": {
-      "path": "compatibility/results/evidence/36e07b187bd1edfadc61c8b769c08dd8fd6e1e8cc71ffb67a90ea0bb40f94bd3.json",
-      "sha256": "36e07b187bd1edfadc61c8b769c08dd8fd6e1e8cc71ffb67a90ea0bb40f94bd3",
-      "bytes": 446739
-    },
-    "note": "Java-to-Rust passed seven composites. Reverse transfer was blocked by a Rust-source POI save failure; four other suites did not start."
-  }
+  ]
 }
