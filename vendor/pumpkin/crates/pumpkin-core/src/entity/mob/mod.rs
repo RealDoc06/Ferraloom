@@ -785,6 +785,18 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    fn mob_handle_killing_blow(&self) {
+        self.get_mob_entity().living_entity.dead.store(true, Relaxed);
+    }
+
+    fn mob_tick_death(&self) {
+        self.get_mob_entity().living_entity.tick_death();
+    }
+
+    fn mob_death_tick_owns_movement(&self) -> bool {
+        false
+    }
+
     fn mob_can_hit(&self) -> bool {
         true
     }
@@ -1350,6 +1362,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn handle_killing_blow(&self) {
+        self.mob_handle_killing_blow();
+    }
+
+    fn tick_death(&self) {
+        self.mob_tick_death();
+    }
+
+    fn death_tick_owns_movement(&self) -> bool {
+        self.mob_death_tick_owns_movement()
+    }
+
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
     }

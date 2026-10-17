@@ -6,7 +6,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use crate::entity::{
@@ -259,6 +259,9 @@ pub struct EnderDragonEntity {
 
     pub in_wall: Mutex<bool>,
     pub dragon_death_time: Mutex<i32>,
+    /// Mob::mob_tick precedes LivingEntity::tick in this engine. A phase's new
+    /// health-zero handoff starts death ticking on the following owner tick.
+    defer_first_death_tick: AtomicBool,
     pub sitting_damage_received: Mutex<f32>,
 
     pub nodes_initialized: Mutex<bool>,
@@ -335,6 +338,7 @@ impl EnderDragonEntity {
                 o_flap_time: Mutex::new(0.0),
                 in_wall: Mutex::new(false),
                 dragon_death_time: Mutex::new(0),
+                defer_first_death_tick: AtomicBool::new(false),
                 sitting_damage_received: Mutex::new(0.0),
                 nodes_initialized: Mutex::new(false),
                 fight_origin: Mutex::new(BlockPos::new(0, 0, 0)),
@@ -893,7 +897,10 @@ impl EnderDragonEntity {
     }
 
     pub fn ai_step(&self) {
-        if self.mob_entity.living_entity.entity.is_removed() {
+        if self.mob_entity.living_entity.entity.is_removed()
+            || self.mob_entity.living_entity.health.load() <= 0.0
+            || self.mob_entity.living_entity.dead.load(Ordering::Relaxed)
+        {
             return;
         }
         self.mob_entity.living_entity.entity.update_last_pos();
@@ -1035,6 +1042,118 @@ impl EnderDragonEntity {
 }
 
 impl Mob for EnderDragonEntity {
+    fn mob_handle_killing_blow(&self) {
+        if !self.current_phase().is_sitting() {
+            self.mob_entity.living_entity.set_health(1.0);
+            self.set_phase(EnderDragonPhase::Dying);
+        }
+        // Dragon deliberately leaves `dead` false. The admitted common tail
+        // still performs loot, callbacks, event 3 and the dying pose once.
+    }
+
+    fn mob_death_tick_owns_movement(&self) -> bool {
+        !self.defer_first_death_tick.load(Ordering::Relaxed)
+    }
+
+    fn mob_tick_death(&self) {
+        if self.defer_first_death_tick.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        let living = &self.mob_entity.living_entity;
+        let entity = &living.entity;
+        let world = entity.world.load_full();
+        if !world.is_current_entity(self) {
+            return;
+        }
+        let fight = self.attached_fight();
+        let xp_total = if let Some(fight) = &fight {
+            let mut fight = fight
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let name = entity.custom_name.load();
+            fight.update_dragon(
+                &world,
+                entity.entity_uuid,
+                living.health.load(),
+                living.get_max_health(),
+                name.as_ref().as_ref(),
+            );
+            if fight.has_previously_killed_dragon() {
+                500
+            } else {
+                12000
+            }
+        } else {
+            500
+        };
+        let time = {
+            let mut time = self
+                .dragon_death_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *time = time.wrapping_add(1);
+            *time
+        };
+        if time > 150 && time % 5 == 0 && world.level_info.load().game_rules.mob_drops {
+            crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                &world,
+                entity.pos.load(),
+                (xp_total as f32 * 0.08).floor() as u32,
+            );
+        }
+        // XP publication can reenter plugins and unload/remove/replace us.
+        if !world.is_current_entity(self) {
+            return;
+        }
+        if time == 1 && !entity.is_silent() {
+            world.sync_global_world_event(
+                pumpkin_data::world::WorldEvent::SoundDragonDeath,
+                entity.block_pos.load(),
+                0,
+            );
+        }
+        let movement = Vector3::new(0.0, 0.10000000149011612, 0.0);
+        entity.move_entity(self, movement);
+        for part in &self.parts {
+            part.entity.update_last_pos();
+            part.entity.set_pos(part.entity.pos.load() + movement);
+        }
+        // Level.addParticle is a server no-op: phase/health metadata drives the
+        // client's death visuals, including its 180..200 explosion emitters.
+        if time >= DEATH_TIMER_MAX {
+            if world.level_info.load().game_rules.mob_drops {
+                crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                    &world,
+                    entity.pos.load(),
+                    (xp_total as f32 * 0.2).floor() as u32,
+                );
+            }
+            if !world.is_current_entity(self) {
+                return;
+            }
+            if let Some(fight) = fight {
+                fight
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_dragon_killed(&world, entity.entity_uuid);
+            }
+            if !world.is_current_entity(self) {
+                return;
+            }
+            world.remove_entity_with_reason(self, crate::entity::RemovalReason::Killed);
+            world.emit_game_event("minecraft:entity_die", entity.pos.load());
+        }
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        // XP belongs entirely to tickDeath, never the common death tail.
+        0
+    }
+
+    fn remove_when_far_away(&self, _distance_squared: f64) -> bool {
+        false
+    }
+
     fn mob_damage_with_context(
         &self,
         _caller: &dyn EntityBase,
@@ -1098,13 +1217,11 @@ impl Mob for EnderDragonEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ai_step();
-    }
-
-    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
         let living = &self.mob_entity.living_entity;
-        if living.health.load() <= 0.0 {
-            self.set_phase(EnderDragonPhase::Dying);
+        let was_alive = living.health.load() > 0.0 && !living.dead.load(Ordering::Relaxed);
+        self.ai_step();
+        if was_alive && living.health.load() <= 0.0 {
+            self.defer_first_death_tick.store(true, Ordering::Relaxed);
         }
     }
 

@@ -6313,11 +6313,15 @@ impl World {
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
+        self.remove_entity_with_reason(entity, RemovalReason::Discarded);
+    }
+
+    pub(crate) fn remove_entity_with_reason(&self, entity: &dyn EntityBase, reason: RemovalReason) {
         let base_entity = entity.get_entity();
         if base_entity
             .removal_reason
-            .swap(Some(RemovalReason::Discarded))
-            .is_some()
+            .compare_exchange(None, Some(reason))
+            .is_err()
         {
             return;
         }
@@ -6327,7 +6331,7 @@ impl World {
         self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
+            new_entities.retain(|e| !std::ptr::eq(e.get_entity(), base_entity));
             new_entities
         });
     }

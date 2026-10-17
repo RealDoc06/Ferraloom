@@ -89,8 +89,11 @@ pub struct LivingEntity {
     pub active_hand: std::sync::Mutex<Option<Hand>>,
     pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
-    /// Indicates whether the entity is dead. (`on_death` called)
+    /// Public dead state, set by the owner's killing-blow policy.
     pub dead: AtomicBool,
+    /// Independent admission for callbacks/loot/pose, including owners whose
+    /// killing-blow policy deliberately leaves `dead` false (the dragon).
+    death_effects_started: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
@@ -287,6 +290,7 @@ impl LivingEntity {
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
+            death_effects_started: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
@@ -1987,7 +1991,7 @@ impl LivingEntity {
         }
     }
 
-    /// Marks the entity as dead exactly once and runs the server-side death
+    /// Admits the owner killing-blow policy and server-side death effects once:
     /// flow: stop movement input, attribute the kill, drop loot, broadcast the
     /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
     /// damage event; only the first call has an effect.
@@ -2002,11 +2006,23 @@ impl LivingEntity {
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
             return;
         };
+        if !std::ptr::eq(dyn_self.get_entity(), &self.entity) || self.entity.is_removed() {
+            return;
+        }
         if self
-            .dead
+            .death_effects_started
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            // Preserve the existing plugin stage: lethal health is observable
+            // before the owner's hook. Admission blocks reentrant duplicates.
+            let mut death_event = crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
+                self.entity.entity_id, 0,
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut death_event);
+            }
+            dyn_self.handle_killing_blow();
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
@@ -2084,6 +2100,7 @@ impl LivingEntity {
             };
 
             // Drop loot
+            world.emit_game_event("minecraft:entity_die", self.entity.pos.load());
             self.drop_loot(&params);
 
             // Award experience
@@ -2622,6 +2639,7 @@ impl LivingEntity {
         }
 
         self.dead.store(false, Relaxed);
+        self.death_effects_started.store(false, Relaxed);
     }
 
     pub fn is_player(&self) -> bool {
@@ -3307,20 +3325,30 @@ impl LivingEntity {
         }
 
         if new_health <= 0.0 {
-            let mut death_event =
-                crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
-                    self.entity.entity_id,
-                    0,
-                );
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut death_event);
-            }
             self.on_death(damage_type, source, cause);
         }
 
         true
+    }
+
+    /// Ordinary death animation. Virtual owners may replace this entire clock.
+    pub fn tick_death(&self) {
+        let time = self.death_time
+            .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+            .unwrap_or_else(|time| time)
+            .saturating_add(1);
+        if self.entity.entity_type == &EntityType::PLAYER {
+            // Keep the real player resident until a client respawn request.
+            if time == 10 {
+                self.entity.world.load().despawn_dead_java_player_for_bedrock(&self.entity);
+            }
+            return;
+        }
+        // Death (3) was emitted by on_death; ordinary retirement sends POOF (60).
+        if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+            self.entity.world.load().send_entity_status(&self.entity, EntityStatus::Poof, None);
+            self.entity.remove();
+        }
     }
 
     pub fn damage(&self, caller: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
@@ -3361,7 +3389,8 @@ impl EntityBase for LivingEntity {
         // from continuing to be simulated (accumulating fall_distance/velocity).
         // We allow movement during death animation (20 ticks) so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
-        let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+        let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20
+            && !caller.death_tick_owns_movement();
         let is_player = self.entity.entity_type == &EntityType::PLAYER;
         if (is_alive || in_death_animation) && !is_player {
             self.tick_movement(caller);
@@ -3621,37 +3650,8 @@ impl EntityBase for LivingEntity {
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
-        if self.health.load() <= 0.0 {
-            let time = self
-                .death_time
-                .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
-                .unwrap_or_else(|time| time)
-                .saturating_add(1);
-            if self.entity.entity_type == &EntityType::PLAYER {
-                // Bedrock keeps a dead remote player actor in its death pose.
-                // Remove Java players after the animation so respawn can
-                // recreate a live, interactable actor with the same identity.
-                if time == 10 {
-                    self.entity
-                        .world
-                        .load()
-                        .despawn_dead_java_player_for_bedrock(&self.entity);
-                }
-                // Players remain part of the world until their client requests a
-                // respawn. Removing one here breaks reconnecting while dead.
-                return;
-            }
-            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
-            // once the death animation finished; the death event (3) was already
-            // broadcast in `on_death`. Sending it again here would restart the
-            // client-side death animation.
-            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity
-                    .world
-                    .load()
-                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
-                self.entity.remove();
-            }
+        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+            caller.tick_death();
         }
     }
 

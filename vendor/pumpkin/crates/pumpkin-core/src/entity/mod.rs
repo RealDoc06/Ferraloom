@@ -314,6 +314,24 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().remove();
     }
 
+    /// Virtual killing-blow policy; ordinary owners become dead. Common death
+    /// effects still run after this hook, even when an owner restores health.
+    fn handle_killing_blow(&self) {
+        if let Some(living) = self.get_living_entity() {
+            living.dead.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn tick_death(&self) {
+        if let Some(living) = self.get_living_entity() {
+            living.tick_death();
+        }
+    }
+
+    fn death_tick_owns_movement(&self) -> bool {
+        false
+    }
+
     /// Returns if damage was successful or not
     fn damage(&self, caller: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
         caller.damage_with_context(caller, amount, damage_type, None, None, None)

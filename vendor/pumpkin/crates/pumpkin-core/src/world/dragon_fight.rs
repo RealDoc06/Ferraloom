@@ -476,19 +476,6 @@ impl DragonFight {
             self.update_bossbar_title(world, name);
         }
 
-        if let Some(loc) = self.exit_portal_location
-            && let Some(dragon_uuid) = self.dragon_uuid
-            && let Some(e) = world
-                .entities
-                .load()
-                .iter()
-                .find(|e| e.get_entity().entity_uuid == dragon_uuid)
-            && let Some(dragon) = e
-                .cast_any()
-                .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>()
-        {
-            dragon.set_fight_origin(loc);
-        }
     }
 
     pub fn set_dragon_killed(&mut self, world: &Arc<World>, killed_uuid: Uuid) {
