@@ -140,6 +140,15 @@ public final class TreeGolden implements InvocationHandler {
             var item=new JsonObject();item.add("input",input);item.add("output",output);sets.add(item);
         }
         WorldgenGolden.write(directory.resolve("position_sets.json.gz"),sets);
+        var properties=new JsonObject();var distances=new JsonArray();var mushroomSides=new JsonArray();var pillarAxes=new JsonArray();
+        for(var state:Block.BLOCK_STATE_REGISTRY) {
+            var axes=new JsonArray();for(var axis:Direction.Axis.values())axes.add(Block.getId(state.trySetValue(RotatedPillarBlock.AXIS,axis)));pillarAxes.add(axes);
+            var distance=LeavesBlock.getOptionalDistanceAt(state);
+            if(distance.isPresent())distances.add(distance.getAsInt());else distances.add(JsonNull.INSTANCE);
+            mushroomSides.add(state.hasProperty(HugeMushroomBlock.WEST) && state.hasProperty(HugeMushroomBlock.EAST) && state.hasProperty(HugeMushroomBlock.NORTH) && state.hasProperty(HugeMushroomBlock.SOUTH));
+        }
+        properties.add("leaf_distances",distances);properties.add("mushroom_sides",mushroomSides);properties.add("pillar_axes",pillarAxes);
+        WorldgenGolden.write(directory.resolve("state_properties.json.gz"),properties);
     }
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
@@ -154,7 +163,7 @@ public final class TreeGolden implements InvocationHandler {
         for(var entry:registries.lookupOrThrow(Registries.FEATURE).listElements().sorted(Comparator.comparing(e->e.key().identifier())).toList()) {
             var feature=entry.value();
             if(!(feature instanceof TreeFeature || feature instanceof FallenTreeFeature || feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature || feature instanceof RootSystemFeature))continue;
-            for(long seed:new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:feature instanceof RootSystemFeature ? List.of("flat","blocked","partial","slope","water","cave") : List.of("flat","blocked","partial","slope","water")) {
+            for(long seed:feature instanceof HugeFungusFeature || feature instanceof AbstractHugeMushroomFeature ? new long[]{0,1,-1,8,8675309} : new long[]{0,1,-1,8675309})for(int[] coordinates:new int[][]{{0,64,0},{-31,80,47}})for(String terrain:feature instanceof RootSystemFeature ? List.of("flat","blocked","partial","slope","water","cave") : List.of("flat","blocked","partial","slope","water")) {
                 var origin=new BlockPos(coordinates[0],coordinates[1],coordinates[2]);
                 var ground=feature instanceof HugeFungusFeature f ? f.validBaseState() : Blocks.GRASS_BLOCK.defaultBlockState();
                 var fixture=new TreeGolden(registries,origin,terrain,ground,generator);

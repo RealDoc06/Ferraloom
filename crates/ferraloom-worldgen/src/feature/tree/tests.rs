@@ -6,7 +6,7 @@ use crate::{
     settings::NoiseGeneratorSettings,
 };
 use ferraloom_data::datapack::{Pack, ResourceManager};
-use ferraloom_util::random::{WorldgenRandom, XoroshiroRandomSource};
+use ferraloom_util::random::{Random, WorldgenRandom, XoroshiroRandomSource};
 use std::{io::Read, path::Path};
 
 // The controlled vanilla registry contains the patch. Its implementation is
@@ -31,8 +31,6 @@ impl WorldgenBlockBehavior for UnsupportedBehavior {
         _r: &WorldGenRegion<'_>,
         _p: Pos,
     ) -> Result<Option<Pos>, Error> {
-        // All non-tree cases compared here place mushroom/fungus blocks. They
-        // never request postprocessing; context-sensitive cases remain pending.
         Err(Error("Unsupported: post_process_pos".into()))
     }
 }
@@ -179,7 +177,7 @@ fn run_cases(require_pending: bool) {
         )
         .unwrap();
         let seed = case["seed"].as_i64().unwrap();
-        let mut random = WorldgenRandom::new(XoroshiroRandomSource::new(seed));
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
         let result = feature.place(&mut FeatureContext {
             region: &mut region,
             random: &mut random,
@@ -197,7 +195,6 @@ fn run_cases(require_pending: bool) {
                             | "Unsupported: populate_worldgen_beehive"
                             | "Unsupported: state_has_sturdy_face"
                             | "Unsupported: destroy_block"
-                            | "Unsupported: post_process_pos"
                             | "Unsupported: configured feature minecraft:pale_moss_patch"
                     ),
                     "unexpected pending behavior {label}: {message}"
@@ -262,7 +259,7 @@ fn supported_controlled_level_cases_match_vanilla() {
     run_cases(false);
 }
 #[test]
-#[ignore = "pending game bridge: update_shape, post_process_pos, state_has_sturdy_face, populate_worldgen_beehive, destroy_block; pale_moss_patch feature"]
+#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive, destroy_block; pale_moss_patch and root-system subfeatures"]
 fn pending_controlled_level_cases_require_game_behavior() {
     run_cases(true);
 }
@@ -330,6 +327,44 @@ fn decorator_position_order_matches_java_hash_sets() {
         assert_eq!(
             serde_json::to_value(positions.iter().collect::<Vec<_>>()).unwrap(),
             case["output"]
+        );
+    }
+}
+
+#[test]
+fn leaf_and_mushroom_property_identity_matches_every_vanilla_state() {
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(include_bytes!("state_properties.json.gz").as_slice())
+        .read_to_string(&mut text)
+        .unwrap();
+    let data: Value = serde_json::from_str(&text).unwrap();
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let loader = FeatureLoader::new(&resources).unwrap();
+    let support = tag(&loader, "prevents_nearby_leaf_decay").unwrap();
+    for (id, distance) in data["leaf_distances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+    {
+        let state = BlockState::from_id(id as u16).unwrap();
+        assert_eq!(
+            serde_json::to_value(optional_leaf_distance(state, &support)).unwrap(),
+            *distance,
+            "leaf distance of state {id}"
+        );
+        for (i, axis) in Axis::VALUES.into_iter().enumerate() {
+            assert_eq!(
+                u64::from(axis_state(state, axis).id()),
+                data["pillar_axes"][id][i].as_u64().unwrap(),
+                "pillar axis of state {id}"
+            );
+        }
+        assert_eq!(
+            plants::has_sides(state),
+            data["mushroom_sides"][id].as_bool().unwrap(),
+            "mushroom faces of state {id}"
         );
     }
 }

@@ -79,6 +79,11 @@ fn relative(p: Pos, d: Direction, n: i32) -> Pos {
     add(p, q.map(|x| x * n))
 }
 fn axis_state(s: BlockState, axis: Axis) -> BlockState {
+    // RotatedPillarBlock.AXIS is the XYZ property. A horizontal-only portal
+    // axis shares its name but is a different vanilla property.
+    if s.with(properties::AXIS, properties::Axis::Y).is_none() {
+        return s;
+    }
     s.with(
         properties::AXIS,
         match axis {
@@ -299,11 +304,7 @@ impl TreeFeature {
                 let q = step(p, dir);
                 if inside(q) && !shape.contains(&q) {
                     let s = c.region.block(q)?;
-                    let d = if self.leaf_support.contains(&s.block()) {
-                        Some(0)
-                    } else {
-                        s.get(properties::DISTANCE).map(i32::from)
-                    };
+                    let d = optional_leaf_distance(s, &self.leaf_support).map(i32::from);
                     if let Some(d) = d {
                         let d = d.min(distance as i32 + 1);
                         if d < 7 {
@@ -389,4 +390,16 @@ fn update_shape_at_edge(
         }
     }
     Ok(())
+}
+
+/// Port of LeavesBlock#getOptionalDistanceAt. The scaffold property has the
+/// same name but a different domain (0..=7), so it is not the leaf property.
+fn optional_leaf_distance(state: BlockState, support: &[Block]) -> Option<u8> {
+    if support.contains(&state.block()) {
+        Some(0)
+    } else if state.with(properties::DISTANCE, 0).is_some() {
+        None
+    } else {
+        state.get(properties::DISTANCE)
+    }
 }

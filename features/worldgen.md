@@ -3032,3 +3032,5 @@ Includes all worldgen type registries, built-in JSON entries and NBT structure t
 | worldgen.float-provider-type.uniform | `minecraft:uniform` (float provider type) | `FloatProviders; UniformFloat` | `features_parity::all_provider_types_match_vanilla_samples_and_random_consumption` | pass | pass |
 | worldgen.float-provider-type.clamped-normal | `minecraft:clamped_normal` (float provider type) | `FloatProviders; ClampedNormalFloat` | `features_parity::all_provider_types_match_vanilla_samples_and_random_consumption` | pass | pass |
 | worldgen.float-provider-type.trapezoid | `minecraft:trapezoid` (float provider type) | `FloatProviders; TrapezoidFloat` | `features_parity::all_provider_types_match_vanilla_samples_and_random_consumption` | pass | pass |
+
+| worldgen.tree.property-identity | Leaf distance, mushroom faces and pillar axes retain vanilla property domains for every state | `LeavesBlock#getOptionalDistanceAt`; `HugeMushroomBlock`; `RotatedPillarBlock` | `feature::tree::tests::leaf_and_mushroom_property_identity_matches_every_vanilla_state` | pass | partial |

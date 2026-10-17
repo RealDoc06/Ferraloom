@@ -119,11 +119,13 @@ impl Feature for HugeMushroom {
         Ok(true)
     }
 }
-fn has_sides(s: BlockState) -> bool {
-    s.get(properties::WEST).is_some()
-        && s.get(properties::EAST).is_some()
-        && s.get(properties::NORTH).is_some()
-        && s.get(properties::SOUTH).is_some()
+pub(super) fn has_sides(s: BlockState) -> bool {
+    // Global property tokens share a name across domains. Walls and redstone
+    // also have these names, but lack the mushroom BooleanProperty domain.
+    s.with(properties::WEST, properties::West::True).is_some()
+        && s.with(properties::EAST, properties::East::True).is_some()
+        && s.with(properties::NORTH, properties::North::True).is_some()
+        && s.with(properties::SOUTH, properties::South::True).is_some()
 }
 fn sides(s: BlockState, w: bool, e: bool, n: bool, so: bool) -> BlockState {
     s.with(
