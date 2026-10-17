@@ -51,6 +51,10 @@ fn tick(x: i32, trigger: i64, order: i64) -> ScheduledTick<&'static Block> {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One real NBT save and unpack scenario preserves signed delays, duplicates and its before/after snapshot."
+)]
 async fn saved_pending_real_chunk_nbt_keeps_signed_delays_duplicates_and_one_unpack() {
     let (_folder, level) = fixture().await;
     level.set_tick_game_time(9_000_000);
@@ -359,6 +363,10 @@ async fn fluid_only_index_survives_block_drain_and_fluid_budget_uses_absolute_ti
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One actual copy scenario observes history, pending and queued ticks with current replacement ownership."
+)]
 async fn copy_partitions_history_and_queues_before_dedup_and_inserts_only_current_owner() {
     let (_source_folder, source) = fixture().await;
     let (_target_folder, target) = fixture().await;
@@ -377,13 +385,12 @@ async fn copy_partitions_history_and_queues_before_dedup_and_inserts_only_curren
     );
     assert!(target.schedule_block_tick_absolute(tick(32, 777, -800)));
     let mut replacement = ChunkData::empty(2, 0);
-    replacement.block_ticks = [SavedTick {
+    replacement.block_ticks = std::iter::once(SavedTick {
         position: BlockPos::new(32, 64, 0),
         value: &Block::STONE,
         delay: 1,
         priority: TickPriority::Low,
-    }]
-    .into_iter()
+    })
     .collect();
     replacement
         .post_processing_ready

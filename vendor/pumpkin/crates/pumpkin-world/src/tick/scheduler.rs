@@ -386,7 +386,7 @@ mod tests {
             let mut queue = scheduler.lock();
             assert!(queue.unpack(100));
             assert_eq!(queue.poll().unwrap().trigger_tick, 100);
-        }
+        };
         assert!(!scheduler.is_scheduled(BlockPos::new(1, 64, 0), &Block::STONE));
         assert_eq!(scheduler.get_all().len(), 1);
         assert!(scheduler.lock().pack_for_retirement(105));
