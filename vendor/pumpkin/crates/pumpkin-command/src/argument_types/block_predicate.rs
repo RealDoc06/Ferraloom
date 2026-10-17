@@ -159,6 +159,13 @@ fn matches_nbt(pattern: &NbtTag, target: &NbtTag) -> bool {
                     .iter()
                     .all(|expected| target.iter().any(|actual| matches_nbt(expected, actual)))
         }
+        // FloatTag/DoubleTag record equality equates all NaNs but distinguishes signed zero.
+        (NbtTag::Float(pattern), NbtTag::Float(target)) => {
+            pattern.to_bits() == target.to_bits() || (pattern.is_nan() && target.is_nan())
+        }
+        (NbtTag::Double(pattern), NbtTag::Double(target)) => {
+            pattern.to_bits() == target.to_bits() || (pattern.is_nan() && target.is_nan())
+        }
         // Scalar types and ordered arrays retain their exact typed equality.
         _ => pattern == target,
     }
@@ -594,6 +601,83 @@ mod tests {
             "#features_cannot_replace[facing=east]",
         ] {
             assert!(predicate(value).ensure_supported_nbt().is_ok());
+        }
+    }
+
+    #[test]
+    fn parsed_float_and_double_predicates_distinguish_signed_zero_and_width() {
+        let source = state("chest");
+        let values = ["0.0f", "-0.0f", "0.0d", "-0.0d"];
+        for (pattern_index, pattern_value) in values.iter().enumerate() {
+            let parsed = predicate(&format!("chest{{value:{pattern_value}}}"));
+            for (target_index, target_value) in values.iter().enumerate() {
+                let actual = chest_nbt(&format!("value:{target_value}"));
+                assert_eq!(
+                    parsed.test_state_with_nbt(source, Some(&actual)),
+                    pattern_index == target_index,
+                    "pattern {pattern_value}, target {target_value}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn typed_nonfinite_fixtures_use_record_equality_in_nested_compounds_and_lists() {
+        use NbtTag::{Double, Float};
+
+        let source = state("chest");
+        // Typed fixtures for the normative record contract, not runtime goldens or SNBT input.
+        let float_nan = f32::from_bits(0x7fc0_0001);
+        let double_nan = f64::from_bits(0x7ff8_0000_0000_0001);
+        for (pattern, target, expected) in [
+            (Float(float_nan), Float(float_nan), true),
+            (Float(float_nan), Float(f32::from_bits(0x7fc0_0042)), true),
+            (Float(float_nan), Float(f32::from_bits(0xffc0_0042)), true),
+            (Float(f32::INFINITY), Float(f32::INFINITY), true),
+            (Float(f32::NEG_INFINITY), Float(f32::NEG_INFINITY), true),
+            (Float(f32::INFINITY), Float(f32::NEG_INFINITY), false),
+            (Float(f32::NEG_INFINITY), Float(f32::INFINITY), false),
+            (Float(float_nan), Float(1.0), false),
+            (Float(1.0), Float(float_nan), false),
+            (Double(double_nan), Double(double_nan), true),
+            (
+                Double(double_nan),
+                Double(f64::from_bits(0x7ff8_0000_0000_0042)),
+                true,
+            ),
+            (
+                Double(double_nan),
+                Double(f64::from_bits(0xfff8_0000_0000_0042)),
+                true,
+            ),
+            (Double(f64::INFINITY), Double(f64::INFINITY), true),
+            (Double(f64::NEG_INFINITY), Double(f64::NEG_INFINITY), true),
+            (Double(f64::INFINITY), Double(f64::NEG_INFINITY), false),
+            (Double(f64::NEG_INFINITY), Double(f64::INFINITY), false),
+            (Double(double_nan), Double(1.0), false),
+            (Double(1.0), Double(double_nan), false),
+            (Float(float_nan), Double(double_nan), false),
+            (Double(double_nan), Float(float_nan), false),
+            (Float(f32::INFINITY), Double(f64::INFINITY), false),
+            (Double(f64::INFINITY), Float(f32::INFINITY), false),
+        ] {
+            let mut pattern_entry = NbtCompound::new();
+            pattern_entry.put("value", pattern);
+            let mut pattern_nbt = NbtCompound::new();
+            pattern_nbt.put_list("values", vec![NbtTag::Compound(pattern_entry)]);
+            let mut parsed = predicate("chest{}");
+            let (BlockPredicate::Block { nbt, .. } | BlockPredicate::Tag { nbt, .. }) = &mut parsed;
+            *nbt = Some(pattern_nbt);
+
+            let mut target_entry = NbtCompound::new();
+            target_entry.put("value", target);
+            let mut actual = chest_nbt("");
+            actual.put_list("values", vec![NbtTag::Compound(target_entry)]);
+            assert_eq!(
+                parsed.test_state_with_nbt(source, Some(&actual)),
+                expected,
+                "pattern {parsed:?}, target {actual:?}"
+            );
         }
     }
 }
