@@ -1575,7 +1575,7 @@ mod player_data_tests {
 
     #[tokio::test]
     async fn returning_spawn_refusal_closes_packet_progress_and_runs_existing_session_cleanup() {
-        let fixture = crate::data::player_server::test::player_fixture().await;
+        let mut fixture = crate::data::player_server::test::player_fixture().await;
         let world = fixture.player.world();
         let java = fixture.client.java().unwrap();
         java.set_player(&fixture.player);
@@ -1622,6 +1622,11 @@ mod player_data_tests {
             java.is_closed(),
             "a refused ready-chunk wait must close the connected session"
         );
+        // Acknowledge the server's close with the peer's write-half FIN. Keep
+        // its read half alive while the real writer finishes the disconnect.
+        tokio::io::AsyncWriteExt::shutdown(&mut fixture.remote)
+            .await
+            .unwrap();
         tokio::time::timeout(
             Duration::from_secs(1),
             java.progress_player_packets(&fixture.player, &fixture.server),
