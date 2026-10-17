@@ -30,9 +30,6 @@ pub(crate) trait Phase: Send + Sync {
     /// Callback-free resets only, under the current-phase publication guard.
     /// Never acquire the phase guard from a reset-state guard in tick().
     fn reset_on_entry(&self, _dragon: &EnderDragonEntity) {}
-    fn is_sitting(&self) -> bool {
-        self.get_type().is_sitting()
-    }
     fn on_hurt(&self, direct: Option<&dyn crate::entity::EntityBase>, amount: f32) -> f32 {
         use crate::entity::projectile::{
             arrow::ArrowEntity, trident::TridentEntity, wind_charge::WindChargeEntity,
