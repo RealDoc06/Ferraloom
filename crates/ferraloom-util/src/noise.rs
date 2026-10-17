@@ -79,11 +79,60 @@ fn lerp_corners(x: f32, y: f32, z: f32, d: [f32; 8]) -> f32 {
     mth::lerp3_f32(x, y, z, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7])
 }
 
-/// Port of the scalar Noise interface. Range bounds are inclusive floats.
+/// Coordinate layout used by Noise#addToVolume: Y contiguous, then X, then Z.
+/// Port of the coordinate-only part of DensityVolume.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct NoiseVolume {
+    pub size: [usize; 3],
+    pub min: [i32; 3],
+    pub step: [i32; 3],
+}
+impl NoiseVolume {
+    pub fn len(self) -> usize {
+        self.size.iter().product()
+    }
+    pub fn is_empty(self) -> bool {
+        self.size.contains(&0)
+    }
+    pub fn index(self, x: usize, y: usize, z: usize) -> usize {
+        (z * self.size[0] + x) * self.size[1] + y
+    }
+    pub fn position(self, index: usize) -> [i32; 3] {
+        let coords = [
+            index / self.size[1] % self.size[0],
+            index % self.size[1],
+            index / (self.size[0] * self.size[1]),
+        ];
+        std::array::from_fn(|i| {
+            self.min[i].wrapping_add((coords[i] as i32).wrapping_mul(self.step[i]))
+        })
+    }
+}
+
+/// Port of the Noise interface. Range bounds are inclusive floats.
 pub trait Noise {
     fn get_2d(&self, x: f64, y: f64) -> f32;
     fn get(&self, x: f64, y: f64, z: f64) -> f32;
     fn range(&self) -> [f32; 2];
+    fn add_to_volume(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+    ) {
+        assert_eq!(buffer.len(), volume.len());
+        for (index, value) in buffer.iter_mut().enumerate() {
+            let [x, y, z] = volume.position(index);
+            *value += amplitude
+                * self.get(
+                    f64::from(x) * xz_scale,
+                    f64::from(y) * y_scale,
+                    f64::from(z) * xz_scale,
+                );
+        }
+    }
 }
 /// Port of PerlinNoise, the single-octave primitive in 26.3.
 #[derive(Clone, Debug)]
@@ -141,6 +190,61 @@ impl PerlinNoise {
         });
         (gradients, values)
     }
+    fn sample_fudged(&self, x: f64, y: f64, z: f64, fudge: Option<f64>, volume: bool) -> f32 {
+        let (cell, [xr, _, zr]) = self.coordinates(x, y, z);
+        let absolute_y = GradientNoise::wrap(y) + self.gradient.offset_y;
+        let relative_y = absolute_y - f64::from(cell[1]);
+        let original_y = relative_y as f32;
+        let yr = if let Some(scale) = fudge {
+            let limit = if y >= 0.0 && y < relative_y {
+                y
+            } else {
+                relative_y
+            };
+            (relative_y - f64::from(mth::floor(limit / scale + 1.0000000116860974E-7)) * scale)
+                as f32
+        } else {
+            original_y
+        };
+        let (gradients, scalar) = self.corners(cell, [xr, yr, zr]);
+        let values = if volume {
+            std::array::from_fn(|i| {
+                let g = gradients[i];
+                (g[0] as f32 * (xr - (i & 1) as f32) + g[2] as f32 * (zr - ((i >> 2) & 1) as f32))
+                    + g[1] as f32 * (yr - ((i >> 1) & 1) as f32)
+            })
+        } else {
+            scalar
+        };
+        lerp_corners(
+            mth::smoothstep_f32(xr),
+            mth::smoothstep_f32(original_y),
+            mth::smoothstep_f32(zr),
+            values,
+        )
+    }
+    fn add_volume_fudged(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+        fudge: Option<f64>,
+    ) {
+        assert_eq!(buffer.len(), volume.len());
+        for (index, value) in buffer.iter_mut().enumerate() {
+            let [x, y, z] = volume.position(index);
+            *value += amplitude
+                * self.sample_fudged(
+                    f64::from(x) * xz_scale,
+                    f64::from(y) * y_scale,
+                    f64::from(z) * xz_scale,
+                    fudge,
+                    true,
+                );
+        }
+    }
     /// Port of PerlinNoise#noiseWithDerivative. Adds to the caller's derivative.
     pub fn noise_with_derivative(&self, x: f64, y: f64, z: f64, derivative: &mut [f32; 3]) -> f32 {
         let (cell, [xr, yr, zr]) = self.coordinates(x, y, z);
@@ -160,6 +264,16 @@ impl PerlinNoise {
     }
 }
 impl Noise for PerlinNoise {
+    fn add_to_volume(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+    ) {
+        self.add_volume_fudged(buffer, volume, xz_scale, y_scale, amplitude, None);
+    }
     #[inline]
     fn get_2d(&self, x: f64, y: f64) -> f32 {
         self.get(GradientNoise::wrap(x), 0.0, GradientNoise::wrap(y))
@@ -179,6 +293,51 @@ impl Noise for PerlinNoise {
         [-2.0, 2.0]
     }
 }
+/// Port of SmearedPerlinNoise, used exclusively by old_blended_noise.
+#[derive(Clone, Debug)]
+pub struct SmearedPerlinNoise {
+    perlin: PerlinNoise,
+    fudge_y_scale: f64,
+}
+impl SmearedPerlinNoise {
+    pub fn new(random: &mut impl RandomSource, fudge_y_scale: f64) -> Self {
+        Self {
+            perlin: PerlinNoise::new(random),
+            fudge_y_scale,
+        }
+    }
+}
+impl Noise for SmearedPerlinNoise {
+    fn get(&self, x: f64, y: f64, z: f64) -> f32 {
+        self.perlin
+            .sample_fudged(x, y, z, Some(self.fudge_y_scale), false)
+    }
+    fn get_2d(&self, x: f64, y: f64) -> f32 {
+        self.get(GradientNoise::wrap(x), 0.0, GradientNoise::wrap(y))
+    }
+    fn range(&self) -> [f32; 2] {
+        let max = (self.fudge_y_scale.abs() + 2.0) as f32;
+        [-max, max]
+    }
+    fn add_to_volume(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+    ) {
+        self.perlin.add_volume_fudged(
+            buffer,
+            volume,
+            xz_scale,
+            y_scale,
+            amplitude,
+            Some(self.fudge_y_scale),
+        );
+    }
+}
+
 /// Port of SimplexNoise. Unlike old versions, get() includes the random offsets.
 #[derive(Clone, Debug)]
 pub struct SimplexNoise {
@@ -294,10 +453,16 @@ impl Noise for SimplexNoise {
 pub enum NoiseSampler {
     Perlin(PerlinNoise),
     Simplex(SimplexNoise),
+    SmearedPerlin(SmearedPerlinNoise),
 }
 impl From<PerlinNoise> for NoiseSampler {
     fn from(n: PerlinNoise) -> Self {
         Self::Perlin(n)
+    }
+}
+impl From<SmearedPerlinNoise> for NoiseSampler {
+    fn from(n: SmearedPerlinNoise) -> Self {
+        Self::SmearedPerlin(n)
     }
 }
 impl From<SimplexNoise> for NoiseSampler {
@@ -306,11 +471,26 @@ impl From<SimplexNoise> for NoiseSampler {
     }
 }
 impl Noise for NoiseSampler {
+    fn add_to_volume(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+    ) {
+        match self {
+            Self::Perlin(n) => n.add_to_volume(buffer, volume, xz_scale, y_scale, amplitude),
+            Self::Simplex(n) => n.add_to_volume(buffer, volume, xz_scale, y_scale, amplitude),
+            Self::SmearedPerlin(n) => n.add_to_volume(buffer, volume, xz_scale, y_scale, amplitude),
+        }
+    }
     #[inline]
     fn get(&self, x: f64, y: f64, z: f64) -> f32 {
         match self {
             Self::Perlin(n) => n.get(x, y, z),
             Self::Simplex(n) => n.get(x, y, z),
+            Self::SmearedPerlin(n) => n.get(x, y, z),
         }
     }
     #[inline]
@@ -318,10 +498,15 @@ impl Noise for NoiseSampler {
         match self {
             Self::Perlin(n) => n.get_2d(x, y),
             Self::Simplex(n) => n.get_2d(x, y),
+            Self::SmearedPerlin(n) => n.get_2d(x, y),
         }
     }
     fn range(&self) -> [f32; 2] {
-        [-2.0, 2.0]
+        match self {
+            Self::Perlin(n) => n.range(),
+            Self::Simplex(n) => n.range(),
+            Self::SmearedPerlin(n) => n.range(),
+        }
     }
 }
 #[derive(Clone, Debug)]
@@ -366,6 +551,24 @@ impl NoiseStack {
     }
 }
 impl Noise for NoiseStack {
+    fn add_to_volume(
+        &self,
+        buffer: &mut [f32],
+        volume: NoiseVolume,
+        xz_scale: f64,
+        y_scale: f64,
+        amplitude: f32,
+    ) {
+        for layer in &self.layers {
+            layer.noise.add_to_volume(
+                buffer,
+                volume,
+                xz_scale * layer.frequency,
+                y_scale * layer.frequency,
+                amplitude * layer.amplitude,
+            );
+        }
+    }
     #[inline]
     fn get(&self, x: f64, y: f64, z: f64) -> f32 {
         let mut value = 0.0;
