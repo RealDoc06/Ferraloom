@@ -81,7 +81,8 @@ def target_health(identity, actual):
     return {**actual, 'full_read': field_read(identity, 'Health', actual)}
 
 
-def attack(*, negative=False, victim=None, health=None, observations=None, offset=1, lethal=False):
+def attack(*, negative=False, victim=None, health=None, observations=None, offset=1, lethal=False,
+           after_health=199.8, counter=0, after_counter=0.1999969482421875):
     victim = subject() if victim is None else victim
     identity = victim['uuid']
     health = ({identity: victim['initial']['Health'], subject('phase_0')['uuid']: typed('Float', 200)}
@@ -92,7 +93,7 @@ def attack(*, negative=False, victim=None, health=None, observations=None, offse
     response = envelope(b'\x03\x00', packet_id=3, sequence=200, payload_bytes=2, decoded_bytes=2)
     before = {key: target_health(key, actual) if key == identity else non_target(key, actual) for key, actual in health.items()}
     after = deepcopy(before)
-    after[identity] = target_health(identity, typed('Float', health[identity]['value'] if negative else 0 if lethal else 199.8))
+    after[identity] = target_health(identity, typed('Float', health[identity]['value'] if negative else 0 if lethal else after_health))
     return {'subject': deepcopy(victim), 'target_id': target, 'request': request, 'allocation_assumption': 'synthetic fresh allocator premise',
         'fence': {'request': {'packet_id': 12, 'action_id': 1, 'written': True, 'after_sequence': 101},
                   'response': response, 'observations': deepcopy(observations if observations is not None else [victim['spawn']])},
@@ -101,6 +102,10 @@ def attack(*, negative=False, victim=None, health=None, observations=None, offse
                  {**response, 'direction': 'clientbound', 'pid': 7}],
         't0': 100, 'gametime_before': 100, 'gametime_after': 100, 'frozen_after': True,
         'before': before, 'after': after, 'retained_health': deepcopy(health),
+        'retained_sitting': typed('Float', counter),
+        'sitting_before': field_read(identity, 'sitting_damage_received', typed('Float', counter)),
+        'sitting_after': field_read(identity, 'sitting_damage_received', typed('Float',
+            counter if negative else health[identity]['value'] if lethal else after_counter)),
         'inventory': {'slots': [None] * 46},
         'player': {'predicate': f'if entity @a[name={dragon.NAME},nbt={{playerGameType:0,Pos:[0.0d,0.0d,2.0d]}}]'},
         'player_position': position(str(dragon.PLAYER_ID), (0.0, 0.0, 2.0)),
@@ -151,6 +156,7 @@ def campaign():
     for index, role in enumerate(dragon.BOOTS):
         subjects = [subject(name, 100 + offset * 10, 10 + offset) for offset, name in enumerate(dragon.boot_cases(role))]
         health = {victim['uuid']: deepcopy(victim['initial']['Health']) for victim in subjects}
+        sitting = {victim['uuid']: deepcopy(victim['initial']['sitting_damage_received']) for victim in subjects}
         observations = [victim['spawn'] for victim in subjects]
         cases = {}
         for victim in subjects:
@@ -166,6 +172,7 @@ def campaign():
                 case['attacks'].append(attack(victim=victim, health=cohort, observations=cohort_observations,
                                              offset=dragon.PARTS.index(name[5:]) + 1 if name.startswith('part_') else 1))
                 health[victim['uuid']] = {key: case['attacks'][-1]['after'][victim['uuid']][key] for key in ('nbt_type', 'value', 'literal')}
+                sitting[victim['uuid']] = deepcopy(case['attacks'][-1]['sitting_after']['actual'])
         if role.endswith('_death1'):
             observations = deepcopy(cases['death_200']['steps'][-1]['observations'])
         engine = 'vanilla' if role.startswith('java_') else 'rust'
@@ -183,7 +190,7 @@ def campaign():
             boot['after_client_close_gametime'] = 100
             boot['final_sweep'] = {}
             for victim in subjects:
-                facts = {**victim['initial'], 'Health': health[victim['uuid']]}
+                facts = {**victim['initial'], 'Health': health[victim['uuid']], 'sitting_damage_received': sitting[victim['uuid']]}
                 reads = {field: field_read(victim['uuid'], field, actual) for field, actual in facts.items()}
                 boot['final_sweep'][victim['uuid']] = {**resident(victim), 'facts': facts,
                                                        'health_read': reads['Health'], 'reads_by_field': reads}
@@ -302,6 +309,166 @@ class DragonValidatorTests(unittest.TestCase):
             dragon.validate_evidence(case)
         case['attacks'].append(attack())
         dragon.validate_evidence(case)
+
+    def test_source_derived_hover_counter_accepts_committed_one_and_one_quarter(self):
+        # Synthetic source-derived controls, not B/D or E runtime acceptance.
+        # Java phase10 isSitting; parent bci134 fadd then bci139 fsub.
+        for remaining, counter in ((199, 1), (198.75, 1.25)):
+            evidence = attack(after_health=remaining, after_counter=counter)
+            dragon.validate_attack(evidence, offset=1)
+            self.assertEqual(evidence['sitting_after']['actual'], typed('Float', counter))
+            literal = str(counter) + 'f'
+            actual = {**typed('Float', counter), 'literal': literal}
+            evidence['sitting_after'] = field_read(evidence['subject']['uuid'], 'sitting_damage_received', actual)
+            dragon.validate_attack(evidence, offset=1)
+            self.assertEqual(evidence['sitting_after']['actual']['literal'], literal)
+        victim = subject()
+        evidence = attack(victim=victim, health={victim['uuid']: typed('Float', 199)}, counter=1,
+                          after_health=198.75, after_counter=1.25)
+        dragon.validate_attack(evidence, offset=1)
+        self.assertEqual(evidence['retained_sitting'], typed('Float', 1))
+        self.assertEqual(evidence['sitting_after']['actual'], typed('Float', 1.25))
+
+    def test_source_derived_counter_arithmetic_rounds_fadd_before_fsub(self):
+        # Isolated arithmetic control, not a claimed reachable campaign baseline.
+        # f32(0.1) + 200 rounds to 200.100006103515625 before subtracting 199.
+        actual = dragon.sitting_counter_after(0.10000000149011612, 200.0, 199.0)
+        self.assertEqual(actual, 1.100006103515625)
+        self.assertNotEqual(actual, 1.100000023841858)  # f32(counter + committed_loss) groups the operations wrongly.
+
+    def test_sitting_counter_requires_committed_loss_and_raw_typed_target_witnesses(self):
+        good = attack(after_health=199, after_counter=1)
+        for defect in ('wrong', 'reset', 'uncommitted', 'negative', 'threshold_reset', 'wrong_type', 'bool_value',
+                       'int_value', 'string_value', 'nan', 'literal', 'missing_before', 'missing_after', 'missing_output',
+                       'ambiguous_output', 'raw_type', 'overflow', 'uuid', 'field', 'command', 'predicate', 'retained'):
+            broken = deepcopy(good)
+            read = broken['sitting_after']
+            if defect in ('wrong', 'reset', 'negative'):
+                value = {'wrong': 1.25, 'reset': 0, 'negative': -1}[defect]
+                broken['sitting_after'] = field_read(broken['subject']['uuid'], 'sitting_damage_received', typed('Float', value))
+            elif defect == 'uncommitted':
+                broken['after'] = deepcopy(broken['before'])
+            elif defect == 'threshold_reset':
+                broken = attack(after_health=149, after_counter=0)
+            elif defect == 'wrong_type':
+                read['actual'] = typed('Double', 1)
+            elif defect in ('bool_value', 'int_value', 'string_value', 'nan'):
+                read['actual']['value'] = {'bool_value': True, 'int_value': 1, 'string_value': '1.0', 'nan': float('nan')}[defect]
+            elif defect == 'literal':
+                read['actual']['literal'] = '1.25f'
+            elif defect in ('missing_before', 'missing_after'):
+                broken.pop('sitting_before' if defect == 'missing_before' else 'sitting_after')
+            elif defect == 'missing_output':
+                read.pop('output')
+            elif defect == 'ambiguous_output':
+                read['output'] *= 2
+            elif defect in ('raw_type', 'overflow'):
+                read['output'] = ['Dragon has the following entity data: ' + ('1.0d' if defect == 'raw_type' else '1e40f')]
+            elif defect == 'uuid':
+                read['uuid'] = subject('phase_0')['uuid']
+            elif defect == 'field':
+                read['field'] = 'Health'
+            elif defect == 'command':
+                read['command'] = f'data get entity {subject("phase_0")["uuid"]} sitting_damage_received'
+            elif defect == 'predicate':
+                read['typed_predicate']['predicate'] = f'if data entity {broken["subject"]["uuid"]} {{sitting_damage_received:0.0f}}'
+            else:
+                broken['retained_sitting'] = typed('Float', 1)
+            with self.subTest(defect=defect), self.assertRaises(AssertionError):
+                dragon.validate_attack(broken, offset=1)
+
+    def test_unknown_id_counter_and_boot_counter_lineage_cannot_be_rebased(self):
+        for actual in (typed('Float', 1), {'nbt_type': 'Float', 'value': 0.0, 'literal': '0f'}):
+            negative = attack(negative=True)
+            identity = negative['subject']['uuid']
+            negative['sitting_after'] = field_read(identity, 'sitting_damage_received', actual)
+            with self.subTest(actual=actual), self.assertRaisesRegex(AssertionError, 'Unknown-ID attack changed sitting counter'):
+                dragon.validate_attack(negative, offset=None)
+        report = campaign()
+        boot = report['boots']['java_frozen24']
+        hit = boot['cases']['part_neck']['attacks'][0]
+        identity = hit['subject']['uuid']
+        hit['retained_sitting'] = typed('Float', 1)
+        hit['sitting_before'] = field_read(identity, 'sitting_damage_received', typed('Float', 1))
+        hit['sitting_after'] = field_read(identity, 'sitting_damage_received', typed('Float', 1.1999969482421875))
+        dragon.validate_attack(hit, offset=2)  # Arithmetic alone cannot establish the retained baseline.
+        with self.assertRaisesRegex(AssertionError, 'last full-read literal'):
+            dragon.validate_boot(boot, 'java_frozen24')
+        self.assertTrue(all(row['result'] == 'failed' for row in dragon.campaign_rows(report)))
+
+    def test_final_sweep_requires_last_verified_counter_literal_and_untouched_state(self):
+        for defect in ('reset', 'wrong_last', 'same_value_new_literal', 'untouched_state'):
+            boot = campaign()['boots']['java_frozen24']
+            victim = boot['cases']['default_hover' if defect == 'untouched_state' else 'part_head']['subject']
+            sweep = boot['final_sweep'][victim['uuid']]
+            actual = typed('Float', 0 if defect == 'reset' else 1)
+            if defect == 'same_value_new_literal':
+                actual = {**sweep['facts']['sitting_damage_received'], 'literal': '0.1999969482421875F'}
+            sweep['facts']['sitting_damage_received'] = actual
+            sweep['reads_by_field']['sitting_damage_received'] = field_read(victim['uuid'], 'sitting_damage_received', actual)
+            with self.subTest(defect=defect), self.assertRaisesRegex(AssertionError, 'Final facts differ'):
+                dragon.validate_boot(boot, 'java_frozen24')
+
+        victim = subject('part_head')
+        probe = dragon.Probe(Mock(), Mock(), {'setup': {}, 'role': 'java_frozen24', 't0': 100})
+        probe.subjects = [victim]
+        probe.health = {victim['uuid']: typed('Float', 199)}
+        probe.sitting = {victim['uuid']: typed('Float', 1)}
+        facts = {**victim['initial'], 'Health': typed('Float', 199), 'sitting_damage_received': typed('Float', 1)}
+        probe.last_reads = {(victim['uuid'], field): field_read(victim['uuid'], field, actual) for field, actual in facts.items()}
+        with patch.object(probe, 'retain'), patch.object(probe, 'resident', return_value=resident(victim)), \
+                patch.object(probe, 'facts', return_value=facts), patch.object(probe, 'frozen_time', return_value=100), \
+                patch.object(probe, 'observations', return_value=[victim['spawn']]), patch.object(dragon, 'interaction_deadline'):
+            probe.final_sweep()
+            self.assertEqual(probe.entry['final_sweep'][victim['uuid']]['facts']['sitting_damage_received'], typed('Float', 1))
+            facts['sitting_damage_received'] = typed('Float', 0)
+            with self.assertRaisesRegex(AssertionError, 'Final fact mismatch'):
+                probe.final_sweep()
+            self.assertEqual(probe.sitting[victim['uuid']], typed('Float', 1))
+
+    def test_probe_reads_counters_around_actual_attack_and_commits_only_verified_literals(self):
+        for actual_counter in (1, 0):
+            witness = attack(after_health=199, after_counter=actual_counter)
+            victim, identity = witness['subject'], witness['subject']['uuid']
+            probe = dragon.Probe(Mock(), Mock(), {'setup': {}, 'role': 'java_frozen24', 't0': 100})
+            probe.subjects = [victim]
+            probe.health = {key: deepcopy(value) for key, value in witness['retained_health'].items()}
+            probe.sitting = {identity: typed('Float', 0)}
+            probe.client.events = []
+            probe.client.state.return_value = {'player_inventory': {'slots': [None] * 46}, 'phase': 'play', 'login': True, 'packets': 201}
+            order = []
+            def read_counter(command):
+                order.append('counter')
+                value = '0.0f' if order.count('counter') == 1 else str(actual_counter) + '.0f'
+                return ['Dragon has the following entity data: ' + value]
+            def send_attack(*args, **kwargs):
+                order.append('attack')
+                probe.client.events.extend({**packet, 'event': 'wire_packet'} for packet in witness['wire'])
+                return witness['request']
+            def fence():
+                order.append('fence')
+                return witness['fence']
+            probe.server.command.side_effect = read_counter
+            probe.client.request.side_effect = send_attack
+            probe.client.dragon_fence.side_effect = fence
+            with patch.object(probe, 'retain'), patch.object(probe, 'frozen_time', return_value=100), \
+                    patch.object(probe, 'health_map', side_effect=[witness['before'], witness['after']]), \
+                    patch.object(probe, 'position', return_value=position(str(dragon.PLAYER_ID), (0.0, 0.0, 2.0))), \
+                    patch.object(dragon, 'typed_predicate', side_effect=lambda server, text: {'predicate': text}):
+                if actual_counter == 1:
+                    evidence = probe.attack(victim, 101, offset=1)
+                    self.assertEqual(probe.sitting[identity], typed('Float', 1))
+                    self.assertEqual(probe.health[identity], typed('Float', 199))
+                    self.assertEqual(evidence['sitting_after']['output'], ['Dragon has the following entity data: 1.0f'])
+                else:
+                    with self.assertRaisesRegex(AssertionError, 'committed health loss'):
+                        probe.attack(victim, 101, offset=1)
+                    self.assertEqual(probe.sitting[identity], typed('Float', 0))
+                    self.assertEqual(probe.health[identity], typed('Float', 200))
+                    self.assertEqual(probe.case['attacks'][0]['sitting_after']['actual'], typed('Float', 0))
+            self.assertEqual(order, ['counter', 'attack', 'fence', 'counter'])
+            self.assertEqual([call.args[0] for call in probe.server.command.call_args_list],
+                             [f'data get entity {identity} sitting_damage_received'] * 2)
 
     def test_header_only_identity_and_complete_removals_reject_part_entities_or_changed_raw(self):
         victim = subject()

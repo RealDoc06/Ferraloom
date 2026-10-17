@@ -160,8 +160,11 @@ def parse_numeric(output: list[str], kind: str) -> dict:
     pattern = (r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?' + ('[fF]' if kind == 'Float' else '[dD]')
                if kind in ('Float', 'Double') else r'-?\d+')
     require(kind in ('Float', 'Int', 'Double') and re.fullmatch(pattern, literal), {'wrong_typed_numeric_read': literal, 'expected': kind})
-    value = (struct.unpack('>f', struct.pack('>f', float(literal[:-1])))[0] if kind == 'Float'
-             else float(literal[:-1]) if kind == 'Double' else int(literal))
+    try:
+        value = (struct.unpack('>f', struct.pack('>f', float(literal[:-1])))[0] if kind == 'Float'
+                 else float(literal[:-1]) if kind == 'Double' else int(literal))
+    except (OverflowError, ValueError):
+        raise AssertionError('Unrepresentable authoritative numeric value') from None
     require(math.isfinite(value), 'Nonfinite authoritative value')
     return {'nbt_type': kind, 'value': value, 'literal': literal}
 
@@ -212,6 +215,9 @@ def validate_position(evidence: dict, identity: str, expected: tuple[float, floa
 
 
 def validate_number(actual: dict, kind: str) -> None:
+    require(type(actual) is dict and set(actual) == {'nbt_type', 'value', 'literal'}
+            and actual['nbt_type'] == kind and type(actual['literal']) is str
+            and type(actual['value']) is (int if kind == 'Int' else float), 'Invalid typed numeric fields')
     require(actual == parse_numeric(['Dragon has the following entity data: ' + actual['literal']], kind),
             'Changed typed numeric literal/value')
 
@@ -231,6 +237,25 @@ def validate_health_read(row: dict, identity: str) -> None:
             'Missing actual typed/scaled target health')
 
 
+def validate_sitting_read(read: dict, identity: str) -> None:
+    require(type(read) is dict and {'uuid', 'field', 'command', 'actual', 'output', 'typed_predicate'} <= read.keys(),
+            'Missing authoritative sitting-counter witness')
+    actual = read['actual']
+    validate_number(actual, 'Float')
+    field = 'sitting_damage_received'
+    require(read['uuid'] == identity and read['field'] == field
+            and read['command'] == f'data get entity {identity} {field}'
+            and actual == parse_numeric(read['output'], 'Float')
+            and read['typed_predicate']['predicate'] == f'if data entity {identity} {{{field}:{actual["literal"]}}}',
+            'Missing actual typed target sitting counter')
+
+
+def sitting_counter_after(counter: float, health_before: float, health_after: float) -> float:
+    """Java Float operands: DragonMultipart.javap.txt:1817-1853, bci134 fadd then bci139 fsub."""
+    added = struct.unpack('>f', struct.pack('>f', counter + health_before))[0]
+    return struct.unpack('>f', struct.pack('>f', added - health_after))[0]
+
+
 def validate_resident(witness: dict, subject: dict, t0: int) -> None:
     require(witness['uuid'] == subject['uuid'] and witness['t0'] == t0
             and witness['gametime_before'] == witness['gametime_after'] == t0
@@ -246,6 +271,8 @@ def validate_attack(attack: dict, *, offset: int | None, lethal: bool = False) -
             and initial['DragonDeathTime']['nbt_type'] == 'Int' and initial['DragonDeathTime']['value'] == 0
             and initial['Health']['nbt_type'] == 'Float' and (0 < initial['Health']['value'] < 0.1 if lethal else initial['Health']['value'] == 200),
             'Attack needs an actually observed fresh hovered victim')
+    validate_number(initial['sitting_damage_received'], 'Float')
+    require(initial['sitting_damage_received']['value'] == 0, 'Attack needs the initial zero sitting counter')
     target = attack['target_id']
     require(type(target) is int and -2**31 <= target < 2**31, 'Invalid signed attack ID')
     if offset is not None:
@@ -282,6 +309,19 @@ def validate_attack(attack: dict, *, offset: int | None, lethal: bool = False) -
     require({key: before[identity][key] for key in ('nbt_type', 'value', 'literal')} == retained[identity], 'Target lost last committed health')
     old, new = before[identity]['value'], after[identity]['value']
     require(old > 0 and (new == old if offset is None else new == 0 if lethal else 0 < new < old), 'No required committed health outcome')
+    for stage in ('sitting_before', 'sitting_after'):
+        validate_sitting_read(attack.get(stage), identity)
+    counter_before, counter_after = attack['sitting_before']['actual'], attack['sitting_after']['actual']
+    validate_number(attack['retained_sitting'], 'Float')
+    require(counter_before == attack['retained_sitting'], 'Target lost last verified sitting counter')
+    require(0 <= counter_before['value'] <= 50, 'Sitting counter outside bounded Health200 fixture')
+    if offset is None:
+        require(counter_after == counter_before, 'Unknown-ID attack changed sitting counter')
+    else:
+        # Round each Java float operation; counter + (old - new) is not equivalent.
+        expected_counter = sitting_counter_after(counter_before['value'], old, new)
+        require(0 < expected_counter <= 50 and counter_after['value'] == expected_counter,
+                'Sitting counter differs from bounded committed health loss')
     require(attack['healthy_connection']['phase'] == 'play' and attack['healthy_connection']['login'] is True, 'Connection lost after attack')
     require(attack['inventory']['slots'] == [None] * 46, 'Missing actual empty inventory')
     require(attack['player']['predicate'] == f'if entity @a[name={NAME},nbt={{playerGameType:0,Pos:[0.0d,0.0d,2.0d]}}]', 'Missing survival player witness')
@@ -315,6 +355,7 @@ def validate_evidence(case: dict) -> None:
         require(negative['subject']['uuid'] == positive['subject']['uuid'] == identity
                 and negative['subject']['entity_id'] == positive['subject']['entity_id'] == case['subject']['entity_id']
                 and all(negative['after'][identity][key] == positive['before'][identity][key] for key in ('nbt_type', 'value', 'literal'))
+                and negative['sitting_after']['actual'] == positive['retained_sitting'] == positive['sitting_before']['actual']
                 and {packet['pid'] for packet in negative['wire']} == {packet['pid'] for packet in positive['wire']},
                 'Following positive must use the same healthy victim and connection')
     else:
@@ -438,6 +479,7 @@ def validate_boot(boot: dict, role: str) -> None:
         validate_parent(subject, boot['observations'], removed=not frozen)
         require(boot['cases'][subject['label']]['subject'] == subject, 'Case/boot subject mismatch')
     health = {subject['uuid']: subject['initial']['Health'] for subject in boot['subjects']}
+    sitting = {subject['uuid']: subject['initial']['sitting_damage_received'] for subject in boot['subjects']}
     for name in names:
         case = boot['cases'][name]
         require(case['name'] == name and case['subject']['label'] == name and case['boot'] == role
@@ -452,19 +494,22 @@ def validate_boot(boot: dict, role: str) -> None:
                     'Attack evidence belongs to another subject/client')
             cohort = identities - ({supplied_identity('unknown_then_positive')['uuid']} if name.startswith('part_') else set())
             require(set(attack['before']) == cohort and attack['retained_health'] == {key: health[key] for key in cohort}
+                    and attack['retained_sitting'] == sitting[case['subject']['uuid']]
                     and {packet['uuid'] for packet in attack['fence']['observations']
                          if packet['kind'] == 'spawn_header' and packet['entity_type'] == 44} == cohort
                     and attack['t0'] == boot['t0'], 'Missing fixed resident health cohort/last full-read literal/T0')
             health[case['subject']['uuid']] = {key: attack['after'][case['subject']['uuid']][key]
                                              for key in ('nbt_type', 'value', 'literal')}
+            sitting[case['subject']['uuid']] = attack['sitting_after']['actual']
     if frozen:
         validate_frozen_times(boot, boot['t0'])
         require(set(boot['final_sweep']) == identities and boot['after_client_close_gametime'] == boot['t0'], 'Missing final frozen sweep/T0')
         for subject in boot['subjects']:
             sweep = boot['final_sweep'][subject['uuid']]
             validate_resident(sweep, subject, boot['t0'])
-            expected = {**subject['initial'], 'Health': health[subject['uuid']]}
-            require(sweep['facts'] == expected, 'Final facts differ from origin/NoAI/last committed Health')
+            expected = {**subject['initial'], 'Health': health[subject['uuid']],
+                        'sitting_damage_received': sitting[subject['uuid']]}
+            require(sweep['facts'] == expected, 'Final facts differ from origin/NoAI/last committed Health and sitting counter')
             for field, kind in (('Health', 'Float'), ('DragonPhase', 'Int'), ('DragonDeathTime', 'Int'), ('sitting_damage_received', 'Float')):
                 validate_number(sweep['facts'][field], kind)
                 read = sweep['reads_by_field'][field]
@@ -534,6 +579,7 @@ class Probe:
         self.case = entry['setup']
         self.subjects: list[dict] = []
         self.health: dict[str, dict] = {}
+        self.sitting: dict[str, dict] = {}
         self.last_reads: dict[tuple[str, str], dict] = {}
 
     def frozen_time(self) -> int:
@@ -628,6 +674,7 @@ class Probe:
         subject['initial_reads'] = {field: deepcopy(self.last_reads[(identity, field)]) for field in subject['initial']}
         subject['gametime_after'] = self.frozen_time()
         self.health[identity] = deepcopy(subject['initial']['Health'])
+        self.sitting[identity] = deepcopy(subject['initial']['sitting_damage_received'])
         self.retain()
         return subject
 
@@ -679,11 +726,17 @@ class Probe:
         evidence['inventory'] = self.client.state()['player_inventory']
         self.retain()
         require(evidence['inventory'] is not None and evidence['inventory']['slots'] == [None] * 46, 'Attack needs actual empty inventory')
+        evidence['retained_sitting'] = deepcopy(self.sitting[subject['uuid']])
+        self.field(subject, 'sitting_damage_received', 'Float')
+        evidence['sitting_before'] = deepcopy(self.last_reads[(subject['uuid'], 'sitting_damage_received')])
+        self.retain()
         start = len(self.client.events)
         evidence['request'] = self.client.request('dragon_attack', entity_id=target_id)
         self.retain()
         evidence['fence'] = self.client.dragon_fence()
         evidence['after'] = self.health_map(subject)
+        self.field(subject, 'sitting_damage_received', 'Float')
+        evidence['sitting_after'] = deepcopy(self.last_reads[(subject['uuid'], 'sitting_damage_received')])
         evidence['gametime_after'] = self.frozen_time()
         evidence['frozen_after'] = True
         state = self.client.state()
@@ -692,6 +745,7 @@ class Probe:
         self.retain()
         validate_attack(evidence, offset=offset, lethal=lethal)
         self.health[subject['uuid']] = {key: evidence['after'][subject['uuid']][key] for key in ('nbt_type', 'value', 'literal')}
+        self.sitting[subject['uuid']] = deepcopy(evidence['sitting_after']['actual'])
         return evidence
 
     def row(self, name: str, action, cleanup) -> bool:
@@ -829,7 +883,8 @@ class Probe:
                 sweep['health_read'] = deepcopy(self.last_reads[(subject['uuid'], 'Health')])
                 sweep['gametime_after'] = self.frozen_time()
                 self.retain()
-                require(sweep['facts'] == {**subject['initial'], 'Health': self.health[subject['uuid']]}, 'Final fact mismatch')
+                require(sweep['facts'] == {**subject['initial'], 'Health': self.health[subject['uuid']],
+                        'sitting_damage_received': self.sitting[subject['uuid']]}, 'Final fact mismatch')
                 validate_parent(subject, self.observations())
 
 
