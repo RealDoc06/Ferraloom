@@ -201,3 +201,58 @@ impl Wire for StopSound {
         Ok(())
     }
 }
+
+packet!(/// Port of ClientboundChunksBiomesPacket.
+ChunksBiomes {chunk_biome_data:Vec<ChunkBiomeData>});
+packet!(/// Port of ClientboundLevelChunkWithLightPacket.
+LevelChunkWithLight {x:i32,z:i32,chunk_data:LevelChunkPacketData,light_data:LightUpdatePacketData});
+packet!(/// Port of ClientboundLightUpdatePacket.
+LightUpdate {x:VarInt,z:VarInt,light_data:LightUpdatePacketData});
+packet!(/// Port of ClientboundMoveVehiclePacket.
+MoveVehicle {moving_to:PositionAndRotation});
+packet!(/// Port of ClientboundMoveEntityPacket.Pos.
+MoveEntityPos {entity_id:VarInt,delta:EntityDelta});
+packet!(/// Port of ClientboundMoveEntityPacket.PosRot.
+MoveEntityPosRot {entity_id:VarInt,delta:EntityDelta,y_rot:Angle,x_rot:Angle});
+packet!(/// Port of ClientboundMoveMinecartPacket.
+MoveMinecart {entity_id:VarInt,lerp_steps:Vec<MinecartStep>});
+packet!(/// Port of ClientboundDeleteChatPacket.
+DeleteChat {message_signature:PackedMessageSignature});
+packet!(/// Port of ClientboundLoginPacket.
+Login {player_id:i32,hardcore:bool,levels:Vec<Identifier>,max_players:VarInt,chunk_radius:VarInt,simulation_distance:VarInt,reduced_debug_info:bool,show_death_screen:bool,do_limited_crafting:bool,common_player_spawn_info:CommonPlayerSpawnInfo,online_mode:bool,enforces_secure_chat:bool});
+packet!(/// Port of ClientboundRespawnPacket.
+Respawn {common_player_spawn_info:CommonPlayerSpawnInfo,data_to_keep:u8});
+packet!(/// Port of ClientboundSetDefaultSpawnPositionPacket.
+SetDefaultSpawnPosition {respawn_data:RespawnData});
+packet!(/// Port of ClientboundSetTimePacket.
+SetTime {game_time:i64,clock_updates:Vec<ClockUpdate>});
+packet!(/// Port of ClientboundGameRuleValuesPacket.
+GameRuleValues {values:Vec<GameRuleEntry>});
+packet!(/// Port of ClientboundCommandSuggestionsPacket.
+CommandSuggestions {id:VarInt,start:VarInt,length:VarInt,suggestions:Vec<CommandSuggestion>});
+packet!(/// Port of ClientboundSetActionBarTextPacket.
+SetActionBarText {text:Component});
+packet!(/// Port of ClientboundSetTitleTextPacket.
+SetTitleText {text:Component});
+packet!(/// Port of ClientboundSetSubtitleTextPacket.
+SetSubtitleText {text:Component});
+packet!(/// Port of ClientboundTabListPacket.
+TabList {header:Component,footer:Component});
+packet!(/// Port of ClientboundSystemChatPacket.
+SystemChat {content:Component,overlay:bool});
+packet!(/// Port of ClientboundPlayerCombatKillPacket.
+PlayerCombatKill {player_id:VarInt,message:Component});
+packet!(/// Port of ClientboundServerDataPacket.
+ServerData {motd:Component,icon_bytes:Option<ByteArray>});
+packet!(/// Port of ClientboundBlockEntityDataPacket.
+BlockEntityData {pos:BlockPos,block_entity_type:BlockEntityTypeId,tag:TrustedCompoundTag});
+packet!(/// Port of ClientboundOpenScreenPacket.
+OpenScreen {container_id:VarInt,menu_type:MenuId,title:Component});
+packet!(/// Port of ClientboundSwingAnimationPacket.
+SwingAnimationPacket {entity_id:VarInt,hand:InteractionHand,animation:SwingAnimation});
+packet!(/// Port of ClientboundSoundEntityPacket.
+SoundEntity {sound:SoundEventHolder,source:SoundSource,id:VarInt,volume:f32,pitch:f32,seed:i64});
+packet!(/// Port of ClientboundSoundPacket.
+Sound {sound:SoundEventHolder,source:SoundSource,x:i32,y:i32,z:i32,volume:f32,pitch:f32,seed:i64});
+packet!(/// Port of ClientboundTestInstanceBlockStatus.
+TestInstanceBlockStatus {status:Component,size:Option<Vec3i>});

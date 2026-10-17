@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 ferraloom-util.workspace = true
+ferraloom-chunk = { path = "../ferraloom-chunk" }
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
 

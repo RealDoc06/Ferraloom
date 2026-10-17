@@ -181,3 +181,13 @@ impl Wire for SignUpdate {
         self.slot.encode(w)
     }
 }
+packet!(/// Port of ServerboundChatCommandSignedPacket.
+ChatCommandSigned {command:String,timestamp:i64,salt:i64,argument_signatures:ArgumentSignatures,last_seen_messages:LastSeenMessagesUpdate});
+packet!(/// Port of ServerboundChatPacket.
+Chat {message:Utf8<256>,timestamp:i64,salt:i64,signature:Option<MessageSignature>,last_seen_messages:LastSeenMessagesUpdate});
+packet!(/// Port of ServerboundChatSessionUpdatePacket.
+ChatSessionUpdate {chat_session:RemoteChatSessionData});
+packet!(/// Port of ServerboundSetGameRulePacket.
+SetGameRule {entries:Vec<GameRuleEntry>});
+packet!(/// Port of ServerboundUseItemOnPacket.
+UseItemOn {hand:InteractionHand,hit_result:BlockHitResult,sequence:VarInt});

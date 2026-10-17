@@ -23,7 +23,7 @@ PostEffects { post_effects: Vec<Identifier> });
 packet!(/// Port of ClientboundClearDialogPacket.
 ClearDialog {});
 
-wire_enum!(KnownLinkType { BugReport=0, CommunityGuidelines=1, Support=2, Status=3, Feedback=4, Community=5, Website=6, Forums=7, News=8, Announcements=9 });
+wire_enum!(KnownLinkType { BugReport=0, CommunityGuidelines=1, Support=2, Status=3, Feedback=4, Community=5, Website=6, Forums=7, News=8, Announcements=9 }, zero);
 packet!(/// Port of ServerLinks.UntrustedEntry.
 ServerLink { link_type: Either<KnownLinkType, Component>, link: String });
 packet!(/// Port of ClientboundServerLinksPacket.

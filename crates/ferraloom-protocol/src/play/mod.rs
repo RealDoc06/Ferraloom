@@ -1,5 +1,6 @@
 //! Port of GameProtocols (Minecraft Java 26.3). Packet bodies are unframed.
 //! Direction enums include the generated packet ID; individual structs do not.
+use crate::chat::Component;
 use crate::codec::{Angle, BitSet, GlobalPos, VarInt, VarLong};
 use crate::{BlockPos, Error, Identifier, Reader, Result, Uuid, Wire, Writer};
 
@@ -37,6 +38,12 @@ macro_rules! wire_enum {
     };
 }
 
+mod chunk;
+pub use chunk::*;
+mod movement;
+pub use movement::*;
+mod chat;
+pub use chat::*;
 mod types;
 pub use types::*;
 pub mod clientbound;

@@ -201,3 +201,124 @@ impl Wire for Input {
         Ok(())
     }
 }
+
+/// Port of GameType#OPTIONAL_STREAM_CODEC; this is a shifted VarInt, not a boolean.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OptionalGameType(pub Option<GameType>);
+impl Wire for OptionalGameType {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let id = r.var_int()?;
+        Ok(Self(if id == 0 {
+            None
+        } else {
+            Some(match id {
+                2 => GameType::Creative,
+                3 => GameType::Adventure,
+                4 => GameType::Spectator,
+                _ => GameType::Survival,
+            })
+        }))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.var_int(match self.0 {
+            None => 0,
+            Some(GameType::Survival) => 1,
+            Some(GameType::Creative) => 2,
+            Some(GameType::Adventure) => 3,
+            Some(GameType::Spectator) => 4,
+        });
+        Ok(())
+    }
+}
+packet!(/// Port of CommonPlayerSpawnInfo.
+CommonPlayerSpawnInfo {dimension_type:DimensionTypeId,dimension:Identifier,seed:i64,game_type:GameType,previous_game_type:OptionalGameType,is_debug:bool,is_flat:bool,last_death_location:Option<GlobalPos>,portal_cooldown:VarInt,sea_level:VarInt});
+packet!(/// Port of LevelData.RespawnData.
+RespawnData {global_pos:GlobalPos,yaw:f32,pitch:f32});
+packet!(/// Port of ClockNetworkState.
+ClockNetworkState {total_ticks:VarLong,partial_tick:f32,rate:f32});
+packet!(/// Port of ClientboundSetTimePacket's clock map entries.
+ClockUpdate {clock:WorldClockId,state:ClockNetworkState});
+packet!(/// Port of gamerule key/value network entries.
+GameRuleEntry {key:Identifier,value:String});
+packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
+CommandSuggestion {text:String,tooltip:Option<Component>});
+wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2});
+packet!(/// Port of SwingAnimation.
+SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});
+packet!(/// Port of SoundEvent.DIRECT_STREAM_CODEC.
+SoundEvent {location:Identifier,fixed_range:Option<f32>});
+/// Port of SoundEvent.STREAM_CODEC.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SoundEventHolder(pub crate::codec::Holder<SoundEvent>);
+impl Wire for SoundEventHolder {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        crate::codec::Holder::decode(r, &Identifier::parse("minecraft:sound_event")?).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0
+            .encode(w, &Identifier::parse("minecraft:sound_event")?)
+    }
+}
+
+/// Port of BlockHitResult's offset floats, relative to the packed block position.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockHitResult {
+    pub block_pos: BlockPos,
+    pub direction: ferraloom_util::Direction,
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub offset_z: f32,
+    pub inside: bool,
+    pub world_border_hit: bool,
+}
+impl Wire for BlockHitResult {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let block_pos = r.read()?;
+        let id = r.var_int()?;
+        let direction = match id {
+            0 => ferraloom_util::Direction::Down,
+            1 => ferraloom_util::Direction::Up,
+            2 => ferraloom_util::Direction::North,
+            3 => ferraloom_util::Direction::South,
+            4 => ferraloom_util::Direction::West,
+            5 => ferraloom_util::Direction::East,
+            _ => return Err(Error::invalid("direction", id.to_string())),
+        };
+        Ok(Self {
+            block_pos,
+            direction,
+            offset_x: r.f32()?,
+            offset_y: r.f32()?,
+            offset_z: r.f32()?,
+            inside: r.bool()?,
+            world_border_hit: r.bool()?,
+        })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.block_pos.encode(w)?;
+        w.var_int(self.direction as i32);
+        w.f32(self.offset_x);
+        w.f32(self.offset_y);
+        w.f32(self.offset_z);
+        w.bool(self.inside);
+        w.bool(self.world_border_hit);
+        Ok(())
+    }
+}
+
+/// Port of ByteBufCodecs.TRUSTED_COMPOUND_TAG.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrustedCompoundTag(pub ferraloom_nbt::CompoundTag);
+impl Wire for TrustedCompoundTag {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        match r.nbt(true)? {
+            ferraloom_nbt::Tag::Compound(tag) => Ok(Self(tag)),
+            _ => Err(Error::invalid("NBT", "expected compound")),
+        }
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.nbt(&ferraloom_nbt::Tag::Compound(self.0.clone()))
+    }
+}
+packet!(/// Port of Vec3i#STREAM_CODEC.
+Vec3i {x:VarInt,y:VarInt,z:VarInt});
