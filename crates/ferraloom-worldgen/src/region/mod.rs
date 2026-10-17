@@ -114,6 +114,71 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: destroy_block".into()))
     }
+    // --- ore and cave family ---
+    fn multiface_state_for_placement(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _block: Block,
+        _old: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        Err(Error("Unsupported: multiface_state_for_placement".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: multiface_spread".into()))
+    }
+    fn sculk_can_spread_from(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: sculk_can_spread_from".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn sculk_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _origin: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _charge_count: i32,
+        _amount_per_charge: i32,
+        _spread_attempts: i32,
+        _growth_rounds: i32,
+        _spread_rounds: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: sculk_spread".into()))
+    }
+    fn set_loot_table(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: RandomizableContainer#setBlockEntityLootTable".into(),
+        ))
+    }
+    fn set_spawner_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _kind: ferraloom_data::EntityType,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
+    }
+    // --- end ore and cave family ---
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -175,6 +240,14 @@ pub trait WorldgenBlockBehavior: Sync {
         region: &WorldGenRegion<'_>,
         position: [i32; 3],
     ) -> Result<Option<[i32; 3]>, Error>;
+    fn is_outline_full_block(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: is_outline_full_block".into()))
+    }
     fn is_solid(&self, _state: BlockState) -> Result<bool, Error> {
         Err(Error("solid block behavior is unavailable".into()))
     }
@@ -263,6 +336,70 @@ impl<'a> WorldGenRegion<'a> {
             sea_level,
         })
     }
+    // --- ore and cave family ---
+    pub fn multiface_state_for_placement(
+        &self,
+        block: Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        self.behavior
+            .multiface_state_for_placement(self, block, old, p, face)
+    }
+    pub fn multiface_spread(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .multiface_spread(self, state, p, face, random, mark_post_processing)
+    }
+    pub fn sculk_can_spread_from(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.sculk_can_spread_from(self, p)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn sculk_spread(
+        &mut self,
+        origin: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        charge_count: i32,
+        amount_per_charge: i32,
+        spread_attempts: i32,
+        growth_rounds: i32,
+        spread_rounds: i32,
+    ) -> Result<(), Error> {
+        self.behavior.sculk_spread(
+            self,
+            origin,
+            random,
+            charge_count,
+            amount_per_charge,
+            spread_attempts,
+            growth_rounds,
+            spread_rounds,
+        )
+    }
+    pub fn set_loot_table(
+        &mut self,
+        p: [i32; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_loot_table(self, p, table, random)
+    }
+    pub fn set_spawner_entity(
+        &mut self,
+        p: [i32; 3],
+        kind: ferraloom_data::EntityType,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_spawner_entity(self, p, kind, random)
+    }
+    // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
     }
@@ -343,9 +480,9 @@ impl<'a> WorldGenRegion<'a> {
             return Ok(false);
         }
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
-        if self.chunks[index].status == ChunkStatus::Full {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight {
             return Err(Error(
-                "worldgen LevelChunk mutation needs a game adapter".into(),
+                "worldgen lit chunk mutation needs a game adapter".into(),
             ));
         }
         let old = self.block(p)?;
@@ -354,9 +491,7 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index]
             .chunk
             .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
-        if in_height {
-            self.chunks[index].poi_changes.push((p, old, state));
-        }
+        self.chunks[index].poi_changes.push((p, old, state));
         if self.behavior.has_block_entity(state) {
             let mut tag = CompoundTag::new();
             for (key, value) in [("x", p[0]), ("y", p[1]), ("z", p[2])] {
@@ -373,6 +508,23 @@ impl<'a> WorldGenRegion<'a> {
             self.mark_post_processing(post)?;
         }
         Ok(true)
+    }
+    /// Port of BulkSectionAccess#getSection followed by setBlockState. Ore
+    /// features check write bounds and build height before taking this path.
+    /// It intentionally changes only section storage and its derived counts.
+    pub fn set_block_in_section(&mut self, p: [i32; 3], state: BlockState) -> Result<(), Error> {
+        let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        let chunk = &mut self.chunks[index].chunk;
+        if p[1] < chunk.min_y || p[1] >= chunk.min_y + chunk.height {
+            return Err(Error("bulk section write outside build height".into()));
+        }
+        chunk.sections[((p[1] - chunk.min_y) >> 4) as usize].set_block_state(
+            (p[0] & 15) as u8,
+            (p[1] & 15) as u8,
+            (p[2] & 15) as u8,
+            state,
+        );
+        Ok(())
     }
     pub fn mark_post_processing(&mut self, p: [i32; 3]) -> Result<(), Error> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
@@ -461,8 +613,11 @@ impl<'a> WorldGenRegion<'a> {
         self.behavior
             .finalize_template_entity(self, tag, mirror, rotation, finalize)
     }
+    pub fn is_outline_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.is_outline_full_block(self, state, p)
+    }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_solid(self.block(p)?)
+        Ok(self.block(p)?.is_solid())
     }
     pub fn has_sturdy_face(
         &self,
