@@ -290,9 +290,20 @@ fn blocks(
                 let property = &props[name];
                 let values = values.as_array().unwrap();
                 let indexes: Vec<_> = values.iter().map(|v| property.index(string(v))).collect();
+                let integer_values = if property.rust_type == "u8" {
+                    format!(
+                        "Some(&{:?})",
+                        values
+                            .iter()
+                            .map(|v| string(v).parse::<i32>().unwrap())
+                            .collect::<Vec<_>>()
+                    )
+                } else {
+                    "None".to_owned()
+                };
                 writeln!(
                     out,
-                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, stride: {stride}, values: &{indexes:?} }},",
+                    "PropertyLayout {{ id: {}, name: {name:?}, names: &{:?}, stride: {stride}, values: &{indexes:?}, integer_values: {integer_values} }},",
                     property.id, values.iter().map(string).collect::<Vec<_>>()
                 )
                 .unwrap();
