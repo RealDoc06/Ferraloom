@@ -182,20 +182,7 @@ pub trait WorldgenBlockBehavior: Sync {
     }
 }
 
-/// Vanilla template transforms, shared with the worldgen behavior adapter.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Mirror {
-    None,
-    LeftRight,
-    FrontBack,
-}
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Rotation {
-    None,
-    Clockwise90,
-    Clockwise180,
-    Counterclockwise90,
-}
+pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
     chunks: &'a mut [RegionChunk],
