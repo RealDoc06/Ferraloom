@@ -202,7 +202,9 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
 
-    fn has_block_entity(&self, state: BlockState) -> bool;
+    fn has_block_entity(&self, state: BlockState) -> bool {
+        state.has_block_entity()
+    }
     fn post_process_pos(
         &self,
         state: BlockState,
@@ -216,6 +218,14 @@ pub trait WorldgenBlockBehavior: Sync {
         _p: [i32; 3],
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: is_outline_full_block".into()))
+    }
+    fn is_collision_full_block(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: is_collision_full_block".into()))
     }
     fn is_solid(&self, _state: BlockState) -> Result<bool, Error> {
         Err(Error("solid block behavior is unavailable".into()))
@@ -274,8 +284,12 @@ impl<'a> WorldGenRegion<'a> {
         query_position: [i32; 3],
         face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
-        self.behavior
-            .state_has_sturdy_face(self, state, query_position, face)
+        match state.cached_sturdy_face(face) {
+            Some(sturdy) => Ok(sturdy),
+            None => self
+                .behavior
+                .state_has_sturdy_face(self, state, query_position, face),
+        }
     }
     // --- end tree family ---
 
@@ -447,23 +461,26 @@ impl<'a> WorldGenRegion<'a> {
             }
         }
         self.chunks[index].poi_changes.push((p, old, state));
-        if self.behavior.has_block_entity(state) {
+        if state.has_block_entity() {
             let mut tag = CompoundTag::new();
             for (key, value) in [("x", p[0]), ("y", p[1]), ("z", p[2])] {
                 tag.insert(key, Tag::Int(value));
             }
             tag.insert("id", Tag::String("DUMMY".into()));
             self.chunks[index].block_entities.insert(p, tag);
-        } else if in_height && self.behavior.has_block_entity(old) {
+        } else if in_height && old.has_block_entity() {
             self.chunks[index].block_entities.remove(&p);
         }
         if flags & 16 == 0 {
-            let post = match state.post_process() {
-                ferraloom_data::PostProcess::Never => None,
-                ferraloom_data::PostProcess::Always => Some(p),
-                ferraloom_data::PostProcess::Context => {
-                    self.behavior.post_process_pos(state, self, p)?
-                }
+            let post = match state.post_process_y_offset() {
+                Some(offset) => Some([p[0], p[1].wrapping_add(offset), p[2]]),
+                None => match state.post_process() {
+                    ferraloom_data::PostProcess::Never => None,
+                    ferraloom_data::PostProcess::Always => Some(p),
+                    ferraloom_data::PostProcess::Context => {
+                        self.behavior.post_process_pos(state, self, p)?
+                    }
+                },
             };
             if let Some(post) = post {
                 self.mark_post_processing(post)?;
@@ -578,6 +595,12 @@ impl<'a> WorldGenRegion<'a> {
     pub fn is_outline_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_outline_full_block(self, state, p)
     }
+    pub fn is_collision_full_block(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        match state.cached_collision_full_block() {
+            Some(full) => Ok(full),
+            None => self.behavior.is_collision_full_block(self, state, p),
+        }
+    }
     pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
         Ok(self.block(p)?.is_solid())
     }
@@ -586,7 +609,11 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         face: ferraloom_util::Direction,
     ) -> Result<bool, Error> {
-        self.behavior.has_sturdy_face(self.block(p)?, self, p, face)
+        let state = self.block(p)?;
+        match state.cached_sturdy_face(face) {
+            Some(sturdy) => Ok(sturdy),
+            None => self.behavior.has_sturdy_face(state, self, p, face),
+        }
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.can_survive(state, self, p)
