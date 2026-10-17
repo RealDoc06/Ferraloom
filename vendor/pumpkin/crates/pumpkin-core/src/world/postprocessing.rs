@@ -867,21 +867,19 @@ mod tests {
             .value()
             .clone();
         let mut replacement = ChunkData::empty(-1, 0);
-        replacement.block_ticks = [SavedTick {
+        replacement.block_ticks = std::iter::once(SavedTick {
             position: pos,
             value: &Block::STONE,
             delay: -1,
             priority: TickPriority::High,
-        }]
-        .into_iter()
+        })
         .collect();
-        replacement.fluid_ticks = [SavedTick {
+        replacement.fluid_ticks = std::iter::once(SavedTick {
             position: pos,
             value: &Fluid::FLOWING_WATER,
             delay: 600,
             priority: TickPriority::Low,
-        }]
-        .into_iter()
+        })
         .collect();
         replacement
             .post_processing_ready
@@ -1004,6 +1002,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "One actual callback phase observes ordered block work, clone copy and following fluid dispatch."
+    )]
     async fn actual_block_callbacks_copy_current_pending_and_queued_then_finish_before_fluid() {
         use crate::{
             block::{BlockBehaviour, BlockMetadata, FluidMetadata, fluid::FluidBehaviour},
