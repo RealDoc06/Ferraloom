@@ -457,10 +457,17 @@ impl<'a> WorldGenRegion<'a> {
         } else if in_height && self.behavior.has_block_entity(old) {
             self.chunks[index].block_entities.remove(&p);
         }
-        if flags & 16 == 0
-            && let Some(post) = self.behavior.post_process_pos(state, self, p)?
-        {
-            self.mark_post_processing(post)?;
+        if flags & 16 == 0 {
+            let post = match state.post_process() {
+                ferraloom_data::PostProcess::Never => None,
+                ferraloom_data::PostProcess::Always => Some(p),
+                ferraloom_data::PostProcess::Context => {
+                    self.behavior.post_process_pos(state, self, p)?
+                }
+            };
+            if let Some(post) = post {
+                self.mark_post_processing(post)?;
+            }
         }
         Ok(true)
     }
