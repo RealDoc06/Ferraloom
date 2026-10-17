@@ -516,6 +516,25 @@ impl Bot {
         }))
         .await
     }
+    /// Uses the signable-command packet with unsigned arguments, as an offline client does.
+    /// Plain command() intentionally keeps the no-signing-context command path available.
+    pub async fn signed_command(&self, text: &str) -> Result<()> {
+        self.send(sb::Packet::ChatCommandSigned(sb::ChatCommandSigned {
+            command: text.trim_start_matches('/').into(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)?
+                .as_millis()
+                .try_into()?,
+            salt: 0,
+            argument_signatures: play::ArgumentSignatures(Vec::new()),
+            last_seen_messages: play::LastSeenMessagesUpdate {
+                offset: VarInt(0),
+                acknowledged: BitSet::default(),
+                checksum: 0,
+            },
+        }))
+        .await
+    }
     pub async fn chat(&self, text: &str) -> Result<()> {
         self.send(sb::Packet::Chat(Box::new(sb::Chat {
             message: common::Utf8(text.into()),

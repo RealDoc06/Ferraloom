@@ -49,27 +49,59 @@ async fn join_and_spawn(s: &mut Session) -> Result<ObservationLog> {
 async fn commands(s: &mut Session) -> Result<ObservationLog> {
     let id = s.join("ParityBot").await?;
     let bot = s.bot(id)?;
-    bot.command("say parity command").await?;
-    let packet=bot.wait_for("say broadcast",Ticks::DEFAULT,|_,p|matches!(p,cb::Packet::PlayerChat(p) if p.body.content.0=="parity command")||matches!(p,cb::Packet::DisguisedChat(p) if p.message.to_json().is_ok_and(|s|s.contains("parity command")))).await?;
     let mut log = ObservationLog::default();
-    match packet.as_ref() {
-        cb::Packet::PlayerChat(p) => {
-            log.record("say.message", &p.body.content.0)?;
-            log.record(
-                "say.name",
-                serde_json::from_str::<serde_json::Value>(&p.chat_type.name.to_json()?)?,
-            )?;
-            log.record("say.type", format!("{:?}", p.chat_type.chat_type))?;
+    for (signed, message) in [
+        (false, "parity unsigned command"),
+        (true, "parity signed command"),
+    ] {
+        let command = format!("say {message}");
+        if signed {
+            bot.signed_command(&command).await?;
+        } else {
+            bot.command(&command).await?;
         }
-        cb::Packet::DisguisedChat(p) => {
-            log.record("say.message", "parity command")?;
-            log.record(
-                "say.name",
-                serde_json::from_str::<serde_json::Value>(&p.chat_type.name.to_json()?)?,
-            )?;
-            log.record("say.type", format!("{:?}", p.chat_type.chat_type))?;
-        }
-        _ => unreachable!(),
+        let packet = bot
+            .wait_for("say broadcast", Ticks::DEFAULT, |_, packet| match packet {
+                cb::Packet::PlayerChat(p) => p.body.content.0 == message,
+                cb::Packet::DisguisedChat(p) => {
+                    p.message.to_json().is_ok_and(|s| s.contains(message))
+                }
+                _ => false,
+            })
+            .await?;
+        let (packet_kind, name, chat_type) = match packet.as_ref() {
+            cb::Packet::PlayerChat(p) => {
+                ensure!(
+                    signed,
+                    "unsigned ChatCommand /say must produce DisguisedChat, got PlayerChat"
+                );
+                log.record("signed.content", &p.body.content.0)?;
+                ("PlayerChat", &p.chat_type.name, &p.chat_type.chat_type)
+            }
+            cb::Packet::DisguisedChat(p) => {
+                ensure!(
+                    !signed,
+                    "ChatCommandSigned /say must produce PlayerChat, got DisguisedChat"
+                );
+                ensure!(
+                    p.message == ferraloom_parity::protocol::chat::Component::literal(message),
+                    "unexpected /say component"
+                );
+                log.record(
+                    "unsigned.content",
+                    serde_json::from_str::<serde_json::Value>(&p.message.to_json()?)?,
+                )?;
+                ("DisguisedChat", &p.chat_type.name, &p.chat_type.chat_type)
+            }
+            _ => unreachable!(),
+        };
+        let prefix = if signed { "signed" } else { "unsigned" };
+        log.record(format!("{prefix}.packet"), packet_kind)?;
+        log.record(
+            format!("{prefix}.name"),
+            serde_json::from_str::<serde_json::Value>(&name.to_json()?)?,
+        )?;
+        log.record(format!("{prefix}.type"), format!("{chat_type:?}"))?;
     }
     bot.command("gamemode spectator").await?;
     bot.wait_for(

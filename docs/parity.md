@@ -33,7 +33,11 @@ Names in `options.operators` receive level-four permission. The default op is
 several clients at once. Each client has independent read/write tasks, so idle
 bots still acknowledge keep-alives, pings, chunk batches and teleports.
 
-`Bot::command` strips an optional leading slash. `teleport` waits for the
+`Bot::command` strips an optional leading slash and sends `ChatCommand`.
+`signed_command` sends `ChatCommandSigned` with empty signatures, the offline
+client path for signable message arguments. These paths remain distinct: an
+unsigned `/say` produces `DisguisedChat`, while the signable packet produces
+`PlayerChat`. The starter asserts both packet variants explicitly. `teleport` waits for the
 acknowledged authoritative update. `move_to` interpolates a path in steps of at
 most one block, waits at least 100 ms between steps, sends `ClientTickEnd`, and
 uses an ordered ping barrier. Choose collision-free spectator travel when the

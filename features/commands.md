@@ -2553,3 +2553,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.xp | `/xp`; redirects to `/experience` | `net.minecraft.server.commands.ExperienceCommand#register` | | - | todo |
 
 | commands.source.player-display-name | Decorate player display names with tell suggestions, entity hover data and insertion; use in chat, say, join and leave | `Player#getDisplayName; Player#decorateDisplayNameComponent` | `entity::player::tests::display_name_matches_java_player_component` | pass | todo |
+| commands.say.unsigned-packet | Unsigned ChatCommand /say has no signing context and broadcasts DisguisedChat | `MessageArgument#resolveChatMessage; SayCommand` | `ferraloom-parity::starter::parity_commands` | - | todo |
+| commands.say.signable-packet | ChatCommandSigned with unsigned offline arguments broadcasts PlayerChat | `ServerGamePacketListenerImpl#collectUnsignedArguments; MessageArgument#resolveChatMessage` | `ferraloom-parity::starter::parity_commands` | - | partial |
