@@ -15,8 +15,12 @@ from test_crafting import drop, envelope, phase
 craft = bridge.craft
 ITEMS = {'honey_bottle': 1, 'sugar': 1217, 'glass_bottle': 1270, 'honey_block': 2, 'cake': 3}
 ZERO = dict.fromkeys(craft.CRAFTED, 0)
-SYNTHETIC_SOURCE = '1' * 40
+# Only the admitted source ID is real; these receipts/bytes are hand-authored.
+SYNTHETIC_SOURCE = bridge.ENGINE_SOURCE_COMMIT
 SYNTHETIC_BINARY = '2' * 64
+OLD_SOURCES = ('a951d03e175831d5220fbd741ad488bfc9b6745e',
+               '67ffe67deb49dbb3719d4f3974fc1c8a92cd2980',
+               'ae26989de759558a2d1cca77f83610de75f220b1')
 
 
 def state(active: str, revision: int, *, grid=None, result=None, cursor=None, main=None) -> dict:
@@ -120,11 +124,11 @@ def synthetic_entry() -> dict:
 def synthetic_receipts() -> tuple[dict, dict]:
     """Synthetic identities/bytes in the exact retained all-sixteen helper schema.
 
-    Commands/counts model the r29 helper source, not a completed native pass.
+    Commands/counts model the r30 helper source, not a completed native pass.
     This is a hand-authored acceptance control, not a runtime golden or pass.
     """
     source = SYNTHETIC_SOURCE
-    root, prefix = '/home/doc/code/Ferraloom', 'review29-all16-builder-synthetic'
+    root, prefix = '/home/doc/code/Ferraloom', 'review30-corrected-engine-builder-synthetic'
     commands = [
         ('fmt-root', ['cargo', 'fmt', '--all', '--', '--check']),
         ('fmt-vendor', ['cargo', 'fmt', '--manifest-path', 'vendor/pumpkin/Cargo.toml', '--all', '--', '--check']),
@@ -147,7 +151,7 @@ def synthetic_receipts() -> tuple[dict, dict]:
               'log': f'{root}/.cache/{prefix}-{name}.log', 'log_sha256': '1' * 64,
               'execution_gate_passed': True} for name, argv in commands]
     counts = {'data': [96], 'protocol': [129, 12], 'command': [92], 'world': [416],
-              'inventory': [24], 'core': [856], 'wrapper': [12]}
+              'inventory': [24], 'core': [866], 'wrapper': [12]}
     native = {'source_commit': source, 'host': 'ferraloom-builder', 'helper_sha256': bridge.NATIVE_HELPER_SHA256,
               'resource_limits': {'memory.max': '6442450944', 'memory.swap.max': '0', 'cpu.max': '200000 100000'},
               'cgroup': '/user.slice/user-1000.slice/user@1000.service/app.slice/ferraloom-build-20261017T040257Z-deadbeef.scope',
@@ -265,7 +269,7 @@ class ReaCraftingCaseTests(unittest.TestCase):
     def associate(self, build: dict, native: dict, **overrides) -> None:
         bridge.validate_build_association(bridge.canonical(build), bridge.canonical(native), **({
             'build_name': '20261017T040257Z-deadbeef.json',
-            'native_name': 'review29-all16-builder-synthetic-native.json',
+            'native_name': 'review30-corrected-engine-builder-synthetic-native.json',
             'source': SYNTHETIC_SOURCE,
             'binary_sha256': SYNTHETIC_BINARY,
         } | overrides))
@@ -273,7 +277,7 @@ class ReaCraftingCaseTests(unittest.TestCase):
     def source_paths(self, changed: list[str], statuses: list[str]) -> None:
         """Mock filesystem/Git inputs and stop after the real pin_inputs path checks."""
         args = SimpleNamespace(rust_source_commit=SYNTHETIC_SOURCE, current_clean_commit='3' * 40,
-                               client_source_commit='4' * 40,
+                               client_source_commit=SYNTHETIC_SOURCE,
                                java='SYNTHETIC-java', rust_binary=Path('/SYNTHETIC/binary'),
                                reference_cache=Path('/SYNTHETIC/reference'), artifacts=Path('/SYNTHETIC/artifacts'),
                                build_receipt=Path('/SYNTHETIC/build.json'), native_receipt=Path('/SYNTHETIC/native.json'))
@@ -289,25 +293,23 @@ class ReaCraftingCaseTests(unittest.TestCase):
 
     def test_synthetic_source_boundaries_require_exact_observed_engine_client_bridge_chain(self):
         """Mocked Git metadata only, never runtime goldens or a completed native pass."""
-        engine, client, harness = SYNTHETIC_SOURCE, '4' * 40, '3' * 40
+        engine, client, harness = SYNTHETIC_SOURCE, SYNTHETIC_SOURCE, '3' * 40
         bridge_names = ('diff', '--no-renames', '--name-only', client, harness)
         bridge_status = ('diff', '--no-renames', '--name-status', client, harness)
-        client_parent = ('rev-list', '--parents', '-n', '1', client)
         harness_parent = ('rev-list', '--parents', '-n', '1', harness)
         client_status = ('diff', '--no-renames', '--name-status', engine, client)
         full_status = ('diff', '--no-renames', '--name-status', engine, harness)
-        paths = {**dict.fromkeys(bridge.CLIENT_PATHS, 'M'), **dict.fromkeys(bridge.OWNED, 'A')}
+        paths = dict.fromkeys(bridge.OWNED, 'M')
         replies = {
             bridge_names: '\n'.join(sorted(bridge.OWNED)),
-            bridge_status: '\n'.join('A\t' + path for path in sorted(bridge.OWNED)),
-            client_parent: client + ' ' + engine,
+            bridge_status: '\n'.join('M\t' + path for path in sorted(bridge.OWNED)),
             harness_parent: harness + ' ' + client,
             ('merge-base', '--is-ancestor', engine, harness): '',
-            client_status: '\n'.join('M\t' + path for path in sorted(bridge.CLIENT_PATHS)),
+            client_status: '',
             full_status: '\n'.join(status + '\t' + path for path, status in sorted(paths.items())),
         }
         outside_queries = []
-        for before, after, excluded in ((engine, client, bridge.CLIENT_PATHS),
+        for before, after, excluded in ((engine, client, ()),
                                          (client, harness, bridge.OWNED),
                                          (engine, harness, tuple(paths))):
             query = ('diff', '--no-renames', '--name-status', before, after, '--', '.',
@@ -317,19 +319,19 @@ class ReaCraftingCaseTests(unittest.TestCase):
         with patch.object(bridge, 'git', side_effect=lambda *query: replies[query]):
             observed = bridge.source_boundaries(engine, client, harness)
         self.assertEqual(observed['engine_to_client']['to_commit'], client)
+        self.assertEqual(observed['engine_to_client']['name_status'], [])
         self.assertEqual(observed['client_to_harness']['from_commit'], client)
         self.assertEqual(observed['engine_to_harness']['from_commit'], engine)
         self.assertEqual(observed['engine_to_harness']['name_status'], replies[full_status].splitlines())
         self.assertTrue(all(boundary['outside_declared_paths'] == [] for boundary in observed.values()))
         defects = [
-            ('wrong_client_status', client_status, replies[client_status].replace('M\t', 'A\t', 1)),
-            ('wrong_bridge_status', bridge_status, replies[bridge_status].replace('A\t', 'M\t', 1)),
+            ('wrong_client_status', client_status, 'M\t' + bridge.CLIENT_PATHS[0]),
+            ('wrong_bridge_status', bridge_status, replies[bridge_status].replace('M\t', 'A\t', 1)),
             ('extra_engine_file', client_status, replies[client_status] + '\nM\tvendor/pumpkin/src/main.rs'),
-            ('missing_client_path', client_status, replies[client_status].splitlines()[0]),
-            ('wrong_client_parent', client_parent, client + ' ' + harness),
-            ('wrong_harness_parent', harness_parent, harness + ' ' + engine),
-            ('unobserved_client_commit', client_parent, '5' * 40 + ' ' + engine),
-            ('merge_parent', harness_parent, harness + ' ' + client + ' ' + engine),
+            ('missing_bridge_path', bridge_names, replies[bridge_names].splitlines()[0]),
+            ('multicommit_harness', harness_parent, harness + ' ' + '4' * 40),
+            ('unobserved_harness_commit', harness_parent, '5' * 40 + ' ' + engine),
+            ('merge_parent', harness_parent, harness + ' ' + engine + ' ' + '4' * 40),
             ('wrong_combined_diff', full_status, replies[full_status] + '\nM\tCargo.toml'),
         ]
         defects += [('outside_boundary_' + str(index), query, 'M\tCargo.toml')
@@ -339,9 +341,22 @@ class ReaCraftingCaseTests(unittest.TestCase):
             with (self.subTest(defect=name), self.assertRaises(AssertionError),
                   patch.object(bridge, 'git', side_effect=lambda *query: altered[query])):
                 bridge.source_boundaries(engine, client, harness)
-        build, native = synthetic_receipts()
-        with self.assertRaises(AssertionError):
-            self.associate(build, native, source=client)
+        for old in OLD_SOURCES:
+            for sources in ((old, old, harness), (engine, old, harness),
+                            (old, client, harness)):
+                with (self.subTest(sources=sources), self.assertRaises(AssertionError),
+                      patch.object(bridge, 'git', side_effect=lambda *query: replies[query])):
+                    bridge.source_boundaries(*sources)
+            with (self.subTest(old_harness=old), self.assertRaises(AssertionError),
+                  patch.object(bridge, 'git', side_effect=[replies[bridge_names], replies[bridge_status],
+                                                          old + ' ' + '4' * 40])):
+                bridge.source_boundaries(engine, client, old)
+            build, native = synthetic_receipts()
+            build['source_commit'] = native['source_commit'] = old
+            build['command'][-2] = old
+            for source in (engine, old):
+                with self.subTest(old_native_source=old, supplied_source=source), self.assertRaises(AssertionError):
+                    self.associate(build, native, source=source)
 
     def test_completed_native_helper_receipt_shape_binds_supplied_binary(self):
         build, native = synthetic_receipts()
@@ -352,7 +367,7 @@ class ReaCraftingCaseTests(unittest.TestCase):
         self.assertEqual(native['helper_sha256'], bridge.NATIVE_HELPER_SHA256)
         with self.assertRaisesRegex(RuntimeError, 'SYNTHETIC ancestry boundary'):
             self.source_paths(['tests/test_rea_crafting_case.py', 'tools/rea_crafting_case.py'],
-                              ['A\ttests/test_rea_crafting_case.py', 'A\ttools/rea_crafting_case.py'])
+                              ['M\ttests/test_rea_crafting_case.py', 'M\ttools/rea_crafting_case.py'])
 
     def test_missing_native_or_old_binary_cannot_match_source(self):
         build, native = synthetic_receipts()
@@ -375,9 +390,11 @@ class ReaCraftingCaseTests(unittest.TestCase):
             ('boolean_exit', lambda b, n: n['steps'][2].update(exit_code=False)),
             ('check_instead_of_build', lambda b, n: n['steps'][-1].update(command=['cargo', 'check', '--locked', '--offline', '--jobs', '1'])),
             ('unrelated_wrapper_job', lambda b, n: b.update(command=['cargo', 'build', '--locked', '--offline', '--jobs', '1'])),
-            ('wrong_prefix', lambda b, n: b['command'].__setitem__(-1, 'review29-all16-builder-other')),
+            ('wrong_prefix', lambda b, n: b['command'].__setitem__(-1, 'review30-corrected-engine-builder-other')),
             ('wrong_helper', lambda b, n: b['command'].__setitem__(6, '.cache/other.py')),
+            ('old_helper', lambda b, n: b['command'].__setitem__(6, '.cache/reviews/r29-native-validation-prepare/run-review29-integrated-all-sixteen.py')),
             ('wrong_helper_hash', lambda b, n: n.update(helper_sha256='0' * 64)),
+            ('old_helper_hash', lambda b, n: n.update(helper_sha256='769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c')),
             ('missing_helper_hash', lambda b, n: n.pop('helper_sha256')),
             ('wrong_native_host', lambda b, n: n.update(host='devbox')),
             ('missing_native_host', lambda b, n: n.pop('host')),
@@ -397,16 +414,17 @@ class ReaCraftingCaseTests(unittest.TestCase):
             with self.subTest(defect=name), self.assertRaises(AssertionError):
                 self.associate(build, native)
         for names in ({'build_name': 'renamed.json'},
-                      {'native_name': 'review29-all16-builder-other-native.json'},
+                      {'native_name': 'review30-corrected-engine-builder-other-native.json'},
+                      {'native_name': 'review29-all16-builder-synthetic-native.json'},
                       {'native_name': 'review28-all16-builder-synthetic-native.json'}):
             build, native = synthetic_receipts()
             with self.subTest(names=names), self.assertRaises(AssertionError):
                 self.associate(build, native, **names)
         paths = ['tests/test_rea_crafting_case.py', 'tools/rea_crafting_case.py']
-        additions = ['A\t' + path for path in paths]
-        for changed, statuses in (([], []), (paths[:1], additions[:1]),
-                                  (paths + ['src/main.rs'], additions + ['M\tsrc/main.rs']),
-                                  (paths, ['M\t' + path for path in paths]),
+        modifications = ['M\t' + path for path in paths]
+        for changed, statuses in (([], []), (paths[:1], modifications[:1]),
+                                  (paths + ['src/main.rs'], modifications + ['M\tsrc/main.rs']),
+                                  (paths, ['A\t' + path for path in paths]),
                                   (paths, ['A\t' + paths[0], 'M\t' + paths[1]])):
             with self.subTest(changed=changed, statuses=statuses), self.assertRaises(AssertionError):
                 self.source_paths(changed, statuses)

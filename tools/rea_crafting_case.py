@@ -32,10 +32,11 @@ from check_jukeboxes import stopped_time
 from parity import worlds
 
 CASE = 'table_offset_right'
+ENGINE_SOURCE_COMMIT = 'b8e01b4756b00fe89dcdb88ac76a604c5e4cb9eb'
 OWNED = ('tools/rea_crafting_case.py', 'tests/test_rea_crafting_case.py')
 CLIENT_PATHS = ('tools/parity/crafting.ts', 'tests/protocol_client.test.ts')
-NATIVE_HELPER = '.cache/reviews/r29-native-validation-prepare/run-review29-integrated-all-sixteen.py'
-NATIVE_HELPER_SHA256 = '769cddec92e87f39a133ad9e1c55fa65ebd97b8c204269adc5dc559f4b1b2c1c'
+NATIVE_HELPER = '.cache/reviews/r30-corrected-engine-native-final/run-corrected-all-sixteen.py'
+NATIVE_HELPER_SHA256 = 'd160e2f738a9c9cfe2ffcef1fcb10fc0b20d00410f933b1debd3424872eab44f'
 NATIVE_STEPS = ('fmt-root', 'fmt-vendor', 'python', 'vendor-clippy', 'data', 'protocol',
                 'command', 'world', 'inventory', 'core', 'gametest-compile', 'clippy',
                 'wrapper', 'node-protocol', 'typescript', 'build')
@@ -318,30 +319,30 @@ def git(*arguments: str) -> str:
 
 
 def source_boundaries(engine: str, client: str, harness: str) -> dict:
-    """Observe the direct E -> F -> H chain, with exactly two paths per boundary."""
+    """Require engine == client == exact B and a direct, two-file B -> bridge refit."""
     craft.require(all(re.fullmatch('[0-9a-f]{40}', value) for value in (engine, client, harness)),
                   'Exact engine/client/harness source commits required')
+    craft.require(engine == client == ENGINE_SOURCE_COMMIT,
+                  'Engine and client must both be the exact reviewed B source')
     bridge_paths = git('diff', '--no-renames', '--name-only', client, harness).splitlines()
     bridge_status = git('diff', '--no-renames', '--name-status', client, harness).splitlines()
     craft.require(bridge_paths == sorted(OWNED)
-                  and bridge_status == ['A\t' + path for path in sorted(OWNED)],
-                  'F -> H must add exactly the two bridge paths')
+                  and bridge_status == ['M\t' + path for path in sorted(OWNED)],
+                  'B -> bridge must modify exactly the two existing bridge paths')
     observed_harness = git('rev-list', '--parents', '-n', '1', harness).split()
-    observed_client = git('rev-list', '--parents', '-n', '1', client).split()
-    craft.require(observed_harness == [harness, client] and observed_client == [client, engine],
-                  'Requires observed direct single-parent E -> F -> H ancestry')
+    craft.require(observed_harness == [harness, engine],
+                  'Requires observed direct single-parent B -> bridge ancestry')
     git('merge-base', '--is-ancestor', engine, harness)
     client_status = git('diff', '--no-renames', '--name-status', engine, client).splitlines()
-    craft.require(client_status == ['M\t' + path for path in sorted(CLIENT_PATHS)],
-                  'E -> F must modify exactly the two crafting client paths')
+    craft.require(client_status == [], 'Engine and client source diff must be empty')
     full_status = git('diff', '--no-renames', '--name-status', engine, harness).splitlines()
-    expected = dict.fromkeys(CLIENT_PATHS, 'M') | dict.fromkeys(OWNED, 'A')
+    expected = dict.fromkeys(OWNED, 'M')
     craft.require(full_status == [status + '\t' + path for path, status in sorted(expected.items())],
-                  'E -> H must contain exactly the four declared paths and statuses')
+                  'B -> bridge must contain exactly the two declared paths and modified statuses')
     boundaries = {}
     for name, before, after, paths, statuses in (
-            ('engine_to_client', engine, observed_client[0], CLIENT_PATHS, client_status),
-            ('client_to_harness', observed_client[0], observed_harness[0], OWNED, bridge_status),
+            ('engine_to_client', engine, client, (), client_status),
+            ('client_to_harness', client, observed_harness[0], OWNED, bridge_status),
             ('engine_to_harness', engine, observed_harness[0], tuple(expected), full_status)):
         outside = git('diff', '--no-renames', '--name-status', before, after, '--', '.',
                       *(':(exclude)' + path for path in paths)).splitlines()
@@ -359,12 +360,13 @@ def validate_build_association(build_raw: bytes, native_raw: bytes, *, build_nam
     not embedded or cryptographic binary/source attestation. Never reread live
     receipt paths here: the parsed bytes are the ones retained and hash-pinned.
     """
+    craft.require(source == ENGINE_SOURCE_COMMIT, 'Native association requires exact reviewed engine B')
     build = json.loads(build_raw, object_pairs_hook=craft.unique_object)
     native = json.loads(native_raw, object_pairs_hook=craft.unique_object)
     craft.require(isinstance(build, dict) and isinstance(native, dict), 'Missing native/build receipt object')
     craft.require(re.fullmatch(r'\d{8}T\d{6}Z-[0-9a-f]{8}\.json', build_name) is not None,
                   'Requires canonical builder job filename')
-    match = re.fullmatch(r'(review29-all16-builder-[a-z0-9-]+)-native\.json', native_name)
+    match = re.fullmatch(r'(review30-corrected-engine-builder-[a-z0-9-]+)-native\.json', native_name)
     craft.require(match is not None, 'Requires original all-sixteen native receipt filename')
     prefix = match[1]
     command = ['timeout', '--signal=TERM', '--kill-after=30s', '7200', 'python3', '-B',
@@ -452,7 +454,7 @@ def pin_inputs(args: argparse.Namespace, report: dict) -> dict[str, str]:
     args.rust_binary = craft.suite.pin_binary(paths['rust_binary_original'], args.artifacts)
     craft.require(craft.digest(args.rust_binary) == pins['rust_binary_original'], 'Changed pinned executable copy')
     report['inputs']['rust_binary_pinned'] = {'path': str(args.rust_binary), 'sha256': pins['rust_binary_original']}
-    report['binary_source_association'] = 'ROOT-admitted binary/native/build/helper pins with matched E, native completed-build hash and exact successful builder helper job; no embedded or cryptographic source attestation.'
+    report['binary_source_association'] = 'ROOT-admitted binary/native/build/helper pins with matched exact B, native completed-build hash and exact successful builder helper job; no embedded or cryptographic source attestation.'
     return {str(path): pins[name] for name, path in paths.items()} | {str(args.rust_binary): pins['rust_binary_original']}
 
 
