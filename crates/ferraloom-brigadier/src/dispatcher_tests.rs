@@ -175,14 +175,17 @@ fn execute_redirected_multiple_times() {
 fn source_redirects(d: &mut CommandDispatcher<i32>) {
     let root = d.root();
     d.register(literal("add").then(
-        argument("value", IntegerArgumentType::default()).redirect_with(root, |c| {
-            Ok(Arc::new(
-                *c.source + c.get_argument::<i32>("value").unwrap(),
-            ))
-        }),
+        argument("value", IntegerArgumentType::default()).redirect_with(
+            root,
+            |c: &CommandContext<i32>| {
+                Ok(Arc::new(
+                    *c.source + c.get_argument::<i32>("value").unwrap(),
+                ))
+            },
+        ),
     ));
     d.register(literal("blank").redirect(root));
-    d.register(literal("run").executes(|c| Ok(*c.source)));
+    d.register(literal("run").executes(|c: &CommandContext<i32>| Ok(*c.source)));
 }
 #[test]
 fn correct_execute_context_after_redirect() {
@@ -208,12 +211,12 @@ fn shared_redirect_and_execute_nodes() {
     d.register(
         literal("add").then(
             argument("value", IntegerArgumentType::default())
-                .redirect_with(root, |c| {
+                .redirect_with(root, |c: &CommandContext<i32>| {
                     Ok(Arc::new(
                         *c.source + c.get_argument::<i32>("value").unwrap(),
                     ))
                 })
-                .executes(|c| Ok(*c.source)),
+                .executes(|c: &CommandContext<i32>| Ok(*c.source)),
         ),
     );
     assert_eq!(d.execute("add 5", 1).unwrap(), 1);
@@ -237,12 +240,11 @@ fn execute_redirected() {
 fn incomplete_tree(d: &mut CommandDispatcher<i32>) -> NodeId {
     d.register(
         literal("foo")
-            .then(
-                literal("bar").then(
-                    argument("value", IntegerArgumentType::default())
-                        .executes(|c| Ok(*c.get_argument::<i32>("value").unwrap())),
+            .then(literal("bar").then(
+                argument("value", IntegerArgumentType::default()).executes(
+                    |c: &CommandContext<i32>| Ok(*c.get_argument::<i32>("value").unwrap()),
                 ),
-            )
+            ))
             .then(literal("awa").executes(|_| Ok(2))),
     )
 }
@@ -332,7 +334,7 @@ fn result_consumer_in_non_error_run() {
 fn result_consumer_in_forked_non_error_run() {
     let mut d = CommandDispatcher::<i32>::new();
     let calls = record(&mut d);
-    d.register(literal("foo").executes(|c| Ok(*c.source)));
+    d.register(literal("foo").executes(|c: &CommandContext<i32>| Ok(*c.source)));
     let root = d.root();
     d.register(literal("repeat").fork(root, |_| Ok(vec![Arc::new(9), Arc::new(10), Arc::new(11)])));
     assert_eq!(d.execute("repeat foo", 0).unwrap(), 3);
@@ -374,7 +376,9 @@ fn exception_in_forked_redirected_command() {
     let calls = record(&mut d);
     d.register(literal("crash").executes(|_| Err(fail())));
     let root = d.root();
-    d.register(literal("redirect").fork(root, |c| Ok(vec![c.source.clone()])));
+    d.register(
+        literal("redirect").fork(root, |c: &CommandContext<i32>| Ok(vec![c.source.clone()])),
+    );
     assert_eq!(d.execute("redirect crash", 0).unwrap(), 0);
     assert_eq!(*calls.lock().unwrap(), [(0, false, 0)]);
 }
@@ -411,7 +415,7 @@ fn partial_exception_in_forked_redirect() {
     d.register(literal("run").executes(|_| Ok(3)));
     let root = d.root();
     d.register(literal("split").fork(root, |_| Ok(vec![Arc::new(0), Arc::new(1), Arc::new(2)])));
-    d.register(literal("filter").fork(root, |c| {
+    d.register(literal("filter").fork(root, |c: &CommandContext<i32>| {
         if *c.source == 1 {
             Err(fail())
         } else {
