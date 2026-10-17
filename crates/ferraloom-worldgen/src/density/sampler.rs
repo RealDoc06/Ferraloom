@@ -18,6 +18,7 @@ pub struct SamplerContext {
     enabled: bool,
     cells: HashMap<NodeId, CacheCell>,
     blending: Option<crate::blending::BlendingOutputBuffer>,
+    beardifier: Option<Arc<crate::structure::Beardifier>>,
 }
 #[derive(Default, Debug)]
 struct CacheCell {
@@ -30,6 +31,7 @@ impl SamplerContext {
             enabled: true,
             cells: HashMap::new(),
             blending: None,
+            beardifier: None,
         }
     }
     pub fn uncached() -> Self {
@@ -40,6 +42,12 @@ impl SamplerContext {
     }
     pub fn blender(&self) -> Option<&Arc<crate::blending::Blender>> {
         self.blending.as_ref().map(|b| &b.blender)
+    }
+    /// Port of NoiseChunk's Beardifier.CONTEXT_KEY user field. Changing a job
+    /// input invalidates all density caches, including wrappers around markers.
+    pub fn set_beardifier(&mut self, beardifier: Option<Arc<crate::structure::Beardifier>>) {
+        self.clear();
+        self.beardifier = beardifier;
     }
     pub fn clear(&mut self) {
         self.cells.clear();
@@ -390,7 +398,10 @@ impl DensityFunctionCompiler {
                 .blending
                 .as_ref()
                 .map_or(0.0, |b| b.get(p[0], p[2]).offset),
-            D::Simple(Simple::Beardifier) => 0.0,
+            D::Simple(Simple::Beardifier) => context
+                .beardifier
+                .as_ref()
+                .map_or(0.0, |b| b.sample_value(p)),
             D::Reference(_) => unreachable!("compiled references are inlined"),
             D::Noise {
                 xz_scale, y_scale, ..
@@ -595,6 +606,10 @@ impl DensityFunctionCompiler {
         let sample = |id, ctx: &mut SamplerContext| self.sample_volume(id, ctx, volume);
         match node.definition.as_ref() {
             D::Constant(v) => vec![*v; volume.len()],
+            D::Simple(Simple::Beardifier) => context
+                .beardifier
+                .as_ref()
+                .map_or_else(|| vec![0.0; volume.len()], |b| b.sample_volume(volume)),
             D::Noise {
                 xz_scale, y_scale, ..
             } => {
