@@ -259,12 +259,25 @@ impl EndSpikeFeature {
     }
     fn place_spike(&self, ctx: &mut FeatureContext<'_, '_>, spike: &EndSpike) -> Result<(), Error> {
         let r = spike.radius;
-        for z in spike.z - r..=spike.z + r {
-            for y in ctx.region.min_y()..=spike.height + 10 {
-                for x in spike.x - r..=spike.x + r {
-                    if (x - spike.x) * (x - spike.x) + (z - spike.z) * (z - spike.z) <= r * r + 1
-                        && y < spike.height
-                    {
+        // betweenClosed(BlockPos, BlockPos) normalizes both corners, including
+        // negative radii and heights accepted by EndSpike's unrestricted codec.
+        let a = [
+            spike.x.wrapping_sub(r),
+            ctx.region.min_y(),
+            spike.z.wrapping_sub(r),
+        ];
+        let b = [
+            spike.x.wrapping_add(r),
+            spike.height.wrapping_add(10),
+            spike.z.wrapping_add(r),
+        ];
+        let radius_squared = f64::from(r.wrapping_mul(r).wrapping_add(1));
+        for z in a[2].min(b[2])..=a[2].max(b[2]) {
+            for y in a[1].min(b[1])..=a[1].max(b[1]) {
+                for x in a[0].min(b[0])..=a[0].max(b[0]) {
+                    let dx = f64::from(x) - f64::from(spike.x);
+                    let dz = f64::from(z) - f64::from(spike.z);
+                    if dx * dx + dz * dz <= radius_squared && y < spike.height {
                         ctx.region
                             .set_block([x, y, z], Block::OBSIDIAN.default_state(), 2)?;
                     } else if y > 65 {
@@ -293,7 +306,11 @@ impl EndSpikeFeature {
                             )
                             .unwrap();
                             ctx.region.set_block(
-                                [spike.x + x, spike.height + y, spike.z + z],
+                                [
+                                    spike.x.wrapping_add(x),
+                                    spike.height.wrapping_add(y),
+                                    spike.z.wrapping_add(z),
+                                ],
                                 state,
                                 2,
                             )?;
@@ -303,7 +320,7 @@ impl EndSpikeFeature {
             }
         }
         ctx.region.create_end_spike_crystal(
-            [spike.x, spike.height + 1, spike.z],
+            [spike.x, spike.height.wrapping_add(1), spike.z],
             self.beam,
             self.invulnerable,
             ctx.random,

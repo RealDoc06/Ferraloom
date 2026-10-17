@@ -53,11 +53,18 @@ enum Selector {
 }
 fn placed_set(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Vec<Arc<PlacedFeature>>, Error> {
     let values = if let Some(tag) = v.as_str().and_then(|v| v.strip_prefix('#')) {
+        let entries = l.data.resources.registry("worldgen/placed_feature");
         let tags = ferraloom_data::datapack::load_tags(
             l.data.resources,
             "worldgen/placed_feature",
-            |id, _| Some(id.clone()),
+            |id, _| entries.contains_key(id).then(|| id.clone()),
         );
+        if !tags.diagnostics.is_empty() {
+            return Err(Error(format!(
+                "invalid placed feature tags: {:?}",
+                tags.diagnostics
+            )));
+        }
         let ids = tags
             .values
             .get(&tag.parse()?)
