@@ -288,9 +288,20 @@ fn scenario(name: &str, bytes: &[u8]) {
                     })
                     .collect();
                 assert_eq!(
-                    notifications, expected,
-                    "{name} checkpoint {checkpoints}: section notifications and traversal order"
+                    notifications.len(),
+                    expected.len(),
+                    "{name} checkpoint {checkpoints}: section notification count"
                 );
+                if let Some(index) = notifications
+                    .iter()
+                    .zip(&expected)
+                    .position(|(a, b)| a != b)
+                {
+                    panic!(
+                        "{name} checkpoint {checkpoints}: notification {index}: actual {:?}, vanilla {:?}",
+                        notifications[index], expected[index]
+                    );
+                }
                 notifications.clear();
                 checkpoints += 1;
                 assert!(!engine.has_light_work());
@@ -343,7 +354,9 @@ scenario_tests!(
     overhang,
     boundaries,
     gaps,
+    slab_boundary,
     batches,
+    queued_edits,
     lifecycle
 );
 

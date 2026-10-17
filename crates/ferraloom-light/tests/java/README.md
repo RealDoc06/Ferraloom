@@ -11,7 +11,9 @@ section states, array presence, homogeneous/allocation semantics, and the exact
 section notification traversal order. A batched-edit case grows the pending-node
 set beyond its initial capacity. Disk
 reloads pass the real engine's arrays into a new engine through queueSectionData.
-The no-skylight lifecycle scenario also covers retention, removal/recreation,
+The empty-section boundary case preserves vanilla's source-scan reset after a
+slab on the bottom edge. The queued-edit case checks Java DataLayer aliasing
+between retained/queued and newly initialized sections. The no-skylight lifecycle scenario also covers retention, removal/recreation,
 queued replacement data, disabling and enabling emission.
 
 `faces.bin` checks both face-occlusion predicates for every ordered pair of

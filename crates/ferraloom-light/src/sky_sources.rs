@@ -1,6 +1,6 @@
 use crate::{LightWorld, shape_occludes};
 use ferraloom_data::{Block, BlockState};
-use ferraloom_util::core::{BlockPos, ChunkPos, Direction};
+use ferraloom_util::core::{BlockPos, ChunkPos, Direction, SectionPos};
 
 /// Port of `ChunkSkyLightSources`. Values are lowest unobstructed source edges,
 /// not the highest non-air block. Open columns extend to negative infinity.
@@ -21,13 +21,22 @@ impl ChunkSkyLightSources {
             for x in 0..16 {
                 let mut top = Block::AIR.default_state();
                 let mut lowest = self.min_y;
-                for y in (world.min_section() * 16..world.max_section() * 16).rev() {
-                    let bottom = world.block_state(chunk.block_at(x, y, z));
-                    if edge_occluded(top, bottom) {
-                        lowest = y + 1;
-                        break;
+                'sections: for section_y in (world.min_section()..world.max_section()).rev() {
+                    let section = world.section(SectionPos::new(chunk.x, section_y, chunk.z));
+                    let Some(section) = section.filter(|s| !s.has_only_air()) else {
+                        // Vanilla resets the upper edge when skipping an empty
+                        // section, even after a shaped block at its boundary.
+                        top = Block::AIR.default_state();
+                        continue;
+                    };
+                    for local_y in (0..16).rev() {
+                        let bottom = section.get_block_state(x as u8, local_y, z as u8);
+                        if edge_occluded(top, bottom) {
+                            lowest = section_y * 16 + i32::from(local_y) + 1;
+                            break 'sections;
+                        }
+                        top = bottom;
                     }
-                    top = bottom;
                 }
                 self.heights[(z * 16 + x) as usize] = lowest;
             }

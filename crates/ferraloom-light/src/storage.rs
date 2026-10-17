@@ -27,6 +27,14 @@ pub struct LightSectionUpdate {
     pub data: Option<Arc<DataLayer>>,
 }
 
+// New sections and their queued data alias the same Java DataLayer until the
+// first reconcile. Represent that alias explicitly without mutable shared data.
+#[derive(Debug)]
+enum QueuedData {
+    Pending(Arc<DataLayer>),
+    Installed,
+}
+
 /// Port of `LayerLightSectionStorage` and both layer storage subclasses.
 /// Updating and published maps share immutable layers; writes copy only once.
 #[derive(Debug)]
@@ -36,7 +44,7 @@ pub(crate) struct Storage {
     enabled: LongSet,
     pub updating: HashMap<i64, Arc<DataLayer>>,
     visible: HashMap<i64, Arc<DataLayer>>,
-    queued: HashMap<i64, Arc<DataLayer>>,
+    queued: HashMap<i64, QueuedData>,
     retained: LongSet,
     remove: LongSet,
     changed: LongSet,
@@ -123,9 +131,12 @@ impl Storage {
         Some(Arc::make_mut(layer))
     }
     pub fn data(&self, pos: SectionPos) -> Option<&Arc<DataLayer>> {
-        self.queued
-            .get(&pos.as_long())
-            .or_else(|| self.visible.get(&pos.as_long()))
+        let key = pos.as_long();
+        match self.queued.get(&key) {
+            Some(QueuedData::Pending(data)) => Some(data),
+            Some(QueuedData::Installed) => self.updating.get(&key),
+            None => self.visible.get(&key),
+        }
     }
     pub fn value(&self, pos: BlockPos) -> u8 {
         let mut section = SectionPos::from_block(pos);
@@ -153,7 +164,8 @@ impl Storage {
     }
     pub fn queue(&mut self, pos: SectionPos, data: Option<DataLayer>) {
         if let Some(data) = data {
-            self.queued.insert(pos.as_long(), Arc::new(data));
+            self.queued
+                .insert(pos.as_long(), QueuedData::Pending(Arc::new(data)));
             self.inconsistent = true;
         } else {
             self.queued.remove(&pos.as_long());
@@ -188,6 +200,9 @@ impl Storage {
             {
                 let data = self.create(pos);
                 self.updating.insert(pos.as_long(), data);
+                if let Some(queued) = self.queued.get_mut(&pos.as_long()) {
+                    *queued = QueuedData::Installed;
+                }
                 self.changed.insert(pos.as_long());
                 if self.layer == LightLayer::Sky {
                     self.bottom = self.bottom.min(pos.y);
@@ -196,9 +211,9 @@ impl Storage {
                         self.tops.insert(pos.chunk().pack(), pos.y + 1);
                     }
                 }
-                for x in -1..=1 {
-                    for y in -1..=1 {
-                        for z in -1..=1 {
+                for z in -1..=1 {
+                    for x in -1..=1 {
+                        for y in -1..=1 {
                             self.affected.insert(pos.offset(x, y, z).as_long());
                         }
                     }
@@ -211,7 +226,7 @@ impl Storage {
         }
     }
     fn create(&self, pos: SectionPos) -> Arc<DataLayer> {
-        if let Some(data) = self.queued.get(&pos.as_long()) {
+        if let Some(QueuedData::Pending(data)) = self.queued.get(&pos.as_long()) {
             return data.clone();
         }
         if self.layer == LightLayer::Sky {
@@ -241,10 +256,14 @@ impl Storage {
         for key in self.remove.iter() {
             let queued = self.queued.remove(key);
             let stored = self.updating.remove(key);
+            let retained = match queued {
+                Some(QueuedData::Pending(data)) => Some(data),
+                Some(QueuedData::Installed) | None => stored,
+            };
             if self.retained.contains(&SectionPos::of(*key).chunk().pack())
-                && let Some(data) = queued.or(stored)
+                && let Some(data) = retained
             {
-                self.queued.insert(*key, data);
+                self.queued.insert(*key, QueuedData::Pending(data));
             }
         }
         for key in self.remove.drain() {
@@ -266,7 +285,9 @@ impl Storage {
         }
         self.queued.retain(|key, data| {
             if let Some(stored) = self.updating.get_mut(key) {
-                if !Arc::ptr_eq(stored, data) {
+                if let QueuedData::Pending(data) = data
+                    && !Arc::ptr_eq(stored, data)
+                {
                     *stored = data.clone();
                     self.changed.insert(*key);
                 }

@@ -244,6 +244,14 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
         w.set(0,48,0,Blocks.STONE.defaultBlockState(),true);w.checkpoint();
         w.set(0,48,0,Blocks.AIR.defaultBlockState(),true);w.checkpoint();w.close();
 
+        w=new LightingOracle(output.resolve("slab_boundary.bin"),4,true);
+        w.set(0,-31,0,Blocks.STONE);
+        w.set(0,16,0,Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE,SlabType.BOTTOM),false);
+        w.set(1,16,0,Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.HALF,Half.BOTTOM),false);
+        w.initialize(false);w.light();w.checkpoint();
+        w.set(0,16,0,Blocks.AIR.defaultBlockState(),true);w.checkpoint();
+        w.set(0,16,0,Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE,SlabType.BOTTOM),true);w.checkpoint();w.close();
+
         w=new LightingOracle(output.resolve("batches.bin"),4,true);
         w.fill(-16,20,-16,31,20,31,Blocks.STONE);
         w.set(-1,-1,-1,Blocks.GLOWSTONE);
@@ -255,6 +263,14 @@ public final class LightingOracle implements LightChunkGetter, BlockGetter {
             w.checkpoint();
         }
         w.diskReload();w.checkpoint();w.close();
+
+        w=new LightingOracle(output.resolve("queued_edits.bin"),4,false);
+        w.set(0,0,0,Blocks.GLOWSTONE);
+        w.queued(0,0,0,LightLayer.BLOCK,4);
+        w.status(0,0,0,false);w.enabled(0,0,true);
+        w.set(0,0,0,Blocks.GLOWSTONE.defaultBlockState(),true);w.checkpoint();
+        w.retain(0,0,true);w.status(0,0,0,true);w.checkpoint();
+        w.status(0,0,0,false);w.set(0,0,0,Blocks.AIR.defaultBlockState(),true);w.checkpoint();w.close();
 
         w=new LightingOracle(output.resolve("lifecycle.bin"),4,false);
         w.set(0,0,0,Blocks.GLOWSTONE);w.initialize(false);w.light();w.checkpoint();
