@@ -615,7 +615,7 @@ fn main() {
     }
     writeln!(
         out,
-        "const STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
+        "static STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
     )
     .unwrap();
     face_occlusion(
