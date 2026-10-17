@@ -522,3 +522,353 @@ async fn later_section_refusal_keeps_earlier_save_plan_and_aba_history_unpublish
     assert_entry(&poi, (1, 0, 1), PoiType::Home, 1);
     assert_entry(&poi, (1, 16, 1), PoiType::Meeting, 32);
 }
+
+// UNRUN: normal save waits on a real backend's reserved physical POI write.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Keep actual backend wait, independent-region progress and current-version disk proof together."
+)]
+async fn managed_save_waits_for_completion<S>(config: S::ChunkConfig)
+where
+    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S::ChunkConfig: Clone + Send + Sync + 'static,
+{
+    let directory = tempfile::tempdir().unwrap();
+    let folder = folder(&directory);
+    let runtime = TestRuntime::new(folder.poi_folder.clone());
+    let storage = &runtime.runtime.storage;
+    let pos = ChunkPos::new(0, 0);
+    let source = ChunkData::empty_sync(0, 0);
+    source.bind_poi(&runtime.runtime).unwrap();
+    runtime.chunks.insert(pos, source.clone());
+    source.set_block_absolute_y(1, 0, 1, home());
+    let writer = Arc::new(ChunkFileManager::<S>::new(config.clone()));
+    writer.watch_chunks(&folder, &[pos]).await;
+    writer
+        .save_chunks(&folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    writer.flush().await.unwrap();
+    let poi_path = folder.poi_folder.join("r.0.0.mca");
+    let before = std::fs::read(&poi_path).unwrap();
+    source.set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+    writer
+        .save_chunks(&folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    let (entered, release) = storage.lock().unwrap().pause_region_write(pos);
+    let flushing = writer.clone();
+    let flush = tokio::spawn(async move { flushing.flush().await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), entered)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut cancelled = Box::pin(PoiStorage::save_all_managed(storage));
+    assert!(
+        std::future::poll_fn(|cx| std::task::Poll::Ready(cancelled.as_mut().poll(cx)))
+            .await
+            .is_pending()
+    );
+    // The only initially dirty region is reserved by the paused backend. This
+    // poll therefore reached its actual gate, not a task-start notification.
+    drop(cancelled);
+    assert!(runtime.runtime.lifecycle.try_write().is_ok());
+    assert!(runtime.chunks.try_get(&pos).is_present());
+    {
+        let mut live = storage
+            .try_lock()
+            .expect("waiting save must release storage");
+        assert_eq!(
+            live.save_all().unwrap_err().kind(),
+            io::ErrorKind::WouldBlock
+        );
+        live.add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Meeting.identifier(), -9)
+            .unwrap();
+    }
+    assert_eq!(std::fs::read(&poi_path).unwrap(), before);
+    let healthy_gate = {
+        let mut live = storage.lock().unwrap();
+        live.add_portal(BlockPos::new(513, 0, 1)).unwrap();
+        live.regions[&(1, 0)].write_active.clone()
+    };
+    let mut save = Box::pin(PoiStorage::save_all_managed(storage));
+    assert!(
+        std::future::poll_fn(|cx| std::task::Poll::Ready(save.as_mut().poll(cx)))
+            .await
+            .is_pending()
+    );
+    // This batch must drain the healthy region while the first remains paused,
+    // rather than collecting every gate before it dispatches any region's IO.
+    drop(
+        tokio::time::timeout(std::time::Duration::from_secs(5), healthy_gate.lock_owned())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        PoiRegion::load(&folder.poi_folder.join("r.1.0.mca"))
+            .unwrap()
+            .get_all()[0]
+            .pos(),
+        BlockPos::new(513, 0, 1)
+    );
+    // This new region is outside the finite initial batch and stays dirty.
+    storage
+        .lock()
+        .unwrap()
+        .add_portal(BlockPos::new(1025, 0, 1))
+        .unwrap();
+    release.send(()).unwrap();
+    flush.await.unwrap().unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), save)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_entry(
+        &PoiRegion::load(&poi_path).unwrap(),
+        (1, 0, 1),
+        PoiType::Meeting,
+        -9,
+    );
+    {
+        let live = storage.lock().unwrap();
+        assert!(!live.region_is_dirty(pos));
+        assert!(!live.region_is_dirty(ChunkPos::new(32, 0)));
+        assert!(live.region_is_dirty(ChunkPos::new(64, 0)));
+        assert!(!folder.poi_folder.join("r.2.0.mca").exists());
+    }
+    assert_eq!(
+        disk_chunk::<S>(&folder, pos, config)
+            .await
+            .section
+            .get_block_absolute_y(1, 0, 1),
+        Some(Block::BELL.default_state.id)
+    );
+}
+
+#[tokio::test]
+async fn all_formats_managed_save_waits_for_completion_and_captures_current_poi() {
+    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        Box::pin(
+            managed_save_waits_for_completion::<AnvilChunkFile<ChunkData>>(
+                pumpkin_config::chunk::AnvilChunkConfig::default(),
+            ),
+        )
+        .await;
+        Box::pin(managed_save_waits_for_completion::<LinearV2File<ChunkData>>(())).await;
+        Box::pin(managed_save_waits_for_completion::<PumpFile<ChunkData>>(())).await;
+    })
+    .await
+    .unwrap();
+}
+
+// UNRUN: reverse contention retains the exact backend receipt, including when
+// the normal caller is cancelled while its already-owned IO is still running.
+async fn managed_owner_preserves_backend_retry<S>(config: S::ChunkConfig)
+where
+    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S::ChunkConfig: Clone + Send + Sync + 'static,
+{
+    let directory = tempfile::tempdir().unwrap();
+    let folder = folder(&directory);
+    let runtime = TestRuntime::new(folder.poi_folder.clone());
+    let storage = runtime.runtime.storage.clone();
+    let pos = ChunkPos::new(0, 0);
+    storage
+        .lock()
+        .unwrap()
+        .add_portal(BlockPos::new(2, 0, 2))
+        .unwrap();
+    let (entered, release) = storage.lock().unwrap().pause_region_write(pos);
+    let saving = storage.clone();
+    let save = tokio::spawn(async move { PoiStorage::save_all_managed(&saving).await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), entered)
+        .await
+        .unwrap()
+        .unwrap();
+    save.abort();
+    assert!(save.await.unwrap_err().is_cancelled());
+    assert_eq!(
+        storage.try_lock().unwrap().save_all().unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    let source = ChunkData::empty_sync(0, 0);
+    source.bind_poi(&runtime.runtime).unwrap();
+    source.set_block_absolute_y(1, 0, 1, home());
+    let original = Arc::downgrade(&source);
+    let writer = ChunkFileManager::<S>::new(config.clone());
+    writer.watch_chunks(&folder, &[pos]).await;
+    writer
+        .save_chunks(&folder, vec![(pos, source)])
+        .await
+        .unwrap();
+    assert!(
+        matches!(writer.flush().await, Err(ChunkWritingError::IoError(error)) if error.kind() == io::ErrorKind::WouldBlock)
+    );
+    assert!(original.upgrade().is_some());
+    let terrain_path = folder.region_folder.join(S::get_chunk_key(&pos));
+    let terrain_before = std::fs::read(&terrain_path).unwrap();
+    storage
+        .lock()
+        .unwrap()
+        .add_with_free_tickets(BlockPos::new(1, 0, 1), PoiType::Home.identifier(), -13)
+        .unwrap();
+    let gate = storage.lock().unwrap().regions[&(0, 0)]
+        .write_active
+        .clone();
+    release.send(()).unwrap();
+    // Fence the cancelled normal owner's real ack, not just its caller task.
+    drop(
+        tokio::time::timeout(std::time::Duration::from_secs(5), gate.lock_owned())
+            .await
+            .unwrap(),
+    );
+    assert!(storage.lock().unwrap().region_is_dirty(pos));
+    writer.flush().await.unwrap();
+    assert_eq!(std::fs::read(&terrain_path).unwrap(), terrain_before);
+    assert_entry(
+        &PoiRegion::load(&folder.poi_folder.join("r.0.0.mca")).unwrap(),
+        (1, 0, 1),
+        PoiType::Home,
+        -13,
+    );
+    assert!(original.upgrade().is_none());
+    assert!(!storage.lock().unwrap().region_is_dirty(pos));
+    assert_eq!(
+        disk_chunk::<S>(&folder, pos, config)
+            .await
+            .section
+            .get_block_absolute_y(1, 0, 1),
+        Some(home())
+    );
+}
+
+#[tokio::test]
+async fn all_formats_managed_owner_cancellation_preserves_exact_backend_retry() {
+    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        Box::pin(managed_owner_preserves_backend_retry::<
+            AnvilChunkFile<ChunkData>,
+        >(pumpkin_config::chunk::AnvilChunkConfig::default()))
+        .await;
+        Box::pin(managed_owner_preserves_backend_retry::<
+            LinearV2File<ChunkData>,
+        >(()))
+        .await;
+        Box::pin(managed_owner_preserves_backend_retry::<PumpFile<ChunkData>>(())).await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn managed_save_reports_real_io_and_load_refusals_after_healthy_region_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    let folder = folder(&directory);
+    let storage = Arc::new(Mutex::new(PoiStorage::new(folder.poi_folder.clone())));
+    let corrupt = folder.poi_folder.join("r.2.0.mca");
+    std::fs::write(&corrupt, b"refused original POI").unwrap();
+    let blocked = folder.poi_folder.join("r.0.0.mca");
+    {
+        let mut live = storage.lock().unwrap();
+        live.add_portal(BlockPos::new(1, 0, 1)).unwrap();
+        live.add_portal(BlockPos::new(513, 0, 1)).unwrap();
+        assert!(live.preload_poi_region(ChunkPos::new(64, 0)).is_err());
+    }
+    std::fs::create_dir(&blocked).unwrap();
+    assert!(PoiStorage::save_all_managed(&storage).await.is_err());
+    assert_eq!(std::fs::read(&corrupt).unwrap(), b"refused original POI");
+    assert!(blocked.is_dir());
+    assert_eq!(
+        PoiRegion::load(&folder.poi_folder.join("r.1.0.mca"))
+            .unwrap()
+            .get_all()[0]
+            .pos(),
+        BlockPos::new(513, 0, 1)
+    );
+    {
+        let live = storage.lock().unwrap();
+        assert!(live.region_is_dirty(ChunkPos::new(0, 0)));
+        assert!(!live.region_is_dirty(ChunkPos::new(32, 0)));
+    }
+    std::fs::remove_dir(&blocked).unwrap();
+    // Repairing IO does not clear an unrelated sticky lazy-load refusal.
+    assert_eq!(
+        PoiStorage::save_all_managed(&storage)
+            .await
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+    assert_eq!(
+        PoiRegion::load(&blocked).unwrap().get_all()[0].pos(),
+        BlockPos::new(1, 0, 1)
+    );
+    assert_eq!(std::fs::read(&corrupt).unwrap(), b"refused original POI");
+}
+
+#[test]
+fn cancelled_queued_managed_save_keeps_gate_until_actual_ack() {
+    tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                let directory = tempfile::tempdir().unwrap();
+                let storage = Arc::new(Mutex::new(PoiStorage::new(directory.path().to_owned())));
+                let position = BlockPos::new(1, 0, 1);
+                storage
+                    .lock()
+                    .unwrap()
+                    .add_with_free_tickets(position, PoiType::Home.identifier(), 1)
+                    .unwrap();
+                let (entered, ready) = tokio::sync::oneshot::channel();
+                let (release, released) = std::sync::mpsc::channel();
+                let blocker = tokio::task::spawn_blocking(move || {
+                    entered.send(()).unwrap();
+                    released
+                        .recv_timeout(std::time::Duration::from_secs(5))
+                        .unwrap();
+                });
+                ready.await.unwrap();
+                let mut cancelled = Box::pin(PoiStorage::save_all_managed(&storage));
+                assert!(
+                    std::future::poll_fn(|cx| std::task::Poll::Ready(cancelled.as_mut().poll(cx)))
+                        .await
+                        .is_pending()
+                );
+                drop(cancelled);
+                {
+                    let mut live = storage.try_lock().unwrap();
+                    assert_eq!(
+                        live.save_all().unwrap_err().kind(),
+                        io::ErrorKind::WouldBlock
+                    );
+                    live.add_with_free_tickets(position, PoiType::Home.identifier(), -17)
+                        .unwrap();
+                }
+                let mut next = Box::pin(PoiStorage::save_all_managed(&storage));
+                assert!(
+                    std::future::poll_fn(|cx| std::task::Poll::Ready(next.as_mut().poll(cx)))
+                        .await
+                        .is_pending()
+                );
+                assert!(!directory.path().join("r.0.0.mca").exists());
+                release.send(()).unwrap();
+                blocker.await.unwrap();
+                next.await.unwrap();
+                assert_entry(
+                    &PoiRegion::load(&directory.path().join("r.0.0.mca")).unwrap(),
+                    (1, 0, 1),
+                    PoiType::Home,
+                    -17,
+                );
+                let live = storage.lock().unwrap();
+                assert!(!live.region_is_dirty(ChunkPos::new(0, 0)));
+                assert_eq!(live.completed_region_writes(ChunkPos::new(0, 0)), 2);
+            })
+            .await
+            .unwrap();
+        });
+}

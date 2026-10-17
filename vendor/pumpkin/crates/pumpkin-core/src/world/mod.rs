@@ -8536,6 +8536,11 @@ impl World {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn save_lifecycle_available_for_test(&self) -> bool {
+        self.entity_lifecycle.try_lock().is_ok()
+    }
+
     pub async fn save(&self) -> Result<(), WorldSaveError> {
         let lifecycle = self.entity_lifecycle.lock().await;
         let entities = self.entities.load_full();
