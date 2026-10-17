@@ -1056,10 +1056,10 @@ impl Level {
         let result = self
             .bind_chunk_poi(chunk)
             .and_then(|()| chunk.prepare_poi());
-        if let Err(error) = &result {
-            if !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture) {
-                self.record_save_failure(error.to_string());
-            }
+        if let Err(error) = &result
+            && !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture)
+        {
+            self.record_save_failure(error.to_string());
         }
         result
     }
@@ -1078,10 +1078,10 @@ impl Level {
                     error.to_string(),
                 ))
             });
-        if let Err(error) = &result {
-            if !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture) {
-                self.record_save_failure(error.to_string());
-            }
+        if let Err(error) = &result
+            && !matches!(error, crate::poi::PoiReconcileError::StaleSaveCapture)
+        {
+            self.record_save_failure(error.to_string());
         }
         result
     }
