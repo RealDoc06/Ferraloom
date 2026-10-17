@@ -9,6 +9,17 @@ use ferraloom_data::datapack::{Pack, ResourceManager};
 use ferraloom_util::random::{WorldgenRandom, XoroshiroRandomSource};
 use std::{io::Read, path::Path};
 
+// The controlled vanilla registry contains the patch. Its implementation is
+// owned by the vegetation family; preserve registry presence and fail explicitly.
+#[derive(Debug)]
+struct PendingMossPatch;
+impl Feature for PendingMossPatch {
+    fn place(&self, _: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
+        Err(Error(
+            "Unsupported: configured feature minecraft:pale_moss_patch".into(),
+        ))
+    }
+}
 struct UnsupportedBehavior;
 impl WorldgenBlockBehavior for UnsupportedBehavior {
     fn has_block_entity(&self, s: BlockState) -> bool {
@@ -100,7 +111,11 @@ fn run_cases(require_pending: bool) {
             );
         }
     }
-    let registry = loader.finish();
+    let mut registry = loader.finish();
+    registry.features.insert(
+        "pale_moss_patch".parse().unwrap(),
+        Arc::new(PendingMossPatch),
+    );
     let mut baselines = std::collections::BTreeMap::new();
     let mut passed = 0;
     let mut geometry = 0;
@@ -188,19 +203,25 @@ fn run_cases(require_pending: bool) {
                     "unexpected pending behavior {label}: {message}"
                 );
                 assert!(!require_pending, "{label} pending: {message}");
-                if message == "Unsupported: update_shape"
-                    && !name.contains("pale_oak")
-                    && !name.starts_with("minecraft:rooted_")
-                {
+                let prefix = match message.as_str() {
+                    "Unsupported: update_shape" => Some("before_edge"),
+                    "Unsupported: populate_worldgen_beehive" => Some("before_bees"),
+                    "Unsupported: destroy_block" => Some("before_destroy"),
+                    "Unsupported: configured feature minecraft:pale_moss_patch" => {
+                        Some("before_external")
+                    }
+                    _ => None,
+                };
+                if let Some(prefix) = prefix {
                     assert_eq!(
                         random.next_long(),
-                        case["next"].as_i64().unwrap(),
-                        "pre-edge RNG {label}"
+                        case[format!("{prefix}_next")].as_i64().unwrap(),
+                        "{prefix} RNG {label}"
                     );
                     assert_eq!(
                         placed(&chunks, origin, terrain, ground),
-                        case["before_edge"],
-                        "pre-edge blocks {label}"
+                        case[prefix],
+                        "{prefix} blocks {label}"
                     );
                     geometry += 1;
                 }
@@ -232,7 +253,7 @@ fn run_cases(require_pending: bool) {
         passed += 1;
     }
     eprintln!(
-        "Tree-family fixture cases compared: {passed}; pre-edge geometry/RNG checked in {geometry} pending tree cases; PENDING (not passing): {pending:?}"
+        "Tree-family fixture cases compared: {passed}; placement prefix geometry/RNG checked in {geometry} pending tree cases; PENDING (not passing): {pending:?}"
     );
     assert!(passed > 0);
 }

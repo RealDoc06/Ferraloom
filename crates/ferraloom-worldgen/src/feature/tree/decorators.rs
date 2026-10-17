@@ -349,15 +349,9 @@ impl Decorator {
                 let mut positions = logs.to_vec();
                 shuffle(&mut positions, c.random);
                 if let Some(&origin) = positions.iter().min_by_key(|p| p[1]) {
-                    if c.random.next_float() < *ground {
-                        let feature = c
-                            .registry
-                            .features
-                            .get(patch)
-                            .ok_or_else(|| {
-                                Error(format!("Unsupported: configured feature {patch}"))
-                            })?
-                            .clone();
+                    if c.random.next_float() < *ground
+                        && let Some(feature) = c.registry.features.get(patch).cloned()
+                    {
                         let old = c.origin;
                         c.origin = add(origin, [0, 1, 0]);
                         let result = feature.place(c);

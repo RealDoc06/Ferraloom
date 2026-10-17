@@ -25,7 +25,14 @@ public final class TreeGolden implements InvocationHandler {
     final Map<ChunkPos,ProtoChunk> chunks=new HashMap<>();
     static net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager templateManager;
     final net.minecraft.server.level.ServerLevel serverLevel;
-    JsonArray beforeEdge;
+    JsonArray beforeEdge,beforeBees,beforeDestroy,beforeExternal;
+    Long beforeEdgeNext,beforeBeesNext,beforeDestroyNext,beforeExternalNext;
+    XoroshiroRandomSource featureSource;
+    long peekNext() {
+        var state=XoroshiroRandomSource.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,featureSource).getOrThrow();
+        var copy=XoroshiroRandomSource.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,state).getOrThrow();
+        return new WorldgenRandom(copy).nextLong();
+    }
     final RandomSource levelRandom=new LegacyRandomSource(123);
     TreeGolden(RegistryAccess.Frozen registries,BlockPos origin,String terrain,BlockState ground,ChunkGenerator generator) {
         this.registries=registries;this.origin=origin;this.terrain=terrain;this.ground=ground;
@@ -69,8 +76,11 @@ public final class TreeGolden implements InvocationHandler {
             case "getBlockState": return block((BlockPos)args[0]);
             case "getFluidState": return block((BlockPos)args[0]).getFluidState();
             case "setBlock": case "setBlockAndUpdate": return set((BlockPos)args[0],(BlockState)args[1]);
-            case "removeBlock": case "destroyBlock": return set((BlockPos)args[0],Blocks.AIR.defaultBlockState());
-            case "getBlockEntity": if(args.length==1)return entities.get((BlockPos)args[0]); break;
+            case "removeBlock": case "destroyBlock":
+                if(beforeDestroy==null){beforeDestroy=placed();beforeDestroyNext=peekNext();}
+                return set((BlockPos)args[0],Blocks.AIR.defaultBlockState());
+            case "getBlockEntity":
+                if(args.length==1){var entity=entities.get((BlockPos)args[0]);if(entity instanceof BeehiveBlockEntity && beforeBees==null){beforeBees=placed();beforeBeesNext=peekNext();}return entity;} break;
             case "getMinY": return -64;
             case "getMaxY": return 319;
             case "getHeight":
@@ -81,8 +91,8 @@ public final class TreeGolden implements InvocationHandler {
                 return -64;
             case "getSeaLevel": return 63;
             case "getSeed": return 8675309L;
-            case "getLevel": return serverLevel;
-            case "getRandom": if(beforeEdge==null)beforeEdge=placed(); return levelRandom;
+            case "getLevel": if(beforeExternal==null){beforeExternal=placed();beforeExternalNext=peekNext();}return serverLevel;
+            case "getRandom": if(beforeEdge==null){beforeEdge=placed();beforeEdgeNext=peekNext();}return levelRandom;
             case "registryAccess": return registries;
             case "getChunk":
                 BlockPos p=args[0] instanceof BlockPos bp ? bp : new BlockPos((int)args[0]*16,0,(int)args[1]*16);
@@ -149,11 +159,14 @@ public final class TreeGolden implements InvocationHandler {
                 var ground=feature instanceof HugeFungusFeature f ? f.validBaseState() : Blocks.GRASS_BLOCK.defaultBlockState();
                 var fixture=new TreeGolden(registries,origin,terrain,ground,generator);
                 var level=(WorldGenLevel)Proxy.newProxyInstance(TreeGolden.class.getClassLoader(),new Class<?>[]{WorldGenLevel.class},fixture);
-                var random=new WorldgenRandom(new XoroshiroRandomSource(seed));var item=new JsonObject();
+                var source=new XoroshiroRandomSource(seed);var random=new WorldgenRandom(source);fixture.featureSource=source;var item=new JsonObject();
                 item.addProperty("feature",entry.key().identifier().toString());item.addProperty("seed",seed);item.add("origin",FeaturesGolden.values(coordinates));item.addProperty("terrain",terrain);item.addProperty("ground",Block.getId(ground));
                 try {item.addProperty("success",feature.place(level,generator,random,origin));}
                 catch(Throwable failure) {throw new RuntimeException(entry.key().identifier()+" "+seed+" "+terrain,failure);}
-                item.addProperty("next",random.nextLong());item.add("blocks",fixture.placed());item.add("block_entities",fixture.blockEntities());if(fixture.beforeEdge!=null)item.add("before_edge",fixture.beforeEdge);cases.add(item);
+                item.addProperty("next",random.nextLong());item.add("blocks",fixture.placed());item.add("block_entities",fixture.blockEntities());if(fixture.beforeEdge!=null){item.add("before_edge",fixture.beforeEdge);item.addProperty("before_edge_next",fixture.beforeEdgeNext);}
+                if(fixture.beforeBees!=null){item.add("before_bees",fixture.beforeBees);item.addProperty("before_bees_next",fixture.beforeBeesNext);}
+                if(fixture.beforeDestroy!=null){item.add("before_destroy",fixture.beforeDestroy);item.addProperty("before_destroy_next",fixture.beforeDestroyNext);}
+                if(fixture.beforeExternal!=null){item.add("before_external",fixture.beforeExternal);item.addProperty("before_external_next",fixture.beforeExternalNext);}cases.add(item);
             }
         }
         WorldgenGolden.write(Path.of(args[0]),cases);
