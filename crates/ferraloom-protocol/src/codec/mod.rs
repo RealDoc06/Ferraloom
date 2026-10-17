@@ -101,14 +101,14 @@ impl<T> StreamCodec<T> for Codec<T> {
 }
 
 pub const VAR_INT: Codec<i32> = Codec {
-    read: Reader::var_int,
+    read: |r| r.var_int(),
     write: |w, v| {
         w.var_int(*v);
         Ok(())
     },
 };
 pub const VAR_LONG: Codec<i64> = Codec {
-    read: Reader::var_long,
+    read: |r| r.var_long(),
     write: |w, v| {
         w.var_long(*v);
         Ok(())
