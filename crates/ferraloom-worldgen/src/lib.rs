@@ -43,6 +43,7 @@ pub mod surface;
 
 pub mod blending;
 
+pub mod carver;
 pub mod decoration;
 pub mod placement;
 pub mod region;
