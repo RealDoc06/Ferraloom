@@ -7,20 +7,42 @@ pub struct NumericBounds<T> {
     pub min: Option<T>,
     pub max: Option<T>,
 }
-impl<T: Wire> Wire for NumericBounds<T> {
+pub trait NumericBound: Wire + PartialEq {
+    const MIN: Self;
+    const MAX: Self;
+}
+macro_rules! numeric_bound {($($ty:ty),*)=>{$(impl NumericBound for $ty {const MIN:Self=Self::MIN;const MAX:Self=Self::MAX;})*};}
+numeric_bound!(f32, f64, i32, i64);
+impl<T: NumericBound> Wire for NumericBounds<T> {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
         let b = r.u8()?;
         Ok(Self {
-            min: if b & 1 != 0 { Some(r.read()?) } else { None },
-            max: if b & 2 != 0 { Some(r.read()?) } else { None },
+            min: if b & 1 != 0 {
+                {
+                    let value = r.read()?;
+                    (value != T::MIN).then_some(value)
+                }
+            } else {
+                None
+            },
+            max: if b & 2 != 0 {
+                {
+                    let value = r.read()?;
+                    (value != T::MAX).then_some(value)
+                }
+            } else {
+                None
+            },
         })
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        w.u8(u8::from(self.min.is_some()) | (u8::from(self.max.is_some()) << 1));
-        if let Some(v) = &self.min {
+        let min = self.min.as_ref().filter(|v| **v != T::MIN);
+        let max = self.max.as_ref().filter(|v| **v != T::MAX);
+        w.u8(u8::from(min.is_some()) | (u8::from(max.is_some()) << 1));
+        if let Some(v) = min {
             v.encode(w)?;
         }
-        if let Some(v) = &self.max {
+        if let Some(v) = max {
             v.encode(w)?;
         }
         Ok(())

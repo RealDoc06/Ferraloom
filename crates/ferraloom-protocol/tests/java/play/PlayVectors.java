@@ -9,6 +9,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.*;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.item.crafting.display.*;
+import net.minecraft.world.item.*;
+import net.minecraft.core.registries.Registries;
 
 /** Runs vanilla's packet codecs. Fixtures are emitted by the real encoder after decoding a neutral seed. */
 public final class PlayVectors {
@@ -24,7 +27,7 @@ public final class PlayVectors {
         RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries().forEach(e -> values.put(e.key(),e.value()));
         lookup.listRegistries().forEach(l -> {
             if (values.containsKey(l.key())) return;
-            if (!Set.of("minecraft:worldgen/biome","minecraft:dimension_type","minecraft:damage_type","minecraft:chat_type","minecraft:dialog","minecraft:world_clock","minecraft:timeline","minecraft:waypoint_style").contains(l.key().identifier().toString())) return;
+            if (!Set.of("minecraft:worldgen/biome","minecraft:dimension_type","minecraft:damage_type","minecraft:chat_type","minecraft:dialog","minecraft:world_clock","minecraft:timeline","minecraft:waypoint_style","minecraft:trim_pattern").contains(l.key().identifier().toString())) return;
             var registry = new MappedRegistry(l.key(),Lifecycle.stable());
             l.listElements().forEach(h -> registry.register(h.key(),h.value(),RegistrationInfo.BUILT_IN));
             registry.freeze();
@@ -126,6 +129,54 @@ public final class PlayVectors {
             for(int i=0;i<16;i++){b.writeUtf("prop"+i);b.writeUtf("value"+i);b.writeBoolean(true);b.writeUtf("signature"+i);}
             b.writeBoolean(false);b.writeVarInt(3);b.writeBoolean(true);b.writeVarInt(Integer.MAX_VALUE);b.writeBoolean(true);text(b,"Display");b.writeVarInt(-1);b.writeBoolean(true);
         });
+        var empty=SlotDisplay.Empty.INSTANCE;
+        var item=new SlotDisplay.ItemSlotDisplay(Items.DIAMOND);
+        var trim=registries.lookupOrThrow(Registries.TRIM_PATTERN).getOrThrow(net.minecraft.world.item.equipment.trim.TrimPatterns.SENTRY);
+        var slots=List.<SlotDisplay>of(empty,SlotDisplay.AnyFuel.INSTANCE,new SlotDisplay.WithAnyPotion(item),new SlotDisplay.OnlyWithComponent(item,net.minecraft.core.component.DataComponents.DAMAGE),item,new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(Items.DIAMOND,64)),new SlotDisplay.TagSlotDisplay(HolderSet.direct(Items.DIAMOND.builtInRegistryHolder())),new SlotDisplay.DyedSlotDemo(item,item),new SlotDisplay.SmithingTrimDemoSlotDisplay(item,item,trim),new SlotDisplay.WithRemainder(item,empty),new SlotDisplay.Composite(List.of(item,empty)));
+        var displays=List.<RecipeDisplay>of(new ShapelessCraftingRecipeDisplay(slots,item,item),new ShapedCraftingRecipeDisplay(3,3,slots.subList(0,9),item,item),new FurnaceRecipeDisplay(item,SlotDisplay.AnyFuel.INSTANCE,item,item,200,.5f),new StonecutterRecipeDisplay(item,item,item),new SmithingRecipeDisplay(item,item,item,item,item));
+        for(int i=0;i<displays.size();i++){
+            final var display=displays.get(i);
+            sample(output,"clientbound_PlaceGhostRecipe_edge_display_"+i,"ClientboundPlaceGhostRecipePacket",b->{b.writeVarInt(300);RecipeDisplay.STREAM_CODEC.encode(b,display);});
+        }
+        sample(output,"clientbound_Commands_edge_all_arguments","ClientboundCommandsPacket",b->{
+            int count=BuiltInRegistries.COMMAND_ARGUMENT_TYPE.size();b.writeVarInt(count+1);b.writeByte(0);b.writeVarInt(count);for(int i=1;i<=count;i++)b.writeVarInt(i);
+            for(int i=0;i<count;i++){
+                var name=BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getKey(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.byId(i)).toString();
+                b.writeByte(2|4|16|32);b.writeVarInt(0);b.writeUtf("arg"+i);b.writeVarInt(i);
+                switch(name){
+                    case "brigadier:float":b.writeByte(3);b.writeFloat(-12.5f);b.writeFloat(42.125f);break;
+                    case "brigadier:double":b.writeByte(3);b.writeDouble(-12.5);b.writeDouble(42.125);break;
+                    case "brigadier:integer":b.writeByte(3);b.writeInt(-5);b.writeInt(10);break;
+                    case "brigadier:long":b.writeByte(3);b.writeLong(-12345);b.writeLong(Long.MAX_VALUE);break;
+                    case "brigadier:string":b.writeVarInt(2);break;
+                    case "minecraft:entity":b.writeByte(3);break;
+                    case "minecraft:score_holder":b.writeByte(1);break;
+                    case "minecraft:time":b.writeInt(20);break;
+                    case "minecraft:resource_or_tag":case "minecraft:resource_or_tag_key":case "minecraft:resource":case "minecraft:resource_key":case "minecraft:resource_selector":b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("item"));break;
+                }
+                b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("ask_server"));
+            }
+            b.writeVarInt(0);
+        });
+        sample(output,"clientbound_UpdateAdvancements_edge_full","ClientboundUpdateAdvancementsPacket",b->{
+            var id=net.minecraft.resources.Identifier.withDefaultNamespace("test");b.writeBoolean(true);b.writeVarInt(1);b.writeIdentifier(id);b.writeBoolean(false);b.writeBoolean(true);
+            text(b,"Title");text(b,"Description");ItemStackTemplate.STREAM_CODEC.encode(b,new ItemStackTemplate(Items.DIAMOND));b.writeVarInt(2);b.writeInt(7);b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("gui/advancements/backgrounds/stone"));
+            b.writeVarInt(2);b.writeVarInt(1);b.writeUtf("one");b.writeVarInt(2);b.writeUtf("two");b.writeUtf("three");b.writeBoolean(true);b.writeFloat(-1.5f);b.writeFloat(2.25f);
+            b.writeVarInt(1);b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("old"));b.writeVarInt(1);b.writeIdentifier(id);b.writeVarInt(1);b.writeUtf("one");b.writeBoolean(true);b.writeLong(123456789L);b.writeBoolean(true);
+        });
+        for(int i=1;i<=15;i++){
+            final int id=i;
+            sample(output,"clientbound_DebugEvent_edge_subscription_"+i,"ClientboundDebugEventPacket",b->{b.writeVarInt(id);debugValue(b,id);});
+            sample(output,"clientbound_DebugEntityValue_edge_present_"+i,"ClientboundDebugEntityValuePacket",b->{b.writeVarInt(300);b.writeVarInt(id);b.writeBoolean(true);debugValue(b,id);});
+            sample(output,"clientbound_DebugEntityValue_edge_absent_"+i,"ClientboundDebugEntityValuePacket",b->{b.writeVarInt(300);b.writeVarInt(id);b.writeBoolean(false);});
+        }
+        for(int i=0;i<=3;i++){
+            final int type=i;
+            sample(output,"clientbound_Waypoint_edge_type_"+i,"ClientboundTrackedWaypointPacket",b->{
+                b.writeVarInt(2);b.writeBoolean(true);b.writeUUID(new UUID(123,456));b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("default"));b.writeBoolean(true);b.writeByte(255);b.writeByte(128);b.writeByte(0);b.writeVarInt(type);
+                switch(type){case 1:b.writeVarInt(-30000000);b.writeVarInt(-64);b.writeVarInt(30000000);break;case 2:b.writeVarInt(-1875000);b.writeVarInt(1875000);break;case 3:b.writeFloat(2.125f);break;}
+            });
+        }
         // Delimiter identity, completion, and size limits are checked against vanilla's bundler.
         var protocol=net.minecraft.network.protocol.game.GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registries));
         var in=Unpooled.wrappedBuffer(new byte[]{0});var delimiter=protocol.codec().decode(in);in.release();
@@ -133,6 +184,27 @@ public final class PlayVectors {
         for(int i=0;i<4096;i++)if(bundler.addPacket(new net.minecraft.network.protocol.game.ClientboundTickingStepPacket(i))!=null)throw new AssertionError();
         try{bundler.addPacket(new net.minecraft.network.protocol.game.ClientboundTickingStepPacket(0));throw new AssertionError("bundle limit not enforced");}catch(IllegalStateException expected){}
         if(bundler.addPacket(delimiter)==null)throw new AssertionError("bundle did not close");
+    }
+    static void node(RegistryFriendlyByteBuf b){b.writeInt(-1);b.writeInt(64);b.writeInt(2);b.writeFloat(1.5f);b.writeFloat(-1);b.writeBoolean(true);b.writeVarInt(26);b.writeFloat(.75f);}
+    static void debugValue(RegistryFriendlyByteBuf b,int id){
+        var pos=new BlockPos(-1,64,2);
+        switch(id){
+            case 1:b.writeBoolean(true);b.writeBlockPos(pos);b.writeBoolean(false);b.writeVarInt(300);b.writeVarInt(1);b.writeBlockPos(pos);break;
+            case 2:b.writeUtf("Name");b.writeUtf("Profession");b.writeInt(10);b.writeFloat(1.5f);b.writeFloat(20);b.writeUtf("inventory");b.writeBoolean(true);b.writeInt(7);for(int i=0;i<4;i++){b.writeVarInt(1);b.writeUtf("entry");}for(int i=0;i<2;i++){b.writeVarInt(1);b.writeBlockPos(pos);}break;
+            case 3:b.writeBoolean(true);b.writeVarInt(123);b.writeBoolean(true);b.writeBlockPos(pos);break;
+            case 4:b.writeVarInt(1);b.writeVarInt(10);b.writeBoolean(true);b.writeUtf("g".repeat(255));break;
+            case 5:b.writeBoolean(true);b.writeInt(0);b.writeBlockPos(pos);b.writeVarInt(1);node(b);b.writeVarInt(0);b.writeVarInt(0);b.writeVarInt(1);node(b);b.writeFloat(1.25f);break;
+            case 6:b.writeVarInt(2);break;
+            case 7:b.writeVarInt(0);b.writeVarInt(3);b.writeVarInt(5);b.writeBoolean(true);break;
+            case 8:b.writeBlockPos(pos);b.writeVarInt(0);b.writeVarInt(2);break;
+            case 9:b.writeVarInt(47);break;
+            case 10:break;
+            case 11:b.writeVarInt(1);b.writeBlockPos(pos);break;
+            case 12:b.writeVarInt(1);b.writeBlockPos(pos);b.writeBlockPos(pos.offset(5,6,7));b.writeVarInt(1);b.writeBlockPos(pos);b.writeBlockPos(pos.offset(2,3,4));b.writeBoolean(true);break;
+            case 13:b.writeVarInt(32);break;
+            case 14:b.writeBlockPos(pos);break;
+            case 15:b.writeVarInt(0);b.writeDouble(-1.5);b.writeDouble(64);b.writeDouble(2.125);break;
+        }
     }
     static <T> void registryRows(RegistryAccess.RegistryEntry<T> e,List<String> rows) {
         e.value().entrySet().forEach(v -> rows.add(e.key().identifier()+"\t"+e.value().getId(v.getValue())+"\t"+v.getKey().identifier()));
@@ -185,7 +257,7 @@ public final class PlayVectors {
             if(cols[0].equals("serverbound_ChatSessionUpdate")){
                 var b=new FriendlyByteBuf(Unpooled.buffer());
                 b.writeUUID(new UUID(0,0));b.writeLong(0);
-                b.writeByteArray(java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic().getEncoded());b.writeByteArray(new byte[0]);
+                b.writeByteArray(HexFormat.of().parseHex(Files.readString(output.resolve("../../../tests/fixtures/rsa_public.hex").normalize()).trim()));b.writeByteArray(new byte[0]);
                 seed=new byte[b.readableBytes()];b.readBytes(seed);b.release();
             }
             try {vector(output,cols[0],cols[1],seed);count++;}
