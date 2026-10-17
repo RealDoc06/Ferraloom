@@ -3,6 +3,7 @@
 pub mod beardifier;
 pub mod bounding_box;
 pub mod placement;
+pub mod rule;
 
 pub use beardifier::{
     Beardifier, JigsawJunction, Projection, Rigid, TerrainAdjustment, TerrainPiece,
