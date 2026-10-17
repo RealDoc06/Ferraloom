@@ -32,3 +32,9 @@ up/down, and `East` covers boolean connections, redstone sides and wall heights.
 `BlockState::with` validates the receiving block's domain and returns `None` for
 unsupported values. Numeric property values are `u8`, boolean values are `bool`.
 Other values are generated enums; none require string lookup during simulation.
+
+`ExtractTagKeys` separately records tag key names and their registry identities,
+including vanilla datapack tags without a Java constant, in `tag_keys.json`.
+`tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;
+each loaded `TagSet` resolves them once and stores membership in bitsets. Custom
+datapack tags resolve by identifier to a dense `TagId` before simulation reads.

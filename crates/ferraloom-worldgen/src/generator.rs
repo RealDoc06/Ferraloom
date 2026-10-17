@@ -6,7 +6,7 @@ use crate::{
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
 use ferraloom_data::{
     Block, BlockState,
-    datapack::{ResourceManager, load_tags},
+    datapack::{ResourceManager, TagSet, load_tags},
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -23,6 +23,9 @@ pub struct GenerationData {
     pub biome_names: Vec<Identifier>,
     pub biome_ids: BTreeMap<Identifier, BiomeId>,
     pub biome_tags: BTreeMap<Identifier, Vec<Identifier>>,
+    pub block_tags: Arc<TagSet<Block>>,
+    pub fluid_tags: Arc<TagSet<ferraloom_data::registries::fluid::Id>>,
+    pub item_tags: Arc<TagSet<ferraloom_data::Item>>,
     motion_blocking: Arc<HashSet<Block>>,
     motion_blocking_no_leaves: Arc<HashSet<Block>>,
     biome_strategy: Strategy<BiomeId>,
@@ -87,6 +90,22 @@ impl GenerationData {
                 .collect(),
         );
         let ids = (0..biome_names.len()).map(|i| BiomeId(i as u32)).collect();
+        let block_tags = Arc::new(TagSet::from_tags(
+            block_tags,
+            ferraloom_data::registries::block::NAMES.len(),
+        )?);
+        let fluid_tags = Arc::new(TagSet::<ferraloom_data::registries::fluid::Id>::load(
+            resources,
+        )?);
+        let item_tags = Arc::new(TagSet::<ferraloom_data::Item>::load(resources)?);
+        for (name, diagnostics) in [
+            ("fluid", &fluid_tags.diagnostics),
+            ("item", &item_tags.diagnostics),
+        ] {
+            if !diagnostics.is_empty() {
+                return Err(Error(format!("invalid {name} tags: {diagnostics:?}")));
+            }
+        }
         let biome_strategy = Strategy::biomes(Arc::new(
             IdMap::new(ids).map_err(|e| Error(format!("invalid biome registry: {e:?}")))?,
         ));
@@ -99,6 +118,9 @@ impl GenerationData {
             biome_names,
             biome_ids,
             biome_tags: biome_tags.values,
+            block_tags,
+            fluid_tags,
+            item_tags,
             motion_blocking,
             motion_blocking_no_leaves,
             biome_strategy,

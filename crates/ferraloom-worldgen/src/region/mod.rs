@@ -260,6 +260,7 @@ pub trait WorldgenBlockBehavior: Sync {
 pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
+    block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
     chunks: &'a mut [RegionChunk],
     center: [i32; 2],
     dependencies: &'a [ChunkStatus],
@@ -315,6 +316,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            block_tags: None,
             chunks,
             center,
             dependencies,
@@ -327,6 +329,17 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn center(&self) -> [i32; 2] {
         self.center
+    }
+    pub fn set_block_tags(
+        &mut self,
+        tags: std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>,
+    ) {
+        self.block_tags = Some(tags);
+    }
+    pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, Error> {
+        self.block_tags
+            .as_deref()
+            .ok_or_else(|| Error("Unsupported: block tag context unavailable".into()))
     }
     fn distance(&self, p: [i32; 2]) -> usize {
         p[0].abs_diff(self.center[0])
