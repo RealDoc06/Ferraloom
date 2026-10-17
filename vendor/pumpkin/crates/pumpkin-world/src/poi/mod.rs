@@ -2,10 +2,10 @@ use rustc_hash::FxHashMap;
 use std::collections::hash_map::Entry;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+#[cfg(test)]
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
+use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use tracing::info;
 
 use flate2::Compression;
@@ -377,7 +377,7 @@ pub struct PoiRegion {
     dirty: bool,
     // Identity changes on every mutation, avoiding revision wrap/ABA on IO ack.
     version: Arc<()>,
-    write_active: Arc<AtomicBool>,
+    write_active: Arc<AsyncMutex<()>>,
     #[cfg(test)]
     completed_writes: Arc<std::sync::atomic::AtomicUsize>,
     #[cfg(test)]
@@ -593,16 +593,13 @@ impl PoiRegion {
         self.version = Arc::new(());
     }
 
-    fn reserve_write(&self) -> io::Result<PoiWriteReservation> {
-        self.write_active
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::WouldBlock,
-                    "POI region write is already pending",
-                )
-            })?;
-        Ok(PoiWriteReservation(self.write_active.clone()))
+    fn reserve_write(&self) -> io::Result<OwnedMutexGuard<()>> {
+        self.write_active.clone().try_lock_owned().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "POI region write is already pending",
+            )
+        })
     }
 
     pub fn save(&mut self, path: &Path) -> io::Result<()> {
@@ -851,21 +848,13 @@ struct PoiWritePause {
     resume: std::sync::mpsc::Receiver<()>,
 }
 
-struct PoiWriteReservation(Arc<AtomicBool>);
-
-impl Drop for PoiWriteReservation {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
-    }
-}
-
 /// The reservation serializes snapshots with public `save_all` without holding
 /// storage during encoding/IO. Later in-memory edits retain their own dirtiness.
 pub(crate) struct PoiRegionSave {
     coords: (i32, i32),
     path: PathBuf,
     region: PoiRegion,
-    _reservation: PoiWriteReservation,
+    _reservation: OwnedMutexGuard<()>,
 }
 
 impl PoiRegionSave {
@@ -1117,13 +1106,31 @@ impl PoiStorage {
         &mut self,
         chunk: ChunkPos,
     ) -> io::Result<Option<PoiRegionSave>> {
-        let coords = (chunk.x >> 5, chunk.y >> 5);
-        let path = self.region_path(coords.0, coords.1);
         let loaded = self.loaded_poi_region(chunk).map_err(io::Error::other)?;
         if !loaded.region.is_dirty() {
             return Ok(None);
         }
         let reservation = loaded.region.reserve_write()?;
+        self.begin_region_save_reserved(chunk, reservation)
+    }
+
+    fn begin_region_save_reserved(
+        &mut self,
+        chunk: ChunkPos,
+        reservation: OwnedMutexGuard<()>,
+    ) -> io::Result<Option<PoiRegionSave>> {
+        let coords = (chunk.x >> 5, chunk.y >> 5);
+        let path = self.region_path(coords.0, coords.1);
+        let loaded = self.loaded_poi_region(chunk).map_err(io::Error::other)?;
+        if !Arc::ptr_eq(
+            OwnedMutexGuard::mutex(&reservation),
+            &loaded.region.write_active,
+        ) {
+            return Err(io::Error::other("POI region changed while waiting to save"));
+        }
+        if !loaded.region.is_dirty() {
+            return Ok(None);
+        }
         Ok(Some(PoiRegionSave {
             coords,
             path,
@@ -1139,6 +1146,65 @@ impl PoiStorage {
             region.dirty = false;
             region.dirty_chunks.clear();
         }
+    }
+
+    /// Flush the initially dirty regions, waiting for existing IO owners without
+    /// holding storage. Capture current memory only after acquiring each region;
+    /// later edits stay dirty for the next save. Call without lifecycle/terrain
+    /// guards. Synchronous `save_all` deliberately remains a strict try-save.
+    pub async fn save_all_managed(storage: &Arc<Mutex<Self>>) -> io::Result<()> {
+        let (folder, regions, mut failure) = {
+            let storage = storage
+                .lock()
+                .map_err(|_| io::Error::other(PoiReconcileError::OwnershipPoisoned))?;
+            let regions: Vec<_> = storage
+                .regions
+                .iter()
+                .filter(|(_, region)| region.is_dirty())
+                .map(|(&(x, z), region)| {
+                    (ChunkPos::new(x << 5, z << 5), region.write_active.clone())
+                })
+                .collect();
+            let failure = storage
+                .load_errors
+                .values()
+                .next()
+                .map(|error| io::Error::new(error.kind(), error.to_string()));
+            (storage.folder.clone(), regions, failure)
+        };
+        std::fs::create_dir_all(folder)?;
+        let writes = regions.into_iter().map(|(chunk, gate)| {
+            let storage = storage.clone();
+            async move {
+                let reservation = gate.lock_owned().await;
+                let snapshot = storage
+                    .lock()
+                    .map_err(|_| io::Error::other(PoiReconcileError::OwnershipPoisoned))?
+                    .begin_region_save_reserved(chunk, reservation)?;
+                let Some(mut snapshot) = snapshot else {
+                    return Ok(());
+                };
+                // Move ownership into the queued closure before yielding. Caller
+                // cancellation cannot release a queued or running writer's gate.
+                crate::chunk::io::run_blocking(move || {
+                    snapshot.write()?;
+                    storage
+                        .lock()
+                        .map_err(|_| io::Error::other(PoiReconcileError::OwnershipPoisoned))?
+                        .finish_region_save(&snapshot);
+                    Ok(())
+                })
+                .await
+                .map_err(io::Error::other)?
+            }
+        });
+        // Attempt independent regions even when one fails or is still owned.
+        for result in futures::future::join_all(writes).await {
+            if let Err(error) = result {
+                failure.get_or_insert(error);
+            }
+        }
+        failure.map_or(Ok(()), Err)
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {

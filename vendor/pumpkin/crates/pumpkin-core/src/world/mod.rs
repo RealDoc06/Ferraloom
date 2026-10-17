@@ -319,6 +319,15 @@ fn save_auxiliary_data(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .save_all()
         .map_err(WorldSaveError::PortalPoi);
+    save_custom_data(custom_data, custom_folder, load_error)?;
+    portal_result
+}
+
+fn save_custom_data(
+    custom_data: &std::sync::Mutex<NbtCompound>,
+    custom_folder: &Path,
+    load_error: Option<&str>,
+) -> Result<(), WorldSaveError> {
     if let Some(error) = load_error {
         return Err(WorldSaveError::CustomData(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -330,8 +339,7 @@ fn save_auxiliary_data(
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let path = custom_folder.join("pumpkin_custom_data.nbt");
     pumpkin_world::nbt_io::write_compound_atomic(&path, custom_data.clone())
-        .map_err(|error| WorldSaveError::CustomData(error.into()))?;
-    portal_result
+        .map_err(|error| WorldSaveError::CustomData(error.into()))
 }
 
 /// Represents a Minecraft world, containing entities, players, and the underlying level data.
@@ -8544,19 +8552,24 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        let auxiliary_result = save_auxiliary_data(
-            &self.portal_poi,
+        // A pending POI owner needs storage to acknowledge its write. Await it
+        // after releasing the world lifecycle, with no store or terrain guard.
+        drop(lifecycle);
+        let portal_result = portal::PortalPoiStorage::save_all_managed(&self.portal_poi)
+            .await
+            .map_err(WorldSaveError::PortalPoi);
+        let auxiliary_result = save_custom_data(
             &self.custom_data,
             &self.level.level_folder.dim_folder,
             self.custom_data_load_error.as_deref(),
-        );
+        )
+        .and(portal_result);
 
         self.level
             .should_save
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.level.level_channel.notify();
 
-        drop(lifecycle);
         let mut save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
             format!("{:?}", self.dimension),
         );
