@@ -3,7 +3,7 @@ use ferraloom_data::{
     Block, BlockState,
     datapack::{Pack, ResourceManager},
 };
-use ferraloom_util::random::{RandomSource, WorldgenRandom, XoroshiroRandomSource};
+use ferraloom_util::random::{Random, RandomSource, WorldgenRandom, XoroshiroRandomSource};
 use ferraloom_worldgen::{
     Error,
     biome::BiomeSource,
