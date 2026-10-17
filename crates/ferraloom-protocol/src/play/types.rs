@@ -45,8 +45,8 @@ wire_enum!(TestBlockMode { Start = 0, Log = 1, Fail = 2, Accept = 3 }, zero);
 wire_enum!(ChatCompletionAction { Add = 0, Remove = 1, Set = 2 }, zero);
 wire_enum!(RemoteDebugSampleType { TickTime = 0 });
 
-packet!(/// Port of Vec3#STREAM_CODEC.
-Vec3 { x: f64, y: f64, z: f64 });
+pub use crate::entity_data::Vec3;
+
 packet!(/// Port of PositionAndRotation#STREAM_CODEC.
 PositionAndRotation { position: Vec3, y_rot: f32, x_rot: f32 });
 packet!(/// Port of PositionMoveRotation#STREAM_CODEC.
@@ -242,23 +242,9 @@ packet!(/// Port of gamerule key/value network entries.
 GameRuleEntry {key:Identifier,value:String});
 packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
 CommandSuggestion {text:String,tooltip:Option<Component> => optional_trusted_component});
-wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2}, zero);
-packet!(/// Port of SwingAnimation.
-SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});
-packet!(/// Port of SoundEvent.DIRECT_STREAM_CODEC.
-SoundEvent {location:Identifier,fixed_range:Option<f32>});
-/// Port of SoundEvent.STREAM_CODEC.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SoundEventHolder(pub crate::codec::Holder<SoundEvent>);
-impl Wire for SoundEventHolder {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        crate::codec::Holder::decode(r, &Identifier::parse("minecraft:sound_event")?).map(Self)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        self.0
-            .encode(w, &Identifier::parse("minecraft:sound_event")?)
-    }
-}
+pub use crate::component::{
+    Sound as SoundEventHolder, SoundEvent, SwingAnimation, SwingAnimationType,
+};
 
 /// Port of BlockHitResult's offset floats, relative to the packed block position.
 #[derive(Clone, Debug, PartialEq)]
