@@ -61,6 +61,7 @@ public final class TreeGolden implements InvocationHandler {
         } else entities.remove(p);
         return true;
     }
+    @SuppressWarnings("unchecked")
     public Object invoke(Object object,Method method,Object[] args) throws Throwable {
         switch(method.getName()) {
             case "isStateAtPosition": return ((java.util.function.Predicate<BlockState>)args[1]).test(block((BlockPos)args[0]));
@@ -76,7 +77,7 @@ public final class TreeGolden implements InvocationHandler {
                 if(args==null || args.length==0)return 384;
                 int x,z;
                 if(args[1] instanceof BlockPos p) {x=p.getX();z=p.getZ();} else {x=(int)args[1];z=(int)args[2];}
-                for(int y=319;y>=-64;y--)if(!block(new BlockPos(x,y,z)).isAir())return y+1;
+                for(int y=319;y>=-64;y--)if(((Heightmap.Types)args[0]).isOpaque().test(((Heightmap.Types)args[0]).keepAfterWorldgen() ? block(new BlockPos(x,y,z)) : initial(new BlockPos(x,y,z))))return y+1;
                 return -64;
             case "getSeaLevel": return 63;
             case "getSeed": return 8675309L;

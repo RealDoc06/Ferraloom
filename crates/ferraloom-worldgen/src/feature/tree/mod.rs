@@ -53,7 +53,7 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
 fn tag(l: &FeatureLoader<'_>, name: &str) -> Result<Vec<Block>, Error> {
     l.data
         .block_tags
-        .get(&format!("minecraft:{name}").parse()?)
+        .get(&format!("minecraft:{name}").parse::<crate::Identifier>()?)
         .cloned()
         .ok_or_else(|| Error(format!("missing tree block tag {name}")))
 }
@@ -277,8 +277,10 @@ impl TreeFeature {
         let max = std::array::from_fn::<_, 3, _>(|i| all.iter().map(|p| p[i]).max().unwrap());
         let inside = |p: Pos| (0..3).all(|i| p[i] >= min[i] && p[i] <= max[i]);
         let mut shape: BTreeSet<Pos> = out.roots.iter().chain(out.decorations.iter()).collect();
-        let mut queues: [BTreeSet<Pos>; 7] = Default::default();
-        queues[0].extend(out.logs.iter());
+        let mut queues: [Positions; 7] = Default::default();
+        for p in out.logs.iter() {
+            queues[0].insert(p);
+        }
         while let Some(distance) = (0..7).find(|&i| !queues[i].is_empty()) {
             let p = queues[distance].pop_first().unwrap();
             if !inside(p) {

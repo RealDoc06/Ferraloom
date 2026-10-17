@@ -43,6 +43,11 @@ impl Positions {
     pub fn contains(&self, p: Pos) -> bool {
         self.buckets[hash(p) as usize & (self.buckets.len() - 1)].contains(&p)
     }
+    pub fn pop_first(&mut self) -> Option<Pos> {
+        let bucket = self.buckets.iter_mut().find(|bucket| !bucket.is_empty())?;
+        self.len -= 1;
+        Some(bucket.remove(0))
+    }
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
