@@ -295,7 +295,9 @@ fn write_utf(w: &mut impl Write, value: &NbtString, fallback: bool) -> Result<()
             return Ok(());
         }
         return Err(NbtError::Utf(format!(
-            "encoded string too long: {len} bytes"
+            "encoded string ({}...{}) too long: {len} bytes",
+            NbtString::from_utf16(value.as_utf16()[..8].to_vec()),
+            NbtString::from_utf16(value.as_utf16()[value.len() - 8..].to_vec())
         )));
     }
     w.write_all(&(len as u16).to_be_bytes())?;
@@ -329,7 +331,7 @@ fn read_payload(r: &mut impl Read, id: u8, a: &mut NbtAccounter) -> Result<Tag> 
         4 | 6 => 16,
         7 | 11 | 12 => 24,
         8 => 36,
-        _ => return Err(NbtError::Format(format!("Invalid tag id: {id}"))),
+        _ => return Err(NbtError::Format(format!("Invalid tag id: {}", id as i8))),
     })?;
     Ok(match id {
         0 => Tag::End,

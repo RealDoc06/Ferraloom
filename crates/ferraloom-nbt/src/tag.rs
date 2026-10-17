@@ -141,7 +141,10 @@ impl Tag {
         })
     }
     pub fn as_float(&self) -> Option<f32> {
-        self.as_double().map(|v| v as f32)
+        match self {
+            Self::Long(v) => Some(*v as f32),
+            _ => self.as_double().map(|v| v as f32),
+        }
     }
     pub fn as_boolean(&self) -> Option<bool> {
         self.as_byte().map(|v| v != 0)
@@ -257,14 +260,9 @@ impl Tag {
         }
     }
 }
-// Mth.floor uses an integer cast followed by a wrapping decrement, including at MIN_VALUE.
+// Port of Mth.floor in 26.3: floor first, then a saturating Java integer cast.
 fn java_floor(v: f64) -> i32 {
-    let i = v as i32;
-    if v < f64::from(i) {
-        i.wrapping_sub(1)
-    } else {
-        i
-    }
+    v.floor() as i32
 }
 
 /// Port of `ListTag`. Out-of-bounds typed getters return `None` or the supplied default.

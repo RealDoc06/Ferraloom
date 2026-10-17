@@ -6,7 +6,9 @@ pub use binary::{Compression, NbtAccounter, NbtError, NbtIo, RootFormat};
 pub use tag::{CompoundTag, ListTag, NbtString, Tag, compare_nbt};
 
 mod snbt;
-pub use snbt::{ParseError, parse, parse_compound, parse_prefix, pretty, to_text};
+pub use snbt::{ParseError, parse, parse_compound, parse_prefix};
+mod print;
+pub use print::{pretty, pretty_utf16, quote, quote_utf16, to_text, to_text_utf16};
 
 mod path;
 pub use path::{NbtPath, PathError};

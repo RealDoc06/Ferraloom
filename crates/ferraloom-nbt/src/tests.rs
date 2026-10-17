@@ -215,3 +215,17 @@ fn vanilla_text_folding() {
         assert_eq!(to_text(&tag, "", true), text(p[2]));
     }
 }
+
+#[test]
+fn vanilla_floating_point_printers() {
+    for p in vectors("float") {
+        let bits = u32::from_str_radix(p[1], 16).unwrap();
+        let value = Tag::Float(f32::from_bits(bits));
+        assert_eq!(value.to_string(), text(p[2]), "float {bits:x}");
+    }
+    for p in vectors("double") {
+        let bits = u64::from_str_radix(p[1], 16).unwrap();
+        let value = Tag::Double(f64::from_bits(bits));
+        assert_eq!(value.to_string(), text(p[2]), "double {bits:x}");
+    }
+}
