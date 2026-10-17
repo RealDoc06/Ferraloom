@@ -632,6 +632,10 @@ async fn supported_saved_container_potions_survive_menu_hopper_drop_and_reload()
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep clock ownership, retained menus and saved-state assertions in one fixture."
+)]
 async fn chest_data_updates_retained_single_menus_and_full_saved_state() {
     for kind in CHESTS {
         let fixture = Fixture::new().await;
