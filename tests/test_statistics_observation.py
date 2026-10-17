@@ -17,6 +17,7 @@ def client() -> Client:
     observed.statistics_values = {}
     observed.jukeboxes = False
     observed.crafting = False
+    observed.dragon_parts = False
     return observed
 
 

@@ -13,6 +13,7 @@ import { decodeJukeboxBlockEntityPacket, decodeJukeboxContainerPacket, decodeJuk
   type SongRegistry } from './jukeboxes.ts';
 import { craftingAction, closeCrafting, decodeCraftingPacket, emptyCraftingState, encodeCraftingClick,
   observeCrafting, type CraftAction, type CraftingPacket } from './crafting.ts';
+import { decodeDragonPacket, DragonBudget, encodeDragonAttack, type DragonObservation } from './dragon_parts.ts';
 
 export const VERSION = '26.3';
 export const PROTOCOL = 777;
@@ -832,6 +833,7 @@ type Command = { id: string | number } & (
   | { action: 'state' }
   | { action: 'quit' }
   | { action: 'request_stats' }
+  | { action: 'dragon_attack'; entity_id: number }
   | ({ action: 'craft_click'; slot: number } & CraftAction)
   | { action: 'expect_disconnect'; translation: 'disconnect.spam' }
   | { action: 'chat' | 'command'; text: string }
@@ -852,6 +854,13 @@ export function parseCommand(value: unknown): Command {
   if (!record(value) || (typeof value.id !== 'string' && !Number.isSafeInteger(value.id))) throw new Error('id must be a string or safe integer');
   const id = typeof value.id === 'string' ? value.id : Number(value.id);
   if (value.action === 'state' || value.action === 'quit' || value.action === 'request_stats') return { id, action: value.action };
+  if (value.action === 'dragon_attack') {
+    if (typeof value.entity_id !== 'number' || Object.keys(value).some(key => !['id', 'action', 'entity_id'].includes(key))) {
+      throw new Error('Dragon Attack requires only entity_id');
+    }
+    encodeDragonAttack(value.entity_id);
+    return { id, action: value.action, entity_id: value.entity_id };
+  }
   if (value.action === 'craft_click') {
     if (typeof value.slot !== 'number' || !Number.isInteger(value.slot) || value.slot < 0 || value.slot >= 46) throw new Error('Invalid crafting slot');
     if (Object.keys(value).some(key => !['id', 'action', 'slot', 'input', 'button'].includes(key))) throw new Error('Crafting IPC cannot supply predictions or revisions');
@@ -948,7 +957,8 @@ function main() {
   const { values } = parseArgs({ options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '25565' }, name: { type: 'string', default: 'FerraloomTest' }, 'block-data': { type: 'boolean', default: false },
     'container-metadata': { type: 'boolean', default: false }, 'raw-packets': { type: 'boolean', default: false },
     'strict-offline-chat': { type: 'boolean', default: false }, 'horns': { type: 'boolean', default: false },
-    'jukeboxes': { type: 'boolean', default: false }, 'crafting': { type: 'boolean', default: false } } });
+    'jukeboxes': { type: 'boolean', default: false }, 'crafting': { type: 'boolean', default: false },
+    'dragon-parts': { type: 'boolean', default: false } } });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !/^[A-Za-z0-9_]{1,16}$/u.test(values.name)) throw new Error('Invalid port or username');
   if (values.horns && !values['block-data']) throw new Error('--horns requires --block-data');
@@ -957,6 +967,9 @@ function main() {
   }
   if (values.crafting && (!values['block-data'] || !values['raw-packets'] || values.horns || values.jukeboxes || values['container-metadata'])) {
     throw new Error('--crafting requires --block-data --raw-packets and an exclusive plain decoder');
+  }
+  if (values['dragon-parts'] && (!values['raw-packets'] || values.horns || values.jukeboxes || values.crafting || values['container-metadata'])) {
+    throw new Error('--dragon-parts requires --raw-packets and an exclusive probe');
   }
   const socket = createConnection({ host: values.host, port });
   let buffer = Buffer.alloc(0);
@@ -989,6 +1002,7 @@ function main() {
     player_inventory: null as PlayerInventoryObservation | null,
     ...(values.crafting ? { crafting: emptyCraftingState() } : {}),
     ...(values.crafting ? { crafting_packets: [] as (CraftingPacket & { sequence: number })[] } : {}),
+    ...(values['dragon-parts'] ? { dragon_packets: Array<DragonObservation>() } : {}),
     statistics_packets: 0,
     statistics_packet: null as (StatisticsPacket & { sequence: number; payload_base64: string; payload_sha256: string }) | null,
     sign_packets: [] as (SignObservation & { sequence: number })[],
@@ -1007,6 +1021,7 @@ function main() {
   let jukeboxEvidenceBytes = 0;
   let craftingEvidenceBytes = 0;
   let craftingActionCount = 0;
+  const dragonBudget = new DragonBudget();
 
   function retainCraftingRaw(raw: Buffer) {
     if (values.crafting && (craftingEvidenceBytes += raw.length) > 16 * 1024 * 1024) throw new Error('Crafting raw evidence budget exceeded');
@@ -1022,9 +1037,10 @@ function main() {
   function send(id: number, ...parts: Buffer[]) {
     if (quitting || socket.destroyed || socket.writableEnded || !socket.writable) return false;
     let packet = Buffer.concat([varInt(id), ...parts]);
-    const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || ((values.horns || values.jukeboxes) && [54, 67].includes(id))) ? packet : null;
+    const raw = values['raw-packets'] && phase === 'play' && ([7, 9, 12, 18, 19, 41, 66].includes(id) || ((values.horns || values.jukeboxes) && [54, 67].includes(id)) || (values['dragon-parts'] && id === 1)) ? packet : null;
     if (values.jukeboxes && raw && (jukeboxEvidenceBytes += raw.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
     if (raw) retainCraftingRaw(raw);
+    if (raw && values['dragon-parts']) dragonBudget.retain(raw.length);
     if (compression >= 0) packet = packet.length >= compression
       ? Buffer.concat([varInt(packet.length), deflateSync(packet)])
       : Buffer.concat([varInt(0), packet]);
@@ -1042,7 +1058,7 @@ function main() {
     } else socket.write(frame);
     // write() returning false means queued with backpressure, not an unsent packet.
     if (raw) emit({ event: 'wire_packet', direction: 'serverbound', packet_id: id, payload_base64: raw.toString('base64'),
-      ...(values.horns || values.jukeboxes || values.crafting ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+      ...(values.horns || values.jukeboxes || values.crafting || values['dragon-parts'] ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
         payload_sha256: createHash('sha256').update(raw).digest('hex') } : {}) });
     return true;
   }
@@ -1081,12 +1097,13 @@ function main() {
     const id = reader.varInt();
     state.packets++;
     if (values['raw-packets'] && ((phase === 'play' && ([3, 4, 18, 20, 32, 33, 60, 66, 110, 119, 124].includes(id) || (values.horns && [22, 50, 118].includes(id)) ||
-        (values.jukeboxes && [6, 8, 46, 47, 50, 118].includes(id)) || (values.crafting && id === 98))) ||
+        (values.jukeboxes && [6, 8, 46, 47, 50, 118].includes(id)) || (values.crafting && id === 98) || (values['dragon-parts'] && [1, 78].includes(id)))) ||
         ((values.horns || values.jukeboxes) && phase === 'configuration' && id === 7))) {
       if (values.jukeboxes && (jukeboxEvidenceBytes += payload.length) > 32 * 1024 * 1024) throw new Error('Jukebox raw evidence budget exceeded');
       retainCraftingRaw(payload);
+      if (values['dragon-parts']) dragonBudget.retain(payload.length);
       emit({ event: 'wire_packet', direction: 'clientbound', packet_id: id, sequence: state.packets, payload_base64: payload.toString('base64'),
-        ...(values.horns || values.jukeboxes || values.crafting ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
+        ...(values.horns || values.jukeboxes || values.crafting || values['dragon-parts'] ? { phase, captured_at: new Date().toISOString(), pid: process.pid,
           payload_sha256: createHash('sha256').update(payload).digest('hex') } : {}) });
     }
     if (phase === 'login') {
@@ -1162,6 +1179,11 @@ function main() {
       state.statistics_packets++;
       state.statistics_packet = observation;
       emit({ event: 'statistics_packet', ...observation });
+    }
+    if (values['dragon-parts'] && (id === 1 || id === 78)) {
+      const observation = { ...decodeDragonPacket(payload), sequence: state.packets };
+      state.dragon_packets?.push(observation);
+      emit({ event: 'dragon_packet', ...observation });
     }
     if (id === ids.play.commands) {
       state.commands_packets++;
@@ -1365,7 +1387,18 @@ function main() {
         emit({ id: command.id, ok: true, result: { expected_translation: expectedDisconnect } });
       } else {
         if (!ready) throw new Error('Client is not ready');
-        if (command.action === 'craft_click') {
+        if (command.action === 'dragon_attack') {
+          if (!values['dragon-parts']) throw new Error('Dragon Attack requires --dragon-parts');
+          const action_number = dragonBudget.attack();
+          const payload = encodeDragonAttack(command.entity_id);
+          const raw = Buffer.concat([varInt(1), payload]);
+          const after_sequence = state.packets;
+          if (!send(1, payload)) throw new Error('Dragon Attack was not queued');
+          emit({ id: command.id, ok: true, result: { entity_id: command.entity_id, packet_id: 1,
+            action_number, written: true, after_sequence, payload_base64: raw.toString('base64'),
+            payload_sha256: createHash('sha256').update(raw).digest('hex'),
+            acknowledgment: 'queued bytes only; require subsequent same-connection AwardStats fence' } });
+        } else if (command.action === 'craft_click') {
           if (!values.crafting) throw new Error('Crafting actions require --crafting');
           if (++craftingActionCount > 256) throw new Error('Crafting action budget exceeded');
           const before = state.crafting!;

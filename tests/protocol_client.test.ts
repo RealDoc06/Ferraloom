@@ -10,6 +10,7 @@ import { HORN_NAMES, crc32c, decodeHornContainerPacket, decodeHornCooldownPacket
 import { SONG_PROFILES, JUKEBOX_ITEM, decodeSongRegistryPacket, decodeJukeboxContainerPacket,
   songRegistryEntries, songName, songReference, songHashPreimage, encodeJukeboxStackHash,
   encodeJukeboxSwap, encodeJukeboxUse, decodeJukeboxBlockEntityPacket, decodeJukeboxLevelEvent } from '../tools/parity/jukeboxes.ts';
+import { decodeDragonPacket, DragonBudget, DRAGON_LIMITS, encodeDragonAttack } from '../tools/parity/dragon_parts.ts';
 
 test('probe version matches the repository compatibility target', () => {
   const target: unknown = JSON.parse(readFileSync(new URL('../compatibility/target.json', import.meta.url), 'utf8'));
@@ -850,4 +851,80 @@ test('crafting IPC accepts only actions and refuses supplied predictions or menu
   assert.deepEqual(parseCommand(command), command);
   for (const fields of [{ state_id: 7 }, { changed_slots: {} }, { carried: null }, { container_id: 0 },
     { slot: 46 }, { input: 'clone' }, { button: 9 }]) assert.throws(() => parseCommand({ ...command, ...fields }));
+});
+
+// Synthetic witnesses derived from the retained exact26.3 codecs, not runtime gold.
+test('Dragon latest Attack encodes exactly one signed entity ID and rejects old interact fields', () => {
+  for (const value of [-2147483648, -1, 0, 2147483647]) {
+    assert.deepEqual(encodeDragonAttack(value), varInt(value));
+    assert.deepEqual(parseCommand({ id: 1, action: 'dragon_attack', entity_id: value }),
+      { id: 1, action: 'dragon_attack', entity_id: value });
+  }
+  for (const entity_id of [NaN, Infinity, 1.5, -2147483649, 2147483648, '1', null]) {
+    assert.throws(() => parseCommand({ id: 1, action: 'dragon_attack', entity_id }));
+  }
+  assert.throws(() => parseCommand({ id: 1, action: 'dragon_attack', entity_id: 1, sneaking: false }));
+  assert.throws(() => parseCommand({ id: 1, action: 'dragon_attack', entity_id: 1, subaction: 1 }));
+});
+
+function syntheticDragonHeader(): Buffer {
+  const xyz = Buffer.alloc(24);
+  xyz.writeDoubleBE(-0.5, 0);
+  xyz.writeDoubleBE(0, 8);
+  xyz.writeDoubleBE(2, 16);
+  // The opaque tail has no asserted LpVec3 interpretation.
+  return Buffer.concat([varInt(1), varInt(129), Buffer.from('00112233445566778899aabbccddeeff', 'hex'),
+    varInt(44), xyz, Buffer.from('aabbccdd', 'hex')]);
+}
+
+test('Dragon AddEntity retains only the bounded identity header plus the opaque remainder', () => {
+  const raw = syntheticDragonHeader();
+  const decoded = decodeDragonPacket(raw);
+  assert.equal(decoded.kind, 'spawn_header');
+  if (decoded.kind !== 'spawn_header') throw new Error('Expected header');
+  assert.equal(decoded.entity_id, 129);
+  assert.equal(decoded.uuid, '00112233-4455-6677-8899-aabbccddeeff');
+  assert.equal(decoded.entity_type, 44);
+  assert.deepEqual([decoded.x, decoded.y, decoded.z], [-0.5, 0, 2]);
+  assert.equal(decoded.complete, false);
+  assert.equal(decoded.decoded_bytes, raw.length - 4);
+  assert.equal(decoded.undecoded_remainder_base64, Buffer.from('aabbccdd', 'hex').toString('base64'));
+  assert.equal(decoded.payload_base64, raw.toString('base64'));
+  assert.equal(decoded.payload_sha256, createHash('sha256').update(raw).digest('hex'));
+  for (let size = 0; size <= decoded.decoded_bytes; size++) assert.throws(() => decodeDragonPacket(raw.subarray(0, size)));
+  const nonfinite = Buffer.from(raw);
+  nonfinite.writeDoubleBE(Infinity, 20);
+  assert.throws(() => decodeDragonPacket(nonfinite));
+  const negativeType = Buffer.concat([raw.subarray(0, 19), varInt(-1), raw.subarray(20)]);
+  assert.throws(() => decodeDragonPacket(negativeType));
+  assert.throws(() => decodeDragonPacket(Buffer.alloc(DRAGON_LIMITS.packet_bytes + 1)));
+});
+
+test('Dragon RemoveEntities consumes the exact count and every signed ID within probe limits', () => {
+  const raw = Buffer.concat([varInt(78), varInt(3), varInt(129), varInt(-1), varInt(-2147483648)]);
+  const decoded = decodeDragonPacket(raw);
+  assert.equal(decoded.kind, 'remove');
+  if (decoded.kind !== 'remove') throw new Error('Expected removal');
+  assert.deepEqual(decoded.entity_ids, [129, -1, -2147483648]);
+  assert.equal(decoded.complete, true);
+  assert.equal(decoded.decoded_bytes, raw.length);
+  assert.deepEqual(decodeDragonPacket(Buffer.from([78, 0])).kind, 'remove');
+  for (let size = 0; size < raw.length; size++) assert.throws(() => decodeDragonPacket(raw.subarray(0, size)));
+  for (const invalid of [Buffer.concat([raw, Buffer.from([0])]), Buffer.from([78, 128]),
+    Buffer.concat([varInt(78), varInt(-1)]), Buffer.concat([varInt(78), varInt(DRAGON_LIMITS.removal_ids + 1)]),
+    Buffer.from([78, 128, 128, 128, 128, 16]), Buffer.from([2, 0])]) {
+    assert.throws(() => decodeDragonPacket(invalid));
+  }
+});
+
+test('Dragon evidence and attack budgets fail closed without evicting observations', () => {
+  const bytes = new DragonBudget();
+  bytes.retain(DRAGON_LIMITS.evidence_bytes);
+  assert.throws(() => bytes.retain(1));
+  const events = new DragonBudget();
+  for (let index = 0; index < DRAGON_LIMITS.events; index++) events.retain(0);
+  assert.throws(() => events.retain(0));
+  const attacks = new DragonBudget();
+  for (let index = 1; index <= DRAGON_LIMITS.attacks; index++) assert.equal(attacks.attack(), index);
+  assert.throws(() => attacks.attack());
 });

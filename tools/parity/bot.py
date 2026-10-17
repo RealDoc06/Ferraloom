@@ -46,7 +46,7 @@ class Client:
     def __init__(self, server: TestServer, *, block_data: bool = False, log_name: str = "wire-client",
                  name: str = NAME, container_metadata: bool = False, raw_packets: bool = False,
                  strict_offline_chat: bool = False, horns: bool = False, jukeboxes: bool = False,
-                 crafting: bool = False):
+                 crafting: bool = False, dragon_parts: bool = False):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", log_name):
             raise ValueError("Invalid client log name")
         if not re.fullmatch(r"[A-Za-z0-9_]{1,16}", name, flags=re.ASCII):
@@ -54,6 +54,7 @@ class Client:
         self.name = name
         self.jukeboxes = jukeboxes
         self.crafting = crafting
+        self.dragon_parts = dragon_parts
         self.expected_disconnect: dict | None = None
         self.forced_close = False
         self.sequence = 0
@@ -72,6 +73,7 @@ class Client:
                  *(["--horns"] if horns else []),
                  *(["--jukeboxes"] if jukeboxes else []),
                  *(["--crafting"] if crafting else []),
+                 *(["--dragon-parts"] if dragon_parts else []),
                  *(["--strict-offline-chat"] if strict_offline_chat else []),
                  *(["--raw-packets"] if raw_packets else [])],
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
@@ -125,6 +127,8 @@ class Client:
                 protocol.require(len(self.events) <= 16384, "Jukebox IPC evidence budget exceeded")
             elif self.crafting:
                 protocol.require(len(self.events) <= 16384, "Crafting IPC evidence budget exceeded")
+            elif self.dragon_parts:
+                protocol.require(len(self.events) <= 4096, "Dragon IPC evidence budget exceeded")
             else:
                 self.events = self.events[-100:]
         return message
@@ -209,6 +213,20 @@ class Client:
                                 and value["statistics_packet"]["sequence"] > sent["after_sequence"])
         return {"request": sent, "response": state["statistics_packet"], "received": state["crafting"],
                 "after_sequence": state["packets"], "observations": state["crafting_packets"]}
+
+    def dragon_fence(self) -> dict:
+        """Fence earlier same-stream attacks, retaining received raw observations.
+
+        AwardStats proves dispatch ordering only. The campaign must separately
+        read authoritative health and must never infer damage from this reply.
+        """
+        protocol.require(self.dragon_parts, "Dragon fence requires opt-in mode")
+        sent = self.request("request_stats")
+        protocol.require(isinstance(sent, dict) and sent.get("written") is True, "Statistics request not queued")
+        state = self.wait_state(lambda value: value.get("statistics_packet") is not None
+                                and value["statistics_packet"]["sequence"] > sent["after_sequence"])
+        return {"request": sent, "response": state["statistics_packet"],
+                "after_sequence": state["packets"], "observations": state["dragon_packets"]}
 
     def wait_spam_disconnect(self, timeout: float = 10) -> dict:
         deadline = time.monotonic() + timeout
