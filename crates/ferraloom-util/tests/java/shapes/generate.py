@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
 
 HERE = Path(__file__).resolve().parent
 VANILLA = Path(os.environ.get("FERRALOOM_VANILLA_DIR", "/home/doc/code/Ferraloom/.cache/vanilla/26.3"))
@@ -15,4 +16,6 @@ JDK = Path(os.environ.get("JAVA_HOME", "/home/doc/code/Ferraloom/.cache/toolchai
 CLASSPATH = ":".join(map(str, [VANILLA / "versions/26.3/server-26.3.jar", *sorted((VANILLA / "libraries").rglob("*.jar"))]))
 with tempfile.TemporaryDirectory(prefix="ferraloom-shapes-java-") as directory:
     subprocess.run([str(JDK / "bin/javac"), "-cp", CLASSPATH, "-d", directory, str(HERE / "ShapeVectors.java")], check=True, cwd=directory)
-    subprocess.run([str(JDK / "bin/java"), "-Xmx768m", "-cp", directory + ":" + CLASSPATH, "ShapeVectors", str((HERE / "../../../src/shapes/vanilla.bin").resolve())], check=True, cwd=directory)
+    output = Path(directory) / "vanilla.bin"
+    subprocess.run([str(JDK / "bin/java"), "-Xmx768m", "-cp", directory + ":" + CLASSPATH, "ShapeVectors", str(output)], check=True, cwd=directory)
+    shutil.copyfile(output, HERE / "../../../src/shapes/vanilla.bin")

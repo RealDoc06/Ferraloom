@@ -202,6 +202,15 @@ public final class ShapeVectors {
                 if(i<12)for(var rotation:OctahedralGroup.values()) {rotate(a,rotation,new Vec3(0.5,0.5,0.5));rotate(a,rotation,new Vec3(0.1,-0.0,2.75));}
                 candidates.add(a);
             }
+            for(double minimum:new double[]{-1,0,0.125,0.5,1})for(double width:new double[]{0,Double.MIN_VALUE,Math.nextDown(1e-7),1e-7,Math.nextUp(1e-7),1e-6})for(int axis=0;axis<3;axis++) {
+                double[] low={0,0,0},high={1,1,1};low[axis]=minimum;high[axis]=minimum+width;
+                optimize(box(low[0],low[1],low[2],high[0],high[1],high[2]));
+            }
+            int cube=box(0.125,0.25,0.5,0.625,0.75,1);
+            int slice=face(cube,Direction.SOUTH);
+            for(int id:List.of(empty,block,cube,slice))for(var rotation:OctahedralGroup.values()) {
+                rotate(id,rotation,new Vec3(0.5,0.5,0.5));rotate(id,rotation,new Vec3(-0.0,0.25,-0.125));
+            }
             for(int a:candidates)for(int op=0;op<16;op++){join(a,a,op,false);join(a,empty,op,false);join(empty,a,op,false);}
             var unique=new HashSet<Integer>();int states=0;
             for(var blockType:BuiltInRegistries.BLOCK)for(var state:blockType.getStateDefinition().getPossibleStates()) {
@@ -212,6 +221,16 @@ public final class ShapeVectors {
                 out.writeByte(10);out.writeInt(Block.getId(state));out.writeInt(collision);out.writeInt(outline);out.writeInt(occlusion);states++;
             }
             for(int id:unique) {optimize(id);faces(id,block);probes(id,random);}
+            var registryIds=new ArrayList<>(unique);Collections.sort(registryIds);
+            for(int i=0;i<registryIds.size();i++) {
+                faces(registryIds.get(i),registryIds.get((i+1)%registryIds.size()));
+                faces(registryIds.get(i),registryIds.get(i));
+            }
+            for(int axis=0;axis<3;axis++) {
+                double[] left={1,1,1},right={0,0,0};left[axis]=0.5;right[axis]=0.5;
+                int a=box(0,0,0,left[0],left[1],left[2]),b=box(right[0],right[1],right[2],1,1,1);
+                faces(a,b);faces(b,a);faces(a,a);faces(b,b);
+            }
             // Touching faces on both sides of the tolerance and subshape slices.
             for(double gap:new double[]{Math.nextDown(1e-7),1e-7,Math.nextUp(1e-7),2e-7}) {
                 int a=box(0,0,0,0.5,1,1), b=box(0.5+gap,0,0,1,1,1);

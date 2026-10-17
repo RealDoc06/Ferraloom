@@ -546,7 +546,7 @@ fn vanilla_shape_operations_and_every_block_state() {
     }
     assert!(reader.0.is_empty());
     assert_eq!(states, 35723);
-    assert_eq!(shapes.len(), 15593);
+    assert_eq!(shapes.len(), 27601);
     println!(
         "{record} vanilla records, {states} registry states, {} shapes; tag counts {counts:?}",
         shapes.len()
