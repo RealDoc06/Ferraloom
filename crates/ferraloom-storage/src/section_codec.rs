@@ -247,7 +247,7 @@ mod tests {
     }
     #[test]
     fn runtime_sections_use_live_biomes_and_keep_unknown_palette_fields() {
-        let tag=ferraloom_nbt::parse_compound(r#"{Y:0b,block_states:{palette:[{Name:"minecraft:air",extension:17}]},biomes:{palette:["test:custom"]},future:9}"#).unwrap();
+        let tag=ferraloom_nbt::parse_compound(r#"{Y:0b,block_states:{palette:[{id:"minecraft:air",extension:17}]},biomes:{palette:["test:custom"]},future:9}"#).unwrap();
         let mut section = ChunkSection::from_nbt(tag.clone()).unwrap();
         let mut runtime = section.to_runtime(&Registry).unwrap().unwrap();
         assert_eq!(runtime.biomes().get(0, 0, 0), BiomeId(900));

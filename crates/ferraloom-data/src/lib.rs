@@ -37,6 +37,36 @@ impl BlockState {
         self.data().block
     }
 
+    /// Port of StateHolder#getValues, in StateDefinition's sorted property order.
+    pub fn properties(self) -> impl Iterator<Item = (&'static str, &'static str)> {
+        let block = self.block().data();
+        block.properties.iter().rev().map(move |layout| {
+            let index = (self.0 - block.first_state) / layout.stride % layout.names.len() as u16;
+            (layout.name, layout.names[index as usize])
+        })
+    }
+
+    /// Port of StateDefinition#appendPropertyCodec and NbtUtils#readBlockState.
+    /// Missing/invalid values keep the default, and unknown properties are ignored.
+    pub fn from_properties<'a>(
+        block: Block,
+        properties: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Option<Self> {
+        let mut state = block.default_state();
+        let data = block.data();
+        for (name, value) in properties {
+            let Some(layout) = data.properties.iter().find(|p| p.name == name) else {
+                continue;
+            };
+            let Some(new) = layout.names.iter().position(|&v| v == value) else {
+                continue;
+            };
+            let old = (state.0 - data.first_state) / layout.stride % layout.names.len() as u16;
+            state = Self(state.0 - old * layout.stride + new as u16 * layout.stride);
+        }
+        Some(state)
+    }
+
     /// Port of StateDefinition's sorted properties and cartesian-product order.
     pub fn get<T: PropertyValue>(self, property: Property<T>) -> Option<T> {
         let block = self.block().data();
@@ -93,6 +123,8 @@ impl PropertyValue for u8 {
 #[derive(Clone, Copy, Debug)]
 struct PropertyLayout {
     id: u8,
+    name: &'static str,
+    names: &'static [&'static str],
     stride: u16,
     values: &'static [u8],
 }
