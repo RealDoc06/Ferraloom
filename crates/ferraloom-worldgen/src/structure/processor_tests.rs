@@ -1,4 +1,5 @@
 use super::*;
+use crate::structure::template::PlacementRandom;
 use crate::{
     biome::BiomeSource,
     generator::{GenerationData, NoiseBasedChunkGenerator},
@@ -6,7 +7,7 @@ use crate::{
     settings::NoiseGeneratorSettings,
 };
 use ferraloom_data::datapack::{Pack, ResourceManager};
-use ferraloom_util::random::Random;
+use ferraloom_util::random::{Algorithm, Random, WorldgenRandom};
 use std::{io::Read, path::Path, sync::Arc};
 fn golden(bytes: &[u8]) -> Value {
     let mut text = String::new();
@@ -75,7 +76,8 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
         let processor = StructureProcessor::decode(&case["definition"]).unwrap();
         let mut settings = StructurePlaceSettings::default();
         if case["external"].as_bool().unwrap() {
-            settings.random = Some(Random::Legacy(LegacyRandomSource::new(12345)));
+            settings.random =
+                PlacementRandom::Fixed(Random::Legacy(LegacyRandomSource::new(12345)));
         }
         let mut chunks = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
             .map(|p| RegionChunk::new(generator.new_chunk(p), ChunkStatus::Terrain));
@@ -111,6 +113,7 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
             63,
         )
         .unwrap();
+        let mut shared = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
         for sample in case["samples"].as_array().unwrap() {
             let p = point(&sample["pos"]);
             let state = BlockState::from_id(sample["state"].as_u64().unwrap() as u16).unwrap();
@@ -132,6 +135,7 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
                     info,
                     &mut settings,
                     &tags,
+                    &mut shared,
                 )
                 .unwrap();
             assert_eq!(
@@ -151,10 +155,10 @@ fn per_block_processors_and_modifiers_match_vanilla_with_rng() {
                 );
             }
         }
-        let next = settings.random.as_mut().map_or_else(
-            || LegacyRandomSource::new(12345).next_int(),
-            RandomSource::next_int,
-        );
+        let next = match &mut settings.random {
+            PlacementRandom::Fixed(random) => random.next_int(),
+            _ => LegacyRandomSource::new(12345).next_int(),
+        };
         assert_eq!(
             next,
             case["next"].as_i64().unwrap() as i32,

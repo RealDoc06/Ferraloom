@@ -13,7 +13,7 @@ use ferraloom_data::{Block, BlockState, datapack::decode_block_state, properties
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 use ferraloom_util::{
     mth,
-    random::{LegacyRandomSource, RandomSource, SingleThreadedRandomSource},
+    random::{LegacyRandomSource, RandomSource, SingleThreadedRandomSource, WorldgenRandom},
 };
 use serde_json::Value;
 
@@ -265,6 +265,7 @@ impl StructureProcessor {
         mut info: StructureBlockInfo,
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
+        shared: &mut WorldgenRandom,
     ) -> Result<Option<StructureBlockInfo>, Error> {
         match self {
             Self::Nop | Self::Capped { .. } => {}
@@ -280,13 +281,14 @@ impl StructureProcessor {
                 if rottable
                     .as_ref()
                     .is_none_or(|b| b.contains(info.state.block(), tags))
-                    && !settings.with_random(info.position, |r| r.next_float() <= *integrity)
+                    && !settings
+                        .with_random(info.position, shared, |r| r.next_float() <= *integrity)
                 {
                     return Ok(None);
                 }
             }
             Self::BlockAge { mossiness } => {
-                info.state = settings.with_random(info.position, |r| {
+                info.state = settings.with_random(info.position, shared, |r| {
                     age_block(info.state, *mossiness, tags, r)
                 })
             }
@@ -365,6 +367,7 @@ impl StructureProcessor {
         processed: &mut [StructureBlockInfo],
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
+        shared: &mut WorldgenRandom,
     ) -> Result<(), Error> {
         let Self::Capped { delegate, limit } = self else {
             return Ok(());
@@ -394,6 +397,7 @@ impl StructureProcessor {
                 processed[index].clone(),
                 settings,
                 tags,
+                shared,
             )? && altered != processed[index]
             {
                 replaced += 1;
@@ -476,8 +480,9 @@ fn blackstone_replace(old: BlockState) -> BlockState {
     }
     state
 }
-fn random_stairs(block: Block, random: &mut impl RandomSource) -> BlockState {
-    let facing = match ferraloom_util::Plane::Horizontal.random_direction(random) {
+fn random_stairs(block: Block, random: &mut (impl RandomSource + ?Sized)) -> BlockState {
+    let facing = match ferraloom_util::Plane::Horizontal.faces()[random.next_int_bound(4) as usize]
+    {
         ferraloom_util::Direction::North => properties::Facing::North,
         ferraloom_util::Direction::East => properties::Facing::East,
         ferraloom_util::Direction::South => properties::Facing::South,
@@ -502,7 +507,7 @@ fn choose(
     normal: [BlockState; 2],
     mossy: [BlockState; 2],
     mossiness: f32,
-    random: &mut impl RandomSource,
+    random: &mut (impl RandomSource + ?Sized),
 ) -> BlockState {
     let blocks = if random.next_float() < mossiness {
         mossy
@@ -516,7 +521,7 @@ fn age_block(
     state: BlockState,
     mossiness: f32,
     tags: &BlockTags,
-    random: &mut impl RandomSource,
+    random: &mut (impl RandomSource + ?Sized),
 ) -> BlockState {
     match state.block() {
         Block::STONE_BRICKS | Block::STONE | Block::CHISELED_STONE_BRICKS

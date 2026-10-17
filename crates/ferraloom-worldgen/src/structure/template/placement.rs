@@ -20,6 +20,7 @@ impl StructureTemplate {
         processors: &[StructureProcessor],
         tags: &BlockTags,
         blocks: &[StructureBlockInfo],
+        random: &mut WorldgenRandom,
     ) -> Result<Vec<StructureBlockInfo>, Error> {
         let process_only_in_chunk = !processors
             .iter()
@@ -56,6 +57,7 @@ impl StructureTemplate {
                     info,
                     settings,
                     tags,
+                    random,
                 )?;
             }
             if let Some(info) = value {
@@ -72,6 +74,7 @@ impl StructureTemplate {
                 &mut processed,
                 settings,
                 tags,
+                random,
             )?;
         }
         Ok(processed)
@@ -94,7 +97,7 @@ impl StructureTemplate {
         if self.palettes.is_empty() {
             return Ok(false);
         }
-        let blocks = &self.random_palette(settings, position)?.blocks;
+        let blocks = &self.random_palette(settings, position, random)?.blocks;
         if (blocks.is_empty() && (settings.ignore_entities || self.entities.is_empty()))
             || self.size.iter().any(|&v| v < 1)
         {
@@ -102,7 +105,7 @@ impl StructureTemplate {
         }
         let apply_waterlogging = settings.liquid_settings == LiquidSettings::ApplyWaterlogging;
         let processed = self.process_block_infos(
-            region, position, reference, settings, processors, tags, blocks,
+            region, position, reference, settings, processors, tags, blocks, random,
         )?;
         let mut to_fill = Vec::new();
         let mut locked_fluids = Vec::new();

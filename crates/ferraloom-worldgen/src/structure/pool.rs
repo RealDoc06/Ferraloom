@@ -242,8 +242,11 @@ impl StructurePoolElement {
                 if template.palettes.is_empty() {
                     return Ok(Vec::new());
                 }
-                let palette =
-                    template.random_palette(&mut StructurePlaceSettings::default(), position)?;
+                let palette = template.random_palette(
+                    &mut StructurePlaceSettings::default(),
+                    position,
+                    random,
+                )?;
                 let mut values = Vec::new();
                 for block in &palette.blocks {
                     if block.state.block() == Block::JIGSAW {

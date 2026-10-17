@@ -189,9 +189,12 @@ fn clipped_mult_palette_template_block_placement_matches_vanilla() {
             ..Default::default()
         };
         if case["external"].as_bool().unwrap() {
-            settings.random = Some(Random::Legacy(LegacyRandomSource::new(91)));
+            settings.random = PlacementRandom::Fixed(Random::Legacy(LegacyRandomSource::new(91)));
         }
-        let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
+        if case["shared"].as_bool().unwrap_or(false) {
+            settings.random = PlacementRandom::Shared;
+        }
+        let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(17));
         let result = {
             let mut region = WorldGenRegion::new(
                 &mut chunks,
@@ -213,6 +216,10 @@ fn clipped_mult_palette_template_block_placement_matches_vanilla() {
                     &[
                         StructureProcessor::BlockIgnore(vec![Block::AIR]),
                         StructureProcessor::BlackstoneReplace,
+                        StructureProcessor::BlockRot {
+                            integrity: 0.8,
+                            rottable: None,
+                        },
                     ],
                     &tags,
                     &mut random,
@@ -239,10 +246,10 @@ fn clipped_mult_palette_template_block_placement_matches_vanilla() {
         );
         assert_eq!(random.next_int(), case["next"].as_i64().unwrap() as i32);
         assert_eq!(
-            settings.random.as_mut().map_or_else(
-                || LegacyRandomSource::new(91).next_int(),
-                RandomSource::next_int
-            ),
+            match &mut settings.random {
+                PlacementRandom::Fixed(random) => random.next_int(),
+                _ => LegacyRandomSource::new(91).next_int(),
+            },
             case["settings_next"].as_i64().unwrap() as i32
         );
     }
