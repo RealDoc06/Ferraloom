@@ -153,3 +153,17 @@ fn custom_argument_preserves_concrete_type_without_source_clone() {
     );
     assert_eq!(d.execute("pos 1,2", Source).unwrap(), 7);
 }
+#[test]
+fn java_subnormal_error_messages_use_nearest_two_digits() {
+    let mut r = StringReader::new("0");
+    let e = ArgumentType::parse(&FloatArgumentType::min(f32::from_bits(1)), &mut r).unwrap_err();
+    assert_eq!(
+        e.raw_message.text(),
+        "Float must not be less than 1.4E-45, found 0.0"
+    );
+    let e = ArgumentType::parse(&DoubleArgumentType::min(f64::from_bits(1)), &mut r).unwrap_err();
+    assert_eq!(
+        e.raw_message.text(),
+        "Double must not be less than 4.9E-324, found 0.0"
+    );
+}

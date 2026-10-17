@@ -262,12 +262,18 @@ impl<S: 'static> CommandDispatcher<S> {
                 if !reader.can_read_length(length)
                     || reader.slice(start, start + length) != node.name
                 {
-                    return Err(reader.error(ExceptionKind::LiteralIncorrect, &[node.name.clone()]));
+                    return Err(reader.error(
+                        ExceptionKind::LiteralIncorrect,
+                        std::slice::from_ref(&node.name),
+                    ));
                 }
                 reader.set_cursor(start + length);
                 if reader.can_read() && reader.peek() != 32 {
                     reader.set_cursor(start);
-                    return Err(reader.error(ExceptionKind::LiteralIncorrect, &[node.name.clone()]));
+                    return Err(reader.error(
+                        ExceptionKind::LiteralIncorrect,
+                        std::slice::from_ref(&node.name),
+                    ));
                 }
             }
             NodeKind::Argument => {
@@ -562,10 +568,10 @@ impl<S: 'static> CommandDispatcher<S> {
             } else if children.len() > 1 {
                 let mut usages = Vec::new();
                 for child in &children {
-                    if let Some(usage) = self.smart_usage(*child, source, child_optional, true) {
-                        if !usages.contains(&usage) {
-                            usages.push(usage);
-                        }
+                    if let Some(usage) = self.smart_usage(*child, source, child_optional, true)
+                        && !usages.contains(&usage)
+                    {
+                        usages.push(usage);
                     }
                 }
                 if usages.len() == 1 {

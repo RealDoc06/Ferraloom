@@ -1,7 +1,7 @@
 use std::{error::Error, fmt, sync::Arc};
 
 /// Port of Message. Implementations may retain Minecraft's translatable component.
-pub trait Message: fmt::Debug + Send + Sync {
+pub trait Message: std::any::Any + fmt::Debug + Send + Sync {
     fn text(&self) -> &str;
 }
 impl Message for String {
@@ -107,11 +107,13 @@ impl fmt::Display for CommandSyntaxException {
 }
 impl Error for CommandSyntaxException {}
 
+type MessageFactory = Arc<dyn Fn(&[String]) -> MessageRef + Send + Sync>;
+
 /// Port of SimpleCommandExceptionType and the dynamic exception factories.
 #[derive(Clone)]
 pub struct CommandExceptionType {
     pub kind: ExceptionKind,
-    message: Arc<dyn Fn(&[String]) -> MessageRef + Send + Sync>,
+    message: MessageFactory,
 }
 impl CommandExceptionType {
     pub fn new(

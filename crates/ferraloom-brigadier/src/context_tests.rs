@@ -45,10 +45,8 @@ fn parsed_argument_get_raw() {
     };
     assert_eq!(argument.range.get("0123456789"), "234");
 }
-fn record() -> (
-    ResultConsumer<&'static str>,
-    Arc<Mutex<Vec<(&'static str, bool, i32)>>>,
-) {
+type Calls = Arc<Mutex<Vec<(&'static str, bool, i32)>>>;
+fn record() -> (ResultConsumer<&'static str>, Calls) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let out = calls.clone();
     let consumer: ResultConsumer<&'static str> =

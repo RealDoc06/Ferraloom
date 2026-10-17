@@ -3,13 +3,13 @@ use super::*;
 #[test]
 fn can_read() {
     let mut reader = StringReader::new("abc");
-    assert_eq!(reader.can_read(), true);
+    assert!(reader.can_read());
     reader.skip();
-    assert_eq!(reader.can_read(), true);
+    assert!(reader.can_read());
     reader.skip();
-    assert_eq!(reader.can_read(), true);
+    assert!(reader.can_read());
     reader.skip();
-    assert_eq!(reader.can_read(), false);
+    assert!(!reader.can_read());
 }
 #[test]
 fn get_remaining_length() {
@@ -25,11 +25,11 @@ fn get_remaining_length() {
 #[test]
 fn can_read_length() {
     let reader = StringReader::new("abc");
-    assert_eq!(reader.can_read_length(1), true);
-    assert_eq!(reader.can_read_length(2), true);
-    assert_eq!(reader.can_read_length(3), true);
-    assert_eq!(reader.can_read_length(4), false);
-    assert_eq!(reader.can_read_length(5), false);
+    assert!(reader.can_read_length(1));
+    assert!(reader.can_read_length(2));
+    assert!(reader.can_read_length(3));
+    assert!(!reader.can_read_length(4));
+    assert!(!reader.can_read_length(5));
 }
 #[test]
 fn peek() {
@@ -464,7 +464,7 @@ fn expect_none() {
 #[test]
 fn read_boolean_correct() {
     let mut reader = StringReader::new("true");
-    assert_eq!(reader.read_boolean().unwrap(), true);
+    assert!(reader.read_boolean().unwrap());
     assert_eq!(reader.read_so_far(), "true");
 }
 #[test]

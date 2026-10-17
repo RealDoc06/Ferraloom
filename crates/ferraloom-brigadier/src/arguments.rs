@@ -89,6 +89,18 @@ macro_rules! numeric_argument {
         }
     }
 }
+// Java requires at least two significant digits when choosing the nearest decimal.
+fn java_scientific(value: impl std::fmt::LowerExp) -> String {
+    let shortest = format!("{value:e}");
+    if shortest
+        .split_once('e')
+        .is_some_and(|(mantissa, _)| !mantissa.contains('.'))
+    {
+        format!("{value:.1e}")
+    } else {
+        shortest
+    }
+}
 // Java uses scientific notation outside [1e-3, 1e7), and always prints a fraction.
 fn java_number<T: std::fmt::Display + Any>(value: T) -> String {
     fn floating(value: f64, plain: String, scientific: String) -> String {
@@ -120,9 +132,9 @@ fn java_number<T: std::fmt::Display + Any>(value: T) -> String {
     }
     let any = &value as &dyn Any;
     if let Some(v) = any.downcast_ref::<f32>() {
-        floating(f64::from(*v), v.to_string(), format!("{v:e}"))
+        floating(f64::from(*v), v.to_string(), java_scientific(*v))
     } else if let Some(v) = any.downcast_ref::<f64>() {
-        floating(*v, v.to_string(), format!("{v:e}"))
+        floating(*v, v.to_string(), java_scientific(*v))
     } else {
         value.to_string()
     }
