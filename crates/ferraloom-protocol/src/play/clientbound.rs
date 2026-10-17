@@ -256,3 +256,53 @@ packet!(/// Port of ClientboundSoundPacket.
 Sound {sound:SoundEventHolder,source:SoundSource,x:i32,y:i32,z:i32,volume:f32,pitch:f32,seed:i64});
 packet!(/// Port of ClientboundTestInstanceBlockStatus.
 TestInstanceBlockStatus {status:Component,size:Option<Vec3i>});
+
+/// Port of ClientboundPlayerInfoUpdatePacket. One action bitset applies to every entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayerInfoUpdate {
+    pub actions: u8,
+    pub entries: Vec<PlayerInfoEntry>,
+}
+impl Wire for PlayerInfoUpdate {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let actions = r.u8()?;
+        let entries = r.list(i32::MAX as usize, |r| {
+            let profile_id = r.read()?;
+            let mut values = Vec::new();
+            for tag in 0..8 {
+                if actions & (1 << tag) != 0 {
+                    values.push(PlayerInfoAction::decode_variant(r, tag)?);
+                }
+            }
+            Ok(PlayerInfoEntry {
+                profile_id,
+                actions: values,
+            })
+        })?;
+        Ok(Self { actions, entries })
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        w.u8(self.actions);
+        w.list(&self.entries, i32::MAX as usize, |w, entry| {
+            let mut values = entry.actions.iter();
+            entry.profile_id.encode(w)?;
+            for tag in 0..8 {
+                if self.actions & (1 << tag) != 0 {
+                    let value = values.next().filter(|v| v.tag() == tag).ok_or_else(|| {
+                        Error::invalid(
+                            "player info actions",
+                            "entry does not match packet mask/order",
+                        )
+                    })?;
+                    value.encode_body(w)?;
+                }
+            }
+            if values.next().is_some() {
+                return Err(Error::invalid("player info actions", "extra action"));
+            }
+            Ok(())
+        })
+    }
+}
+packet!(/// Port of ClientboundBossEventPacket.
+BossEvent {id:Uuid,operation:BossOperation});

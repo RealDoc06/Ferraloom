@@ -31,11 +31,21 @@ public final class PlayVectors {
     }
     @SuppressWarnings({"rawtypes", "unchecked"})
     static void vector(Path output, String label, String className, byte[] seed) throws Exception {
-        var codec = (StreamCodec)Class.forName(className).getField("STREAM_CODEC").get(null);
+        var codec = (StreamCodec)Class.forName(className).getField(label.startsWith("clientbound_CustomPayload")?"GAMEPLAY_STREAM_CODEC":"STREAM_CODEC").get(null);
         var input = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(seed),registries);
         var encoded = new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);
         try {
-            var packet=codec.decode(input);
+            Object packet=null;
+            for (int attempt=0;attempt<32;attempt++) {
+                try {input.readerIndex(0);packet=codec.decode(input);break;}
+                catch(Exception e){
+                    if (!Objects.toString(e.getMessage(),"").contains("Expected non-null compound tag")) throw e;
+                    int offset=input.readerIndex()-1;
+                    if(offset<0 || seed[offset]!=0)throw e;
+                    seed[offset]=(byte)(label.equals("clientbound_BlockEntityData")?10:8);
+                }
+            }
+            if(packet==null)throw new IllegalStateException("Could not create seed");
             codec.encode(encoded,packet);
             byte[] bytes=new byte[encoded.readableBytes()];encoded.readBytes(bytes);
             Files.writeString(output.resolve(label+".hex"),HexFormat.of().formatHex(bytes)+"\n");
@@ -49,6 +59,15 @@ public final class PlayVectors {
             if(row.isBlank() || row.startsWith("#"))continue;
             var cols=row.split("\\t",-1);
             byte[] seed=cols.length>2?HexFormat.of().parseHex(cols[2]):new byte[65536];
+            if(cols[0].endsWith("CustomPayload"))seed=HexFormat.of().parseHex("0f6d696e6563726166743a6272616e640776616e696c6c61");
+            if(cols[0].equals("serverbound_CustomClickAction"))seed=new byte[]{0,1,0};
+            if(cols[0].equals("clientbound_SetEntityData"))seed=new byte[]{0,(byte)255};
+            if(cols[0].equals("serverbound_ChatSessionUpdate")){
+                var b=new FriendlyByteBuf(Unpooled.buffer());
+                b.writeUUID(new UUID(0,0));b.writeLong(0);
+                b.writeByteArray(java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic().getEncoded());b.writeByteArray(new byte[0]);
+                seed=new byte[b.readableBytes()];b.readBytes(seed);b.release();
+            }
             try {vector(output,cols[0],cols[1],seed);count++;}
             catch(Exception e){System.err.println(cols[0]+": "+e.getClass().getSimpleName()+": "+e.getMessage());}
         }
