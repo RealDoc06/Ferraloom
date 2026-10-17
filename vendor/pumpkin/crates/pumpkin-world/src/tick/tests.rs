@@ -1,5 +1,4 @@
-//! Source-only controls through real Level containers, chunk NBT and save IO.
-//! All tests in this module are UNRUN until ROOT's builder validation.
+//! Controls through real Level containers, chunk NBT and save IO.
 
 use super::{SavedTick, ScheduledTick, TickPriority};
 use crate::{
@@ -519,4 +518,57 @@ async fn tick_only_dirty_change_recaptures_retained_source_without_poi_revision_
         (1, 600)
     );
     assert_eq!(level.prepare_chunk_poi(&chunk).unwrap(), stamp);
+}
+
+#[tokio::test]
+async fn proto_fluid_conversion_deduplicates_but_disk_saved_duplicates_survive() {
+    use crate::chunk_system::chunk_state::{Chunk, StagedChunkEnum};
+    use pumpkin_config::lighting::LightingEngineConfig;
+    let (_folder, level) = fixture().await;
+    let mut proto = crate::ProtoChunk::new(0, 0, &level.world_gen.load());
+    proto.stage = StagedChunkEnum::Full;
+    proto.schedule_fluid_tick(1, 64, 1, &Fluid::WATER);
+    proto.schedule_fluid_tick(1, 64, 1, &Fluid::WATER);
+    proto.schedule_fluid_tick(2, 64, 1, &Fluid::LAVA);
+    assert_eq!(proto.fluid_ticks.len(), 3);
+    let mut disk_source = ChunkData::empty(0, 0);
+    disk_source.fluid_ticks = proto.fluid_ticks.clone().into_iter().collect();
+    let bytes = disk_source.to_bytes().unwrap();
+    let disk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+    assert_eq!(disk.fluid_ticks.pack_at(100).len(), 3);
+
+    let mut converted = Chunk::Proto(Box::new(proto));
+    converted.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+    let Chunk::Level(promoted) = converted else {
+        panic!("expected Full chunk")
+    };
+    let saved = promoted.fluid_ticks.pack_at(100);
+    assert_eq!(
+        saved
+            .iter()
+            .map(|tick| (tick.position.0.x, tick.value.id))
+            .collect::<Vec<_>>(),
+        vec![(1, Fluid::WATER.id), (2, Fluid::LAVA.id)]
+    );
+    assert!(promoted.fluid_ticks.get_all().is_empty());
+    promoted
+        .post_processing_ready
+        .store(true, Ordering::Relaxed);
+    level.bind_chunk_poi(&promoted).unwrap();
+    level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), promoted.clone());
+    level.set_tick_game_time(100);
+    level.unpack_chunk_ticks(Vector2::new(0, 0), 100);
+    assert_eq!(promoted.fluid_ticks.get_all().len(), 2);
+    let eligible = FxHashSet::from_iter([Vector2::new(0, 0)]);
+    assert_eq!(level.collect_fluid_ticks(100, 65536, &eligible).len(), 2);
+
+    disk.post_processing_ready.store(true, Ordering::Relaxed);
+    let disk = Arc::new(disk);
+    level.bind_chunk_poi(&disk).unwrap();
+    level.loaded_chunks.insert(Vector2::new(0, 0), disk.clone());
+    level.unpack_chunk_ticks(Vector2::new(0, 0), 100);
+    assert_eq!(disk.fluid_ticks.get_all().len(), 3);
+    assert_eq!(level.collect_fluid_ticks(100, 65536, &eligible).len(), 3);
 }

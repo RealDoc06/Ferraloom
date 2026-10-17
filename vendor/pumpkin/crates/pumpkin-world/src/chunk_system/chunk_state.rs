@@ -7,7 +7,7 @@ use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 
@@ -324,6 +324,13 @@ impl Chunk {
             }
         }
 
+        // Proto producers keep their Vec, but conversion retains the first
+        // position/type record. Disk SavedTick lists use unchecked unpack.
+        let mut fluid_tick_keys = FxHashSet::default();
+        let fluid_ticks = proto_chunk
+            .fluid_ticks
+            .into_iter()
+            .filter(|tick| fluid_tick_keys.insert((tick.position, tick.value)));
         let chunk = ChunkData {
             light_engine: Mutex::new(light_data),
             light_populated: AtomicBool::new(is_lit),
@@ -333,7 +340,7 @@ impl Chunk {
             z: proto_chunk.z,
             dirty: AtomicBool::new(true),
             block_ticks: ChunkTickScheduler::default(),
-            fluid_ticks: ChunkTickScheduler::from_iter(proto_chunk.fluid_ticks),
+            fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             block_tick_phase_owners: AtomicU32::new(0),
             post_processing: Mutex::new(proto_chunk.post_processing),
             post_processing_ready: AtomicBool::new(false),

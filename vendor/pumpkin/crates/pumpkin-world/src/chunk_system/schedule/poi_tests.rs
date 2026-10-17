@@ -1095,7 +1095,7 @@ mod stale_save_deferral {
     }
 }
 
-// ROOT-authorized append-only actual tick-phase retirement control. UNRUN.
+// Tick-phase retirement through the real scheduler and backend fixture.
 #[tokio::test]
 async fn active_block_phase_defers_already_prepared_retirement_then_retries_without_poi_changes() {
     use crate::tick::TickPriority;

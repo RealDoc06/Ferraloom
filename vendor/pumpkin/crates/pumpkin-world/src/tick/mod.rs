@@ -68,16 +68,19 @@ pub struct ScheduledTick<T> {
 }
 
 impl<T> ScheduledTick<T> {
+    #[must_use]
     pub(crate) fn drain_key(&self) -> (i64, TickPriority, i64) {
         (self.trigger_tick, self.priority, self.sub_tick_order)
     }
 
+    #[must_use]
     pub(crate) fn intra_tick_key(&self) -> (TickPriority, i64) {
         (self.priority, self.sub_tick_order)
     }
 }
 
 impl<T: Copy> ScheduledTick<T> {
+    #[must_use]
     pub fn to_saved_tick(&self, now: i64) -> SavedTick<T> {
         SavedTick {
             position: self.position,
@@ -98,6 +101,7 @@ pub struct SavedTick<T> {
 }
 
 impl<T> SavedTick<T> {
+    #[must_use]
     pub fn unpack(self, now: i64, sub_tick_order: i64) -> ScheduledTick<T> {
         ScheduledTick {
             position: self.position,

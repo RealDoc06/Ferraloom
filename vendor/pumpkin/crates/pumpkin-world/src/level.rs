@@ -195,6 +195,8 @@ struct BlockTickPhase {
 }
 
 struct ContainerHead {
+    // Pin the publication selected for this head; a raw pointer permits ABA.
+    owner: SyncChunk,
     position: Vector2<i32>,
     key: (TickPriority, i64),
 }
@@ -1301,6 +1303,7 @@ impl Level {
         self.tick_clock.store(now, Ordering::Release);
     }
 
+    #[must_use]
     pub fn tick_game_time(&self) -> i64 {
         self.tick_clock.load(Ordering::Acquire)
     }
@@ -1392,6 +1395,8 @@ impl Level {
                 current.dirty.store(true, Ordering::Release);
             }
         }
+        // Unconditional for every ready Arc, even after its pending list was
+        // consumed: this also repairs bounded absent-publication index races.
         if current.block_ticks.has_ticks() || current.fluid_ticks.has_ticks() {
             self.chunks_with_scheduled_ticks.insert(pos);
         }
@@ -1407,6 +1412,16 @@ impl Level {
         scheduler: fn(&ChunkData) -> &ChunkTickScheduler<T>,
         block_phase: bool,
     ) -> (Vec<(ScheduledTick<T>, SyncChunk)>, Vec<SyncChunk>) {
+        let heads = self.collect_tick_heads(now, eligible, scheduler);
+        self.drain_tick_heads(now, budget, heads, scheduler, block_phase)
+    }
+
+    fn collect_tick_heads<T: Copy + Hash + Eq>(
+        &self,
+        now: i64,
+        eligible: &FxHashSet<Vector2<i32>>,
+        scheduler: fn(&ChunkData) -> &ChunkTickScheduler<T>,
+    ) -> BinaryHeap<ContainerHead> {
         // Drop all index shard guards before reading the authoritative FULL map.
         let positions: Vec<_> = self
             .chunks_with_scheduled_ticks
@@ -1416,6 +1431,9 @@ impl Level {
         let mut heads = BinaryHeap::new();
         for pos in positions {
             let Some(current) = self.loaded_chunks.get(&pos) else {
+                // A racing new insertion is reindexed by every-ready-Arc unpack
+                // before its next eligible collection. Never look up the map
+                // while holding the index shard to try to close this window.
                 self.chunks_with_scheduled_ticks.remove(&pos);
                 continue;
             };
@@ -1423,6 +1441,7 @@ impl Level {
                 let queue = scheduler(&current).lock();
                 if let Some(head) = queue.peek().filter(|tick| tick.trigger_tick <= now) {
                     heads.push(ContainerHead {
+                        owner: current.value().clone(),
                         position: pos,
                         key: head.intra_tick_key(),
                     });
@@ -1430,6 +1449,17 @@ impl Level {
             }
             self.remove_empty_tick_index(pos, &current);
         }
+        heads
+    }
+
+    fn drain_tick_heads<T: Copy + Hash + Eq>(
+        &self,
+        now: i64,
+        budget: usize,
+        mut heads: BinaryHeap<ContainerHead>,
+        scheduler: fn(&ChunkData) -> &ChunkTickScheduler<T>,
+        block_phase: bool,
+    ) -> (Vec<(ScheduledTick<T>, SyncChunk)>, Vec<SyncChunk>) {
         let mut result = Vec::new();
         let mut owners = Vec::new();
         let mut owner_ids = FxHashSet::default();
@@ -1440,6 +1470,9 @@ impl Level {
             // No other map Ref or queue is retained when resolving this one.
             let other_key = heads.peek().and_then(|next| {
                 let other = self.loaded_chunks.get(&next.position)?;
+                if !Arc::ptr_eq(other.value(), &next.owner) || !other.is_post_processing_ready() {
+                    return None;
+                }
                 let key = scheduler(&other)
                     .lock()
                     .peek()
@@ -1447,9 +1480,14 @@ impl Level {
                 key
             });
             let Some(current) = self.loaded_chunks.get(&head.position) else {
+                // Every-ready-Arc unpack repairs a concurrent publication's
+                // index before its next eligible collection (map -> index only).
                 self.chunks_with_scheduled_ticks.remove(&head.position);
                 continue;
             };
+            if !Arc::ptr_eq(current.value(), &head.owner) || !current.is_post_processing_ready() {
+                continue;
+            }
             let mut queue = scheduler(&current).lock();
             if queue.peek().is_some_and(|tick| tick.trigger_tick <= now) {
                 if block_phase && owner_ids.insert(Arc::as_ptr(current.value())) {
@@ -1460,7 +1498,9 @@ impl Level {
                     owners.push(current.value().clone());
                 }
                 // The first tick of this selected container is unconditional.
-                let first = queue.poll().expect("due head exists under queue lock");
+                let Some(first) = queue.poll() else {
+                    break;
+                };
                 result.push((first, current.value().clone()));
                 while result.len() < budget {
                     let Some(tick) = queue.peek() else {
@@ -1471,16 +1511,17 @@ impl Level {
                     {
                         break;
                     }
-                    result.push((
-                        queue.poll().expect("head exists under queue lock"),
-                        current.value().clone(),
-                    ));
+                    let Some(next) = queue.poll() else {
+                        break;
+                    };
+                    result.push((next, current.value().clone()));
                 }
                 current.dirty.store(true, Ordering::Release);
             }
             if result.len() < budget {
                 if let Some(next) = queue.peek().filter(|tick| tick.trigger_tick <= now) {
                     heads.push(ContainerHead {
+                        owner: current.value().clone(),
                         position: head.position,
                         key: next.intra_tick_key(),
                     });
@@ -1581,6 +1622,7 @@ impl Level {
     /// Inclusive source box, history -> pending -> queued, x-major chunk traversal.
     /// Same-world callbacks and between-tick ingress define this partition.
     /// Cross-world callbacks may observe another parallel world's phase boundary.
+    #[must_use]
     pub fn snapshot_block_ticks(
         &self,
         min: &BlockPos,
@@ -1626,14 +1668,13 @@ impl Level {
         offset: &BlockPos,
     ) {
         let ticks = source.snapshot_block_ticks(min, max);
-        let Some(min_order) = ticks.iter().map(|tick| tick.sub_tick_order).min() else {
+        let mut orders = ticks.iter().map(|tick| tick.sub_tick_order);
+        let Some(first) = orders.next() else {
             return;
         };
-        let max_order = ticks
-            .iter()
-            .map(|tick| tick.sub_tick_order)
-            .max()
-            .expect("nonempty snapshot");
+        let (min_order, max_order) = orders.fold((first, first), |(min, max), order| {
+            (min.min(order), max.max(order))
+        });
         // Compute over every match before target dedup, including requeued keys.
         for mut tick in ticks {
             tick.position = BlockPos::new(
@@ -2491,5 +2532,151 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    async fn tick_head_fixture() -> (TempDir, Arc<Level>) {
+        let directory = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            directory.path().to_owned(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        level.set_tick_game_time(100);
+        (directory, level)
+    }
+
+    fn publish_tick_chunk(level: &Level, x: i32, ready: bool) -> SyncChunk {
+        let chunk = ChunkData::empty_sync(x, 0);
+        chunk.post_processing_ready.store(ready, Ordering::Relaxed);
+        level.bind_chunk_poi(&chunk).unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(x, 0), chunk.clone());
+        chunk
+    }
+
+    #[tokio::test]
+    async fn selected_tick_head_rechecks_exact_publication_and_readiness() {
+        let (_directory, level) = tick_head_fixture().await;
+        let original = publish_tick_chunk(&level, 0, true);
+        let eligible = FxHashSet::from_iter([Vector2::new(0, 0)]);
+        level.schedule_fluid_tick(
+            &Fluid::WATER,
+            BlockPos::new(1, 64, 0),
+            0,
+            TickPriority::Normal,
+        );
+        let no_longer_ready = level.collect_tick_heads(100, &eligible, |chunk| &chunk.fluid_ticks);
+        original
+            .post_processing_ready
+            .store(false, Ordering::Relaxed);
+        assert!(
+            level
+                .drain_tick_heads(
+                    100,
+                    65536,
+                    no_longer_ready,
+                    |chunk| &chunk.fluid_ticks,
+                    false
+                )
+                .0
+                .is_empty()
+        );
+        original
+            .post_processing_ready
+            .store(true, Ordering::Relaxed);
+        let unready_heads = level.collect_tick_heads(100, &eligible, |chunk| &chunk.fluid_ticks);
+        let replaced_heads = level.collect_tick_heads(100, &eligible, |chunk| &chunk.fluid_ticks);
+        let replacement = publish_tick_chunk(&level, 0, false);
+        level.schedule_fluid_tick(
+            &Fluid::WATER,
+            BlockPos::new(1, 64, 0),
+            0,
+            TickPriority::ExtremelyHigh,
+        );
+        assert!(
+            level
+                .drain_tick_heads(100, 65536, unready_heads, |chunk| &chunk.fluid_ticks, false)
+                .0
+                .is_empty()
+        );
+        assert_eq!(replacement.fluid_ticks.get_all().len(), 1);
+        replacement
+            .post_processing_ready
+            .store(true, Ordering::Relaxed);
+        // Readiness alone is insufficient: a selected head belongs to its Arc.
+        assert!(
+            level
+                .drain_tick_heads(
+                    100,
+                    65536,
+                    replaced_heads,
+                    |chunk| &chunk.fluid_ticks,
+                    false
+                )
+                .0
+                .is_empty()
+        );
+        assert_eq!(original.fluid_ticks.get_all().len(), 1);
+        assert_eq!(replacement.fluid_ticks.get_all().len(), 1);
+        assert_eq!(level.collect_fluid_ticks(100, 65536, &eligible).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sampled_other_tick_head_rechecks_exact_publication_and_readiness() {
+        let (_directory, level) = tick_head_fixture().await;
+        for replace in [false, true] {
+            publish_tick_chunk(&level, 0, true);
+            let original = publish_tick_chunk(&level, 1, true);
+            let third = publish_tick_chunk(&level, 2, true);
+            for (x, priority) in [
+                (1, TickPriority::High),
+                (2, TickPriority::VeryLow),
+                (16, TickPriority::Normal),
+                (32, TickPriority::Low),
+            ] {
+                level.schedule_fluid_tick(&Fluid::WATER, BlockPos::new(x, 64, 0), 0, priority);
+            }
+            let eligible =
+                FxHashSet::from_iter([Vector2::new(0, 0), Vector2::new(1, 0), Vector2::new(2, 0)]);
+            let heads = level.collect_tick_heads(100, &eligible, |chunk| &chunk.fluid_ticks);
+            let current = if replace {
+                // A ready replacement is still not the sampled publication.
+                let current = publish_tick_chunk(&level, 1, true);
+                level.schedule_fluid_tick(
+                    &Fluid::WATER,
+                    BlockPos::new(16, 64, 0),
+                    0,
+                    TickPriority::ExtremelyHigh,
+                );
+                current
+            } else {
+                original
+                    .post_processing_ready
+                    .store(false, Ordering::Relaxed);
+                original.clone()
+            };
+            // Sampling either invalid head would interrupt this chunk and put
+            // the third chunk ahead of its second record under this budget.
+            let (due, owners) =
+                level.drain_tick_heads(100, 2, heads, |chunk| &chunk.fluid_ticks, false);
+            assert_eq!(
+                due.iter()
+                    .map(|(tick, _)| tick.position.0.x)
+                    .collect::<Vec<_>>(),
+                vec![1, 2]
+            );
+            assert!(owners.is_empty());
+            assert_eq!(current.fluid_ticks.get_all().len(), 1);
+            assert_eq!(third.fluid_ticks.get_all().len(), 1);
+            current.post_processing_ready.store(true, Ordering::Relaxed);
+            let due = level.collect_fluid_ticks(100, 65536, &eligible);
+            assert_eq!(
+                due.iter().map(|tick| tick.position.0.x).collect::<Vec<_>>(),
+                vec![16, 32]
+            );
+        }
     }
 }

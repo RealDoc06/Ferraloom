@@ -820,7 +820,6 @@ mod tests {
         assert_eq!(calls.lock().unwrap().len(), 2);
     }
 
-    // The controls below are source-only additions; all are UNRUN.
     #[tokio::test]
     async fn already_block_ready_replacement_unpacks_both_saved_containers_at_preincrement_age() {
         use pumpkin_world::tick::{SavedTick, TickPriority};

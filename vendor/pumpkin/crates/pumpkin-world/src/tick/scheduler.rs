@@ -51,21 +51,25 @@ impl<T> ChunkTickScheduler<T> {
 
 impl<T: Copy + Hash + Eq> ChunkTickScheduler<T> {
     /// Queued absolute records only. Pending saved records are deliberately hidden.
+    #[must_use]
     pub fn get_all(&self) -> Vec<ScheduledTick<T>> {
         self.lock().get_all()
     }
 
+    #[must_use]
     pub fn has_ticks(&self) -> bool {
         self.lock().peek().is_some()
     }
 
     /// Explicit-clock packing for standalone callers and fixtures.
+    #[must_use]
     pub fn pack_at(&self, now: i64) -> Vec<SavedTick<T>> {
         self.lock().pack(now)
     }
 }
 
 impl<'a, T: Hash + Eq> ChunkTickScheduler<&'a T> {
+    #[must_use]
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
         self.lock().keys.contains(&(pos, value))
     }
@@ -98,13 +102,14 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
         let Some(saved) = self.pending_saved.take() else {
             return false;
         };
+        let changed = !saved.is_empty();
         let mut order = -(saved.len() as i64);
         for tick in saved {
             // Keys were seeded by construction. Saved duplicates must survive.
             self.queue.push(QueueEntry(tick.unpack(now, order)));
             order = order.wrapping_add(1);
         }
-        true
+        changed
     }
 
     pub(crate) fn pack(&self, now: i64) -> Vec<SavedTick<T>> {
@@ -282,7 +287,7 @@ mod tests {
             .iter()
             .map(|entry| {
                 let nbt = entry.to_nbt_compound();
-                assert_eq!(nbt.get_int("t"), Some(i32::from(entry.delay)));
+                assert_eq!(nbt.get_int("t"), Some(entry.delay));
                 SavedTick::<&'static Block>::from_nbt_compound(&nbt).unwrap()
             })
             .collect();
@@ -304,5 +309,47 @@ mod tests {
         }
         assert!(!scheduler.has_ticks());
         assert!(!restored.has_ticks());
+    }
+
+    #[tokio::test]
+    async fn empty_disk_pending_is_consumed_once_without_dirtying_ready_chunk() {
+        use crate::{
+            chunk::{ChunkData, format::anvil::SingleChunkDataSerializer},
+            level::Level,
+        };
+        use pumpkin_config::world::LevelConfig;
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::math::vector2::Vector2;
+        use std::sync::{Arc, atomic::Ordering};
+        let folder = tempfile::tempdir().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_owned(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        level.shutdown().await.unwrap();
+        level.set_tick_game_time(400);
+        let bytes = ChunkData::empty(0, 0).to_bytes().unwrap();
+        let chunk = Arc::new(ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).unwrap());
+        assert!(chunk.block_ticks.lock().pending_saved.is_some());
+        assert!(chunk.fluid_ticks.lock().pending_saved.is_some());
+        chunk.post_processing_ready.store(true, Ordering::Relaxed);
+        level.bind_chunk_poi(&chunk).unwrap();
+        level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        assert!(!chunk.dirty.load(Ordering::Acquire));
+        level.unpack_chunk_ticks(Vector2::new(0, 0), 400);
+        assert!(chunk.block_ticks.lock().pending_saved.is_none());
+        assert!(chunk.fluid_ticks.lock().pending_saved.is_none());
+        assert!(!chunk.dirty.load(Ordering::Acquire));
+        level.unpack_chunk_ticks(Vector2::new(0, 0), 500);
+        assert!(!chunk.dirty.load(Ordering::Acquire));
+        assert!(
+            !level
+                .chunks_with_scheduled_ticks
+                .contains(&Vector2::new(0, 0))
+        );
     }
 }
