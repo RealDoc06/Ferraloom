@@ -34,6 +34,8 @@ mod block_events;
 pub mod brightness;
 pub mod chunker;
 #[cfg(test)]
+mod clone_tests;
+#[cfg(test)]
 mod dragon_part_tests;
 pub mod explosion;
 pub mod generation_cache;
