@@ -91,6 +91,14 @@ impl RegionChunk {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    fn destroy_block(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _drop: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: destroy_block".into()))
+    }
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -403,6 +411,9 @@ impl<'a> WorldGenRegion<'a> {
         )?;
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
+    }
+    pub fn destroy_block(&mut self, p: [i32; 3], drop: bool) -> Result<bool, Error> {
+        self.behavior.destroy_block(self, p, drop)
     }
     pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
         self.behavior.place_liquid(self, p, fluid)
