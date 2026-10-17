@@ -1774,4 +1774,557 @@ mod tests {
         >(()))
         .await;
     }
+
+    // R28 additions are source-authored and UNRUN. Every encoder, region write
+    // and decoder below is the actual backend; only admission can be paused.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Keep exact-source refusal and fresh disk proof together."
+    )]
+    async fn stale_admission_retains_source<S>(config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::PoiRegion;
+        use pumpkin_data::poi::PoiType;
+        use pumpkin_util::math::position::BlockPos;
+        for watched in [false, true] {
+            for aba in [false, true] {
+                let directory = TempDir::new().unwrap();
+                let folder = folder(&directory);
+                let runtime = TestRuntime::new(folder.poi_folder.clone());
+                let writer = ChunkFileManager::<S>::new(config.clone());
+                let source = bound_home(&runtime, 0);
+                let pos = Vector2::new(0, 0);
+                let home = source.section.get_block_absolute_y(1, 0, 1).unwrap();
+                runtime.chunks.insert(pos, source.clone());
+                writer
+                    .save_chunks(&folder, vec![(pos, source.clone())])
+                    .await
+                    .unwrap();
+                {
+                    let mut storage = runtime.runtime.storage.lock().unwrap();
+                    storage
+                        .add_with_free_tickets(
+                            BlockPos::new(1, 0, 1),
+                            PoiType::Home.identifier(),
+                            0,
+                        )
+                        .unwrap();
+                    storage.save_all().unwrap();
+                }
+                let path = folder.region_folder.join(S::get_chunk_key(&pos));
+                let poi_path = folder.poi_folder.join("r.0.0.mca");
+                let terrain_before = std::fs::read(&path).unwrap();
+                let poi_before = std::fs::read(&poi_path).unwrap();
+                if watched {
+                    writer.watch_chunks(&folder, &[pos]).await;
+                }
+                source.set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
+                let (entered, resume) = runtime.runtime.pause_capture_admission(&source);
+                let mut saving = Box::pin(writer.save_chunks(&folder, vec![(pos, source.clone())]));
+                tokio::select! {
+                    result = &mut saving => panic!("capture bypassed admission gate: {result:?}"),
+                    result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+                }
+                if aba {
+                    source.set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
+                }
+                // An ordinary non-POI setter alone must also invalidate capture.
+                source.set_block_absolute_y(2, 0, 1, Block::DIRT.default_state.id);
+                resume.send(()).unwrap();
+                assert!(matches!(
+                    saving.await,
+                    Err(ChunkWritingError::StaleSaveCapture)
+                ));
+                assert!(source.is_dirty());
+                let loader = writer.get_loader(&path).await;
+                assert!(Arc::ptr_eq(
+                    loader.unapplied.lock().await.get(&(0, 0)).unwrap(),
+                    &source
+                ));
+                assert_eq!(std::fs::read(&path).unwrap(), terrain_before);
+                assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+                // No resubmission: the failed backend admission owns this retry.
+                writer.flush().await.unwrap();
+                let reader = ChunkFileManager::<S>::new(config.clone());
+                let (send, mut receive) = mpsc::channel(1);
+                reader.fetch_chunks(&folder, &[pos], send).await;
+                let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+                    panic!("missing retried terrain")
+                };
+                assert!(!Arc::ptr_eq(&saved, &source));
+                assert_eq!(saved.section.get_block_absolute_y(1, 0, 1), Some(home));
+                assert_eq!(
+                    saved.section.get_block_absolute_y(2, 0, 1),
+                    Some(Block::DIRT.default_state.id)
+                );
+                let poi = PoiRegion::load(&poi_path).unwrap();
+                let entry = poi
+                    .get_all()
+                    .into_iter()
+                    .find(|entry| entry.pos() == BlockPos::new(1, 0, 1))
+                    .unwrap();
+                assert_eq!(entry.poi_type, PoiType::Home.identifier());
+                assert_eq!(entry.free_tickets, if aba { 1 } else { 0 });
+                assert!(!source.is_dirty());
+                assert!(loader.unapplied.lock().await.is_empty());
+                assert!(
+                    loader
+                        .get()
+                        .await
+                        .unwrap()
+                        .read()
+                        .await
+                        .receipts
+                        .lock()
+                        .await
+                        .is_empty()
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn all_formats_stale_admission_retries_exact_source_and_aba_without_resubmission() {
+        Box::pin(stale_admission_retains_source::<AnvilChunkFile<ChunkData>>(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        ))
+        .await;
+        Box::pin(stale_admission_retains_source::<
+            crate::chunk::format::linear::LinearV2File<ChunkData>,
+        >(()))
+        .await;
+        Box::pin(stale_admission_retains_source::<
+            crate::chunk::format::pump::PumpFile<ChunkData>,
+        >(()))
+        .await;
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Exercise real mixed backend failures, retained sources and healthy siblings together."
+    )]
+    async fn stale_sibling_cannot_hide_end<S>(config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::PoiRegion;
+        use pumpkin_data::poi::PoiType;
+        use pumpkin_util::math::position::BlockPos;
+        for across_regions in [false, true] {
+            for explicit_flush in [false, true] {
+                let directory = TempDir::new().unwrap();
+                let folder = folder(&directory);
+                let runtime = TestRuntime::new(folder.poi_folder.clone());
+                let writer = ChunkFileManager::<S>::new(config.clone());
+                let bx = if across_regions { 32 } else { 1 };
+                let cx = if across_regions { 64 } else { 2 };
+                let positions = [Vector2::new(0, 0), Vector2::new(bx, 0), Vector2::new(cx, 0)];
+                let sources = [
+                    bound_home(&runtime, 0),
+                    bound_home(&runtime, bx),
+                    bound_home(&runtime, cx),
+                ];
+                let home = sources[0].section.get_block_absolute_y(1, 0, 1).unwrap();
+                for (pos, source) in positions.iter().zip(&sources) {
+                    runtime.chunks.insert(*pos, source.clone());
+                }
+                let submitted = || {
+                    positions
+                        .iter()
+                        .copied()
+                        .zip(sources.iter().cloned())
+                        .collect()
+                };
+                writer.save_chunks(&folder, submitted()).await.unwrap();
+                let a_path = folder.region_folder.join(S::get_chunk_key(&positions[0]));
+                let b_path = folder.region_folder.join(S::get_chunk_key(&positions[1]));
+                let poi_a = folder.poi_folder.join("r.0.0.mca");
+                let poi_b = folder.poi_folder.join(format!("r.{}.0.mca", bx >> 5));
+                {
+                    let mut storage = runtime.runtime.storage.lock().unwrap();
+                    for x in [0, bx] {
+                        storage
+                            .add_with_free_tickets(
+                                BlockPos::new(x * 16 + 1, 0, 1),
+                                PoiType::Home.identifier(),
+                                0,
+                            )
+                            .unwrap();
+                    }
+                    storage.save_all().unwrap();
+                }
+                let poi_a_before = std::fs::read(&poi_a).unwrap();
+                let poi_b_before = std::fs::read(&poi_b).unwrap();
+                if explicit_flush {
+                    writer.watch_chunks(&folder, &positions).await;
+                }
+                sources[0].mark_dirty(true);
+                sources[1].set_custom_data("r28", "refused", pumpkin_nbt::tag::NbtTag::End);
+                sources[1].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+                sources[2].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+                // For explicit flush, admit real failed sources first. A stays
+                // pending after this first stale attempt; C has actual cached bytes.
+                let (entered, resume) = runtime.runtime.pause_capture_admission(&sources[0]);
+                let mut saving = Box::pin(writer.save_chunks(&folder, submitted()));
+                tokio::select! {
+                    result = &mut saving => panic!("capture bypassed admission gate: {result:?}"),
+                    result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+                }
+                sources[0].set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
+                resume.send(()).unwrap();
+                assert!(matches!(
+                    saving.await,
+                    Err(ChunkWritingError::ChunkSerializingError(_))
+                ));
+                if explicit_flush {
+                    let (entered, resume) = runtime.runtime.pause_capture_admission(&sources[0]);
+                    let mut flushing = Box::pin(writer.flush());
+                    tokio::select! {
+                        result = &mut flushing => panic!("flush bypassed admission gate: {result:?}"),
+                        result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+                    }
+                    sources[0].set_block_absolute_y(2, 0, 1, Block::DIRT.default_state.id);
+                    resume.send(()).unwrap();
+                    assert!(matches!(
+                        flushing.await,
+                        Err(ChunkWritingError::ChunkSerializingError(_))
+                    ));
+                }
+                for (pos, source, path) in [
+                    (positions[0], &sources[0], &a_path),
+                    (positions[1], &sources[1], &b_path),
+                ] {
+                    assert!(source.is_dirty());
+                    let loader = writer.get_loader(path).await;
+                    assert!(Arc::ptr_eq(
+                        loader.unapplied.lock().await.get(&(pos.x, pos.y)).unwrap(),
+                        source
+                    ));
+                }
+                assert_eq!(saved_block::<S>(&folder, config.clone(), 0).await, home);
+                assert_eq!(saved_block::<S>(&folder, config.clone(), bx).await, home);
+                if across_regions {
+                    assert_eq!(std::fs::read(&poi_a).unwrap(), poi_a_before);
+                    assert_eq!(std::fs::read(&poi_b).unwrap(), poi_b_before);
+                }
+                for x in [0, bx] {
+                    let poi =
+                        PoiRegion::load(&folder.poi_folder.join(format!("r.{}.0.mca", x >> 5)))
+                            .unwrap();
+                    let entry = poi
+                        .get_all()
+                        .into_iter()
+                        .find(|entry| entry.pos() == BlockPos::new(x * 16 + 1, 0, 1))
+                        .unwrap();
+                    assert_eq!(entry.poi_type, PoiType::Home.identifier());
+                    assert_eq!(entry.free_tickets, 0);
+                }
+                assert_eq!(
+                    saved_block::<S>(&folder, config.clone(), cx).await,
+                    Block::BELL.default_state.id
+                );
+                let healthy =
+                    PoiRegion::load(&folder.poi_folder.join(format!("r.{}.0.mca", cx >> 5)))
+                        .unwrap();
+                assert_eq!(
+                    healthy
+                        .get_all()
+                        .into_iter()
+                        .find(|entry| entry.pos() == BlockPos::new(cx * 16 + 1, 0, 1))
+                        .unwrap()
+                        .free_tickets,
+                    32
+                );
+                sources[1].set_custom_data("r28", "refused", pumpkin_nbt::tag::NbtTag::Int(1));
+                writer.flush().await.unwrap();
+                assert_eq!(
+                    saved_block::<S>(&folder, config.clone(), bx).await,
+                    Block::BELL.default_state.id
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn all_formats_mixed_stale_and_end_keep_hard_error_and_write_healthy_regions() {
+        Box::pin(stale_sibling_cannot_hide_end::<AnvilChunkFile<ChunkData>>(
+            pumpkin_config::chunk::AnvilChunkConfig::default(),
+        ))
+        .await;
+        Box::pin(stale_sibling_cannot_hide_end::<
+            crate::chunk::format::linear::LinearV2File<ChunkData>,
+        >(()))
+        .await;
+        Box::pin(stale_sibling_cannot_hide_end::<
+            crate::chunk::format::pump::PumpFile<ChunkData>,
+        >(()))
+        .await;
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Keep actual completion refusal, old POI bytes and exact receipt retry together."
+    )]
+    async fn stale_completion_cannot_hide_poi_io<S>(config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::PoiRegion;
+        use pumpkin_data::poi::PoiType;
+        use pumpkin_util::math::position::BlockPos;
+        for across_regions in [false, true] {
+            for admission_stale in [false, true] {
+                let directory = TempDir::new().unwrap();
+                let folder = folder(&directory);
+                let runtime = TestRuntime::new(folder.poi_folder.clone());
+                let writer = ChunkFileManager::<S>::new(config.clone());
+                let bx = if across_regions { 32 } else { 1 };
+                let positions = [Vector2::new(0, 0), Vector2::new(bx, 0), Vector2::new(64, 0)];
+                let sources = [
+                    bound_home(&runtime, 0),
+                    bound_home(&runtime, bx),
+                    bound_home(&runtime, 64),
+                ];
+                for (pos, source) in positions.iter().zip(&sources) {
+                    runtime.chunks.insert(*pos, source.clone());
+                }
+                let submitted = || {
+                    positions
+                        .iter()
+                        .copied()
+                        .zip(sources.iter().cloned())
+                        .collect()
+                };
+                writer.save_chunks(&folder, submitted()).await.unwrap();
+                {
+                    let mut storage = runtime.runtime.storage.lock().unwrap();
+                    for x in [0, bx] {
+                        storage
+                            .add_with_free_tickets(
+                                BlockPos::new(x * 16 + 1, 0, 1),
+                                PoiType::Home.identifier(),
+                                0,
+                            )
+                            .unwrap();
+                    }
+                    storage.save_all().unwrap();
+                }
+                writer.watch_chunks(&folder, &positions).await;
+                sources[0].set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
+                sources[1].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+                sources[2].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+                let home = sources[0].section.get_block_absolute_y(1, 0, 1).unwrap();
+                if admission_stale {
+                    let (entered, resume) = runtime.runtime.pause_capture_admission(&sources[0]);
+                    let mut saving = Box::pin(writer.save_chunks(&folder, submitted()));
+                    tokio::select! {
+                        result = &mut saving => panic!("capture bypassed admission gate: {result:?}"),
+                        result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+                    }
+                    sources[0].set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
+                    resume.send(()).unwrap();
+                    assert!(matches!(
+                        saving.await,
+                        Err(ChunkWritingError::StaleSaveCapture)
+                    ));
+                } else {
+                    writer.save_chunks(&folder, submitted()).await.unwrap();
+                    sources[0].set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
+                }
+                // Real rename refusal at the real POI destination. Preserve the
+                // original file beside it and restore it before the retained retry.
+                let blocked = folder.poi_folder.join(format!("r.{}.0.mca", bx >> 5));
+                let backup = blocked.with_extension("original");
+                let original = std::fs::read(&blocked).unwrap();
+                std::fs::rename(&blocked, &backup).unwrap();
+                std::fs::create_dir(&blocked).unwrap();
+                let result = if admission_stale {
+                    let (entered, resume) = runtime.runtime.pause_capture_admission(&sources[0]);
+                    let mut flushing = Box::pin(writer.flush());
+                    tokio::select! {
+                        result = &mut flushing => panic!("flush bypassed admission gate: {result:?}"),
+                        result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+                    }
+                    sources[0].set_block_absolute_y(2, 0, 1, Block::DIRT.default_state.id);
+                    resume.send(()).unwrap();
+                    flushing.await
+                } else {
+                    writer.flush().await
+                };
+                // Covers stale apply_pending + hard flush_serialized as well as
+                // stale/hard siblings inside complete_poi_batch and region join_all.
+                assert!(matches!(result, Err(ChunkWritingError::IoError(_))));
+                assert_eq!(std::fs::read(&backup).unwrap(), original);
+                assert!(blocked.is_dir());
+                assert!(sources[0].is_dirty());
+                let a_loader = writer
+                    .get_loader(&folder.region_folder.join(S::get_chunk_key(&positions[0])))
+                    .await;
+                assert!(Arc::ptr_eq(
+                    a_loader.unapplied.lock().await.get(&(0, 0)).unwrap(),
+                    &sources[0]
+                ));
+                let b_loader = writer
+                    .get_loader(&folder.region_folder.join(S::get_chunk_key(&positions[1])))
+                    .await;
+                let cached = b_loader.get().await.unwrap();
+                let receipts = cached.read().await.receipts.clone();
+                assert!(Arc::ptr_eq(
+                    &receipts.lock().await.get(&(bx, 0)).unwrap().0,
+                    &sources[1]
+                ));
+                let old = PoiRegion::load(&backup).unwrap();
+                assert_eq!(
+                    old.get_all()
+                        .into_iter()
+                        .find(|entry| entry.pos() == BlockPos::new(bx * 16 + 1, 0, 1))
+                        .unwrap()
+                        .free_tickets,
+                    0
+                );
+                assert_eq!(
+                    saved_block::<S>(&folder, config.clone(), 64).await,
+                    Block::BELL.default_state.id
+                );
+                assert_eq!(
+                    PoiRegion::load(&folder.poi_folder.join("r.2.0.mca"))
+                        .unwrap()
+                        .get_all()[0]
+                        .free_tickets,
+                    32
+                );
+                std::fs::remove_dir(&blocked).unwrap();
+                std::fs::rename(&backup, &blocked).unwrap();
+                writer.flush().await.unwrap();
+                let poi = PoiRegion::load(&folder.poi_folder.join("r.0.0.mca")).unwrap();
+                assert_eq!(
+                    poi.get_all()
+                        .into_iter()
+                        .find(|entry| entry.pos() == BlockPos::new(1, 0, 1))
+                        .unwrap()
+                        .free_tickets,
+                    1
+                );
+                assert_eq!(
+                    saved_block::<S>(&folder, config.clone(), bx).await,
+                    Block::BELL.default_state.id
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn all_formats_mixed_stale_and_poi_io_keep_hard_error_and_complete_healthy_region() {
+        Box::pin(stale_completion_cannot_hide_poi_io::<
+            AnvilChunkFile<ChunkData>,
+        >(pumpkin_config::chunk::AnvilChunkConfig::default()))
+        .await;
+        Box::pin(stale_completion_cannot_hide_poi_io::<
+            crate::chunk::format::linear::LinearV2File<ChunkData>,
+        >(()))
+        .await;
+        Box::pin(stale_completion_cannot_hide_poi_io::<
+            crate::chunk::format::pump::PumpFile<ChunkData>,
+        >(()))
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Exercise actual Anvil compression refusal mixed with stale and healthy receipts."
+    )]
+    async fn anvil_mixed_stale_and_compression_keep_hard_error_and_write_healthy_sibling() {
+        use crate::chunk::poi_binding::TestRuntime;
+        use crate::poi::PoiRegion;
+        for across_regions in [false, true] {
+            let directory = TempDir::new().unwrap();
+            let folder = folder(&directory);
+            let runtime = TestRuntime::new(folder.poi_folder.clone());
+            let mut config = pumpkin_config::chunk::AnvilChunkConfig::default();
+            config.compression.algorithm = pumpkin_config::chunk::Compression::LZ4;
+            config.compression.level = 0;
+            let mut writer = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone());
+            let bx = if across_regions { 32 } else { 1 };
+            let cx = if across_regions { 64 } else { 2 };
+            let positions = [Vector2::new(0, 0), Vector2::new(bx, 0), Vector2::new(cx, 0)];
+            let sources = [
+                bound_home(&runtime, 0),
+                bound_home(&runtime, bx),
+                bound_home(&runtime, cx),
+            ];
+            let home = sources[0].section.get_block_absolute_y(1, 0, 1).unwrap();
+            for (pos, source) in positions.iter().zip(&sources) {
+                runtime.chunks.insert(*pos, source.clone());
+            }
+            writer
+                .save_chunks(
+                    &folder,
+                    positions
+                        .iter()
+                        .copied()
+                        .zip(sources.iter().cloned())
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            writer.watch_chunks(&folder, &positions).await;
+            sources[0].set_block_absolute_y(2, 0, 1, Block::STONE.default_state.id);
+            sources[2].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+            writer
+                .save_chunks(
+                    &folder,
+                    vec![
+                        (positions[0], sources[0].clone()),
+                        (positions[2], sources[2].clone()),
+                    ],
+                )
+                .await
+                .unwrap();
+            sources[0].set_blocks_batch([(1, 0, 1, BlockStateId::AIR), (1, 0, 1, home)]);
+            sources[1].set_block_absolute_y(1, 0, 1, Block::BELL.default_state.id);
+            writer.chunk_config.compression.level = 16;
+            assert!(matches!(
+                writer
+                    .save_chunks(&folder, vec![(positions[1], sources[1].clone())])
+                    .await,
+                Err(ChunkWritingError::Compression(_))
+            ));
+            assert!(matches!(
+                writer.flush().await,
+                Err(ChunkWritingError::Compression(_))
+            ));
+            assert!(sources[0].is_dirty());
+            assert!(sources[1].is_dirty());
+            assert_eq!(
+                saved_block::<AnvilChunkFile<ChunkData>>(&folder, config.clone(), bx).await,
+                home
+            );
+            assert_eq!(
+                saved_block::<AnvilChunkFile<ChunkData>>(&folder, config.clone(), cx).await,
+                Block::BELL.default_state.id
+            );
+            let poi =
+                PoiRegion::load(&folder.poi_folder.join(format!("r.{}.0.mca", cx >> 5))).unwrap();
+            assert!(
+                poi.get_all()
+                    .iter()
+                    .any(|entry| entry.pos().x == cx * 16 + 1 && entry.free_tickets == 32)
+            );
+            writer.chunk_config.compression.level = 0;
+            writer.flush().await.unwrap();
+            assert_eq!(
+                saved_block::<AnvilChunkFile<ChunkData>>(&folder, config, bx).await,
+                Block::BELL.default_state.id
+            );
+        }
+    }
 }

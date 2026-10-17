@@ -321,6 +321,8 @@ impl Level {
             storage: poi_storage.clone(),
             lifecycle: chunk_lifecycle.clone(),
             chunks: Arc::downgrade(&loaded_chunks),
+            #[cfg(test)]
+            capture_admission_gate: Mutex::new(None),
         });
         let level_ref = Arc::new(Self {
             seed,

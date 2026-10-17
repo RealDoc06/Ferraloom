@@ -872,3 +872,48 @@ fn cancelled_queued_managed_save_keeps_gate_until_actual_ack() {
             .unwrap();
         });
 }
+
+// R28 conversion boundary contract, source-authored and UNRUN. The actual
+// backend/worker mixed-failure tests cover the downstream policy separately.
+#[test]
+fn stale_save_deferral_requires_the_exact_poi_error_variant() {
+    for wrapped in [false, true] {
+        let convert = |error| {
+            if wrapped {
+                ChunkWritingError::from(ChunkSerializingError::Poi(error))
+            } else {
+                ChunkWritingError::from(error)
+            }
+        };
+        assert!(matches!(
+            convert(PoiReconcileError::StaleSaveCapture),
+            ChunkWritingError::StaleSaveCapture
+        ));
+        for error in [
+            PoiReconcileError::WrongStorage,
+            PoiReconcileError::ObsoletePublication,
+            PoiReconcileError::OwnershipPoisoned,
+            PoiReconcileError::MetadataPoisoned,
+            PoiReconcileError::TerrainPoisoned,
+            PoiReconcileError::InvalidCoordinates,
+            PoiReconcileError::RevisionExhausted,
+            PoiReconcileError::PreparationWorkerFailed(
+                PoiReconcileError::StaleSaveCapture.to_string(),
+            ),
+        ] {
+            assert!(!convert(error).is_stale_save_capture());
+        }
+    }
+    let text = PoiReconcileError::StaleSaveCapture.to_string();
+    assert!(!ChunkWritingError::ChunkSerializingError(text.clone()).is_stale_save_capture());
+    assert!(
+        !ChunkWritingError::from(ChunkSerializingError::ErrorSerializingChunk(
+            pumpkin_nbt::Error::SerdeError(text.clone())
+        ))
+        .is_stale_save_capture()
+    );
+    assert!(
+        !ChunkWritingError::from(ChunkSerializingError::PoiIo(std::io::Error::other(text)))
+            .is_stale_save_capture()
+    );
+}

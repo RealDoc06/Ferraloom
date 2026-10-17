@@ -16,6 +16,56 @@ pub struct PoiRuntime {
     pub(crate) storage: Arc<Mutex<PoiStorage>>,
     pub(crate) lifecycle: Arc<RwLock<()>>,
     pub(crate) chunks: Weak<DashMap<ChunkPos, SyncChunk>>,
+    #[cfg(test)]
+    pub(crate) capture_admission_gate: Mutex<Option<CaptureAdmissionGate>>,
+}
+
+/// One exact-source pause at real backend admission, after encoding/compression.
+/// The slot and every production ownership guard are released before waiting.
+#[cfg(test)]
+pub(crate) struct CaptureAdmissionGate {
+    source: Weak<ChunkData>,
+    entered: tokio::sync::oneshot::Sender<()>,
+    resume: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(test)]
+impl PoiRuntime {
+    pub(crate) fn pause_capture_admission(
+        &self,
+        source: &Arc<ChunkData>,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (entered, reached) = tokio::sync::oneshot::channel();
+        let (release, resume) = std::sync::mpsc::channel();
+        let mut slot = self.capture_admission_gate.lock().unwrap();
+        assert!(
+            slot.is_none(),
+            "a capture admission pause is already installed"
+        );
+        *slot = Some(CaptureAdmissionGate {
+            source: Arc::downgrade(source),
+            entered,
+            resume,
+        });
+        (reached, release)
+    }
+
+    fn wait_capture_admission(&self, source: &Arc<ChunkData>) {
+        let gate = self
+            .capture_admission_gate
+            .lock()
+            .unwrap()
+            .take_if(|gate| gate.source.ptr_eq(&Arc::downgrade(source)));
+        if let Some(gate) = gate {
+            let _ = gate.entered.send(());
+            gate.resume
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -68,6 +118,10 @@ impl EncodedPoiCommit {
     /// Called after all fallible backend chunk encoding/compression, before the
     /// backend replaces either its cached bytes or their paired receipt.
     pub(crate) fn validate(&self) -> Result<(), ChunkWritingError> {
+        #[cfg(test)]
+        self.source
+            .poi_runtime()?
+            .wait_capture_admission(&self.source);
         self.source
             .validate_poi_capture(&self.stamp)
             .map_err(ChunkWritingError::from)
@@ -300,6 +354,7 @@ impl TestRuntime {
             storage: Arc::new(Mutex::new(PoiStorage::new(folder))),
             lifecycle: Arc::new(RwLock::new(())),
             chunks: Arc::downgrade(&chunks),
+            capture_admission_gate: Mutex::new(None),
         });
         Self { runtime, chunks }
     }

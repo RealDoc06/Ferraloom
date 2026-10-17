@@ -658,3 +658,439 @@ async fn cancelled_empty_fetch_drains_pending_failure_before_normal_io_and_retry
         .unwrap()
         .unwrap();
 }
+
+// R28 actual worker/Level contracts, source-authored and UNRUN. This fixture
+// drains Level's automatic workers, then owns the ordinary FIFO write worker.
+mod stale_save_deferral {
+    use super::*;
+    use crate::chunk::{
+        ChunkWritingError,
+        format::{anvil::AnvilChunkFile, linear::LinearV2File, pump::PumpFile},
+        io::{ChunkSerializer, LoadedData, file_manager::ChunkFileManager},
+    };
+    use pumpkin_config::chunk::ChunkConfig;
+
+    struct SaveWorker {
+        _directory: tempfile::TempDir,
+        level: Arc<Level>,
+        send: tokio::sync::mpsc::Sender<WriteRequest>,
+        lock: IOLock,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    impl SaveWorker {
+        async fn new(chunk: ChunkConfig) -> Self {
+            let directory = tempfile::tempdir().unwrap();
+            let level = Level::from_root_folder(
+                &LevelConfig {
+                    chunk,
+                    ..LevelConfig::default()
+                },
+                directory.path().to_owned(),
+                0,
+                Dimension::OVERWORLD,
+            );
+            level.shutdown().await.unwrap();
+            let (send, receive) = tokio::sync::mpsc::channel(16);
+            let lock = Arc::new((
+                Mutex::new(HashMapType::default()),
+                tokio::sync::Notify::new(),
+            ));
+            let task = tokio::spawn(io_write_work(receive, level.clone(), lock.clone()));
+            Self {
+                _directory: directory,
+                level,
+                send,
+                lock,
+                task,
+            }
+        }
+
+        async fn queue(&self, chunks: Vec<(ChunkPos, SyncChunk)>) {
+            {
+                let mut entries = self.lock.0.lock().unwrap();
+                for (pos, _) in &chunks {
+                    entries.entry(*pos).or_default().writes += 1;
+                }
+            }
+            self.send
+                .send(WriteRequest::Chunks(
+                    chunks
+                        .into_iter()
+                        .map(|(pos, chunk)| (pos, Chunk::Level(chunk)))
+                        .collect(),
+                ))
+                .await
+                .unwrap();
+        }
+
+        async fn chunks_finished(&self) {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let notified = self.lock.1.notified();
+                    if self.lock.0.lock().unwrap().is_empty() {
+                        break;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        async fn request_flush(&self) -> tokio::sync::oneshot::Receiver<Result<(), String>> {
+            let (send, receive) = tokio::sync::oneshot::channel();
+            self.send
+                .send(WriteRequest::Flush(vec![send]))
+                .await
+                .unwrap();
+            receive
+        }
+
+        async fn finish(self) {
+            drop(self.send);
+            tokio::time::timeout(Duration::from_secs(5), self.task)
+                .await
+                .unwrap()
+                .unwrap();
+        }
+    }
+
+    fn source(level: &Level, x: i32) -> SyncChunk {
+        let chunk = ChunkData::empty_sync(x, 0);
+        level.bind_chunk_poi(&chunk).unwrap();
+        level
+            .loaded_chunks
+            .insert(ChunkPos::new(x, 0), chunk.clone());
+        level.set_block_state(&BlockPos::new(x * 16 + 1, 0, 1), home());
+        chunk
+    }
+
+    async fn disk<S>(level: &Level, pos: ChunkPos, config: S::ChunkConfig) -> SyncChunk
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = std::path::PathBuf>,
+        S::ChunkConfig: Send + Sync,
+    {
+        let reader = ChunkFileManager::<S>::new(config);
+        let (send, mut receive) = tokio::sync::mpsc::channel(1);
+        reader.fetch_chunks(&level.level_folder, &[pos], send).await;
+        let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+            panic!("actual backend did not persist terrain")
+        };
+        saved
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Keep ordinary Chunks deferral, strict Flush refusal and actual disk completion together."
+    )]
+    async fn worker_retry<S>(chunk_config: ChunkConfig, config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = std::path::PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        for (watched, completion_stale) in [(false, false), (true, false), (false, true)] {
+            for stale_flush in [false, true] {
+                let worker = SaveWorker::new(chunk_config.clone()).await;
+                let level = &worker.level;
+                let pos = ChunkPos::new(0, 0);
+                let chunk = source(level, 0);
+                level
+                    .chunk_saver
+                    .save_chunks(&level.level_folder, vec![(pos, chunk.clone())])
+                    .await
+                    .unwrap();
+                {
+                    let mut storage = level.poi_storage.lock().unwrap();
+                    storage
+                        .add_with_free_tickets(
+                            BlockPos::new(1, 0, 1),
+                            PoiType::Home.identifier(),
+                            0,
+                        )
+                        .unwrap();
+                    storage.save_all().unwrap();
+                }
+                let terrain_path = level
+                    .level_folder
+                    .region_folder
+                    .join(S::get_chunk_key(&pos));
+                let poi_path = level.level_folder.poi_folder.join("r.0.0.mca");
+                let terrain_before = std::fs::read(&terrain_path).unwrap();
+                let poi_before = std::fs::read(&poi_path).unwrap();
+                if watched {
+                    level
+                        .chunk_saver
+                        .watch_chunks(&level.level_folder, &[pos])
+                        .await;
+                }
+                level.set_block_state(&BlockPos::new(2, 0, 1), Block::STONE.default_state.id);
+                let (entered, resume) = if completion_stale {
+                    level.poi_storage.lock().unwrap().pause_region_write(pos)
+                } else {
+                    level.poi_runtime.pause_capture_admission(&chunk)
+                };
+                worker.queue(vec![(pos, chunk.clone())]).await;
+                tokio::time::timeout(Duration::from_secs(5), entered)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                // Same published Arc: both ABA history and an ordinary setter
+                // invalidate the private capture while no ownership guard is held.
+                level.set_block_state(&BlockPos::new(1, 0, 1), BlockStateId::AIR);
+                level.set_block_state(&BlockPos::new(1, 0, 1), home());
+                level.set_block_state(&BlockPos::new(2, 0, 1), Block::DIRT.default_state.id);
+                resume.send(()).unwrap();
+                worker.chunks_finished().await;
+                assert!(chunk.is_dirty());
+                assert!(Arc::ptr_eq(
+                    level.loaded_chunks.get(&pos).unwrap().value(),
+                    &chunk
+                ));
+                if completion_stale {
+                    let captured = disk::<S>(level, pos, config.clone()).await;
+                    assert_eq!(
+                        captured.section.get_block_absolute_y(2, 0, 1),
+                        Some(Block::STONE.default_state.id)
+                    );
+                    assert_eq!(
+                        PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
+                        0
+                    );
+                } else {
+                    assert_eq!(std::fs::read(&terrain_path).unwrap(), terrain_before);
+                    assert_eq!(std::fs::read(&poi_path).unwrap(), poi_before);
+                }
+                let terrain_deferred = std::fs::read(&terrain_path).unwrap();
+                let poi_deferred = std::fs::read(&poi_path).unwrap();
+                let expected_marker = if stale_flush {
+                    let (entered, resume) = if completion_stale {
+                        level.poi_storage.lock().unwrap().pause_region_write(pos)
+                    } else {
+                        level.poi_runtime.pause_capture_admission(&chunk)
+                    };
+                    let mut finished = worker.request_flush().await;
+                    tokio::time::timeout(Duration::from_secs(5), entered)
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert!(matches!(
+                        finished.try_recv(),
+                        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+                    ));
+                    level.set_block_state(
+                        &BlockPos::new(2, 0, 1),
+                        Block::GOLD_BLOCK.default_state.id,
+                    );
+                    resume.send(()).unwrap();
+                    let failure = tokio::time::timeout(Duration::from_secs(5), finished)
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap_err();
+                    assert_eq!(failure, ChunkWritingError::StaleSaveCapture.to_string());
+                    assert!(chunk.is_dirty());
+                    if completion_stale {
+                        let captured = disk::<S>(level, pos, config.clone()).await;
+                        assert_eq!(
+                            captured.section.get_block_absolute_y(2, 0, 1),
+                            Some(Block::DIRT.default_state.id)
+                        );
+                        assert_eq!(
+                            PoiRegion::load(&poi_path).unwrap().get_all()[0].free_tickets,
+                            1
+                        );
+                    } else {
+                        assert_eq!(std::fs::read(&terrain_path).unwrap(), terrain_deferred);
+                        assert_eq!(std::fs::read(&poi_path).unwrap(), poi_deferred);
+                    }
+                    Block::GOLD_BLOCK.default_state.id
+                } else {
+                    Block::DIRT.default_state.id
+                };
+                // This actual FIFO Flush retries retained work without another
+                // Chunks request. It must not return the old background refusal.
+                tokio::time::timeout(Duration::from_secs(5), worker.request_flush().await)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                let saved = disk::<S>(level, pos, config.clone()).await;
+                assert!(!Arc::ptr_eq(&saved, &chunk));
+                assert_eq!(saved.section.get_block_absolute_y(1, 0, 1), Some(home()));
+                assert_eq!(
+                    saved.section.get_block_absolute_y(2, 0, 1),
+                    Some(expected_marker)
+                );
+                let poi = PoiRegion::load(&poi_path).unwrap();
+                assert_eq!(poi.get_all()[0].poi_type, PoiType::Home.identifier());
+                assert_eq!(poi.get_all()[0].free_tickets, 1);
+                assert!(!chunk.is_dirty());
+                worker.finish().await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn all_formats_actual_chunks_defer_stale_and_actual_flush_stays_strict() {
+        let anvil = pumpkin_config::chunk::AnvilChunkConfig::default();
+        Box::pin(worker_retry::<AnvilChunkFile<ChunkData>>(
+            ChunkConfig::Anvil(anvil.clone()),
+            anvil,
+        ))
+        .await;
+        Box::pin(worker_retry::<LinearV2File<ChunkData>>(
+            ChunkConfig::Linear,
+            (),
+        ))
+        .await;
+        Box::pin(worker_retry::<PumpFile<ChunkData>>(ChunkConfig::Pump, ())).await;
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Observe real mixed hard failures through the worker's historical Level latch."
+    )]
+    async fn worker_retains_hard_sibling<S>(chunk_config: ChunkConfig, config: S::ChunkConfig)
+    where
+        S: ChunkSerializer<Data = ChunkData, WriteBackend = std::path::PathBuf>,
+        S::ChunkConfig: Clone + Send + Sync + 'static,
+    {
+        for across_regions in [false, true] {
+            let worker = SaveWorker::new(chunk_config.clone()).await;
+            let level = &worker.level;
+            let bx = if across_regions { 32 } else { 1 };
+            let cx = if across_regions { 64 } else { 2 };
+            let positions = [
+                ChunkPos::new(0, 0),
+                ChunkPos::new(bx, 0),
+                ChunkPos::new(cx, 0),
+            ];
+            let chunks = [source(level, 0), source(level, bx), source(level, cx)];
+            let submitted = || {
+                positions
+                    .iter()
+                    .copied()
+                    .zip(chunks.iter().cloned())
+                    .collect()
+            };
+            level
+                .chunk_saver
+                .save_chunks(&level.level_folder, submitted())
+                .await
+                .unwrap();
+            {
+                let mut storage = level.poi_storage.lock().unwrap();
+                for x in [0, bx] {
+                    storage
+                        .add_with_free_tickets(
+                            BlockPos::new(x * 16 + 1, 0, 1),
+                            PoiType::Home.identifier(),
+                            0,
+                        )
+                        .unwrap();
+                }
+                storage.save_all().unwrap();
+            }
+            chunks[0].mark_dirty(true);
+            level.set_block_state(
+                &BlockPos::new(bx * 16 + 1, 0, 1),
+                Block::BELL.default_state.id,
+            );
+            level.set_block_state(
+                &BlockPos::new(cx * 16 + 1, 0, 1),
+                Block::BELL.default_state.id,
+            );
+            chunks[1].set_custom_data("r28", "refused", pumpkin_nbt::tag::NbtTag::End);
+            let expected_hard =
+                ChunkWritingError::from(chunks[1].to_bytes_for_save().unwrap_err()).to_string();
+            let (entered, resume) = level.poi_runtime.pause_capture_admission(&chunks[0]);
+            worker.queue(submitted()).await;
+            tokio::time::timeout(Duration::from_secs(5), entered)
+                .await
+                .unwrap()
+                .unwrap();
+            level.set_block_state(&BlockPos::new(2, 0, 1), Block::STONE.default_state.id);
+            resume.send(()).unwrap();
+            worker.chunks_finished().await;
+            assert!(chunks[0].is_dirty());
+            assert!(chunks[1].is_dirty());
+            assert_eq!(
+                disk::<S>(level, positions[1], config.clone())
+                    .await
+                    .section
+                    .get_block_absolute_y(1, 0, 1),
+                Some(home())
+            );
+            assert_eq!(
+                disk::<S>(level, positions[2], config.clone())
+                    .await
+                    .section
+                    .get_block_absolute_y(1, 0, 1),
+                Some(Block::BELL.default_state.id)
+            );
+            for x in [0, bx] {
+                let poi = PoiRegion::load(
+                    &level
+                        .level_folder
+                        .poi_folder
+                        .join(format!("r.{}.0.mca", x >> 5)),
+                )
+                .unwrap();
+                let entry = poi
+                    .get_all()
+                    .into_iter()
+                    .find(|entry| entry.pos() == BlockPos::new(x * 16 + 1, 0, 1))
+                    .unwrap();
+                assert_eq!(entry.poi_type, PoiType::Home.identifier());
+                assert_eq!(entry.free_tickets, 0);
+            }
+            chunks[1].set_custom_data("r28", "refused", pumpkin_nbt::tag::NbtTag::Int(1));
+            // The stable attempt physically succeeds, yet the real earlier hard
+            // failure must still be returned once by Level's unchanged latch.
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(5), worker.request_flush().await)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap_err(),
+                expected_hard
+            );
+            assert!(!chunks[0].is_dirty());
+            assert!(!chunks[1].is_dirty());
+            assert_eq!(
+                disk::<S>(level, positions[1], config.clone())
+                    .await
+                    .section
+                    .get_block_absolute_y(1, 0, 1),
+                Some(Block::BELL.default_state.id)
+            );
+            tokio::time::timeout(Duration::from_secs(5), worker.request_flush().await)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            worker.finish().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn all_formats_actual_worker_keeps_hard_sibling_failure_after_stable_retry() {
+        let anvil = pumpkin_config::chunk::AnvilChunkConfig::default();
+        Box::pin(worker_retains_hard_sibling::<AnvilChunkFile<ChunkData>>(
+            ChunkConfig::Anvil(anvil.clone()),
+            anvil,
+        ))
+        .await;
+        Box::pin(worker_retains_hard_sibling::<LinearV2File<ChunkData>>(
+            ChunkConfig::Linear,
+            (),
+        ))
+        .await;
+        Box::pin(worker_retains_hard_sibling::<PumpFile<ChunkData>>(
+            ChunkConfig::Pump,
+            (),
+        ))
+        .await;
+    }
+}
