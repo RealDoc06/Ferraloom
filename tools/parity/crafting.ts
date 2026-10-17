@@ -24,13 +24,22 @@ export type CraftMenu = {
 export type CraftingState = {
   player: CraftMenu | null; table: CraftMenu | null; active: 'player' | 'table';
   cursor: PlainStack; cursor_sequence: number | null;
+  received_cursors: Record<'player' | 'table', { stack: PlainStack; sequence: number | null }>;
 };
 export type CraftingPacket = ContainerPacket
   | { kind: 'cursor'; packet_id: 98; stack: PlainStack }
   | { kind: 'player_slot'; packet_id: 110; slot: number; stack: PlainStack };
 
 export function emptyCraftingState(): CraftingState {
-  return { player: null, table: null, active: 'player', cursor: null, cursor_sequence: null };
+  return { player: null, table: null, active: 'player', cursor: null, cursor_sequence: null,
+    received_cursors: { player: { stack: null, sequence: null }, table: { stack: null, sequence: null } } };
+}
+
+/** Expose only the active menu's received cursor. A null sequence is unknown,
+ * distinct from an empty stack received in content18 or cursor98. */
+function activeCraftingCursor(state: CraftingState): CraftingState {
+  const cursor = state.received_cursors[state.active];
+  return { ...state, cursor: cursor.stack, cursor_sequence: cursor.sequence };
 }
 
 /** Inventory indexes are not menu indexes: offhand40 never projects to a table. */
@@ -89,14 +98,16 @@ function projectInventory(menu: CraftMenu | null, inventory: number, stack: Plai
  * packet advances its revision. Shared player slots project across baselines. */
 export function observeCrafting(current: CraftingState, packet: CraftingPacket & { sequence: number }): CraftingState {
   const next = { ...current };
-  if (packet.kind === 'cursor') return { ...next, cursor: copyStack(packet.stack), cursor_sequence: packet.sequence };
+  if (packet.kind === 'cursor') return activeCraftingCursor({ ...next, received_cursors: { ...next.received_cursors,
+    [next.active]: { stack: copyStack(packet.stack), sequence: packet.sequence } } });
   if (packet.kind === 'player_slot') return { ...next,
     player: projectInventory(next.player, packet.slot, packet.stack),
     table: projectInventory(next.table, packet.slot, packet.stack) };
   if (packet.kind === 'open') {
     if (packet.container_id <= 0 || packet.menu_type !== 12) throw new Error('Crafting requires an actual table type12');
-    return { ...next, active: 'table', table: { kind: 'table', container_id: packet.container_id,
-      state_id: null, revision_sequence: null, baseline_sequence: null, slots: null } };
+    return activeCraftingCursor({ ...next, active: 'table', table: { kind: 'table', container_id: packet.container_id,
+      state_id: null, revision_sequence: null, baseline_sequence: null, slots: null },
+      received_cursors: { ...next.received_cursors, table: { stack: null, sequence: null } } });
   }
   const key = packet.container_id === 0 ? 'player' : 'table';
   let menu = next[key];
@@ -105,8 +116,8 @@ export function observeCrafting(current: CraftingState, packet: CraftingPacket &
     if (packet.slots.length !== 46) throw new Error('Crafting requires exactly 46 slots');
     menu = { kind: key, container_id: packet.container_id, state_id: packet.state_id,
       baseline_sequence: packet.sequence, revision_sequence: packet.sequence, slots: packet.slots.map(copyStack) };
-    next.cursor = copyStack(packet.carried);
-    next.cursor_sequence = packet.sequence;
+    next.received_cursors = { ...next.received_cursors,
+      [key]: { stack: copyStack(packet.carried), sequence: packet.sequence } };
   } else {
     if (packet.slot < 0 || packet.slot >= 46) throw new Error('Crafting slot outside menu');
     if (menu?.slots == null) return next;
@@ -123,13 +134,14 @@ export function observeCrafting(current: CraftingState, packet: CraftingPacket &
       next[other] = projectInventory(next[other], inventory, menu.slots![slot]!);
     }
   }
-  return next;
+  return activeCraftingCursor(next);
 }
 
-/** A local close only selects the retained player baseline. It is not a
- * received open/content packet and does not predict evacuated grid contents. */
+/** A local close selects the retained player baseline and received cursor.
+ * It does not predict an empty cursor or evacuated grid contents. */
 export function closeCrafting(state: CraftingState): CraftingState {
-  return { ...state, active: 'player', table: null };
+  return activeCraftingCursor({ ...state, active: 'player', table: null,
+    received_cursors: { ...state.received_cursors, table: { stack: null, sequence: null } } });
 }
 
 export function encodeCraftingClick(state: CraftingState, slot: number, action: CraftAction): Buffer {

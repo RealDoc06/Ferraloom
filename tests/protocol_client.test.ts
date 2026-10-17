@@ -822,7 +822,7 @@ test('crafting inventory110 routes offhand40 only to player45 and never table40'
   assert.deepEqual(table, before);
 });
 
-test('crafting global cursor and shared table slots preserve received revisions and snapshots', () => {
+test('crafting active cursor and shared table slots preserve received revisions and snapshots', () => {
   const source = Array<PlainStack>(46).fill(null);
   source[36] = { item_id: 1217, count: 64 };
   const player = craftingPlayer(source);
@@ -844,6 +844,114 @@ test('crafting global cursor and shared table slots preserve received revisions 
   assert.equal(slot.cursor, null);
   assert.deepEqual(cursor.cursor, { item_id: 1217, count: 3 });
   assert.equal(table.table?.slots?.[40], null);
+});
+
+test('crafting table extraction closes onto the received player cursor without another cursor98', () => {
+  const player = observeCrafting(craftingPlayer(), { kind: 'cursor', packet_id: 98,
+    stack: null, sequence: 436 });
+  const opened = observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 1,
+    menu_type: 12, title: 'container.crafting', sequence: 482 });
+  let table = observeCrafting(opened, { kind: 'content', packet_id: 18, container_id: 1,
+    state_id: 1, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 483 });
+  table = observeCrafting(table, { kind: 'slot', packet_id: 20, container_id: 1,
+    state_id: 8, slot: 9, stack: { item_id: 1270, count: 1 }, sequence: 509 });
+  const extracted = observeCrafting(table, { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 510 });
+  const before = structuredClone(extracted);
+  const closed = closeCrafting(extracted);
+  const closedBefore = structuredClone(closed);
+  assert.equal(closed.active, 'player');
+  assert.equal(closed.table, null);
+  assert.equal(closed.cursor, null);
+  assert.equal(closed.cursor_sequence, 436);
+  let returned = observeCrafting(closed, { kind: 'player_slot', packet_id: 110,
+    slot: 0, stack: { item_id: 1217, count: 3 }, sequence: 535 });
+  returned = observeCrafting(returned, { kind: 'player_slot', packet_id: 110,
+    slot: 1, stack: { item_id: 1270, count: 1 }, sequence: 536 });
+  assert.equal(returned.player?.state_id, 7);
+  assert.equal(returned.player?.revision_sequence, 10);
+  returned = observeCrafting(returned, { kind: 'slot', packet_id: 20, container_id: 0,
+    state_id: 28, slot: 36, stack: { item_id: 1217, count: 3 }, sequence: 537 });
+  returned = observeCrafting(returned, { kind: 'slot', packet_id: 20, container_id: 0,
+    state_id: 29, slot: 37, stack: { item_id: 1270, count: 1 }, sequence: 538 });
+  assert.deepEqual(returned.player?.slots?.slice(36, 38),
+    [{ item_id: 1217, count: 3 }, { item_id: 1270, count: 1 }]);
+  assert.equal(returned.cursor, null);
+  assert.equal(returned.cursor_sequence, 436);
+  assert.equal(returned.player?.baseline_sequence, 10);
+  assert.equal(returned.player?.revision_sequence, 538);
+  assert.equal(returned.player?.state_id, 29);
+  assert.equal(encodeCraftingClick(returned, 36, { input: 'pickup', button: 0 }).toString('hex'), '001d002400000000');
+  assert.deepEqual(extracted, before);
+  assert.deepEqual(closed, closedBefore);
+});
+
+test('crafting inactive player content retains its cursor without replacing the active table cursor', () => {
+  const opened = observeCrafting(craftingPlayer(), { kind: 'open', packet_id: 60,
+    container_id: 3, menu_type: 12, title: 'container.crafting', sequence: 11 });
+  const table = observeCrafting(opened, { kind: 'content', packet_id: 18, container_id: 3,
+    state_id: 19, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 12 });
+  const cursor = observeCrafting(table, { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 13 });
+  const before = structuredClone(cursor);
+  const carried = { item_id: 1270, count: 1 };
+  const updated = observeCrafting(cursor, { kind: 'content', packet_id: 18, container_id: 0,
+    state_id: 8, slots: Array<PlainStack>(46).fill(null), carried, sequence: 14 });
+  carried.count = 64;
+  assert.deepEqual(updated.cursor, { item_id: 1217, count: 3 });
+  assert.equal(updated.cursor_sequence, 13);
+  assert.equal(updated.table?.state_id, 19);
+  assert.equal(updated.table?.revision_sequence, 12);
+  assert.equal(updated.player?.state_id, 8);
+  assert.equal(updated.player?.revision_sequence, 14);
+  const closed = closeCrafting(updated);
+  assert.deepEqual(closed.cursor, { item_id: 1270, count: 1 });
+  assert.equal(closed.cursor_sequence, 14);
+  assert.deepEqual(cursor, before);
+});
+
+test('crafting table cursors distinguish unknown from received empty across reopening', () => {
+  const player = observeCrafting(craftingPlayer(), { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 11 });
+  const opened = observeCrafting(player, { kind: 'open', packet_id: 60, container_id: 3,
+    menu_type: 12, title: 'container.crafting', sequence: 12 });
+  assert.equal(opened.cursor, null);
+  assert.equal(opened.cursor_sequence, null);
+  const received = observeCrafting(opened, { kind: 'cursor', packet_id: 98,
+    stack: null, sequence: 13 });
+  assert.equal(received.cursor, null);
+  assert.equal(received.cursor_sequence, 13);
+  assert.equal(received.table?.slots, null);
+  assert.throws(() => encodeCraftingClick(received, 9, { input: 'pickup', button: 0 }));
+  const closed = closeCrafting(received);
+  assert.deepEqual(closed.cursor, { item_id: 1217, count: 3 });
+  assert.equal(closed.cursor_sequence, 11);
+  const reopened = observeCrafting(closed, { kind: 'open', packet_id: 60, container_id: 4,
+    menu_type: 12, title: 'container.crafting', sequence: 14 });
+  assert.equal(reopened.cursor, null);
+  assert.equal(reopened.cursor_sequence, null);
+  const content = observeCrafting(reopened, { kind: 'content', packet_id: 18, container_id: 4,
+    state_id: 1, slots: Array<PlainStack>(46).fill(null), carried: null, sequence: 15 });
+  assert.equal(content.cursor, null);
+  assert.equal(content.cursor_sequence, 15);
+  assert.equal(opened.cursor_sequence, null);
+  assert.equal(received.cursor_sequence, 13);
+});
+
+test('crafting player close preserves unknown empty and nonempty received cursors', () => {
+  const unknown = emptyCraftingState();
+  assert.deepEqual(closeCrafting(unknown), unknown);
+  const empty = observeCrafting(unknown, { kind: 'cursor', packet_id: 98,
+    stack: null, sequence: 1 });
+  assert.equal(empty.player, null);
+  assert.equal(empty.cursor, null);
+  assert.equal(empty.cursor_sequence, 1);
+  assert.deepEqual(closeCrafting(empty), empty);
+  const nonempty = observeCrafting(craftingPlayer(), { kind: 'cursor', packet_id: 98,
+    stack: { item_id: 1217, count: 3 }, sequence: 11 });
+  assert.deepEqual(closeCrafting(nonempty), nonempty);
+  assert.equal(nonempty.player?.revision_sequence, 10);
+  assert.equal(unknown.cursor_sequence, null);
 });
 
 test('crafting IPC accepts only actions and refuses supplied predictions or menu revisions', () => {
