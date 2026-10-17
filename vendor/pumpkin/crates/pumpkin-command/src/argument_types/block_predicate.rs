@@ -433,6 +433,8 @@ impl BlockPredicateParser {
             }
             PredicateSuggestions::PropertyValue(key) => {
                 // addSuggestions supplies every possible value, without prefix filtering.
+                // The builder canonicalizes round-trip i32 text; other text sorts lexically.
+                // Java property-typed IntegerSuggestion equivalence remains open.
                 for value in self.blocks().flat_map(|block| property_values(block, key)) {
                     builder = builder.suggest(value);
                 }
@@ -970,6 +972,10 @@ mod parser_tests {
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "Assertions reproduce the legacy translate_cross command error components exactly."
+    )]
     fn direct_properties_capture_key_value_and_missing_equals_errors() {
         assert!(error_at("stone[unknown=true]", "stone[".len()).is(&ERROR_UNKNOWN_PROPERTY));
         let duplicate = "oak_stairs[facing=east,facing=west]";
@@ -1018,6 +1024,10 @@ mod parser_tests {
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "Assertions reproduce the legacy translate_cross command error components exactly."
+    )]
     fn vague_errors_retain_default_diagnostic_id_and_value_replacement_cursor() {
         let missing_equals = "#anvil[facing ]";
         let error = error_at(missing_equals, "#anvil[".len());
