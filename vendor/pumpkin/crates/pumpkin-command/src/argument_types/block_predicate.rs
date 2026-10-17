@@ -426,7 +426,7 @@ mod tests {
     fn chest_nbt(fields: &str) -> NbtCompound {
         ArgumentType::<DummySource>::parse(
             &NbtCompoundArgumentType,
-            &mut StringReader::new(&format!("{{id:'minecraft:chest',x:9,y:64,z:-3,{fields}}}")),
+            &mut StringReader::new(format!("{{id:'minecraft:chest',x:9,y:64,z:-3,{fields}}}")),
         )
         .unwrap()
     }
