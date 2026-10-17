@@ -3,6 +3,7 @@
 pub mod beardifier;
 pub mod bounding_box;
 pub mod placement;
+pub mod pool;
 pub mod processor;
 pub mod rule;
 pub mod template;

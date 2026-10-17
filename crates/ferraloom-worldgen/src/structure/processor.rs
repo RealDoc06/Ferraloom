@@ -498,20 +498,14 @@ fn blackstone_replace(old: BlockState) -> BlockState {
     }
     state
 }
-fn age_block(
-    state: BlockState,
-    mossiness: f32,
-    tags: &BlockTags,
-    random: &mut impl RandomSource,
-) -> BlockState {
-    let random_stairs = |block: Block, random: &mut _| {
+fn random_stairs(block: Block, random: &mut impl RandomSource) -> BlockState {
         let facing = match ferraloom_util::Plane::Horizontal.random_direction(random) {
             ferraloom_util::Direction::North => properties::Facing::North,
             ferraloom_util::Direction::East => properties::Facing::East,
             ferraloom_util::Direction::South => properties::Facing::South,
             ferraloom_util::Direction::West => properties::Facing::West,
             _ => unreachable!(),
-        };
+        }
         block
             .default_state()
             .with(properties::FACING, facing)
@@ -525,15 +519,22 @@ fn age_block(
                 },
             )
             .unwrap()
-    };
-    let choose = |normal: [BlockState; 2], mossy: [BlockState; 2], random: &mut _| {
+    }
+fn choose(normal: [BlockState; 2], mossy: [BlockState; 2], mossiness: f32, random: &mut impl RandomSource) -> BlockState {
         let blocks = if random.next_float() < mossiness {
             mossy
         } else {
             normal
-        };
+        }
         blocks[random.next_int_bound(2) as usize]
-    };
+    }
+
+fn age_block(
+    state: BlockState,
+    mossiness: f32,
+    tags: &BlockTags,
+    random: &mut impl RandomSource,
+) -> BlockState {
     match state.block() {
         Block::STONE_BRICKS | Block::STONE | Block::CHISELED_STONE_BRICKS
             if random.next_float() < 0.5 =>
@@ -546,7 +547,7 @@ fn age_block(
                 Block::MOSSY_STONE_BRICKS.default_state(),
                 random_stairs(Block::MOSSY_STONE_BRICK_STAIRS, random),
             ];
-            choose(normal, mossy, random)
+            choose(normal, mossy, mossiness, random)
         }
         Block::STONE_BRICKS | Block::STONE | Block::CHISELED_STONE_BRICKS => state,
         b if tags.contains(&"stairs".parse().unwrap(), b) => {
@@ -562,6 +563,7 @@ fn age_block(
                             .with_properties_of(state),
                         Block::MOSSY_STONE_BRICK_SLAB.default_state(),
                     ],
+                    mossiness,
                     random,
                 )
             } else {
