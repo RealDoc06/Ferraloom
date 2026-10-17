@@ -19,3 +19,5 @@ wire_union!(TeamOperation:u8 {
     Join=3 {players:Vec<String>},
     Leave=4 {players:Vec<String>}
 });
+
+wire_enum!(DisplaySlot {List=0,Sidebar=1,BelowName=2,TeamBlack=3,TeamDarkBlue=4,TeamDarkGreen=5,TeamDarkAqua=6,TeamDarkRed=7,TeamDarkPurple=8,TeamGold=9,TeamGray=10,TeamDarkGray=11,TeamBlue=12,TeamGreen=13,TeamAqua=14,TeamRed=15,TeamLightPurple=16,TeamYellow=17,TeamWhite=18},zero);

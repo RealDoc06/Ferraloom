@@ -73,7 +73,7 @@ RecipeBookSeenRecipe { recipe: RecipeDisplayId });
 packet!(/// Port of ServerboundRenameItemPacket#STREAM_CODEC.
 RenameItem { name: String });
 packet!(/// Port of ServerboundSelectBundleItemPacket#STREAM_CODEC.
-SelectBundleItem { slot_id: VarInt, selected_item_index: VarInt });
+SelectBundleItem { slot_id: VarInt, selected_item_index: VarInt => selected_bundle_index });
 packet!(/// Port of ServerboundSelectTradePacket#STREAM_CODEC.
 SelectTrade { item: VarInt });
 packet!(/// Port of ServerboundSetBeaconPacket#STREAM_CODEC.
@@ -202,7 +202,7 @@ SetCommandBlock {pos:BlockPos,command:String,mode:CommandBlockMode,flags:Command
 packet!(/// Port of ServerboundSetJigsawBlockPacket.
 SetJigsawBlock {pos:BlockPos,name:Identifier,target:Identifier,pool:Identifier,final_state:String,joint:JigsawJoint,selection_priority:VarInt,placement_priority:VarInt});
 packet!(/// Port of ServerboundSetStructureBlockPacket.
-SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:Utf8<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
+SetStructureBlock {pos:BlockPos,update_type:StructureUpdateType,mode:StructureMode,name:String,offset:StructureCoordinates<-48,48>,size:StructureCoordinates<0,48>,mirror:Mirror,rotation:Rotation,data:FriendlyString<128>,integrity:StructureIntegrity,seed:VarLong,flags:StructureBlockFlags});
 packet!(/// Port of ServerboundTestInstanceBlockActionPacket.
 TestInstanceBlockAction {pos:BlockPos,action:TestInstanceAction,data:TestInstanceData});
 /// Port of ServerboundDebugSubscriptionRequestPacket, bounded to 32 subscription IDs.
@@ -288,8 +288,16 @@ state_packets!(Packet, ferraloom_data::packets::play::serverbound::Packet, {
     SignUpdate(SignUpdate) => SignUpdate,
     SpectatorAction(SpectatorAction) => SpectatorAction,
     TeleportToEntity(TeleportToEntity) => TeleportToEntity,
-    TestInstanceBlockAction(TestInstanceBlockAction) => TestInstanceBlockAction,
+    TestInstanceBlockAction(Box<TestInstanceBlockAction>) => TestInstanceBlockAction,
     UseItemOn(UseItemOn) => UseItemOn,
     UseItem(UseItem) => UseItem,
     CustomClickAction(CustomClickAction) => CustomClickAction,
 });
+
+fn selected_bundle_index(r: &mut Reader<'_>) -> Result<VarInt> {
+    let id = r.var_int()?;
+    if id < -1 {
+        return Err(Error::invalid("selected bundle index", id.to_string()));
+    }
+    Ok(VarInt(id))
+}

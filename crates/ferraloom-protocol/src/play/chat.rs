@@ -110,7 +110,7 @@ impl Wire for FilterMask {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
         match r.var_int()? {
             1 => Ok(Self::FullyFiltered),
-            2 => Ok(Self::PartiallyFiltered(r.read()?)),
+            2 => Ok(Self::PartiallyFiltered(ByteBitSet::decode(r)?.0)),
             _ => Ok(Self::PassThrough),
         }
     }
@@ -120,7 +120,7 @@ impl Wire for FilterMask {
             Self::FullyFiltered => w.var_int(1),
             Self::PartiallyFiltered(bits) => {
                 w.var_int(2);
-                bits.encode(w)?;
+                ByteBitSet::encode_bits(bits, w)?;
             }
         }
         Ok(())

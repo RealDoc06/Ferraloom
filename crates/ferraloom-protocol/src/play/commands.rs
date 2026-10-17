@@ -18,18 +18,14 @@ impl<T: NumericBound> Wire for NumericBounds<T> {
         let b = r.u8()?;
         Ok(Self {
             min: if b & 1 != 0 {
-                {
-                    let value = r.read()?;
-                    (value != T::MIN).then_some(value)
-                }
+                let value = r.read()?;
+                (value != T::MIN).then_some(value)
             } else {
                 None
             },
             max: if b & 2 != 0 {
-                {
-                    let value = r.read()?;
-                    (value != T::MAX).then_some(value)
-                }
+                let value = r.read()?;
+                (value != T::MAX).then_some(value)
             } else {
                 None
             },

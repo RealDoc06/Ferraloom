@@ -15,7 +15,7 @@ wire_enum!(ChatVisibility {Full=0,System=1,Hidden=2}, wrapping);
 wire_enum!(HumanoidArm {Left=0,Right=1}, zero);
 wire_enum!(ParticleStatus {All=0,Decreased=1,Minimal=2}, wrapping);
 packet!(/// Port of ClientInformation.
-ClientInformation {language:Utf8<16>,view_distance:i8,chat_visibility:ChatVisibility,chat_colors:bool,model_customisation:u8,main_hand:HumanoidArm,text_filtering_enabled:bool,allows_listing:bool,particle_status:ParticleStatus});
+ClientInformation {language:FriendlyString<16>,view_distance:i8,chat_visibility:ChatVisibility,chat_colors:bool,model_customisation:u8,main_hand:HumanoidArm,text_filtering_enabled:bool,allows_listing:bool,particle_status:ParticleStatus});
 
 /// Port of ServerboundCustomPayloadPacket.
 #[derive(Clone, Debug, PartialEq)]

@@ -29,7 +29,7 @@ public final class PlayVectors {
             if (values.containsKey(l.key())) return;
             if (!Set.of("minecraft:worldgen/biome","minecraft:dimension_type","minecraft:damage_type","minecraft:chat_type","minecraft:dialog","minecraft:world_clock","minecraft:timeline","minecraft:waypoint_style","minecraft:trim_pattern").contains(l.key().identifier().toString())) return;
             var registry = new MappedRegistry(l.key(),Lifecycle.stable());
-            l.listElements().forEach(h -> registry.register(h.key(),h.value(),RegistrationInfo.BUILT_IN));
+            l.listElements().sorted(Comparator.comparing(h -> h.key().identifier().toString())).forEach(h -> registry.register(h.key(),h.value(),RegistrationInfo.BUILT_IN));
             registry.freeze();
             values.put(l.key(),registry);
         });
@@ -63,7 +63,7 @@ public final class PlayVectors {
     }
     static void sample(Path output,String label,String name,java.util.function.Consumer<RegistryFriendlyByteBuf> write) throws Exception {
         var b=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);
-        try {write.accept(b);byte[] bytes=new byte[b.readableBytes()];b.readBytes(bytes);vector(output,label,"net.minecraft.network.protocol.game."+name,bytes);}
+        try {write.accept(b);byte[] bytes=new byte[b.readableBytes()];b.readBytes(bytes);vector(output,label,name.contains(".")?name:"net.minecraft.network.protocol.game."+name,bytes);}
         finally {b.release();}
     }
     static void text(RegistryFriendlyByteBuf b,String value) {
@@ -99,7 +99,7 @@ public final class PlayVectors {
             });
         }
         sample(output,"clientbound_LightUpdate_edge_present","ClientboundLightUpdatePacket",b->{
-            b.writeVarInt(-123);b.writeVarInt(456);var bits=new BitSet();bits.set(0);bits.set(65);b.writeBitSet(bits);b.writeBitSet(bits);b.writeBitSet(new BitSet());b.writeBitSet(new BitSet());
+            b.writeVarInt(-123);b.writeVarInt(456);var bits=new BitSet();bits.set(0);bits.set(65);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,new BitSet());net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,new BitSet());
             for(int j=0;j<2;j++){b.writeVarInt(2);byte[] layer=new byte[2048];Arrays.fill(layer,(byte)0xa5);b.writeByteArray(layer);b.writeByteArray(new byte[2048]);}
         });
         sample(output,"clientbound_MoveEntityPosRot_edge_stepped","ClientboundMoveEntityPacket$PosRot",b->{
@@ -177,6 +177,24 @@ public final class PlayVectors {
                 switch(type){case 1:b.writeVarInt(-30000000);b.writeVarInt(-64);b.writeVarInt(30000000);break;case 2:b.writeVarInt(-1875000);b.writeVarInt(1875000);break;case 3:b.writeFloat(2.125f);break;}
             });
         }
+        for(int stock=0;stock<2;stock++){
+            var offer=new net.minecraft.world.item.trading.MerchantOffer(new net.minecraft.world.item.trading.ItemCost(Items.EMERALD,5),Optional.of(new net.minecraft.world.item.trading.ItemCost(Items.GOLD_INGOT,2)),new ItemStack(Items.DIAMOND,1),stock==0?0:4,4,2,.05f,1);
+            sample(output,"clientbound_MerchantOffers_edge_stock_"+stock,"ClientboundMerchantOffersPacket",b->{b.writeVarInt(300);b.writeVarInt(1);net.minecraft.world.item.trading.MerchantOffer.STREAM_CODEC.encode(b,offer);b.writeVarInt(5);b.writeVarInt(100);b.writeBoolean(true);b.writeBoolean(true);});
+        }
+        sample(output,"clientbound_SetEquipment_edge_multiple","ClientboundSetEquipmentPacket",b->{b.writeVarInt(300);b.writeByte(128);ItemStack.OPTIONAL_STREAM_CODEC.encode(b,new ItemStack(Items.DIAMOND_SWORD,1));b.writeByte(5);ItemStack.OPTIONAL_STREAM_CODEC.encode(b,new ItemStack(Items.SHIELD,1));});
+        for(int format=0;format<3;format++){
+            final int f=format;
+            sample(output,"clientbound_SetScore_edge_format_"+format,"ClientboundSetScorePacket",b->{b.writeUtf("player");b.writeUtf("objective");b.writeVarInt(Integer.MIN_VALUE);b.writeBoolean(true);text(b,"Name");b.writeBoolean(true);b.writeVarInt(f);if(f==1){net.minecraft.network.chat.Style.Serializer.TRUSTED_STREAM_CODEC.encode(b,net.minecraft.network.chat.Style.EMPTY.withBold(true));}if(f==2)text(b,"Score");});
+        }
+        sample(output,"clientbound_Commands_edge_literal","ClientboundCommandsPacket",b->{b.writeVarInt(2);b.writeByte(0);b.writeVarInt(1);b.writeVarInt(1);b.writeByte(5);b.writeVarInt(0);b.writeUtf("literal");b.writeVarInt(0);});
+        sample(output,"clientbound_ForgetLevelChunk_edge_coordinates","ClientboundForgetLevelChunkPacket",b->{b.writeChunkPos(new net.minecraft.world.level.ChunkPos(-123,456));});
+        sample(output,"clientbound_SectionBlocksUpdate_edge_changes","ClientboundSectionBlocksUpdatePacket",b->{b.writeLong(SectionPos.asLong(-2,-4,3));b.writeVarInt(2);b.writeVarLong(((long)net.minecraft.world.level.block.Block.getId(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())<<12)|4095);b.writeVarLong((long)net.minecraft.world.level.block.Block.getId(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())<<12);});
+        sample(output,"clientbound_PlayerChat_edge_partial_filter","ClientboundPlayerChatPacket",b->{
+            b.writeVarInt(Integer.MAX_VALUE);b.writeUUID(new UUID(123,456));b.writeVarInt(300);b.writeBoolean(true);b.writeBytes(new byte[256]);
+            b.writeUtf("m".repeat(256));b.writeLong(Long.MIN_VALUE);b.writeLong(Long.MAX_VALUE);b.writeVarInt(20);for(int i=0;i<20;i++)b.writeVarInt(i+1);
+            b.writeBoolean(true);text(b,"Unsigned");b.writeVarInt(2);var bits=new BitSet();bits.set(0);bits.set(9);bits.set(65);net.minecraft.network.codec.ByteBufCodecs.BIT_SET.encode(b,bits);
+            b.writeVarInt(1);text(b,"Sender");b.writeBoolean(true);text(b,"Target");
+        });
         // Delimiter identity, completion, and size limits are checked against vanilla's bundler.
         var protocol=net.minecraft.network.protocol.game.GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registries));
         var in=Unpooled.wrappedBuffer(new byte[]{0});var delimiter=protocol.codec().decode(in);in.release();
@@ -184,6 +202,41 @@ public final class PlayVectors {
         for(int i=0;i<4096;i++)if(bundler.addPacket(new net.minecraft.network.protocol.game.ClientboundTickingStepPacket(i))!=null)throw new AssertionError();
         try{bundler.addPacket(new net.minecraft.network.protocol.game.ClientboundTickingStepPacket(0));throw new AssertionError("bundle limit not enforced");}catch(IllegalStateException expected){}
         if(bundler.addPacket(delimiter)==null)throw new AssertionError("bundle did not close");
+    }
+    static void normalization(Path output,String label,String className,byte[] input) throws Exception {
+        vector(output,label,className,input.clone());
+        Files.writeString(output.resolve(label+".input.hex"),HexFormat.of().formatHex(input)+"\n");
+    }
+    @SuppressWarnings({"rawtypes","unchecked"})
+    static void rejected(Path output,String label,byte[] input) throws Exception {
+        var b=new FriendlyByteBuf(Unpooled.wrappedBuffer(input));
+        try {
+            try {net.minecraft.network.protocol.common.ServerboundCustomClickActionPacket.STREAM_CODEC.decode(b);throw new AssertionError(label+" should reject");}
+            catch(net.minecraft.nbt.NbtAccounterException expected){}
+            Files.writeString(output.resolve(label+".reject.hex"),HexFormat.of().formatHex(input)+"\n");
+        }finally{b.release();}
+    }
+    static byte[] clickSeed(net.minecraft.nbt.Tag tag){
+        var inner=new FriendlyByteBuf(Unpooled.buffer());var outer=new FriendlyByteBuf(Unpooled.buffer());
+        try{inner.writeNbt(tag);outer.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("test"));byte[] nbt=new byte[inner.readableBytes()];inner.readBytes(nbt);outer.writeByteArray(nbt);byte[] input=new byte[outer.readableBytes()];outer.readBytes(input);return input;}
+        finally{inner.release();outer.release();}
+    }
+    static void normalizationCases(Path output) throws Exception {
+        normalization(output,"serverbound_CustomClickAction_norm_trailing","net.minecraft.network.protocol.common.ServerboundCustomClickActionPacket",new byte[]{0,4,0,1,2,3});
+        var b=new FriendlyByteBuf(Unpooled.buffer());
+        b.writeUtf("en_us");b.writeByte(-1);b.writeVarInt(-1);b.writeBoolean(true);b.writeByte(255);b.writeVarInt(99);b.writeBoolean(true);b.writeBoolean(false);b.writeVarInt(-5);
+        byte[] input=new byte[b.readableBytes()];b.readBytes(input);b.release();
+        normalization(output,"serverbound_ClientInformation_norm_wrapping","net.minecraft.network.protocol.common.ServerboundClientInformationPacket",input);
+        b=new FriendlyByteBuf(Unpooled.buffer());b.writeVarInt(1);b.writeBoolean(true);b.writeVarInt(99);b.writeUtf("https://example.com");input=new byte[b.readableBytes()];b.readBytes(input);b.release();
+        normalization(output,"clientbound_ServerLinks_norm_zero","net.minecraft.network.protocol.common.ClientboundServerLinksPacket",input);
+        b=new FriendlyByteBuf(Unpooled.buffer());b.writeIdentifier(net.minecraft.resources.Identifier.withDefaultNamespace("unknown"));b.writeBytes(new byte[]{1,2,3,4});input=new byte[b.readableBytes()];b.readBytes(input);b.release();
+        normalization(output,"serverbound_CustomPayload_norm_discarded","net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket",input);
+        normalization(output,"clientbound_CustomPayload_norm_discarded","net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket",input);
+        rejected(output,"serverbound_CustomClickAction_quota",clickSeed(net.minecraft.nbt.StringTag.valueOf("q".repeat(17000))));
+        var tag=new net.minecraft.nbt.CompoundTag();var current=tag;
+        for(int i=0;i<17;i++){var next=new net.minecraft.nbt.CompoundTag();current.put("nested",next);current=next;}
+        rejected(output,"serverbound_CustomClickAction_depth",clickSeed(tag));
+        sample(output,"clientbound_ResourcePackPush_edge_prompt","net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket",buf->{buf.writeUUID(new UUID(123,456));buf.writeUtf("https://example.com/pack");buf.writeUtf("f".repeat(40));buf.writeBoolean(true);buf.writeBoolean(true);text(buf,"Download?");});
     }
     static void node(RegistryFriendlyByteBuf b){b.writeInt(-1);b.writeInt(64);b.writeInt(2);b.writeFloat(1.5f);b.writeFloat(-1);b.writeBoolean(true);b.writeVarInt(26);b.writeFloat(.75f);}
     static void debugValue(RegistryFriendlyByteBuf b,int id){
@@ -264,6 +317,7 @@ public final class PlayVectors {
             catch(Exception e){throw new IllegalStateException(cols[0],e);}
         }
         edgeCases(output);
+        normalizationCases(output);
         Files.write(output.resolve("packets.tsv"),packetRows);
         System.out.println("Encoded "+count+" packet samples plus bundle delimiter");
     }

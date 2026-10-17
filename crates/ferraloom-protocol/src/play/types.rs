@@ -1,7 +1,7 @@
 //! Embedded play-state network forms shared by both directions.
 use super::*;
 
-pub use crate::common::{ByteArray, OptionalNbt, OptionalVarInt, Utf8};
+pub use crate::common::{ByteArray, FriendlyString, OptionalNbt, OptionalVarInt, Utf8};
 
 macro_rules! registry_ids {
     ($($name:ident),* $(,)?) => { $(
@@ -45,8 +45,8 @@ wire_enum!(TestBlockMode { Start = 0, Log = 1, Fail = 2, Accept = 3 }, zero);
 wire_enum!(ChatCompletionAction { Add = 0, Remove = 1, Set = 2 }, zero);
 wire_enum!(RemoteDebugSampleType { TickTime = 0 });
 
-packet!(/// Port of Vec3#STREAM_CODEC.
-Vec3 { x: f64, y: f64, z: f64 });
+pub use crate::entity_data::Vec3;
+
 packet!(/// Port of PositionAndRotation#STREAM_CODEC.
 PositionAndRotation { position: Vec3, y_rot: f32, x_rot: f32 });
 packet!(/// Port of PositionMoveRotation#STREAM_CODEC.
@@ -242,23 +242,9 @@ packet!(/// Port of gamerule key/value network entries.
 GameRuleEntry {key:Identifier,value:String});
 packet!(/// Port of ClientboundCommandSuggestionsPacket.Entry.
 CommandSuggestion {text:String,tooltip:Option<Component> => optional_trusted_component});
-wire_enum!(SwingAnimationType {None=0,Whack=1,Stab=2}, zero);
-packet!(/// Port of SwingAnimation.
-SwingAnimation {animation_type:SwingAnimationType,duration:VarInt});
-packet!(/// Port of SoundEvent.DIRECT_STREAM_CODEC.
-SoundEvent {location:Identifier,fixed_range:Option<f32>});
-/// Port of SoundEvent.STREAM_CODEC.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SoundEventHolder(pub crate::codec::Holder<SoundEvent>);
-impl Wire for SoundEventHolder {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        crate::codec::Holder::decode(r, &Identifier::parse("minecraft:sound_event")?).map(Self)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        self.0
-            .encode(w, &Identifier::parse("minecraft:sound_event")?)
-    }
-}
+pub use crate::component::{
+    Sound as SoundEventHolder, SoundEvent, SwingAnimation, SwingAnimationType,
+};
 
 /// Port of BlockHitResult's offset floats, relative to the packed block position.
 #[derive(Clone, Debug, PartialEq)]
@@ -413,5 +399,33 @@ impl Wire for StructureIntegrity {
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         w.f32(self.0);
         Ok(())
+    }
+}
+
+/// Port of ByteBufCodecs.BIT_SET. This byte-array representation differs from
+/// FriendlyByteBuf's length-prefixed array of big-endian longs.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ByteBitSet(pub BitSet);
+impl ByteBitSet {
+    pub fn encode_bits(bits: &BitSet, w: &mut Writer<'_>) -> Result<()> {
+        let len = bits.bit_length().div_ceil(8);
+        w.count(len, i32::MAX as usize)?;
+        for i in 0..len {
+            w.u8((bits.words()[i / 8] >> (i % 8 * 8)) as u8);
+        }
+        Ok(())
+    }
+}
+impl Wire for ByteBitSet {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        let bytes = r.byte_array(i32::MAX as usize)?;
+        let mut words = vec![0; bytes.len().div_ceil(8)];
+        for (i, byte) in bytes.iter().enumerate() {
+            words[i / 8] |= u64::from(*byte) << (i % 8 * 8);
+        }
+        Ok(Self(BitSet::from_words(words)))
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        Self::encode_bits(&self.0, w)
     }
 }

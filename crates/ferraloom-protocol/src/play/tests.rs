@@ -1046,3 +1046,77 @@ fn vanilla_bundle_limit_and_terminal_message() {
         Some(ClientboundMessage::Bundle(Vec::new()))
     );
 }
+
+fn normalize<T: Wire>(input: &str, expected: &str) {
+    let context = Context::new();
+    let input = bytes(input);
+    let mut r = Reader::with_context(&input, &context);
+    let value = T::decode(&mut r).unwrap();
+    r.finish().unwrap();
+    let mut w = Writer::with_context(&context);
+    value.encode(&mut w).unwrap();
+    assert_eq!(w.into_inner(), bytes(expected));
+}
+
+#[test]
+fn vanilla_common_normalization_and_custom_click_limits() {
+    normalize::<serverbound::CustomClickAction>(
+        include_str!("fixtures/serverbound_CustomClickAction_norm_trailing.input.hex"),
+        include_str!("fixtures/serverbound_CustomClickAction_norm_trailing.hex"),
+    );
+    normalize::<serverbound::ClientInformation>(
+        include_str!("fixtures/serverbound_ClientInformation_norm_wrapping.input.hex"),
+        include_str!("fixtures/serverbound_ClientInformation_norm_wrapping.hex"),
+    );
+    normalize::<clientbound::ServerLinks>(
+        include_str!("fixtures/clientbound_ServerLinks_norm_zero.input.hex"),
+        include_str!("fixtures/clientbound_ServerLinks_norm_zero.hex"),
+    );
+    normalize::<serverbound::CustomPayload>(
+        include_str!("fixtures/serverbound_CustomPayload_norm_discarded.input.hex"),
+        include_str!("fixtures/serverbound_CustomPayload_norm_discarded.hex"),
+    );
+    normalize::<clientbound::CustomPayload>(
+        include_str!("fixtures/clientbound_CustomPayload_norm_discarded.input.hex"),
+        include_str!("fixtures/clientbound_CustomPayload_norm_discarded.hex"),
+    );
+    for fixture in [
+        include_str!("fixtures/serverbound_CustomClickAction_quota.reject.hex"),
+        include_str!("fixtures/serverbound_CustomClickAction_depth.reject.hex"),
+    ] {
+        assert!(serverbound::CustomClickAction::from_bytes(&bytes(fixture)).is_err());
+    }
+}
+
+#[test]
+fn vanilla_light_masks_and_partial_chat_filter() {
+    let light = check::<clientbound::LightUpdate>(
+        "nonempty light masks",
+        include_str!("fixtures/clientbound_LightUpdate_edge_present.hex"),
+    );
+    assert!(light.light_data.sky_y_mask.0.get(0));
+    assert!(light.light_data.sky_y_mask.0.get(65));
+    assert_eq!(light.light_data.sky_updates.len(), 2);
+    assert!(
+        light
+            .light_data
+            .sky_updates
+            .iter()
+            .all(|layer| layer.0.len() == 2048)
+    );
+    assert_eq!(light.light_data.sky_updates[0].0[0], 0xa5);
+    let chat = check::<clientbound::PlayerChat>(
+        "partial chat filter",
+        include_str!("fixtures/clientbound_PlayerChat_edge_partial_filter.hex"),
+    );
+    let FilterMask::PartiallyFiltered(mask) = chat.filter_mask else {
+        panic!("expected partial filter")
+    };
+    assert!(mask.get(0) && mask.get(9) && mask.get(65));
+    assert_eq!(chat.body.last_seen.0.len(), 20);
+    assert!(
+        chat.signature.is_some()
+            && chat.unsigned_content.is_some()
+            && chat.chat_type.target_name.is_some()
+    );
+}
