@@ -58,7 +58,7 @@ fn bytes(hex: &str) -> Vec<u8> {
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
         .collect()
 }
-fn check<T: Wire>(name: &str, hex: &str) {
+fn check<T: Wire>(name: &str, hex: &str) -> T {
     let expected = bytes(hex);
     let context = Context::new();
     let mut r = Reader::with_context(&expected, &context);
@@ -69,6 +69,7 @@ fn check<T: Wire>(name: &str, hex: &str) {
         .encode(&mut w)
         .unwrap_or_else(|e| panic!("{name}: {e}"));
     assert_eq!(w.into_inner(), expected, "{name}");
+    value
 }
 #[test]
 fn vanilla_packet_bodies() {
@@ -923,5 +924,125 @@ fn vanilla_packet_bodies() {
     check::<serverbound::CustomClickAction>(
         "serverbound_CustomClickAction",
         include_str!("fixtures/serverbound_CustomClickAction.hex"),
+    );
+}
+
+#[test]
+fn vanilla_packets_with_ids_and_edge_cases() {
+    let mut clientbound_ids = std::collections::BTreeSet::new();
+    let mut serverbound_ids = std::collections::BTreeSet::new();
+    for row in include_str!("fixtures/packets.tsv").lines() {
+        let (name, hex) = row.split_once('\t').unwrap();
+        if name.starts_with("clientbound_") {
+            let packet = check::<clientbound::Packet>(name, hex);
+            clientbound_ids.insert(packet.packet_id());
+        } else {
+            let packet = check::<serverbound::Packet>(name, hex);
+            serverbound_ids.insert(packet.packet_id());
+        }
+    }
+    assert_eq!(
+        clientbound_ids.len(),
+        ferraloom_data::packets::play::clientbound::ALL.len()
+    );
+    assert_eq!(
+        serverbound_ids.len(),
+        ferraloom_data::packets::play::serverbound::ALL.len()
+    );
+}
+
+#[test]
+fn chunk_sections_from_simulation_match_vanilla() {
+    use crate::codec::RegistryContext;
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use std::sync::Arc;
+    let context = Context::new();
+    let biome_registry = Identifier::parse("minecraft:worldgen/biome").unwrap();
+    let plains = BiomeId(
+        context
+            .entry_id(
+                &biome_registry,
+                &Identifier::parse("minecraft:plains").unwrap(),
+            )
+            .unwrap() as u32,
+    );
+    let biomes = Arc::new(
+        IdMap::new(
+            (0..context
+                .entries
+                .iter()
+                .filter(|(r, _, _)| r == biome_registry.as_str())
+                .count())
+                .map(|i| BiomeId(i as u32))
+                .collect(),
+        )
+        .unwrap(),
+    );
+    for (entries, hex) in [
+        (
+            1,
+            include_str!("fixtures/clientbound_LevelChunkWithLight_edge_palette_1.hex"),
+        ),
+        (
+            2,
+            include_str!("fixtures/clientbound_LevelChunkWithLight_edge_palette_2.hex"),
+        ),
+        (
+            300,
+            include_str!("fixtures/clientbound_LevelChunkWithLight_edge_palette_300.hex"),
+        ),
+    ] {
+        let packet = clientbound::LevelChunkWithLight::from_bytes(&bytes(hex)).unwrap();
+        let mut section = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(biomes.clone()),
+            plains,
+        );
+        for i in 0..entries - 1 {
+            section.set_block_state(
+                (i & 15) as u8,
+                ((i >> 8) & 15) as u8,
+                ((i >> 4) & 15) as u8,
+                ferraloom_data::BlockState::from_id((i + 1) as u16).unwrap(),
+            );
+        }
+        assert_eq!(
+            LevelChunkSectionData::from(&section).to_bytes().unwrap(),
+            packet.chunk_data.sections[0].to_bytes().unwrap()
+        );
+    }
+}
+
+#[test]
+fn vanilla_bundle_limit_and_terminal_message() {
+    let delimiter = clientbound::Packet::BundleDelimiter(clientbound::BundleDelimiter {});
+    let packet = clientbound::Packet::TickingStep(clientbound::TickingStep {
+        tick_steps: VarInt(1),
+    });
+    let mut packer = BundlePacker::default();
+    assert!(packer.push(delimiter.clone()).unwrap().is_none());
+    for _ in 0..BundlePacker::LIMIT {
+        assert!(packer.push(packet.clone()).unwrap().is_none());
+    }
+    assert!(packer.push(packet).is_err());
+    let message = packer.push(delimiter.clone()).unwrap().unwrap();
+    let ClientboundMessage::Bundle(packets) = message else {
+        panic!("expected bundle")
+    };
+    assert_eq!(packets.len(), BundlePacker::LIMIT);
+    assert!(!packer.is_bundling());
+    assert!(packer.push(delimiter.clone()).unwrap().is_none());
+    assert!(
+        packer
+            .push(clientbound::Packet::StartConfiguration(
+                clientbound::StartConfiguration {}
+            ))
+            .is_err()
+    );
+    let mut empty = BundlePacker::default();
+    empty.push(delimiter.clone()).unwrap();
+    assert_eq!(
+        empty.push(delimiter).unwrap(),
+        Some(ClientboundMessage::Bundle(Vec::new()))
     );
 }
