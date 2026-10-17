@@ -36,7 +36,7 @@ impl PathError {
         match self {
             Self::Syntax(e) => e.message.clone(),
             Self::NothingFound(p) => format!("Found no elements matching {p}"),
-            Self::ExpectedList(t) => format!("Expected list, got: {t}"),
+            Self::ExpectedList(t) => format!("Expected a list: got {t}"),
             Self::InvalidIndex(i) => format!("Invalid list index: {i}"),
             Self::TooDeep => "NBT tag is too deeply nested".into(),
         }

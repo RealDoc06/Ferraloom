@@ -34,6 +34,17 @@ public class VanillaNbt {
             line("path",hex(input),operation,hex(value),hex(result),hex(root.toString()));
         }catch(CommandSyntaxException e) {line("patherror",hex(input),operation,hex(value),Integer.toString(e.getCursor()),hex(e.getRawMessage().getString()));}
     }
+    static void account(String hex,long quota,int depth) throws Exception {
+        NbtAccounter a=new NbtAccounter(quota,depth);
+        try {
+            Tag tag=NbtIo.readAnyTag(new DataInputStream(new ByteArrayInputStream(HexFormat.of().parseHex(hex))),a);
+            line("account",hex,Long.toString(quota),Integer.toString(depth),Long.toString(a.getUsage()),Integer.toString(a.getDepth()),"ok",hex(tag.toString()));
+        }catch(Exception e) {
+            Throwable cause=e;
+            if(e instanceof ReportedNbtException) while(cause.getCause()!=null) cause=cause.getCause();
+            line("account",hex,Long.toString(quota),Integer.toString(depth),Long.toString(a.getUsage()),Integer.toString(a.getDepth()),"error",hex(cause.getMessage()));
+        }
+    }
     public static void main(String[] args) throws Exception {
         if(args.length>0) {for(String s:args)parse(s);return;}
         String[] cases={"{}","[]","[1,2b,foo,{a:2}]","{z:1,a:2,True:3,1:4,\"x y\":5}",
@@ -47,6 +58,29 @@ public class VanillaNbt {
             "{DataVersion:1,size:[1,2,3],data:[{nbt:{z:1},state:0,pos:[1,2,3]}],entities:[{pos:[1d,2d,3d],blockPos:[1,2,3]}],palette:[{Name:stone}],z:4}",
             "{s:\"nul\\x00é😀\",b:1b,sht:2s,i:3,l:4L,f:1.25f,d:2.5d,ba:[B;1,-2],ia:[I;3,-4],la:[L;5,-6],list:[1,foo]}"};
         for(String s:cases)parse(s);
+        for(String s:List.of("1__2.3__4e+0_2f","1 f","- 1","0 x FF","[B;1,2b,]","{a:1, b:2}","\"a \\n b\"","128b","256ub","32768s","2147483648","9223372036854775808L","4294967296ui","18446744073709551616ul","-1ui","1e999f","\"\\uD800\""))parse(s);
+        for(String bytes:List.of("00","0101","020002","0300000003","040000000000000004","053f800000","063ff0000000000000","08000161","0903000000020000000100000002","0a030001610000000100","090000000001","0901ffffffff","07ffffffff","0aff00016100","0a0a0001780000")) {
+            for(long quota:List.of(0L,8L,36L,128L,1024L)) account(bytes,quota,512);
+        }
+        account("0a0a0001780000",1024,1);
+        account("0a0a0001780000",1024,0);
+        for(String bytes:List.of("0000","0001ff","0001c0","0002c080","00020000","0003eda080","0004f09f9880","0003e18000","0002c000")) {
+            try {String value=new DataInputStream(new ByteArrayInputStream(HexFormat.of().parseHex(bytes))).readUTF();StringBuilder units=new StringBuilder();for(char c:value.toCharArray())units.append(String.format("%04x",(int)c));line("utf",bytes,"ok",units.toString());}
+            catch(UTFDataFormatException e) {line("utf",bytes,"error",hex(e.getMessage()));}
+        }
+        for(Tag tag:List.of(IntTag.valueOf(256),LongTag.valueOf(Long.MAX_VALUE),FloatTag.valueOf(-1.9f),DoubleTag.valueOf(-1.9),DoubleTag.valueOf(Double.NEGATIVE_INFINITY),FloatTag.valueOf(Float.NaN))) {
+            NumericTag n=(NumericTag)tag;
+            line("numeric",hex(tag.toString()),Integer.toString(n.byteValue()),Integer.toString(n.shortValue()),Integer.toString(n.intValue()),Long.toString(n.longValue()),Boolean.toString(n.asBoolean().get()));
+        }
+        for(int length:List.of(65535,65536)) {
+            String value="a".repeat(length);var out=new ByteArrayOutputStream();String error="";
+            try {NbtIo.writeAnyTag(StringTag.valueOf(value),new DataOutputStream(out));}catch(UTFDataFormatException e) {error=e.getMessage();}
+            var fallback=new ByteArrayOutputStream();NbtIo.writeUnnamedTagWithFallback(StringTag.valueOf(value),new DataOutputStream(fallback));
+            line("fallback",Integer.toString(length),Integer.toString(out.size()),hex(error),Integer.toString(fallback.size()),HexFormat.of().formatHex(Arrays.copyOfRange(fallback.toByteArray(),0,Math.min(5,fallback.size()))));
+        }
+        ListTag big=new ListTag();for(int i=0;i<130;i++)big.add(IntTag.valueOf(i));
+        ByteArrayTag array=new ByteArrayTag(new byte[130]);
+        for(Tag tag:List.of(big,array))line("text",hex(tag.toString()),hex(new TextComponentTagVisitor("",TextComponentTagVisitor.PlainStyling.INSTANCE,true).visit(tag).getString()));
         for(String p:List.of("a[]","a[-1].x","a[{id:2}].x","{v:4}.a[0]","a[{id:9}]","missing.x","n[]","a[99]"))path(p,"get","");
         for(String p:List.of("new[].x","a[{id:2}].x","a[{id:9}].x","a[].x","n[]","a[-1]","v.x","obj{id:7}.x"))path(p,"set","8");
         for(String p:List.of("a","n","missing","v"))path(p,"insert","7b");
