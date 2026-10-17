@@ -36,6 +36,15 @@ pub(crate) fn float(v: &Value) -> Result<f32, Error> {
         .parse()
         .map_err(|_| Error("invalid float".into()))
 }
+/// Port of Codec.floatRange: round to float before checking Float.compare bounds.
+pub(crate) fn float_range(v: &Value, min: f32, max: f32) -> Result<f32, Error> {
+    let value = float(v)?;
+    if !value.total_cmp(&min).is_lt() && !value.total_cmp(&max).is_gt() {
+        Ok(value)
+    } else {
+        Err(Error(format!("number {value} outside [{min},{max}]")))
+    }
+}
 pub(crate) fn bounded(v: &Value, min: f64, max: f64) -> Result<f64, Error> {
     let value = double(v)?;
     if !value.total_cmp(&min).is_lt() && !value.total_cmp(&max).is_gt() {
@@ -45,12 +54,7 @@ pub(crate) fn bounded(v: &Value, min: f64, max: f64) -> Result<f64, Error> {
     }
 }
 pub(crate) fn noise_value(v: &Value) -> Result<f32, Error> {
-    let value = float(v)?;
-    if (-1_000_000.0..=1_000_000.0).contains(&value) {
-        Ok(value)
-    } else {
-        Err(Error("noise value outside [-1000000,1000000]".into()))
-    }
+    float_range(v, -1_000_000.0, 1_000_000.0)
 }
 /// Port of LazilyParsedNumber#intValue, preserving decimal truncation and
 /// low-32-bit overflow. Both integer codecs use BigDecimal's low-bit result.
@@ -149,6 +153,10 @@ mod tests {
                 ("int", integer(value).map(|v| v.to_string())),
                 ("long", long(value).map(|v| v.to_string())),
                 ("float", float(value).map(|v| v.to_bits().to_string())),
+                (
+                    "float_range",
+                    float_range(value, 0.0, 1.0).map(|v| v.to_bits().to_string()),
+                ),
                 ("double", double(value).map(|v| v.to_bits().to_string())),
             ] {
                 assert_eq!(
