@@ -236,11 +236,11 @@ impl PlacementModifier {
             }
             Self::HeightRange(height) => {
                 let context = WorldGenerationContext::new(
-                    generator.settings.noise.min_y,
-                    generator.settings.noise.height,
+                    generator.min_y(),
+                    generator.gen_depth(),
                     region.min_y(),
                     region.height(),
-                    generator.settings.sea_level,
+                    generator.sea_level(),
                 );
                 result.push([p[0], height.sample(random, context), p[2]]);
             }
@@ -277,7 +277,7 @@ impl PlacementModifier {
                     crate::biome_manager::obfuscate_seed(region.seed),
                     p,
                 );
-                let biome = &generator.data.biome_names[region.noise_biome(quart)?.0 as usize];
+                let biome = &generator.data().biome_names[region.noise_biome(quart)?.0 as usize];
                 let steps = registry
                     .biome_features
                     .get(biome)

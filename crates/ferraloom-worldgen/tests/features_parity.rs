@@ -661,6 +661,14 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     )
     .unwrap();
     assert!(region.block([16, 0, 0]).is_err());
+    assert!(region.block_tags().is_err());
+    region.set_block_tags(generator.data.block_tags.clone());
+    assert!(
+        region
+            .block_tags()
+            .unwrap()
+            .contains_key(ferraloom_data::tags::BlockTags::DIRT, Block::DIRT,)
+    );
     assert!(
         !region
             .set_block([16, 0, 0], Block::STONE.default_state(), 2)

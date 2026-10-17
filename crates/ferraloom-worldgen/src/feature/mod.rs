@@ -3,7 +3,7 @@
 use crate::{
     Error, Identifier,
     codec::*,
-    generator::NoiseBasedChunkGenerator,
+    generator::ChunkGeneratorAccess,
     placement::{modifier::PlacementModifier, predicate::PredicateDecodeData},
     region::WorldGenRegion,
 };
@@ -26,7 +26,7 @@ pub struct FeatureContext<'a, 'r> {
     pub region: &'a mut WorldGenRegion<'r>,
     pub random: &'a mut WorldgenRandom,
     pub origin: [i32; 3],
-    pub generator: &'a NoiseBasedChunkGenerator,
+    pub generator: &'a dyn ChunkGeneratorAccess,
     pub registry: &'a FeatureRegistry,
 }
 pub type FeatureFactory =
