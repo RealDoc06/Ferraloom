@@ -17,10 +17,30 @@ only and contributes zero standalone behavior tests. The
 [completed builder receipt](../compatibility/results/evidence/9ff973e5b879ad6f197ee0a10eb7887b5a0b3630eb2ec720ae2f5347e90dd0c8.json) and
 [ROOT verification](../compatibility/results/evidence/fdc30e6ff1fd7d45c1bbfcf004681a1f09f08037747882f48ff7ab7b79f96c6b.json) bind actual source, host,
 resource scope, final binary and original command logs by content hash.
-This checkpoint applies to tested engine `b8e01b4`; the future evidence/docs commit remains unknown.
+This checkpoint applies to tested engine `b8e01b4`; this docs/evidence update was not native-checked.
 Engine source `b8e01b4` was [published to GitHub](../compatibility/results/evidence/3594d64c7d828659f279497f14b3b7289b416f5565b045d6a2cfc14b3be8864f.json)
 on `main` and `validation/r29-cc10c5b`. The receipt records those refs before any later evidence/docs commit.
-CI completion is unknown. Fresh paired runtime and REA acceptance remain pending; no verified family is claimed.
+CI completion is unknown. Broader Dragon and REA acceptance remain open; no verified family is claimed.
+
+The [selected paired crafting campaign](../compatibility/results/crafting.json)
+used that same engine, client source and executable on `ferraloom-builder`.
+All 13 selected ordinary crafting composites passed: 13 Java and 13 Rust case
+rows across two fresh boots and two clients, equal recorded outcomes, 114 saved
+snapshots and 60 state/statistics checks. Both servers and both clients exited
+with code zero without forced cleanup; runtime errors were empty. Six boot
+checkpoints retained the source, binary and resource pins. The run used 6 GiB
+memory, no swap, 200% CPU, two workers, a 180-second startup timeout and a
+20-second interaction timeout. Only the Java reference used the configured
+`sync-chunk-writes=false` profile; Rust configuration was unchanged.
+
+The byte-identical [ROOT verification](../compatibility/results/evidence/b8d3948bbf73ba511d4df051edd699dc78610a183e105f216e2e353b7ce9cc56.json)
+records verification on `devbox` of all 527 original files and archive members,
+including 520 production-manifest files. The full report, archive and export
+index are retained privately, not public raw goldens; the crafting index labels
+their hashes accordingly. This evidence establishes only the selected campaign.
+It does not promote a feature family, REA or the ledger, or establish full
+gameplay, default Java write-profile parity or crash durability. Earlier failed
+crafting evidence and historical results remain unchanged.
 
 Recent changes cover owned Java input continuations through final saves,
 terrain-read refusal and item admission, POI persistence fences, builtin horns
