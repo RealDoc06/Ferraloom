@@ -579,3 +579,72 @@ async fn proto_fluid_conversion_deduplicates_but_disk_saved_duplicates_survive()
     assert_eq!(disk.fluid_ticks.get_all().len(), 3);
     assert_eq!(level.collect_fluid_ticks(100, 65536, &eligible).len(), 3);
 }
+
+#[tokio::test]
+async fn failed_save_encoding_preserves_valid_tick_capture_until_retained_source_retry() {
+    use pumpkin_nbt::tag::NbtTag;
+    let (_folder, level) = fixture().await;
+    let chunk = publish(&level, 0);
+    let position = Vector2::new(0, 0);
+    level.set_tick_game_time(100);
+    level.schedule_block_tick(
+        &Block::STONE,
+        BlockPos::new(1, 64, 0),
+        200,
+        TickPriority::High,
+    );
+    level.schedule_fluid_tick(
+        &Fluid::WATER,
+        BlockPos::new(2, 64, 0),
+        250,
+        TickPriority::Low,
+    );
+    let writer = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+    writer.watch_chunks(&level.level_folder, &[position]).await;
+    writer
+        .save_chunks(&level.level_folder, vec![(position, chunk.clone())])
+        .await
+        .unwrap();
+    assert_eq!(chunk.block_ticks.lock().valid_encoded_capture(), Some(100));
+    assert_eq!(chunk.fluid_ticks.lock().valid_encoded_capture(), Some(100));
+    assert!(!chunk.is_dirty());
+    // Duplicate insertion and empty clear/unpack preserve the valid encoded
+    // snapshot of these unchanged queue contents.
+    level.schedule_block_tick(&Block::STONE, BlockPos::new(1, 64, 0), 1, TickPriority::Low);
+    level.clear_block_ticks(&BlockPos::new(5, 64, 0), &BlockPos::new(6, 65, 1));
+    level.unpack_chunk_ticks(position, 120);
+    assert!(!chunk.is_dirty());
+    assert_eq!(chunk.block_ticks.lock().valid_encoded_capture(), Some(100));
+    assert_eq!(chunk.fluid_ticks.lock().valid_encoded_capture(), Some(100));
+    level.set_tick_game_time(120);
+    level.prepare_chunk_poi(&chunk).unwrap();
+    assert_eq!(chunk.block_ticks.lock().valid_encoded_capture(), Some(100));
+    assert_eq!(chunk.fluid_ticks.lock().valid_encoded_capture(), Some(100));
+    chunk.set_custom_data("r31", "refused", NbtTag::End);
+    assert!(matches!(
+        writer
+            .save_chunks(&level.level_folder, vec![(position, chunk.clone())])
+            .await,
+        Err(crate::chunk::ChunkWritingError::ChunkSerializingError(_))
+    ));
+    assert!(chunk.is_dirty());
+    assert_eq!(chunk.block_ticks.lock().valid_encoded_capture(), Some(100));
+    assert_eq!(chunk.fluid_ticks.lock().valid_encoded_capture(), Some(100));
+    level.set_tick_game_time(140);
+    chunk.set_custom_data("r31", "refused", NbtTag::Int(1));
+    // Existing failed submission owns the retry; there is no new save request.
+    writer.flush().await.unwrap();
+    assert!(!chunk.is_dirty());
+    assert_eq!(chunk.block_ticks.lock().valid_encoded_capture(), Some(140));
+    assert_eq!(chunk.fluid_ticks.lock().valid_encoded_capture(), Some(140));
+    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    reader
+        .fetch_chunks(&level.level_folder, &[position], send)
+        .await;
+    let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+        panic!("missing retried tick snapshot")
+    };
+    assert_eq!(saved.block_ticks.pack_at(0)[0].delay, 160);
+    assert_eq!(saved.fluid_ticks.pack_at(0)[0].delay, 210);
+}

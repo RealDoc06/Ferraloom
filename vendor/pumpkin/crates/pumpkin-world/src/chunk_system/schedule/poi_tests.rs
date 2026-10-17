@@ -1277,6 +1277,7 @@ async fn prepared_retirement_fixes_both_delay_lists_before_deferred_backend_writ
 
 #[tokio::test]
 async fn clean_retirement_preserves_earlier_capture_without_resubmission() {
+    use crate::chunk::io::LoadedData;
     let (_directory, level, mut schedule, mut workers) = fixture().await;
     let pos = ChunkPos::new(0, 0);
     let chunk = publish(&mut schedule, &level, pos);
@@ -1303,6 +1304,11 @@ async fn clean_retirement_preserves_earlier_capture_without_resubmission() {
         result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
     }
     assert!(!chunk.is_dirty());
+    level.set_tick_game_time(120);
+    let pure = ChunkData::from_bytes(&chunk.to_bytes().unwrap(), pos).unwrap();
+    assert_eq!(pure.block_ticks.pack_at(0)[0].delay, 180);
+    assert_eq!(pure.fluid_ticks.pack_at(0)[0].delay, 230);
+    assert!(!chunk.is_dirty());
     level.set_tick_game_time(140);
     schedule = unload(schedule, level.clone()).await;
     assert!(!level.loaded_chunks.contains_key(&pos));
@@ -1312,6 +1318,33 @@ async fn clean_retirement_preserves_earlier_capture_without_resubmission() {
     level.set_tick_game_time(1_000_140);
     resume.send(()).unwrap();
     saving.await.unwrap();
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    level
+        .chunk_saver
+        .fetch_chunks(&level.level_folder, &[pos], send)
+        .await;
+    let Some(LoadedData::Loaded(reused)) = receive.recv().await else {
+        panic!("missing retained retired chunk")
+    };
+    assert!(Arc::ptr_eq(&reused, &chunk));
+    assert_eq!(
+        reused
+            .block_ticks
+            .pack_at(0)
+            .iter()
+            .map(|tick| tick.delay)
+            .collect::<Vec<_>>(),
+        vec![200]
+    );
+    assert_eq!(
+        reused
+            .fluid_ticks
+            .pack_at(0)
+            .iter()
+            .map(|tick| tick.delay)
+            .collect::<Vec<_>>(),
+        vec![250]
+    );
     level.chunk_saver.flush().await.unwrap();
     assert!(!chunk.is_dirty());
     assert_eq!(
