@@ -1,5 +1,6 @@
 //! Persistent component codecs and HashOps' typed CRC32C representation.
 use super::*;
+use crate::ops::{EncodeOps, HashOps, JsonOps, NbtOps, encode_nbt};
 use crate::{
     BlockPos, Error, Identifier, Result, Uuid,
     chat::Component,
@@ -12,6 +13,7 @@ use serde_json::{Map, Value as Json};
 #[derive(Clone, Debug, PartialEq)]
 pub enum PersistentValue {
     Nbt(Tag),
+    Component(Component),
     Boolean(bool),
     String(NbtString),
     Int(i32),
@@ -21,146 +23,54 @@ pub enum PersistentValue {
     Map(Vec<(String, PersistentValue)>),
 }
 impl PersistentValue {
-    pub fn to_json(&self) -> Json {
-        match self {
-            Self::Nbt(v) => tag_json(v),
-            Self::Boolean(v) => (*v).into(),
-            Self::String(v) => v.to_string_lossy().into(),
-            Self::Int(v) => (*v).into(),
-            Self::Float(v) => Json::from(*v),
-            Self::Double(v) => Json::from(*v),
-            Self::List(v) => Json::Array(v.iter().map(Self::to_json).collect()),
-            Self::Map(v) => Json::Object(v.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()),
-        }
-    }
-    pub fn to_nbt(&self) -> Tag {
-        match self {
-            Self::Nbt(v) => v.clone(),
-            Self::Boolean(v) => Tag::Byte(i8::from(*v)),
-            Self::String(v) => Tag::String(v.clone()),
-            Self::Int(v) => Tag::Int(*v),
-            Self::Float(v) => Tag::Float(*v),
-            Self::Double(v) => Tag::Double(*v),
-            Self::List(v) => Tag::List(ListTag(v.iter().map(Self::to_nbt).collect())),
-            Self::Map(v) => {
-                let mut map = CompoundTag::new();
-                for (k, v) in v {
-                    map.insert(k.as_str(), v.to_nbt());
-                }
-                Tag::Compound(map)
+    pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        Ok(match self {
+            Self::Nbt(v) => return encode_nbt(v, ops),
+            // Temporary until P1's Component::encode_ops lands. Default names have no boolean style fields.
+            Self::Component(v) => return encode_nbt(&v.to_nbt()?, ops),
+            Self::Boolean(v) => ops.create_boolean(*v),
+            Self::String(v) => ops.create_string_utf16(v.as_utf16()),
+            Self::Int(v) => ops.create_int(*v),
+            Self::Float(v) => ops.create_float(*v),
+            Self::Double(v) => ops.create_double(*v),
+            Self::List(v) => {
+                ops.create_list(v.iter().map(|v| v.encode_ops(ops)).collect::<Result<_>>()?)
             }
-        }
-    }
-    /// Port of HashOps.CRC32C_INSTANCE; Guava primitive sinks use little-endian bytes.
-    pub fn hash(&self) -> i32 {
-        match self {
-            Self::Nbt(v) => hash_tag(v),
-            Self::Boolean(v) => crc32c(&[13, u8::from(*v)]),
-            Self::String(v) => hash_string(v),
-            Self::Int(v) => tagged(8, &v.to_le_bytes()),
-            Self::Float(v) => tagged(10, &v.to_le_bytes()),
-            Self::Double(v) => tagged(11, &v.to_le_bytes()),
-            Self::List(v) => hash_list(v.iter().map(Self::hash)),
-            Self::Map(v) => hash_map(
+            Self::Map(v) => ops.create_map(
                 v.iter()
-                    .map(|(k, v)| (hash_string(&k.as_str().into()), v.hash())),
-            ),
-        }
+                    .map(|(k, v)| Ok((ops.create_string(k), v.encode_ops(ops)?)))
+                    .collect::<Result<_>>()?,
+            )?,
+        })
+    }
+    pub fn to_json(&self) -> Result<Json> {
+        self.encode_ops(&JsonOps)
+    }
+    pub fn to_nbt(&self) -> Result<Tag> {
+        self.encode_ops(&NbtOps)
+    }
+    pub fn hash(&self) -> Result<i32> {
+        Ok(self.encode_ops(&HashOps)?.0)
     }
 }
 /// Port of a component's persistent Codec, shared by item defaults, storage and commands.
 pub trait Persistent: Sized {
     fn from_json(value: &Json) -> Result<Self>;
     fn to_persistent(&self) -> Result<PersistentValue>;
+    fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        self.to_persistent()?.encode_ops(ops)
+    }
     fn to_json(&self) -> Result<Json> {
-        Ok(self.to_persistent()?.to_json())
+        self.encode_ops(&JsonOps)
     }
     fn from_nbt(value: &Tag) -> Result<Self> {
         Self::from_json(&tag_json(value))
     }
     fn to_nbt(&self) -> Result<Tag> {
-        Ok(self.to_persistent()?.to_nbt())
+        self.encode_ops(&NbtOps)
     }
     fn hash(&self) -> Result<i32> {
-        Ok(self.to_persistent()?.hash())
-    }
-}
-fn crc32c(bytes: &[u8]) -> i32 {
-    let mut crc = !0u32;
-    for b in bytes {
-        crc ^= u32::from(*b);
-        for _ in 0..8 {
-            crc = (crc >> 1) ^ (0x82f63b78 & (0u32.wrapping_sub(crc & 1)));
-        }
-    }
-    !crc as i32
-}
-fn tagged(tag: u8, bytes: &[u8]) -> i32 {
-    let mut v = vec![tag];
-    v.extend(bytes);
-    crc32c(&v)
-}
-fn hash_string(value: &NbtString) -> i32 {
-    let mut v = vec![12];
-    v.extend((value.len() as i32).to_le_bytes());
-    for c in value.as_utf16() {
-        v.extend(c.to_le_bytes());
-    }
-    crc32c(&v)
-}
-fn hash_list(values: impl IntoIterator<Item = i32>) -> i32 {
-    let mut v = vec![4];
-    for hash in values {
-        v.extend(hash.to_le_bytes());
-    }
-    v.push(5);
-    crc32c(&v)
-}
-fn hash_map(values: impl IntoIterator<Item = (i32, i32)>) -> i32 {
-    let mut pairs: Vec<_> = values.into_iter().collect();
-    pairs.sort_by_key(|(k, v)| (*k as u32, *v as u32));
-    let mut v = vec![2];
-    for (key, value) in pairs {
-        v.extend(key.to_le_bytes());
-        v.extend(value.to_le_bytes());
-    }
-    v.push(3);
-    crc32c(&v)
-}
-fn hash_tag(tag: &Tag) -> i32 {
-    match tag {
-        Tag::End => crc32c(&[1]),
-        Tag::Byte(v) => tagged(6, &v.to_le_bytes()),
-        Tag::Short(v) => tagged(7, &v.to_le_bytes()),
-        Tag::Int(v) => tagged(8, &v.to_le_bytes()),
-        Tag::Long(v) => tagged(9, &v.to_le_bytes()),
-        Tag::Float(v) => tagged(10, &v.to_le_bytes()),
-        Tag::Double(v) => tagged(11, &v.to_le_bytes()),
-        Tag::String(v) => hash_string(v),
-        Tag::List(v) => hash_list(v.iter().map(hash_tag)),
-        Tag::Compound(v) => hash_map(v.iter().map(|(k, v)| (hash_string(k), hash_tag(v)))),
-        Tag::ByteArray(a) => {
-            let mut v = vec![14];
-            v.extend(a.iter().map(|b| *b as u8));
-            v.push(15);
-            crc32c(&v)
-        }
-        Tag::IntArray(a) => {
-            let mut v = vec![16];
-            for n in a {
-                v.extend(n.to_le_bytes());
-            }
-            v.push(17);
-            crc32c(&v)
-        }
-        Tag::LongArray(a) => {
-            let mut v = vec![18];
-            for n in a {
-                v.extend(n.to_le_bytes());
-            }
-            v.push(19);
-            crc32c(&v)
-        }
+        Ok(self.encode_ops(&HashOps)?.0)
     }
 }
 fn object(value: &Json) -> Result<&Map<String, Json>> {
@@ -346,7 +256,7 @@ impl Persistent for Component {
         Self::from_json(&v.to_string())
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        Ok(PersistentValue::Nbt(self.to_nbt()?))
+        Ok(PersistentValue::Component(self.clone()))
     }
 }
 fn tag_json(v: &Tag) -> Json {
@@ -1252,7 +1162,34 @@ persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" 
 persistent_record!(SwingAnimation {animation_type => "type" [Some(SwingAnimationType::Whack)],duration => "duration" [Some(VarInt(6))]});
 persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "flags" [Some(vec![])],strings => "strings" [Some(vec![])],colors => "colors" [Some(vec![])]});
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
-persistent_record!(Fireworks {flight_duration => "flight_duration" [Some(VarInt(0))],explosions => "explosions" [Some(BoundedList(vec![]))]});
+impl Persistent for Fireworks {
+    fn from_json(v: &Json) -> Result<Self> {
+        let flight_duration = field::<VarInt>(v, "flight_duration", Some(VarInt(0)))?;
+        if !(0..=255).contains(&flight_duration.0) {
+            return Err(invalid("fireworks flight duration"));
+        }
+        Ok(Self {
+            flight_duration,
+            explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
+        })
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        let mut v = Vec::new();
+        if self.flight_duration.0 != 0 {
+            v.push((
+                "flight_duration".into(),
+                PersistentValue::Nbt(Tag::Byte(self.flight_duration.0 as i8)),
+            ));
+        }
+        entry(
+            &mut v,
+            "explosions",
+            &self.explosions,
+            Some(BoundedList(vec![])),
+        )?;
+        Ok(PersistentValue::Map(v))
+    }
+}
 persistent_record!(LodestoneTracker {target => "target" [Some(None)],tracked => "tracked" [Some(true)]});
 persistent_record!(ArmorTrim {material => "material" [None],pattern => "pattern" [None]});
 persistent_record!(BannerLayer {pattern => "pattern" [None],color => "color" [None]});
@@ -1615,7 +1552,12 @@ impl Persistent for MobEffectDetails {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = Vec::new();
-        entry(&mut v, "amplifier", &self.amplifier, Some(VarInt(0)))?;
+        if self.amplifier.0 != 0 {
+            v.push((
+                "amplifier".into(),
+                PersistentValue::Nbt(Tag::Byte(self.amplifier.0 as i8)),
+            ));
+        }
         entry(&mut v, "duration", &self.duration, Some(VarInt(0)))?;
         entry(&mut v, "ambient", &self.ambient, Some(false))?;
         entry(&mut v, "show_particles", &self.show_particles, Some(true))?;

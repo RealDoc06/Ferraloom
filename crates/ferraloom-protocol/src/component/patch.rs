@@ -11,10 +11,11 @@ macro_rules! components {
             pub fn key(&self) -> Identifier { registry(self.component_type().name()) }
             pub fn from_json(key:&Identifier,value:&serde_json::Value)->Result<Self> { super::persistent::component_from_json(key,value) }
             pub fn from_nbt(key:&Identifier,value:&ferraloom_nbt::Tag)->Result<Self> { super::persistent::component_from_nbt(key,value) }
+            pub fn encode_ops<O:crate::ops::EncodeOps>(&self,ops:&O)->Result<O::Value> {self.to_persistent()?.encode_ops(ops)}
             pub fn to_persistent(&self)->Result<PersistentValue> { super::persistent::component_value(self) }
-            pub fn to_json(&self)->Result<serde_json::Value> { Ok(self.to_persistent()?.to_json()) }
-            pub fn to_nbt(&self)->Result<ferraloom_nbt::Tag> { Ok(self.to_persistent()?.to_nbt()) }
-            pub fn hash(&self)->Result<i32> { Ok(self.to_persistent()?.hash()) }
+            pub fn to_json(&self)->Result<serde_json::Value> { self.to_persistent()?.to_json() }
+            pub fn to_nbt(&self)->Result<ferraloom_nbt::Tag> { self.to_persistent()?.to_nbt() }
+            pub fn hash(&self)->Result<i32> { self.to_persistent()?.hash() }
             pub fn decode_value(key: &Identifier, r: &mut Reader<'_>) -> Result<Self> {
                 if key.as_str() == "minecraft:intangible_projectile" { <Unit as Persistent>::from_nbt(&r.nbt(false)?)?; return Ok(Self::IntangibleProjectile(Unit)); }
                 match key.as_str() { $(concat!("minecraft:", $key) => Ok(Self::$variant(r.read()?)),)* _ => Err(crate::Error::invalid("component", key.to_string())) }
