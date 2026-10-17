@@ -5,7 +5,19 @@ import java.util.*;
 import java.util.zip.GZIPOutputStream;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
-import net.minecraft.world.level.levelgen.Beardifier;
+import net.minecraft.world.level.levelgen.*;
+import net.minecraft.core.*;
+import net.minecraft.core.registries.*;
+import net.minecraft.resources.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.packs.*;
+import net.minecraft.server.packs.repository.PackSource;
+import net.minecraft.server.packs.resources.*;
+import net.minecraft.tags.TagLoader;
+import net.minecraft.world.level.biome.*;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.structure.placement.*;
 import net.minecraft.world.level.levelgen.densityfunction.*;
 import net.minecraft.world.level.levelgen.structure.*;
 import net.minecraft.world.level.levelgen.structure.pools.*;
@@ -41,8 +53,48 @@ public final class StructureGolden {
         }
         write(directory.resolve("beardifier.json.gz"),out);
     }
+    static RegistryAccess.Frozen load() {
+        var location=new PackLocationInfo("vanilla",Component.literal("vanilla"),PackSource.BUILT_IN,Optional.empty());
+        var pack=new VanillaPackResourcesBuilder().pushJarResources().exposeNamespace("minecraft").build(location).fullResources();
+        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));
+        var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        TagLoader.loadTagsForExistingRegistries(manager,builtins).forEach(Registry.PendingTags::apply);
+        return RegistryDataLoader.load(manager,builtins.registries().<HolderLookup.RegistryLookup<?>>map(e -> e.value()).toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
+    }
+    static void placements(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var out=new JsonArray(); var sets=registries.lookupOrThrow(Registries.STRUCTURE_SET);
+        var source=new FixedBiomeSource(registries.lookupOrThrow(Registries.BIOME).getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS));
+        var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace("overworld"));
+        for(long seed:new long[]{0,-1,8675309,Long.MIN_VALUE,Long.MAX_VALUE}) {
+            var random=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings);
+            var state=ChunkGeneratorStructureState.createForNormal(random,seed,new ChunkPos(37,-49),source,sets);
+            for(var entry:sets.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList()) {
+                var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("set",entry.key().identifier().toString());
+                var placement=entry.value().placement();var candidates=new JsonArray();
+                if(placement instanceof RandomSpreadStructurePlacement spread) {
+                    for(int x:new int[]{-30000000,-4097,-129,-128,-33,-32,-1,0,1,31,32,33,127,128,4096,29999999})for(int z:new int[]{-777,-33,-1,0,1,32,12345}) {
+                        var candidate=spread.getPotentialStructureChunk(seed,x,z);candidates.add(ints(x,z,candidate.x(),candidate.z()));
+                    }
+                }
+                item.add("candidates",candidates);var starts=new JsonArray();
+                for(int x=-64;x<=64;x++)for(int z=-64;z<=64;z++)if(placement.isStructureChunk(state,x,z))starts.add(ints(x,z));
+                item.add("placement_chunks",starts);
+                if(placement instanceof ConcentricRingsStructurePlacement rings) {
+                    var positions=state.getRingPositionsFor(rings);var list=new JsonArray();if(positions!=null)for(var p:positions)list.add(ints(p.x(),p.z()));item.add("rings",list);
+                }
+                out.add(item);
+            }
+        }
+        write(directory.resolve("placements.json.gz"),out);
+        var frequencies=new JsonArray();
+        for(var method:AbstractSpreadingStructurePlacement.FrequencyReductionMethod.values())for(long seed:new long[]{0,-1,8675309,Long.MIN_VALUE,Long.MAX_VALUE})for(float probability:new float[]{0,0.004f,0.2f,0.5f,1}) {
+            var item=new JsonObject();item.addProperty("method",method.getSerializedName());item.addProperty("seed",seed);item.addProperty("probability",probability);var values=new JsonArray();
+            for(int x=-97;x<=97;x+=7)for(int z=-83;z<=83;z+=11)values.add(method.shouldGenerate(seed,1234567,x,z,probability));item.add("values",values);frequencies.add(item);
+        }
+        write(directory.resolve("frequencies.json.gz"),frequencies);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);beardifier(directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);beardifier(directory);placements(load(),directory);
     }
 }
