@@ -186,8 +186,8 @@ impl PlayerInventory {
     }
 
     /// Adds a stack to any available slot, prioritizing stacking with existing items.
-    fn add_stack(&self, stack: ItemStack) -> usize {
-        let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack);
+    fn add_stack(&self, stack: &ItemStack) -> usize {
+        let mut slot_index = self.get_occupied_slot_with_room_for_stack(stack);
 
         if slot_index == -1 {
             slot_index = self.get_empty_slot();
@@ -203,7 +203,7 @@ impl PlayerInventory {
     /// Adds a stack to a specific slot.
     ///
     /// Returns the number of items that couldn't fit.
-    fn add_stack_to_slot(&self, slot: usize, stack: ItemStack) -> usize {
+    fn add_stack_to_slot(&self, slot: usize, stack: &ItemStack) -> usize {
         if slot >= Self::MAIN_SIZE {
             if let Some(slot_type) = self.equipment_slots.get(&slot) {
                 let mut equipment = self
@@ -211,7 +211,7 @@ impl PlayerInventory {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let mut current = equipment.get(slot_type);
-                let remaining = Self::add_to_stack(&mut current, &stack);
+                let remaining = Self::add_to_stack(&mut current, stack);
                 equipment.put(slot_type, current);
                 return remaining;
             }
@@ -222,7 +222,7 @@ impl PlayerInventory {
             .main_inventory
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Self::add_to_stack(&mut inv[slot], &stack)
+        Self::add_to_stack(&mut inv[slot], stack)
     }
 
     /// Shared by main and equipment storage; equipment reads return a clone to write back.
@@ -322,9 +322,9 @@ impl PlayerInventory {
         loop {
             i = stack.item_count;
             if slot == -1 {
-                stack.set_count(self.add_stack(stack.clone()) as u8);
+                stack.set_count(self.add_stack(stack) as u8);
             } else {
-                stack.set_count(self.add_stack_to_slot(slot as usize, stack.clone()) as u8);
+                stack.set_count(self.add_stack_to_slot(slot as usize, stack) as u8);
             }
 
             if stack.is_empty() || stack.item_count >= i {

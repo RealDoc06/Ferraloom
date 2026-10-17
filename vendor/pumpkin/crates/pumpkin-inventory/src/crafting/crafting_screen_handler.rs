@@ -466,11 +466,9 @@ impl ResultSlot {
     }
 
     fn refill_output(&self) -> ItemStack {
-        let result = if let Some(matched) = self.match_recipe() {
-            matched.stack()
-        } else {
-            ItemStack::EMPTY.clone()
-        };
+        let result = self
+            .match_recipe()
+            .map_or_else(|| ItemStack::EMPTY.clone(), |matched| matched.stack());
         *self
             .result
             .lock()
