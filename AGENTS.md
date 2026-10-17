@@ -18,6 +18,13 @@ writing code.
   Put a short doc comment on ported items naming the source, for example
   `/// Port of ServerLevel#tickChunk.`
 - When behavior is unclear, run the vanilla server and observe it. Do not guess.
+- Shared caches live only in the main checkout, never in worktrees:
+  decompiled source `/home/doc/code/Ferraloom/.cache/decompiled/26.3/`,
+  vanilla jar, libraries and data generator reports
+  `/home/doc/code/Ferraloom/.cache/vanilla/26.3/`, JDK 25
+  `/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1/`. Running small
+  Java programs against the vanilla jar on devbox, for example to capture
+  expected test values, counts as light work.
 
 ## Tests
 
@@ -51,6 +58,10 @@ Do not alter Proxmox, other containers or live services.
 - Conventional commits, for example `feat(protocol): encode chunk data packets`.
 - Keep commits small and focused. Work on your own branch; the parent agent
   merges it.
+- Add external dependencies in your crate's own `Cargo.toml`, not in
+  `[workspace.dependencies]`, so parallel branches merge cleanly.
+- Stay inside the paths your brief assigns you. Ask the parent before touching
+  anything else.
 
 ## Delegation
 
