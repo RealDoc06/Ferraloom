@@ -1257,7 +1257,7 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
     close_fixture(&fixture).await;
 }
 
-/// Finish the retained session even when the instrumented World replaced its
+/// Finish the retained session even when the instrumented world replaced its
 /// registration, then let shared cleanup close the client and stop the server.
 async fn close_fixture(fixture: &PlayerFixture) {
     crate::finish_player_session(&fixture.server, &fixture.player)
