@@ -3,6 +3,7 @@ import com.mojang.serialization.JsonOps;
 import java.nio.file.*;
 import java.util.*;
 import net.minecraft.core.*;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.registries.*;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.*;
@@ -11,6 +12,8 @@ import net.minecraft.world.level.chunk.*;
 import net.minecraft.world.level.levelgen.*;
 import net.minecraft.world.level.levelgen.carver.*;
 import net.minecraft.world.level.levelgen.heightproviders.*;
+import net.minecraft.world.level.biome.*;
+import net.minecraft.world.level.levelgen.densityfunction.*;
 
 /** Our reference driver calls real 26.3 provider codecs and carver geometry. */
 public final class FeaturesGolden {
@@ -87,9 +90,40 @@ public final class FeaturesGolden {
         }
         WorldgenGolden.write(out.resolve("providers.json.gz"),cases);
     }
+    static void terrain(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var fill=NoiseBasedChunkGenerator.class.getDeclaredMethod("doFill",NoiseChunk.class,net.minecraft.world.level.chunk.ChunkAccess.class);fill.setAccessible(true);
+        var carve=NoiseBasedChunkGenerator.class.getDeclaredMethod("generateCarvers",ChunkAccess.class,net.minecraft.world.level.levelgen.blending.Blender.class,NoiseChunk.class,RandomState.class,net.minecraft.world.level.biome.BiomeManager.class,net.minecraft.server.level.WorldGenRegion.class,net.minecraft.world.level.levelgen.material.rule.MaterialRule.class);carve.setAccessible(true);
+        var picker=NoiseBasedChunkGenerator.class.getDeclaredMethod("createFluidPicker",NoiseGeneratorSettings.class);picker.setAccessible(true);
+        var out=new JsonArray();
+        for(long seed:new long[]{0,8675309}) for(String dimension:List.of("overworld","nether","end")) for(int[] p:WorldgenGolden.locations(registries,seed,dimension)) {
+            var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace(dimension));
+            var state=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings);var source=WorldgenGolden.source(registries,dimension);
+            var generator=new NoiseBasedChunkGenerator(source,Holder.direct(settings));
+            var heights=net.minecraft.world.level.LevelHeightAccessor.create(settings.noiseSettings().minY(),settings.noiseSettings().height());
+            var chunk=new net.minecraft.world.level.chunk.ProtoChunk(new net.minecraft.world.level.ChunkPos(p[0],p[1]),net.minecraft.world.level.chunk.UpgradeData.EMPTY,heights,net.minecraft.world.level.chunk.PalettedContainerFactory.create(registries),null);
+            int minY=heights.getMinY(),height=heights.getHeight(),sy=height/4;
+            var grid=WorldgenGolden.biomeGrid(source,state,SamplerContext.builder().enableCaches().build(),p[0],p[1],minY,height);
+            chunk.fillBiomesFromNoise((qx,qy,qz)->grid.get(((qz&3)*4+(qx&3))*sy+(qy-minY/4)));
+            var volume=new DensityVolume(16,height,16,p[0]*16,minY,p[1]*16);
+            try(var noise=new NoiseChunk(state,null,settings,(Aquifer.FluidPicker)picker.invoke(null,settings),net.minecraft.world.level.levelgen.blending.Blender.empty(),volume)) {
+                fill.invoke(generator,noise,chunk);
+                var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("dimension",dimension);item.add("chunk",values(p[0],p[1]));item.add("noise",WorldgenGolden.blocks(chunk));item.addProperty("biomes",WorldgenGolden.biomeHash(grid));
+                Map<Long,List<Holder<Biome>>> cache=new HashMap<>();cache.put(net.minecraft.world.level.ChunkPos.pack(p[0],p[1]),grid);var context=SamplerContext.builder().enableCaches().build();
+                BiomeResolver lookup=(qx,qy,qz)-> {
+                    int cx=qx>>2,cz=qz>>2;var values=cache.computeIfAbsent(net.minecraft.world.level.ChunkPos.pack(cx,cz),key->WorldgenGolden.biomeGrid(source,state,context,cx,cz,minY,height));
+                    return values.get(((qz&3)*4+(qx&3))*sy+Math.clamp(qy-minY/4,0,sy-1));
+                };
+                var biomeManager=new BiomeManager(lookup,BiomeManager.obfuscateSeed(seed));
+                state.surfaceSystem().buildSurface(state,biomeManager,new WorldGenerationContext(generator,heights),chunk,noise,settings.materialRule().value(),source.possibleBiomes());
+                carve.invoke(generator,chunk,net.minecraft.world.level.levelgen.blending.Blender.empty(),noise,state,biomeManager,null,settings.materialRule().value());
+                item.add("terrain",WorldgenGolden.blocks(chunk));out.add(item);
+            }
+        }
+        WorldgenGolden.write(directory.resolve("carved_chunks.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();
         var registries=WorldgenGolden.load();var out=Path.of(args[0]);Files.createDirectories(out);
-        providers(registries,out);masks(registries,out);
+        providers(registries,out);masks(registries,out);terrain(registries,out);
     }
 }

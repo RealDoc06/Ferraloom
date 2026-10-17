@@ -126,3 +126,65 @@ fn every_builtin_carver_mask_matches_vanilla() {
         );
     }
 }
+
+#[test]
+fn full_terrain_with_carvers_matches_vanilla() {
+    use ferraloom_worldgen::{biome::BiomeSource, generator::*, settings::NoiseGeneratorSettings};
+    use serde_json::json;
+    use std::sync::Arc;
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let cases = golden(include_bytes!("golden/carved_chunks.json.gz"));
+    for case in cases.as_array().unwrap() {
+        let seed = case["seed"].as_i64().unwrap();
+        let dimension = case["dimension"].as_str().unwrap();
+        let value = resources
+            .require(
+                &format!("worldgen/noise_settings/{dimension}.json")
+                    .parse()
+                    .unwrap(),
+            )
+            .unwrap()
+            .json()
+            .unwrap();
+        let settings = NoiseGeneratorSettings::decode(&value).unwrap();
+        let source = BiomeSource::decode(
+            &if dimension == "end" {
+                json!({"type":"minecraft:the_end"})
+            } else {
+                json!({"type":"minecraft:multi_noise","preset":format!("minecraft:{dimension}")})
+            },
+            &resources,
+        )
+        .unwrap();
+        let generator =
+            NoiseBasedChunkGenerator::new(data.clone(), settings, source, seed).unwrap();
+        let p = [
+            case["chunk"][0].as_i64().unwrap() as i32,
+            case["chunk"][1].as_i64().unwrap() as i32,
+        ];
+        let chunk = generator.build_terrain(p, None).unwrap();
+        let mut hash = Sha256::new();
+        for z in 0..16 {
+            for x in 0..16 {
+                for y in chunk.min_y..chunk.min_y + chunk.height {
+                    hash.update(chunk.block(x, y, z).id().to_be_bytes());
+                }
+            }
+        }
+        assert_eq!(
+            format!("{:x}", hash.finalize()),
+            case["terrain"]["hash"].as_str().unwrap(),
+            "terrain {dimension} {seed} {p:?}"
+        );
+        assert_eq!(
+            serde_json::to_value(chunk.world_surface.as_slice()).unwrap(),
+            case["terrain"]["world_surface"]
+        );
+        assert_eq!(
+            serde_json::to_value(chunk.ocean_floor.as_slice()).unwrap(),
+            case["terrain"]["ocean_floor"]
+        );
+    }
+}

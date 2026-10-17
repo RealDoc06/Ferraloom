@@ -509,10 +509,15 @@ impl CarverRegistry {
             .into_iter()
             .map(|(id, r)| {
                 let v = r.json()?;
-                let carvers = list(field(&v, "carvers")?)?
-                    .iter()
-                    .map(crate::codec::id)
-                    .collect::<Result<Vec<_>, _>>()?;
+                let entries = field(&v, "carvers")?;
+                let carvers = if entries.is_string() {
+                    vec![crate::codec::id(entries)?]
+                } else {
+                    list(entries)?
+                        .iter()
+                        .map(crate::codec::id)
+                        .collect::<Result<Vec<_>, _>>()?
+                };
                 Ok((id, carvers))
             })
             .collect::<Result<_, Error>>()?;

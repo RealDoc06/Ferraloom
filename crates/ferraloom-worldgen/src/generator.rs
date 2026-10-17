@@ -17,6 +17,8 @@ use std::{
 pub struct GenerationData {
     pub density: Arc<DensityRegistry>,
     pub material: MaterialRegistry,
+    pub carvers: crate::carver::CarverRegistry,
+    pub uncarvable: HashSet<Block>,
     pub temperatures: Arc<BiomeTemperatures>,
     pub biome_names: Vec<Identifier>,
     pub biome_ids: BTreeMap<Identifier, BiomeId>,
@@ -28,6 +30,7 @@ impl GenerationData {
     pub fn load(resources: &ResourceManager) -> Result<Self, Error> {
         let density = Arc::new(DensityRegistry::load(resources)?);
         let material = MaterialRegistry::load(resources)?;
+        let carvers = crate::carver::CarverRegistry::load(resources)?;
         let temperatures = Arc::new(BiomeTemperatures::load(resources)?);
         let biome_names = resources
             .registry("worldgen/biome")
@@ -57,6 +60,13 @@ impl GenerationData {
                 block_tags.diagnostics
             )));
         }
+        let uncarvable = block_tags
+            .values
+            .get(&"uncarvable".parse()?)
+            .ok_or_else(|| Error("missing uncarvable block tag".into()))?
+            .iter()
+            .copied()
+            .collect();
         let motion_blocking = Arc::new(
             block_tags
                 .values
@@ -73,6 +83,8 @@ impl GenerationData {
         Ok(Self {
             density,
             material,
+            carvers,
+            uncarvable,
             temperatures,
             biome_names,
             biome_ids,
@@ -230,6 +242,7 @@ impl NoiseBasedChunkGenerator {
             step: [1; 3],
         };
         let mut samplers = SamplerContext::cached();
+        samplers.set_beardifier(None);
         if let Some(blender) = blender {
             samplers.set_blender(blender, volume);
         }
@@ -303,6 +316,113 @@ impl NoiseBasedChunkGenerator {
             &self.data.temperatures,
             &mut |p| lookup.at_block(self, p),
         );
+    }
+    /// Port of NoiseBasedChunkGenerator#generateCarvers. Mask generation and
+    /// application share no mutable state with another chunk job.
+    pub fn generate_carvers(
+        &self,
+        chunk: &mut GeneratedChunk,
+        noise: &mut NoiseChunk,
+        upgrading: bool,
+    ) -> Result<(), Error> {
+        if noise.volume.is_empty() {
+            return Ok(());
+        }
+        let context = crate::placement::providers::WorldGenerationContext::new(
+            self.settings.noise.min_y,
+            self.settings.noise.height,
+            chunk.min_y,
+            chunk.height,
+            self.settings.sea_level,
+        );
+        let mut search = SearchContext::default();
+        let mut samplers = SamplerContext::uncached();
+        let mask = self.data.carvers.generate_mask(
+            context,
+            self.random.seed,
+            chunk.position,
+            upgrading,
+            |quart| {
+                self.source.sample(
+                    &self.random.compiler,
+                    self.random.router,
+                    &mut samplers,
+                    &mut search,
+                    quart,
+                )
+            },
+        )?;
+        let blender = noise.samplers.blender().cloned();
+        let mut lookup = BiomeLookup::new(self, chunk, blender.clone());
+        mask.visit(|x, z, bottom, top| {
+            let mut has_grass = false;
+            for y in (bottom..=top).rev() {
+                if blender
+                    .as_ref()
+                    .is_some_and(|b| !b.can_carve(chunk.position, x, y, z))
+                {
+                    continue;
+                }
+                let old = chunk.block(x, y, z);
+                if self.data.uncarvable.contains(&old.block()) {
+                    continue;
+                }
+                if matches!(old.block(), Block::GRASS_BLOCK | Block::MYCELIUM) {
+                    has_grass = true;
+                }
+                let p = [
+                    chunk.position[0] * 16 + i32::from(x),
+                    y,
+                    chunk.position[1] * 16 + i32::from(z),
+                ];
+                if let Some(state) = noise.aquifer.compute_substance(
+                    &self.random.compiler,
+                    &mut noise.samplers,
+                    p,
+                    0.0,
+                ) {
+                    chunk.set_block(x, y, z, state);
+                    if noise.aquifer.should_schedule_fluid_update() && !state.data().fluid.empty {
+                        chunk.post_processing.push(p);
+                    }
+                    if has_grass && chunk.block(x, y - 1, z).block() == Block::DIRT {
+                        let below = [p[0], y - 1, p[2]];
+                        if let Some(material) = self.random.surface.top_material(
+                            chunk,
+                            noise,
+                            &self.random.compiler,
+                            &self.data.temperatures,
+                            &mut |p| lookup.at_block(self, p),
+                            below,
+                            !state.data().fluid.empty,
+                        ) {
+                            chunk.set_block(x, y - 1, z, material);
+                            if !material.data().fluid.empty {
+                                chunk.post_processing.push(below);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+    /// Full 26.3 TERRAIN status: noise, surface, then carvers. Structure starts
+    /// supply a Beardifier before density is sampled. `generate` remains the
+    /// slice-1 noise/surface diagnostic API.
+    pub fn build_terrain(
+        &self,
+        position: [i32; 2],
+        beardifier: Option<Arc<crate::structure::Beardifier>>,
+    ) -> Result<GeneratedChunk, Error> {
+        let mut chunk = self.new_chunk(position);
+        self.create_biomes(&mut chunk);
+        let mut noise = self.noise_chunk(&chunk);
+        noise.samplers.set_beardifier(beardifier);
+        self.fill_from_noise(&mut chunk, &mut noise);
+        self.build_surface(&mut chunk, &mut noise);
+        self.generate_carvers(&mut chunk, &mut noise, false)?;
+        Ok(chunk)
     }
     pub fn generate_in_dimension(
         &self,

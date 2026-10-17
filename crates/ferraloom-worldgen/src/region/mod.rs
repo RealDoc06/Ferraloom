@@ -96,6 +96,18 @@ pub trait WorldgenBlockBehavior: Sync {
         region: &WorldGenRegion<'_>,
         position: [i32; 3],
     ) -> Result<Option<[i32; 3]>, Error>;
+    fn is_solid(&self, _state: BlockState) -> Result<bool, Error> {
+        Err(Error("solid block behavior is unavailable".into()))
+    }
+    fn has_sturdy_face(
+        &self,
+        _state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("sturdy face behavior is unavailable".into()))
+    }
     fn can_survive(
         &self,
         _state: BlockState,
@@ -306,6 +318,16 @@ impl<'a> WorldGenRegion<'a> {
         )?;
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
+    }
+    pub fn is_solid(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.is_solid(self.block(p)?)
+    }
+    pub fn has_sturdy_face(
+        &self,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.has_sturdy_face(self.block(p)?, self, p, face)
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.can_survive(state, self, p)
