@@ -9,4 +9,5 @@ trap 'rm -rf "$classes"' EXIT
 classpath="$vanilla/versions/26.3/server-26.3.jar"
 while IFS= read -r -d '' library; do classpath="$classpath:$library"; done < <(find "$vanilla/libraries" -name '*.jar' -print0)
 "$jdk/javac" -cp "$classpath" -d "$classes" "$root/crates/ferraloom-protocol/tests/java/ProtocolVectors.java"
+cd "$classes"
 "$jdk/java" -cp "$classes:$classpath" ProtocolVectors "$root/crates/ferraloom-protocol/tests/fixtures"
