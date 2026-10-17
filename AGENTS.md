@@ -40,3 +40,9 @@ Preserve fixtures, worlds, player data, reference JARs, primary evidence, logs
 and receipts. Remove only specifically verified disposable closed artifacts.
 Let an active validation run finish before relocating later work. Do not alter
 Proxmox, other containers or live services as part of project development.
+
+Delegated agents must send implementation, architecture and scope questions to
+their parent agent through agent or thread messages. Do not open user-question
+UI for these decisions. The parent answers pending child requests and owns
+routine project decisions; only the parent may escalate essential questions to
+Doc. Repeat this routing rule in every delegation brief.
