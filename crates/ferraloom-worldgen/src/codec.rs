@@ -70,6 +70,10 @@ fn decimal_integer(v: &Value) -> Result<u64, Error> {
         return Err(Error("expected number".into()));
     };
     let text = number.to_string();
+    // Gson's NumberLimits applies these before BigDecimal's narrowing methods.
+    if text.len() > 10_000 {
+        return Err(Error("decimal string exceeds Gson limit".into()));
+    }
     let negative = text.starts_with('-');
     let text = text.trim_start_matches('-');
     let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
@@ -79,12 +83,15 @@ fn decimal_integer(v: &Value) -> Result<u64, Error> {
     let integer_digits = mantissa.find('.').unwrap_or(mantissa.len()) as i64;
     let fractional_digits =
         mantissa.len() as i64 - integer_digits - i64::from(mantissa.contains('.'));
+    let scale = fractional_digits.saturating_sub(exponent);
     // BigDecimal rejects exponents/scales beyond its signed 32-bit scale.
     if exponent.unsigned_abs() > i32::MAX as u64
-        || !(i64::from(i32::MIN)..=i64::from(i32::MAX))
-            .contains(&fractional_digits.saturating_sub(exponent))
+        || !(i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&scale)
     {
         return Err(Error("decimal scale overflow".into()));
+    }
+    if scale.unsigned_abs() >= 10_000 {
+        return Err(Error("decimal scale exceeds Gson limit".into()));
     }
     let length = integer_digits.saturating_add(exponent);
     if length <= 0 {
