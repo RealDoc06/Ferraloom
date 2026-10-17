@@ -38,6 +38,43 @@ pub(crate) struct ChunkTickQueue<T> {
     queue: BinaryHeap<QueueEntry<T>>,
     pending_saved: Option<Vec<SavedTick<T>>>,
     keys: FxHashSet<(BlockPos, T)>,
+    revision: u64,
+    valid_encoded_capture: Option<i64>,
+}
+
+/// Private queue-content version captured alongside actual Save NBT tick lists.
+#[derive(Clone, Copy)]
+pub(crate) struct TickCapture {
+    revision: u64,
+    now: i64,
+}
+
+impl<T> ChunkTickQueue<T> {
+    const fn changed(&mut self) {
+        // Never wrap into an old token. Exhaustion disables capture metadata.
+        self.revision = self.revision.saturating_add(1);
+        self.valid_encoded_capture = None;
+    }
+
+    #[must_use]
+    pub(crate) const fn capture_token(&self, now: i64) -> TickCapture {
+        TickCapture {
+            revision: self.revision,
+            now,
+        }
+    }
+
+    /// Record only after successful Save NBT encoding and snapshot validation.
+    pub(crate) const fn record_valid_encoded_capture(&mut self, capture: TickCapture) {
+        if self.revision != u64::MAX && self.revision == capture.revision {
+            self.valid_encoded_capture = Some(capture.now);
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn valid_encoded_capture(&self) -> Option<i64> {
+        self.valid_encoded_capture
+    }
 }
 
 impl<T> ChunkTickScheduler<T> {
@@ -81,6 +118,7 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
             return false;
         }
         self.queue.push(QueueEntry(tick));
+        self.changed();
         true
     }
 
@@ -91,6 +129,7 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
     pub(crate) fn poll(&mut self) -> Option<ScheduledTick<T>> {
         let tick = self.queue.pop()?.0;
         self.keys.remove(&(tick.position, tick.value));
+        self.changed();
         Some(tick)
     }
 
@@ -109,6 +148,9 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
             self.queue.push(QueueEntry(tick.unpack(now, order)));
             order = order.wrapping_add(1);
         }
+        if changed {
+            self.changed();
+        }
         changed
     }
 
@@ -126,6 +168,9 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
         }
         self.pending_saved = Some(self.pack(now));
         self.queue.clear();
+        // Representation changed too: a late encoder must not record a clock
+        // for, or rebase, the new pending form after retirement.
+        self.changed();
         // Preserve keys verbatim: polling one saved duplicate can remove its
         // key while another same-key record remains in the heap.
         true
@@ -156,6 +201,7 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
         }
         if removed {
             self.keys.retain(|(pos, _)| !contains(pos));
+            self.changed();
         }
         removed
     }
@@ -173,6 +219,8 @@ impl<T: Copy + Hash + Eq> FromIterator<SavedTick<T>> for ChunkTickScheduler<T> {
                 queue: BinaryHeap::new(),
                 pending_saved: Some(saved),
                 keys,
+                revision: 0,
+                valid_encoded_capture: None,
             }),
         }
     }
@@ -185,6 +233,8 @@ impl<T> Default for ChunkTickScheduler<T> {
                 queue: BinaryHeap::new(),
                 pending_saved: None,
                 keys: FxHashSet::default(),
+                revision: 0,
+                valid_encoded_capture: None,
             }),
         }
     }

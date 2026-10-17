@@ -22,7 +22,10 @@ use crate::{
     },
     generation::section_coords,
     level::LevelFolder,
-    tick::{SavedTick, scheduler::ChunkTickScheduler},
+    tick::{
+        SavedTick,
+        scheduler::{ChunkTickScheduler, TickCapture},
+    },
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -36,6 +39,17 @@ use super::{
 pub mod anvil;
 pub mod linear;
 pub mod pump;
+
+struct TickCaptures {
+    block: TickCapture,
+    fluid: TickCapture,
+}
+
+struct CapturedRoot {
+    root: NbtCompound,
+    stamp: Option<PoiCaptureStamp>,
+    ticks: Option<TickCaptures>,
+}
 
 #[cfg(test)]
 mod item_admission_tests;
@@ -614,19 +628,32 @@ impl ChunkData {
             .storage
             .lock()
             .map_err(|_| PoiReconcileError::OwnershipPoisoned)?;
-        let (root, stamp) = self.capture_root(Some(storage.loaded_poi_region(pos)?))?;
+        let capture = self.capture_root(
+            Some(storage.loaded_poi_region(pos)?),
+            matches!(purpose, PoiCapturePurpose::Save),
+        )?;
         drop(storage);
         drop(current);
         drop(lifecycle);
-        let bytes = crate::nbt_io::encode_compound(root)
+        let bytes = crate::nbt_io::encode_compound(capture.root)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-        let stamp = stamp.ok_or(PoiReconcileError::UnboundChunk)?;
+        let stamp = capture.stamp.ok_or(PoiReconcileError::UnboundChunk)?;
         self.validate_poi_capture(&stamp)?;
+        // This records a valid encoded Save snapshot, before later fallible
+        // backend compression/admission. Pure and Unload captures have no token.
+        if let Some(ticks) = capture.ticks {
+            self.block_ticks
+                .lock()
+                .record_valid_encoded_capture(ticks.block);
+            self.fluid_ticks
+                .lock()
+                .record_valid_encoded_capture(ticks.fluid);
+        }
         Ok(EncodedPoiSnapshot { bytes, stamp })
     }
 
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        crate::nbt_io::encode_compound(self.capture_root(None)?.0)
+        crate::nbt_io::encode_compound(self.capture_root(None, false)?.root)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)
     }
 
@@ -636,7 +663,8 @@ impl ChunkData {
     fn capture_root(
         &self,
         loaded_poi: Option<crate::poi::LoadedPoiRegion<'_>>,
-    ) -> Result<(NbtCompound, Option<PoiCaptureStamp>), ChunkSerializingError> {
+        capture_tick_clock: bool,
+    ) -> Result<CapturedRoot, ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -801,7 +829,7 @@ impl ChunkData {
         root_compound.put_list("sections", sections_list);
 
         // The phase check, clock read and block snapshot must share the poll lock.
-        let (block_ticks, tick_game_time) = {
+        let (block_ticks, tick_game_time, block_capture) = {
             let queue = self.block_ticks.lock();
             if self.block_tick_phase_owners.load(Ordering::Acquire) != 0 {
                 return Err(crate::poi::PoiReconcileError::StaleSaveCapture.into());
@@ -809,9 +837,11 @@ impl ChunkData {
             match self.poi_runtime() {
                 Ok(runtime) => {
                     let now = runtime.tick_clock.load(Ordering::Acquire);
-                    (queue.pack(now), Some(now))
+                    let ticks = queue.pack(now);
+                    let capture = capture_tick_clock.then(|| queue.capture_token(now));
+                    (ticks, Some(now), capture)
                 }
-                Err(error) => (queue.pack_unbound().ok_or(error)?, None),
+                Err(error) => (queue.pack_unbound().ok_or(error)?, None, None),
             }
         };
         root_compound.put_list(
@@ -822,14 +852,18 @@ impl ChunkData {
                 .collect(),
         );
 
-        let fluid_ticks = {
+        let (fluid_ticks, fluid_capture) = {
             let queue = self.fluid_ticks.lock();
-            match tick_game_time {
+            let ticks = match tick_game_time {
                 Some(now) => queue.pack(now),
                 None => queue
                     .pack_unbound()
                     .ok_or(crate::poi::PoiReconcileError::UnboundChunk)?,
-            }
+            };
+            let capture = tick_game_time
+                .filter(|_| capture_tick_clock)
+                .map(|now| queue.capture_token(now));
+            (ticks, capture)
         };
         root_compound.put_list(
             "fluid_ticks",
@@ -859,7 +893,13 @@ impl ChunkData {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }
 
-        Ok((root_compound, plan))
+        Ok(CapturedRoot {
+            root: root_compound,
+            stamp: plan,
+            ticks: block_capture
+                .zip(fluid_capture)
+                .map(|(block, fluid)| TickCaptures { block, fluid }),
+        })
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {

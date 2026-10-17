@@ -712,9 +712,10 @@ impl ChunkSections {
 impl ChunkData {
     /// Retain terminal retirement's tick snapshot in the existing pending form.
     /// Caller owns the exact exclusive map entry after counter/stamp validation.
-    /// Java fixes accepted save delays synchronously. This Rust representation
-    /// retains dirty sources' delays through deferred encoding and recaptures;
-    /// clean sources keep their earlier accepted snapshot without another save.
+    /// Clean queues with a common valid Save capture retain its encoded delays;
+    /// dirty queues freeze against the shared retirement clock. This does not
+    /// align memory with a newer Save whose encoding is unresolved: that remains
+    /// the existing asynchronous/presubmitted-save approximation.
     pub(crate) fn pack_tick_delays_for_retirement(
         &self,
     ) -> Result<(), crate::poi::PoiReconcileError> {
@@ -741,6 +742,18 @@ impl ChunkData {
             Ok(runtime) => Some(runtime.tick_clock.load(Ordering::Acquire)),
             Err(PoiReconcileError::UnboundChunk) => None,
             Err(error) => return Err(error),
+        };
+        let now = if self.dirty.load(Ordering::Acquire) {
+            now
+        } else {
+            let block_capture = self.block_ticks.lock().valid_encoded_capture();
+            let fluid_capture = self.fluid_ticks.lock().valid_encoded_capture();
+            match (block_capture, fluid_capture) {
+                (Some(block), Some(fluid)) if block == fluid => Some(block),
+                // No completed common capture: retain the existing clock
+                // behavior without a new retry, dirty store or save request.
+                _ => now,
+            }
         };
         pack(&self.block_ticks, now)?;
         pack(&self.fluid_ticks, now)
