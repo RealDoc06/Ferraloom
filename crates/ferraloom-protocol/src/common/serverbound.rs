@@ -44,8 +44,8 @@ impl Wire for CustomClickAction {
         let id = r.read()?;
         let bytes = r.byte_array(65536)?;
         let mut body = Reader::new(bytes);
-        let payload = body.optional_nbt(false)?;
-        body.finish()?;
+        let payload =
+            body.optional_nbt_with_accounter(&mut ferraloom_nbt::NbtAccounter::new(32768, 16))?;
         Ok(Self { id, payload })
     }
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {

@@ -126,3 +126,21 @@ impl Wire for FilterMask {
         Ok(())
     }
 }
+
+wire_enum!(ChatDecorationParameter {Sender=0,Target=1,Content=2},zero);
+packet!(/// Port of ChatTypeDecoration.
+ChatTypeDecoration {translation_key:String,parameters:Vec<ChatDecorationParameter>,style:crate::chat::Style});
+packet!(/// Port of ChatType.DIRECT_STREAM_CODEC.
+ChatType {chat:ChatTypeDecoration,narration:ChatTypeDecoration});
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatTypeHolder(pub crate::codec::Holder<ChatType>);
+impl Wire for ChatTypeHolder {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        crate::codec::Holder::decode(r, &Identifier::parse("minecraft:chat_type")?).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0.encode(w, &Identifier::parse("minecraft:chat_type")?)
+    }
+}
+packet!(/// Port of ChatType.Bound.
+ChatTypeBound {chat_type:ChatTypeHolder,name:Component,target_name:Option<Component>});

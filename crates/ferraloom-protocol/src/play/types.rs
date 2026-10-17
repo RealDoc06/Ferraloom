@@ -323,14 +323,6 @@ impl Wire for TrustedCompoundTag {
 packet!(/// Port of Vec3i#STREAM_CODEC.
 Vec3i {x:VarInt,y:VarInt,z:VarInt});
 
-impl<T: Wire> Wire for Box<T> {
-    fn decode(r: &mut Reader<'_>) -> Result<Self> {
-        T::decode(r).map(Box::new)
-    }
-    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
-        (**self).encode(w)
-    }
-}
 wire_enum!(ParticleRandomization {Default=0,Alternative=1,AlternativeWithSpeed=2}, zero);
 packet!(/// Port of ExplosionParticleInfo.
 ExplosionParticleInfo {particle:crate::entity_data::Particle,scaling:f32,speed:f32});

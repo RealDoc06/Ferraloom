@@ -21,6 +21,10 @@ fn vanilla_packet_bodies() {
         "clientbound_Animate",
         include_str!("fixtures/clientbound_Animate.hex"),
     );
+    check::<clientbound::AwardStats>(
+        "clientbound_AwardStats",
+        include_str!("fixtures/clientbound_AwardStats.hex"),
+    );
     check::<clientbound::BlockChangedAck>(
         "clientbound_BlockChangedAck",
         include_str!("fixtures/clientbound_BlockChangedAck.hex"),
@@ -68,6 +72,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::CommandSuggestions>(
         "clientbound_CommandSuggestions",
         include_str!("fixtures/clientbound_CommandSuggestions.hex"),
+    );
+    check::<clientbound::Commands>(
+        "clientbound_Commands",
+        include_str!("fixtures/clientbound_Commands.hex"),
     );
     check::<clientbound::ContainerClose>(
         "clientbound_ContainerClose",
@@ -405,6 +413,10 @@ fn vanilla_packet_bodies() {
         "clientbound_SetHeldSlot",
         include_str!("fixtures/clientbound_SetHeldSlot.hex"),
     );
+    check::<clientbound::SetObjective>(
+        "clientbound_SetObjective",
+        include_str!("fixtures/clientbound_SetObjective.hex"),
+    );
     check::<clientbound::SetPassengers>(
         "clientbound_SetPassengers",
         include_str!("fixtures/clientbound_SetPassengers.hex"),
@@ -412,6 +424,14 @@ fn vanilla_packet_bodies() {
     check::<clientbound::SetPlayerInventory>(
         "clientbound_SetPlayerInventory",
         include_str!("fixtures/clientbound_SetPlayerInventory.hex"),
+    );
+    check::<clientbound::SetPlayerTeam>(
+        "clientbound_SetPlayerTeam",
+        include_str!("fixtures/clientbound_SetPlayerTeam.hex"),
+    );
+    check::<clientbound::SetScore>(
+        "clientbound_SetScore",
+        include_str!("fixtures/clientbound_SetScore.hex"),
     );
     check::<clientbound::SetSimulationDistance>(
         "clientbound_SetSimulationDistance",
@@ -492,6 +512,10 @@ fn vanilla_packet_bodies() {
     check::<clientbound::Transfer>(
         "clientbound_Transfer",
         include_str!("fixtures/clientbound_Transfer.hex"),
+    );
+    check::<clientbound::UpdateAdvancements>(
+        "clientbound_UpdateAdvancements",
+        include_str!("fixtures/clientbound_UpdateAdvancements.hex"),
     );
     check::<clientbound::UpdateAttributes>(
         "clientbound_UpdateAttributes",
@@ -620,6 +644,10 @@ fn vanilla_packet_bodies() {
     check::<serverbound::CustomPayload>(
         "serverbound_CustomPayload",
         include_str!("fixtures/serverbound_CustomPayload.hex"),
+    );
+    check::<serverbound::DebugSubscriptionRequest>(
+        "serverbound_DebugSubscriptionRequest",
+        include_str!("fixtures/serverbound_DebugSubscriptionRequest.hex"),
     );
     check::<serverbound::EditBook>(
         "serverbound_EditBook",
