@@ -26,3 +26,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chat.chat-type.say-command | `minecraft:say_command` (chat type) | `data/minecraft/chat_type/say_command.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.team-msg-command-incoming | `minecraft:team_msg_command_incoming` (chat type) | `data/minecraft/chat_type/team_msg_command_incoming.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.team-msg-command-outgoing | `minecraft:team_msg_command_outgoing` (chat type) | `data/minecraft/chat_type/team_msg_command_outgoing.json`; `ChatType#DIRECT_CODEC` | | - | todo |
+| chat.broadcast.offline-multiple-clients | Deliver unsigned offline chat to a second client with exact sender display-name decoration | `PlayerList#broadcastChatMessage; ChatType#bind; Player#getDisplayName` | `ferraloom-parity::starter::parity_chat_formatting` | - | partial |

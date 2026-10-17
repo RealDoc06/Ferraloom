@@ -124,9 +124,10 @@ async fn chunk_loading_while_walking(s: &mut Session) -> Result<ObservationLog> 
     Ok(log)
 }
 async fn chat_formatting(s: &mut Session) -> Result<ObservationLog> {
-    let id = s.join("ParityBot").await?;
-    let bot = s.bot(id)?;
-    bot.chat("hello parity").await?;
+    let sender = s.join("ParityBot").await?;
+    let witness = s.join("ChatWitness").await?;
+    s.bot(sender)?.chat("hello parity").await?;
+    let bot = s.bot(witness)?;
     let packet = bot
         .wait_for(
             "player chat",

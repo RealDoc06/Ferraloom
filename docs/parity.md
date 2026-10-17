@@ -117,5 +117,5 @@ ferraloom-build -- env FERRALOOM_PARITY_SIDE=ferraloom cargo test -p ferraloom-p
 Keep feature inventory rows scoped to the behavior actually asserted. The
 starter cases cover join/configuration and a valid spawn, say/gamemode/tp
 results, paced spectator movement with destination chunk load and old chunk
-unload, unsigned chat decoration fields, and a stopped/saved/restarted player
+unload, unsigned chat delivery to a second bot with exact decoration fields, and a stopped/saved/restarted player
 position. They do not prove the entire corresponding vanilla feature family.
