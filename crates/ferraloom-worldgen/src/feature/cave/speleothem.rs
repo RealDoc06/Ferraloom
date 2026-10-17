@@ -316,9 +316,10 @@ impl SpeleothemClusterFeature {
         height: i32,
         density: f32,
     ) -> Result<(), Error> {
-        let Some((mut floor, ceiling)) = scan(ctx.region, p, self.range, empty_or_water, |s| {
-            !empty_or_water(s)
-        })?
+        let Some(Column { mut floor, ceiling }) =
+            scan(ctx.region, p, self.range, empty_or_water, |s| {
+                !empty_or_water(s)
+            })?
         else {
             return Ok(());
         };
@@ -557,12 +558,14 @@ impl LargeDripstone {
 }
 impl Feature for LargeDripstoneFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let Some((Some(floor), Some(ceiling))) =
-            scan(ctx.region, ctx.origin, self.range, empty_or_water, |s| {
-                s.block() == Block::DRIPSTONE_BLOCK
-                    || s.block() == Block::LAVA
-                    || self.replaceable.contains(&s.block())
-            })?
+        let Some(Column {
+            floor: Some(floor),
+            ceiling: Some(ceiling),
+        }) = scan(ctx.region, ctx.origin, self.range, empty_or_water, |s| {
+            s.block() == Block::DRIPSTONE_BLOCK
+                || s.block() == Block::LAVA
+                || self.replaceable.contains(&s.block())
+        })?
         else {
             return Ok(false);
         };

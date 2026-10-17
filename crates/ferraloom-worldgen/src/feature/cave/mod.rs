@@ -50,19 +50,15 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
             .and_then(Value::as_str)
             == Some("true");
         let level = match fluid {
-            fluid::Id::WATER | fluid::Id::LAVA => {
-                if falling {
-                    8
-                } else {
-                    0
-                }
-            }
+            // FlowingFluid#getLegacyLevel ignores FALLING on source fluids.
+            fluid::Id::WATER | fluid::Id::LAVA => 0,
             fluid::Id::FLOWING_WATER | fluid::Id::FLOWING_LAVA => {
                 let amount = state
                     .get("properties")
                     .and_then(|v| v.get("level"))
                     .and_then(Value::as_str)
                     .and_then(|s| s.parse::<i32>().ok())
+                    .filter(|n| (1..=8).contains(n))
                     .unwrap_or(7);
                 8 - amount + if falling { 8 } else { 0 }
             }
@@ -130,15 +126,20 @@ const HORIZONTAL: [Direction; 4] = [
     Direction::West,
 ];
 
-/// Port of Column#scan, returning (floor, ceiling). A missing column and a
-/// column with no edges are distinct, as they are in vanilla.
+/// Port of Column's optional floor and ceiling, including unbounded rays.
+struct Column {
+    floor: Option<i32>,
+    ceiling: Option<i32>,
+}
+
+/// Port of Column#scan. A missing column and a column with no edges are distinct.
 fn scan(
     region: &WorldGenRegion<'_>,
     origin: [i32; 3],
     range: i32,
     inside: impl Fn(BlockState) -> bool,
     edge: impl Fn(BlockState) -> bool,
-) -> Result<Option<(Option<i32>, Option<i32>)>, Error> {
+) -> Result<Option<Column>, Error> {
     if !inside(region.block(origin)?) {
         return Ok(None);
     }
@@ -154,7 +155,10 @@ fn scan(
             ends[i] = Some(p[1]);
         }
     }
-    Ok(Some((ends[0], ends[1])))
+    Ok(Some(Column {
+        floor: ends[0],
+        ceiling: ends[1],
+    }))
 }
 
 /// Port of ReplaceBlockFeature.
@@ -281,7 +285,7 @@ struct UnderwaterMagmaFeature {
 }
 impl Feature for UnderwaterMagmaFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let Some((Some(y), _)) = scan(
+        let Some(Column { floor: Some(y), .. }) = scan(
             ctx.region,
             ctx.origin,
             self.range,

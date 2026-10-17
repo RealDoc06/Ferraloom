@@ -146,9 +146,11 @@ impl Feature for GeodeFeature {
             cracks.extend([7, 5, 1].map(|y| offset(ctx.origin, [x, y, z])));
         }
         let mut potential = Vec::new();
-        for z in self.min..=self.max {
-            for y in self.min..=self.max {
-                for x in self.min..=self.max {
+        let min = self.min.min(self.max);
+        let max = self.min.max(self.max);
+        for z in min..=max {
+            for y in min..=max {
+                for x in min..=max {
                     let p = offset(ctx.origin, [x, y, z]);
                     let noise_offset = noise.get(p[0] as f64, p[1] as f64, p[2] as f64) as f64
                         * self.noise_multiplier;
