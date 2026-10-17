@@ -480,7 +480,7 @@ impl BlockPredicateParser {
     }
 }
 
-/// Retained SharedSuggestionProvider filtering, bounded to builtin ASCII identifiers.
+/// Retained `SharedSuggestionProvider` filtering, bounded to builtin ASCII identifiers.
 fn matches_resource_id(contents: &str, id: &str) -> bool {
     if contents.contains(':') {
         matches_resource_substr(contents, id)
