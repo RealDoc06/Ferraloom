@@ -1,4 +1,5 @@
 //! StructureTemplate's resource loading, palette order and coordinate geometry.
+mod placement;
 use super::BoundingBox;
 use crate::{Error, Identifier};
 use ferraloom_data::{
