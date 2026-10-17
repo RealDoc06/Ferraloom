@@ -120,6 +120,17 @@ impl<T: Copy + Hash + Eq> ChunkTickQueue<T> {
         result
     }
 
+    pub(crate) fn pack_for_retirement(&mut self, now: i64) -> bool {
+        if self.queue.is_empty() {
+            return false;
+        }
+        self.pending_saved = Some(self.pack(now));
+        self.queue.clear();
+        // Preserve keys verbatim: polling one saved duplicate can remove its
+        // key while another same-key record remains in the heap.
+        true
+    }
+
     pub(crate) fn pack_unbound(&self) -> Option<Vec<SavedTick<T>>> {
         self.queue
             .is_empty()
@@ -351,5 +362,36 @@ mod tests {
                 .chunks_with_scheduled_ticks
                 .contains(&Vector2::new(0, 0))
         );
+    }
+
+    #[test]
+    fn retirement_pack_preserves_missing_key_after_polling_one_saved_duplicate() {
+        let scheduler: ChunkTickScheduler<_> = [
+            SavedTick {
+                position: BlockPos::new(1, 64, 0),
+                value: &Block::STONE,
+                delay: 0,
+                priority: TickPriority::Normal,
+            },
+            SavedTick {
+                position: BlockPos::new(1, 64, 0),
+                value: &Block::STONE,
+                delay: 10,
+                priority: TickPriority::Normal,
+            },
+        ]
+        .into_iter()
+        .collect();
+        {
+            let mut queue = scheduler.lock();
+            assert!(queue.unpack(100));
+            assert_eq!(queue.poll().unwrap().trigger_tick, 100);
+        }
+        assert!(!scheduler.is_scheduled(BlockPos::new(1, 64, 0), &Block::STONE));
+        assert_eq!(scheduler.get_all().len(), 1);
+        assert!(scheduler.lock().pack_for_retirement(105));
+        assert!(scheduler.get_all().is_empty());
+        assert!(!scheduler.is_scheduled(BlockPos::new(1, 64, 0), &Block::STONE));
+        assert_eq!(scheduler.pack_at(10_000)[0].delay, 5);
     }
 }

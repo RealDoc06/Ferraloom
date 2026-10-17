@@ -1333,6 +1333,13 @@ impl GenerationSchedule {
         if !unload.prepare_or_defer(pos, chunk) {
             return false;
         }
+        // Terminal prepared retirement, not initial ticket loss or downgrade.
+        // One clock sample fixes both saved lists before background encoding.
+        if chunk.pack_tick_delays_for_retirement().is_err() {
+            unload.mark_live(pos);
+            unload.prepare_or_defer(pos, chunk);
+            return false;
+        }
         entry.remove();
         self.chunk_activation_revision
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);

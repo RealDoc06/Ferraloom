@@ -1177,3 +1177,157 @@ async fn active_block_phase_defers_already_prepared_retirement_then_retries_with
     assert!(chunk.read_for_poi().is_capture_current(&before));
     assert!(schedule.chunk_map.is_empty());
 }
+
+async fn fresh_retired_tick_delays(level: &Level, pos: ChunkPos) -> (Vec<i32>, Vec<i32>) {
+    use crate::chunk::{
+        format::anvil::AnvilChunkFile,
+        io::{LoadedData, file_manager::ChunkFileManager},
+    };
+    use pumpkin_config::chunk::AnvilChunkConfig;
+    let reader = ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(AnvilChunkConfig::default());
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    reader.fetch_chunks(&level.level_folder, &[pos], send).await;
+    let Some(LoadedData::Loaded(saved)) = receive.recv().await else {
+        panic!("missing retired chunk")
+    };
+    (
+        saved
+            .block_ticks
+            .pack_at(0)
+            .iter()
+            .map(|tick| tick.delay)
+            .collect(),
+        saved
+            .fluid_ticks
+            .pack_at(0)
+            .iter()
+            .map(|tick| tick.delay)
+            .collect(),
+    )
+}
+
+fn schedule_retirement_ticks(level: &Level) {
+    use crate::tick::TickPriority;
+    use pumpkin_data::fluid::Fluid;
+    level.schedule_block_tick(
+        &Block::STONE,
+        BlockPos::new(1, 64, 1),
+        200,
+        TickPriority::High,
+    );
+    level.schedule_fluid_tick(
+        &Fluid::WATER,
+        BlockPos::new(2, 64, 1),
+        250,
+        TickPriority::Low,
+    );
+}
+
+#[tokio::test]
+async fn prepared_retirement_fixes_both_delay_lists_before_deferred_backend_write() {
+    let (_directory, level, mut schedule, mut workers) = fixture().await;
+    let pos = ChunkPos::new(0, 0);
+    let chunk = publish(&mut schedule, &level, pos);
+    level.set_tick_game_time(100);
+    schedule_retirement_ticks(&level);
+    schedule.unload_chunks.insert(pos);
+    level.set_tick_game_time(140);
+    schedule = unload(schedule, level.clone()).await;
+    // Requested/prepared work still has absolute queues. Initial ticket loss
+    // must not fix the delay before actual terminal retirement.
+    assert!(level.loaded_chunks.contains_key(&pos));
+    assert_eq!(chunk.block_ticks.get_all()[0].trigger_tick, 300);
+    assert_eq!(chunk.fluid_ticks.get_all()[0].trigger_tick, 350);
+    level.set_tick_game_time(150);
+    schedule = unload(schedule, level.clone()).await;
+    assert!(!level.loaded_chunks.contains_key(&pos));
+    assert!(chunk.block_ticks.get_all().is_empty());
+    assert!(chunk.fluid_ticks.get_all().is_empty());
+    assert!(
+        chunk
+            .block_ticks
+            .is_scheduled(BlockPos::new(1, 64, 1), &Block::STONE)
+    );
+    assert!(
+        chunk
+            .fluid_ticks
+            .is_scheduled(BlockPos::new(2, 64, 1), &pumpkin_data::fluid::Fluid::WATER)
+    );
+    let WriteRequest::Chunks(saved) = workers.write.try_recv().unwrap() else {
+        panic!("expected terrain save")
+    };
+    assert_eq!(saved.len(), 1);
+    let Chunk::Level(source) = &saved[0].1 else {
+        panic!("expected Full terrain")
+    };
+    assert!(Arc::ptr_eq(source, &chunk));
+    level.set_tick_game_time(1_000_150);
+    level
+        .chunk_saver
+        .save_chunks(&level.level_folder, vec![(pos, source.clone())])
+        .await
+        .unwrap();
+    level.chunk_saver.flush().await.unwrap();
+    assert_eq!(
+        fresh_retired_tick_delays(&level, pos).await,
+        (vec![150], vec![200])
+    );
+    assert!(schedule.chunk_map.is_empty());
+}
+
+#[tokio::test]
+async fn retirement_redirties_after_inflight_capture_for_retained_receipt_recapture() {
+    let (_directory, level, mut schedule, mut workers) = fixture().await;
+    let pos = ChunkPos::new(0, 0);
+    let chunk = publish(&mut schedule, &level, pos);
+    level.set_tick_game_time(100);
+    schedule_retirement_ticks(&level);
+    schedule.unload_chunks.insert(pos);
+    schedule = unload(schedule, level.clone()).await;
+    assert!(level.chunk_unload.access().requests().is_empty());
+    assert!(level.loaded_chunks.contains_key(&pos));
+    level
+        .chunk_saver
+        .watch_chunks(&level.level_folder, &[pos])
+        .await;
+    // Existing admission gate is after capture/compression and its dirty clear,
+    // with no lifecycle read guard left to exclude terminal retirement.
+    let (entered, resume) = level.poi_runtime.pause_capture_admission(&chunk);
+    let mut saving = Box::pin(
+        level
+            .chunk_saver
+            .save_chunks(&level.level_folder, vec![(pos, chunk.clone())]),
+    );
+    tokio::select! {
+        result = &mut saving => panic!("older capture bypassed admission gate: {result:?}"),
+        result = tokio::time::timeout(std::time::Duration::from_secs(5), entered) => result.unwrap().unwrap(),
+    }
+    assert!(!chunk.is_dirty());
+    level.set_tick_game_time(140);
+    schedule = unload(schedule, level.clone()).await;
+    assert!(!level.loaded_chunks.contains_key(&pos));
+    // Without the post-mutation dirty store this clean Prepared source has no
+    // queued retirement save and its older receipt cannot carry a recapture.
+    assert!(chunk.is_dirty());
+    let WriteRequest::Chunks(saved) = workers.write.try_recv().unwrap() else {
+        panic!("expected frozen terrain source")
+    };
+    let Chunk::Level(source) = &saved[0].1 else {
+        panic!("expected Full terrain")
+    };
+    assert!(Arc::ptr_eq(source, &chunk));
+    level.set_tick_game_time(1_000_140);
+    resume.send(()).unwrap();
+    saving.await.unwrap();
+    // No new submission: complete the older bytes, then use their retained
+    // dirty source for the existing next-flush recapture path.
+    level.chunk_saver.flush().await.unwrap();
+    assert!(chunk.is_dirty());
+    level.chunk_saver.flush().await.unwrap();
+    assert!(!chunk.is_dirty());
+    assert_eq!(
+        fresh_retired_tick_delays(&level, pos).await,
+        (vec![160], vec![210])
+    );
+    assert!(schedule.chunk_map.is_empty());
+}

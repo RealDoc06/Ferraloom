@@ -69,19 +69,19 @@ pub struct ScheduledTick<T> {
 
 impl<T> ScheduledTick<T> {
     #[must_use]
-    pub(crate) fn drain_key(&self) -> (i64, TickPriority, i64) {
+    pub(crate) const fn drain_key(&self) -> (i64, TickPriority, i64) {
         (self.trigger_tick, self.priority, self.sub_tick_order)
     }
 
     #[must_use]
-    pub(crate) fn intra_tick_key(&self) -> (TickPriority, i64) {
+    pub(crate) const fn intra_tick_key(&self) -> (TickPriority, i64) {
         (self.priority, self.sub_tick_order)
     }
 }
 
 impl<T: Copy> ScheduledTick<T> {
     #[must_use]
-    pub fn to_saved_tick(&self, now: i64) -> SavedTick<T> {
+    pub const fn to_saved_tick(&self, now: i64) -> SavedTick<T> {
         SavedTick {
             position: self.position,
             value: self.value,
