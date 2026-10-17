@@ -10,6 +10,7 @@ struct SpeleothemBlocks {
     base: Block,
     pointed: Block,
     replaceable: Vec<Block>,
+    water: Vec<fluid::Id>,
 }
 impl SpeleothemBlocks {
     fn decode(v: &Value, l: &FeatureLoader<'_>) -> Result<Self, Error> {
@@ -17,6 +18,7 @@ impl SpeleothemBlocks {
             base: decode_block_state(field(v, "base_block")?)?.block(),
             pointed: decode_block_state(field(v, "pointed_block")?)?.block(),
             replaceable: l.data.blocks(field(v, "replaceable_blocks")?)?,
+            water: l.data.fluids(&Value::String("#minecraft:water".into()))?,
         })
     }
     fn is_base(&self, state: BlockState) -> bool {
@@ -71,8 +73,7 @@ impl SpeleothemBlocks {
             state = state
                 .with(
                     properties::WATERLOGGED,
-                    fluid.fluid_type == fluid::Id::WATER
-                        || fluid.fluid_type == fluid::Id::FLOWING_WATER,
+                    self.water.contains(&fluid.fluid_type),
                 )
                 .ok_or_else(|| Error("pointed block lacks waterlogged".into()))?;
             ctx.region.set_block(p, state, 2)?;
@@ -256,10 +257,7 @@ impl SpeleothemClusterFeature {
         if [Block::WATER, self.blocks.base, self.blocks.pointed].contains(&state.block()) {
             return Ok(false);
         }
-        let water = |s: BlockState| {
-            s.data().fluid.fluid_type == fluid::Id::WATER
-                || s.data().fluid.fluid_type == fluid::Id::FLOWING_WATER
-        };
+        let water = |s: BlockState| self.blocks.water.contains(&s.data().fluid.fluid_type);
         if water(ctx.region.block(move_direction(p, Direction::Up))?) {
             return Ok(false);
         }

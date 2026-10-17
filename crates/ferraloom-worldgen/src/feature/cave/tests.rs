@@ -46,6 +46,7 @@ fn initial(terrain: &str, origin: [i32; 3], p: [i32; 3]) -> BlockState {
         };
     }
     let block = match terrain {
+        "air" => Block::AIR,
         "nether" => Block::NETHERRACK,
         "deepslate" => Block::DEEPSLATE,
         "surface" => {
@@ -154,9 +155,7 @@ fn pending(case: &Value) -> Option<&'static str> {
         "minecraft:multiface_growth" if case["result"] == true => {
             Some("MultifaceSpreadeableBlock placement and MultifaceSpreader")
         }
-        "minecraft:sculk_patch" if case["result"] == true => {
-            Some("SculkBehaviour collision check and SculkSpreader")
-        }
+        "minecraft:sculk_patch" if case["result"] == true => Some("SculkSpreader#updateCursors"),
         "minecraft:monster_room" if case["result"] == true => {
             Some("RandomizableContainer loot table and SpawnerBlockEntity initialization")
         }
@@ -311,8 +310,8 @@ fn run(select: impl Fn(&Value) -> bool) {
     let mut features = BTreeMap::new();
     for case in &selected {
         let name = case["feature"].as_str().unwrap();
-        if !features.contains_key(name) {
-            features.insert(name.to_owned(), loader.feature(&case["config"]).unwrap());
+        if let std::collections::btree_map::Entry::Vacant(entry) = features.entry(name.to_owned()) {
+            entry.insert(loader.feature(&case["config"]).unwrap());
         }
     }
     let registry = loader.finish();
@@ -337,7 +336,7 @@ fn pending_multiface_behavior() {
     run(|case| case["config"]["type"] == "minecraft:multiface_growth");
 }
 #[test]
-#[ignore = "needs shared SculkBehaviour and SculkSpreader"]
+#[ignore = "needs shared SculkSpreader#updateCursors"]
 fn pending_sculk_behavior() {
     run(|case| case["config"]["type"] == "minecraft:sculk_patch");
 }

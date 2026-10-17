@@ -229,9 +229,7 @@ impl Feature for GeodeFeature {
                     .with(properties::WATERLOGGED, old.data().fluid.source)
                     .unwrap_or(state);
                 // BuddingAmethystBlock#canClusterGrowAtState is state-only.
-                if is_air(old)
-                    || old.block() == Block::WATER && old.get(properties::LEVEL) == Some(0)
-                {
+                if is_air(old) || old.block() == Block::WATER && old.data().fluid.amount == 8 {
                     self.safe_set(ctx, q, state)?;
                     break;
                 }

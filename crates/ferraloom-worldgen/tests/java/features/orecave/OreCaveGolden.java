@@ -47,6 +47,7 @@ public final class OreCaveGolden {
             int y=p.getY()-origin.getY(),x=p.getX()-origin.getX(),z=p.getZ()-origin.getZ();
             if(terrain.startsWith("spring:"))return y==0&&z==0&&x>=0&&x<=3?Blocks.AIR.defaultBlockState():BuiltInRegistries.BLOCK.getValue(Identifier.parse(terrain.substring(7))).defaultBlockState();
             Block block=switch(terrain) {
+                case "air" -> Blocks.AIR;
                 case "nether" -> Blocks.NETHERRACK;
                 case "deepslate" -> Blocks.DEEPSLATE;
                 case "surface" -> y>0?Blocks.AIR:y>=-3?Blocks.DIRT:Blocks.STONE;
@@ -152,6 +153,10 @@ public final class OreCaveGolden {
             }
         }
         features.put("fixture/replace_single_block",JsonParser.parseString("{type:'minecraft:replace_single_block',targets:[{target:{predicate_type:'minecraft:random_block_match',block:'minecraft:stone',probability:0.5},state:'minecraft:diamond_ore'}]}").getAsJsonObject());
+        var fullFlowGeode=features.get("amethyst_geode").deepCopy();
+        fullFlowGeode.getAsJsonObject("blocks").add("filling_provider",JsonParser.parseString("{id:'minecraft:water',properties:{level:'8'}}"));
+        features.put("fixture/geode_full_flow",fullFlowGeode);
+        for(String type:List.of("ore","scattered_ore"))features.put("fixture/"+type+"_zero",JsonParser.parseString("{type:'minecraft:"+type+"',size:0,discard_chance_on_air_exposure:0.5,targets:[{target:{predicate_type:'minecraft:block_match',block:'minecraft:stone'},state:'minecraft:iron_ore'}]}").getAsJsonObject());
         var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace("overworld"));
         var generator=new NoiseBasedChunkGenerator(WorldgenGolden.source(registries,"overworld"),Holder.direct(settings));
         var out=new JsonArray();int count=0;
@@ -159,6 +164,7 @@ public final class OreCaveGolden {
         for(var entry:features.entrySet()) {
             var feature=Feature.DIRECT_CODEC.parse(ops,entry.getValue()).getOrThrow();
             var scenarios=new ArrayList<String>(List.of(terrains));
+            if(Set.of("minecraft:ore","minecraft:scattered_ore").contains(entry.getValue().get("type").getAsString()))scenarios.add("air");
             if(entry.getValue().get("type").getAsString().equals("minecraft:spring_feature")) {
                 var valid=entry.getValue().get("valid_blocks");scenarios.add("spring:"+(valid.isJsonArray()?valid.getAsJsonArray().get(0):valid).getAsString());
             }

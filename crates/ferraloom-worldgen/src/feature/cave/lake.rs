@@ -8,11 +8,13 @@ struct LakeFeature {
     can_place: BlockPredicate,
     replace_fluid: BlockPredicate,
     replace_barrier: BlockPredicate,
+    water: Vec<fluid::Id>,
 }
 pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     loader.register("lake".parse()?, |v, l| {
         Ok(Arc::new(LakeFeature {
             fluid: l.state_provider(field(v, "fluid")?)?,
+            water: l.data.fluids(&Value::String("#minecraft:water".into()))?,
             barrier: l.state_provider(field(v, "barrier")?)?,
             can_place: BlockPredicate::decode(field(v, "can_place_feature")?, &l.data)?,
             replace_fluid: BlockPredicate::decode(
@@ -135,9 +137,7 @@ impl Feature for LakeFeature {
                 }
             }
         }
-        if fluid.data().fluid.fluid_type == fluid::Id::WATER
-            || fluid.data().fluid.fluid_type == fluid::Id::FLOWING_WATER
-        {
+        if self.water.contains(&fluid.data().fluid.fluid_type) {
             for x in 0..16 {
                 for z in 0..16 {
                     let p = offset(origin, [x, 4, z]);

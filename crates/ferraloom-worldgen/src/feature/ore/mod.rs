@@ -104,7 +104,7 @@ impl OreFeature {
     fn vein(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let dir = ctx.random.next_float() * std::f32::consts::PI;
         let spread = self.size as f32 / 8.0;
-        let max_radius = (((self.size as f32 / 16.0 * 2.0 + 1.0) / 2.0).ceil()) as i32;
+        let max_radius = ((self.size as f32 / 16.0 * 2.0 + 1.0) / 2.0).ceil() as i32;
         let x = [
             ctx.origin[0] as f64 + (dir as f64).sin() * spread as f64,
             ctx.origin[0] as f64 - (dir as f64).sin() * spread as f64,
