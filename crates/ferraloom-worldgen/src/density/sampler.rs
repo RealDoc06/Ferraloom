@@ -1155,15 +1155,27 @@ fn binary(kind: Binary, a: f32, b: f32, ca: Option<f32>, cb: Option<f32>, volume
             }
         }
         Binary::Min => {
-            if volume && ca.is_none() && cb.is_none() {
-                if b < a { b } else { a }
+            if volume {
+                if ca.is_some() {
+                    if a < b { a } else { b }
+                } else if b < a {
+                    b
+                } else {
+                    a
+                }
             } else {
                 java::min_f32(a, b)
             }
         }
         Binary::Max => {
-            if volume && ca.is_none() && cb.is_none() {
-                if b > a { b } else { a }
+            if volume {
+                if ca.is_some() {
+                    if a > b { a } else { b }
+                } else if b > a {
+                    b
+                } else {
+                    a
+                }
             } else {
                 java::max_f32(a, b)
             }

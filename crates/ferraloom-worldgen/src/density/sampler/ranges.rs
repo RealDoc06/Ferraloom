@@ -2,6 +2,7 @@
 use super::*;
 use ferraloom_util::java::{max_f32 as max, min_f32 as min};
 
+/// Port of Interval, including the bounds used for density compiler shortcuts.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Interval {
     pub min: f32,

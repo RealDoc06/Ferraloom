@@ -48,6 +48,17 @@ fn density_functions_and_router_volumes_match_vanilla_bits() {
             .unwrap();
         for (name, values) in case["functions"].as_object().unwrap() {
             let id = compiler.compile_reference(&name.parse().unwrap()).unwrap();
+            let range = compiler.range(id);
+            for (bound, expected) in [range.min, range.max]
+                .into_iter()
+                .zip(case["ranges"][name].as_array().unwrap())
+            {
+                assert_eq!(
+                    bound.to_bits(),
+                    expected.as_u64().unwrap() as u32,
+                    "range of {name}"
+                );
+            }
             let mut context = SamplerContext::uncached();
             for (point, expected) in points.into_iter().zip(values.as_array().unwrap()) {
                 let actual = compiler.sample_value(id, &mut context, point);

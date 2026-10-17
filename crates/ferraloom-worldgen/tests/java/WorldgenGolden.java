@@ -57,13 +57,14 @@ public final class WorldgenGolden {
             var settings=settingsRegistry.getValue(Identifier.withDefaultNamespace(dimension));
             var state=RandomState.create(noises,seed,settings);
             var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("dimension",dimension);
-            var functions=new JsonObject();
+            var functions=new JsonObject();var ranges=new JsonObject();
             for(var entry:definitions.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList()) {
                 var function=entry.value();var samples=new JsonArray();
                 for(int[] p:POINTS) samples.add(Integer.toUnsignedLong(Float.floatToRawIntBits(state.getSampler(function).sampleValue(SamplerContext.EMPTY_UNCACHED,p[0],p[1],p[2]))));
                 functions.add(entry.key().identifier().toString(),samples);
+                var range=function.range();ranges.add(entry.key().identifier().toString(),array(Integer.toUnsignedLong(Float.floatToIntBits(range.min())),Integer.toUnsignedLong(Float.floatToIntBits(range.max()))));
             }
-            item.add("functions",functions);
+            item.add("functions",functions);item.add("ranges",ranges);
             var router=settings.noiseRouter();var volumes=new JsonObject();
             var volume=new DensityVolume(3,5,2,-17,-63,31,4,3,7);
             var context=SamplerContext.builder().enableCaches().build();
@@ -385,6 +386,7 @@ public final class WorldgenGolden {
         extended.add(new String[]{"density","{\"type\":\"minecraft:min\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
         extended.add(new String[]{"density","{\"type\":\"minecraft:max\",\"left\":{\"type\":\"minecraft:gradient\",\"axis\":\"x\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25},\"right\":{\"type\":\"minecraft:log\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}"});
         extended.add(new String[]{"density","{\"type\":\"minecraft:noise\",\"noise\":\"minecraft:surface\",\"xz_scale\":0.25,\"y_scale\":0.5,\"shift_x\":{\"type\":\"minecraft:min\",\"left\":0,\"right\":{\"type\":\"minecraft:add\",\"left\":1,\"right\":{\"type\":\"minecraft:sqrt\",\"input\":{\"type\":\"minecraft:gradient\",\"axis\":\"y\",\"from_coordinate\":-32,\"to_coordinate\":32,\"from_value\":-3.875,\"to_value\":5.25}}}}}"});
+        for(String type:List.of("min","max")) for(String[] arguments:List.of(new String[]{"-0.0","0.0"},new String[]{"0.0","-0.0"})) extended.add(new String[]{"density","{\"type\":\"minecraft:"+type+"\",\"left\":"+arguments[0]+",\"right\":"+arguments[1]+"}"});
         for(var test:extended) {
             var definition=JsonParser.parseString(test[1]);
             com.mojang.serialization.Codec<?> codec=switch(test[0]) {
