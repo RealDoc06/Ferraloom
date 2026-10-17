@@ -909,12 +909,15 @@ mod tests {
 
     #[tokio::test]
     async fn dispatcher_clone_copies_full_tick_box_on_zero_selection_and_move_without_fluids() {
-        use crate::command::{CommandSource, node::dispatcher::CommandDispatcher};
-        use pumpkin_util::permission::PermissionRegistry;
+        use crate::command::{CommandSource, commands::default_dispatcher};
+        use pumpkin_data::BlockStateId;
+        use pumpkin_util::permission::PermissionManager;
         use pumpkin_world::tick::{ScheduledTick, TickPriority};
         let (_folder, world) = test_world().await;
-        let mut dispatcher = CommandDispatcher::new();
-        crate::command::commands::clone::register(&mut dispatcher, &PermissionRegistry::default());
+        let dispatcher = default_dispatcher(
+            &PermissionManager::new(),
+            &pumpkin_config::CommandsConfig::default(),
+        );
         let source = CommandSource::dummy().with_world(world.clone());
         world.level.set_tick_game_time(1_000);
         for (x, state) in [
@@ -1004,10 +1007,10 @@ mod tests {
     async fn actual_block_callbacks_copy_current_pending_and_queued_then_finish_before_fluid() {
         use crate::{
             block::{BlockBehaviour, BlockMetadata, FluidMetadata, fluid::FluidBehaviour},
-            command::{CommandSource, node::dispatcher::CommandDispatcher},
+            command::{CommandSource, commands::default_dispatcher},
         };
         use pumpkin_data::BlockId;
-        use pumpkin_util::permission::PermissionRegistry;
+        use pumpkin_util::permission::PermissionManager;
         use pumpkin_world::tick::{ScheduledTick, TickPriority};
         use std::sync::Mutex;
         struct ObservedStone(Arc<Mutex<Vec<i32>>>);
@@ -1044,10 +1047,9 @@ mod tests {
                         .collect::<Vec<_>>(),
                     vec![(-8, -10), (-7, 5), (-5, 8), (-6, 20), (-8, 100)]
                 );
-                let mut dispatcher = CommandDispatcher::new();
-                crate::command::commands::clone::register(
-                    &mut dispatcher,
-                    &PermissionRegistry::default(),
+                let dispatcher = default_dispatcher(
+                    &PermissionManager::new(),
+                    &pumpkin_config::CommandsConfig::default(),
                 );
                 let source = CommandSource::dummy().with_world(args.world.clone());
                 assert_eq!(
