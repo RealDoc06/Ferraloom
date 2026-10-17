@@ -151,10 +151,12 @@ fn pending(case: &Value) -> Option<&'static str> {
         "minecraft:vegetation_patch" | "minecraft:waterlogged_vegetation_patch" => {
             Some("nested vegetation_feature and block survival")
         }
-        "minecraft:multiface_growth" => {
+        "minecraft:multiface_growth" if case["result"] == true => {
             Some("MultifaceSpreadeableBlock placement and MultifaceSpreader")
         }
-        "minecraft:sculk_patch" => Some("SculkBehaviour collision check and SculkSpreader"),
+        "minecraft:sculk_patch" if case["result"] == true => {
+            Some("SculkBehaviour collision check and SculkSpreader")
+        }
         "minecraft:monster_room" if case["result"] == true => {
             Some("RandomizableContainer loot table and SpawnerBlockEntity initialization")
         }

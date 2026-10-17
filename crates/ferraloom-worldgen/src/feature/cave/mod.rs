@@ -17,6 +17,7 @@ use ferraloom_util::{Direction, random::RandomSource};
 use serde_json::Value;
 use std::sync::Arc;
 
+mod fossil;
 mod geode;
 mod lake;
 mod monster_room;
@@ -95,6 +96,7 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     })?;
     speleothem::register(loader)?;
     geode::register(loader)?;
+    fossil::register(loader)?;
     lake::register(loader)?;
     spreading::register(loader)?;
     vegetation::register(loader)?;

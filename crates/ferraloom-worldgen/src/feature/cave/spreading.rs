@@ -131,7 +131,25 @@ impl Feature for MultifaceGrowthFeature {
 }
 impl Feature for SculkPatchFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if !ctx.region.sculk_can_spread_from(ctx.origin)? {
+        let state = ctx.region.block(ctx.origin)?;
+        let mut can_spread = state
+            .block()
+            .is_instance_of(ferraloom_data::BlockClass::SculkBehaviour);
+        if !can_spread
+            && (state.is_air() || state.block() == Block::WATER && state.data().fluid.source)
+        {
+            for direction in Direction::VALUES {
+                let p = move_direction(ctx.origin, direction);
+                if ctx
+                    .region
+                    .is_collision_full_block(ctx.region.block(p)?, p)?
+                {
+                    can_spread = true;
+                    break;
+                }
+            }
+        }
+        if !can_spread {
             return Ok(false);
         }
         ctx.region.sculk_spread(
