@@ -152,9 +152,16 @@ impl NoiseBasedChunkGenerator {
         )
     }
     pub fn create_biomes(&self, chunk: &mut GeneratedChunk) {
+        self.create_biomes_with_blender(chunk, None);
+    }
+    pub fn create_biomes_with_blender(
+        &self,
+        chunk: &mut GeneratedChunk,
+        blender: Option<&crate::blending::Blender>,
+    ) {
         let mut samplers = SamplerContext::cached();
         let mut search = SearchContext::default();
-        let grid = self.source.sample_quart_grid(
+        let grid = self.source.sample_quart_grid_with_blender(
             &self.random.compiler,
             self.random.router,
             &mut samplers,
@@ -165,6 +172,7 @@ impl NoiseBasedChunkGenerator {
                 chunk.position[1] * 4,
             ],
             [4, chunk.height as usize / 4, 4],
+            blender,
         );
         let size_y = chunk.height as usize / 4;
         for (section_index, section) in chunk.sections.iter_mut().enumerate() {
@@ -184,12 +192,22 @@ impl NoiseBasedChunkGenerator {
         }
     }
     pub fn noise_chunk(&self, chunk: &GeneratedChunk) -> NoiseChunk {
+        self.noise_chunk_with_blender(chunk, None)
+    }
+    pub fn noise_chunk_with_blender(
+        &self,
+        chunk: &GeneratedChunk,
+        blender: Option<Arc<crate::blending::Blender>>,
+    ) -> NoiseChunk {
         let volume = DensityVolume {
             size: [16, chunk.height as usize, 16],
             min: [chunk.position[0] * 16, chunk.min_y, chunk.position[1] * 16],
             step: [1; 3],
         };
         let mut samplers = SamplerContext::cached();
+        if let Some(blender) = blender {
+            samplers.set_blender(blender, volume);
+        }
         let picker = FluidPicker {
             sea_level: self.settings.sea_level,
             default_fluid: self.settings.default_fluid,
@@ -242,7 +260,7 @@ impl NoiseBasedChunkGenerator {
         }
     }
     pub fn build_surface(&self, chunk: &mut GeneratedChunk, noise: &mut NoiseChunk) {
-        let mut lookup = BiomeLookup::new(self, chunk);
+        let mut lookup = BiomeLookup::new(self, chunk, noise.samplers.blender().cloned());
         self.random.surface.build(
             chunk,
             noise,
@@ -250,6 +268,18 @@ impl NoiseBasedChunkGenerator {
             &self.data.temperatures,
             &mut |p| lookup.at_block(self, p),
         );
+    }
+    pub fn generate_blended(
+        &self,
+        position: [i32; 2],
+        blender: Arc<crate::blending::Blender>,
+    ) -> GeneratedChunk {
+        let mut chunk = self.new_chunk(position);
+        self.create_biomes_with_blender(&mut chunk, Some(&blender));
+        let mut noise = self.noise_chunk_with_blender(&chunk, Some(blender));
+        self.fill_from_noise(&mut chunk, &mut noise);
+        self.build_surface(&mut chunk, &mut noise);
+        chunk
     }
     pub fn generate(&self, position: [i32; 2]) -> GeneratedChunk {
         let mut chunk = self.new_chunk(position);
@@ -376,6 +406,7 @@ pub(crate) fn is_air(state: BlockState) -> bool {
     )
 }
 struct BiomeLookup {
+    blender: Option<Arc<crate::blending::Blender>>,
     chunks: HashMap<[i32; 2], Vec<BiomeId>>,
     samplers: SamplerContext,
     search: SearchContext,
@@ -384,7 +415,11 @@ struct BiomeLookup {
     height: i32,
 }
 impl BiomeLookup {
-    fn new(generator: &NoiseBasedChunkGenerator, chunk: &GeneratedChunk) -> Self {
+    fn new(
+        generator: &NoiseBasedChunkGenerator,
+        chunk: &GeneratedChunk,
+        blender: Option<Arc<crate::blending::Blender>>,
+    ) -> Self {
         let mut chunks = HashMap::new();
         let size_y = chunk.height as usize / 4;
         let mut biomes = vec![BiomeId(0); 16 * size_y];
@@ -398,6 +433,7 @@ impl BiomeLookup {
         }
         chunks.insert(chunk.position, biomes);
         Self {
+            blender,
             chunks,
             samplers: SamplerContext::cached(),
             search: SearchContext::default(),
@@ -413,13 +449,14 @@ impl BiomeLookup {
         let biomes = self.chunks.entry(key).or_insert_with(|| {
             generator
                 .source
-                .sample_quart_grid(
+                .sample_quart_grid_with_blender(
                     &generator.random.compiler,
                     generator.random.router,
                     &mut self.samplers,
                     &mut self.search,
                     [key[0] * 4, self.min_y / 4, key[1] * 4],
                     [4, size_y, 4],
+                    self.blender.as_deref(),
                 )
                 .into_iter()
                 .map(|id| generator.data.biome_ids[&id])

@@ -15,6 +15,7 @@ pub struct NodeId(usize);
 pub struct SamplerContext {
     enabled: bool,
     cells: HashMap<NodeId, CacheCell>,
+    blending: Option<crate::blending::BlendingOutputBuffer>,
 }
 #[derive(Default, Debug)]
 struct CacheCell {
@@ -26,10 +27,17 @@ impl SamplerContext {
         Self {
             enabled: true,
             cells: HashMap::new(),
+            blending: None,
         }
     }
     pub fn uncached() -> Self {
         Self::default()
+    }
+    pub fn set_blender(&mut self, blender: Arc<crate::blending::Blender>, volume: DensityVolume) {
+        self.blending = Some(blender.output_buffer(volume));
+    }
+    pub fn blender(&self) -> Option<&Arc<crate::blending::Blender>> {
+        self.blending.as_ref().map(|b| &b.blender)
     }
     pub fn clear(&mut self) {
         self.cells.clear();
@@ -347,8 +355,15 @@ impl DensityFunctionCompiler {
         use DensityFunction as D;
         match node.definition.as_ref() {
             D::Constant(v) => *v,
-            D::Simple(Simple::BlendAlpha) => 1.0,
-            D::Simple(_) => 0.0,
+            D::Simple(Simple::BlendAlpha) => context
+                .blending
+                .as_ref()
+                .map_or(1.0, |b| b.get(p[0], p[2]).alpha),
+            D::Simple(Simple::BlendOffset) => context
+                .blending
+                .as_ref()
+                .map_or(0.0, |b| b.get(p[0], p[2]).offset),
+            D::Simple(Simple::Beardifier) => 0.0,
             D::Reference(_) => unreachable!("compiled references are inlined"),
             D::Noise {
                 xz_scale, y_scale, ..
@@ -409,7 +424,7 @@ impl DensityFunctionCompiler {
                 sample(c[1], context),
                 self.constant(c[0]).is_none() && self.constant(c[1]).is_some(),
             ),
-            D::Spline(_) => self.spline_value(node.spline.as_ref().unwrap(), &mut |coordinate| {
+            D::Spline(_) => Self::spline_value(node.spline.as_ref().unwrap(), &mut |coordinate| {
                 sample(coordinate, context)
             }),
             D::Lerp { .. } => {
@@ -437,22 +452,29 @@ impl DensityFunctionCompiler {
                 }
                 let key = BlockPos::new(p[0], p[1], p[2]).as_long();
                 if let Some(cell) = context.cells.get(&id) {
-                    if let Some((k, v)) = cell.scalar {
-                        if k == key && !v.is_nan() {
-                            return v;
-                        }
+                    if let Some((k, v)) = cell.scalar
+                        && k == key
+                        && !v.is_nan()
+                    {
+                        return v;
                     }
-                    if let Some((volume, buffer)) = &cell.volume {
-                        if let Some(index) = index_of(*volume, p) {
-                            return buffer[index];
-                        }
+                    if let Some((volume, buffer)) = &cell.volume
+                        && let Some(index) = index_of(*volume, p)
+                    {
+                        return buffer[index];
                     }
                 }
                 let v = sample(c[0], context);
                 context.cells.entry(id).or_default().scalar = Some((key, v));
                 v
             }
-            D::BlendDensity(_) => sample(c[0], context),
+            D::BlendDensity(_) => {
+                let input = sample(c[0], context);
+                context
+                    .blending
+                    .as_ref()
+                    .map_or(input, |b| b.blender.blend_density(p, input))
+            }
             D::Interpolated {
                 cell_xz, cell_y, ..
             } => {
@@ -481,7 +503,7 @@ impl DensityFunctionCompiler {
                 lower, cell_height, ..
             } => {
                 let upper = self.sample_value(c[1], context, [p[0], 0, p[2]]);
-                self.find_top(c[0], context, p[0], p[2], upper, *lower, *cell_height) as f32
+                self.find_top(c[0], context, [p[0], p[2]], upper, *lower, *cell_height) as f32
             }
             D::OldBlendedNoise {
                 xz_scale,
@@ -617,7 +639,7 @@ impl DensityFunctionCompiler {
                 let mut coordinates = HashMap::new();
                 (0..volume.len())
                     .map(|i| {
-                        self.spline_value(node.spline.as_ref().unwrap(), &mut |coordinate| {
+                        Self::spline_value(node.spline.as_ref().unwrap(), &mut |coordinate| {
                             coordinates
                                 .entry(coordinate)
                                 .or_insert_with(|| sample(coordinate, context))[i]
@@ -681,16 +703,26 @@ impl DensityFunctionCompiler {
                     return sample(c[0], context);
                 }
                 if let Some((old, b)) = context.cells.get(&id).and_then(|cell| cell.volume.as_ref())
+                    && *old == volume
                 {
-                    if *old == volume {
-                        return b.clone();
-                    }
+                    return b.clone();
                 }
                 let result = sample(c[0], context);
                 context.cells.entry(id).or_default().volume = Some((volume, result.clone()));
                 result
             }
-            D::BlendDensity(_) => sample(c[0], context),
+            D::BlendDensity(_) => {
+                let input = sample(c[0], context);
+                if let Some(b) = &context.blending {
+                    input
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, v)| b.blender.blend_density(volume.position(i), v))
+                        .collect()
+                } else {
+                    input
+                }
+            }
             D::Slice {
                 axis, coordinate, ..
             } => {
@@ -725,7 +757,7 @@ impl DensityFunctionCompiler {
                     .enumerate()
                     .map(|(i, upper)| {
                         let [x, _, z] = flat.position(i);
-                        self.find_top(c[0], context, x, z, upper, *lower, *cell_height) as f32
+                        self.find_top(c[0], context, [x, z], upper, *lower, *cell_height) as f32
                     })
                     .collect::<Vec<_>>();
                 (0..volume.len())
@@ -863,8 +895,7 @@ impl DensityFunctionCompiler {
         &self,
         density: NodeId,
         context: &mut SamplerContext,
-        x: i32,
-        z: i32,
+        horizontal: [i32; 2],
         upper: f32,
         lower: i32,
         step: i32,
@@ -874,7 +905,7 @@ impl DensityFunctionCompiler {
             return lower;
         }
         while y >= lower {
-            if self.sample_value(density, context, [x, y, z]) > 0.0 {
+            if self.sample_value(density, context, [horizontal[0], y, horizontal[1]]) > 0.0 {
                 return y;
             }
             let next = y.wrapping_sub(step);
@@ -885,10 +916,7 @@ impl DensityFunctionCompiler {
         }
         lower
     }
-    fn spline_value(&self, spline: &CompiledSpline, sample: &mut impl FnMut(NodeId) -> f32) -> f32 {
-        // `self` is intentionally not involved: all nested coordinates come from
-        // the supplied scalar or lazily populated volume input.
-        let _ = self;
+    fn spline_value(spline: &CompiledSpline, sample: &mut impl FnMut(NodeId) -> f32) -> f32 {
         match spline {
             CompiledSpline::Constant(v) => *v,
             CompiledSpline::Multipoint { coordinate, points } => {
@@ -900,7 +928,7 @@ impl DensityFunctionCompiler {
                     } else {
                         points.last().unwrap()
                     };
-                    let value = self.spline_value(value, sample);
+                    let value = Self::spline_value(value, sample);
                     if *derivative == 0.0 {
                         value
                     } else {
@@ -910,8 +938,8 @@ impl DensityFunctionCompiler {
                     let (x1, v1, d1) = &points[upper - 1];
                     let (x2, v2, d2) = &points[upper];
                     let t = (x - x1) / (x2 - x1);
-                    let y1 = self.spline_value(v1, sample);
-                    let y2 = self.spline_value(v2, sample);
+                    let y1 = Self::spline_value(v1, sample);
+                    let y2 = Self::spline_value(v2, sample);
                     let a = d1 * (x2 - x1) - (y2 - y1);
                     let b = -d2 * (x2 - x1) + (y2 - y1);
                     mth::lerp_f32(t, y1, y2) + t * (1.0 - t) * mth::lerp_f32(t, a, b)
@@ -926,9 +954,7 @@ fn children(f: &DensityFunction) -> Vec<&Function> {
     match f {
         D::Noise { shift, .. } => shift.iter().collect(),
         D::Unary { input, .. }
-        | D::Round {
-            input, multiple: _, ..
-        }
+        | D::Round { input, .. }
         | D::Clamp { input, .. }
         | D::Slice { input, .. }
         | D::Interpolated { input, .. }
@@ -1035,6 +1061,8 @@ fn unary(kind: Unary, v: f32) -> f32 {
         }
     }
 }
+// Keep constant-sampler operand order, including any NaN payload propagation.
+#[allow(clippy::if_same_then_else)]
 fn binary(kind: Binary, a: f32, b: f32, ca: Option<f32>, cb: Option<f32>, volume: bool) -> f32 {
     match kind {
         Binary::Add => {
@@ -1045,9 +1073,7 @@ fn binary(kind: Binary, a: f32, b: f32, ca: Option<f32>, cb: Option<f32>, volume
             }
         }
         Binary::Sub => {
-            if cb.is_some() && ca.is_none() {
-                a + (-b)
-            } else if volume && ca.is_none() {
+            if (cb.is_some() || volume) && ca.is_none() {
                 a + (-b)
             } else {
                 a - b

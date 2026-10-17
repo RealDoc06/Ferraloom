@@ -119,6 +119,19 @@ impl BiomeSource {
         min: [i32; 3],
         size: [usize; 3],
     ) -> Vec<Identifier> {
+        self.sample_quart_grid_with_blender(compiler, router, samplers, search, min, size, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn sample_quart_grid_with_blender(
+        &self,
+        compiler: &DensityFunctionCompiler,
+        router: CompiledRouter,
+        samplers: &mut SamplerContext,
+        search: &mut SearchContext,
+        min: [i32; 3],
+        size: [usize; 3],
+        blender: Option<&crate::blending::Blender>,
+    ) -> Vec<Identifier> {
         let volume = DensityVolume {
             min: min.map(|n| n.wrapping_shl(2)),
             size,
@@ -132,7 +145,15 @@ impl BiomeSource {
                     for y in section_y..(section_y + 4).min(size[1]) {
                         for z in 0..size[2] {
                             let index = volume.index(x, y, z);
-                            result[index] = parameters.find(targets[index], search).clone();
+                            result[index] = blender
+                                .and_then(|b| {
+                                    b.blend_biome([
+                                        min[0] + x as i32,
+                                        min[1] + y as i32,
+                                        min[2] + z as i32,
+                                    ])
+                                })
+                                .unwrap_or_else(|| parameters.find(targets[index], search).clone());
                         }
                     }
                 }
@@ -141,13 +162,10 @@ impl BiomeSource {
         } else {
             (0..volume.len())
                 .map(|i| {
-                    self.sample(
-                        compiler,
-                        router,
-                        samplers,
-                        search,
-                        volume.position(i).map(|n| n >> 2),
-                    )
+                    let quart = volume.position(i).map(|n| n >> 2);
+                    blender
+                        .and_then(|b| b.blend_biome(quart))
+                        .unwrap_or_else(|| self.sample(compiler, router, samplers, search, quart))
                 })
                 .collect()
         }

@@ -27,10 +27,10 @@ impl VerticalAnchor {
         ];
         let mut decoded = Vec::new();
         for (name, ctor) in alternatives {
-            if let Some(value) = v.get(name) {
-                if let Ok(n) = int_range(value, -2032, 2031) {
-                    decoded.push(ctor(n));
-                }
+            if let Some(value) = v.get(name)
+                && let Ok(n) = int_range(value, -2032, 2031)
+            {
+                decoded.push(ctor(n));
             }
         }
         if decoded.len() != 1 {

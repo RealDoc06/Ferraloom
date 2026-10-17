@@ -177,9 +177,42 @@ public final class WorldgenGolden {
         }
         write(directory.resolve("chunks.json.gz"),out);
     }
+    static void blending(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var constructor=net.minecraft.world.level.levelgen.blending.BlendingData.class.getDeclaredConstructor(int.class,int.class,Optional.class);constructor.setAccessible(true);
+        var densities=net.minecraft.world.level.levelgen.blending.BlendingData.class.getDeclaredField("densities");densities.setAccessible(true);
+        var biomes=net.minecraft.world.level.levelgen.blending.BlendingData.class.getDeclaredField("biomes");biomes.setAccessible(true);
+        var heightsMap=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.world.level.levelgen.blending.BlendingData>();
+        var densityMap=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.world.level.levelgen.blending.BlendingData>();
+        var biomeRegistry=registries.lookupOrThrow(Registries.BIOME);
+        for(int[] p:new int[][]{{-1,-1},{-1,0},{0,-1},{0,0},{2,1}}) {
+            int cx=p[0],cz=p[1],min=cx<0?-4:0;float[] h=new float[16];
+            for(int i=0;i<16;i++)h[i]=((i+cx+cz)&3)==0?Float.MAX_VALUE:20+cx*9+cz*3+i*1.5f;
+            var data=constructor.newInstance(min,min+4,Optional.of(h));
+            float[][] ds=(float[][])densities.get(data);
+            @SuppressWarnings("unchecked") var bs=(List<List<Holder<Biome>>>)biomes.get(data);
+            for(int i=0;i<16;i++) {
+                if(i%3!=0) {ds[i]=new float[8];for(int y=0;y<8;y++)ds[i][y]=((i*17+y*5+cx-cz)%29-14)/4f;}
+                if(i%2==0) {var column=new ArrayList<Holder<Biome>>();for(int y=0;y<16;y++)column.add(biomeRegistry.getOrThrow(((i+y+cx)&1)==0?Biomes.PLAINS:Biomes.DESERT));bs.set(i,column);}
+            }
+            heightsMap.put(net.minecraft.world.level.ChunkPos.pack(cx,cz),data);if(Math.abs(cx)<=1&&Math.abs(cz)<=1)densityMap.put(net.minecraft.world.level.ChunkPos.pack(cx,cz),data);
+        }
+        var ctor=net.minecraft.world.level.levelgen.blending.Blender.class.getDeclaredConstructors()[0];ctor.setAccessible(true);
+        var blender=(net.minecraft.world.level.levelgen.blending.Blender)ctor.newInstance(heightsMap,densityMap,null);
+        var offset=net.minecraft.world.level.levelgen.blending.Blender.class.getDeclaredMethod("blendOffsetAndFactor",int.class,int.class);offset.setAccessible(true);
+        var biome=net.minecraft.world.level.levelgen.blending.Blender.class.getDeclaredMethod("blendBiome",int.class,int.class,int.class);biome.setAccessible(true);
+        var result=new JsonArray();
+        var cached=blender.blendOffsetAndFactor(new DensityVolume(16,64,16,-16,-64,-16));
+        for(int x:new int[]{-129,-33,-17,-16,-4,-1,0,1,4,15,16,17,63,129})for(int z:new int[]{-17,-4,0,4,17})for(int y:new int[]{-65,-32,-1,0,7,8,31,63,64}) {
+            var output=offset.invoke(blender,x,z);var alpha=output.getClass().getDeclaredMethod("alpha");alpha.setAccessible(true);var value=output.getClass().getDeclaredMethod("blendingOffset");value.setAccessible(true);
+            var row=new JsonArray();row.add(array(x,y,z));row.add(Integer.toUnsignedLong(Float.floatToRawIntBits((float)alpha.invoke(output))));row.add(Integer.toUnsignedLong(Float.floatToRawIntBits((float)value.invoke(output))));row.add(Integer.toUnsignedLong(Float.floatToRawIntBits(blender.blendDensity(x,y,z,0.12345f))));
+            var b=(Holder<?>)biome.invoke(blender,x>>2,y>>2,z>>2);row.add(b==null?JsonNull.INSTANCE:new JsonPrimitive(b.unwrapKey().orElseThrow().identifier().toString()));
+            row.add(Integer.toUnsignedLong(Float.floatToRawIntBits(cached.getAlpha(x,z))));row.add(Integer.toUnsignedLong(Float.floatToRawIntBits(cached.getOffset(x,z))));result.add(row);
+        }
+        write(directory.resolve("blending.json.gz"),result);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         var directory=Path.of(args[0]);Files.createDirectories(directory);
-        var registries=load();presets(directory);densities(registries,directory);biomes(registries,directory);chunks(registries,directory);
+        var registries=load();presets(directory);densities(registries,directory);biomes(registries,directory);chunks(registries,directory);blending(registries,directory);
     }
 }

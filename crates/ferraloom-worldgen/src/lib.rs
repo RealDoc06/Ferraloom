@@ -40,3 +40,5 @@ pub mod aquifer;
 pub mod biome_manager;
 pub mod generator;
 pub mod surface;
+
+pub mod blending;
