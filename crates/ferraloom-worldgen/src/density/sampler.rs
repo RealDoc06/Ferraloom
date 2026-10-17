@@ -491,7 +491,7 @@ impl DensityFunctionCompiler {
                 }
                 let volume = DensityVolume {
                     size: [2; 3],
-                    min: std::array::from_fn(|i| p[i] - local[i]),
+                    min: std::array::from_fn(|i| p[i].wrapping_sub(local[i])),
                     step: cell,
                 };
                 let b = self.sample_volume(c[0], context, volume);

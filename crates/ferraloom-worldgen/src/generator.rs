@@ -151,6 +151,28 @@ impl NoiseBasedChunkGenerator {
             self.data.motion_blocking.clone(),
         )
     }
+    pub fn new_chunk_in_dimension(
+        &self,
+        position: [i32; 2],
+        dimension: DimensionType,
+    ) -> GeneratedChunk {
+        let default = self
+            .data
+            .biome_ids
+            .get(&"plains".parse().unwrap())
+            .copied()
+            .unwrap_or(BiomeId(0));
+        GeneratedChunk::new(
+            position,
+            NoiseSettings {
+                min_y: dimension.min_y,
+                height: dimension.height,
+            },
+            default,
+            self.data.biome_strategy.clone(),
+            self.data.motion_blocking.clone(),
+        )
+    }
     pub fn create_biomes(&self, chunk: &mut GeneratedChunk) {
         self.create_biomes_with_blender(chunk, None);
     }
@@ -199,9 +221,12 @@ impl NoiseBasedChunkGenerator {
         chunk: &GeneratedChunk,
         blender: Option<Arc<crate::blending::Blender>>,
     ) -> NoiseChunk {
+        let min_y = chunk.min_y.max(self.settings.noise.min_y);
+        let max_y = (chunk.min_y + chunk.height)
+            .min(self.settings.noise.min_y + self.settings.noise.height);
         let volume = DensityVolume {
-            size: [16, chunk.height as usize, 16],
-            min: [chunk.position[0] * 16, chunk.min_y, chunk.position[1] * 16],
+            size: [16, (max_y - min_y).max(0) as usize, 16],
+            min: [chunk.position[0] * 16, min_y, chunk.position[1] * 16],
             step: [1; 3],
         };
         let mut samplers = SamplerContext::cached();
@@ -213,7 +238,11 @@ impl NoiseBasedChunkGenerator {
             default_fluid: self.settings.default_fluid,
         };
         let aquifer = Aquifer::new(
-            self.random.aquifer,
+            if volume.is_empty() {
+                None
+            } else {
+                self.random.aquifer
+            },
             picker,
             &self.random.compiler,
             &mut samplers,
@@ -226,6 +255,9 @@ impl NoiseBasedChunkGenerator {
         }
     }
     pub fn fill_from_noise(&self, chunk: &mut GeneratedChunk, noise: &mut NoiseChunk) {
+        if noise.volume.is_empty() {
+            return;
+        }
         let values = self.random.compiler.sample_volume(
             self.random.router.functions[7],
             &mut noise.samplers,
@@ -260,6 +292,9 @@ impl NoiseBasedChunkGenerator {
         }
     }
     pub fn build_surface(&self, chunk: &mut GeneratedChunk, noise: &mut NoiseChunk) {
+        if noise.volume.is_empty() {
+            return;
+        }
         let mut lookup = BiomeLookup::new(self, chunk, noise.samplers.blender().cloned());
         self.random.surface.build(
             chunk,
@@ -268,6 +303,18 @@ impl NoiseBasedChunkGenerator {
             &self.data.temperatures,
             &mut |p| lookup.at_block(self, p),
         );
+    }
+    pub fn generate_in_dimension(
+        &self,
+        position: [i32; 2],
+        dimension: DimensionType,
+    ) -> GeneratedChunk {
+        let mut chunk = self.new_chunk_in_dimension(position, dimension);
+        self.create_biomes(&mut chunk);
+        let mut noise = self.noise_chunk(&chunk);
+        self.fill_from_noise(&mut chunk, &mut noise);
+        self.build_surface(&mut chunk, &mut noise);
+        chunk
     }
     pub fn generate_blended(
         &self,

@@ -77,6 +77,7 @@ pub struct SurfaceSystem {
     default_block: BlockState,
     sea: i32,
     preliminary: NodeId,
+    generation: crate::settings::NoiseSettings,
     random: PositionalRandomFactory,
     bands: [BlockState; 192],
     clay_offset: NoiseStack,
@@ -109,6 +110,7 @@ impl SurfaceSystem {
             default_block: settings.default_block,
             sea: settings.sea_level,
             preliminary,
+            generation: settings.noise,
             random,
             bands: generate_bands(&mut random.from_hash_of("minecraft:clay_bands")),
             clay_offset: noise("clay_bands_offset")?,
@@ -159,8 +161,8 @@ impl SurfaceSystem {
             gradient: [0; 2],
             secondary: None,
             min_surface: None,
-            min_y: chunk.min_y,
-            height: chunk.height,
+            min_y: chunk.min_y.max(self.generation.min_y),
+            height: chunk.height.min(self.generation.height),
         };
         self.rule.prefill(&mut context);
         for x in 0..16u8 {

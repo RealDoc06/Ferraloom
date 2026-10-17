@@ -377,8 +377,21 @@ pub fn load_tags<T: Clone + Eq>(
             )
             .unwrap();
         for resource in manager.stack(&file) {
+            let json = match resource.json() {
+                Ok(json) => json,
+                Err(error) => {
+                    diagnostics.push(TagDiagnostic {
+                        tag: id.clone(),
+                        source: resource.source.into(),
+                        message: error.to_string(),
+                    });
+                    continue;
+                }
+            };
+            // TagLoader creates the builder after parsing JSON, before TagFile's
+            // codec runs. A malformed TagFile can therefore leave an empty tag.
+            builders.entry(id.clone()).or_default();
             let decode = || -> Result<(bool, Vec<TagEntry>), Error> {
-                let json = resource.json()?;
                 let replace = match json.get("replace") {
                     None => false,
                     Some(v) => v
