@@ -9,7 +9,9 @@ use crate::{
         BlockBehaviour, BlockMetadata, OnStateReplacedArgs, PlacedArgs,
         entities::{barrel::BarrelBlockEntity, chest::ChestBlockEntity},
     },
-    data::player_server::test::{PlayerFixture, close_fixture, player_fixture, stop_chunk_workers},
+    data::player_server::test::{
+        PlayerFixture, close_fixture as close_player_fixture, player_fixture, stop_chunk_workers,
+    },
 };
 use pumpkin_data::{BlockId, block_properties::BarrelLikeProperties, item::Item};
 use pumpkin_data::{
@@ -1253,4 +1255,13 @@ async fn ensure_pending_attachment_preserves_custom_data_and_guards_current_owne
     assert_guards_released(&world, &SOURCE);
     world.remove_block_entity(&SOURCE);
     close_fixture(&fixture).await;
+}
+
+/// Finish the retained session even when the instrumented World replaced its
+/// registration, then let shared cleanup close the client and stop the server.
+async fn close_fixture(fixture: &PlayerFixture) {
+    crate::finish_player_session(&fixture.server, &fixture.player)
+        .await
+        .unwrap();
+    close_player_fixture(fixture).await;
 }
