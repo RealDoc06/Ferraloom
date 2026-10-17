@@ -61,6 +61,7 @@ class Client:
         self.messages: queue.Queue[dict] = queue.Queue()
         self.pending: dict[int, dict] = {}
         self.events: list[dict] = []
+        self.dragon_wire_events = 0
         self.statistics_values: dict[tuple[int, int], dict | None] = {}
         self.failure: str | None = None
         self.stderr = (server.directory / f"{log_name}.stderr.log").open("w")
@@ -128,7 +129,11 @@ class Client:
             elif self.crafting:
                 protocol.require(len(self.events) <= 16384, "Crafting IPC evidence budget exceeded")
             elif self.dragon_parts:
-                protocol.require(len(self.events) <= 4096, "Dragon IPC evidence budget exceeded")
+                # Raw packets and decoded companions have disjoint budgets; retain both in order.
+                if event == "wire_packet":
+                    self.dragon_wire_events += 1
+                protocol.require(self.dragon_wire_events <= 4096, "Dragon wire IPC evidence budget exceeded")
+                protocol.require(len(self.events) - self.dragon_wire_events <= 4096, "Dragon IPC evidence budget exceeded")
             else:
                 self.events = self.events[-100:]
         return message

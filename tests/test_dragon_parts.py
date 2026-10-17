@@ -6,6 +6,7 @@ import base64
 from copy import deepcopy
 import hashlib
 from pathlib import Path
+import queue
 import struct
 import sys
 import unittest
@@ -681,6 +682,113 @@ class DragonValidatorTests(unittest.TestCase):
             self.assertEqual(failed['non_target_witnesses'][-1], witness)
             self.assertIn('Health changed', failed['error'])
             cleanup.assert_not_called()
+
+
+def queued_client(*, dragon_parts=True, jukeboxes=False, crafting=False) -> dragon.Client:
+    """Use the real receiver with an in-memory queue, without starting a client."""
+    observed = dragon.Client.__new__(dragon.Client)
+    observed.messages = queue.Queue()
+    observed.failure = None
+    observed.pending = {}
+    observed.events = []
+    observed.dragon_wire_events = 0
+    observed.statistics_values = {}
+    observed.dragon_parts = dragon_parts
+    observed.jukeboxes = jukeboxes
+    observed.crafting = crafting
+    return observed
+
+
+class DragonReceiveTests(unittest.TestCase):
+    def receive_all(self, observed, messages):
+        for message in messages:
+            observed.messages.put(message)
+            self.assertIs(observed.receive(1), message)
+
+    def test_mixed_exact_boundaries_preserve_all_records_in_order(self):
+        observed = queued_client()
+        wire = envelope(b'\x21\x00', event='wire_packet', packet_id=33, direction='clientbound', pid=7)
+        messages = [message for sequence in range(4096) for message in (
+            {**wire, 'sequence': sequence, 'time': 'synthetic'},
+            {'event': 'chat', 'sequence': sequence, 'text': f'synthetic-{sequence}'})]
+        expected = deepcopy(messages)
+        self.receive_all(observed, messages)
+        self.assertEqual(len(observed.events), 4096 + 4096)
+        self.assertEqual(observed.events, expected)
+
+    def test_wire_4097_fails_independently_and_preserves_offender(self):
+        observed = queued_client()
+        messages = [{'event': 'ready'}, *({'event': 'wire_packet', 'sequence': index} for index in range(4096))]
+        self.receive_all(observed, messages)
+        offender = envelope(b'\x21\x00', event='wire_packet', packet_id=33, sequence=4096)
+        observed.messages.put(offender)
+        with self.assertRaisesRegex(AssertionError, '^Dragon wire IPC evidence budget exceeded$'):
+            observed.receive(1)
+        self.assertEqual(observed.events, messages + [offender])
+        self.assertIs(observed.events[-1], offender)
+
+    def test_nonwire_4097_fails_independently_and_preserves_offender(self):
+        observed = queued_client()
+        kinds = ('chat', 'dragon_packet', 'statistics_packet', 'menu', 'position', 'command_tree', 'ready')
+        messages = [{'event': 'wire_packet'}, *({'event': kinds[index % len(kinds)], 'sequence': index, 'entries': []}
+                                              for index in range(4096))]
+        self.receive_all(observed, messages)
+        offender = {'event': 'chat', 'text': 'synthetic overflow'}
+        observed.messages.put(offender)
+        with self.assertRaisesRegex(AssertionError, '^Dragon IPC evidence budget exceeded$'):
+            observed.receive(1)
+        self.assertEqual(observed.events, messages + [offender])
+        self.assertIs(observed.events[-1], offender)
+
+    def test_replies_do_not_charge_unsolicited_categories(self):
+        observed = queued_client()
+        messages = [message for index in range(4096) for message in (
+            {'event': 'wire_packet', 'sequence': index}, {'event': 'chat', 'text': f'synthetic-{index}'})]
+        snapshot = {'packets': 4096, 'dragon_packets': [{'kind': 'spawn_header'}], 'chat_messages': messages[1::2]}
+        replies = [{'id': index, 'ok': True, 'result': deepcopy(snapshot)} for index in range(1, 4)]
+        replies += [{'id': 4, 'ok': True, 'result': {'written': True, 'entity_id': -2147483000}},
+                    {'id': 5, 'ok': True, 'result': {'written': True, 'after_sequence': 4096}}]
+        self.receive_all(observed, replies)
+        self.receive_all(observed, messages)
+        self.receive_all(observed, replies)
+        self.assertEqual(observed.pending, {reply['id']: reply for reply in replies})
+        self.assertEqual(observed.events, messages)
+
+    def test_non_dragon_modes_and_fatal_events_keep_existing_contracts(self):
+        for mode, label in (('jukeboxes', 'Jukebox'), ('crafting', 'Crafting'), (None, '')):
+            for dragon_parts in ((False, True) if mode else (False,)):
+                with self.subTest(mode=mode, dragon_parts=dragon_parts):
+                    observed = queued_client(dragon_parts=dragon_parts, **({mode: True} if mode else {}))
+                    messages = [{'event': 'wire_packet' if index % 2 else 'chat', 'sequence': index}
+                                for index in range(16384 if mode else 101)]
+                    self.receive_all(observed, messages)
+                    self.assertEqual(observed.events, messages if mode else messages[-100:])
+                    if mode:
+                        offender = {'event': 'chat', 'text': 'synthetic overflow'}
+                        observed.messages.put(offender)
+                        with self.assertRaisesRegex(AssertionError, f'^{label} IPC evidence budget exceeded$'):
+                            observed.receive(1)
+                        self.assertEqual(observed.events, messages + [offender])
+        for dragon_parts in (False, True):
+            for fatal in ({'event': 'error', 'message': 'synthetic error'}, {'event': 'eof'}, {'event': 'end'}):
+                with self.subTest(dragon_parts=dragon_parts, fatal=fatal):
+                    observed = queued_client(dragon_parts=dragon_parts)
+                    observed.messages.put(fatal)
+                    with self.assertRaises(RuntimeError) as failed:
+                        observed.receive(1)
+                    failure = fatal.get('message', f'Client ended: {fatal}')
+                    self.assertEqual(str(failed.exception), failure)
+                    self.assertEqual(observed.failure, failure)
+                    self.assertEqual(observed.events, [])
+                    observed.messages.put({'event': 'ready'})
+                    with self.assertRaises(RuntimeError) as repeated:
+                        observed.receive(1)
+                    self.assertEqual(str(repeated.exception), failure)
+                    self.assertEqual(observed.messages.qsize(), 1)
+            observed = queued_client(dragon_parts=dragon_parts)
+            expected_end = {'event': 'end', 'expected': True}
+            self.receive_all(observed, [expected_end])
+            self.assertEqual(observed.events, [expected_end])
 
 
 if __name__ == '__main__':
