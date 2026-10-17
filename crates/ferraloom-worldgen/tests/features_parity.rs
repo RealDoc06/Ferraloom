@@ -672,6 +672,55 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .0
             .starts_with("Unsupported")
     );
+    // These state-only answers work even when the game behavior bridge cannot
+    // answer shape queries or claims there are no block entities.
+    assert!(region.is_solid([0, 0, 0]).unwrap());
+    assert!(
+        region
+            .has_sturdy_face([0, 0, 0], ferraloom_util::Direction::Up)
+            .unwrap()
+    );
+    assert!(
+        region
+            .is_collision_full_block(Block::STONE.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    assert!(
+        !region
+            .is_collision_full_block(Block::AIR.default_state(), [0, 0, 0])
+            .unwrap()
+    );
+    region
+        .set_block([1, 0, 0], Block::CHEST.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .contains_key(&[1, 0, 0])
+    );
+    region
+        .set_block([1, 0, 0], Block::AIR.default_state(), 2)
+        .unwrap();
+    assert!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .block_entities
+            .is_empty()
+    );
+    region
+        .set_block([2, 0, 0], Block::BROWN_MUSHROOM.default_state(), 2)
+        .unwrap();
+    assert_eq!(
+        region
+            .chunk([0, 0], ChunkStatus::Empty)
+            .unwrap()
+            .chunk
+            .post_processing,
+        [[2, 0, 0]]
+    );
 }
 
 #[test]
