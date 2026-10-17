@@ -15,7 +15,10 @@ async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
     assert!(outcome.chunks >= 9);
     assert!(outcome.unloaded > 0);
     support::verify_save(root.path(), outcome.position)?;
-    eprintln!("Ferraloom packet sequence: {:?}", outcome.sequence);
+    eprintln!(
+        "Ferraloom login: {:?}; configuration: {:?}; join: {:?}",
+        outcome.sequence.login, outcome.sequence.configuration, outcome.sequence.join
+    );
     Ok(())
 }
 
@@ -93,10 +96,15 @@ async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     let outcome = support::scenario(server.address).await?;
     server.wait().await?;
     support::verify_save(root.path(), outcome.position)?;
-    eprintln!(
-        "Vanilla packet sequence: {:?}\nFerraloom packet sequence: {:?}",
-        vanilla_outcome.sequence, outcome.sequence
-    );
+    for (name, sequence) in [
+        ("Vanilla", &vanilla_outcome.sequence),
+        ("Ferraloom", &outcome.sequence),
+    ] {
+        eprintln!(
+            "{name} login: {:?}; configuration: {:?}; join: {:?}",
+            sequence.login, sequence.configuration, sequence.join
+        );
+    }
     assert_eq!(outcome.sequence, vanilla_outcome.sequence);
     struct VanillaGuard(std::process::Child);
     impl Drop for VanillaGuard {

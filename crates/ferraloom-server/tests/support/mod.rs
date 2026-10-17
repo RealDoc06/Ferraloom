@@ -318,8 +318,9 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
         .until(|_, p| matches!(p,cb::Packet::GameEvent(p)if p.event==3 && p.param==3.))
         .await?;
     let start = client.position;
-    for step in 1..=20 {
-        let x = start[0] + f64::from(step) * 5.;
+    // Stay below ordinary flying speed while vanilla generates neighboring terrain.
+    for step in 1..=100 {
+        let x = start[0] + f64::from(step);
         client.position[0] = x;
         client
             .io
@@ -348,7 +349,7 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
         client
             .until(|_, p| matches!(p,cb::Packet::PongResponse(p) if p.time==i64::from(step)))
             .await?;
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
     let target = (
         (start[0] + 100.).floor() as i32 >> 4,
