@@ -7,10 +7,5 @@ use crate::level::{Level, LevelError};
 ///
 /// One immutable object per vanilla block class; state is always registry data.
 pub trait BlockBehavior: Sync {
-    fn tick(
-        &self,
-        state: BlockState,
-        pos: BlockPos,
-        level: &mut dyn Level,
-    ) -> Result<(), LevelError>;
+    fn tick(&self, state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError>;
 }

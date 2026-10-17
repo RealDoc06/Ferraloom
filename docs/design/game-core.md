@@ -24,14 +24,15 @@ that file as implementations arrive. Do not create empty modules in advance.
 configuration; `game::entity::player` owns `ServerPlayer` gameplay. Commands and
 packet handlers call game code, never socket APIs.
 
-Propose one leaf crate, **`ferraloom-chunk`**, depending only on util/data: generic
+The leaf crate **`ferraloom-chunk`** depends only on util/data: generic
 `PalettedContainer<T>`, palette strategies, packed bit storage and
 `LevelChunkSection` (block/biome containers and derived counts). Game, worldgen,
 storage and protocol depend on it. NBT codecs belong in storage; wire codecs in
 protocol. `LevelChunk`, tickets, block entities and behavior stay in game.
-The foundation's `level::chunk::LevelChunkSection` uses private dense storage;
-move that type and replace its backing when the coordinator creates the leaf
-crate. Do not introduce a second public block-state representation. A storage
+The foundation reexports and uses that shared section type. Its palettes support
+single, linear, hash-map and global strategies, with separate disk packing and
+raw memory views. Dynamic biome IDs use the dimension's live registry, not a
+pinned built-in-only list. Do not introduce a second block-state representation. A storage
 dependency would invert the graph; protocol depending on game creates a cycle;
 putting simulation helpers into generated data mixes unrelated ownership.
 
@@ -74,7 +75,8 @@ under exclusive ownership, then resume with the actual chunk. Do not return an
 empty chunk, silently skip work, or delay a synchronous neighbor query.
 
 Merge before dispatch or in the exclusive lane, preserving original entity/tick
-ordinals, containers, pending events and random state. Split only at the end of
+ordinals, containers and pending events; fork random streams as specified below.
+Split only at the end of
 a complete tick, when the recomputed closure graph disconnects and no active
 stack, passenger tree, pending synchronous operation or job pins both sides.
 No inactivity timer is required for correctness; later hysteresis is a tuning
@@ -91,7 +93,7 @@ a time, lets its owner borrow all required returned regions, then resumes it.
 No worker advances to k+1 until every region finishes k. Requests have stable
 phase/region/operation ordinals; no arrival-time race chooses the winner.
 
-The server phase driver calls a `LiveLevel` adapter owning `Option<Region>`,
+The server phase driver calls a concrete `Level` adapter owning `Option<Region>`,
 not a method holding a borrow of the canonical region for the whole phase.
 World calls can take that owned region out of the adapter after state borrows
 end. Parked stacks retain handles/scalars and the adapter, not references into
@@ -121,7 +123,8 @@ Port these phases literally, including freeze/debug/empty-world gates:
    when running normally; game-time sync every 20 ticks; effective respawn data.
    These are serial server phases, retaining vanilla dimension order.
 4. For each dimension, `ServerLevel#tick` follows the phases below. Finish that
-   dimension before beginning the next, even with regions enabled.
+   dimension before beginning the next, even with regions enabled. Cross-dimension
+   parallelism is a phase-5 option, decided by measurement rather than assumed.
 5. After all levels: connections; `PlayerList#tick`; debug subscribers; GameTests
    when running normally; GUI/tickables; each player's chunk batch and resume
    flushing; activity monitor. `ServerGamePacketListenerImpl#tick` calls
@@ -155,8 +158,19 @@ The dimension sequence is:
    filters and shuffles spawning chunks; increments inhabited time, ticks thunder
    and natural spawning in that order; iterates block-ticking chunks for weather
    and random ticks; then custom spawners. Broadcast changed chunks follows.
-   Spawn accounting and shared RNG are serial resources; do not give each region
-   an independent mob cap. `ChunkMap#tick()` updates player chunk tracking, entity
+   In parallel mode build exact dimension-wide `SpawnState` counts at the
+   chunk-tick barrier while all regions are parked. Partition each category's
+   remaining global budget by each region's share of spawnable chunks: integer
+   quotas first, remaining units by largest fractional remainder, then region
+   ordinal. Regions use those quotas and their local per-player caps without a
+   shared counter during spawning. Players whose spawn neighborhoods overlap
+   have merged dependency closures. Local caps can further suppress a quota;
+   unused quota is not redistributed during this phase. This avoids overshooting
+   global caps, but can reduce spawns when another region could have used spare
+   quota. Do not assign each region a full vanilla global cap. Single-region
+   mode uses vanilla's unpartitioned `SpawnState`/category eligibility exactly.
+   Regional RNG streams handle shuffle/random ticking independently.
+   `ChunkMap#tick()` updates player chunk tracking, entity
    movement/tracker packets, then moved-player audiences. This precedes entities.
 5. Block events when running: insertion-ordered set, drain newly enqueued events
    in the same phase; retain events in non-ticking chunks for later. Clear
@@ -188,9 +202,9 @@ bag that admits impossible subclasses.
 
 One stateless `Entity` dispatcher per type implements virtual methods; static
 registry table indexes `EntityType`. Each method receives an `EntityRef` and
-`&mut dyn Level`. Calls use mutable **handles**, for example
+`&mut Level`, the concrete region-scoped access type. Calls use mutable **handles**, for example
 `target.hurt_server(level, source, damage)`. A handle never owns canonical data.
-`LevelExt` supplies `level.entity::<Cow>(id)` / `entity_mut::<Cow>(id)`;
+`Level` supplies `level.entity::<Cow>(id)` / `entity_mut::<Cow>(id)`;
 `Cow::as_living_mut()` and `EntityState::as_living_mut()` provide parent views.
 Methods copy scalars/handles, end the borrow, invoke world/virtual methods, then
 reborrow. Methods returning owned query result lists preserve vanilla's capture
@@ -236,8 +250,10 @@ no new Rust enum duplicating generated registry facts. Unsupported behaviors
 are errors until implemented, never silent base-block behavior.
 
 `Level` is the live access surface; layer read-only `BlockGetter`/`LevelReader`
-views when callers need them. Keep object-safe primitive methods plus typed
-extension methods. `Level#setBlock` ports flags, neighbor update order, block
+views when callers need them. Hot block/fluid reads and writes are concrete,
+inlinable methods, including typed entity access. Adapter differences live inside
+`Level`; only entity/block behavior tables use dynamic dispatch. Tests use the
+same concrete access type. `Level#setBlock` ports flags, neighbor update order, block
 entity replacement, heightmaps, lighting, POIs and tracking. The foundation
 explicitly exposes only **`set_block_state`**, the lower-level storage mutation;
 it is not a complete placement implementation. Return missing-ownership errors
@@ -271,7 +287,8 @@ and commands immediately. Never fan them out into next-tick regional messages.
 Messages are reserved for work that already has an asynchronous contract:
 completed jobs, network ingress and safely isolated ownership handoff. Envelopes
 carry tick/phase, origin sequence, handle and ownership epoch; route through the
-current directory, reject stale epochs, apply once at the receiving tick's start.
+current directory, reject stale epochs, deliver once at the receiving tick's
+start and integrate at the declared vanilla phase.
 Ordinary movement reaching a dependency edge merges synchronously; transfer
 between truly independent owners can use next-tick handoff only after the
 source's final eligible tick. A newly discovered synchronous dependency always
@@ -315,35 +332,51 @@ not justify a different return value or a tick-dependent timeout fallback.
 
 ## Randomness, identity and accepted differences
 
-There is no independently seeded per-region replacement for `Level#random`.
-Each region has a random-access facade, while vanilla's dimension RNG,
-`randValue` position LCG and sound seed source retain their original identities.
-Operations using these shared streams run in the dimension-exclusive lane;
-group whole spawn/shuffle or random-tick operations rather than individual draws.
-Per-entity RNG lives in canonical `EntityData` and moves with it. Worldgen retains
-its own seeded/positional streams. Preserve call count, algorithm and Java math.
-`--regions off` preserves original stream consumption order. Vanilla initializes
+In region mode each region owns deterministic forks of the dimension's
+`Level#random`, `randValue` position LCG and sound seed source. Use the same RNG
+algorithms and Java math. Creation/split consumes forks from the parent in stable
+region-ordinal order. At merge each old region forks once in ordinal order;
+the merged region takes the lowest-ordinal parent's fork and discards the others.
+Random/sound streams use their algorithm's `fork`; LCG children advance the
+parent's vanilla recurrence once and take that resulting signed word as their
+initial state. Fork events and source states are persisted in replay/checkpoint data;
+worker placement and job completion never choose a fork. No RNG operation takes
+the exclusive lane. Per-entity RNG lives in canonical `EntityData` and moves with
+it unchanged. Worldgen retains its own seeded/positional streams.
+`--regions off` leaves original streams and their consumption order untouched,
+without even a fork when the one reference region is created. Vanilla initializes
 some streams from nondeterministic seeds; exact seeded comparisons require the
 same controlled seed inputs in both harnesses, not merely the same world seed.
 
-The server allocates network entity IDs at the original creation step, through
-server-exclusive access; never reserve worker-sized ranges or let atomics race.
-UUID creation follows vanilla independently. Persist/transfer handles and IDs
-separately; merge/split never renumbers an existing entity.
+In region mode the server allocates network-ID blocks on demand at phase
+boundaries in region-ordinal order; each region allocates locally from its block
+and keeps unused IDs across phases. Exhaustion requests another deterministic block
+through the exclusive lane, never races an atomic counter. Single-region mode
+uses vanilla's original counter at the original allocation step, with no ranges.
+Clients treat IDs as opaque; the parity harness normalizes them. UUID creation
+follows vanilla independently. Persist/transfer handles and IDs separately;
+merge/split never renumbers an existing entity.
+`getId()` remains the network entity ID, including in `Mob#serverAiStep` cadence.
+There is no second scheduling identity. Deterministic ranges preserve the
+distribution of staggered AI work, but change which actor receives which cadence;
+that is an accepted region-mode difference. Packet-ID normalization alone does
+not erase it. Single-region IDs and AI cadence remain exactly vanilla's.
 
 The admitted parallel difference is **within-phase cross-region order**. Its
 observable consequences include multi-region selector/read results and packet
-interleaving, global spawn-cap winners, shared RNG draw assignment, and newly
-created ID assignment when independent regions create entities in a different
-order. These are consequences of that one ordering relaxation, not bit-exact
-parity claims. They are accepted only for independent regions under the
-coordinator's decision; connected contraptions must merge and keep their order.
+interleaving. The explicitly accepted parallel mechanisms also change RNG draw
+assignment through deterministic regional forks, which region gets the last
+near-cap spawns through quota partitioning (including quota underuse), and opaque
+network IDs and per-actor AI cadence through reserved ranges. These are deliberate compatibility
+relaxations approved by the coordinator, not bit-exact parity claims.
+Connected contraptions merge and keep vanilla local order, though region
+creation/merge/split can change the RNG stream they consume.
 Exact total server order requires `--regions off`. Worker count/completion order
 must not add additional nondeterminism for the same accepted input trace.
 
 Not acceptable: lost neighbors, stale actor snapshots, different math/RNG
-algorithms, duplicated/lost ticks or packets, per-region dimension tick budgets
-or spawn caps, changed portal return semantics, delayed synchronous commands,
+algorithms, duplicated/lost ticks or packets, multiplied dimension tick budgets
+or global spawn caps, changed portal return semantics, delayed synchronous commands,
 or off-tick results applied according to wall-clock races. Both modes run parity
 scenarios; ordering-sensitive cross-region scenarios record the known relaxation
 explicitly instead of weakening ordinary vanilla assertions.
@@ -352,7 +385,7 @@ explicitly instead of weakening ordinary vanilla assertions.
 
 1. Review this ownership/dispatch design and compile the foundation. No behavior
    inventory claims: the foundation is not a complete mob or block feature.
-2. Create shared chunk leaf; palettes/sections, chunk status/tickets, live Level
+2. Shared chunk leaf is implemented and real-jar-vector tested. Port chunk status/tickets, live Level
    mutation/neighbor order and serialization; wire single-region server phases.
 3. Player/connection split, ingress/egress, tracking/chunk sends, login and basic
    playable interactions. Bring up vanilla parity before adding broad gameplay.
