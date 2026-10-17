@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, BlockState, translation};
+use pumpkin_data::tag::{RegistryKey, get_latest_map, get_tag_ids};
+use pumpkin_data::{Block, BlockId, BlockState, translation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 
+use crate::argument_types::FromStringReader;
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::argument_types::block::{INVALID_BLOCK_ERROR_TYPE, UNSUPPORTED_BLOCK_NBT};
 use crate::argument_types::nbt::NbtCompoundArgumentType;
@@ -20,7 +22,7 @@ pub const ERROR_UNKNOWN_TAG: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENTS_BLOCK_TAG_UNKNOWN,
 );
 
-pub const ERROR_NO_VALUE: CommandErrorType<1> = CommandErrorType::new(
+pub const ERROR_NO_VALUE: CommandErrorType<2> = CommandErrorType::new(
     translation::java::ARGUMENT_BLOCK_PROPERTY_NOVALUE,
     translation::java::ARGUMENT_BLOCK_PROPERTY_NOVALUE,
 );
@@ -174,75 +176,311 @@ pub(crate) fn parse_properties(
     block: Option<&'static Block>,
     holder: &str,
 ) -> Result<HashMap<String, String>, CommandSyntaxError> {
-    let mut properties = HashMap::new();
-    if reader.peek() == Some('[') {
+    let mut parser = BlockPredicateParser {
+        block,
+        ..BlockPredicateParser::default()
+    };
+    parser.read_properties(reader, holder)?;
+    Ok(parser.properties)
+}
+
+#[derive(Default)]
+enum PredicateSuggestions {
+    #[default]
+    BlockIdOrTag,
+    Tag,
+    OpenPropertiesOrNbt,
+    OpenNbt,
+    PropertyName {
+        allow_end: bool,
+    },
+    Equals,
+    PropertyValue(String),
+    NextPropertyOrEnd,
+    Nothing,
+}
+
+/// The same parse supplies arguments and completions; only argument errors rewind entry.
+#[derive(Default)]
+struct BlockPredicateParser {
+    block: Option<&'static Block>,
+    tag_ids: Option<&'static [u16]>,
+    properties: HashMap<String, String>,
+    suggestions: PredicateSuggestions,
+}
+
+impl BlockPredicateParser {
+    fn parse(&mut self, reader: &mut StringReader) -> Result<BlockPredicate, CommandSyntaxError> {
+        let start = reader.cursor();
+        let (mut predicate, holder) = if reader.peek() == Some('#') {
+            reader.skip();
+            self.suggestions = PredicateSuggestions::Tag;
+            let normalized = Identifier::from_reader(reader)?.to_string();
+            let stripped = normalized.strip_prefix("minecraft:").unwrap_or(&normalized);
+            let Some(ids) = get_tag_ids(RegistryKey::Block, &normalized)
+                .or_else(|| get_tag_ids(RegistryKey::Block, stripped))
+            else {
+                reader.set_cursor(start);
+                return Err(ERROR_UNKNOWN_TAG.create(reader, TextComponent::text(normalized)));
+            };
+            self.tag_ids = Some(ids);
+            (
+                BlockPredicate::Tag {
+                    tag_name: normalized,
+                    block_ids: ids.to_vec(),
+                    properties: HashMap::new(),
+                    nbt: None,
+                },
+                // The retained readTag leaves the parser's diagnostic id at its default.
+                "minecraft:".to_string(),
+            )
+        } else {
+            let normalized = Identifier::from_reader(reader)?.to_string();
+            let Some(block) = Block::from_name(&normalized) else {
+                reader.set_cursor(start);
+                return Err(
+                    INVALID_BLOCK_ERROR_TYPE.create(reader, TextComponent::text(normalized))
+                );
+            };
+            self.block = Some(block);
+            (
+                BlockPredicate::Block {
+                    block,
+                    properties: HashMap::new(),
+                    nbt: None,
+                },
+                normalized,
+            )
+        };
+
+        self.suggestions = PredicateSuggestions::OpenPropertiesOrNbt;
+        if reader.peek() == Some('[') {
+            self.read_properties(reader, &holder)?;
+            self.suggestions = PredicateSuggestions::OpenNbt;
+        }
+        if reader.peek() == Some('{') {
+            self.suggestions = PredicateSuggestions::Nothing;
+        }
+        let nbt = parse_nbt(reader)?;
+        let (BlockPredicate::Block {
+            properties,
+            nbt: parsed_nbt,
+            ..
+        }
+        | BlockPredicate::Tag {
+            properties,
+            nbt: parsed_nbt,
+            ..
+        }) = &mut predicate;
+        *properties = std::mem::take(&mut self.properties);
+        *parsed_nbt = nbt;
+        Ok(predicate)
+    }
+
+    fn read_properties(
+        &mut self,
+        reader: &mut StringReader,
+        holder: &str,
+    ) -> Result<(), CommandSyntaxError> {
+        if reader.peek() != Some('[') {
+            return Ok(());
+        }
         reader.skip();
+        self.suggestions = PredicateSuggestions::PropertyName { allow_end: true };
+        let mut value_start = None;
         reader.skip_whitespace();
         while reader.can_read_char() && reader.peek() != Some(']') {
+            // Deliberately after the loop condition: ',]' closes, ', ]' reads another key.
+            reader.skip_whitespace();
+            let key_start = reader.cursor();
             let key = reader.read_string()?;
-            if properties.contains_key(&key) {
-                return Err(ERROR_DUPLICATE_PROPERTY.create(
-                    reader,
-                    TextComponent::text(holder.to_string()),
-                    TextComponent::text(key),
-                ));
-            }
-            if let Some(block) = block
-                && !block
-                    .properties(block.default_state.id)
-                    .is_some_and(|props| props.to_props().iter().any(|(name, _)| *name == key))
+            if let Some(block) = self.block
+                && !property_names(block).contains(&key.as_str())
             {
+                reader.set_cursor(key_start);
                 return Err(ERROR_UNKNOWN_PROPERTY.create(
                     reader,
                     TextComponent::text(holder.to_string()),
                     TextComponent::text(key),
                 ));
             }
+            if self.properties.contains_key(&key) {
+                reader.set_cursor(key_start);
+                return Err(ERROR_DUPLICATE_PROPERTY.create(
+                    reader,
+                    TextComponent::text(key),
+                    TextComponent::text(holder.to_string()),
+                ));
+            }
             reader.skip_whitespace();
+            if self.block.is_some() {
+                self.suggestions = PredicateSuggestions::Equals;
+            }
             if reader.peek() != Some('=') {
-                return Err(ERROR_NO_VALUE.create(reader, TextComponent::text(key)));
+                if self.block.is_none() {
+                    reader.set_cursor(key_start);
+                }
+                return Err(ERROR_NO_VALUE.create(
+                    reader,
+                    TextComponent::text(key),
+                    TextComponent::text(holder.to_string()),
+                ));
             }
             reader.skip();
             reader.skip_whitespace();
+            self.suggestions = PredicateSuggestions::PropertyValue(key.clone());
+            let start = reader.cursor();
+            value_start = Some(start);
             let val = reader.read_string()?;
-            if val.is_empty() {
-                return Err(ERROR_NO_VALUE.create(reader, TextComponent::text(key)));
-            }
-            if let Some(block) = block
-                && !block.states.iter().any(|state| {
-                    block.properties(state.id).is_some_and(|props| {
-                        props
-                            .to_props()
-                            .iter()
-                            .any(|(name, value)| *name == key && *value == val)
-                    })
-                })
+            if let Some(block) = self.block
+                && !property_values(block, &key).contains(val.as_str())
             {
+                reader.set_cursor(start);
                 return Err(ERROR_INVALID_PROPERTY.create(
                     reader,
                     TextComponent::text(holder.to_string()),
-                    TextComponent::text(key),
                     TextComponent::text(val),
+                    TextComponent::text(key),
                 ));
             }
-            properties.insert(key, val);
+            self.properties.insert(key, val);
+            if self.block.is_some() {
+                self.suggestions = PredicateSuggestions::NextPropertyOrEnd;
+            }
             reader.skip_whitespace();
-            if reader.peek() == Some(',') {
-                reader.skip();
-                reader.skip_whitespace();
-            } else if reader.peek() == Some(']') {
-                break;
-            } else {
-                return Err(ERROR_UNCLOSED_PROPERTIES.create_without_context());
+            if reader.can_read_char() {
+                value_start = None;
+                match reader.peek() {
+                    Some(',') => {
+                        reader.skip();
+                        self.suggestions = PredicateSuggestions::PropertyName { allow_end: false };
+                    }
+                    Some(']') => break,
+                    _ => return Err(ERROR_UNCLOSED_PROPERTIES.create(reader)),
+                }
             }
         }
-        if reader.peek() == Some(']') {
+        if reader.can_read_char() {
             reader.skip();
         } else {
-            return Err(ERROR_UNCLOSED_PROPERTIES.create_without_context());
+            // Vague values remain strings, and an unfinished final value is replaceable.
+            if self.block.is_none()
+                && let Some(start) = value_start
+            {
+                reader.set_cursor(start);
+            }
+            return Err(ERROR_UNCLOSED_PROPERTIES.create(reader));
         }
+        Ok(())
     }
-    Ok(properties)
+
+    fn blocks(&self) -> impl Iterator<Item = &'static Block> + '_ {
+        self.block.into_iter().chain(
+            self.tag_ids
+                .into_iter()
+                .flatten()
+                .filter_map(|id| BlockId::new(*id))
+                .map(Block::from_id),
+        )
+    }
+
+    fn suggest(&self, mut builder: SuggestionsBuilder) -> Suggestions {
+        match &self.suggestions {
+            PredicateSuggestions::BlockIdOrTag | PredicateSuggestions::Tag => {
+                let tags = get_latest_map(RegistryKey::Block)
+                    .keys()
+                    .map(|tag| format!("#{tag}"));
+                // Resource prefix filtering is project behavior; the Java helper is unclosed.
+                builder = builder.filter_and_suggest_iter(tags);
+                if matches!(self.suggestions, PredicateSuggestions::BlockIdOrTag) {
+                    let blocks = (0..BlockId::COUNT)
+                        .filter_map(BlockId::new)
+                        .map(Block::from_id)
+                        .map(|block| format!("minecraft:{}", block.name));
+                    builder = builder.filter_and_suggest_iter(blocks);
+                }
+            }
+            PredicateSuggestions::OpenPropertiesOrNbt | PredicateSuggestions::OpenNbt => {
+                if builder.remaining().is_empty() {
+                    if matches!(self.suggestions, PredicateSuggestions::OpenPropertiesOrNbt)
+                        && self.blocks().any(|block| !property_names(block).is_empty())
+                    {
+                        builder = builder.suggest("[");
+                    }
+                    if self
+                        .blocks()
+                        .any(|block| block.default_state.block_entity_type != u16::MAX)
+                    {
+                        builder = builder.suggest("{");
+                    }
+                }
+            }
+            PredicateSuggestions::PropertyName { allow_end } => {
+                if *allow_end && builder.remaining().is_empty() {
+                    builder = builder.suggest("]");
+                }
+                let prefix = builder.remaining().to_lowercase();
+                for name in self.blocks().flat_map(property_names) {
+                    if !self.properties.contains_key(name) && name.starts_with(&prefix) {
+                        builder = builder.suggest(format!("{name}="));
+                    }
+                }
+            }
+            PredicateSuggestions::Equals => {
+                if builder.remaining().is_empty() {
+                    builder = builder.suggest("=");
+                }
+            }
+            PredicateSuggestions::PropertyValue(key) => {
+                // addSuggestions supplies every possible value, without prefix filtering.
+                for value in self.blocks().flat_map(|block| property_values(block, key)) {
+                    builder = builder.suggest(value);
+                }
+                if self.block.is_none() {
+                    if self
+                        .blocks()
+                        .flat_map(property_names)
+                        .any(|name| !self.properties.contains_key(name))
+                    {
+                        builder = builder.suggest(",");
+                    }
+                    builder = builder.suggest("]");
+                }
+            }
+            PredicateSuggestions::NextPropertyOrEnd => {
+                if builder.remaining().is_empty() {
+                    builder = builder.suggest("]");
+                    if self
+                        .blocks()
+                        .flat_map(property_names)
+                        .any(|name| !self.properties.contains_key(name))
+                    {
+                        builder = builder.suggest(",");
+                    }
+                }
+            }
+            PredicateSuggestions::Nothing => {}
+        }
+        builder.build()
+    }
+}
+
+fn property_names(block: &Block) -> Vec<&'static str> {
+    block
+        .properties(block.default_state.id)
+        .map(|props| props.to_props().into_iter().map(|(name, _)| name).collect())
+        .unwrap_or_default()
+}
+
+/// Keeps the existing canonical registry-string admission; Property.getValue aliases are open.
+fn property_values(block: &Block, key: &str) -> BTreeSet<&'static str> {
+    block
+        .states
+        .iter()
+        .filter_map(|state| block.properties(state.id))
+        .flat_map(|props| props.to_props())
+        .filter_map(|(name, value)| (name == key).then_some(value))
+        .collect()
 }
 
 pub(crate) fn parse_nbt(
@@ -263,72 +501,12 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for BlockPredicateArgument
     type Item = BlockPredicate;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        if reader.peek() == Some('#') {
-            reader.skip();
-            let start = reader.cursor();
-            while let Some(c) = reader.peek() {
-                if c.is_alphanumeric() || c == '_' || c == ':' || c == '/' || c == '.' || c == '-' {
-                    reader.skip();
-                } else {
-                    break;
-                }
-            }
-            let tag_str = &reader.string()[start..reader.cursor()];
-            let normalized = if tag_str.contains(':') {
-                tag_str.to_string()
-            } else {
-                format!("minecraft:{tag_str}")
-            };
-            let stripped = normalized.strip_prefix("minecraft:").unwrap_or(&normalized);
-
-            let tag_ids = get_tag_ids(RegistryKey::Block, &normalized)
-                .or_else(|| get_tag_ids(RegistryKey::Block, stripped));
-
-            let block_ids = match tag_ids {
-                Some(ids) => ids.to_vec(),
-                None => {
-                    return Err(ERROR_UNKNOWN_TAG.create(reader, TextComponent::text(normalized)));
-                }
-            };
-
-            let properties = parse_properties(reader, None, &normalized)?;
-            let nbt = parse_nbt(reader)?;
-
-            Ok(BlockPredicate::Tag {
-                tag_name: normalized,
-                block_ids,
-                properties,
-                nbt,
-            })
-        } else {
-            let start = reader.cursor();
-            while let Some(c) = reader.peek() {
-                if c.is_alphanumeric() || c == '_' || c == ':' || c == '/' || c == '.' || c == '-' {
-                    reader.skip();
-                } else {
-                    break;
-                }
-            }
-            let block_str = &reader.string()[start..reader.cursor()];
-            let normalized = if block_str.contains(':') {
-                block_str.to_string()
-            } else {
-                format!("minecraft:{block_str}")
-            };
-
-            let block = Block::from_name(&normalized).ok_or_else(|| {
-                INVALID_BLOCK_ERROR_TYPE.create(reader, TextComponent::text(normalized.clone()))
-            })?;
-
-            let properties = parse_properties(reader, Some(block), &normalized)?;
-            let nbt = parse_nbt(reader)?;
-
-            Ok(BlockPredicate::Block {
-                block,
-                properties,
-                nbt,
-            })
+        let start = reader.cursor();
+        let result = BlockPredicateParser::default().parse(reader);
+        if result.is_err() {
+            reader.set_cursor(start);
         }
+        result
     }
 
     fn client_side_parser(&self) -> JavaClientArgumentType {
@@ -350,7 +528,11 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for BlockPredicateArgument
         _context: &CommandContext<S>,
         builder: SuggestionsBuilder,
     ) -> Suggestions {
-        builder.build()
+        let mut reader = StringReader::new(builder.input.as_str());
+        reader.set_cursor(builder.start);
+        let mut parser = BlockPredicateParser::default();
+        let _ = parser.parse(&mut reader);
+        parser.suggest(builder.create_offset(reader.cursor()))
     }
 }
 
