@@ -107,6 +107,8 @@ impl CompoundTag {
     pub fn get(&self, key:&str)->Option<&Tag> {self.values.get(&NbtString::from(key))}
     pub fn get_mut(&mut self, key:&str)->Option<&mut Tag> {self.values.get_mut(&NbtString::from(key))}
     pub fn get_key(&self, key:&NbtString)->Option<&Tag> {self.values.get(key)}
+    pub fn get_mut_key(&mut self,key:&NbtString)->Option<&mut Tag> {self.values.get_mut(key)}
+    pub fn remove_key(&mut self,key:&NbtString)->Option<Tag> {self.insertion.retain(|k|k!=key);self.values.remove(key)}
     pub fn insert(&mut self, key:impl Into<NbtString>, value:Tag)->Option<Tag> {
         let key=key.into(); if !self.values.contains_key(&key) {self.insertion.push(key.clone());} self.values.insert(key,value)
     }
