@@ -66,8 +66,8 @@ pub enum EntityDataValue {
     Long(VarLong),
     Float(f32),
     String(String),
-    Component(Component),
-    OptionalComponent(Option<Component>),
+    Component(Box<Component>),
+    OptionalComponent(Option<Box<Component>>),
     ItemStack(ItemStack),
     Boolean(bool),
     Rotations(Rotations),
@@ -164,9 +164,9 @@ impl EntityDataValue {
             2 => Self::Long(r.read()?),
             3 => Self::Float(r.read()?),
             4 => Self::String(r.read()?),
-            5 => Self::Component(Component::decode_trusted(r)?),
+            5 => Self::Component(Box::new(Component::decode_trusted(r)?)),
             6 => {
-                Self::OptionalComponent(r.optional_nbt(true)?.map(Component::from_nbt).transpose()?)
+                Self::OptionalComponent(r.optional(|r| Component::decode_trusted(r).map(Box::new))?)
             }
             7 => Self::ItemStack(r.read()?),
             8 => Self::Boolean(r.read()?),
@@ -224,9 +224,7 @@ impl EntityDataValue {
             Self::Float(v) => w.write(v),
             Self::String(v) => w.write(v),
             Self::Component(v) => w.write(v),
-            Self::OptionalComponent(v) => {
-                w.optional_nbt(v.as_ref().map(Component::to_nbt).transpose()?.as_ref())
-            }
+            Self::OptionalComponent(v) => w.optional(v, |w, v| w.write(v)),
             Self::ItemStack(v) => w.write(v),
             Self::Boolean(v) => w.write(v),
             Self::Rotations(v) => w.write(v),

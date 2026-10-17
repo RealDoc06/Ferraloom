@@ -3,6 +3,8 @@ mod map;
 mod patch;
 pub use map::*;
 mod persistent;
+mod predicate;
+pub use predicate::*;
 mod stack;
 mod values;
 pub use patch::*;

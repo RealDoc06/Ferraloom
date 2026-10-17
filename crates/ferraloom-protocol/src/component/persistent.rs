@@ -1,5 +1,6 @@
 //! Persistent component codecs and HashOps' typed CRC32C representation.
 use super::*;
+use crate::ops::{EncodeOps, HashOps, JsonOps, NbtOps, encode_nbt};
 use crate::{
     BlockPos, Error, Identifier, Result, Uuid,
     chat::Component,
@@ -12,6 +13,7 @@ use serde_json::{Map, Value as Json};
 #[derive(Clone, Debug, PartialEq)]
 pub enum PersistentValue {
     Nbt(Tag),
+    Component(Box<Component>),
     Boolean(bool),
     String(NbtString),
     Int(i32),
@@ -21,158 +23,71 @@ pub enum PersistentValue {
     Map(Vec<(String, PersistentValue)>),
 }
 impl PersistentValue {
-    pub fn to_json(&self) -> Json {
-        match self {
-            Self::Nbt(v) => tag_json(v),
-            Self::Boolean(v) => (*v).into(),
-            Self::String(v) => v.to_string_lossy().into(),
-            Self::Int(v) => (*v).into(),
-            Self::Float(v) => Json::from(*v),
-            Self::Double(v) => Json::from(*v),
-            Self::List(v) => Json::Array(v.iter().map(Self::to_json).collect()),
-            Self::Map(v) => Json::Object(v.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()),
-        }
-    }
-    pub fn to_nbt(&self) -> Tag {
-        match self {
-            Self::Nbt(v) => v.clone(),
-            Self::Boolean(v) => Tag::Byte(i8::from(*v)),
-            Self::String(v) => Tag::String(v.clone()),
-            Self::Int(v) => Tag::Int(*v),
-            Self::Float(v) => Tag::Float(*v),
-            Self::Double(v) => Tag::Double(*v),
-            Self::List(v) => Tag::List(ListTag(v.iter().map(Self::to_nbt).collect())),
-            Self::Map(v) => {
-                let mut map = CompoundTag::new();
-                for (k, v) in v {
-                    map.insert(k.as_str(), v.to_nbt());
-                }
-                Tag::Compound(map)
+    pub fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        Ok(match self {
+            Self::Nbt(v) => return encode_nbt(v, ops),
+            Self::Component(v) => return v.encode_ops(ops),
+            Self::Boolean(v) => ops.create_boolean(*v),
+            Self::String(v) => ops.create_string_utf16(v.as_utf16()),
+            Self::Int(v) => ops.create_int(*v),
+            Self::Float(v) => ops.create_float(*v),
+            Self::Double(v) => ops.create_double(*v),
+            Self::List(v) => {
+                ops.create_list(v.iter().map(|v| v.encode_ops(ops)).collect::<Result<_>>()?)
             }
-        }
-    }
-    /// Port of HashOps.CRC32C_INSTANCE; Guava primitive sinks use little-endian bytes.
-    pub fn hash(&self) -> i32 {
-        match self {
-            Self::Nbt(v) => hash_tag(v),
-            Self::Boolean(v) => crc32c(&[13, u8::from(*v)]),
-            Self::String(v) => hash_string(v),
-            Self::Int(v) => tagged(8, &v.to_le_bytes()),
-            Self::Float(v) => tagged(10, &v.to_le_bytes()),
-            Self::Double(v) => tagged(11, &v.to_le_bytes()),
-            Self::List(v) => hash_list(v.iter().map(Self::hash)),
-            Self::Map(v) => hash_map(
+            Self::Map(v) => ops.create_map(
                 v.iter()
-                    .map(|(k, v)| (hash_string(&k.as_str().into()), v.hash())),
-            ),
-        }
+                    .map(|(k, v)| Ok((ops.create_string(k), v.encode_ops(ops)?)))
+                    .collect::<Result<_>>()?,
+            )?,
+        })
+    }
+    pub fn to_json(&self) -> Result<Json> {
+        self.encode_ops(&JsonOps)
+    }
+    pub fn to_nbt(&self) -> Result<Tag> {
+        self.encode_ops(&NbtOps)
+    }
+    pub fn hash(&self) -> Result<i32> {
+        Ok(self.encode_ops(&HashOps)?.0)
     }
 }
 /// Port of a component's persistent Codec, shared by item defaults, storage and commands.
 pub trait Persistent: Sized {
     fn from_json(value: &Json) -> Result<Self>;
     fn to_persistent(&self) -> Result<PersistentValue>;
+    fn encode_ops<O: EncodeOps>(&self, ops: &O) -> Result<O::Value> {
+        self.to_persistent()?.encode_ops(ops)
+    }
     fn to_json(&self) -> Result<Json> {
-        Ok(self.to_persistent()?.to_json())
+        self.encode_ops(&JsonOps)
     }
     fn from_nbt(value: &Tag) -> Result<Self> {
         Self::from_json(&tag_json(value))
     }
     fn to_nbt(&self) -> Result<Tag> {
-        Ok(self.to_persistent()?.to_nbt())
+        self.encode_ops(&NbtOps)
     }
     fn hash(&self) -> Result<i32> {
-        Ok(self.to_persistent()?.hash())
+        Ok(self.encode_ops(&HashOps)?.0)
     }
 }
-fn crc32c(bytes: &[u8]) -> i32 {
-    let mut crc = !0u32;
-    for b in bytes {
-        crc ^= u32::from(*b);
-        for _ in 0..8 {
-            crc = (crc >> 1) ^ (0x82f63b78 & (0u32.wrapping_sub(crc & 1)));
-        }
-    }
-    !crc as i32
-}
-fn tagged(tag: u8, bytes: &[u8]) -> i32 {
-    let mut v = vec![tag];
-    v.extend(bytes);
-    crc32c(&v)
-}
-fn hash_string(value: &NbtString) -> i32 {
-    let mut v = vec![12];
-    v.extend((value.len() as i32).to_le_bytes());
-    for c in value.as_utf16() {
-        v.extend(c.to_le_bytes());
-    }
-    crc32c(&v)
-}
-fn hash_list(values: impl IntoIterator<Item = i32>) -> i32 {
-    let mut v = vec![4];
-    for hash in values {
-        v.extend(hash.to_le_bytes());
-    }
-    v.push(5);
-    crc32c(&v)
-}
-fn hash_map(values: impl IntoIterator<Item = (i32, i32)>) -> i32 {
-    let mut pairs: Vec<_> = values.into_iter().collect();
-    pairs.sort_by_key(|(k, v)| (*k as u32, *v as u32));
-    let mut v = vec![2];
-    for (key, value) in pairs {
-        v.extend(key.to_le_bytes());
-        v.extend(value.to_le_bytes());
-    }
-    v.push(3);
-    crc32c(&v)
-}
-fn hash_tag(tag: &Tag) -> i32 {
-    match tag {
-        Tag::End => crc32c(&[1]),
-        Tag::Byte(v) => tagged(6, &v.to_le_bytes()),
-        Tag::Short(v) => tagged(7, &v.to_le_bytes()),
-        Tag::Int(v) => tagged(8, &v.to_le_bytes()),
-        Tag::Long(v) => tagged(9, &v.to_le_bytes()),
-        Tag::Float(v) => tagged(10, &v.to_le_bytes()),
-        Tag::Double(v) => tagged(11, &v.to_le_bytes()),
-        Tag::String(v) => hash_string(v),
-        Tag::List(v) => hash_list(v.iter().map(hash_tag)),
-        Tag::Compound(v) => hash_map(v.iter().map(|(k, v)| (hash_string(k), hash_tag(v)))),
-        Tag::ByteArray(a) => {
-            let mut v = vec![14];
-            v.extend(a.iter().map(|b| *b as u8));
-            v.push(15);
-            crc32c(&v)
-        }
-        Tag::IntArray(a) => {
-            let mut v = vec![16];
-            for n in a {
-                v.extend(n.to_le_bytes());
-            }
-            v.push(17);
-            crc32c(&v)
-        }
-        Tag::LongArray(a) => {
-            let mut v = vec![18];
-            for n in a {
-                v.extend(n.to_le_bytes());
-            }
-            v.push(19);
-            crc32c(&v)
-        }
-    }
-}
-fn object(value: &Json) -> Result<&Map<String, Json>> {
+pub(super) fn object(value: &Json) -> Result<&Map<String, Json>> {
     value.as_object().ok_or_else(|| invalid("component object"))
 }
-fn field<T: Persistent>(value: &Json, name: &str, default: Option<T>) -> Result<T> {
+pub(super) fn field_nbt<T: Persistent>(value: &Tag, name: &str, default: Option<T>) -> Result<T> {
+    match value.as_compound().and_then(|v| v.get(name)) {
+        Some(v) => T::from_nbt(v),
+        None => default.ok_or_else(|| crate::Error::invalid("component field", name)),
+    }
+}
+pub(super) fn field<T: Persistent>(value: &Json, name: &str, default: Option<T>) -> Result<T> {
     match value.get(name) {
         Some(v) => T::from_json(v),
         None => default.ok_or_else(|| Error::invalid("component field", name)),
     }
 }
-fn entry<T: Persistent + PartialEq>(
+pub(super) fn entry<T: Persistent + PartialEq>(
     entries: &mut Vec<(String, PersistentValue)>,
     name: &str,
     value: &T,
@@ -187,6 +102,7 @@ macro_rules! persistent_record {
     ($ty:ident { $($field:ident => $name:literal [$default:expr]),* $(,)? }) => {
         impl Persistent for $ty {
             fn from_json(value:&Json)->Result<Self> { object(value)?; Ok(Self { $($field:field(value,$name,$default)?),* }) }
+            fn from_nbt(value:&Tag)->Result<Self>{if value.as_compound().is_none(){return Err(invalid("component object"));}Ok(Self{$($field:field_nbt(value,$name,$default)?),*})}
             fn to_persistent(&self)->Result<PersistentValue> {
                 let mut entries=Vec::new(); $(entry(&mut entries,$name,&self.$field,$default)?;)* Ok(PersistentValue::Map(entries))
             }
@@ -272,6 +188,12 @@ impl<T: Persistent> Persistent for Vec<T> {
             .map(T::from_json)
             .collect()
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let len = v.collection_len().ok_or_else(|| invalid("list"))?;
+        (0..len)
+            .map(|i| T::from_nbt(&v.collection_get(i).expect("collection element")))
+            .collect()
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::List(
             self.iter().map(T::to_persistent).collect::<Result<_>>()?,
@@ -285,6 +207,13 @@ impl<T: Persistent, const MAX: usize> Persistent for BoundedList<T, MAX> {
             return Err(invalid("list length"));
         }
         Ok(Self(value))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let values = Vec::<T>::from_nbt(v)?;
+        if values.len() > MAX {
+            return Err(invalid("list length"));
+        }
+        Ok(Self(values))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if self.0.len() > MAX {
@@ -313,6 +242,9 @@ impl<T: Persistent> Persistent for Option<T> {
             T::from_json(v).map(Some)
         }
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        T::from_nbt(v).map(Some)
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match self {
             Some(v) => v.to_persistent(),
@@ -323,6 +255,9 @@ impl<T: Persistent> Persistent for Option<T> {
 impl<T: Persistent> Persistent for Box<T> {
     fn from_json(v: &Json) -> Result<Self> {
         T::from_json(v).map(Box::new)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        T::from_nbt(v).map(Box::new)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         (**self).to_persistent()
@@ -345,11 +280,14 @@ impl Persistent for Component {
     fn from_json(v: &Json) -> Result<Self> {
         Self::from_json(&v.to_string())
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Component::from_nbt(v.clone())
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        Ok(PersistentValue::Nbt(self.to_nbt()?))
+        Ok(PersistentValue::Component(Box::new(self.clone())))
     }
 }
-fn tag_json(v: &Tag) -> Json {
+pub(super) fn tag_json(v: &Tag) -> Json {
     match v {
         Tag::End => Json::Null,
         Tag::Byte(n) => Json::from(*n),
@@ -615,14 +553,7 @@ impl Persistent for BlockTransformerHolder {
         self.0.to_persistent()
     }
 }
-impl Persistent for ComponentPredicateType {
-    fn from_json(v: &Json) -> Result<Self> {
-        Identifier::from_json(v).map(Self)
-    }
-    fn to_persistent(&self) -> Result<PersistentValue> {
-        self.0.to_persistent()
-    }
-}
+
 impl Persistent for BlockSet {
     fn from_json(v: &Json) -> Result<Self> {
         set_from_json(v).map(Self)
@@ -741,19 +672,16 @@ impl Persistent for InstrumentHolder {
 }
 impl Persistent for JukeboxSongHolder {
     fn from_json(v: &Json) -> Result<Self> {
-        Ok(Self(if v.is_string() {
-            Holder::Reference(Identifier::from_json(v)?)
-        } else {
-            Holder::Direct(JukeboxSong::from_json(v)?)
-        }))
+        Ok(Self(Holder::Reference(Identifier::from_json(v)?)))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
-            Holder::Direct(v) => v.to_persistent(),
+            Holder::Direct(_) => Err(invalid("unregistered holder")),
         }
     }
 }
+
 impl Persistent for BannerPatternHolder {
     fn from_json(v: &Json) -> Result<Self> {
         Ok(Self(if v.is_string() {
@@ -771,19 +699,16 @@ impl Persistent for BannerPatternHolder {
 }
 impl Persistent for PaintingVariantHolder {
     fn from_json(v: &Json) -> Result<Self> {
-        Ok(Self(if v.is_string() {
-            Holder::Reference(Identifier::from_json(v)?)
-        } else {
-            Holder::Direct(PaintingVariant::from_json(v)?)
-        }))
+        Ok(Self(Holder::Reference(Identifier::from_json(v)?)))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         match &self.0 {
             Holder::Reference(v) => v.to_persistent(),
-            Holder::Direct(v) => v.to_persistent(),
+            Holder::Direct(_) => Err(invalid("unregistered holder")),
         }
     }
 }
+
 impl Persistent for Rarity {
     fn from_json(v: &Json) -> Result<Self> {
         match v.as_str() {
@@ -1205,7 +1130,7 @@ impl Persistent for AxolotlVariant {
     }
 }
 
-fn set_from_json(v: &Json) -> Result<HolderSet> {
+pub(super) fn set_from_json(v: &Json) -> Result<HolderSet> {
     if let Some(s) = v.as_str() {
         if let Some(tag) = s.strip_prefix('#') {
             return Ok(HolderSet::Named(Identifier::parse(tag)?));
@@ -1214,7 +1139,7 @@ fn set_from_json(v: &Json) -> Result<HolderSet> {
     }
     Ok(HolderSet::Direct(Vec::<Identifier>::from_json(v)?))
 }
-fn set_value(v: &HolderSet) -> Result<PersistentValue> {
+pub(super) fn set_value(v: &HolderSet) -> Result<PersistentValue> {
     match v {
         HolderSet::Named(k) => format!("#{k}").to_persistent(),
         HolderSet::Direct(entries) => {
@@ -1252,7 +1177,34 @@ persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" 
 persistent_record!(SwingAnimation {animation_type => "type" [Some(SwingAnimationType::Whack)],duration => "duration" [Some(VarInt(6))]});
 persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "flags" [Some(vec![])],strings => "strings" [Some(vec![])],colors => "colors" [Some(vec![])]});
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
-persistent_record!(Fireworks {flight_duration => "flight_duration" [Some(VarInt(0))],explosions => "explosions" [Some(BoundedList(vec![]))]});
+impl Persistent for Fireworks {
+    fn from_json(v: &Json) -> Result<Self> {
+        let flight_duration = field::<VarInt>(v, "flight_duration", Some(VarInt(0)))?;
+        if !(0..=255).contains(&flight_duration.0) {
+            return Err(invalid("fireworks flight duration"));
+        }
+        Ok(Self {
+            flight_duration,
+            explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
+        })
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        let mut v = Vec::new();
+        if self.flight_duration.0 != 0 {
+            v.push((
+                "flight_duration".into(),
+                PersistentValue::Nbt(Tag::Byte(self.flight_duration.0 as i8)),
+            ));
+        }
+        entry(
+            &mut v,
+            "explosions",
+            &self.explosions,
+            Some(BoundedList(vec![])),
+        )?;
+        Ok(PersistentValue::Map(v))
+    }
+}
 persistent_record!(LodestoneTracker {target => "target" [Some(None)],tracked => "tracked" [Some(true)]});
 persistent_record!(ArmorTrim {material => "material" [None],pattern => "pattern" [None]});
 persistent_record!(BannerLayer {pattern => "pattern" [None],color => "color" [None]});
@@ -1374,6 +1326,19 @@ impl<T: Persistent + PartialEq> Persistent for Filterable<T> {
             })
         }
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if v.as_compound().is_some_and(|v| v.contains_key("raw")) {
+            Ok(Self {
+                raw: field_nbt(v, "raw", None)?,
+                filtered: field_nbt(v, "filtered", Some(None))?,
+            })
+        } else {
+            Ok(Self {
+                raw: T::from_nbt(v)?,
+                filtered: None,
+            })
+        }
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = vec![("raw".into(), self.raw.to_persistent()?)];
         entry(&mut v, "filtered", &self.filtered, Some(None))?;
@@ -1400,6 +1365,24 @@ impl Persistent for ItemStackTemplate {
             field(v, "components", Some(DataComponentPatch::default()))?,
         )
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if matches!(v, Tag::String(_)) {
+            return Self::new(
+                ferraloom_data::Item::from_nbt(v)?,
+                1,
+                DataComponentPatch::default(),
+            );
+        }
+        let count = field_nbt::<i32>(v, "count", Some(1))?;
+        if !(1..=99).contains(&count) {
+            return Err(invalid("stack template count"));
+        }
+        Self::new(
+            field_nbt(v, "id", None)?,
+            count,
+            field_nbt(v, "components", Some(DataComponentPatch::default()))?,
+        )
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = vec![("id".into(), self.item.to_persistent()?)];
         entry(&mut v, "count", &self.count, Some(1))?;
@@ -1423,6 +1406,26 @@ impl Persistent for DataComponentPatch {
                 patch.remove(id);
             } else {
                 patch.set(DataComponent::from_json(&registry(k), v)?);
+            }
+        }
+        Ok(patch)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let mut patch = Self::default();
+        for (k, v) in v
+            .as_compound()
+            .ok_or_else(|| invalid("component patch"))?
+            .iter()
+        {
+            let key = k.to_string_lossy();
+            if let Some(key) = key.strip_prefix('!') {
+                Unit::from_nbt(v)?;
+                patch.remove(
+                    ComponentTypeId::from_name(registry(key).as_str())
+                        .ok_or_else(|| invalid("component removal"))?,
+                );
+            } else {
+                patch.set(DataComponent::from_nbt(&registry(&key), v)?);
             }
         }
         Ok(patch)
@@ -1470,6 +1473,11 @@ impl Persistent for i64 {
 impl<T: Persistent, const N: usize> Persistent for [T; N] {
     fn from_json(v: &Json) -> Result<Self> {
         Vec::<T>::from_json(v)?
+            .try_into()
+            .map_err(|_| invalid("array length"))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Vec::<T>::from_nbt(v)?
             .try_into()
             .map_err(|_| invalid("array length"))
     }
@@ -1535,7 +1543,7 @@ impl Persistent for ResolvableProfile {
         Ok(PersistentValue::Map(v))
     }
 }
-fn map_entries(value: PersistentValue) -> Result<Vec<(String, PersistentValue)>> {
+pub(super) fn map_entries(value: PersistentValue) -> Result<Vec<(String, PersistentValue)>> {
     match value {
         PersistentValue::Map(v) => Ok(v),
         _ => Err(invalid("map")),
@@ -1566,6 +1574,20 @@ impl Persistent for AttributeDisplay {
             _ => Err(invalid("attribute display")),
         }
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        match v
+            .as_compound()
+            .and_then(|v| v.get("type"))
+            .and_then(Tag::as_string)
+            .map(|v| v.to_string_lossy())
+            .as_deref()
+        {
+            Some("default") => Ok(Self::Default),
+            Some("hidden") => Ok(Self::Hidden),
+            Some("override") => Ok(Self::Override(field_nbt(v, "value", None)?)),
+            _ => Err(invalid("attribute display")),
+        }
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let (name, extra) = match self {
             Self::Default => ("default", None),
@@ -1586,6 +1608,14 @@ impl Persistent for AttributeEntry {
             modifier: AttributeModifier::from_json(v)?,
             slot: field(v, "slot", Some(EquipmentSlotGroup::Any))?,
             display: field(v, "display", Some(AttributeDisplay::Default))?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            attribute: field_nbt(v, "type", None)?,
+            modifier: AttributeModifier::from_nbt(v)?,
+            slot: field_nbt(v, "slot", Some(EquipmentSlotGroup::Any))?,
+            display: field_nbt(v, "display", Some(AttributeDisplay::Default))?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1615,7 +1645,12 @@ impl Persistent for MobEffectDetails {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = Vec::new();
-        entry(&mut v, "amplifier", &self.amplifier, Some(VarInt(0)))?;
+        if self.amplifier.0 != 0 {
+            v.push((
+                "amplifier".into(),
+                PersistentValue::Nbt(Tag::Byte(self.amplifier.0 as i8)),
+            ));
+        }
         entry(&mut v, "duration", &self.duration, Some(VarInt(0)))?;
         entry(&mut v, "ambient", &self.ambient, Some(false))?;
         entry(&mut v, "show_particles", &self.show_particles, Some(true))?;
@@ -1736,6 +1771,18 @@ impl Persistent for TypedBlockEntityData {
             tag: CustomData::from_json(&Json::Object(v))?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let mut tag = v.clone();
+        let id = tag
+            .as_compound_mut()
+            .ok_or_else(|| invalid("block entity data"))?
+            .remove("id")
+            .ok_or_else(|| invalid("block entity type"))?;
+        Ok(Self {
+            entity_type: BlockEntityType::from_nbt(&id)?,
+            tag: CustomData(tag),
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut tag = self.tag.0.clone();
         tag.as_compound_mut()
@@ -1767,16 +1814,27 @@ impl Persistent for DataComponentMatchers {
         let mut partial = Vec::new();
         if let Some(v) = v.get("predicates") {
             for (k, v) in object(v)? {
-                let key = registry(k);
-                let ty = if ComponentTypeId::from_name(key.as_str()).is_some() {
-                    Either::Right(ComponentTypeId::from_name(key.as_str()).unwrap())
-                } else {
-                    Either::Left(ComponentPredicateType(key))
-                };
-                partial.push(ComponentPredicate {
-                    predicate_type: ty,
-                    value: json_tag(v)?,
-                });
+                partial.push(ComponentPredicate::from_key(&registry(k), v)?);
+            }
+        }
+        Ok(Self {
+            exact,
+            partial: BoundedList(partial),
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let exact = if let Some(v) = v.as_compound().and_then(|v| v.get("components")) {
+            DataComponentPatch::from_nbt(v)?.added
+        } else {
+            vec![]
+        };
+        let mut partial = Vec::new();
+        if let Some(v) = v.as_compound().and_then(|v| v.get("predicates")) {
+            for (k, v) in v.as_compound().ok_or_else(|| invalid("predicates"))?.iter() {
+                partial.push(ComponentPredicate::from_key_nbt(
+                    &registry(&k.to_string_lossy()),
+                    v,
+                )?);
             }
         }
         Ok(Self {
@@ -1804,13 +1862,7 @@ impl Persistent for DataComponentMatchers {
                     self.partial
                         .0
                         .iter()
-                        .map(|p| {
-                            let name = match &p.predicate_type {
-                                Either::Left(t) => t.0.to_string(),
-                                Either::Right(t) => t.name().to_owned(),
-                            };
-                            Ok((name, p.value.to_persistent()?))
-                        })
+                        .map(|p| Ok((p.key().to_string(), p.to_persistent()?)))
                         .collect::<Result<_>>()?,
                 ),
             ));
@@ -1818,6 +1870,7 @@ impl Persistent for DataComponentMatchers {
         Ok(PersistentValue::Map(v))
     }
 }
+
 impl Persistent for IntBounds {
     fn from_json(v: &Json) -> Result<Self> {
         if v.is_number() {
@@ -1834,10 +1887,10 @@ impl Persistent for IntBounds {
         }
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        if let (Some(min), Some(max)) = (self.min, self.max) {
-            if min == max {
-                return min.to_persistent();
-            }
+        if let (Some(min), Some(max)) = (self.min, self.max)
+            && min == max
+        {
+            return min.to_persistent();
         }
         let mut v = Vec::new();
         entry(&mut v, "min", &self.min, Some(None))?;
@@ -1851,6 +1904,13 @@ impl Persistent for LockCode {
             items: field(v, "items", Some(None))?,
             count: field(v, "count", Some(IntBounds::default()))?,
             components: DataComponentMatchers::from_json(v)?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            items: field_nbt(v, "items", Some(None))?,
+            count: field_nbt(v, "count", Some(IntBounds::default()))?,
+            components: DataComponentMatchers::from_nbt(v)?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1924,6 +1984,17 @@ impl Persistent for AdventureModePredicate {
         }
         Ok(Self { predicates })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let predicates = if matches!(v, Tag::List(_)) {
+            Vec::<BlockPredicate>::from_nbt(v)?
+        } else {
+            vec![BlockPredicate::from_nbt(v)?]
+        };
+        if predicates.is_empty() {
+            return Err(invalid("empty adventure predicate"));
+        }
+        Ok(Self { predicates })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if self.predicates.len() == 1 {
             self.predicates[0].to_persistent()
@@ -1939,6 +2010,14 @@ impl Persistent for BlockPredicate {
             properties: field(v, "state", Some(None))?,
             nbt: field(v, "nbt", Some(None))?,
             components: DataComponentMatchers::from_json(v)?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            blocks: field_nbt(v, "blocks", Some(None))?,
+            properties: field_nbt(v, "state", Some(None))?,
+            nbt: field_nbt(v, "nbt", Some(None))?,
+            components: DataComponentMatchers::from_nbt(v)?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -2344,14 +2423,339 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
     Ok(value)
 }
 pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataComponent> {
-    match key.as_str() {
-        "minecraft:custom_data" => Ok(DataComponent::CustomData(CustomData::from_nbt(value)?)),
-        "minecraft:bucket_entity_data" => Ok(DataComponent::BucketEntityData(
-            CustomData::from_nbt(value)?,
-        )),
-        "minecraft:entity_data" => Ok(DataComponent::EntityData(TypedEntityData::from_nbt(value)?)),
-        _ => component_from_json(key, &tag_json(value)),
-    }
+    Ok(match key.as_str() {
+        "minecraft:custom_data" => {
+            DataComponent::CustomData(<CustomData as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:max_stack_size" => {
+            DataComponent::MaxStackSize(<VarInt as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:max_damage" => {
+            DataComponent::MaxDamage(<VarInt as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:damage" => DataComponent::Damage(<VarInt as Persistent>::from_nbt(value)?),
+        "minecraft:unbreakable" => {
+            DataComponent::Unbreakable(<Unit as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:use_effects" => {
+            DataComponent::UseEffects(<UseEffects as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:custom_name" => {
+            DataComponent::CustomName(<Component as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:minimum_attack_charge" => {
+            DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:damage_type" => {
+            DataComponent::DamageType(<DamageType as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:item_name" => {
+            DataComponent::ItemName(<Component as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:item_model" => {
+            DataComponent::ItemModel(<Identifier as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:lore" => DataComponent::Lore(
+            <BoundedList<Component, 256> as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:rarity" => DataComponent::Rarity(<Rarity as Persistent>::from_nbt(value)?),
+        "minecraft:enchantments" => {
+            DataComponent::Enchantments(<ItemEnchantments as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:can_place_on" => {
+            DataComponent::CanPlaceOn(<AdventureModePredicate as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:can_break" => {
+            DataComponent::CanBreak(<AdventureModePredicate as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:attribute_modifiers" => {
+            DataComponent::AttributeModifiers(<Vec<AttributeEntry> as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:custom_model_data" => {
+            DataComponent::CustomModelData(<CustomModelData as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:tooltip_display" => {
+            DataComponent::TooltipDisplay(<TooltipDisplay as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:repair_cost" => {
+            DataComponent::RepairCost(<VarInt as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:creative_slot_lock" => return Err(invalid("transient component")),
+        "minecraft:enchantment_glint_override" => {
+            DataComponent::EnchantmentGlintOverride(<bool as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:intangible_projectile" => {
+            DataComponent::IntangibleProjectile(<Unit as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:food" => DataComponent::Food(<FoodProperties as Persistent>::from_nbt(value)?),
+        "minecraft:consumable" => {
+            DataComponent::Consumable(<Consumable as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:use_remainder" => {
+            DataComponent::UseRemainder(<ItemStackTemplate as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:use_cooldown" => {
+            DataComponent::UseCooldown(<UseCooldown as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:damage_resistant" => {
+            DataComponent::DamageResistant(field_nbt(value, "types", None)?)
+        }
+        "minecraft:tool" => DataComponent::Tool(<Tool as Persistent>::from_nbt(value)?),
+        "minecraft:weapon" => DataComponent::Weapon(<Weapon as Persistent>::from_nbt(value)?),
+        "minecraft:attack_range" => {
+            DataComponent::AttackRange(<AttackRange as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:enchantable" => DataComponent::Enchantable(field_nbt(value, "value", None)?),
+        "minecraft:equippable" => {
+            DataComponent::Equippable(<Equippable as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:repairable" => DataComponent::Repairable(field_nbt(value, "items", None)?),
+        "minecraft:glider" => DataComponent::Glider(<Unit as Persistent>::from_nbt(value)?),
+        "minecraft:tooltip_style" => {
+            DataComponent::TooltipStyle(<Identifier as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:death_protection" => {
+            DataComponent::DeathProtection(<DeathProtection as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:blocks_attacks" => {
+            DataComponent::BlocksAttacks(<BlocksAttacks as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:piercing_weapon" => {
+            DataComponent::PiercingWeapon(<PiercingWeapon as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:kinetic_weapon" => {
+            DataComponent::KineticWeapon(<KineticWeapon as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:attack_animation" => {
+            DataComponent::AttackAnimation(<SwingAnimation as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:interact_animation" => {
+            DataComponent::InteractAnimation(<SwingAnimation as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:additional_trade_cost" => return Err(invalid("transient component")),
+        "minecraft:block_transformer" => DataComponent::BlockTransformer(
+            <BlockTransformerHolder as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:villager_food" => {
+            DataComponent::VillagerFood(<VillagerFood as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:stored_enchantments" => {
+            DataComponent::StoredEnchantments(<ItemEnchantments as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:dye" => DataComponent::Dye(<DyeColor as Persistent>::from_nbt(value)?),
+        "minecraft:dyed_color" => DataComponent::DyedColor(<i32 as Persistent>::from_nbt(value)?),
+        "minecraft:map_id" => DataComponent::MapId(<VarInt as Persistent>::from_nbt(value)?),
+        "minecraft:map_decorations" => {
+            DataComponent::MapDecorations(<MapDecorations as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:map_post_processing" => return Err(invalid("transient component")),
+        "minecraft:charged_projectiles" => {
+            DataComponent::ChargedProjectiles(
+                <BoundedList<ItemStackTemplate, 1024> as Persistent>::from_nbt(value)?,
+            )
+        }
+        "minecraft:bundle_contents" => {
+            DataComponent::BundleContents(<Vec<ItemStackTemplate> as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:potion_contents" => {
+            DataComponent::PotionContents(<PotionContents as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:potion_duration_scale" => {
+            DataComponent::PotionDurationScale(<f32 as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:suspicious_stew_effects" => {
+            DataComponent::SuspiciousStewEffects(<Vec<StewEffect> as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:writable_book_content" => DataComponent::WritableBookContent(field_nbt(
+            value,
+            "pages",
+            Some(BoundedList(vec![])),
+        )?),
+        "minecraft:written_book_content" => {
+            DataComponent::WrittenBookContent(<WrittenBookContent as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:trim" => DataComponent::Trim(<ArmorTrim as Persistent>::from_nbt(value)?),
+        "minecraft:debug_stick_state" => {
+            DataComponent::DebugStickState(<DebugStickState as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:entity_data" => {
+            DataComponent::EntityData(<TypedEntityData as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:bucket_entity_data" => {
+            DataComponent::BucketEntityData(<CustomData as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:block_entity_data" => {
+            DataComponent::BlockEntityData(<TypedBlockEntityData as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:instrument" => {
+            DataComponent::Instrument(<InstrumentHolder as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:provides_trim_material" => DataComponent::ProvidesTrimMaterial(
+            <TrimMaterialHolder as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:ominous_bottle_amplifier" => {
+            DataComponent::OminousBottleAmplifier(<VarInt as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:jukebox_playable" => {
+            DataComponent::JukeboxPlayable(<JukeboxSongHolder as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:provides_banner_patterns" => DataComponent::ProvidesBannerPatterns(
+            <BannerPatternSet as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:recipes" => DataComponent::Recipes(<Recipes as Persistent>::from_nbt(value)?),
+        "minecraft:lodestone_tracker" => {
+            DataComponent::LodestoneTracker(<LodestoneTracker as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:firework_explosion" => {
+            DataComponent::FireworkExplosion(<FireworkExplosion as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:fireworks" => {
+            DataComponent::Fireworks(<Fireworks as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:profile" => {
+            DataComponent::Profile(<ResolvableProfile as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:note_block_sound" => {
+            DataComponent::NoteBlockSound(<Identifier as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:banner_patterns" => {
+            DataComponent::BannerPatterns(<Vec<BannerLayer> as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:base_color" => {
+            DataComponent::BaseColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:pot_decorations" => {
+            DataComponent::PotDecorations(<PotDecorations as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:container" => DataComponent::Container(container_from_nbt(value)?),
+        "minecraft:block_state" => {
+            DataComponent::BlockState(<BlockItemStateProperties as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:bees" => DataComponent::Bees(<Vec<BeeOccupant> as Persistent>::from_nbt(value)?),
+        "minecraft:sulfur_cube_content" => {
+            DataComponent::SulfurCubeContent(<ItemStackTemplate as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:lock" => DataComponent::Lock(<LockCode as Persistent>::from_nbt(value)?),
+        "minecraft:container_loot" => {
+            DataComponent::ContainerLoot(<SeededContainerLoot as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:break_sound" => {
+            DataComponent::BreakSound(<Sound as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:compostable" => {
+            DataComponent::Compostable(<Compostable as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cooking_fuel" => {
+            DataComponent::CookingFuel(<CookingFuel as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:brewing_fuel" => {
+            DataComponent::BrewingFuel(<BrewingFuel as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:mob_visibility" => {
+            DataComponent::MobVisibility(<MobVisibility as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:villager/variant" => {
+            DataComponent::VillagerVariant(<VillagerType as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:wolf/variant" => {
+            DataComponent::WolfVariant(<WolfVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:wolf/sound_variant" => {
+            DataComponent::WolfSoundVariant(<WolfSoundVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:wolf/collar" => {
+            DataComponent::WolfCollar(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:fox/variant" => {
+            DataComponent::FoxVariant(<FoxVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:salmon/size" => {
+            DataComponent::SalmonSize(<SalmonVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:parrot/variant" => {
+            DataComponent::ParrotVariant(<ParrotVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:tropical_fish/pattern" => DataComponent::TropicalFishPattern(
+            <TropicalFishPattern as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:tropical_fish/base_color" => {
+            DataComponent::TropicalFishBaseColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:tropical_fish/pattern_color" => {
+            DataComponent::TropicalFishPatternColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:mooshroom/variant" => {
+            DataComponent::MooshroomVariant(<MooshroomVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:rabbit/variant" => {
+            DataComponent::RabbitVariant(<RabbitVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:pig/variant" => {
+            DataComponent::PigVariant(<PigVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:pig/sound_variant" => {
+            DataComponent::PigSoundVariant(<PigSoundVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cow/variant" => {
+            DataComponent::CowVariant(<CowVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cow/sound_variant" => {
+            DataComponent::CowSoundVariant(<CowSoundVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:chicken/variant" => {
+            DataComponent::ChickenVariant(<ChickenVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:chicken/sound_variant" => DataComponent::ChickenSoundVariant(
+            <ChickenSoundVariant as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:zombie_nautilus/variant" => DataComponent::ZombieNautilusVariant(
+            <ZombieNautilusVariant as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:frog/variant" => {
+            DataComponent::FrogVariant(<FrogVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:horse/variant" => {
+            DataComponent::HorseVariant(<HorseVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:painting/variant" => {
+            DataComponent::PaintingVariant(<PaintingVariantHolder as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:llama/variant" => {
+            DataComponent::LlamaVariant(<LlamaVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:axolotl/variant" => {
+            DataComponent::AxolotlVariant(<AxolotlVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cat/variant" => {
+            DataComponent::CatVariant(<CatVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cat/sound_variant" => {
+            DataComponent::CatSoundVariant(<CatSoundVariant as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:cat/collar" => {
+            DataComponent::CatCollar(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:sheep/color" => {
+            DataComponent::SheepColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:shulker/color" => {
+            DataComponent::ShulkerColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:provides_pottery_pattern" => DataComponent::ProvidesPotteryPattern(
+            <DecoratedPotPattern as Persistent>::from_nbt(value)?,
+        ),
+        "minecraft:sign_text_front" => {
+            DataComponent::SignTextFront(<SignText as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:sign_text_back" => {
+            DataComponent::SignTextBack(<SignText as Persistent>::from_nbt(value)?)
+        }
+        "minecraft:waxed" => DataComponent::Waxed(<Unit as Persistent>::from_nbt(value)?),
+        "minecraft:cushion/color" => {
+            DataComponent::CushionColor(<DyeColor as Persistent>::from_nbt(value)?)
+        }
+        _ => return Err(invalid("component type")),
+    })
 }
 pub(super) fn component_value(component: &DataComponent) -> Result<PersistentValue> {
     validate_component(component)?;
@@ -2511,4 +2915,40 @@ fn validate_component(value: &DataComponent) -> Result<()> {
         }
         _ => Ok(()),
     }
+}
+impl Persistent for NbtPredicate {
+    fn from_json(v: &Json) -> Result<Self> {
+        if let Some(s) = v.as_str() {
+            let tag = ferraloom_nbt::parse_compound(s)
+                .map_err(|e| Error::invalid("NBT predicate", e.to_string()))?;
+            Ok(Self(CustomData(Tag::Compound(tag))))
+        } else {
+            CustomData::from_json(v).map(Self)
+        }
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        self.0.0.to_string().to_persistent()
+    }
+}
+
+pub(super) use persistent_record;
+
+fn container_from_nbt(v: &Tag) -> Result<BoundedList<Option<ItemStackTemplate>, 256>> {
+    let slots = v.as_list().ok_or_else(|| invalid("container slots"))?;
+    if slots.len() > 256 {
+        return Err(invalid("container length"));
+    }
+    let mut items = Vec::new();
+    for v in slots.iter() {
+        let slot = field_nbt::<i32>(v, "slot", None)?;
+        if !(0..256).contains(&slot) {
+            return Err(invalid("container slot"));
+        }
+        let slot = slot as usize;
+        if items.len() <= slot {
+            items.resize_with(slot + 1, || None);
+        }
+        items[slot] = Some(field_nbt(v, "item", None)?);
+    }
+    Ok(BoundedList(items))
 }
