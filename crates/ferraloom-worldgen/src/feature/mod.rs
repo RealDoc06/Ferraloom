@@ -16,6 +16,8 @@ use std::{
     sync::Arc,
 };
 
+pub mod cave;
+pub mod ore;
 pub mod state_provider;
 
 pub trait Feature: Debug + Send + Sync {
@@ -92,6 +94,8 @@ impl<'a> FeatureLoader<'a> {
             providers: BTreeMap::new(),
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        ore::register(&mut loader)?;
+        cave::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {
