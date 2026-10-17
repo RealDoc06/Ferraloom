@@ -70,7 +70,7 @@ fn cases() -> &'static [Case] {
                 });
             }
         }
-        assert_eq!(cases.len(), 105);
+        assert_eq!(cases.len(), 180);
         for c in &cases {
             assert_eq!(c.steps.len(), 720);
         }
@@ -575,11 +575,32 @@ open_map_test!(
 );
 
 fn run_java_map<const L: bool>(name: &str) {
-    let keys = string_keys();
-    for case in cases().iter().filter(|c| c.name == name) {
-        assert_eq!(case.keys, "string");
-        let mut map =
-            JavaHashMap::<Option<StringKey>, String, L>::with_capacity_and_load_factor(0, case.f);
+    run_java_map_keys::<_, L>(name, "string", string_keys());
+    run_java_map_keys::<_, L>(name, "long", long_keys());
+    run_java_map_keys::<_, L>(name, "int", int_keys());
+    run_java_map_keys::<_, L>(name, "tree", (0..160).map(TreeKey).collect());
+    run_java_map_keys::<_, L>(
+        name,
+        "blockpos",
+        (0..160)
+            .map(|id| crate::BlockPos::new((id - 80) * 64, 0, 0))
+            .collect(),
+    );
+    run_java_map_keys::<_, L>(
+        name,
+        "vec3i",
+        (0..160)
+            .map(|id| crate::Vec3i::new(-31 * id, id, 0))
+            .collect(),
+    );
+}
+fn run_java_map_keys<K: JavaHash + Eq + Clone + Debug, const L: bool>(
+    name: &str,
+    kind: &str,
+    keys: Vec<K>,
+) {
+    for case in cases().iter().filter(|c| c.name == name && c.keys == kind) {
+        let mut map = JavaHashMap::<K, String, L>::with_capacity_and_load_factor(0, case.f);
         map.access_order = name == "JavaAccessHashMap";
         for (i, step) in case.steps.iter().enumerate() {
             let key = keys[step.key].clone();
@@ -656,9 +677,32 @@ impl<K: Eq + JavaHash, V, const L: bool> JavaHashMap<K, V, L> {
     }
 }
 fn run_java_set<const L: bool>(name: &str) {
-    let keys = string_keys();
-    for case in cases().iter().filter(|c| c.name == name) {
-        let mut set = JavaHashSet::<Option<StringKey>, L>::with_capacity_and_load_factor(0, case.f);
+    run_java_set_keys::<_, L>(name, "string", string_keys());
+    run_java_set_keys::<_, L>(name, "long", long_keys());
+    run_java_set_keys::<_, L>(name, "int", int_keys());
+    run_java_set_keys::<_, L>(name, "tree", (0..160).map(TreeKey).collect());
+    run_java_set_keys::<_, L>(
+        name,
+        "blockpos",
+        (0..160)
+            .map(|id| crate::BlockPos::new((id - 80) * 64, 0, 0))
+            .collect(),
+    );
+    run_java_set_keys::<_, L>(
+        name,
+        "vec3i",
+        (0..160)
+            .map(|id| crate::Vec3i::new(-31 * id, id, 0))
+            .collect(),
+    );
+}
+fn run_java_set_keys<K: JavaHash + Eq + Clone + Debug, const L: bool>(
+    name: &str,
+    kind: &str,
+    keys: Vec<K>,
+) {
+    for case in cases().iter().filter(|c| c.name == name && c.keys == kind) {
+        let mut set = JavaHashSet::<K, L>::with_capacity_and_load_factor(0, case.f);
         for (i, step) in case.steps.iter().enumerate() {
             let key = keys[step.key].clone();
             match step.op {
@@ -762,4 +806,92 @@ fn entry_helpers_and_linked_endpoints() {
     assert_eq!(j.keys().copied().collect::<Vec<_>>(), [1, 2]);
     assert_eq!(j.pop_last(), Some((2, 4)));
     assert_eq!(j.pop_first(), Some((1, 1)));
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TreeKey(i32);
+impl JavaHash for TreeKey {
+    fn java_hash_code(&self) -> i32 {
+        (self.0 - 80) * 64
+    }
+    fn java_compare(&self, other: &Self) -> Option<Ordering> {
+        Some(self.0.cmp(&other.0))
+    }
+}
+
+#[test]
+fn java_hashes_match_vanilla_util_and_jdk() {
+    let strings = ["", "abc", "Aa", "BB", "😀", "\u{ffff}foo"];
+    let doubles = [
+        0.0,
+        -0.0,
+        1.25,
+        -7.5,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for line in include_str!("hashes.txt").lines() {
+        let f = line.split_whitespace().collect::<Vec<_>>();
+        let at = |i: usize| f[i].parse::<i32>().unwrap();
+        match f[0] {
+            "string" => {
+                let i = f[1].parse::<usize>().unwrap();
+                let actual = if i == 4 {
+                    crate::java::string_hash_code_utf16([0xd83d, 0xde00, 0xd800])
+                } else {
+                    strings[i].java_hash_code()
+                };
+                assert_eq!(actual, at(2));
+            }
+            "long" => {
+                let n = f[1].parse::<i64>().unwrap();
+                assert_eq!(n.java_hash_code(), at(2));
+            }
+            "uuid" => {
+                let n = f[1].parse::<i64>().unwrap();
+                assert_eq!(
+                    crate::Uuid::new(n, n.rotate_left(17)).java_hash_code(),
+                    at(2)
+                );
+            }
+            "pos" => {
+                let x = at(1);
+                let y = x.wrapping_mul(31);
+                let z = x ^ (-559038737);
+                assert_eq!(JavaHash::java_hash_code(&crate::Vec3i::new(x, y, z)), at(2));
+                assert_eq!(
+                    JavaHash::java_hash_code(&crate::BlockPos::new(x, y, z)),
+                    at(3)
+                );
+                assert_eq!(
+                    JavaHash::java_hash_code(&crate::SectionPos::new(x, y, z)),
+                    at(4)
+                );
+                assert_eq!(JavaHash::java_hash_code(&crate::ChunkPos::new(x, z)), at(5));
+            }
+            "record" => assert_eq!(record_hash_code([at(1), "abc".java_hash_code()]), at(2)),
+            "geometry" => {
+                let i = f[1].parse::<usize>().unwrap();
+                let (x, y, z) = (doubles[i], doubles[(i + 1) % 7], doubles[(i + 2) % 7]);
+                assert_eq!(crate::Vec3::new(x, y, z).java_hash_code(), at(2));
+                assert_eq!(crate::Aabb::new(x, y, z, z, x, y).java_hash_code(), at(3));
+            }
+            "identifier" => assert_eq!(identifier_hash_code("minecraft", "stone"), at(1)),
+            "boolean" => {
+                assert_eq!(true.java_hash_code(), at(1));
+                assert_eq!(false.java_hash_code(), at(2));
+            }
+            other => panic!("unknown oracle kind {other}"),
+        }
+    }
+    // A subclass inheriting Comparable<Vec3i> is not screened as Comparable<BlockPos>.
+    assert_eq!(
+        JavaHash::java_compare(&crate::BlockPos::ZERO, &crate::BlockPos::ZERO),
+        None
+    );
+    assert_eq!(
+        JavaHash::java_compare(&crate::Vec3i::ZERO, &crate::Vec3i::new(0, 1, 0)),
+        Some(Ordering::Less)
+    );
 }

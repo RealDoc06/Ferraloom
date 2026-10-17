@@ -82,6 +82,9 @@ macro_rules! position_hash {
         fn java_hash_code(&self) -> i32 { <$ty>::java_hash_code(*self) }
     })* };
 }
+// BlockPos/SectionPos inherit Comparable<Vec3i>, not Comparable<their own class>.
+// HashMap#comparableClassFor rejects them. Their inherent compare_to methods
+// still provide vanilla y/z/x comparison for callers outside HashMap tree bins.
 position_hash!(crate::BlockPos, crate::SectionPos, crate::ChunkPos);
 impl JavaHash for crate::Vec3i {
     fn java_hash_code(&self) -> i32 {

@@ -3,6 +3,8 @@
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import it.unimi.dsi.fastutil.HashCommon;
 
 public class CollectionsOracle {
@@ -31,6 +33,10 @@ public class CollectionsOracle {
         for(int bit=0;bit<8;bit++) s.append((id & (1<<bit))==0 ? "Aa" : "BB");
         return s.toString();
     }
+    record TreeKey(int id) implements Comparable<TreeKey> {
+        @Override public int hashCode() {return (id-80)*64;}
+        @Override public int compareTo(TreeKey other) {return Integer.compare(id,other.id);}
+    }
     static Object key(String kind,int id) {
         return switch(kind) {
             case "long" -> LONGS[id];
@@ -38,6 +44,9 @@ public class CollectionsOracle {
             case "short" -> (short)INTS[id];
             case "char" -> (char)INTS[id];
             case "string" -> string(id);
+            case "tree" -> new TreeKey(id);
+            case "blockpos" -> new BlockPos((id-80)*64,0,0);
+            case "vec3i" -> new Vec3i(-31*id,id,0);
             default -> throw new AssertionError(kind);
         };
     }
@@ -190,6 +199,9 @@ public class CollectionsOracle {
                     "JavaHashMap string object", "JavaHashSet string set", "JavaLinkedHashMap string object", "JavaLinkedHashSet string set", "JavaAccessHashMap string object"
                 }) {
                     String[] p=spec.split(" "); scenario(out,p[0],p[1],p[2],p[2].equals("set"),p[0].contains("Linked")||p[0].contains("Access"),f);
+                    if(p[0].startsWith("Java")) for(String keys:new String[]{"long","int","tree","blockpos","vec3i"}) {
+                        scenario(out,p[0],keys,p[2],p[2].equals("set"),p[0].contains("Linked")||p[0].contains("Access"),f);
+                    }
                 }
             }
         }

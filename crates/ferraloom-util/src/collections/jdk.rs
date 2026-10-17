@@ -791,6 +791,12 @@ impl<K: Eq + JavaHash, const L: bool> JavaHashSet<K, L> {
     }
 }
 impl<K: Eq + JavaHash> JavaHashSet<K, true> {
+    pub fn insert_first(&mut self, key: K) -> bool {
+        self.0.insert_first(key, ()).is_none()
+    }
+    pub fn insert_last(&mut self, key: K) -> bool {
+        self.0.insert_last(key, ()).is_none()
+    }
     pub fn first(&self) -> Option<&K> {
         self.0.first().map(|(k, _)| k)
     }
