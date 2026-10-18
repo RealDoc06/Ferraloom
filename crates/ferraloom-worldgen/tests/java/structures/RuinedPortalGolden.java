@@ -77,7 +77,7 @@ public final class RuinedPortalGolden {
                     default -> throw new UnsupportedOperationException(method.toString());
                 });
                 var random=new LegacyRandomSource(seed);spread.invoke(piece,random,world);drips.invoke(piece,random,world);
-                if(grown) for(var p:BlockPos.betweenClosedStream(piece.getBoundingBox()).toList())leaves.invoke(piece,random,world,p);
+                if(grown) for(var p:BlockPos.betweenClosedStream(piece.getBoundingBox()).map(BlockPos::immutable).toList())leaves.invoke(piece,random,world,p);
                 var item=new JsonObject();item.addProperty("nbt",piece.createTag(serialization).toString());item.addProperty("mode",mode);item.addProperty("seed",seed);item.add("writes",writes);item.addProperty("next",random.nextInt());out.add(item);
             }
         }
