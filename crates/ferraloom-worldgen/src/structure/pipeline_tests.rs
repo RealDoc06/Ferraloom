@@ -163,6 +163,7 @@ fn probe_start(id: Identifier, seed: i64, chunk: [i32; 2], references: i32) -> S
     let rotation = Rotation::VALUES[random.next_int_bound(4) as usize];
     StructureStart::new(
         id,
+        worldgen_structure_type::Id::from_name("minecraft:jigsaw").unwrap(),
         chunk,
         references,
         [
@@ -274,6 +275,7 @@ fn structure_start_and_reference_statuses_match_vanilla_weighted_retries_and_bou
                     "test:c".parse().unwrap(),
                     StructureStart::new(
                         "test:c".parse().unwrap(),
+                        worldgen_structure_type::Id::from_name("minecraft:jigsaw").unwrap(),
                         p,
                         2,
                         TerrainAdjustment::BeardThin,
@@ -298,6 +300,7 @@ fn structure_start_and_reference_statuses_match_vanilla_weighted_retries_and_bou
                     "test:a".parse().unwrap(),
                     StructureStart::new(
                         "test:a".parse().unwrap(),
+                        worldgen_structure_type::Id::from_name("minecraft:jigsaw").unwrap(),
                         p,
                         9,
                         TerrainAdjustment::None,

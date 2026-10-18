@@ -8,13 +8,10 @@ use super::{
     template::{LiquidSettings, StructureTemplateManager},
 };
 use crate::{Error, Identifier, feature::PlacedFeature};
-use ferraloom_data::datapack::ResourceManager;
+use ferraloom_data::{datapack::ResourceManager, registries::worldgen_structure_type};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_util::{Direction, Rotation};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 /// The ported piece variants. Handwritten variants are added with their actual
 /// generators and postProcess implementations; unknown pieces never become air.
@@ -78,6 +75,7 @@ impl StructurePiece {
 #[derive(Clone, Debug)]
 pub struct StructureStart {
     pub structure: Option<Identifier>,
+    pub kind: Option<worldgen_structure_type::Id>,
     pub chunk: [i32; 2],
     pub references: i32,
     pub pieces: Vec<StructurePiece>,
@@ -88,6 +86,7 @@ impl StructureStart {
     pub fn invalid() -> Self {
         Self {
             structure: None,
+            kind: None,
             chunk: [0; 2],
             references: 0,
             pieces: Vec::new(),
@@ -97,6 +96,7 @@ impl StructureStart {
     }
     pub fn new(
         structure: Identifier,
+        kind: worldgen_structure_type::Id,
         chunk: [i32; 2],
         references: i32,
         terrain: TerrainAdjustment,
@@ -104,6 +104,7 @@ impl StructureStart {
     ) -> Self {
         Self {
             structure: Some(structure),
+            kind: Some(kind),
             chunk,
             references,
             terrain,
@@ -120,6 +121,8 @@ impl StructureStart {
     ) -> Self {
         Self::new(
             structure,
+            worldgen_structure_type::Id::from_name("minecraft:jigsaw")
+                .expect("builtin structure type"),
             chunk,
             references,
             terrain,
@@ -190,7 +193,7 @@ impl StructureStart {
     /// fixer before this call. Unknown structure ids are discarded like vanilla.
     pub fn from_nbt(
         tag: &CompoundTag,
-        settings: &BTreeMap<Identifier, TerrainAdjustment>,
+        settings: &super::pipeline::StructureRegistry,
         templates: &StructureTemplateManager,
         resources: &ResourceManager,
         decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
@@ -204,7 +207,7 @@ impl StructureStart {
         let Ok(id) = id.to_string_lossy().parse::<Identifier>() else {
             return Ok(None);
         };
-        let Some(&terrain) = settings.get(&id) else {
+        let Some(definition) = settings.structures.get(&id) else {
             return Ok(None);
         };
         let mut pieces = Vec::new();
@@ -298,12 +301,13 @@ impl StructureStart {
         }
         Ok(Some(Self::new(
             id,
+            definition.kind,
             [
                 tag.get_int("ChunkX").unwrap_or(0),
                 tag.get_int("ChunkZ").unwrap_or(0),
             ],
             tag.get_int("references").unwrap_or(0),
-            terrain,
+            definition.terrain,
             pieces,
         )))
     }

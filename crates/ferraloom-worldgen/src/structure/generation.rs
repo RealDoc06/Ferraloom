@@ -205,6 +205,7 @@ impl StructureGenerators {
                         );
                         return Ok(StructureStart::new(
                             id.clone(),
+                            settings.kind,
                             context.chunk,
                             references,
                             settings.terrain,
@@ -255,6 +256,7 @@ impl StructureGenerators {
                 };
                 return Ok(StructureStart::new(
                     id.clone(),
+                    settings.kind,
                     context.chunk,
                     references,
                     settings.terrain,
@@ -316,6 +318,7 @@ impl StructureGenerators {
                 .collect();
                 return Ok(StructureStart::new(
                     id.clone(),
+                    settings.kind,
                     context.chunk,
                     references,
                     settings.terrain,
@@ -373,6 +376,7 @@ impl StructureGenerators {
                 );
                 return Ok(StructureStart::new(
                     id.clone(),
+                    settings.kind,
                     context.chunk,
                     references,
                     settings.terrain,
@@ -394,6 +398,7 @@ impl StructureGenerators {
         }
         Ok(StructureStart::new(
             id.clone(),
+            settings.kind,
             context.chunk,
             references,
             settings.terrain,

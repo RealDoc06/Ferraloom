@@ -98,13 +98,14 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
         );
         let loaded = StructureStart::from_nbt(
             &start.to_nbt(chunk).unwrap(),
-            &structures.registry.terrain_settings(),
+            &structures.registry,
             &templates,
             &resources,
             &mut |_| Err(Error("no inline feature".into())),
         )
         .unwrap()
         .unwrap();
+        assert_eq!(loaded.kind, start.kind);
         assert_eq!(
             loaded.to_nbt(chunk).unwrap(),
             ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap()

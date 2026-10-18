@@ -115,6 +115,10 @@ fn live_start_is_restored_with_piece_mutations_when_game_bridge_is_unsupported()
         id.clone(),
         StructureStart::new(
             id.clone(),
+            ferraloom_data::registries::worldgen_structure_type::Id::from_name(
+                "minecraft:buried_treasure",
+            )
+            .unwrap(),
             [0, 0],
             0,
             TerrainAdjustment::None,

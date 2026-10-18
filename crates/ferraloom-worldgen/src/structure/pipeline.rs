@@ -148,7 +148,6 @@ impl ChunkStructures {
         decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
     ) -> Result<Self, Error> {
         let mut chunk = Self::new(position);
-        let settings = registry.terrain_settings();
         if let Some(starts) = tag.get("starts").and_then(Tag::as_compound) {
             for (key, value) in starts.iter() {
                 let Ok(id) = key.to_string_lossy().parse::<Identifier>() else {
@@ -158,7 +157,7 @@ impl ChunkStructures {
                     && let Some(value) = value.as_compound()
                     && let Some(start) = StructureStart::from_nbt(
                         value,
-                        &settings,
+                        registry,
                         templates,
                         resources,
                         decode_feature,
