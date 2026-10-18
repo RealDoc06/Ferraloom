@@ -224,6 +224,10 @@ impl EntityStorage {
 }
 
 impl Level {
+    pub fn min_build_height(&self) -> i32 {
+        self.region().min_y
+    }
+
     pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
         self.region_mut().entities.movement_effects.push(effect);
     }
@@ -298,13 +302,20 @@ impl Level {
         self.region().entities.lookup.by_uuid(uuid)
     }
     pub fn tick_entities(&mut self) -> Result<(), LevelError> {
-        self.tick_entities_with_freeze(false)
+        self.tick_entities_with_tick_rate(&super::tick_rate::TickRateManager::default())
     }
-    pub fn tick_entities_with_freeze(&mut self, frozen: bool) -> Result<(), LevelError> {
+    pub fn tick_entities_with_tick_rate(
+        &mut self,
+        tick_rate: &super::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
         for entity in self.region().entity_tick_list.snapshot() {
             let state = self.entity_state(entity)?;
             let base = state.as_entity();
-            if base.removed || (frozen && state.entity_type() != ferraloom_data::EntityType::PLAYER)
+            if base.removed
+                || tick_rate.is_entity_frozen(
+                    state.entity_type() == ferraloom_data::EntityType::PLAYER,
+                    crate::entity::count_player_passengers(entity, self)?,
+                )
             {
                 continue;
             }

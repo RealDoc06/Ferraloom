@@ -109,3 +109,105 @@ pub fn position_rider(
     let attachment = rider_behavior.vehicle_attachment_point(passenger, vehicle, level)?;
     level.set_entity_pos(passenger, position - attachment)
 }
+
+/// Port of Entity#baseTick. Each borrow ends before fluid, damage or removal calls.
+pub fn base_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
+        let previous = base.last_known_position.unwrap_or(base.position);
+        base.last_known_speed = base.position - previous;
+        base.last_known_position = Some(base.position);
+        base.in_block_state = None;
+    }
+    let vehicle = level.entity::<EntityData>(entity)?.vehicle;
+    if let Some(vehicle) = vehicle
+        && level.entity::<EntityData>(vehicle)?.removed
+    {
+        stop_riding(entity, level)?;
+    }
+    let was_eye = level
+        .entity::<EntityData>(entity)?
+        .fluid_interaction
+        .eyes_inside(ferraloom_data::tags::FluidTags::WATER, level)?;
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
+        if base.boarding_cooldown > 0 {
+            base.boarding_cooldown -= 1;
+        }
+        if base.portal_cooldown > 0 {
+            base.portal_cooldown -= 1;
+        }
+        base.was_in_powder_snow = base.is_in_powder_snow;
+        base.is_in_powder_snow = false;
+        base.was_eye_in_water = was_eye;
+    }
+    super::fluid::update_fluid_interaction(behavior, entity, level)?;
+    update_swimming(entity, level)?;
+    let base = level.entity::<EntityData>(entity)?;
+    let in_lava = base
+        .fluid_interaction
+        .height(ferraloom_data::tags::FluidTags::LAVA, level)?
+        > 0.0;
+    if base.remaining_fire_ticks > 0 {
+        if base.entity_type.data().fire_immune {
+            level.entity_mut::<EntityData>(entity)?.clear_fire();
+        } else {
+            if base.remaining_fire_ticks % 20 == 0 && !in_lava {
+                behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
+            }
+            level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
+        }
+    }
+    if in_lava {
+        level.entity_mut::<EntityData>(entity)?.fall_distance *= 0.5;
+    }
+    if level.entity::<EntityData>(entity)?.position.y < f64::from(level.min_build_height() - 64) {
+        level.remove_entity(entity)?;
+    }
+    let base = level.entity_mut::<EntityData>(entity)?;
+    base.set_shared_flag(0, base.remaining_fire_ticks > 0 || base.has_visual_fire);
+    base.first_tick = false;
+    Ok(())
+}
+fn update_swimming(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+    let base = level.entity::<EntityData>(entity)?;
+    let sprinting = base.shared_flag(3);
+    let water = base.was_touching_water;
+    let passenger = base.vehicle.is_some();
+    let swimming = if base.shared_flag(4) {
+        sprinting && water && !passenger
+    } else {
+        sprinting
+            && base.was_eye_in_water
+            && water
+            && !passenger
+            && level.fluid_tags()?.contains_key(
+                ferraloom_data::tags::FluidTags::WATER,
+                level
+                    .get_block_state(base.block_position)?
+                    .data()
+                    .fluid
+                    .fluid_type,
+            )
+    };
+    level
+        .entity_mut::<EntityData>(entity)?
+        .set_shared_flag(4, swimming);
+    Ok(())
+}
+
+/// Port of Entity#countPlayerPassengers; the root itself is excluded.
+pub fn count_player_passengers(entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+    let mut count = 0_i32;
+    for passenger in &level.entity::<EntityData>(entity)?.passengers {
+        if matches!(level.entity_state(*passenger)?, EntityState::Player(_)) {
+            count = count.wrapping_add(1);
+        }
+        count = count.wrapping_add(count_player_passengers(*passenger, level)?);
+    }
+    Ok(count)
+}
