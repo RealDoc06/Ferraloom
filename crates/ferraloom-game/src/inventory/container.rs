@@ -219,13 +219,62 @@ impl Container for ResultContainer {
     }
 }
 
+/// Port of TransientCraftingContainer storage. The menu dispatches slotsChanged
+/// immediately after set/remove; setChanged and clearContent have no callback.
+#[derive(Clone, Debug)]
+pub struct TransientCraftingContainer {
+    items: Vec<ItemStack>,
+}
+impl TransientCraftingContainer {
+    pub fn new(size: usize) -> Self {
+        Self {
+            items: vec![ItemStack::default(); size],
+        }
+    }
+    pub fn items(&self) -> &[ItemStack] {
+        &self.items
+    }
+    pub fn grow_item(&mut self, index: usize, amount: i32) {
+        let total = count(&self.items[index]).wrapping_add(amount);
+        set_count(&mut self.items[index], total);
+    }
+}
+impl Container for TransientCraftingContainer {
+    fn size(&self) -> usize {
+        self.items.len()
+    }
+    fn get_item(&self, index: usize) -> ItemStack {
+        self.items.get(index).cloned().unwrap_or_default()
+    }
+    fn set_item(&mut self, index: usize, stack: ItemStack) {
+        self.items[index] = stack;
+    }
+    fn remove_item(&mut self, index: usize, amount: i32) -> ItemStack {
+        if amount <= 0 || self.items[index].is_empty() {
+            ItemStack::default()
+        } else {
+            split(&mut self.items[index], amount)
+        }
+    }
+    fn remove_item_no_update(&mut self, index: usize) -> ItemStack {
+        std::mem::take(&mut self.items[index])
+    }
+    fn clear_content(&mut self) {
+        self.items.fill(ItemStack::default());
+    }
+}
+
 /// Canonical player-owned menu storage. Block inventories are borrowed separately.
 #[derive(Clone, Debug)]
 pub enum MenuContainer {
     Simple(SimpleContainer),
+    Crafting(TransientCraftingContainer),
     Result(ResultContainer),
 }
 impl MenuContainer {
+    pub fn crafting(size: usize) -> Self {
+        Self::Crafting(TransientCraftingContainer::new(size))
+    }
     pub fn simple(size: usize) -> Self {
         Self::Simple(SimpleContainer::new(size))
     }
@@ -234,42 +283,49 @@ impl Container for MenuContainer {
     fn size(&self) -> usize {
         match self {
             Self::Simple(c) => c.size(),
+            Self::Crafting(c) => c.size(),
             Self::Result(c) => c.size(),
         }
     }
     fn get_item(&self, slot: usize) -> ItemStack {
         match self {
             Self::Simple(c) => c.get_item(slot),
+            Self::Crafting(c) => c.get_item(slot),
             Self::Result(c) => c.get_item(slot),
         }
     }
     fn set_item(&mut self, slot: usize, stack: ItemStack) {
         match self {
             Self::Simple(c) => c.set_item(slot, stack),
+            Self::Crafting(c) => c.set_item(slot, stack),
             Self::Result(c) => c.set_item(slot, stack),
         }
     }
     fn set_changed(&mut self) {
         match self {
             Self::Simple(c) => c.set_changed(),
+            Self::Crafting(c) => c.set_changed(),
             Self::Result(c) => c.set_changed(),
         }
     }
     fn remove_item(&mut self, slot: usize, amount: i32) -> ItemStack {
         match self {
             Self::Simple(c) => c.remove_item(slot, amount),
+            Self::Crafting(c) => c.remove_item(slot, amount),
             Self::Result(c) => c.remove_item(slot, amount),
         }
     }
     fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
         match self {
             Self::Simple(c) => c.remove_item_no_update(slot),
+            Self::Crafting(c) => c.remove_item_no_update(slot),
             Self::Result(c) => c.remove_item_no_update(slot),
         }
     }
     fn clear_content(&mut self) {
         match self {
             Self::Simple(c) => c.clear_content(),
+            Self::Crafting(c) => c.clear_content(),
             Self::Result(c) => c.clear_content(),
         }
     }

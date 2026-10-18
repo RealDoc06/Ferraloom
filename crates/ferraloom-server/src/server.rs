@@ -20,11 +20,15 @@ use ferraloom_data::{
 use ferraloom_game::{
     Behaviors,
     block::UnportedBehavior,
+    crafting::{RecipeManager, RecipeSynchronization},
     entity::{
         EntityRef, EntityState,
         player::{GameType, MovementResult, PlayerBehavior, ServerPlayer, move_player},
     },
-    inventory::{MenuContext, UnsupportedMenuHooks},
+    inventory::{
+        MenuContext, MenuHooks, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
+        UnsupportedMenuHooks,
+    },
     level::{
         LevelError, Region, chunk_holder::ChunkStatus, chunk_map::PlayerChunkSender,
         distance_manager::tracking_view, server_level::ServerLevel,
@@ -160,6 +164,9 @@ pub struct MinecraftServer {
     properties: Arc<ServerProperties>,
     root: PathBuf,
     registries: RegistrySet,
+    recipe_manager: RecipeManager,
+    recipe_synchronization: RecipeSynchronization,
+    crafting_context: RuntimeCraftingContext,
     access: AccessLists,
     level: ServerLevel,
     world: World,
@@ -200,6 +207,9 @@ impl MinecraftServer {
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
+        let recipe_manager = RecipeManager::load(&resources, &TagSet::load(&resources)?)?;
+        let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
+        let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
         let world = World::open(&options.root, &properties, &resources, &registries)?;
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
@@ -292,6 +302,9 @@ impl MinecraftServer {
             properties,
             root: options.root,
             registries,
+            recipe_manager,
+            recipe_synchronization,
+            crafting_context,
             access,
             level,
             world,
@@ -524,6 +537,7 @@ impl MinecraftServer {
                 .level
                 .tick_entities()
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            self.broadcast_container_changes()?;
             self.level.level.finish_entity_management();
         } else {
             self.integrate_jobs()?;
@@ -681,7 +695,7 @@ impl MinecraftServer {
             mode,
         );
         if let Some(saved) = saved {
-            player.load(saved);
+            player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
@@ -811,29 +825,19 @@ impl MinecraftServer {
         c.push(cb::Packet::SetHeldSlot(cb::SetHeldSlot {
             slot: VarInt(player.inventory.selected_slot() as i32),
         }));
-        c.push(cb::Packet::UpdateRecipes(cb::UpdateRecipes {
-            item_sets: Vec::new(),
-            stonecutter_recipes: Vec::new(),
-        }));
+        c.push(cb::Packet::UpdateRecipes(
+            self.recipe_synchronization.update.clone(),
+        ));
         c.push(cb::Packet::EntityEvent(cb::EntityEvent {
             entity_id,
             event_id: 24 + permission.clamp(0, 4) as i8,
         }));
         c.push(self.commands.packet(permission));
-        c.push(cb::Packet::RecipeBookSettings(
-            cb::RecipeBookSettingsPacket {
-                book_settings: RecipeBookSettings(std::array::from_fn(|_| {
-                    RecipeBookTypeSettings {
-                        open: false,
-                        filtering: false,
-                    }
-                })),
-            },
-        ));
-        c.push(cb::Packet::RecipeBookAdd(cb::RecipeBookAdd {
-            entries: Vec::new(),
-            replace: true,
-        }));
+        let (settings, recipes) = player
+            .recipe_book
+            .initial_packets(&self.recipe_synchronization);
+        c.push(cb::Packet::RecipeBookSettings(settings));
+        c.push(cb::Packet::RecipeBookAdd(recipes));
         self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
             content: Component::translatable(
                 "multiplayer.player.joined",
@@ -984,6 +988,15 @@ impl MinecraftServer {
                 self.handle_container_click(connection, entity, packet)?
             }
             sb::Packet::ContainerClose(_) => self.handle_container_close(connection, entity)?,
+            sb::Packet::PlaceRecipe(packet) => {
+                self.handle_place_recipe(connection, entity, packet)?
+            }
+            sb::Packet::RecipeBookChangeSettings(packet) => {
+                self.handle_recipe_book_change_settings(entity, packet)?
+            }
+            sb::Packet::RecipeBookSeenRecipe(packet) => {
+                self.handle_recipe_book_seen_recipe(entity, packet)?
+            }
             sb::Packet::ContainerButtonClick(packet) => {
                 self.handle_container_button_click(connection, entity, packet)?
             }
@@ -1304,6 +1317,16 @@ impl MinecraftServer {
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             let spectator = player.game_mode == GameType::Spectator || player.parent.health() <= 0.;
+            let mut callbacks = PendingCraftingCallbacks;
+            let mut hooks = RecipeMenuHooks {
+                manager: &self.recipe_manager,
+                context: &self.crafting_context,
+                synchronization: &self.recipe_synchronization,
+                book: &mut player.recipe_book,
+                // The canonical GameRules owner supplies this hook on integration.
+                limited_crafting: None,
+                callbacks: &mut callbacks,
+            };
             let menu = player.menus.current_mut();
             if menu.container_id != packet.container_id.0 {
                 return Ok(());
@@ -1332,7 +1355,7 @@ impl MinecraftServer {
                     i32::from(packet.slot_num),
                     i32::from(packet.button_num),
                     packet.container_input,
-                    &mut UnsupportedMenuHooks,
+                    &mut hooks,
                 );
                 menu.resume_remote_updates();
                 result?;
@@ -1417,6 +1440,121 @@ impl MinecraftServer {
         }
         Ok(())
     }
+    /// Port of ServerGamePacketListenerImpl#handlePlaceRecipe. Slot deltas are
+    /// broadcast by ServerPlayer#tick; only direct result and ghost packets go now.
+    fn handle_place_recipe(
+        &mut self,
+        connection: ConnectionId,
+        entity: EntityRef,
+        packet: sb::PlaceRecipe,
+    ) -> Result<()> {
+        self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
+        let Some(display) = self
+            .recipe_synchronization
+            .get_recipe_from_display(packet.recipe)
+        else {
+            return Ok(());
+        };
+        let recipe = self
+            .recipe_manager
+            .by_key(&display.parent)
+            .context("recipe display without parent")?;
+        let (packets, drops) = {
+            let player = self
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            if player.game_mode == GameType::Spectator
+                || player.menus.current().container_id != packet.container_id.0
+                || !player.recipe_book.contains(&recipe.id)
+                || recipe.value.placement_info().is_impossible_to_place()
+            {
+                return Ok(());
+            }
+            let mut context = MenuContext::player(
+                &mut player.inventory,
+                &mut player.parent.equipment,
+                player.game_mode == GameType::Creative,
+            );
+            let menu = player.menus.current_mut();
+            if !menu.still_valid(&context) {
+                return Ok(());
+            }
+            if menu.crafting_grid_size().is_none() {
+                if matches!(
+                    menu.kind,
+                    ferraloom_game::inventory::MenuKind::Furnace
+                        | ferraloom_game::inventory::MenuKind::Smoker
+                        | ferraloom_game::inventory::MenuKind::BlastFurnace
+                ) {
+                    bail!("Unsupported: furnace recipe-book placement");
+                }
+                return Ok(());
+            }
+            let mut callbacks = PendingCraftingCallbacks;
+            let mut hooks = RecipeMenuHooks {
+                manager: &self.recipe_manager,
+                context: &self.crafting_context,
+                synchronization: &self.recipe_synchronization,
+                book: &mut player.recipe_book,
+                limited_crafting: None,
+                callbacks: &mut callbacks,
+            };
+            hooks.prepare_recipe_click(menu.kind)?;
+            let allow_dropping = context.creative;
+            let action = menu.handle_crafting_placement(
+                &mut context,
+                recipe,
+                packet.use_max_items,
+                allow_dropping,
+                &mut hooks,
+            )?;
+            let mut packets = menu.drain_packets();
+            if action == ferraloom_game::crafting::PostPlaceAction::PlaceGhostRecipe {
+                packets.push(cb::Packet::PlaceGhostRecipe(cb::PlaceGhostRecipe {
+                    container_id: VarInt(menu.container_id),
+                    recipe_display: display.display.display.clone(),
+                }));
+            }
+            (packets, context.drops)
+        };
+        for drop in drops {
+            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
+        }
+        for packet in packets {
+            self.connections.get_mut(&connection).unwrap().push(packet);
+        }
+        Ok(())
+    }
+    /// Port of ServerGamePacketListenerImpl#handleRecipeBookChangeSettingsPacket.
+    fn handle_recipe_book_change_settings(
+        &mut self,
+        entity: EntityRef,
+        packet: sb::RecipeBookChangeSettings,
+    ) -> Result<()> {
+        self.level
+            .level
+            .entity_mut::<ServerPlayer>(entity)
+            .map_err(game_error)?
+            .recipe_book
+            .change_settings(packet.book_type, packet.is_open, packet.is_filtering);
+        Ok(())
+    }
+    /// Port of ServerGamePacketListenerImpl#handleRecipeBookSeenRecipePacket.
+    fn handle_recipe_book_seen_recipe(
+        &mut self,
+        entity: EntityRef,
+        packet: sb::RecipeBookSeenRecipe,
+    ) -> Result<()> {
+        self.level
+            .level
+            .entity_mut::<ServerPlayer>(entity)
+            .map_err(game_error)?
+            .recipe_book
+            .mark_display_seen(&self.recipe_synchronization, packet.recipe);
+        Ok(())
+    }
     /// Port of ServerGamePacketListenerImpl#handleSetCreativeModeSlot.
     fn handle_creative_slot(
         &mut self,
@@ -1441,14 +1579,24 @@ impl MinecraftServer {
                 return Ok(());
             }
             if (1..=45).contains(&packet.slot_num) {
-                ensure!(
-                    packet.slot_num > 4,
-                    "Unsupported: crafting result calculation"
-                );
+                let mut callbacks = PendingCraftingCallbacks;
+                let mut hooks = RecipeMenuHooks {
+                    manager: &self.recipe_manager,
+                    context: &self.crafting_context,
+                    synchronization: &self.recipe_synchronization,
+                    book: &mut player.recipe_book,
+                    limited_crafting: None,
+                    callbacks: &mut callbacks,
+                };
                 let mut context =
                     MenuContext::player(&mut player.inventory, &mut player.parent.equipment, true);
                 let menu = &mut player.menus.inventory_menu;
-                menu.set_item(&mut context, packet.slot_num as usize, stack.clone());
+                menu.set_item_live(
+                    &mut context,
+                    packet.slot_num as usize,
+                    stack.clone(),
+                    &mut hooks,
+                )?;
                 menu.set_remote_slot(packet.slot_num as usize, &stack);
                 menu.broadcast_changes(&context)?;
                 menu.changes.clear();

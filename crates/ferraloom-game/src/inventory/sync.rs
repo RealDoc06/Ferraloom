@@ -40,6 +40,7 @@ impl RemoteSlot {
 /// Owned commands emitted at vanilla's synchronizer call sites, in call order.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContainerUpdate {
+    RecipeBookAdd(cb::RecipeBookAdd),
     Initial {
         container_id: i32,
         state_id: i32,
@@ -63,6 +64,7 @@ pub enum ContainerUpdate {
 impl ContainerUpdate {
     pub fn into_packets(self) -> Vec<cb::Packet> {
         match self {
+            Self::RecipeBookAdd(packet) => vec![cb::Packet::RecipeBookAdd(packet)],
             Self::Initial {
                 container_id,
                 state_id,

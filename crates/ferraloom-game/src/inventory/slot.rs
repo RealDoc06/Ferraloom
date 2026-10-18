@@ -59,6 +59,16 @@ pub enum SlotKind {
 /// Pure domain hooks. Default errors make unported recipe, enchantment and trade work explicit.
 /// Implementations may hold immutable recipe/fuel tables; they do not own player stacks.
 pub trait MenuHooks {
+    fn crafting_ref(&self) -> Option<&dyn super::CraftingMenuHooks> {
+        None
+    }
+    fn crafting(&mut self) -> Option<&mut dyn super::CraftingMenuHooks> {
+        None
+    }
+    fn has_crafting(&self) -> bool {
+        false
+    }
+
     fn prepare_recipe_click(&mut self, _kind: super::MenuKind) -> Result<()> {
         Err(MenuError::Unsupported(
             "synchronous recipe/enchantment/trade calculation",

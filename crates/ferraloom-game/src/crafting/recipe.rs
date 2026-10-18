@@ -81,6 +81,7 @@ pub trait CraftingContext {
 }
 impl CraftingContext for () {}
 
+/// Port of Recipe metadata and its registry-dispatched serializer payload.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recipe {
     pub kind: RecipeKind,
@@ -92,24 +93,29 @@ pub struct Recipe {
 /// Ported serializer data, retaining vanilla names for source cross-reference.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RecipeKind {
+    /// Port of ShapedRecipe.
     Shaped {
         pattern: ShapedRecipePattern,
         result: ItemStackTemplate,
     },
+    /// Port of ShapelessRecipe.
     Shapeless {
         ingredients: Vec<Ingredient>,
         result: ItemStackTemplate,
     },
+    /// Port of DyeRecipe.
     Dye {
         target: Ingredient,
         dye: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of ImbueRecipe.
     Imbue {
         source: Ingredient,
         material: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of TransmuteRecipe.
     Transmute {
         input: Ingredient,
         material: Ingredient,
@@ -117,27 +123,32 @@ pub enum RecipeKind {
         result: TransmuteResult,
         add_material_count: bool,
     },
+    /// Port of DecoratedPotRecipe.
     DecoratedPot {
         walls: [Ingredient; 4],
         result: ItemStackTemplate,
     },
+    /// Port of BookCloningRecipe.
     BookCloning {
         source: Ingredient,
         material: Ingredient,
         allowed_generations: IntRange,
         result: ItemStackTemplate,
     },
+    /// Port of MapExtendingRecipe.
     MapExtending {
         map: Ingredient,
         material: Ingredient,
         result: TransmuteResult,
     },
+    /// Port of FireworkRocketRecipe.
     FireworkRocket {
         shell: Ingredient,
         fuel: Ingredient,
         star: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of FireworkStarRecipe.
     FireworkStar {
         shapes: Vec<(FireworkShape, Ingredient)>,
         trail: Ingredient,
@@ -146,21 +157,26 @@ pub enum RecipeKind {
         dye: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of FireworkStarFadeRecipe.
     FireworkStarFade {
         target: Ingredient,
         dye: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of BannerDuplicateRecipe.
     BannerDuplicate {
         banner: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of ShieldDecorationRecipe.
     ShieldDecoration {
         banner: Ingredient,
         target: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of RepairItemRecipe.
     RepairItem,
+    /// Port of AbstractCookingRecipe and its four subclasses.
     Cooking {
         recipe_type: RecipeType,
         ingredient: Ingredient,
@@ -168,28 +184,33 @@ pub enum RecipeKind {
         cooking_time: i32,
         experience: f32,
     },
+    /// Port of StonecutterRecipe.
     Stonecutting {
         ingredient: Ingredient,
         result: ItemStackTemplate,
     },
+    /// Port of SmithingTransformRecipe.
     SmithingTransform {
         template: Option<Ingredient>,
         base: Ingredient,
         addition: Option<Ingredient>,
         result: ItemStackTemplate,
     },
+    /// Port of SmithingTrimRecipe.
     SmithingTrim {
         template: Ingredient,
         base: Ingredient,
         addition: Ingredient,
         pattern: TrimPatternHolder,
     },
+    /// Port of BrewingRecipe.
     Brewing {
         input: PotionIngredient,
         reagent: PotionIngredient,
         output: ItemStackTemplate,
     },
 }
+/// Port of PotionIngredient. Potion contents constrain brewing, not Ingredient.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PotionIngredient {
     pub ingredient: Ingredient,
@@ -214,6 +235,7 @@ impl PotionIngredient {
             .map_or(Ok(true), |predicate| context.test_potions(predicate, stack))
     }
 }
+/// Port of the bounded MinMaxBounds.Ints fields used by crafting codecs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct IntRange {
     pub min: Option<i32>,
@@ -252,6 +274,7 @@ impl IntRange {
         Ok(result)
     }
 }
+/// Port of TransmuteResult; an absent item retains the original item type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransmuteResult {
     pub item: Option<Item>,

@@ -77,7 +77,7 @@ impl AbstractContainerMenu {
         let mut inventory_xy = (8, 84);
         match kind {
             MenuKind::Inventory => {
-                menu.local = vec![MenuContainer::simple(4), MenuContainer::simple(4)];
+                menu.local = vec![MenuContainer::crafting(4), MenuContainer::simple(4)];
                 menu.add_slot(
                     Slot::new(result, 0, 154, 28).with_kind(SlotKind::Result(ResultKind::Crafting)),
                 );
@@ -143,7 +143,7 @@ impl AbstractContainerMenu {
                 menu.add_data(4);
             }
             MenuKind::Crafting => {
-                menu.local = vec![MenuContainer::simple(9), MenuContainer::simple(4)];
+                menu.local = vec![MenuContainer::crafting(9), MenuContainer::simple(4)];
                 menu.add_slot(
                     Slot::new(result, 0, 124, 35).with_kind(SlotKind::Result(ResultKind::Crafting)),
                 );
@@ -385,6 +385,12 @@ impl AbstractContainerMenu {
         {
             return Ok(ItemStack::default());
         }
+        if index == 0
+            && self.crafting_grid_size().is_some()
+            && let Some(crafting) = hooks.crafting_ref()
+        {
+            crafting.validate_take_result()?;
+        }
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
@@ -426,6 +432,9 @@ impl AbstractContainerMenu {
             }
             MenuKind::Crafting => {
                 if index == 0 {
+                    if let Some(crafting) = hooks.crafting() {
+                        crafting.item_crafted(self, ctx, &stack, None)?;
+                    }
                     self.move_item_stack_to(ctx, &mut stack, 10, 46, true, hooks)?
                 } else if index < 10 {
                     self.move_item_stack_to(ctx, &mut stack, 10, 46, false, hooks)?
@@ -446,7 +455,7 @@ impl AbstractContainerMenu {
                 } else if self.get_item(ctx, 0).is_empty()
                     && self.slots[0].may_place(&stack, hooks)?
                 {
-                    self.set_item(ctx, 0, split(&mut stack, 1));
+                    self.set_item_live(ctx, 0, split(&mut stack, 1), hooks)?;
                     true
                 } else {
                     false
@@ -554,7 +563,7 @@ impl AbstractContainerMenu {
                     // Vanilla returns EMPTY immediately after a successful fuel transfer.
                     // Write through the canonical source before that early return.
                     if self.move_item_stack_to(ctx, &mut stack, 4, 5, false, hooks)? {
-                        self.set_item(ctx, index, stack);
+                        self.set_item_live(ctx, index, stack, hooks)?;
                         return Ok(ItemStack::default());
                     }
                     if self.slots[3].may_place(&stack, hooks)? {
@@ -588,7 +597,7 @@ impl AbstractContainerMenu {
                     true
                 } else {
                     self.move_player_sections(ctx, &mut stack, index, start, hooks)?;
-                    self.set_item(ctx, index, stack);
+                    self.set_item_live(ctx, index, stack, hooks)?;
                     return Ok(ItemStack::default());
                 }
             }
@@ -598,15 +607,24 @@ impl AbstractContainerMenu {
             return Ok(ItemStack::default());
         }
         let remaining = count(&stack);
-        self.set_item(
-            ctx,
-            index,
-            if stack.is_empty() {
-                ItemStack::default()
-            } else {
-                stack.clone()
-            },
-        );
+        if index == 0 && self.crafting_grid_size().is_some() && hooks.has_crafting() {
+            self.local[1].set_item(0, stack.clone());
+            self.crafting_remove_count = self
+                .crafting_remove_count
+                .wrapping_add(count(&original) - remaining);
+            self.crafting_check_achievements(ctx, &stack, hooks)?;
+        }
+        if stack.is_empty() {
+            self.set_item_live(ctx, index, ItemStack::default(), hooks)?;
+        } else {
+            // ItemStack mutations affect the canonical stack without Slot#set.
+            let slot = self.slots[index].clone();
+            self.container_mut(ctx, slot.container)
+                .set_item(slot.container_slot, stack.clone());
+            if self.crafting_grid_size().is_none() || slot.container != ContainerId::Local(0) {
+                self.container_mut(ctx, slot.container).set_changed();
+            }
+        }
         if remaining == count(&original) {
             return Ok(ItemStack::default());
         }
@@ -622,7 +640,17 @@ impl AbstractContainerMenu {
             let crafted = count(&original) - remaining;
             // Recipe hooks are checked before a result is taken through clicked().
             // Direct quickMoveStack callers must provide the same result hook.
-            self.take_hook(ctx, &slot, &stack, crafted, hooks)?;
+            self.on_take(
+                ctx,
+                slot.index,
+                &stack,
+                if slot.kind == SlotKind::Result(ResultKind::Crafting) && hooks.has_crafting() {
+                    0
+                } else {
+                    crafted
+                },
+                hooks,
+            )?;
         }
         if ((matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting) && index == 0)
             || (self.kind == MenuKind::Stonecutter && index == 1))
@@ -635,20 +663,6 @@ impl AbstractContainerMenu {
         }
         Ok(original)
     }
-    fn take_hook(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        slot: &Slot,
-        stack: &ItemStack,
-        crafted: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<()> {
-        match slot.container {
-            ContainerId::Local(i) => slot.on_take(&mut self.local[i], stack, crafted, hooks),
-            ContainerId::Player => slot.on_take(&mut ctx.player, stack, crafted, hooks),
-            ContainerId::External(i) => slot.on_take(&mut *ctx.external[i], stack, crafted, hooks),
-        }
-    }
     fn move_between(
         &mut self,
         ctx: &mut MenuContext<'_>,
@@ -656,7 +670,7 @@ impl AbstractContainerMenu {
         index: usize,
         boundary: usize,
         end: usize,
-        hooks: &dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<bool> {
         if index < boundary {
             self.move_item_stack_to(ctx, stack, boundary, end, true, hooks)
@@ -670,7 +684,7 @@ impl AbstractContainerMenu {
         stack: &mut ItemStack,
         index: usize,
         start: usize,
-        hooks: &dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<bool> {
         if index < start + 27 {
             self.move_item_stack_to(ctx, stack, start + 27, start + 36, false, hooks)

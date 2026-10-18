@@ -1,5 +1,7 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod container;
+mod crafting;
+mod crafting_runtime;
 mod menu;
 mod menus;
 mod server_player;
@@ -7,6 +9,8 @@ mod slot;
 mod sync;
 
 pub use container::*;
+pub use crafting::*;
+pub use crafting_runtime::*;
 pub use menu::*;
 pub use menus::*;
 pub use server_player::*;
@@ -27,6 +31,7 @@ pub enum MenuError {
     ContainerTooSmall { actual: usize, expected: usize },
     Unsupported(&'static str),
     Protocol(ferraloom_protocol::Error),
+    Crafting(crate::crafting::Error),
     Level(crate::level::LevelError),
 }
 impl std::fmt::Display for MenuError {
@@ -38,6 +43,7 @@ impl std::fmt::Display for MenuError {
             }
             Self::Unsupported(operation) => write!(f, "unsupported menu behavior: {operation}"),
             Self::Protocol(error) => error.fmt(f),
+            Self::Crafting(error) => error.fmt(f),
             Self::Level(error) => write!(f, "{error:?}"),
         }
     }
@@ -70,3 +76,9 @@ impl From<crate::level::LevelError> for MenuError {
 
 #[cfg(test)]
 mod tests;
+
+impl From<crate::crafting::Error> for MenuError {
+    fn from(error: crate::crafting::Error) -> Self {
+        Self::Crafting(error)
+    }
+}
