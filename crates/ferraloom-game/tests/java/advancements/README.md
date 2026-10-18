@@ -17,3 +17,14 @@ likewise use `recipe_holders` and `ServerRecipeBook::unlock_recipe` one at a tim
 calling recipe_unlocked before advancing. The batch helpers are for state-only
 callers. The save adapter supplies the system timezone offset at each obtained
 time, including DST, to match vanilla's timestamp format.
+
+`AnnouncementVectors` adds four actual `PlayerAdvancements#award` observations:
+all before/after chat-rule combinations, with the XP reward changing both the
+rule and display name. Its separate compressed fixture avoids recapturing
+identity-dependent tree order when observing this synchronous callback boundary.
+
+`RecipeCraftedVectors` observes the real recipe matcher with six ordered input
+lists, including a repeated reference to the same stack. The retained live event
+and pure event use these cases to check greedy ingredient matching and receiver
+multiplicity. Rust tests also check retention cleanup after capture or predicate
+errors.

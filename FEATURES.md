@@ -4,9 +4,9 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
-| [Advancements](features/advancements.md) | 1942 | 0 | 1933 | 9 | 0 |
+| [Advancements](features/advancements.md) | 1954 | 4 | 1940 | 10 | 0 |
 | [Block entities](features/block-entities.md) | 112 | 72 | 40 | 0 | 0 |
-| [Blocks](features/blocks.md) | 393 | 313 | 47 | 33 | 0 |
+| [Blocks](features/blocks.md) | 396 | 310 | 50 | 36 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 46 | 21 | 25 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
@@ -41,7 +41,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
-| [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
+| [Statistics](features/statistics.md) | 104 | 6 | 94 | 4 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
 | [Ticking, game events and vibrations](features/ticking.md) | 191 | 181 | 10 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19345** | **12101** | **4343** | **2901** | **0** |
+| **Total** | **19368** | **12105** | **4357** | **2906** | **0** |

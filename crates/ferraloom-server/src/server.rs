@@ -191,7 +191,7 @@ pub struct MinecraftServer {
     root: PathBuf,
     registries: RegistrySet,
     recipe_manager: Arc<RecipeManager>,
-    recipe_synchronization: RecipeSynchronization,
+    recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: Arc<RuntimeCraftingContext>,
     access: AccessLists,
     level: ServerLevel,
@@ -260,7 +260,8 @@ impl MinecraftServer {
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
-        let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
+        let recipe_synchronization =
+            Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
         let loot = Arc::new(LootData::load(
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
@@ -325,11 +326,55 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        let loaded_recipe_tags =
+            ferraloom_data::datapack::load_tags(&resources, "recipe", |id, _| {
+                recipe_manager.by_key(id).map(|recipe| {
+                    protocol::Identifier::parse(&recipe.id.to_string())
+                        .expect("validated recipe identifier")
+                })
+            });
+        for diagnostic in loaded_recipe_tags.diagnostics {
+            eprintln!("Recipe tag: {diagnostic:?}");
+        }
+        let recipe_tags = loaded_recipe_tags
+            .values
+            .into_iter()
+            .map(|(id, values)| {
+                (
+                    protocol::Identifier::parse(&id.to_string())
+                        .expect("validated recipe tag identifier"),
+                    values,
+                )
+            })
+            .collect();
+        let advancements = Arc::new(
+            ferraloom_game::advancements::ServerAdvancementManager::load(
+                &resources,
+                &ferraloom_game::advancements::AdvancementRegistryContext {
+                    loot: &loot,
+                    recipes: &recipe_manager,
+                    recipe_tags: &recipe_tags,
+                    lookup: Some(&LootRegistryLookup::new(&registries, &resources)),
+                },
+            )?,
+        );
+        for warning in &advancements.validation_problems {
+            eprintln!(
+                "Advancement {} criterion {} {}: {}",
+                warning.advancement,
+                warning.criterion,
+                warning.problem.path,
+                warning.problem.message
+            );
+        }
         level.level.set_container_resources(
             Arc::new(ContainerResources {
                 recipes: Arc::clone(&recipe_manager),
                 loot,
                 crafting: Arc::clone(&crafting_context),
+                advancements,
+                recipe_tags,
+                recipe_synchronization: Arc::clone(&recipe_synchronization),
             }),
             world.seed,
         );
@@ -1068,6 +1113,28 @@ impl MinecraftServer {
         if let Some(saved) = saved {
             player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
+        let advancement_manager = self
+            .level
+            .level
+            .container_resources()
+            .map_err(game_error)?
+            .advancements
+            .clone();
+        let progress_path = self.world.access.path().to_path_buf();
+        let progress_uuid = profile.id;
+        let progress = tokio::task::spawn_blocking(move || {
+            ferraloom_game::advancements::load_player_progress(
+                &progress_path,
+                progress_uuid,
+                &advancement_manager,
+            )
+        })
+        .await??;
+        for diagnostic in progress.diagnostics {
+            eprintln!("{diagnostic}");
+        }
+        player.advancements = progress.advancements;
+        player.stats = progress.stats;
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
             player.update_game_mode_abilities();
@@ -1562,6 +1629,7 @@ impl MinecraftServer {
             event_id: 24 + permission.clamp(0, 4) as i8,
         }));
         c.push(self.commands.packet(permission));
+        player.stats.mark_all_dirty();
         let (settings, recipes) = player
             .recipe_book
             .initial_packets(&self.recipe_synchronization);
@@ -1669,13 +1737,6 @@ impl MinecraftServer {
                             value: EntityDataValue::Byte(c.information.model_customisation as i8),
                         },
                     ]),
-                }),
-                cb::Packet::UpdateAdvancements(cb::UpdateAdvancements {
-                    should_reset: true,
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                    progress: Vec::new(),
-                    show_advancements: true,
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
@@ -2073,10 +2134,21 @@ impl MinecraftServer {
                     player.set_shared_flag(1, p.input.shift);
                 }
             }
-            sb::Packet::CustomPayload(_)
-            | sb::Packet::Pong(_)
-            | sb::Packet::PlayerCommand(_)
-            | sb::Packet::SeenAdvancements(_) => {}
+            sb::Packet::SeenAdvancements(packet) => {
+                ferraloom_game::advancements::seen_advancements(
+                    &mut self.level.level,
+                    entity,
+                    &packet,
+                )
+                .map_err(game_error)?;
+            }
+            sb::Packet::ClientCommand(packet)
+                if packet.action == play::ClientCommandAction::RequestStats =>
+            {
+                ferraloom_game::stats::request_stats(&mut self.level.level, entity)
+                    .map_err(game_error)?;
+            }
+            sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
             _ => {}
         }
@@ -3174,11 +3246,20 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
+            let progress = ferraloom_game::advancements::PlayerProgressSave::capture(
+                player,
+                self.world.access.path(),
+            )?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
             let name = player.display_name();
             let access = self.world.access.clone();
-            tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag)).await??;
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                access.player_data().save(&uuid, &tag)?;
+                progress.write()?;
+                Ok(())
+            })
+            .await??;
             self.level
                 .distance_manager
                 .update_player(entity, None, &mut self.level.tickets);
@@ -3416,6 +3497,21 @@ impl MinecraftServer {
         for (pos, tag) in encoded {
             self.world.io.store(pos, Some(tag)).await?;
         }
+        let progress = self
+            .players
+            .iter()
+            .filter_map(|id| self.connections.get(id))
+            .filter_map(|connection| match connection.phase {
+                Phase::Play(entity) => Some(entity),
+                _ => None,
+            })
+            .map(|entity| {
+                Ok(ferraloom_game::advancements::PlayerProgressSave::capture(
+                    self.player(entity)?,
+                    self.world.access.path(),
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let players = self
             .players
             .iter()
@@ -3435,6 +3531,8 @@ impl MinecraftServer {
         self.world
             .save_level_and_players(self.level.game_time, players)
             .await?;
+        tokio::task::spawn_blocking(move || progress.into_iter().try_for_each(|save| save.write()))
+            .await??;
         self.world.io.synchronize(flush).await?;
         Ok(())
     }

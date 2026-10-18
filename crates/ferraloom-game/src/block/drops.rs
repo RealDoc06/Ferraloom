@@ -469,11 +469,21 @@ mod tests {
                 )
                 .unwrap(),
             );
+            let recipes = Arc::new(RecipeManager::new(Vec::new()).unwrap());
+            let recipe_synchronization = Arc::new(crate::crafting::RecipeSynchronization::new(
+                &recipes,
+                |_| true,
+            ));
             level.set_container_resources(
                 Arc::new(ContainerResources {
                     crafting: crate::inventory::RuntimeCraftingContext::fixture(),
-                    recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
+                    recipes: Arc::clone(&recipes),
                     loot: Arc::new(loot),
+                    advancements: Arc::new(crate::advancements::ServerAdvancementManager::new(
+                        Vec::new(),
+                    )),
+                    recipe_tags: Default::default(),
+                    recipe_synchronization,
                 }),
                 0,
             );

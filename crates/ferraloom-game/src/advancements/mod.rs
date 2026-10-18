@@ -2,6 +2,11 @@
 //! and apply returned effects synchronously at the triggering call site.
 pub mod criteria;
 mod data;
+mod live;
+pub use live::{award_recipes, flush_dirty, seen_advancements};
+mod persistence;
+pub use persistence::{LoadedPlayerProgress, PlayerProgressSave, load_player_progress};
+pub(crate) use persistence::{PlayerProgressDirectory, player_progress_path};
 mod player;
 mod progress;
 mod tree;
