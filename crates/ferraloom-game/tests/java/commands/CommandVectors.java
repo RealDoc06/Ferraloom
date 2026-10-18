@@ -182,6 +182,7 @@ public final class CommandVectors {
             var inputs = new LinkedHashSet<String>(entry.getValue().getExamples());
             inputs.addAll(List.of("", " ", "?", "-1", "1.5", "~ ~ ~", "0 1", "0 1 2", "^ ^ ^", "~ ^ ~", "@a", "@e[type=minecraft:player,limit=1]"));
             if (entry.getKey().equals("minecraft:entity")) inputs.addAll(List.of("@", "@z", "@a[", "@a[limit=0]", "@a[x=1,x=2]", "@a[name=!A,name=B]", "@e[type=#minecraft:undead,type=minecraft:player]", "@a[distance=3..1]", "@a[scores={foo=1..2}]", "@a[advancements={minecraft:story/root={foo=true}}]"));
+            if (entry.getKey().equals("minecraft:nbt_tag") || entry.getKey().equals("minecraft:nbt_compound_tag")) inputs.addAll(List.of("{", "{a", "{a:", "{a:1", "[B;", "[B;1s]", "\"abc", "\"\\q", "\"\\xG0", "\"\\Uffffffff\"", "\"\\N{NOT A CHARACTER}\"", "1_", "01", "-1ub", "999999999999999999999999999999l", "1e999", "{'':1}", "uuid(1)", "bool('abc')", "bad(1)"));
             if (entry.getKey().equals("minecraft:item_stack")) inputs.addAll(List.of("stone[]", "stone[damage=1]", "stone[!damage]", "stone[damage=1,damage=2]", "stone[creative_slot_lock={}]", "stone[unknown=1]", "stone[damage=]", "stone[damage=1,", "stone[ damage=1 ]", "stone[custom_name='hello']"));
             if (entry.getKey().equals("minecraft:particle")) {
                 BuiltInRegistries.PARTICLE_TYPE.keySet().forEach(id -> { inputs.add(id.toString()); inputs.add(id+"{}"); });
@@ -219,6 +220,9 @@ public final class CommandVectors {
                     if (value instanceof net.minecraft.commands.arguments.coordinates.LocalCoordinates coordinates) vector.add("local_coordinates", JSON.toJsonTree(List.of(coordinates.left(), coordinates.up(), coordinates.forwards())));
                 } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
                     vector.addProperty("ok", false); vector.addProperty("error_cursor", e.getCursor()); vector.addProperty("message", e.getRawMessage().getString());
+                    if ((entry.getKey().equals("minecraft:nbt_tag") || entry.getKey().equals("minecraft:nbt_compound_tag")) && e.getRawMessage() instanceof net.minecraft.network.chat.Component component) {
+                        vector.add("error_component",net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,component).getOrThrow());
+                    }
                 } catch (RuntimeException e) {
                     vector.addProperty("runtime_exception", e.getClass().getName()); vector.addProperty("runtime_message", e.getMessage());
                 }

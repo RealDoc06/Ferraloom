@@ -764,12 +764,44 @@ fn enum_word(
 pub fn nbt(reader: &mut StringReader, compound: bool) -> Result<Tag, CommandSyntaxException> {
     let start = reader.cursor();
     let (tag, used) = ferraloom_nbt::parse_prefix(&reader.remaining())
-        .map_err(|e| error(&e.message, &[]).with_context(reader.string(), start + e.cursor))?;
+        .map_err(|e| snbt_error(&e.message).with_context(reader.string(), start + e.cursor))?;
     reader.set_cursor(start + used);
     if compound && !matches!(tag, Tag::Compound(_)) {
         return Err(error_at(reader, "argument.nbt.expected.compound", &[]));
     }
     Ok(tag)
+}
+/// Restore SnbtGrammar's translated error component from the NBT parser's plain diagnostic.
+fn snbt_error(message: &str) -> CommandSyntaxException {
+    if let Some(literal) = message.strip_prefix("Expected literal ") {
+        return error("argument.literal.incorrect", &[literal.into()]);
+    }
+    for (prefix, key) in [
+        (
+            "Failed to parse number: ",
+            "snbt.parser.number_parse_failure",
+        ),
+        (
+            "Expected a character literal of length ",
+            "snbt.parser.expected_hex_escape",
+        ),
+        (
+            "Invalid Unicode character value: ",
+            "snbt.parser.invalid_codepoint",
+        ),
+        ("No such operation: ", "snbt.parser.no_such_operation"),
+    ] {
+        if let Some(value) = message.strip_prefix(prefix) {
+            return error(key, &[value.into()]);
+        }
+    }
+    if let Some((key, _)) = crate::commands::exceptions::translations()
+        .iter()
+        .find(|(key, text)| key.starts_with("snbt.parser.") && text.as_str() == message)
+    {
+        return error(key, &[]);
+    }
+    error(message, &[])
 }
 /// FilenameUtils#wildcardMatch over resource identifiers (ASCII).
 fn wildcard_match(pattern: &str, value: &str) -> bool {

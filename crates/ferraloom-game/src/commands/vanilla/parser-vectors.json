@@ -5761,6 +5761,12 @@
     "ok": false,
     "error_cursor": 4,
     "message": "Expected literal :",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        ":"
+      ]
+    },
     "cursor": 0
   },
   {
@@ -5770,6 +5776,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5779,6 +5788,9 @@
     "ok": false,
     "error_cursor": 1,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5788,6 +5800,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5797,6 +5812,9 @@
     "ok": false,
     "error_cursor": 2,
     "message": "Expected compound tag",
+    "error_component": {
+      "translate": "argument.nbt.expected.compound"
+    },
     "cursor": 2
   },
   {
@@ -5806,6 +5824,9 @@
     "ok": false,
     "error_cursor": 3,
     "message": "Expected compound tag",
+    "error_component": {
+      "translate": "argument.nbt.expected.compound"
+    },
     "cursor": 3
   },
   {
@@ -5815,6 +5836,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5824,6 +5848,9 @@
     "ok": false,
     "error_cursor": 3,
     "message": "Decimal numbers can't start with 0",
+    "error_component": {
+      "translate": "snbt.parser.leading_zero_not_allowed"
+    },
     "cursor": 0
   },
   {
@@ -5833,6 +5860,9 @@
     "ok": false,
     "error_cursor": 3,
     "message": "Decimal numbers can't start with 0",
+    "error_component": {
+      "translate": "snbt.parser.leading_zero_not_allowed"
+    },
     "cursor": 0
   },
   {
@@ -5842,6 +5872,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5851,6 +5884,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5860,6 +5896,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -5869,6 +5908,285 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "{",
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Expected literal \"",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "\""
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "{a",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal :",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        ":"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "{a:",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "{a:1",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "[B;",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected literal +",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "+"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "[B;1s]",
+    "ok": false,
+    "error_cursor": 6,
+    "message": "Invalid array element type",
+    "error_component": {
+      "translate": "snbt.parser.invalid_array_element_type"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "\"abc",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Invalid string contents",
+    "error_component": {
+      "translate": "snbt.parser.invalid_string_contents"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "\"\\q",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal b",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "b"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "\"\\xG0",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected a character literal of length 2",
+    "error_component": {
+      "translate": "snbt.parser.expected_hex_escape",
+      "with": [
+        "2"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "\"\\Uffffffff\"",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "Invalid Unicode character value: U+FFFFFFFF",
+    "error_component": {
+      "translate": "snbt.parser.invalid_codepoint",
+      "with": [
+        "U+FFFFFFFF"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "\"\\N{NOT A CHARACTER}\"",
+    "ok": false,
+    "error_cursor": 20,
+    "message": "Invalid Unicode character name",
+    "error_component": {
+      "translate": "snbt.parser.invalid_character_name"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "1_",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal (",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "("
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "01",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "-1ub",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Expected a non-negative number",
+    "error_component": {
+      "translate": "snbt.parser.expected_non_negative_number"
+    },
+    "cursor": 4
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "999999999999999999999999999999l",
+    "ok": false,
+    "error_cursor": 31,
+    "message": "Failed to parse number: For input string: \"999999999999999999999999999999\"",
+    "error_component": {
+      "translate": "snbt.parser.number_parse_failure",
+      "with": [
+        "For input string: \"999999999999999999999999999999\""
+      ]
+    },
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "1e999",
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Expected compound tag",
+    "error_component": {
+      "translate": "argument.nbt.expected.compound"
+    },
+    "cursor": 1
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "{'':1}",
+    "ok": false,
+    "error_cursor": 5,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "uuid(1)",
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Expected a string representing a valid UUID",
+    "error_component": {
+      "translate": "snbt.parser.expected_string_uuid"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "bool('abc')",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "Expected a number or a boolean",
+    "error_component": {
+      "translate": "snbt.parser.expected_number_or_boolean"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "input": "bad(1)",
+    "ok": false,
+    "error_cursor": 6,
+    "message": "No such operation: bad/1",
+    "error_component": {
+      "translate": "snbt.parser.no_such_operation",
+      "with": [
+        "bad/1"
+      ]
+    },
     "cursor": 0
   },
   {
@@ -11362,6 +11680,12 @@
     "ok": false,
     "error_cursor": 4,
     "message": "Expected literal :",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        ":"
+      ]
+    },
     "cursor": 0
   },
   {
@@ -11378,6 +11702,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11387,6 +11714,9 @@
     "ok": false,
     "error_cursor": 1,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11396,6 +11726,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11419,6 +11752,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11428,6 +11764,9 @@
     "ok": false,
     "error_cursor": 3,
     "message": "Decimal numbers can't start with 0",
+    "error_component": {
+      "translate": "snbt.parser.leading_zero_not_allowed"
+    },
     "cursor": 0
   },
   {
@@ -11437,6 +11776,9 @@
     "ok": false,
     "error_cursor": 3,
     "message": "Decimal numbers can't start with 0",
+    "error_component": {
+      "translate": "snbt.parser.leading_zero_not_allowed"
+    },
     "cursor": 0
   },
   {
@@ -11446,6 +11788,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11455,6 +11800,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11464,6 +11812,9 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
     "cursor": 0
   },
   {
@@ -11473,6 +11824,280 @@
     "ok": false,
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "{",
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Expected literal \"",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "\""
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "{a",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal :",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        ":"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "{a:",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected a valid unquoted string",
+    "error_component": {
+      "translate": "snbt.parser.expected_unquoted_string"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "{a:1",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "[B;",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected literal +",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "+"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "[B;1s]",
+    "ok": false,
+    "error_cursor": 6,
+    "message": "Invalid array element type",
+    "error_component": {
+      "translate": "snbt.parser.invalid_array_element_type"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "\"abc",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Invalid string contents",
+    "error_component": {
+      "translate": "snbt.parser.invalid_string_contents"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "\"\\q",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal b",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "b"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "\"\\xG0",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Expected a character literal of length 2",
+    "error_component": {
+      "translate": "snbt.parser.expected_hex_escape",
+      "with": [
+        "2"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "\"\\Uffffffff\"",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "Invalid Unicode character value: U+FFFFFFFF",
+    "error_component": {
+      "translate": "snbt.parser.invalid_codepoint",
+      "with": [
+        "U+FFFFFFFF"
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "\"\\N{NOT A CHARACTER}\"",
+    "ok": false,
+    "error_cursor": 20,
+    "message": "Invalid Unicode character name",
+    "error_component": {
+      "translate": "snbt.parser.invalid_character_name"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "1_",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal (",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "("
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "01",
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "-1ub",
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Expected a non-negative number",
+    "error_component": {
+      "translate": "snbt.parser.expected_non_negative_number"
+    },
+    "cursor": 4
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "999999999999999999999999999999l",
+    "ok": false,
+    "error_cursor": 31,
+    "message": "Failed to parse number: For input string: \"999999999999999999999999999999\"",
+    "error_component": {
+      "translate": "snbt.parser.number_parse_failure",
+      "with": [
+        "For input string: \"999999999999999999999999999999\""
+      ]
+    },
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "1e999",
+    "ok": true,
+    "cursor": 1
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "{'':1}",
+    "ok": false,
+    "error_cursor": 5,
+    "message": "Expected literal .",
+    "error_component": {
+      "translate": "argument.literal.incorrect",
+      "with": [
+        "."
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "uuid(1)",
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Expected a string representing a valid UUID",
+    "error_component": {
+      "translate": "snbt.parser.expected_string_uuid"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "bool('abc')",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "Expected a number or a boolean",
+    "error_component": {
+      "translate": "snbt.parser.expected_number_or_boolean"
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "input": "bad(1)",
+    "ok": false,
+    "error_cursor": 6,
+    "message": "No such operation: bad/1",
+    "error_component": {
+      "translate": "snbt.parser.no_such_operation",
+      "with": [
+        "bad/1"
+      ]
+    },
     "cursor": 0
   },
   {

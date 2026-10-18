@@ -10,6 +10,7 @@ struct Vector {
     cursor: usize,
     error_cursor: Option<i32>,
     message: Option<String>,
+    error_component: Option<serde_json::Value>,
     value: Option<serde_json::Value>,
     world_coordinates: Option<serde_json::Value>,
     local_coordinates: Option<[f64; 3]>,
@@ -188,6 +189,14 @@ fn check_vector(vector: &Vector) {
             vector.error_cursor.unwrap(),
             "{label}: {error}"
         );
+        if let Some(component) = &vector.error_component {
+            let actual = crate::commands::exceptions::error_component(&error);
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&actual.to_json().unwrap()).unwrap(),
+                *component,
+                "{label}: translated error component"
+            );
+        }
         assert_eq!(
             error.raw_message.text(),
             vector.message.as_deref().unwrap(),
