@@ -106,6 +106,9 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     {
         return Some(&geometry::PLANT_SHAPES);
     }
+    if block == Block::BAMBOO && method == M::IsCollisionShapeFullBlock {
+        return Some(&geometry::PLANT_SHAPES);
+    }
     let behavior: &'static dyn BlockBehavior = match block.class() {
         C::ChorusPlantBlock | C::ChorusFlowerBlock
             if matches!(

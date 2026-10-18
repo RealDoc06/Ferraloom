@@ -87,6 +87,15 @@ pub fn supports(class: BlockClass) -> bool {
     )
 }
 impl BlockBehavior for PlantShapes {
+    /// Port of BambooStalkBlock#isCollisionShapeFullBlock's constant override.
+    fn is_collision_shape_full_block(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     fn shape(
         &self,
         state: BlockState,

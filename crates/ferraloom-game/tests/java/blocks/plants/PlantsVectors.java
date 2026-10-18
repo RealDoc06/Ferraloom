@@ -258,7 +258,7 @@ public final class PlantsVectors {
                     var coordinates=new ArrayList<String>();for(double d:new double[]{box.minX,box.minY,box.minZ,box.maxX,box.maxY,box.maxZ})coordinates.add(Long.toUnsignedString(Double.doubleToRawLongBits(d),16));
                     boxes.add(String.join(":",coordinates));
                 }
-                System.out.println("shape\t"+Block.getId(state)+"\t"+at.getX()+"\t"+at.getY()+"\t"+at.getZ()+"\t"+collision+"\t"+String.join(";",boxes));
+                System.out.println("shape\t"+Block.getId(state)+"\t"+at.getX()+"\t"+at.getY()+"\t"+at.getZ()+"\t"+collision+"\t"+String.join(";",boxes)+"\t"+state.isCollisionShapeFullBlock(level,at));
             }
         }
         var growthSpeed=CropBlock.class.getDeclaredMethod("getGrowthSpeed",Block.class,BlockGetter.class,BlockPos.class);

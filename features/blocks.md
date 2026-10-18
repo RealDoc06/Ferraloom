@@ -333,7 +333,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 
 | blocks.plants.snow-melt-threshold | Snow melt uses block light above 11, drop hook and captured destruction context | `SnowLayerBlock#randomTick` | `plants::tests::snow_melts_only_above_eleven_block_light_and_emits_destroy_context` | - | todo |
 
-| blocks.plants.native-shapes | Plant outlines and collision shapes, including position offsets and all registered states | Real vanilla shape methods (3,810 vectors) | `plants::tests::plant_outline_and_empty_context_collision_shapes_match_vanilla` | pass | pass |
+| blocks.plants.native-shapes | Plant outlines, collision shapes and full-collision queries, including bamboo's constant override, position offsets and all registered states | Real vanilla shape methods (3,810 vectors) | `plants::tests::plant_outline_and_empty_context_collision_shapes_match_vanilla` | pass | todo |
 
 | blocks.plants.bamboo-crown | Bamboo crown rewrites, age propagation and stopping-stage RNG | `BambooStalkBlock#growBamboo` on a real vanilla Level (384 vectors) | `plants::tests::bamboo_crown_rewrites_and_stage_draws_match_vanilla` | pass | pass |
 | blocks.plants.parity-crops | Crops mature under `/tick` with hydrated farmland | `CropBlock#randomTick` | `ferraloom-parity/tests/plants.rs::parity_crops_grow_under_tick` | - | todo |

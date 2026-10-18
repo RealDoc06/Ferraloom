@@ -402,6 +402,11 @@ fn plant_outline_and_empty_context_collision_shapes_match_vanilla() {
             .collect::<Vec<_>>()
             .join(";");
         assert_eq!(actual, f[6], "{line}");
+        assert_eq!(
+            reader.is_collision_shape_full_block(state, pos).unwrap(),
+            f[7] == "true",
+            "full collision {line}"
+        );
         count += 1;
     }
     assert_eq!(count, 3810);
