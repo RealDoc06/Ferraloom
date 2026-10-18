@@ -171,7 +171,40 @@ public final class NeighborVectors {
               @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
               @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
 
+              static void recordReadiness(String stage,net.minecraft.world.ticks.LevelTicks<String> ticks,BlockPos pos){
+                ticks.tick(0,65536,(p,t)->{});
+                System.out.println("scheduled-readiness:"+stage+"\t"+ticks.hasScheduledTick(pos,"block"));
+              }
+              static void scheduledReadiness(RegistryAccess r) throws Exception {
+                var level=new MutationFixture(r);var pos=new BlockPos(8,0,8);var chunk=level.getChunkAt(pos);
+                var holder=new net.minecraft.server.level.ChunkHolder(chunk.getPos(),32,level,level.source.lights,(p,old,l,set)->{},(p,b)->List.of());
+                var future=net.minecraft.server.level.ChunkHolder.class.getDeclaredField("tickingChunkFuture");future.setAccessible(true);
+                var ready=java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkResult.of(chunk));future.set(holder,ready);
+                var completion=new java.util.concurrent.CompletableFuture<net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess>>();
+                var storage=new net.minecraft.world.level.entity.EntityPersistentStorage<net.minecraft.world.level.entity.EntityAccess>(){
+                  public java.util.concurrent.CompletableFuture<net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess>> loadEntities(ChunkPos p){return completion;}
+                  public void storeEntities(net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess> entities){throw new UnsupportedOperationException("storeEntities");}
+                  public void flush(boolean flush){throw new UnsupportedOperationException("flush");}
+                };
+                // Empty storage never calls an entity callback; an accidental
+                // callback through this omitted service fails immediately.
+                var entities=new net.minecraft.world.level.entity.PersistentEntitySectionManager<>(net.minecraft.world.level.entity.EntityAccess.class,null,storage);
+                var simulation=new boolean[]{true};
+                var ticks=new net.minecraft.world.ticks.LevelTicks<String>(key->entities.areEntitiesLoaded(key)&&simulation[0]&&holder.getTickingChunkFuture().getNow(net.minecraft.server.level.ChunkHolder.UNLOADED_LEVEL_CHUNK).isSuccess());
+                ticks.addContainer(chunk.getPos(),new net.minecraft.world.ticks.LevelChunkTicks<>());
+                ticks.schedule(new net.minecraft.world.ticks.ScheduledTick<>("block",pos,0,net.minecraft.world.ticks.TickPriority.NORMAL,0));
+                recordReadiness("fresh",ticks,pos);
+                entities.updateChunkStatus(chunk.getPos(),net.minecraft.world.level.entity.Visibility.TRACKED);
+                recordReadiness("pending",ticks,pos);
+                completion.complete(new net.minecraft.world.level.entity.ChunkEntities<>(chunk.getPos(),List.of()));
+                recordReadiness("completed-not-integrated",ticks,pos);
+                entities.tick();simulation[0]=false;recordReadiness("outside-simulation",ticks,pos);
+                simulation[0]=true;future.set(holder,java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkHolder.UNLOADED_LEVEL_CHUNK));
+                recordReadiness("ticking-not-ready",ticks,pos);
+                future.set(holder,ready);recordReadiness("ready",ticks,pos);
+              }
               public static void run(RegistryAccess r) throws Exception {
+                scheduledReadiness(r);
                 for(var status:List.of(net.minecraft.server.level.FullChunkStatus.FULL,net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING))for(boolean ready:new boolean[]{false,true}){
                   var live=new MutationFixture(r);live.fullStatus=status;var updatePos=new BlockPos(8,0,8);
                   var chunk=live.getChunkAt(updatePos);

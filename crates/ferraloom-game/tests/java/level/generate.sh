@@ -43,3 +43,5 @@ rg '^directional-replacement:' "$classes/neighbors.tsv" > "$root/crates/ferraloo
 rg '^client-update:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/client-updates.tsv"
 
 rg '^(dynamic-fluid-wall|fluid-wall):' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/walls.tsv"
+
+rg '^scheduled-readiness:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/scheduled-readiness.tsv"

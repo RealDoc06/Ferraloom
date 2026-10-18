@@ -45,34 +45,47 @@ fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_
     }
     assert!(level.update_empty_time(true, true));
 }
+fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
+    chunk::LevelChunk::new(
+        pos,
+        -1..1,
+        ferraloom_chunk::LevelChunkSection::new(
+            ferraloom_chunk::Strategy::block_states(),
+            ferraloom_chunk::Strategy::biomes(Arc::new(
+                ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+            )),
+            ferraloom_chunk::BiomeId(0),
+        ),
+    )
+}
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(Region::new(behaviors));
     for x in -1..=1 {
         for z in -1..=1 {
-            level
-                .add_chunk(chunk::LevelChunk::new(
-                    ChunkPos::new(x, z),
-                    -1..1,
-                    ferraloom_chunk::LevelChunkSection::new(
-                        ferraloom_chunk::Strategy::block_states(),
-                        ferraloom_chunk::Strategy::biomes(Arc::new(
-                            ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
-                        )),
-                        ferraloom_chunk::BiomeId(0),
-                    ),
-                ))
-                .unwrap();
+            let pos = ChunkPos::new(x, z);
+            level.add_chunk(empty_chunk(pos)).unwrap();
             level
                 .set_chunk_loading_status(
-                    ChunkPos::new(x, z),
+                    pos,
                     distance_manager::FullChunkStatus::EntityTicking,
                     true,
                 )
                 .unwrap();
+            level
+                .update_entity_chunk_status(pos, entity::Visibility::Ticking)
+                .unwrap();
         }
     }
+    for request in level.take_entity_storage_requests() {
+        let entity::EntityStorageRequest::Load { id, .. } = request else {
+            panic!("new empty fixture only requests entity loads")
+        };
+        level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    }
+    level.tick_entity_management().unwrap();
     level
 }
+
 fn fixture(behaviors: &'static Behaviors) -> Level {
     let mut level = empty_level(behaviors);
     for direction in Direction::VALUES {
@@ -472,6 +485,77 @@ fn flat_pool() -> Level {
     }
     level.rules_mut().spread_fire = false;
     level
+}
+#[test]
+fn scheduled_phases_wait_for_entity_load_integration_simulation_and_ticking_future() {
+    use ferraloom_data::registries::fluid::Id as Fluid;
+    let mut level = Level::new(Region::new(&EMPTY));
+    let chunk = ChunkPos::ZERO;
+    let pos = BlockPos::new(8, 0, 8);
+    level.add_chunk(empty_chunk(chunk)).unwrap();
+    level
+        .set_block_state(pos, Block::STONE.default_state())
+        .unwrap();
+    level.set_chunk_block_ticking(chunk, true).unwrap();
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    level
+        .schedule_block_tick_after(pos, Block::STONE, 0)
+        .unwrap();
+    level
+        .schedule_fluid_tick_after(pos, Fluid::WATER, 0)
+        .unwrap();
+    let check = |level: &mut Level, name: &str| {
+        level.tick_block_phase(0, 65536).unwrap();
+        level.tick_fluid_phase(0, 65536).unwrap();
+        let key = format!("scheduled-readiness:{name}");
+        let expected = include_str!("../../tests/java/level/scheduled-readiness.tsv")
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once('\t')?;
+                (name == key).then_some(value.parse::<bool>().unwrap())
+            })
+            .unwrap();
+        assert_eq!(
+            level.has_scheduled_block_tick(pos, Block::STONE),
+            expected,
+            "{name}"
+        );
+        assert_eq!(
+            level.has_scheduled_fluid_tick(pos, Fluid::WATER),
+            expected,
+            "{name}"
+        );
+    };
+    check(&mut level, "fresh");
+    level
+        .update_entity_chunk_status(chunk, entity::Visibility::Tracked)
+        .unwrap();
+    check(&mut level, "pending");
+    let entity::EntityStorageRequest::Load { id, .. } =
+        level.take_entity_storage_requests().pop().unwrap()
+    else {
+        panic!("the fixture requests its entity chunk")
+    };
+    level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    check(&mut level, "completed-not-integrated");
+    level.tick_entity_management().unwrap();
+    level.set_chunk_block_ticking(chunk, false).unwrap();
+    check(&mut level, "outside-simulation");
+    level.set_chunk_block_ticking(chunk, true).unwrap();
+    level
+        .set_chunk_loading_status(
+            chunk,
+            distance_manager::FullChunkStatus::BlockTicking,
+            false,
+        )
+        .unwrap();
+    check(&mut level, "ticking-not-ready");
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    check(&mut level, "ready");
 }
 #[test]
 fn water_spread_uses_scheduled_delay_and_crosses_a_chunk_boundary() {
