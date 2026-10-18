@@ -93,7 +93,13 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
     );
 }
 fn check_vector(vector: &Vector) {
-    let argument = MinecraftArgument::new(wire::from_report(&vector.parser, &vector.properties));
+    let mut argument =
+        MinecraftArgument::new(wire::from_report(&vector.parser, &vector.properties));
+    argument.context = Arc::new(crate::commands::context::CommandBuildContext {
+        registries: serde_json::from_str(include_str!("../vanilla/registry-elements.json"))
+            .unwrap(),
+        tags: Default::default(),
+    });
     let mut reader = StringReader::with_provider(&vector.input, Arc::new(BrigadierExceptions));
     let parsed = argument.parse(&mut reader);
     let label = format!("{} {:?}", vector.parser, vector.input);

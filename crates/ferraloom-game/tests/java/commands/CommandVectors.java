@@ -49,11 +49,18 @@ public final class CommandVectors {
         Bootstrap.bootStrap();
         var registries = VanillaRegistries.createWorldLookup();
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(p -> p.apply());
+        var elements = new JsonObject();
+        registries.listRegistries().forEach(registry -> {
+            var entries = new JsonArray();
+            registry.listElements().forEach(holder -> entries.add(holder.key().identifier().toString()));
+            elements.add(registry.key().identifier().toString(), entries);
+        });
         var context = CommandBuildContext.simple(registries, FeatureFlags.DEFAULT_FLAGS);
         var commands = new Commands(Commands.CommandSelection.DEDICATED, context);
         var dispatcher = commands.getDispatcher();
         var out = Path.of(args[0]);
         Files.createDirectories(out);
+        write(out, "registry-elements.json", elements);
         var nodes = new ArrayList<CommandNode<CommandSourceStack>>();
         var ids = new IdentityHashMap<CommandNode<CommandSourceStack>,Integer>();
         var queue = new ArrayDeque<CommandNode<CommandSourceStack>>();

@@ -252,16 +252,7 @@ impl MinecraftArgument {
             A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
             A::NbtTag {} => V::Tag(nbt(reader, false)?),
             A::NbtCompoundTag {} => V::Tag(nbt(reader, true)?),
-            A::NbtPath {} => {
-                let start = reader.cursor();
-                let text = nbt_path_text(reader);
-                V::Path(NbtPath::parse(&text).map_err(|e| {
-                    let mut error = error("argument.nbtpath.node.invalid", &[]);
-                    error.input = Some(reader.string().into());
-                    error.cursor = Some(start + e.cursor().max(0) as usize);
-                    error
-                })?)
-            }
+            A::NbtPath {} => V::Path(nbt_path(reader)?),
             A::Component {} => {
                 let tag = nbt(reader, false)?;
                 V::Component(
@@ -613,34 +604,61 @@ fn wildcard_match(pattern: &str, value: &str) -> bool {
     }
     matched[value.len()]
 }
-fn nbt_path_text(reader: &mut StringReader) -> String {
+/// Port of NbtPathArgument#parse; retain the reader's position independently of the error cursor.
+fn nbt_path(reader: &mut StringReader) -> Result<NbtPath, CommandSyntaxException> {
     let start = reader.cursor();
-    let mut nesting = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    while reader.can_read() {
-        let c = reader.peek();
-        if let Some(q) = quote {
-            reader.skip();
-            if escaped {
-                escaped = false;
-            } else if c == 92 {
-                escaped = true;
-            } else if c == q {
-                quote = None;
+    let mut first = true;
+    while reader.can_read() && reader.peek() != 32 {
+        match reader.peek() {
+            91 => {
+                reader.skip();
+                match if reader.can_read() { reader.peek() } else { 0 } {
+                    123 => {
+                        nbt(reader, true)?;
+                        reader.expect(93)?;
+                    }
+                    93 => reader.skip(),
+                    _ => {
+                        reader.read_int()?;
+                        reader.expect(93)?;
+                    }
+                }
             }
-            continue;
+            123 => {
+                if !first {
+                    return Err(error_at(reader, "arguments.nbtpath.node.invalid", &[]));
+                }
+                nbt(reader, true)?;
+            }
+            _ => {
+                let name = if matches!(reader.peek(), 34 | 39) {
+                    reader.read_string()?
+                } else {
+                    let start = reader.cursor();
+                    while reader.can_read()
+                        && !matches!(reader.peek(), 32 | 34 | 39 | 91 | 93 | 46 | 123 | 125)
+                    {
+                        reader.skip();
+                    }
+                    reader.slice(start, reader.cursor())
+                };
+                if name.is_empty() {
+                    return Err(error_at(reader, "arguments.nbtpath.node.invalid", &[]));
+                }
+                if reader.can_read() && reader.peek() == 123 {
+                    nbt(reader, true)?;
+                }
+            }
         }
-        match c {
-            34 | 39 => quote = Some(c),
-            91 | 123 => nesting += 1,
-            93 | 125 => nesting -= 1,
-            32 if nesting == 0 => break,
-            _ => {}
+        first = false;
+        if reader.can_read() && !matches!(reader.peek(), 32 | 91 | 123) {
+            reader.expect(46)?;
         }
-        reader.skip();
     }
-    reader.slice(start, reader.cursor())
+    NbtPath::parse(&reader.slice(start, reader.cursor())).map_err(|error| {
+        super::exceptions::error(&error.message(), &[])
+            .with_context(reader.string(), start + error.cursor().max(0) as usize)
+    })
 }
 
 #[cfg(test)]

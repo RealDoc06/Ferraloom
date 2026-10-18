@@ -693,5 +693,20 @@
   "arguments.swizzle.invalid": "Invalid swizzle: expected combination of 'x', 'y' and 'z'",
   "chat.square_brackets": "[%s]",
   "slot.only_single_allowed": "Only single slots allowed: got '%s'",
-  "slot.unknown": "Unknown slot '%s'"
+  "slot.unknown": "Unknown slot '%s'",
+  "argument.id.invalid": "Invalid ID",
+  "argument.id.unknown": "Unknown ID: %s",
+  "argument.item.tag.disallowed": "Tags aren't allowed here; only actual items are",
+  "argument.nbt.array.invalid": "Invalid array type '%s'",
+  "argument.nbt.array.mixed": "Can't insert %s into %s",
+  "argument.nbt.expected.compound": "Expected compound tag",
+  "argument.nbt.expected.key": "Expected key",
+  "argument.nbt.expected.value": "Expected value",
+  "argument.nbt.list.mixed": "Can't insert %s into list of %s",
+  "argument.nbt.trailing": "Unexpected trailing data",
+  "argument.range.empty": "Expected value or range of values",
+  "argument.range.ints": "Only whole numbers are allowed; not decimals",
+  "argument.range.swapped": "Min cannot be bigger than max",
+  "argument.resource_or_id.invalid": "Invalid ID or tag",
+  "argument.time.invalid_tick_count": "The tick count must be non-negative"
 }

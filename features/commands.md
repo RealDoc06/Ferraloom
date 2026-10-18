@@ -2572,3 +2572,4 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | `/gamemode`: live target selection, unchanged-mode return zero and self/other feedback | pending command parity scenarios | todo | todo |
 | `/ban`, `/ban-ip`, `/pardon`, `/pardon-ip`, `/banlist`: persisted lists, feedback and live disconnects | pending command parity scenarios | todo | todo |
 | `/whitelist`: on/off/list/add/remove/reload and enforced live admission | pending command parity scenarios | todo | todo |
+| NBT path parser preserves nested parser errors and reader cursor separately | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
