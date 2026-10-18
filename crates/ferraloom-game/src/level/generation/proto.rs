@@ -197,7 +197,14 @@ impl ProtoChunk {
                     .block_ticks
                     .ticks()
                     .iter()
-                    .map(|t| saved_tick(t.position, t.kind.name(), t.priority))
+                    .map(|t| {
+                        retained_tick(
+                            self.disk.block_ticks.as_deref(),
+                            t.position,
+                            t.kind.name(),
+                            t.priority,
+                        )
+                    })
                     .collect(),
             );
             disk.fluid_ticks = Some(
@@ -205,7 +212,14 @@ impl ProtoChunk {
                     .fluid_ticks
                     .ticks()
                     .iter()
-                    .map(|t| saved_tick(t.position, t.kind.name(), t.priority))
+                    .map(|t| {
+                        retained_tick(
+                            self.disk.fluid_ticks.as_deref(),
+                            t.position,
+                            t.kind.name(),
+                            t.priority,
+                        )
+                    })
                     .collect(),
             );
         }
@@ -216,6 +230,17 @@ impl ProtoChunk {
         }
         disk.post_processing = Some(post_processing);
         let maps = disk.heightmaps.get_or_insert_default();
+        maps.retain(|name, _| {
+            let wg = matches!(
+                name.to_string_lossy().as_str(),
+                "WORLD_SURFACE_WG" | "OCEAN_FLOOR_WG"
+            );
+            if self.region.status < ChunkStatus::Terrain {
+                wg
+            } else {
+                !wg
+            }
+        });
         let data = context.generator.access().data();
         for (map, name) in [
             (Heightmap::WorldSurfaceWg, "WORLD_SURFACE_WG"),
@@ -256,6 +281,28 @@ impl ProtoChunk {
         }
         Ok(disk)
     }
+}
+fn retained_tick(
+    saved: Option<&[storage::SavedTick]>,
+    position: [i32; 3],
+    name: &str,
+    priority: i32,
+) -> storage::SavedTick {
+    saved
+        .unwrap_or_default()
+        .iter()
+        .find(|tick| {
+            tick.id
+                .as_ref()
+                .is_some_and(|id| id.to_string_lossy() == name)
+                && [
+                    tick.x.unwrap_or(0),
+                    tick.y.unwrap_or(0),
+                    tick.z.unwrap_or(0),
+                ] == position
+        })
+        .cloned()
+        .unwrap_or_else(|| saved_tick(position, name, priority))
 }
 fn saved_tick(position: [i32; 3], name: &str, priority: i32) -> storage::SavedTick {
     storage::SavedTick {

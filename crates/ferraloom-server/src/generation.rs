@@ -38,6 +38,7 @@ pub struct GenerationOutput {
     pub neighbors: Vec<(ChunkPos, SerializableChunkData)>,
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
+    pub full_structures: Vec<(ChunkPos, storage::StructureData)>,
 }
 /// Port of ChunkMap's generation cache. FULL entries are read-only imposter
 /// protos. No references into this cache escape an owned generation job.
@@ -67,6 +68,34 @@ impl GenerationState {
             holders: BTreeMap::new(),
             structure_check: StructureCheck::default(),
         }
+    }
+    pub fn refresh_full_chunks(&mut self, level: &ferraloom_game::level::Level) {
+        for (&key, holder) in &mut self.holders {
+            if holder.chunk.region.status != ChunkStatus::Full {
+                continue;
+            }
+            let Some(chunk) = level.chunk(ChunkPos::unpack(key)) else {
+                continue;
+            };
+            let mut generated = holder.chunk.region.chunk.clone();
+            generated.sections = chunk.sections().cloned().collect();
+            generated.world_surface = *chunk
+                .heightmap(ferraloom_game::level::heightmap::Heightmap::WorldSurface)
+                .expect("attached full heightmap");
+            generated.ocean_floor = *chunk
+                .heightmap(ferraloom_game::level::heightmap::Heightmap::OceanFloor)
+                .expect("attached full heightmap");
+            let mut updated =
+                ferraloom_worldgen::region::RegionChunk::new(generated, ChunkStatus::Full);
+            std::mem::swap(&mut updated.structures, &mut holder.chunk.region.structures);
+            updated.block_entities = holder.chunk.region.block_entities.clone();
+            holder.chunk.region = updated;
+        }
+    }
+    pub fn forget(&mut self, pos: ChunkPos) {
+        self.holders.remove(&pos.pack());
+        self.snapshots.remove_chunk(pos);
+        self.light.forget_chunk_sources(pos);
     }
     /// Runtime may request any saved status. A missing chunk is never fabricated
     /// at FULL, and every per-step result is retained even when a later step fails.
@@ -223,8 +252,15 @@ impl GenerationState {
             }
         }
         let mut neighbors = Vec::new();
+        let mut full_structures = Vec::new();
         for key in touched {
             let proto = &self.holders[&key].chunk;
+            if key != pos.pack() && proto.region.status == ChunkStatus::Full {
+                full_structures.push((
+                    ChunkPos::unpack(key),
+                    storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
+                ));
+            }
             if key != pos.pack()
                 && proto.region.status < ChunkStatus::Full
                 && proto.region.status > ChunkStatus::Empty
@@ -250,6 +286,7 @@ impl GenerationState {
             terrain,
             neighbors,
             skips,
+            full_structures,
             statuses: self
                 .holders
                 .iter()

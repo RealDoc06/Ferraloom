@@ -222,8 +222,9 @@ impl WorldGenContext {
             }
             ChunkStatusTask::GenerateStructureReferences => {
                 let mut references = std::mem::take(&mut chunks[index].structures.references);
+                let readable: &[RegionChunk] = chunks;
                 pipeline::create_references(center, &mut references, &mut |position| {
-                    chunks
+                    readable
                         .iter()
                         .find(|c| {
                             c.chunk.position == position && c.status >= ChunkStatus::StructureStarts

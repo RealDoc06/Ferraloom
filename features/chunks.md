@@ -14,7 +14,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.tickets.forced | Add and remove persistent forced-chunk tickets | `ServerLevel#setChunkForced; ForceLoadCommand` | | - | todo |
 | chunks.tickets.portal | Keep destination portal chunks loaded while portal travel completes | `PortalForcer; TicketType` | | - | todo |
 | chunks.tickets.ender-pearl | Maintain owner-linked ender pearl tickets across entity ticks and loading | `ThrownEnderpearl` | | - | todo |
-| chunks.unload.safe | Defer chunk unload until pending saves and work are safe to complete | `ChunkMap#processUnloads` | | - | todo |
+| chunks.unload.safe | Defer chunk unload until pending saves and work are safe to complete | `ChunkMap#processUnloads` | owned save futures, generation claims, ticket/holder identity rechecks and dirty re-save; `chunk_map::tests` holder removal guard | - | partial |
 | chunks.unload.entities | Persist and unload entity sections as chunk tracking visibility changes | `PersistentEntitySectionManager` | | - | todo |
 | chunks.save.dirty | Save dirty chunks and avoid overwriting full chunks with protochunks | `ChunkMap#save` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.network.batch-feedback | Adapt chunk batch sending using client batch feedback and pending acknowledgements | `PlayerChunkSender` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |
@@ -44,3 +44,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.runtime.batch-quota | Apply PlayerChunkSender quota and acknowledgement window; pending-set tie traversal awaits shared collections | `PlayerChunkSender#sendNextChunks; #onChunkBatchReceivedByClient` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |
 
 | chunks.pipeline.warn-units | Strict fails missing game callbacks; Warn abandons one placed feature or structure piece, retaining partial writes and reporting shared counters | `ChunkGenerator#applyBiomeDecoration; StructureStart#placeInChunk` | `generation::default_noise_generation_warn_reaches_full_and_strict_rejects_missing_behavior` | - | partial |
+
+| chunks.pipeline.saved-region-parity | Compare saved FULL blocks, block entities, heightmaps and structure data after a bot walks into fresh terrain | `ChunkMap; SerializableChunkData` | `ferraloom-parity::chunk_generation::fresh_world_saved_regions_match_after_walking_into_new_terrain` gated on builder; Strict game shape/survival/liquid and entity factories pending | - | todo |

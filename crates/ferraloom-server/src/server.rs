@@ -189,7 +189,7 @@ pub struct MinecraftServer {
     enforces_secure_chat: bool,
     listener_task: Option<JoinHandle<Result<()>>>,
     pending_level_hooks: PendingLevelHooks,
-    player_loading_futures: Vec<ChunkPos>,
+    player_loading_futures: Vec<(ChunkPos, u64)>,
 }
 /// Subsystems with explicit pending effects retain visible counters. Their
 /// eventual ports consume the ordered effects at these same native slots.
@@ -1124,24 +1124,36 @@ impl MinecraftServer {
                     .map_err(game_error)?;
             }
         }
-        self.player_loading_futures.extend(
-            self.level
-                .distance_manager
-                .take_player_loading_waiters(&self.level.tickets),
-        );
+        let waiters = self
+            .level
+            .distance_manager
+            .take_player_loading_waiters(&self.level.tickets);
+        for pos in waiters {
+            if let Some(holder) = self.level.chunks.holders.get(&pos.pack()) {
+                self.player_loading_futures.push((pos, holder.request_id));
+            }
+        }
         let mut index = 0;
         while index < self.player_loading_futures.len() {
-            let pos = self.player_loading_futures[index];
+            let (pos, request_id) = self.player_loading_futures[index];
+            let current = self
+                .level
+                .chunks
+                .holders
+                .get(&pos.pack())
+                .is_some_and(|holder| holder.request_id == request_id);
             let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
                 pos,
                 FullChunkStatus::EntityTicking,
             );
-            if future.is_ready(|p| {
-                self.world
-                    .light_ready
-                    .contains(&p)
-                    .then_some(ChunkStatus::Full)
-            }) || self.world.failed_generation.contains(&pos)
+            if !current
+                || future.is_ready(|p| {
+                    self.world
+                        .light_ready
+                        .contains(&p)
+                        .then_some(ChunkStatus::Full)
+                })
+                || self.world.failed_generation.contains(&pos)
             {
                 self.level.distance_manager.complete_player_loading(pos);
                 self.player_loading_futures.remove(index);
@@ -1152,6 +1164,7 @@ impl MinecraftServer {
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
+        self.world.refresh_generation_snapshots(&self.level.level);
         let completed = self.world.poll_terrain();
         for pos in &self.world.failed_generation {
             self.level.distance_manager.complete_player_loading(*pos);
@@ -1239,6 +1252,32 @@ impl MinecraftServer {
                     .post_process_generation(pos)
                     .map_err(game_error)?;
                 self.world.ready.insert(pos);
+            }
+        }
+        for (pos, epoch) in self.world.poll_unloads()? {
+            let eligible = self
+                .level
+                .chunks
+                .holders
+                .get(&pos.pack())
+                .is_some_and(|holder| holder.ticket_level > 44 && holder.epoch == epoch);
+            if eligible
+                && !self.world.generation_pins(pos)
+                && self.level.chunks.remove_unloaded_holder(pos).is_some()
+            {
+                self.level.level.remove_chunk(pos);
+                self.world.finish_unload(pos)?;
+            }
+        }
+        for pos in self.level.chunks.holder_positions().collect::<Vec<_>>() {
+            let holder = &self.level.chunks.holders[&pos.pack()];
+            if holder.ticket_level > 44 && self.level.level.chunk(pos).is_some() {
+                self.world.schedule_unload(
+                    &self.level.level,
+                    pos,
+                    holder.epoch,
+                    self.level.game_time,
+                )?;
             }
         }
         Ok(())

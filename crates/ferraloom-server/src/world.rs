@@ -170,6 +170,9 @@ enum LightJob {
         sections: Vec<LevelChunkSection>,
         saved_light: Option<SerializableChunkData>,
     },
+    Unload {
+        pos: ChunkPos,
+    },
     Changed {
         chunks: Vec<(ChunkPos, Vec<LevelChunkSection>)>,
         changes: Vec<LightMutation>,
@@ -236,6 +239,16 @@ fn run_light_worker(
                 let mut changes = engine.initialize_light(&snapshots, pos, lighted).sections;
                 changes.extend(engine.light_chunk(&snapshots, pos, lighted).sections);
                 (Some((request, pos)), changes)
+            }
+            LightJob::Unload { pos } => {
+                for y in -4..20 {
+                    engine.update_section_status(SectionPos::new(pos.x, y, pos.z), true);
+                }
+                engine.set_light_enabled(&snapshots, pos, false);
+                snapshots.remove_chunk(pos);
+                engine.forget_chunk_sources(pos);
+                lights.remove(&pos.pack());
+                (None, engine.run_light_updates(&snapshots).sections)
             }
             LightJob::Changed { chunks, changes } => {
                 for (pos, sections) in chunks {
@@ -463,6 +476,11 @@ fn spawn_tag(p: BlockPos) -> Tag {
         .collect(),
     )
 }
+struct ChunkUnload {
+    pos: ChunkPos,
+    epoch: u64,
+    saving: oneshot::Receiver<Result<()>>,
+}
 pub struct World {
     pub access: Arc<LevelStorageAccess>,
     pub level_data: LevelData,
@@ -482,6 +500,8 @@ pub struct World {
     active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
     pub failed_generation: Vec<ChunkPos>,
     proto_saves: VecDeque<storage::IoTask<()>>,
+    unloading: VecDeque<ChunkUnload>,
+    evictions: Vec<ChunkPos>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
     light_tx: mpsc::Sender<LightJob>,
@@ -709,6 +729,8 @@ impl World {
             active_generation: BTreeMap::new(),
             failed_generation: Vec::new(),
             proto_saves: VecDeque::new(),
+            unloading: VecDeque::new(),
+            evictions: Vec::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
             light_tx,
@@ -891,6 +913,9 @@ impl World {
             .generation_state
             .take()
             .context("generation state in flight")?;
+        for pos in self.evictions.drain(..) {
+            state.forget(pos);
+        }
         self.initial_chunks.remove(&request.pos.pack());
         let registry = self.registry.clone();
         let io = self.io.clone();
@@ -931,6 +956,11 @@ impl World {
         let result = result.and_then(|output| {
             self.generation_skips.extend(output.skips);
             self.generation_statuses.extend(output.statuses);
+            for (pos, structures) in output.full_structures {
+                if let Some(disk) = self.saved.get_mut(&pos.pack()) {
+                    disk.structures = Some(structures);
+                }
+            }
             for (pos, disk) in output.neighbors {
                 self.proto_saves
                     .push_back(self.io.store(pos, Some(disk.write()?)));
@@ -948,13 +978,77 @@ impl World {
         }
         Ok(())
     }
+    pub fn generation_pins(&self, pos: ChunkPos) -> bool {
+        self.active_generation
+            .keys()
+            .any(|center| center.x.abs_diff(pos.x).max(center.z.abs_diff(pos.z)) <= 11)
+    }
+    pub fn schedule_unload(
+        &mut self,
+        level: &Level,
+        pos: ChunkPos,
+        epoch: u64,
+        game_time: i64,
+    ) -> Result<()> {
+        if self.generation_pins(pos) || self.unloading.iter().any(|job| job.pos == pos) {
+            return Ok(());
+        }
+        let snapshot = self.capture_chunk(level, pos, game_time)?;
+        let registry = self.registry.clone();
+        let io = self.io.clone();
+        let saving = self.saving.submit(move || -> Result<()> {
+            io.store(pos, Some(snapshot.encode(&registry)?)).wait()?;
+            Ok(())
+        });
+        self.unloading.push_back(ChunkUnload { pos, epoch, saving });
+        Ok(())
+    }
+    pub fn poll_unloads(&mut self) -> Result<Vec<(ChunkPos, u64)>> {
+        let mut done = Vec::new();
+        while let Some(job) = self.unloading.front_mut() {
+            match job.saving.try_recv() {
+                Ok(result) => {
+                    result?;
+                    let job = self.unloading.pop_front().unwrap();
+                    done.push((job.pos, job.epoch));
+                }
+                Err(oneshot::error::TryRecvError::Empty) => break,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(done)
+    }
+    pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
+        self.ready.remove(&pos);
+        self.light_ready.remove(&pos);
+        self.saved.remove(&pos.pack());
+        self.lights.remove(&pos.pack());
+        self.generation_statuses.remove(&pos);
+        if let Some(state) = self.generation_state.as_mut() {
+            state.forget(pos);
+        } else {
+            self.evictions.push(pos);
+        }
+        self.light_tx.send(LightJob::Unload { pos })?;
+        Ok(())
+    }
     pub async fn close_chunk_storage(&mut self) -> Result<()> {
         self.finish_generation().await?;
+        while let Some(job) = self.unloading.pop_front() {
+            job.saving.await??;
+        }
         Arc::get_mut(&mut self.io)
             .context("chunk IO still owned by generation")?
             .shutdown()
             .await?;
         Ok(())
+    }
+    pub fn refresh_generation_snapshots(&mut self, level: &Level) {
+        if !self.pending.is_empty()
+            && let Some(state) = &mut self.generation_state
+        {
+            state.refresh_full_chunks(level);
+        }
     }
     /// Poll at ServerChunkCache's integration point, strictly by request ordinal.
     pub fn poll_terrain(&mut self) -> Result<Vec<(u64, Terrain)>> {
@@ -987,7 +1081,11 @@ impl World {
                 Err(error) => return Err(error.into()),
             }
         }
-        self.start_generation()?;
+        // Integrate completed results before capturing the next job's live
+        // imposter snapshots, including post-processing writes and heightmaps.
+        if done.is_empty() {
+            self.start_generation()?;
+        }
         Ok(done)
     }
     pub fn queue_block_light_changes(
