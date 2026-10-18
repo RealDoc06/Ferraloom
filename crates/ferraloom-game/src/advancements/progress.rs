@@ -316,7 +316,9 @@ impl AdvancementProgress {
             }
         }
         let mut result = json!({"done":self.is_done()});
-        if !criteria.is_empty() {
+        // optionalFieldOf compares the live criterion map before CRITERIA_CODEC
+        // removes ungranted entries, so nonempty progress writes an empty object.
+        if !self.criteria.is_empty() {
             result
                 .as_object_mut()
                 .expect("object")
