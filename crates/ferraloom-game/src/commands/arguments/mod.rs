@@ -3,6 +3,7 @@ pub mod blocks;
 pub mod coordinates;
 pub mod operation;
 pub mod range;
+pub mod scoreboard;
 pub mod selectors;
 pub mod slots;
 pub mod wire;
@@ -33,6 +34,9 @@ use std::sync::Arc;
 #[derive(Clone, Debug)]
 pub enum ArgumentValue {
     Slots(slots::SlotRange),
+    DisplaySlot(u8),
+    Criteria(scoreboard::ObjectiveCriteria),
+    Resources(Vec<String>),
     Block(blocks::BlockInput),
     Boolean(bool),
     Integer(i32),
@@ -427,6 +431,37 @@ impl MinecraftArgument {
                 "argument.swing_animation.invalid",
             )?),
             A::Objective {} | A::Team {} => V::String(reader.read_unquoted_string()),
+            A::ObjectiveCriteria {} => V::Criteria(scoreboard::criteria(reader)?),
+            A::ScoreboardSlot {} => V::DisplaySlot(scoreboard::display_slot(reader)?),
+            A::ResourceSelector { registry } => {
+                let start = reader.cursor();
+                while reader.can_read()
+                    && matches!(reader.peek(),97..=122|48..=57|95|58|47|46|45|42|63)
+                {
+                    reader.skip();
+                }
+                let pattern = reader.slice(start, reader.cursor());
+                let pattern = if pattern.contains(':') {
+                    pattern
+                } else {
+                    format!("minecraft:{pattern}")
+                };
+                let resources = self
+                    .context
+                    .entries(registry.as_str())
+                    .into_iter()
+                    .filter(|id| wildcard_match(&pattern, id))
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+                if resources.is_empty() {
+                    return Err(error_at(
+                        reader,
+                        "argument.resource_selector.not_found",
+                        &[pattern, registry.to_string()],
+                    ));
+                }
+                V::Resources(resources)
+            }
             A::ScoreHolder { flags } => {
                 if reader.can_read() && reader.peek() == 64 {
                     let selector = EntitySelector::parse(reader, allow_selectors)?;
@@ -479,6 +514,22 @@ impl ArgumentType for MinecraftArgument {
             CommandArgument::EntityAnchor {} => &["feet", "eyes"],
             CommandArgument::Operation {} => &["=", "+=", "-=", "*=", "/=", "%=", "<", ">", "><"],
             CommandArgument::HexColor {} => &["F00", "FF0000"],
+            CommandArgument::TeamColor {} => scoreboard::COLORS,
+            CommandArgument::ScoreboardSlot {} => scoreboard::DISPLAY_SLOTS,
+            CommandArgument::TemplateMirror {} => &["none", "front_back", "left_right"],
+            CommandArgument::TemplateRotation {} => &[
+                "none",
+                "clockwise_90",
+                "clockwise_180",
+                "counterclockwise_90",
+            ],
+            CommandArgument::Heightmap {} => &[
+                "world_surface",
+                "motion_blocking",
+                "motion_blocking_no_leaves",
+                "ocean_floor",
+            ],
+            CommandArgument::SwingAnimation {} => &["none", "whack", "stab"],
             _ => &[],
         };
         for value in values {
@@ -542,6 +593,25 @@ pub fn nbt(reader: &mut StringReader, compound: bool) -> Result<Tag, CommandSynt
         return Err(error_at(reader, "argument.nbt.expected.compound", &[]));
     }
     Ok(tag)
+}
+/// FilenameUtils#wildcardMatch over resource identifiers (ASCII).
+fn wildcard_match(pattern: &str, value: &str) -> bool {
+    let mut matched = vec![false; value.len() + 1];
+    matched[0] = true;
+    for token in pattern.bytes() {
+        if token == b'*' {
+            for index in 1..matched.len() {
+                matched[index] |= matched[index - 1];
+            }
+        } else {
+            for index in (1..matched.len()).rev() {
+                matched[index] =
+                    matched[index - 1] && (token == b'?' || token == value.as_bytes()[index - 1]);
+            }
+            matched[0] = false;
+        }
+    }
+    matched[value.len()]
 }
 fn nbt_path_text(reader: &mut StringReader) -> String {
     let start = reader.cursor();

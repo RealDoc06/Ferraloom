@@ -6,6 +6,16 @@ pub struct CommandBuildContext {
     pub tags: BTreeMap<String, BTreeMap<String, Vec<String>>>,
 }
 impl CommandBuildContext {
+    pub fn entries(&self, registry: &str) -> Vec<&str> {
+        self.registries.get(registry).map_or_else(
+            || {
+                ferraloom_data::registry_entries(registry)
+                    .unwrap_or_default()
+                    .to_vec()
+            },
+            |entries| entries.iter().map(String::as_str).collect(),
+        )
+    }
     pub fn contains(&self, registry: &str, id: &str) -> bool {
         self.registries.get(registry).map_or_else(
             || {
