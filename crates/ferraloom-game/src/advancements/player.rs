@@ -299,13 +299,23 @@ impl PlayerAdvancements {
         trigger: TriggerType,
         player_context: &LootParams,
         context: &mut MatchContext<'_>,
-        mut matches: impl FnMut(&TriggerInstance, &mut MatchContext<'_>) -> Result<bool>,
+        matches: impl FnMut(&TriggerInstance, &mut MatchContext<'_>) -> Result<bool>,
     ) -> Result<Vec<TriggerInstanceKey>> {
         if trigger == TriggerType::Impossible {
             return Ok(Vec::new());
         }
+        Self::match_captured_listeners(self.listeners(trigger), player_context, context, matches)
+    }
+    /// Evaluate listener membership captured at SimpleCriterionTrigger#trigger's
+    /// entry. Live callers release the player borrow before predicate evaluation.
+    pub fn match_captured_listeners<'a>(
+        listeners: impl IntoIterator<Item = (&'a TriggerInstanceKey, &'a TriggerInstance)>,
+        player_context: &LootParams,
+        context: &mut MatchContext<'_>,
+        mut matches: impl FnMut(&TriggerInstance, &mut MatchContext<'_>) -> Result<bool>,
+    ) -> Result<Vec<TriggerInstanceKey>> {
         let mut matched = Vec::new();
-        for (key, instance) in self.listeners(trigger) {
+        for (key, instance) in listeners {
             if matches(instance, context)?
                 && match &instance.player {
                     None => true,

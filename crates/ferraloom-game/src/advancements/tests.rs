@@ -96,18 +96,43 @@ fn vanilla_trigger_codecs_and_synthetic_matches() {
             row["input"]
         );
     }
+    struct Runtime<'a> {
+        facts: &'a Facts,
+        random: LegacyRandomSource,
+    }
+    impl LootRuntime for Runtime<'_> {
+        fn facts(&self) -> &dyn LootFacts {
+            self.facts
+        }
+        fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource)) {
+            operation(&mut self.random);
+        }
+    }
+    impl TriggerRuntime for Runtime<'_> {
+        fn trigger_facts(&self) -> &dyn TriggerFacts {
+            self.facts
+        }
+    }
     let mut covered = std::collections::BTreeSet::new();
     for row in oracle()["trigger_matches"].as_array().unwrap() {
         let criterion = Criterion::decode(&row["input"]).unwrap();
         covered.insert(criterion.trigger);
         let n = row["scenario"].as_i64().unwrap() as i32;
         let mut random = LegacyRandomSource::new(42);
-        let mut context = MatchContext {
-            data: &data,
+        let mut context =
+            MatchContext::borrowed(&data, &facts, &mut random, Vec3::new(1.0, 64.0, 2.0));
+        let mut runtime = Runtime {
             facts: &facts,
-            random: &mut random,
-            origin: Vec3::new(1.0, 64.0, 2.0),
+            random: LegacyRandomSource::new(42),
         };
+        let mut live_context = MatchContext::live(&data, &mut runtime, context.origin);
+        let runtime_matched = scenario(&criterion.instance, n, &mut live_context).unwrap();
+        assert_eq!(
+            runtime_matched,
+            row["matches"].as_bool().unwrap(),
+            "live {} scenario {n}",
+            row["input"]
+        );
         let matched = scenario(&criterion.instance, n, &mut context);
         assert_eq!(
             matched.unwrap_or_else(|e| panic!("{} scenario {n}: {e}", row["input"])),
@@ -441,12 +466,8 @@ impl RewardHarness {
                         let params = create_context(origin, EntityRef(0));
                         let data = LootData::default();
                         let mut random = LegacyRandomSource::new(42);
-                        let mut context = MatchContext {
-                            data: &data,
-                            facts: &Facts,
-                            random: &mut random,
-                            origin,
-                        };
+                        let mut context =
+                            MatchContext::borrowed(&data, &Facts, &mut random, origin);
                         let matched = player
                             .matching_listeners(
                                 TriggerType::RecipeUnlocked,
@@ -514,12 +535,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             let params = create_context(origin, EntityRef(0));
             let data = LootData::default();
             let mut random = LegacyRandomSource::new(42);
-            let mut context = MatchContext {
-                data: &data,
-                facts: &Facts,
-                random: &mut random,
-                origin,
-            };
+            let mut context = MatchContext::borrowed(&data, &Facts, &mut random, origin);
             let matched = player
                 .matching_listeners(
                     TriggerType::Tick,
@@ -617,12 +633,7 @@ fn unavailable_trigger_facts_are_errors_and_impossible_never_awards() {
     let criterion=Criterion::decode(&json!({"trigger":"location","conditions":{"player":{"type":"entity_properties","entity":"this","predicate":{"location":{"biomes":"plains"}}}}})).unwrap();
     let data = LootData::default();
     let mut random = LegacyRandomSource::new(0);
-    let mut context = MatchContext {
-        data: &data,
-        facts: &NoFacts,
-        random: &mut random,
-        origin: Vec3::ZERO,
-    };
+    let mut context = MatchContext::borrowed(&data, &NoFacts, &mut random, Vec3::ZERO);
     assert!(
         context
             .predicate(
@@ -834,12 +845,8 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             let origin = Vec3::new(1.0, 64.0, 2.0);
                             let data = LootData::default();
                             let mut random = LegacyRandomSource::new(42);
-                            let mut context = MatchContext {
-                                data: &data,
-                                facts: &Facts,
-                                random: &mut random,
-                                origin,
-                            };
+                            let mut context =
+                                MatchContext::borrowed(&data, &Facts, &mut random, origin);
                             let matched = player
                                 .matching_listeners(
                                     TriggerType::RecipeUnlocked,
