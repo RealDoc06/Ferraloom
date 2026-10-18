@@ -13,8 +13,15 @@ pub fn options() -> LaunchOptions {
 
 macro_rules! command_test {
     ($name:ident, $scenario:path) => {
+        $crate::command_support::command_test!(
+            $name,
+            $scenario,
+            "requires builder vanilla jar/JDK; run with --ignored"
+        );
+    };
+    ($name:ident, $scenario:path, $reason:literal) => {
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-        #[ignore = "requires builder vanilla jar/JDK; run with --ignored"]
+        #[ignore = $reason]
         async fn $name() -> ferraloom_parity::Result<()> {
             ferraloom_parity::run(
                 $crate::command_support::options(),

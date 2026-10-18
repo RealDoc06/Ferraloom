@@ -676,7 +676,8 @@ async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog>
 }
 command_test!(
     parity_command_force_load_and_weather,
-    force_load_and_weather
+    force_load_and_weather,
+    "pending canonical center-chunk FULL acquisition; current ready wait also requires neighbor light/postProcess"
 );
 
 async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> {
