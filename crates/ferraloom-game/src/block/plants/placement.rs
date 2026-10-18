@@ -81,6 +81,7 @@ fn below_max_y(reader: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<bool, L
                 .max_y()
         }
         LevelReaderRef::Worldgen(region) => region.min_y() + region.height(),
+        LevelReaderRef::PathNavigation(reader) => reader.max_build_height() + 1,
     };
     Ok(pos.y < max - 1)
 }
