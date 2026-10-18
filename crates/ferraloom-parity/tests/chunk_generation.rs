@@ -51,71 +51,107 @@ async fn walk_and_compare_saved_chunks(session: &mut Session) -> Result<Observat
     bot.command("tick freeze").await?;
     bot.command("gamemode spectator").await?;
     bot.synchronize().await?;
-    bot.teleport([8192.5, 300., 8192.5]).await?;
-    bot.move_to([8240.5, 300., 8192.5], false).await?;
-    bot.wait_for("newly walked terrain", Ticks(2400), |state, _| {
-        state.chunks.contains(&(515, 512))
-    })
-    .await?;
-    bot.synchronize().await?;
+    for (dimension, origin, y) in [
+        ("minecraft:overworld", 8192.5, 300.),
+        ("minecraft:the_nether", 16384.5, 160.),
+        ("minecraft:the_end", 32768.5, 200.),
+    ] {
+        if dimension == "minecraft:overworld" {
+            bot.teleport([origin, y, origin]).await?;
+        } else {
+            let before = bot.snapshot().teleports;
+            bot.command(&format!(
+                "execute in {dimension} run tp @s {origin} {y} {origin}"
+            ))
+            .await?;
+            bot.wait_for("dimension transfer", Ticks::DEFAULT, |state, packet| {
+                state.teleports > before
+                    && matches!(
+                        packet,
+                        ferraloom_parity::protocol::play::clientbound::Packet::PlayerPosition(_)
+                    )
+            })
+            .await?;
+        }
+        bot.set_min_section(if dimension == "minecraft:overworld" {
+            -4
+        } else {
+            0
+        });
+        bot.move_to([origin + 48., y, origin], false).await?;
+        let center = (origin.floor() as i32 >> 4) + 3;
+        if !bot.snapshot().chunks.contains(&(center, center - 3)) {
+            bot.wait_for("newly walked terrain", Ticks(2400), |state, _| {
+                state.chunks.contains(&(center, center - 3))
+            })
+            .await?;
+        }
+        bot.synchronize().await?;
+    }
     session.stop().await?;
     let world = session.saved_world()?;
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
     let resources = ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar))?]);
     let registry = RegistryAdapter::new(&RegistrySet::load(&resources)?)?;
     let mut log = ObservationLog::default();
-    for x in 512..=515 {
-        let pos = ChunkPos::new(x, 512);
-        let disk = world
-            .chunk("minecraft:overworld", pos)?
-            .expect("walked chunk must be saved");
-        ensure!(
-            disk.status
-                .as_ref()
-                .is_some_and(|s| s.to_string_lossy() == "minecraft:full")
-        );
-        let mut blocks = BTreeMap::new();
-        for section in disk.sections.as_deref().unwrap_or_default() {
-            if let Some(runtime) = section.to_runtime(&registry)? {
-                let states = (0..4096)
-                    .map(|index| {
-                        runtime
-                            .get_block_state(
-                                (index & 15) as u8,
-                                (index >> 8) as u8,
-                                ((index >> 4) & 15) as u8,
-                            )
-                            .id()
-                    })
-                    .collect::<Vec<_>>();
-                blocks.insert(section.y.expect("section Y"), states);
+    for (dimension, origin) in [
+        ("minecraft:overworld", 512),
+        ("minecraft:the_nether", 1024),
+        ("minecraft:the_end", 2048),
+    ] {
+        for x in origin..=origin + 3 {
+            let pos = ChunkPos::new(x, origin);
+            let disk = world
+                .chunk(dimension, pos)?
+                .expect("walked chunk must be saved");
+            ensure!(
+                disk.status
+                    .as_ref()
+                    .is_some_and(|s| s.to_string_lossy() == "minecraft:full")
+            );
+            let mut blocks = BTreeMap::new();
+            for section in disk.sections.as_deref().unwrap_or_default() {
+                if let Some(runtime) = section.to_runtime(&registry)? {
+                    let states = (0..4096)
+                        .map(|index| {
+                            runtime
+                                .get_block_state(
+                                    (index & 15) as u8,
+                                    (index >> 8) as u8,
+                                    ((index >> 4) & 15) as u8,
+                                )
+                                .id()
+                        })
+                        .collect::<Vec<_>>();
+                    blocks.insert(section.y.expect("section Y"), states);
+                }
             }
+            log.record(format!("{dimension}.{x}.blocks"), blocks)?;
+            // Coordinates become explicit strings because JSON map keys are scalar.
+            let entities = block_entities(disk.block_entities.unwrap_or_default())
+                .into_iter()
+                .map(|(pos, tag)| (format!("{},{},{}", pos[0], pos[1], pos[2]), tag))
+                .collect::<BTreeMap<_, _>>();
+            log.record(format!("{dimension}.{x}.block_entities"), entities)?;
+            let heightmaps = disk
+                .heightmaps
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(name, words)| (name.to_string_lossy(), words.0))
+                .collect::<BTreeMap<_, _>>();
+            log.record(format!("{dimension}.{x}.heightmaps"), heightmaps)?;
+            log.record(
+                format!("{dimension}.{x}.structures"),
+                canonical(&Tag::Compound(
+                    disk.structures.expect("structure payload").to_nbt(),
+                )),
+            )?;
         }
-        log.record(format!("{x}.blocks"), blocks)?;
-        // Coordinates become explicit strings because JSON map keys are scalar.
-        let entities = block_entities(disk.block_entities.unwrap_or_default())
-            .into_iter()
-            .map(|(pos, tag)| (format!("{},{},{}", pos[0], pos[1], pos[2]), tag))
-            .collect::<BTreeMap<_, _>>();
-        log.record(format!("{x}.block_entities"), entities)?;
-        let heightmaps = disk
-            .heightmaps
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(name, words)| (name.to_string_lossy(), words.0))
-            .collect::<BTreeMap<_, _>>();
-        log.record(format!("{x}.heightmaps"), heightmaps)?;
-        log.record(
-            format!("{x}.structures"),
-            canonical(&Tag::Compound(
-                disk.structures.expect("structure payload").to_nbt(),
-            )),
-        )?;
     }
     Ok(log)
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "gated fresh vanilla worlds: Strict shape/survival/liquid, block-entity, entity and synchronous-neighbor behavior pending; enable FERRALOOM_GENERATION_PARITY=1 on builder"]
+#[ignore = "gated fresh vanilla worlds: Strict shape/survival/liquid, block-entity, entity, dimension transfer and synchronous-neighbor behavior pending; enable FERRALOOM_GENERATION_PARITY=1 on builder"]
 async fn fresh_world_saved_regions_match_after_walking_into_new_terrain() -> Result<()> {
     ensure!(
         std::env::var("FERRALOOM_GENERATION_PARITY").as_deref() == Ok("1"),
