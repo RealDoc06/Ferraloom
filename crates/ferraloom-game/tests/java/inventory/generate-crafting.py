@@ -2,7 +2,9 @@
 """Capture server-side crafting menus against the real 26.3 recipe registry."""
 from pathlib import Path
 import subprocess
+import runpy
 source=Path(__file__).resolve().parent
+runpy.run_path(str(source/'generate.py'))
 cache=Path('/home/doc/code/Ferraloom/.cache')
 vanilla=cache/'vanilla/26.3'
 java=cache/'toolchains/jdk-25.0.4.1+1/bin'
