@@ -54,7 +54,7 @@ fn player(kind: &str) -> ServerPlayer {
 fn input(kind: &str) -> ItemStack {
     if kind == "damaged" {
         let mut patch = DataComponentPatch::default();
-        patch.set(DataComponent::Damage(7.into()));
+        patch.set(DataComponent::Damage(ferraloom_protocol::codec::VarInt(7)));
         ItemStack::new(Item::IRON_PICKAXE, 1, patch)
     } else {
         ItemStack::new(Item::STONE, 10, Default::default())
