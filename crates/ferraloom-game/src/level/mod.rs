@@ -312,11 +312,12 @@ impl Level {
     }
     pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {
         let pos = chunk.pos();
+        let attached_only = self.acquire_driver.is_none();
         let region = self.region_mut();
         if region.chunks.contains_key(&pos) {
             return Err(LevelError::DuplicateChunk(pos));
         }
-        if region.chunks.is_empty() {
+        if attached_only && region.chunks.is_empty() {
             region.min_y = chunk.min_y();
             region.max_y = chunk.max_y();
         }

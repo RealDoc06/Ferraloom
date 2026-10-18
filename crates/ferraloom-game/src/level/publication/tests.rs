@@ -352,3 +352,19 @@ fn driver_is_one_owned_runtime_and_cold_access_never_replaces_it() {
             .absent
     );
 }
+
+#[test]
+fn installed_dimension_bounds_reject_a_wrong_first_chunk_without_changing_context() {
+    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    level
+        .install_acquire_driver(Box::new(PublishingDriver::new(None, true)), 0..16)
+        .unwrap();
+    let empty_section = chunk(ORIGIN).section(0).unwrap().clone();
+    assert_eq!(
+        level.add_chunk(LevelChunk::new(ORIGIN, -1..1, empty_section)),
+        Err(LevelError::WrongChunkHeight(ORIGIN))
+    );
+    assert!(level.chunk(ORIGIN).is_none());
+    assert_eq!(level.min_build_height(), 0);
+    assert_eq!(level.max_build_height(), 16);
+}
