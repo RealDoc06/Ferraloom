@@ -370,14 +370,13 @@ impl StructureProcessor {
                         )
                         && rule.position.test(info.position, reference, &mut random)
                     {
-                        // Append modifiers mutate the existing CompoundTag in Java.
+                        // AppendStatic mutates the existing CompoundTag in Java.
                         // Capped compares its old record after that mutation, so
                         // these NBT changes alone do not count toward the cap.
                         mutated_input_nbt = info.nbt.is_some()
                             && matches!(
                                 rule.block_entity_modifier,
-                                RuleBlockEntityModifier::AppendLoot(_)
-                                    | RuleBlockEntityModifier::AppendStatic(_)
+                                RuleBlockEntityModifier::AppendStatic(_)
                             );
                         info.state = rule.output;
                         info.nbt = rule.block_entity_modifier.apply(&mut random, info.nbt);
