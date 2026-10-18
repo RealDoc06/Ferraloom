@@ -2,8 +2,14 @@
 mod behavior;
 pub mod block_item;
 pub mod name;
+mod placement;
+mod pov;
+pub use pov::get_player_pov_hit_result;
 pub mod stack;
 pub use behavior::{ItemBehavior, ported_behavior, required_behavior};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod placement_tests;

@@ -263,7 +263,7 @@ fn update_block_entity_components(
     entity.set_changed(level)
 }
 
-fn retained(stack: StackView<'_>) -> Result<StackRef, LevelError> {
+pub(super) fn retained(stack: StackView<'_>) -> Result<StackRef, LevelError> {
     match stack {
         StackView::Retained(reference) => Ok(reference),
         StackView::Borrowed(_) => Err(LevelError::Inventory("mutable item context receiver")),

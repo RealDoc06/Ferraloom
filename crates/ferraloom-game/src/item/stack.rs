@@ -129,4 +129,4 @@ pub(super) fn item_data_error(item: Item, error: ferraloom_protocol::Error) -> L
 }
 
 #[cfg(test)]
-mod tests;
+pub(in crate::item) mod tests;

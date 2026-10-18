@@ -20,6 +20,18 @@ pub trait ItemBehavior: Sync {
         base_use_on(item, context, operation)
     }
 
+    /// Item#use's air-use virtual. Unported derived bodies are required errors;
+    /// the complete game-mode air-use pipeline follows in slice D.
+    fn use_item(
+        &self,
+        item: Item,
+        _player: crate::entity::EntityRef,
+        _hand: ferraloom_protocol::play::InteractionHand,
+        _operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        Err(LevelError::UnsupportedItemMethod(item, ItemMethod::Use))
+    }
+
     /// Port of BlockItem#place.
     fn place(
         &self,
@@ -47,13 +59,18 @@ pub trait ItemBehavior: Sync {
         context: &BlockPlaceContext<'_>,
         operation: &mut StackOperation<'_>,
     ) -> Result<Option<BlockState>, LevelError> {
-        let block = required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?;
-        let Some(state) = operation.level.get_state_for_placement(block, context)? else {
-            return Ok(None);
-        };
-        Ok(required_behavior(item, ItemMethod::CanPlace)?
-            .can_place(item, context, state, operation)?
-            .then_some(state))
+        base_get_placement_state(item, context, operation)
+    }
+
+    /// Port of StandingAndWallBlockItem#canPlace's distinct overload.
+    fn can_place_standing_or_wall(
+        &self,
+        _item: Item,
+        state: BlockState,
+        pos: ferraloom_util::BlockPos,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        level.can_survive(state, pos)
     }
 
     /// Port of BlockItem#canPlace, with the native short circuit and placement context.
@@ -146,7 +163,11 @@ static BLOCK_ITEM: BlockItem = BlockItem;
 
 /// A real reflected override never falls through to an inherited base.
 pub fn ported_behavior(item: Item, method: ItemMethod) -> Option<&'static dyn ItemBehavior> {
-    match (method, method.owner(item)?) {
+    let owner = method.owner(item)?;
+    if let Some(behavior) = super::placement::ported_behavior(method, owner) {
+        return Some(behavior);
+    }
+    match (method, owner) {
         (ItemMethod::UseOn, ItemClass::Item) => Some(&ITEM),
         (
             ItemMethod::UseOn
@@ -188,4 +209,19 @@ pub(super) fn base_use_on(
     } else {
         Ok(Some(InteractionResult::Pass))
     }
+}
+
+/// BlockItem's explicit base body still invokes its actual derived virtuals.
+pub(super) fn base_get_placement_state(
+    item: Item,
+    context: &BlockPlaceContext<'_>,
+    operation: &mut StackOperation<'_>,
+) -> Result<Option<BlockState>, LevelError> {
+    let block = required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?;
+    let Some(state) = operation.level.get_state_for_placement(block, context)? else {
+        return Ok(None);
+    };
+    Ok(required_behavior(item, ItemMethod::CanPlace)?
+        .can_place(item, context, state, operation)?
+        .then_some(state))
 }

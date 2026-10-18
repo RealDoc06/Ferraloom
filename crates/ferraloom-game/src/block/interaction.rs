@@ -217,7 +217,7 @@ pub fn use_item_on(
     Ok(result)
 }
 
-fn hand_slot(
+pub(crate) fn hand_slot(
     level: &Level,
     player: EntityRef,
     hand: InteractionHand,

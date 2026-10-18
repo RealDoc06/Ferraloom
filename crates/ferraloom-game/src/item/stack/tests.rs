@@ -19,7 +19,7 @@ use ferraloom_util::{
 };
 use std::io::Read;
 
-fn level() -> (Level, EntityRef) {
+pub(in crate::item) fn level() -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
     let data = level.context().generator.access().data();
@@ -334,29 +334,18 @@ fn native_block_item_custom_data_merges_and_retains_the_block_entity_receiver() 
 }
 
 #[test]
-fn placement_virtual_overrides_are_required_under_both_policies() {
+fn unported_item_virtual_is_required_under_both_policies() {
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
-        let (mut level, player) = level();
+        let (mut level, _) = level();
         level.set_unported_behavior(policy);
-        let mut operation = StackOperation::new(&mut level);
-        let receiver = operation
-            .own(
-                player,
-                ItemStack::new(Item::SCAFFOLDING, 3, Default::default()),
-            )
-            .unwrap();
         assert_eq!(
-            use_on(receiver, &context(receiver, Direction::Up), &mut operation),
-            Err(LevelError::UnsupportedItemMethod(
-                Item::SCAFFOLDING,
-                ItemMethod::UpdatePlacementContext
+            super::super::required_behavior(Item::SHEARS, ItemMethod::MineBlock).err(),
+            Some(LevelError::UnsupportedItemMethod(
+                Item::SHEARS,
+                ItemMethod::MineBlock
             ))
         );
-        assert_eq!(
-            inventory::count(operation.level.stack(receiver).unwrap()),
-            3
-        );
-        assert_eq!(operation.level.unported_behavior_stats().skipped_calls, 0);
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
     }
 }
 
