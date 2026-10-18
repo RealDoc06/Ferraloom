@@ -486,20 +486,19 @@ impl GenerationState {
             proto_biomes: self
                 .holders
                 .iter()
-                .filter_map(|(&key, holder)| {
-                    (holder.completed >= ChunkStatus::Biomes).then(|| ProtoBiomeSnapshot {
-                        pos: ChunkPos::unpack(key),
-                        revision: self.revision,
-                        min_section: self.context.dimension.min_y >> 4,
-                        biomes: holder
-                            .chunk
-                            .region
-                            .chunk
-                            .sections
-                            .iter()
-                            .map(|section| section.biomes().clone())
-                            .collect(),
-                    })
+                .filter(|(_, holder)| holder.completed >= ChunkStatus::Biomes)
+                .map(|(&key, holder)| ProtoBiomeSnapshot {
+                    pos: ChunkPos::unpack(key),
+                    revision: self.revision,
+                    min_section: self.context.dimension.min_y >> 4,
+                    biomes: holder
+                        .chunk
+                        .region
+                        .chunk
+                        .sections
+                        .iter()
+                        .map(|section| section.biomes().clone())
+                        .collect(),
                 })
                 .collect(),
         })
