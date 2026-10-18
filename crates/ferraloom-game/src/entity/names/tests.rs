@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     Behaviors,
     entity::{
-        animal::Cow,
         player::{GameType, ServerPlayer},
         synched_data,
     },
@@ -62,7 +61,7 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
             ));
             EntityState::Item(Box::new(item))
         } else {
-            EntityState::Cow(Box::new(Cow::default()))
+            EntityState::Cow(Box::default())
         };
         state.as_entity_mut().uuid = Uuid::new(0, 1);
         if scenario.ends_with("-custom") && scenario != "item-stack-custom" {
