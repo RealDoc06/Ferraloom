@@ -305,19 +305,40 @@ impl Client {
         Ok(())
     }
 }
+#[derive(Clone, Copy, Debug)]
+enum ScenarioPhase {
+    Connect,
+    InitialChunks,
+    Chat,
+    Spectator,
+    Walk,
+    DestinationChunks,
+    Freeze,
+    PeriodicTime,
+    Save,
+    Stop,
+}
+
 pub async fn scenario(address: SocketAddr, sample_periodic_time: bool) -> Result<Outcome> {
+    let mut phase = ScenarioPhase::Connect;
     tokio::time::timeout(
         Duration::from_secs(240),
-        run_scenario(address, sample_periodic_time),
+        run_scenario(address, sample_periodic_time, &mut phase),
     )
     .await
-    .context("join/walk scenario timed out")?
+    .with_context(|| format!("join/walk scenario timed out at {phase:?}"))?
 }
-async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result<Outcome> {
+async fn run_scenario(
+    address: SocketAddr,
+    sample_periodic_time: bool,
+    phase: &mut ScenarioPhase,
+) -> Result<Outcome> {
     let mut client = Client::connect(address).await?;
+    *phase = ScenarioPhase::InitialChunks;
     client
         .until(|c, p| c.chunks.len() >= 9 && matches!(p, cb::Packet::ChunkBatchFinished(_)))
         .await?;
+    *phase = ScenarioPhase::Chat;
     client
         .io
         .send(&sb::Packet::Chat(Box::new(sb::Chat {
@@ -337,12 +358,14 @@ async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result
     client
         .until(|_, p| matches!(p,cb::Packet::PlayerChat(p)if p.body.content.0=="hello parity"))
         .await?;
+    *phase = ScenarioPhase::Spectator;
     client.command("gamemode spectator").await?;
     client
         .until(|_, p| matches!(p,cb::Packet::GameEvent(p)if p.event==3 && p.param==3.))
         .await?;
     let start = client.position;
     // Stay below ordinary flying speed while vanilla generates neighboring terrain.
+    *phase = ScenarioPhase::Walk;
     for step in 1..=100 {
         let x = start[0] + f64::from(step);
         client.position[0] = x;
@@ -380,6 +403,7 @@ async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result
         start[2].floor() as i32 >> 4,
     );
     if !client.chunks.contains(&target) || client.unloads == 0 {
+        *phase = ScenarioPhase::DestinationChunks;
         client
             .until(|c, p| {
                 c.chunks.contains(&target)
@@ -390,10 +414,12 @@ async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result
     }
     let frozen_periodic_time = if sample_periodic_time {
         // Freeze only this parity fixture so the sampled gameTime can match saved overworld Time exactly.
+        *phase = ScenarioPhase::Freeze;
         client.command("tick freeze").await?;
         client
             .until(|_, p| matches!(p, cb::Packet::TickingState(p) if p.is_frozen))
             .await?;
+        *phase = ScenarioPhase::PeriodicTime;
         loop {
             if let cb::Packet::SetTime(time) = client.next().await? {
                 break Some(time);
@@ -402,8 +428,10 @@ async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result
     } else {
         None
     };
+    *phase = ScenarioPhase::Save;
     client.command("save-all flush").await?;
     client.until(|_,p|matches!(p,cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|s|s.contains("Saved the game")||s.contains("commands.save.success")))).await?;
+    *phase = ScenarioPhase::Stop;
     client.command("stop").await?;
     loop {
         let bytes = client.io.read().await?;
