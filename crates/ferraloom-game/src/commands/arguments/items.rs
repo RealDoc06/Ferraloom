@@ -86,14 +86,7 @@ fn component_type(
     }
     let start = reader.cursor();
     let key = identifier(reader)?;
-    let id = ComponentTypeId::from_name(&key).filter(|id| {
-        !matches!(
-            *id,
-            ComponentTypeId::CREATIVE_SLOT_LOCK
-                | ComponentTypeId::ADDITIONAL_TRADE_COST
-                | ComponentTypeId::MAP_POST_PROCESSING
-        )
-    });
+    let id = persistent_component_type(&key);
     let Some(id) = id else {
         reader.set_cursor(start);
         return Err(error_at(reader, "arguments.item.component.unknown", &[key]));
@@ -102,4 +95,14 @@ fn component_type(
         id,
         Identifier::parse(&key).expect("parsed component identifier"),
     ))
+}
+pub(super) fn persistent_component_type(key: &str) -> Option<ComponentTypeId> {
+    ComponentTypeId::from_name(key).filter(|id| {
+        !matches!(
+            *id,
+            ComponentTypeId::CREATIVE_SLOT_LOCK
+                | ComponentTypeId::ADDITIONAL_TRADE_COST
+                | ComponentTypeId::MAP_POST_PROCESSING
+        )
+    })
 }

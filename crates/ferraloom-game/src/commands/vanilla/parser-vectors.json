@@ -2877,6 +2877,194 @@
     "cursor": 0
   },
   {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*",
+    "ok": true,
+    "cursor": 1
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[]",
+    "ok": true,
+    "cursor": 3
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "stone[]",
+    "ok": true,
+    "cursor": 7
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "stone[damage]",
+    "ok": true,
+    "cursor": 13
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "stone[!damage]",
+    "ok": true,
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "stone[damage=1]",
+    "ok": true,
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "stone[count=1]",
+    "ok": true,
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[count~{min:1,max:5}]",
+    "ok": true,
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage~{damage:{min:1}}]",
+    "ok": true,
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage|custom_name]",
+    "ok": true,
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[!damage,custom_name='foo']",
+    "ok": true,
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[custom_data~{foo:1}]",
+    "ok": true,
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[creative_slot_lock]",
+    "ok": false,
+    "error_cursor": 20,
+    "message": "Expected literal ~",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[unknown]",
+    "ok": false,
+    "error_cursor": 9,
+    "message": "Unknown item component 'minecraft:unknown'",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[unknown~{}]",
+    "ok": false,
+    "error_cursor": 9,
+    "message": "Unknown item component 'minecraft:unknown'",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage=]",
+    "ok": false,
+    "error_cursor": 9,
+    "message": "Expected a valid unquoted string",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage",
+    "ok": false,
+    "error_cursor": 8,
+    "message": "Expected literal =",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage,]",
+    "ok": false,
+    "error_cursor": 9,
+    "message": "Invalid ID",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[damage|]",
+    "ok": false,
+    "error_cursor": 9,
+    "message": "Invalid ID",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[!!damage]",
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Invalid ID",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[count={min:5,max:1}]",
+    "ok": false,
+    "error_cursor": 21,
+    "message": "Malformed 'minecraft:count' component: 'Swapped bounds in range: Optional[5] is higher than Optional[1]'",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[count='a']",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "Malformed 'minecraft:count' component: 'Failed to parse either. First: Not a map: \"a\"; Second: Not a number'",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": " stone [ damage = 1 ]",
+    "ok": true,
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "input": "*[count]",
+    "ok": true,
+    "cursor": 8
+  },
+  {
     "parser": "brigadier:float",
     "properties": {
       "min": 0.0

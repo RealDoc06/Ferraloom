@@ -2,6 +2,7 @@
 pub mod blocks;
 mod chat;
 pub mod coordinates;
+pub mod item_predicate;
 pub mod items;
 pub mod operation;
 pub mod range;
@@ -45,6 +46,7 @@ pub enum ArgumentValue {
     Block(blocks::BlockInput),
     BlockPredicate(blocks::BlockPredicate),
     Item(items::ItemInput),
+    ItemPredicate(item_predicate::ItemPredicate),
     Boolean(bool),
     Integer(i32),
     Long(i64),
@@ -288,6 +290,7 @@ impl MinecraftArgument {
             A::BlockState {} => V::Block(blocks::parse(reader)?),
             A::BlockPredicate {} => V::BlockPredicate(blocks::predicate(reader, &self.context)?),
             A::ItemStack {} => V::Item(items::parse(reader)?),
+            A::ItemPredicate {} => V::ItemPredicate(item_predicate::parse(reader, &self.context)?),
             A::ItemSlot {} => V::Integer(slots::parse(reader, true)?.slots[0]),
             A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
             A::NbtTag {} => V::Tag(nbt(reader, false)?),

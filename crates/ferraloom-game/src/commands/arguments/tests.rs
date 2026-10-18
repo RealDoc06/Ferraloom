@@ -35,6 +35,7 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         "minecraft:block_state",
         "minecraft:block_predicate",
         "minecraft:item_stack",
+        "minecraft:item_predicate",
         "minecraft:team_color",
         "minecraft:hex_color",
         "minecraft:message",
