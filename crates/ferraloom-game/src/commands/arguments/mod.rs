@@ -936,7 +936,10 @@ impl Message {
             }
             let matches = part.selector.find(source, query, false)?;
             result.extra.push(crate::commands::builtins::format_list(
-                matches.into_iter().map(|entity| query.display_name(entity)),
+                matches
+                    .into_iter()
+                    .map(|entity| query.display_name(entity))
+                    .collect::<Result<Vec<_>, _>>()?,
             ));
             read_to = part.end;
         }

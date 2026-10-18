@@ -1,5 +1,6 @@
 //! Vanilla statistic identities, counters and player JSON. Gameplay hooks apply
 //! the returned values to scoreboard objectives in the owning player adapter.
+mod live;
 use crate::loot::{Identifier, LootError, Result, codec};
 use ferraloom_data::{Block, EntityType, Item, registries::custom_stat};
 use ferraloom_protocol::{
@@ -12,6 +13,7 @@ use ferraloom_protocol::{
 use ferraloom_util::collections::{
     HashMap as JavaHashMap, HashSet as JavaHashSet, JavaHash, Object2IntOpenHashMap,
 };
+pub use live::request_stats;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -335,7 +337,11 @@ impl ServerStatsCounter {
         Ok((result, diagnostics))
     }
     pub fn save_path(world: &Path, uuid: ferraloom_protocol::Uuid) -> PathBuf {
-        world.join("stats").join(format!("{uuid}.json"))
+        crate::advancements::player_progress_path(
+            world,
+            uuid,
+            crate::advancements::PlayerProgressDirectory::Stats,
+        )
     }
 }
 /// Pure REQUEST_STATS branch of ServerGamePacketListenerImpl#handleClientCommand.
@@ -347,6 +353,66 @@ pub fn handle_client_command(
         ClientCommandAction::RequestStats => Some(counter.send_stats()),
         _ => None,
     }
+}
+
+/// Port of ServerPlayer#awardStat. The canonical counter saturates first;
+/// matching scoreboard objectives synchronously add the original delta.
+pub fn award_stat(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    stat: Stat,
+    amount: i32,
+) -> std::result::Result<(), crate::level::LevelError> {
+    level
+        .entity_mut::<crate::entity::player::ServerPlayer>(player)?
+        .stats
+        .increment(stat, amount);
+    statistic_scoreboard(level, player, stat, ScoreboardUpdate::Add(amount))
+}
+/// Port of ServerPlayer#resetStat (ScoreAccess#reset writes zero).
+pub fn reset_stat(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    stat: Stat,
+) -> std::result::Result<(), crate::level::LevelError> {
+    level
+        .entity_mut::<crate::entity::player::ServerPlayer>(player)?
+        .stats
+        .set_value(stat, 0);
+    statistic_scoreboard(level, player, stat, ScoreboardUpdate::Reset)
+}
+enum ScoreboardUpdate {
+    Add(i32),
+    Reset,
+}
+fn statistic_scoreboard(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    stat: Stat,
+    update: ScoreboardUpdate,
+) -> std::result::Result<(), crate::level::LevelError> {
+    let criterion = stat.objective_name();
+    let scoreboard = level.shared()?.scoreboard.scoreboard();
+    let needs_display = scoreboard.objectives_for_criterion(&criterion).any(|name| {
+        scoreboard
+            .get_objective(name)
+            .is_some_and(|objective| objective.display_auto_update)
+    });
+    // ScoreAccess#set only invokes the native display getter for auto-updated objectives.
+    let display = needs_display
+        .then(|| level.entity_display_name(player))
+        .transpose()?;
+    let holder = level.entity_scoreboard_name(player)?.into_owned();
+    let scoreboard = &mut level.shared_mut()?.scoreboard;
+    match update {
+        ScoreboardUpdate::Add(amount) => {
+            scoreboard.add_criterion_score(&holder, &criterion, amount, display.as_ref())
+        }
+        ScoreboardUpdate::Reset => {
+            scoreboard.set_criterion_score(&holder, &criterion, 0, display.as_ref())
+        }
+    }
+    .map_err(|_| crate::level::LevelError::Inventory("statistic scoreboard objective"))
 }
 
 #[cfg(test)]

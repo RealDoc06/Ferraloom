@@ -76,6 +76,8 @@ pub struct BotState {
     pub containers: BTreeMap<i32, Container>,
     /// Player Inventory indices (0..42), distinct from inventory-menu slot numbers.
     pub inventory: BTreeMap<i32, ItemStack>,
+    /// Latest full advancement progress, including packets consumed during join.
+    pub advancement_progress: BTreeMap<p::Identifier, play::AdvancementProgress>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
     pub display_objectives: Vec<cb::SetDisplayObjective>,
@@ -999,6 +1001,18 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             s.scores
                 .insert((p.objective_name.clone(), p.owner.clone()), p.score.0);
         }
+        cb::Packet::UpdateAdvancements(p) => {
+            if p.should_reset {
+                s.advancement_progress.clear();
+            }
+            for id in &p.removed {
+                s.advancement_progress.remove(id);
+            }
+            for progress in &p.progress {
+                s.advancement_progress
+                    .insert(progress.id.clone(), progress.clone());
+            }
+        }
         cb::Packet::ResetScore(p) => s.scores.retain(|(objective, owner), _| {
             owner != &p.owner || p.objective_name.as_ref().is_some_and(|o| o != objective)
         }),
@@ -1061,6 +1075,58 @@ fn apply_delta(entity: &mut Entity, delta: &play::EntityDelta) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn advancement_updates_reset_remove_and_replace_whole_progress() -> Result<()> {
+        let first = p::Identifier::parse("test:first")?;
+        let second = p::Identifier::parse("test:second")?;
+        let progress = |id: &p::Identifier, names: &[&str]| play::AdvancementProgress {
+            id: id.clone(),
+            criteria: names
+                .iter()
+                .map(|name| play::CriterionProgress {
+                    name: (*name).into(),
+                    obtained: Some(1),
+                })
+                .collect(),
+        };
+        let packet = |reset, removed, progress| {
+            cb::Packet::UpdateAdvancements(cb::UpdateAdvancements {
+                should_reset: reset,
+                added: Vec::new(),
+                removed,
+                progress,
+                show_advancements: true,
+            })
+        };
+        let mut state = BotState::default();
+        apply(
+            &mut state,
+            &packet(
+                true,
+                Vec::new(),
+                vec![progress(&first, &["a", "b"]), progress(&second, &["c"])],
+            ),
+        )?;
+        let replacement = progress(&first, &["new"]);
+        apply(
+            &mut state,
+            &packet(false, vec![second.clone()], vec![replacement.clone()]),
+        )?;
+        assert_eq!(state.advancement_progress.len(), 1);
+        assert_eq!(state.advancement_progress[&first], replacement);
+        assert!(!state.advancement_progress.contains_key(&second));
+        apply(
+            &mut state,
+            &packet(true, Vec::new(), vec![progress(&second, &["reset"])]),
+        )?;
+        assert_eq!(state.advancement_progress.len(), 1);
+        assert!(!state.advancement_progress.contains_key(&first));
+        assert_eq!(
+            state.advancement_progress[&second],
+            progress(&second, &["reset"])
+        );
+        Ok(())
+    }
     #[test]
     fn entity_delta_preserves_zero_axes_and_java_negative_ties() {
         let mut entity = Entity {

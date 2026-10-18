@@ -14,6 +14,7 @@ use crate::{
 
 pub mod acquisition;
 mod block_entity;
+pub mod blockscan;
 pub mod border;
 mod broadcast;
 pub mod chunk;
@@ -116,6 +117,7 @@ pub enum LevelError {
 pub struct LevelRules {
     /// Published by the canonical GameRules owner after load and each change.
     pub block_drops: Option<bool>,
+    pub show_advancement_messages: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
@@ -146,6 +148,7 @@ impl Default for LevelRules {
         };
         Self {
             block_drops: None,
+            show_advancement_messages: true,
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
