@@ -13,6 +13,7 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
     PackReload,
     SnowAccumulation,
@@ -153,6 +154,13 @@ impl UnportedCalls {
         if self.seen.insert(call) {
             self.stats.distinct_calls = self.seen.len();
             match call {
+                UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
+                    eprintln!(
+                        "Unported advancement criterion skipped: {} (skipped calls: {})",
+                        trigger.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Block(block, method) => eprintln!(
                     "Unported behavior skipped: {}#{} (skipped calls: {})",
                     block.name(),
@@ -186,6 +194,9 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::AdvancementCriterion(trigger) => {
+                    LevelError::UnsupportedAdvancementCriterion(trigger)
+                }
                 UnportedOperation::WeatherStrike => LevelError::UnsupportedWeatherQuery,
                 UnportedOperation::PackReload => LevelError::UnsupportedPackReload,
                 UnportedOperation::SnowAccumulation => {
