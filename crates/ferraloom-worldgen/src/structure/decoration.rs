@@ -1,14 +1,18 @@
 //! ChunkGenerator#applyBiomeDecoration's structure pass. Registry and reference
 //! order are inputs; a job exclusively borrows its region and random stream.
 use super::{
-    BoundingBox, jigsaw::JigsawStart, rule::BlockTags, template::StructureTemplateManager,
+    BoundingBox,
+    jigsaw::JigsawStart,
+    rule::BlockTags,
+    start::{StructurePiece, StructureStart},
+    template::StructureTemplateManager,
 };
 use crate::{
     Error, Identifier,
     decoration::{GenerationStep, StructureDecoration},
     feature::{FeatureContext, FeatureRegistry},
-    generator::NoiseBasedChunkGenerator,
-    region::WorldGenRegion,
+    generator::{ChunkGeneratorAccess, NoiseBasedChunkGenerator},
+    region::{ChunkStatus, WorldGenRegion},
 };
 use ferraloom_data::datapack::ResourceManager;
 use ferraloom_util::random::WorldgenRandom;
@@ -79,6 +83,111 @@ impl JigsawStart {
                     false,
                     tags,
                 )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl StructureStart {
+    /// Port of StructureStart#placeInChunk. Starts are exclusively owned while
+    /// postProcess may change piece bounds, chest flags or entity-spawn flags.
+    pub fn place_in_chunk(
+        &mut self,
+        context: &mut FeatureContext<'_, '_>,
+        templates: &StructureTemplateManager,
+        tags: &BlockTags,
+        bounds: BoundingBox,
+    ) -> Result<(), Error> {
+        let Some(first) = self.pieces.first() else {
+            return Ok(());
+        };
+        let first = first.bounds();
+        let [x, _, z] = first.center();
+        let reference = [x, first.min[1], z];
+        for piece in &mut self.pieces {
+            if !piece.bounds().intersects(bounds) {
+                continue;
+            }
+            match piece {
+                StructurePiece::Jigsaw(piece) => {
+                    piece.element.place(
+                        templates,
+                        context,
+                        piece.position,
+                        reference,
+                        piece.rotation,
+                        bounds,
+                        piece.liquid,
+                        false,
+                        tags,
+                    )?;
+                }
+            }
+        }
+        // JigsawStructure inherits the empty Structure#afterPlace method.
+        Ok(())
+    }
+}
+
+/// StructureManager-backed decoration using the live region's references and
+/// starts. Reference-set iteration order survives save/reload. A start is taken
+/// from its origin chunk only for its synchronous postProcess call.
+pub struct RegionStructureDecoration<'a> {
+    pub registry: &'a [StructureStep],
+    pub templates: &'a StructureTemplateManager,
+    pub tags: &'a BlockTags,
+    pub generator: &'a dyn ChunkGeneratorAccess,
+    pub features: &'a FeatureRegistry,
+}
+impl StructureDecoration for RegionStructureDecoration<'_> {
+    fn place_step(
+        &mut self,
+        step: GenerationStep,
+        region: &mut WorldGenRegion<'_>,
+        random: &mut WorldgenRandom,
+        decoration_seed: i64,
+    ) -> Result<(), Error> {
+        let chunk = region.center();
+        let [x, z] = chunk.map(|p| p.wrapping_mul(16));
+        let bounds = BoundingBox::new(
+            [x, region.min_y() + 1, z],
+            [x + 15, region.min_y() + region.height() - 1, z + 15],
+        );
+        for (index, structure) in self.registry.iter().filter(|s| s.step == step).enumerate() {
+            random.set_feature_seed(decoration_seed, index as i32, step as i32);
+            let references = region
+                .chunk(chunk, ChunkStatus::StructureReferences)?
+                .structures
+                .references
+                .get(&structure.id)
+                .map(|r| r.iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for source in references {
+                let source = ferraloom_util::ChunkPos::unpack(source);
+                let origin = [source.x, source.z];
+                let Some(mut start) = region.take_structure_start(origin, &structure.id)? else {
+                    continue;
+                };
+                let result = if start.is_valid() {
+                    start.place_in_chunk(
+                        &mut FeatureContext {
+                            region,
+                            random,
+                            origin: [x, bounds.min[1], z],
+                            generator: self.generator,
+                            registry: self.features,
+                        },
+                        self.templates,
+                        self.tags,
+                        bounds,
+                    )
+                } else {
+                    Ok(())
+                };
+                // Restore even when a game-backed operation returns Unsupported.
+                region.restore_structure_start(origin, structure.id.clone(), start)?;
+                result?;
             }
         }
         Ok(())

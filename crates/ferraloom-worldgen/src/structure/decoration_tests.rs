@@ -73,6 +73,21 @@ fn structure_registry_step_indices_and_empty_starts_rng_match_vanilla() {
                 "step={step:?} prefix={prefix} seed={}",
                 case["seed"]
             );
+            let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(17));
+            let seed = random.set_decoration_seed(case["seed"].as_i64().unwrap(), -112, 176);
+            RegionStructureDecoration {
+                registry: &entries[..prefix],
+                templates: &templates,
+                tags: &tags,
+                generator: &generator,
+                features: &features,
+            }
+            .place_step(step, &mut region, &mut random, seed)
+            .unwrap();
+            assert_eq!(
+                random.next_int(),
+                case["next"][prefix].as_i64().unwrap() as i32
+            );
         }
     }
 }
