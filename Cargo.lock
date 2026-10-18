@@ -418,6 +418,7 @@ dependencies = [
  "ferraloom-chunk",
  "ferraloom-data",
  "ferraloom-nbt",
+ "ferraloom-storage",
  "ferraloom-util",
  "flate2",
  "serde_json",

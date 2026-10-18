@@ -25,6 +25,8 @@ pub struct PoolElementStructurePiece {
     pub rotation: Rotation,
     pub bounds: BoundingBox,
     pub liquid: LiquidSettings,
+    pub gen_depth: i32,
+    pub orientation: Option<ferraloom_util::Direction>,
     pub junctions: Vec<JigsawJunction>,
 }
 impl PoolElementStructurePiece {
@@ -93,6 +95,8 @@ impl JigsawPlacement {
         let adjusted = sub(self.position, local_anchor);
         let bounds = element.bounding_box(templates, adjusted, rotation)?;
         let mut center = PoolElementStructurePiece {
+            gen_depth: 0,
+            orientation: None,
             ground_level_delta: element.ground_level_delta(),
             element,
             position: adjusted,
@@ -396,6 +400,8 @@ impl<R: RandomSource, H: FnMut(i32, i32, Heightmap) -> Result<i32, Error>> Place
                             destination_projection: target_projection,
                         });
                         let child = PoolElementStructurePiece {
+                            gen_depth: 0,
+                            orientation: None,
                             element: target.clone(),
                             position,
                             ground_level_delta: ground,
