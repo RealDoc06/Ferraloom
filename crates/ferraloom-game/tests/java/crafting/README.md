@@ -14,3 +14,7 @@ or decompiled source. Rust tests read the same recipes from the pinned server ja
 protocol component primitive fixtures using real DFU/Gson/NBT codecs. It covers
 integer narrowing and NumberLimits, direct float rounding, all numeric NBT kinds,
 and the shared compound-or-SNBT alternative used by custom and typed entity data.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-book.sh` captures
+`ServerRecipeBook.Packed.CODEC` and `loadUntrusted` against required lists,
+default settings, numeric booleans, empty numeric arrays and unknown recipe ids.
