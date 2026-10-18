@@ -229,9 +229,12 @@ impl MinecraftServer {
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
-                        return Err(exceptions::error(
+                        return Err(exceptions::error_with_arguments(
                             "commands.difficulty.failure",
-                            &[difficulty_name(&current)],
+                            vec![builtins::component(Component::translatable(
+                                format!("options.difficulty.{current}"),
+                                vec![],
+                            ))],
                         ));
                     }
                     let mut settings = self
@@ -241,14 +244,20 @@ impl MinecraftServer {
                         .get_compound("difficulty_settings")
                         .cloned()
                         .unwrap_or_default();
-                    settings.insert("difficulty", Tag::String(requested.as_str().into()));
+                    let changed = if self.properties.boolean("hardcore") {
+                        "hard"
+                    } else {
+                        requested.as_str()
+                    };
+                    let locked = settings.get_boolean_or("locked", false);
+                    settings.insert("difficulty", Tag::String(changed.into()));
                     self.world
                         .level_data
                         .data
                         .insert("difficulty_settings", Tag::Compound(settings));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
-                        difficulty: difficulty(requested),
-                        locked: false,
+                        difficulty: difficulty(changed),
+                        locked,
                     }));
                     CommandResult::success(
                         0,
@@ -364,15 +373,7 @@ fn difficulty_id(value: &str) -> i32 {
         _ => 1,
     }
 }
-fn difficulty_name(value: &str) -> String {
-    match value {
-        "peaceful" => "Peaceful",
-        "normal" => "Normal",
-        "hard" => "Hard",
-        _ => "Easy",
-    }
-    .into()
-}
+
 fn game_mode_name(mode: GameType) -> &'static str {
     match mode {
         GameType::Survival => "survival",

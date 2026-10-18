@@ -355,7 +355,7 @@ impl ServerClockManager {
                 if state.rate == *rate {
                     return Err(error(
                         "commands.time.rate.already_same",
-                        &[clock.clone(), rate.to_string()],
+                        &[clock.clone(), super::exceptions::java_float_string(*rate)],
                     ));
                 }
                 state.rate = *rate;

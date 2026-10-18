@@ -63,6 +63,14 @@ pub fn render(key: &str, args: &[String]) -> String {
     }
     result
 }
+/// Float.toString formatting used by translatableEscape's numeric arguments.
+pub fn java_float_string(value: f32) -> String {
+    // The Java-checked SNBT printer shares Float.toString's exact decimal selection.
+    let mut text = ferraloom_nbt::Tag::Float(value).to_string();
+    text.pop(); // FloatTag appends the SNBT type suffix after the number.
+    text
+}
+
 pub fn translated(key: &str, args: &[String]) -> TranslatedMessage {
     TranslatedMessage {
         component: Component::translatable(
@@ -76,6 +84,17 @@ pub fn error(key: &str, args: &[String]) -> CommandSyntaxException {
     CommandSyntaxException::new(
         ExceptionKind::Custom(key.into()),
         Arc::new(translated(key, args)),
+    )
+}
+pub fn error_with_arguments(key: &str, arguments: Vec<Argument>) -> CommandSyntaxException {
+    let component = Component::translatable(key, arguments);
+    let rendered = plain_text(&component);
+    CommandSyntaxException::new(
+        ExceptionKind::Custom(key.into()),
+        Arc::new(TranslatedMessage {
+            component,
+            rendered,
+        }),
     )
 }
 pub fn error_at(reader: &StringReader, key: &str, args: &[String]) -> CommandSyntaxException {
