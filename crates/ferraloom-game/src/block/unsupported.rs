@@ -48,6 +48,13 @@ pub enum BlockMethod {
     IsCollisionShapeFullBlock,
     CloneItemStack,
     CanBeReplaced,
+    Signal,
+    DirectSignal,
+    IsSignalSource,
+    OwnSignal,
+    ShouldRedstoneWireConnectTo,
+    HasAnalogOutputSignal,
+    AnalogOutputSignal,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -74,6 +81,13 @@ impl BlockMethod {
             Self::TriggerEvent => Vanilla::TriggerEvent,
             Self::CloneItemStack => Vanilla::GetCloneItemStack,
             Self::CanBeReplaced => Vanilla::CanBeReplaced,
+            Self::Signal => Vanilla::GetSignal,
+            Self::DirectSignal => Vanilla::GetDirectSignal,
+            Self::IsSignalSource => Vanilla::IsSignalSource,
+            Self::OwnSignal => Vanilla::OwnSignal,
+            Self::ShouldRedstoneWireConnectTo => Vanilla::ShouldRedstoneWireConnectTo,
+            Self::HasAnalogOutputSignal => Vanilla::HasAnalogOutputSignal,
+            Self::AnalogOutputSignal => Vanilla::GetAnalogOutputSignal,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -96,6 +110,13 @@ impl BlockMethod {
                 | Self::IsCollisionShapeFullBlock
                 | Self::CloneItemStack
                 | Self::CanBeReplaced
+                | Self::Signal
+                | Self::DirectSignal
+                | Self::IsSignalSource
+                | Self::OwnSignal
+                | Self::ShouldRedstoneWireConnectTo
+                | Self::HasAnalogOutputSignal
+                | Self::AnalogOutputSignal
         )
     }
     pub const fn name(self) -> &'static str {
@@ -128,6 +149,13 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
             Self::CloneItemStack => "getCloneItemStack",
             Self::CanBeReplaced => "canBeReplaced(BlockPlaceContext)",
+            Self::Signal => "getSignal",
+            Self::DirectSignal => "getDirectSignal",
+            Self::IsSignalSource => "isSignalSource",
+            Self::OwnSignal => "ownSignal",
+            Self::ShouldRedstoneWireConnectTo => "shouldRedstoneWireConnectTo",
+            Self::HasAnalogOutputSignal => "hasAnalogOutputSignal",
+            Self::AnalogOutputSignal => "getAnalogOutputSignal",
         }
     }
 }
