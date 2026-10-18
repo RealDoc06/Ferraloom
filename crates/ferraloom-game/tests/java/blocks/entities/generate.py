@@ -14,8 +14,12 @@ def run(args):
     if result.returncode:
         print(result.stdout[-2000:]);print(result.stderr);raise SystemExit(result.returncode)
     return result.stdout
-run([str(jdk/'javac'),'-cp',cp,'-d',str(classes),str(source/'BlockEntityVectors.java')])
+run([str(jdk/'javac'),'-cp',cp,'-d',str(classes),str(source.parent.parent/'level/NeighborVectors.java')])
+run([str(jdk/'java'),'-cp',f'{classes}:{cp}','NeighborVectors','generate',str(classes/'NeighborFixture.java')])
+fixture=classes/'NeighborFixture.java'
+fixture.write_text(fixture.read_text().replace('final class MutationFixture','class MutationFixture'))
+run([str(jdk/'javac'),'-cp',f'{classes}:{cp}','-d',str(classes),str(fixture),str(source/'BlockEntityFixture.java'),str(source/'BlockEntityVectors.java')])
 output=run([str(jdk/'java'),'-Xmx512m','-cp',f'{classes}:{cp}','BlockEntityVectors'])
-rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-','default-save\t','filled-save\t','roundtrip\t','update-tag\t','update-packet\t','loot-save\t','loot-zero\t'))]
+rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-','default-save\t','filled-save\t','roundtrip\t','update-tag\t','update-packet\t','loot-save\t','loot-zero\t','ticker-phase\t'))]
 (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} vanilla block-entity vectors')
