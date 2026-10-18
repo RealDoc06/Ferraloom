@@ -2,8 +2,8 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    bamboo, crops, dripleaf, feature_bonemeal, growing, hanging_moss, moss, multiface_spreader,
-    nylium, pitcher, sapling, sea_pickle, spread, survival,
+    bamboo, crops, dripleaf, feature_bonemeal, grass_bonemeal, growing, hanging_moss, moss,
+    multiface_spreader, nylium, pitcher, sapling, sea_pickle, spread, survival,
     tree_grower::TreeGrower,
 };
 use crate::level::LevelError;
@@ -78,7 +78,7 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     use BlockClass as C;
     if matches!(
         block.class(),
-        C::NetherrackBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock
+        C::GrassBlock | C::NetherrackBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock
     ) {
         return Some(&NEIGHBOR_BONEMEAL);
     }
@@ -197,6 +197,10 @@ impl BonemealableBlock for PlantBonemeal {
         }
         let level = &access.as_reader();
         match state.block().class() {
+            C::GrassBlock => {
+                Ok(level.get_block_state(pos.above(1))?.is_air()
+                    && inside_height(level, pos.above(1)))
+            }
             C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {
                 feature_bonemeal::target(state, pos, level)
             }
@@ -342,10 +346,11 @@ impl BonemealableBlock for PlantBonemeal {
         state: BlockState,
         pos: BlockPos,
         level: &mut LevelAccessRef<'_, '_>,
-        _source: BonemealSource,
+        source: BonemealSource,
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::GrassBlock => grass_bonemeal::perform(pos, level, source)?,
             C::MushroomBlock => feature_bonemeal::grow_mushroom(state, pos, level)?,
             C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {
                 feature_bonemeal::perform(state, pos, level)?;

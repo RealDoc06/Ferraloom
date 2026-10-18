@@ -387,3 +387,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.mushroom-bonemeal | Typed huge-mushroom radius bounds, 0.4 probability, fluid removal and original mushroom restoration on failed live placement | `MushroomBlock#isValidBonemealTarget; growMushroom` | Typed native feature-radius vectors and live feature bridge | pass | todo |
 
 | blocks.plants.sapling-targets | Real ServerLevel sapling/azalea/mangrove target and success calls preserve weighted RNG, flower/2x2 checks and top-height rejection | `SaplingBlock#isValidBonemealTarget/isBonemealSuccess`, `AzaleaBlock`, `MangrovePropaguleBlock` | Dedicated ServerLevel sapling-target oracle (capture pending) | - | todo |
+
+| blocks.plants.grass-bonemeal-walk | Grass bone meal preserves 128 walk attempts, captured short-grass state, zoomed biome flower lists and ordinary placed-feature calls with canonical RNG | `GrassBlock#performBonemeal/placeBonemealEffect` | Native biome/composite bone-meal metadata; dedicated live parity scenario | pass | todo |

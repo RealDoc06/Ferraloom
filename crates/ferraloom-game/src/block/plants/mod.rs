@@ -13,6 +13,7 @@ mod spread;
 mod spreading;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
 mod geometry;
+mod grass_bonemeal;
 mod ground;
 mod growing;
 mod hanging_moss;
