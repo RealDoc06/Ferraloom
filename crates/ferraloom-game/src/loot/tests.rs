@@ -328,6 +328,8 @@ fn item_predicate_acceptance_matches_real_java() {
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     for record in vectors["item_predicates"].as_array().unwrap() {
         let test = crate::predicates::ItemPredicate::decode(&record["predicate"]).unwrap();
+        test.bind_registries(Some(&OracleRegistries(&resources)))
+            .unwrap();
         assert_eq!(
             test.matches(&decode_stack(&record["item"]), &facts)
                 .unwrap(),

@@ -418,6 +418,18 @@ impl<'a> BindingContext<'a> {
     ) -> Result<()> {
         self.block(value)
     }
+    fn fluid_predicate(&mut self, value: &crate::predicates::FluidPredicate) -> Result<()> {
+        self.optional_set(RegistryKey::Fluid, &value.fluids)
+    }
+    fn damage_predicate(&mut self, value: &crate::predicates::DamagePredicate) -> Result<()> {
+        if let Some(entity) = &value.source_entity {
+            self.entity(entity)?;
+        }
+        if let Some(source) = &value.damage_type {
+            self.damage(source)?;
+        }
+        Ok(())
+    }
 }
 macro_rules! bindable {
     ($ty:ty, $method:ident) => {
@@ -438,6 +450,8 @@ bindable!(crate::predicates::BlockPredicate, block_predicate);
 bindable!(crate::predicates::EntityPredicate, entity);
 bindable!(crate::predicates::LocationPredicate, location);
 bindable!(crate::predicates::DamageSourcePredicate, damage);
+bindable!(crate::predicates::DamagePredicate, damage_predicate);
+bindable!(crate::predicates::FluidPredicate, fluid_predicate);
 
 trait Bind {
     fn bind(&self, c: &mut BindingContext<'_>) -> Result<()>;
