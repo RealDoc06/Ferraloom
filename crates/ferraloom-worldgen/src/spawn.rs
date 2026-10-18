@@ -191,13 +191,13 @@ pub fn initial_spawn(
     let mut result = [origin[0] * 16 + 8, height, origin[1] * 16 + 8];
     let (mut x, mut z, mut dx, mut dz) = (0, 0, 0, -1);
     for _ in 0..121 {
-        if (-5..=5).contains(&x) && (-5..=5).contains(&z) {
-            if let Some(position) =
+        if (-5..=5).contains(&x)
+            && (-5..=5).contains(&z)
+            && let Some(position) =
                 spawn_position_in_chunk(world, generator, [origin[0] + x, origin[1] + z])?
-            {
-                result = position;
-                break;
-            }
+        {
+            result = position;
+            break;
         }
         if x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z) {
             (dx, dz) = (-dz, dx);
