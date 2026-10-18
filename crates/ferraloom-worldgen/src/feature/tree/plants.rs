@@ -42,8 +42,8 @@ impl HugeMushroom {
 impl Feature for HugeMushroom {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = ctx.origin;
-        let mut height = ctx.random.next_int_bound(3) + 4;
-        if ctx.random.next_int_bound(12) == 0 {
+        let mut height = ctx.random()?.next_int_bound(3) + 4;
+        if ctx.random()?.next_int_bound(12) == 0 {
             height *= 2;
         }
         if origin[1] < ctx.level.min_y() + 1
@@ -199,11 +199,11 @@ impl HugeFungus {
         hat: f32,
         vines: f32,
     ) -> Result<(), Error> {
-        if c.random.next_float() < decor {
+        if c.random()?.next_float() < decor {
             c.level.set_block(p, self.decor, 3)?;
-        } else if c.random.next_float() < hat {
+        } else if c.random()?.next_float() < hat {
             c.level.set_block(p, self.hat, 3)?;
-            if c.random.next_float() < vines {
+            if c.random()?.next_float() < vines {
                 Self::vines(c, p)?;
             }
         }
@@ -214,8 +214,8 @@ impl HugeFungus {
         if !is_air(c.level.block(p)?) {
             return Ok(());
         }
-        let mut height = c.random.next_int_bound(5) + 1;
-        if c.random.next_int_bound(7) == 0 {
+        let mut height = c.random()?.next_int_bound(5) + 1;
+        if c.random()?.next_int_bound(7) == 0 {
             height *= 2;
         }
         for y in 0..=height {
@@ -223,7 +223,7 @@ impl HugeFungus {
                 if y == height || !is_air(c.level.block(add(p, [0, -1, 0]))?) {
                     let state = Block::WEEPING_VINES
                         .default_state()
-                        .with_integer_property("age", c.random.next_int_bound(3) + 23)
+                        .with_integer_property("age", c.random()?.next_int_bound(3) + 23)
                         .map_err(|e| Error(format!("{e:?}")))?;
                     c.level.set_block(p, state, 2)?;
                     break;
@@ -242,14 +242,14 @@ impl Feature for HugeFungus {
         if c.level.block(add(origin, [0, -1, 0]))?.block() != self.base.block() {
             return Ok(false);
         }
-        let mut height = c.random.next_int_bound(10) + 4;
-        if c.random.next_int_bound(12) == 0 {
+        let mut height = c.random()?.next_int_bound(10) + 4;
+        if c.random()?.next_int_bound(12) == 0 {
             height *= 2;
         }
         if !self.planted && origin[1] + height + 1 >= c.generator.gen_depth() {
             return Ok(false);
         }
-        let huge = !self.planted && c.random.next_float() < 0.06;
+        let huge = !self.planted && c.random()?.next_float() < 0.06;
         c.level.set_block(origin, Block::AIR.default_state(), 260)?;
         let radius = if huge { 1i32 } else { 0 };
         for x in -radius..=radius {
@@ -261,7 +261,7 @@ impl Feature for HugeFungus {
                         if self.planted && !is_air(c.level.block(add(p, [0, -1, 0]))?) {
                             c.level.destroy_block(p, true)?;
                         }
-                        if self.planted || !corner || c.random.next_float() < 0.1 {
+                        if self.planted || !corner || c.random()?.next_float() < 0.1 {
                             c.level.set_block(p, self.stem, 3)?;
                         }
                     }
@@ -269,10 +269,10 @@ impl Feature for HugeFungus {
             }
         }
         let vines = self.hat.block() == Block::NETHER_WART_BLOCK;
-        let hat_height = (c.random.next_int_bound(1 + height / 3) + 5).min(height);
+        let hat_height = (c.random()?.next_int_bound(1 + height / 3) + 5).min(height);
         let start = height - hat_height;
         for y in start..=height {
-            let mut r = if y < height - c.random.next_int_bound(3) {
+            let mut r = if y < height - c.random()?.next_int_bound(3) {
                 2i32
             } else {
                 1
@@ -297,9 +297,9 @@ impl Feature for HugeFungus {
                             if !inside {
                                 if c.level.block(add(p, [0, -1, 0]))?.block() == self.hat.block() {
                                     c.level.set_block(p, self.hat, 3)?;
-                                } else if f64::from(c.random.next_float()) < 0.15 {
+                                } else if f64::from(c.random()?.next_float()) < 0.15 {
                                     c.level.set_block(p, self.hat, 3)?;
-                                    if vines && c.random.next_int_bound(11) == 0 {
+                                    if vines && c.random()?.next_int_bound(11) == 0 {
                                         Self::vines(c, p)?;
                                     }
                                 }

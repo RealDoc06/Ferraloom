@@ -206,7 +206,9 @@ fn replay(require_pending: bool) {
         let registry = Default::default();
         let mut ctx = FeatureContext {
             level: ferraloom_worldgen::feature::WorldGenLevel::Region(&mut region),
-            random: ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+            random: ferraloom_worldgen::feature::FeatureRandomSelector::External(
+                ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+            ),
             origin,
             generator: &generator,
             registry: &registry,

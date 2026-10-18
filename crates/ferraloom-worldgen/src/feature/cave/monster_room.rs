@@ -75,8 +75,8 @@ impl MonsterRoomFeature {
 }
 impl Feature for MonsterRoomFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let xr = ctx.random.next_int_bound(2) + 2;
-        let zr = ctx.random.next_int_bound(2) + 2;
+        let xr = ctx.random()?.next_int_bound(2) + 2;
+        let zr = ctx.random()?.next_int_bound(2) + 2;
         let mut holes = 0;
         for dx in -xr - 1..=xr + 1 {
             for dy in -1..=4 {
@@ -110,7 +110,7 @@ impl Feature for MonsterRoomFeature {
                         {
                             ctx.level.set_block(p, Block::CAVE_AIR.default_state(), 2)?;
                         } else if ctx.level.is_solid(p)? && old.block() != Block::CHEST {
-                            let block = if dy == -1 && ctx.random.next_int_bound(4) != 0 {
+                            let block = if dy == -1 && ctx.random()?.next_int_bound(4) != 0 {
                                 Block::MOSSY_COBBLESTONE
                             } else {
                                 Block::COBBLESTONE
@@ -126,9 +126,9 @@ impl Feature for MonsterRoomFeature {
         for _ in 0..2 {
             for _ in 0..3 {
                 let p = [
-                    ctx.origin[0] + ctx.random.next_int_bound(xr * 2 + 1) - xr,
+                    ctx.origin[0] + ctx.random()?.next_int_bound(xr * 2 + 1) - xr,
                     ctx.origin[1],
-                    ctx.origin[2] + ctx.random.next_int_bound(zr * 2 + 1) - zr,
+                    ctx.origin[2] + ctx.random()?.next_int_bound(zr * 2 + 1) - zr,
                 ];
                 if !is_air(ctx.level.block(p)?) {
                     continue;
@@ -162,7 +162,7 @@ impl Feature for MonsterRoomFeature {
                 EntityType::ZOMBIE,
                 EntityType::ZOMBIE,
                 EntityType::SPIDER,
-            ][ctx.random.next_int_bound(4) as usize];
+            ][ctx.random()?.next_int_bound(4) as usize];
             ctx.level
                 .set_spawner_entity(ctx.origin, mob, &mut ctx.random)?;
         }

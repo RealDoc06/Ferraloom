@@ -47,14 +47,14 @@ impl Feature for LakeFeature {
         }
         let origin = offset(ctx.origin, [-8, -4, -8]);
         let mut grid = [false; 2048];
-        let spots = ctx.random.next_int_bound(4) + 4;
+        let spots = ctx.random()?.next_int_bound(4) + 4;
         for _ in 0..spots {
-            let xr = ctx.random.next_double() * 6.0 + 3.0;
-            let yr = ctx.random.next_double() * 4.0 + 2.0;
-            let zr = ctx.random.next_double() * 6.0 + 3.0;
-            let xp = ctx.random.next_double() * (16.0 - xr - 2.0) + 1.0 + xr / 2.0;
-            let yp = ctx.random.next_double() * (8.0 - yr - 4.0) + 2.0 + yr / 2.0;
-            let zp = ctx.random.next_double() * (16.0 - zr - 2.0) + 1.0 + zr / 2.0;
+            let xr = ctx.random()?.next_double() * 6.0 + 3.0;
+            let yr = ctx.random()?.next_double() * 4.0 + 2.0;
+            let zr = ctx.random()?.next_double() * 6.0 + 3.0;
+            let xp = ctx.random()?.next_double() * (16.0 - xr - 2.0) + 1.0 + xr / 2.0;
+            let yp = ctx.random()?.next_double() * (8.0 - yr - 4.0) + 2.0 + yr / 2.0;
+            let zp = ctx.random()?.next_double() * (16.0 - zr - 2.0) + 1.0 + zr / 2.0;
             for x in 1..15 {
                 for z in 1..15 {
                     for y in 1..7 {
@@ -126,7 +126,8 @@ impl Feature for LakeFeature {
             for x in 0..16 {
                 for z in 0..16 {
                     for y in 0..8 {
-                        if boundary(&grid, x, y, z) && (y < 4 || ctx.random.next_int_bound(2) != 0)
+                        if boundary(&grid, x, y, z)
+                            && (y < 4 || ctx.random()?.next_int_bound(2) != 0)
                         {
                             let p = offset(origin, [x as i32, y as i32, z as i32]);
                             if ctx.level.is_solid(p)?

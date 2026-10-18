@@ -118,9 +118,9 @@ impl Decorator {
                         Direction::South,
                     ] {
                         let yes = if let Self::LeaveVine(chance) = self {
-                            c.random.next_float() < *chance
+                            c.random()?.next_float() < *chance
                         } else {
-                            c.random.next_int_bound(3) > 0
+                            c.random()?.next_int_bound(3) > 0
                         };
                         if yes {
                             let mut p = step(p, d);
@@ -141,16 +141,16 @@ impl Decorator {
                 }
             }
             Self::Cocoa(probability) => {
-                if c.random.next_float() >= *probability {
+                if c.random()?.next_float() >= *probability {
                     return Ok(());
                 }
                 if let Some(base) = logs.first() {
                     for &p in logs.iter().filter(|p| p[1] - base[1] <= 2) {
                         for d in HORIZONTAL {
-                            if c.random.next_float() <= 0.25 {
+                            if c.random()?.next_float() <= 0.25 {
                                 let p = step(p, d.opposite());
                                 if is_air(c.level.block(p)?) {
-                                    let age = c.random.next_int_bound(3);
+                                    let age = c.random()?.next_int_bound(3);
                                     let s = Block::COCOA
                                         .default_state()
                                         .with_integer_property("age", age)
@@ -168,11 +168,12 @@ impl Decorator {
                 directions,
             } => {
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, &mut c.random);
+                shuffle(&mut positions, &mut c.random()?);
                 for p in positions {
-                    let d = directions[c.random.next_int_bound(directions.len() as i32) as usize];
+                    let d =
+                        directions[c.random()?.next_int_bound(directions.len() as i32) as usize];
                     let p = step(p, d);
-                    if c.random.next_float() <= *probability && is_air(c.level.block(p)?) {
+                    if c.random()?.next_float() <= *probability && is_air(c.level.block(p)?) {
                         let s = provider.get_state(c, p)?;
                         put(c, p, s, out)?;
                     }
@@ -187,12 +188,13 @@ impl Decorator {
                 directions,
             } => {
                 let mut positions = leaves.to_vec();
-                shuffle(&mut positions, &mut c.random);
+                shuffle(&mut positions, &mut c.random()?);
                 let mut blacklist = BTreeSet::new();
                 for leaf in positions {
-                    let d = directions[c.random.next_int_bound(directions.len() as i32) as usize];
+                    let d =
+                        directions[c.random()?.next_int_bound(directions.len() as i32) as usize];
                     let p = step(leaf, d);
-                    if blacklist.contains(&p) || c.random.next_float() >= *probability {
+                    if blacklist.contains(&p) || c.random()?.next_float() >= *probability {
                         continue;
                     }
                     let mut air = true;
@@ -219,13 +221,13 @@ impl Decorator {
                 let Some(base) = logs.first() else {
                     return Ok(());
                 };
-                if c.random.next_float() >= *probability {
+                if c.random()?.next_float() >= *probability {
                     return Ok(());
                 }
                 let y = if let Some(leaf) = leaves.first() {
                     (leaf[1] - 1).max(base[1] + 1)
                 } else {
-                    (base[1] + 1 + c.random.next_int_bound(3)).min(logs.last().unwrap()[1])
+                    (base[1] + 1 + c.random()?.next_int_bound(3)).min(logs.last().unwrap()[1])
                 };
                 let mut positions = logs
                     .iter()
@@ -234,7 +236,7 @@ impl Decorator {
                         [Direction::East, Direction::South, Direction::West].map(|d| step(p, d))
                     })
                     .collect::<Vec<_>>();
-                shuffle(&mut positions, &mut c.random);
+                shuffle(&mut positions, &mut c.random()?);
                 for p in positions {
                     if is_air(c.level.block(p)?)
                         && is_air(c.level.block(step(p, Direction::South))?)
@@ -254,11 +256,11 @@ impl Decorator {
                 probability,
                 logs: log_blocks,
             } => {
-                if logs.is_empty() || c.random.next_float() >= *probability {
+                if logs.is_empty() || c.random()?.next_float() >= *probability {
                     return Ok(());
                 }
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, &mut c.random);
+                shuffle(&mut positions, &mut c.random()?);
                 for p in positions {
                     let mut enclosed = true;
                     for d in Direction::VALUES {
@@ -290,7 +292,7 @@ impl Decorator {
                             circle(c, add(p, delta), provider, out)?;
                         }
                         for _ in 0..5 {
-                            let n = c.random.next_int_bound(64);
+                            let n = c.random()?.next_int_bound(64);
                             let x = n % 8;
                             let z = n / 8;
                             if x == 0 || x == 7 || z == 0 || z == 7 {
@@ -323,9 +325,11 @@ impl Decorator {
                         positions.iter().map(|p| p[2]).max().unwrap() + radius,
                     ];
                     for _ in 0..*tries {
-                        let p = std::array::from_fn::<_, 3, _>(|i| {
-                            min[i] + c.random.next_int_bound(max[i] - min[i] + 1)
-                        });
+                        let p = c.with_random(|random| {
+                            std::array::from_fn::<_, 3, _>(|i| {
+                                min[i] + random.next_int_bound(max[i] - min[i] + 1)
+                            })
+                        })?;
                         let above = add(p, [0, 1, 0]);
                         let s = c.level.block(above)?;
                         if (is_air(s) || s.block() == Block::VINE)
@@ -347,9 +351,9 @@ impl Decorator {
                 patch,
             } => {
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, &mut c.random);
+                shuffle(&mut positions, &mut c.random()?);
                 if let Some(&origin) = positions.iter().min_by_key(|p| p[1]) {
-                    if c.random.next_float() < *ground
+                    if c.random()?.next_float() < *ground
                         && let Some(feature) = c.registry.features.get(patch).cloned()
                     {
                         let old = c.origin;
@@ -363,11 +367,11 @@ impl Decorator {
                         .map(|p| (p, *trunk))
                         .chain(leaves.iter().map(|p| (p, *leaf_chance)))
                     {
-                        if c.random.next_float() < chance {
+                        if c.random()?.next_float() < chance {
                             let mut p = add(p, [0, -1, 0]);
                             if is_air(c.level.block(p)?) {
                                 while is_air(c.level.block(add(p, [0, -1, 0]))?)
-                                    && f64::from(c.random.next_float()) >= 0.5
+                                    && f64::from(c.random()?.next_float()) >= 0.5
                                 {
                                     put(
                                         c,
@@ -395,7 +399,7 @@ impl Decorator {
                 }
             }
             Self::Shelf(probability) => {
-                if c.random.next_float() >= *probability || logs.is_empty() {
+                if c.random()?.next_float() >= *probability || logs.is_empty() {
                     return Ok(());
                 }
                 let first = logs[0];
@@ -416,7 +420,7 @@ impl Decorator {
                         continue;
                     }
                     for d in dirs {
-                        if c.random.next_float() > 0.25 {
+                        if c.random()?.next_float() > 0.25 {
                             continue;
                         }
                         let q = step(p, d);
@@ -432,7 +436,7 @@ impl Decorator {
                         {
                             continue;
                         }
-                        let age = c.random.next_int_bound(2);
+                        let age = c.random()?.next_int_bound(2);
                         let s = Block::SHELF_MUSHROOM
                             .default_state()
                             .with_integer_property("age", age)

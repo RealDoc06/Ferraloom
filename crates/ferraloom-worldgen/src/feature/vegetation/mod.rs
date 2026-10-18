@@ -143,9 +143,9 @@ impl Feature for BambooFeature {
             .level
             .can_survive(Block::BAMBOO.default_state(), origin)?
         {
-            let height = ctx.random.next_int_bound(12) + 5;
-            if ctx.random.next_float() < self.probability {
-                let r = ctx.random.next_int_bound(4) + 1;
+            let height = ctx.random()?.next_int_bound(12) + 5;
+            if ctx.random()?.next_float() < self.probability {
+                let r = ctx.random()?.next_int_bound(4) + 1;
                 for x in origin[0] - r..=origin[0] + r {
                     for z in origin[2] - r..=origin[2] + r {
                         if (x - origin[0]).pow(2) + (z - origin[2]).pow(2) <= r * r {
@@ -199,11 +199,12 @@ struct BlockColumnFeature {
 }
 impl Feature for BlockColumnFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let mut heights = self
-            .layers
-            .iter()
-            .map(|l| l.height.sample(&mut ctx.random))
-            .collect::<Vec<_>>();
+        let mut heights = ctx.with_random(|random| {
+            self.layers
+                .iter()
+                .map(|l| l.height.sample(random))
+                .collect::<Vec<_>>()
+        })?;
         let total = heights.iter().fold(0i32, |a, b| a.wrapping_add(*b));
         if total == 0 {
             return Ok(false);
@@ -253,19 +254,19 @@ impl Feature for BlockPileFeature {
         if ctx.origin[1] < ctx.level.min_y() + 5 {
             return Ok(false);
         }
-        let xr = 2 + ctx.random.next_int_bound(2);
-        let zr = 2 + ctx.random.next_int_bound(2);
+        let xr = 2 + ctx.random()?.next_int_bound(2);
+        let zr = 2 + ctx.random()?.next_int_bound(2);
         for z in -zr..=zr {
             for y in 0..=1 {
                 for x in -xr..=xr {
                     let selected = (x * x + z * z) as f32
-                        <= ctx.random.next_float() * 10.0 - ctx.random.next_float() * 6.0;
-                    if selected || f64::from(ctx.random.next_float()) < 0.031 {
+                        <= ctx.random()?.next_float() * 10.0 - ctx.random()?.next_float() * 6.0;
+                    if selected || f64::from(ctx.random()?.next_float()) < 0.031 {
                         let p = offset(ctx.origin, [x, y, z]);
                         if ctx.level.block(p)?.is_air() {
                             let below = relative(p, Direction::Down);
                             let allowed = if ctx.level.block(below)?.block() == Block::DIRT_PATH {
-                                ctx.random.next_boolean()
+                                ctx.random()?.next_boolean()
                             } else {
                                 match ctx.level.block(below)?.cached_sturdy_face(Direction::Up) {
                                     Some(sturdy) => sturdy,
@@ -361,14 +362,14 @@ impl Feature for RandomNeighborSpreadFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let state = self.block.get_state(ctx, ctx.origin)?;
         ctx.level.set_block(ctx.origin, state, 2)?;
-        let attempts = self.attempts.sample(&mut ctx.random);
+        let attempts = self.attempts.sample(&mut ctx.random()?);
         for _ in 0..attempts {
             let p = offset(
                 ctx.origin,
                 [
-                    self.xz_offset.sample(&mut ctx.random),
-                    self.y_offset.sample(&mut ctx.random),
-                    self.xz_offset.sample(&mut ctx.random),
+                    self.xz_offset.sample(&mut ctx.random()?),
+                    self.y_offset.sample(&mut ctx.random()?),
+                    self.xz_offset.sample(&mut ctx.random()?),
                 ],
             );
             if self.can_replace.test(&mut ctx.level, p, ctx.generator)? {
@@ -403,11 +404,11 @@ struct ProjectedRandomPatchySquare {
 }
 impl Feature for ProjectedRandomPatchySquare {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let size = self.size.sample(&mut ctx.random);
+        let size = self.size.sample(&mut ctx.random()?);
         let bound = size * size + 1;
         for x in -size..=size {
             for z in -size..=size {
-                if ctx.random.next_int_bound(bound) < bound - x.abs() * z.abs() {
+                if ctx.random()?.next_int_bound(bound) < bound - x.abs() * z.abs() {
                     let mut p = offset(ctx.origin, [x, 0, z]);
                     let mut drop = self.max_projection_height;
                     while self.project_through.test(
@@ -457,7 +458,7 @@ impl Feature for SingleBlockPillarFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
         while self.can_replace.test(&mut ctx.level, p, ctx.generator)?
-            && ctx.random.next_float() < self.chance
+            && ctx.random()?.next_float() < self.chance
             && p[1] >= ctx.level.min_y()
             && p[1] < ctx.level.min_y() + ctx.level.height()
         {

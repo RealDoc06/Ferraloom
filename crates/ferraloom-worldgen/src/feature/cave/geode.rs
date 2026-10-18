@@ -100,7 +100,7 @@ impl GeodeFeature {
 }
 impl Feature for GeodeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let count = self.distribution.sample(&mut ctx.random);
+        let count = self.distribution.sample(&mut ctx.random()?);
         let noise = NormalNoise::create_parity(-4, vec![1.0]).create(&mut WorldgenRandom::new(
             LegacyRandomSource::new(ctx.level.seed()),
         ));
@@ -113,19 +113,19 @@ impl Feature for GeodeFeature {
         ];
         let crack_size = mth::inv_sqrt(
             self.crack_size
-                + ctx.random.next_double() / 2.0
+                + ctx.random()?.next_double() / 2.0
                 + if count > 3 { adjustment } else { 0.0 },
         );
-        let crack = (ctx.random.next_float() as f64) < self.crack_chance;
+        let crack = (ctx.random()?.next_float() as f64) < self.crack_chance;
         let mut points = Vec::new();
         let mut invalid = 0;
         for _ in 0..count {
             let p = offset(
                 ctx.origin,
                 [
-                    self.outer_distance.sample(&mut ctx.random),
-                    self.outer_distance.sample(&mut ctx.random),
-                    self.outer_distance.sample(&mut ctx.random),
+                    self.outer_distance.sample(&mut ctx.random()?),
+                    self.outer_distance.sample(&mut ctx.random()?),
+                    self.outer_distance.sample(&mut ctx.random()?),
                 ],
             );
             let state = ctx.level.block(p)?;
@@ -135,11 +135,11 @@ impl Feature for GeodeFeature {
                     return Ok(false);
                 }
             }
-            points.push((p, self.point_offset.sample(&mut ctx.random)));
+            points.push((p, self.point_offset.sample(&mut ctx.random()?)));
         }
         let mut cracks = Vec::new();
         if crack {
-            let index = ctx.random.next_int_bound(4);
+            let index = ctx.random()?.next_int_bound(4);
             let d = count * 2 + 1;
             let x = if index == 0 || index == 2 { d } else { 0 };
             let z = if index == 1 || index == 2 { d } else { 0 };
@@ -195,12 +195,12 @@ impl Feature for GeodeFeature {
                             }
                         } else if shell >= thresholds[1] {
                             let alternate =
-                                (ctx.random.next_float() as f64) < self.alternate_chance;
+                                (ctx.random()?.next_float() as f64) < self.alternate_chance;
                             let state =
                                 self.providers[if alternate { 2 } else { 1 }].get_state(ctx, p)?;
                             self.safe_set(ctx, p, state)?;
                             if (!self.require_alternate || alternate)
-                                && (ctx.random.next_float() as f64) < self.placement_chance
+                                && (ctx.random()?.next_float() as f64) < self.placement_chance
                             {
                                 potential.push(p);
                             }
@@ -214,8 +214,8 @@ impl Feature for GeodeFeature {
             }
         }
         for p in potential {
-            let mut state =
-                self.placements[ctx.random.next_int_bound(self.placements.len() as i32) as usize];
+            let mut state = self.placements
+                [ctx.random()?.next_int_bound(self.placements.len() as i32) as usize];
             for d in Direction::VALUES {
                 let facing = match d {
                     Direction::Down => Facing::Down,

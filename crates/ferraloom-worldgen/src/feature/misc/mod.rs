@@ -125,26 +125,29 @@ fn decode_selector(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Arc<dyn Featu
 impl Feature for Selector {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         match self {
-            Self::Boolean { yes, no } => {
-                if ctx.random.next_boolean() { yes } else { no }.place(ctx, false)
+            Self::Boolean { yes, no } => if ctx.random()?.next_boolean() {
+                yes
+            } else {
+                no
             }
+            .place(ctx, false),
             Self::Random { features, default } => {
                 for (feature, chance) in features {
-                    if ctx.random.next_float() < *chance {
+                    if ctx.random()?.next_float() < *chance {
                         return feature.place(ctx, false);
                     }
                 }
                 default.place(ctx, false)
             }
             Self::Simple(features) => {
-                let i = ctx.random.next_int_bound(features.len() as i32) as usize;
+                let i = ctx.random()?.next_int_bound(features.len() as i32) as usize;
                 features[i].place(ctx, false)
             }
             Self::Weighted { features, total } => {
                 if *total == 0 {
                     return Ok(false);
                 }
-                let mut choice = ctx.random.next_int_bound(*total);
+                let mut choice = ctx.random()?.next_int_bound(*total);
                 for (feature, weight) in features {
                     choice -= weight;
                     if choice < 0 {
@@ -208,7 +211,7 @@ impl Feature for BonusChestFeature {
             .collect::<Vec<_>>();
         for values in [&mut xs, &mut zs] {
             for i in (2..=values.len()).rev() {
-                let j = ctx.random.next_int_bound(i as i32) as usize;
+                let j = ctx.random()?.next_int_bound(i as i32) as usize;
                 values.swap(i - 1, j);
             }
         }

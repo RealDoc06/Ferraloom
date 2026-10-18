@@ -162,9 +162,9 @@ impl TrunkPlacer {
                 }
                 attachments.push(Attachment::new(add(o, [0, h, 0]), 0, true));
                 if matches!(self.kind, Kind::MegaJungle) {
-                    let mut y = h - 2 - c.random.next_int_bound(4);
+                    let mut y = h - 2 - c.random()?.next_int_bound(4);
                     while y > h / 2 {
-                        let angle = c.random.next_float() * std::f32::consts::TAU;
+                        let angle = c.random()?.next_float() * std::f32::consts::TAU;
                         let mut x = 0;
                         let mut z = 0;
                         for b in 0..5 {
@@ -173,7 +173,7 @@ impl TrunkPlacer {
                             self.log(t, c, add(o, [x, y - 3 + b / 2, z]), None, out)?;
                         }
                         attachments.push(Attachment::new(add(o, [x, y, z]), -2, false));
-                        y -= 2 + c.random.next_int_bound(4);
+                        y -= 2 + c.random()?.next_int_bound(4);
                     }
                 }
             }
@@ -182,8 +182,8 @@ impl TrunkPlacer {
                     t.below(c, add(o, d), out)?;
                 }
                 let d = horizontal(c);
-                let lean = h - c.random.next_int_bound(4);
-                let mut steps = 2 - c.random.next_int_bound(3);
+                let lean = h - c.random()?.next_int_bound(4);
+                let mut steps = 2 - c.random()?.next_int_bound(3);
                 let mut p = o;
                 for y in 0..h {
                     if y >= lean && steps > 0 {
@@ -202,9 +202,9 @@ impl TrunkPlacer {
                 for x in -1..=2 {
                     for z in -1..=2 {
                         if (!(0..=1).contains(&x) || !(0..=1).contains(&z))
-                            && c.random.next_int_bound(3) <= 0
+                            && c.random()?.next_int_bound(3) <= 0
                         {
-                            let length = c.random.next_int_bound(3) + 2;
+                            let length = c.random()?.next_int_bound(3) + 2;
                             for y in 0..length {
                                 self.log(t, c, add(o, [x, h - y - 2, z]), None, out)?;
                             }
@@ -216,8 +216,8 @@ impl TrunkPlacer {
             Kind::Forking => {
                 t.below(c, add(o, [0, -1, 0]), out)?;
                 let d = horizontal(c);
-                let lean = h - c.random.next_int_bound(4) - 1;
-                let mut steps = 3 - c.random.next_int_bound(3);
+                let lean = h - c.random()?.next_int_bound(4) - 1;
+                let mut steps = 3 - c.random()?.next_int_bound(3);
                 let mut p = o;
                 let mut top = None;
                 for y in 0..h {
@@ -236,8 +236,8 @@ impl TrunkPlacer {
                 let mut p = o;
                 let b = horizontal(c);
                 if b != d {
-                    let start = lean - c.random.next_int_bound(2) - 1;
-                    let steps = 1 + c.random.next_int_bound(3);
+                    let start = lean - c.random()?.next_int_bound(2) - 1;
+                    let steps = 1 + c.random()?.next_int_bound(3);
                     let mut top = None;
                     for y in start..h.min(start + steps) {
                         if y >= 1 {
@@ -258,7 +258,7 @@ impl TrunkPlacer {
                 let mut p = o;
                 t.below(c, add(p, [0, -1, 0]), out)?;
                 for y in 0..h {
-                    if y + 1 >= h - 1 + c.random.next_int_bound(2) {
+                    if y + 1 >= h - 1 + c.random()?.next_int_bound(2) {
                         p = step(p, d);
                     }
                     if t.valid(c, p)? {
@@ -269,7 +269,7 @@ impl TrunkPlacer {
                     }
                     p[1] += 1;
                 }
-                let length = length.sample(&mut c.random);
+                let length = length.sample(&mut c.random()?);
                 for _ in 0..=length {
                     if t.valid(c, p)? {
                         self.log(t, c, p, None, out)?;
@@ -286,13 +286,13 @@ impl TrunkPlacer {
             } => {
                 t.below(c, add(o, [0, -1, 0]), out)?;
                 let first =
-                    (h - 1 + start[0] + c.random.next_int_bound(start[1] - start[0] + 1)).max(0);
+                    (h - 1 + start[0] + c.random()?.next_int_bound(start[1] - start[0] + 1)).max(0);
                 let mut second =
-                    (h - 1 + start[0] + c.random.next_int_bound(start[1] - start[0])).max(0);
+                    (h - 1 + start[0] + c.random()?.next_int_bound(start[1] - start[0])).max(0);
                 if second >= first {
                     second += 1;
                 }
-                let count = count.sample(&mut c.random);
+                let count = count.sample(&mut c.random()?);
                 let trunk_h = if count == 3 {
                     h
                 } else if count >= 2 {
@@ -311,9 +311,9 @@ impl TrunkPlacer {
                     .chain((count >= 2).then_some((second, d.opposite())))
                 {
                     let mut p = add(o, [0, start, 0]);
-                    let ey = h - 1 + end.sample(&mut c.random);
+                    let ey = h - 1 + end.sample(&mut c.random()?);
                     let extend = start < trunk_h - 1 || ey < start;
-                    let distance = length.sample(&mut c.random) + i32::from(extend);
+                    let distance = length.sample(&mut c.random()?) + i32::from(extend);
                     let target = relative(add(o, [0, ey, 0]), d, distance);
                     for _ in 0..if extend { 2 } else { 1 } {
                         p = step(p, d);
@@ -326,7 +326,7 @@ impl TrunkPlacer {
                     };
                     while p != target {
                         let chance = (target[1] - p[1]).abs() as f32 / manhattan(p, target) as f32;
-                        let vertical = c.random.next_float() < chance;
+                        let vertical = c.random()?.next_float() < chance;
                         p = step(p, if vertical { v } else { d });
                         self.log(t, c, p, if vertical { None } else { Some(d.axis()) }, out)?;
                     }
@@ -335,13 +335,13 @@ impl TrunkPlacer {
             }
             Kind::Poplar { above, amount } => {
                 t.below(c, add(o, [0, -1, 0]), out)?;
-                let top = h - above.sample(&mut c.random);
+                let top = h - above.sample(&mut c.random()?);
                 for y in 0..h {
                     self.log(t, c, add(o, [0, y, 0]), None, out)?;
                     let mut directions = Direction::VALUES;
-                    shuffle(&mut directions, &mut c.random);
+                    shuffle(&mut directions, &mut c.random()?);
                     if top - 1 == y {
-                        let amount = amount.sample(&mut c.random) as usize;
+                        let amount = amount.sample(&mut c.random()?) as usize;
                         for d in directions
                             .into_iter()
                             .filter(|d| d.axis() != Axis::Y)
@@ -363,12 +363,12 @@ impl TrunkPlacer {
                     let mut p = add(o, [0, y, 0]);
                     if self.log(t, c, p, None, out)?
                         && y < h - 1
-                        && c.random.next_float() < *probability
+                        && c.random()?.next_float() < *probability
                     {
                         let d = horizontal(c);
-                        let len = length.sample(&mut c.random);
-                        let start = (len - length.sample(&mut c.random) - 1).max(0);
-                        let steps = steps.sample(&mut c.random);
+                        let len = length.sample(&mut c.random()?);
+                        let start = (len - length.sample(&mut c.random()?) - 1).max(0);
+                        let steps = steps.sample(&mut c.random()?);
                         let mut top = p[1] + start;
                         for i in start..h.min(start + steps) {
                             if i >= 1 {
@@ -458,8 +458,8 @@ impl TrunkPlacer {
                 (radius * radius - adjacent * adjacent).sqrt()
             } * 0.5;
             for _ in 0..clusters {
-                let r = f64::from(shape) * (f64::from(c.random.next_float()) + 0.328);
-                let angle = f64::from(c.random.next_float() * 2.0) * std::f64::consts::PI;
+                let r = f64::from(shape) * (f64::from(c.random()?.next_float()) + 0.328);
+                let angle = f64::from(c.random()?.next_float() * 2.0) * std::f64::consts::PI;
                 let p = add(
                     o,
                     [

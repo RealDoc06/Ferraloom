@@ -227,7 +227,9 @@ fn check(
     .unwrap();
     let mut context = FeatureContext {
         level: crate::feature::WorldGenLevel::Region(&mut region),
-        random: crate::feature::FeatureRandom::Region(&mut random),
+        random: crate::feature::FeatureRandomSelector::External(
+            crate::feature::FeatureRandom::Region(&mut random),
+        ),
         origin,
         generator,
         registry,

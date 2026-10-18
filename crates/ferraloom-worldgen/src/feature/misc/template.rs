@@ -101,7 +101,7 @@ impl Feature for TemplateFeature {
         if self.total == 0 {
             return Err(Error("Weighted list has no elements".into()));
         }
-        let mut selection = ctx.random.next_int_bound(self.total);
+        let mut selection = ctx.random()?.next_int_bound(self.total);
         let entry = self
             .templates
             .iter()
@@ -114,7 +114,7 @@ impl Feature for TemplateFeature {
             return Err(Error("template rotation list has no elements".into()));
         }
         let rotation =
-            entry.rotations[ctx.random.next_int_bound(entry.rotations.len() as i32) as usize];
+            entry.rotations[ctx.random()?.next_int_bound(entry.rotations.len() as i32) as usize];
         let template = entry.template.as_ref().map_err(|e| Error(e.clone()))?;
         let half = [-(template.size[0] / 2), 0, -(template.size[2] / 2)];
         let position = offset(
@@ -126,14 +126,13 @@ impl Feature for TemplateFeature {
             random: PlacementRandom::Shared,
             ..StructurePlaceSettings::default()
         };
-        template.place_in_world(
-            &mut ctx.level,
+        template.place_with_access(
+            &mut ctx.placement(),
             position,
             position,
             &mut settings,
             &self.processors,
             &self.tags,
-            &mut ctx.random,
             3,
         )
     }

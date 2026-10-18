@@ -267,22 +267,50 @@ impl StructureProcessor {
         tags: &BlockTags,
         shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<Option<StructureBlockInfo>, Error> {
-        self.process_block_with_nbt_mutation(
-            region, target, reference, relative, info, settings, tags, shared,
+        let mut access =
+            crate::feature::FeaturePlacementAccess::read(region, shared.feature_random());
+        self.process_block_with_access(
+            &mut access,
+            target,
+            reference,
+            relative,
+            info,
+            settings,
+            tags,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn process_block_with_access(
+        &self,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
+        target: [i32; 3],
+        reference: [i32; 3],
+        relative: [i32; 3],
+        info: StructureBlockInfo,
+        settings: &mut StructurePlaceSettings,
+        tags: &BlockTags,
+    ) -> Result<Option<StructureBlockInfo>, Error> {
+        self.process_block_with_nbt_mutation_access(
+            access, target, reference, relative, info, settings, tags,
         )
         .map(|(info, _)| info)
     }
     #[allow(clippy::too_many_arguments)]
-    fn process_block_with_nbt_mutation(
+    fn process_block_with_nbt_mutation_access(
         &self,
-        region: &impl crate::feature::LiveWorldGenLevel,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
         target: [i32; 3],
         reference: [i32; 3],
         relative: [i32; 3],
         mut info: StructureBlockInfo,
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
-        shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<(Option<StructureBlockInfo>, bool), Error> {
         let mut mutated_input_nbt = false;
         match self {
@@ -299,20 +327,22 @@ impl StructureProcessor {
                 if rottable
                     .as_ref()
                     .is_none_or(|b| b.contains(info.state.block(), tags))
-                    && !settings
-                        .with_random(info.position, shared, |r| r.next_float() <= *integrity)
+                    && !settings.with_random(info.position, &mut access.random()?, |r| {
+                        r.next_float() <= *integrity
+                    })
                 {
                     return Ok((None, false));
                 }
             }
             Self::BlockAge { mossiness } => {
-                info.state = settings.with_random(info.position, shared, |r| {
+                info.state = settings.with_random(info.position, &mut access.random()?, |r| {
                     age_block(info.state, *mossiness, tags, r)
                 })
             }
             Self::BlackstoneReplace => info.state = blackstone_replace(info.state),
             Self::Gravity { heightmap, offset } => {
-                info.position[1] = region
+                info.position[1] = access
+                    .level()
                     .height_at(*heightmap, info.position[0], info.position[2])?
                     .wrapping_add(*offset)
                     .wrapping_add(relative[1])
@@ -336,14 +366,16 @@ impl StructureProcessor {
                 }
             }
             Self::LavaSubmergedBlock => {
-                if region.block(info.position)?.block() == Block::LAVA
-                    && !region.is_outline_full_block(info.state, info.position)?
+                if access.level().block(info.position)?.block() == Block::LAVA
+                    && !access
+                        .level()
+                        .is_outline_full_block(info.state, info.position)?
                 {
                     info.state = Block::LAVA.default_state();
                 }
             }
             Self::ProtectedBlocks(blocks) => {
-                if blocks.contains(region.block(info.position)?.block(), tags) {
+                if blocks.contains(access.level().block(info.position)?.block(), tags) {
                     return Ok((None, false));
                 }
             }
@@ -358,7 +390,7 @@ impl StructureProcessor {
                         .input
                         .test(info.state, info.position, tags, &mut random)
                         && rule.location.test(
-                            region.block(info.position)?,
+                            access.level().block(info.position)?,
                             info.position,
                             tags,
                             &mut random,
@@ -395,13 +427,39 @@ impl StructureProcessor {
         tags: &BlockTags,
         shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<(), Error> {
+        let mut access =
+            crate::feature::FeaturePlacementAccess::read(region, shared.feature_random());
+        self.finalize_processing_with_access(
+            &mut access,
+            target,
+            reference,
+            original,
+            processed,
+            settings,
+            tags,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn finalize_processing_with_access(
+        &self,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
+        target: [i32; 3],
+        reference: [i32; 3],
+        original: &[&StructureBlockInfo],
+        processed: &mut [StructureBlockInfo],
+        settings: &mut StructurePlaceSettings,
+        tags: &BlockTags,
+    ) -> Result<(), Error> {
         let Self::Capped { delegate, limit } = self else {
             return Ok(());
         };
         if limit.range().1 == 0 || processed.is_empty() || original.len() != processed.len() {
             return Ok(());
         }
-        let mut random = SingleThreadedRandomSource::new(region.seed())
+        let mut random = SingleThreadedRandomSource::new(access.level().seed())
             .fork_positional()
             .at(target[0], target[1], target[2]);
         let max = limit.sample(&mut random).min(processed.len() as i32);
@@ -415,15 +473,14 @@ impl StructureProcessor {
             if replaced >= max {
                 break;
             }
-            let (altered, mutated_input_nbt) = delegate.process_block_with_nbt_mutation(
-                region,
+            let (altered, mutated_input_nbt) = delegate.process_block_with_nbt_mutation_access(
+                access,
                 target,
                 reference,
                 original[index].position,
                 processed[index].clone(),
                 settings,
                 tags,
-                shared,
             )?;
             if let Some(altered) = altered {
                 if mutated_input_nbt {

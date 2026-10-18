@@ -168,7 +168,9 @@ impl DecorationPlan {
                 feature.place(
                     &mut FeatureContext {
                         level: crate::feature::WorldGenLevel::Region(region),
-                        random: crate::feature::FeatureRandom::Region(&mut random),
+                        random: crate::feature::FeatureRandomSelector::External(
+                            crate::feature::FeatureRandom::Region(&mut random),
+                        ),
                         origin,
                         generator,
                         registry,

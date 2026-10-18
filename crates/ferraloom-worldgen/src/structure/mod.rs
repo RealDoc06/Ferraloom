@@ -41,7 +41,9 @@ impl<'r> StructurePlacementContext<'_, 'r> {
     pub fn reborrow_feature(&mut self) -> crate::feature::FeatureContext<'_, 'r> {
         crate::feature::FeatureContext {
             level: crate::feature::WorldGenLevel::Region(self.region),
-            random: crate::feature::FeatureRandom::Region(self.random),
+            random: crate::feature::FeatureRandomSelector::External(
+                crate::feature::FeatureRandom::Region(self.random),
+            ),
             origin: self.origin,
             generator: self.generator,
             registry: self.registry,

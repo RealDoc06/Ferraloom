@@ -188,7 +188,9 @@ fn check_cases(select: impl Fn(&Value) -> bool) {
         let result = feature
             .place(&mut FeatureContext {
                 level: crate::feature::WorldGenLevel::Region(&mut region),
-                random: crate::feature::FeatureRandom::Region(&mut random),
+                random: crate::feature::FeatureRandomSelector::External(
+                    crate::feature::FeatureRandom::Region(&mut random),
+                ),
                 origin: p,
                 generator: &generator,
                 registry: &registry,

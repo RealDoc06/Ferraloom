@@ -182,7 +182,7 @@ impl Feature for ReplaceBlockFeature {
                 ctx.level.block(ctx.origin)?,
                 ctx.origin,
                 &self.tags,
-                &mut ctx.random,
+                &mut ctx.random()?,
             ) {
                 ctx.level.set_block(ctx.origin, target.state, 2)?;
                 break;
@@ -201,7 +201,7 @@ struct DiskFeature {
 }
 impl Feature for DiskFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let radius = self.radius.sample(&mut ctx.random);
+        let radius = self.radius.sample(&mut ctx.random()?);
         let mut placed = false;
         for dz in -radius..=radius {
             for dx in -radius..=radius {
@@ -310,7 +310,7 @@ impl Feature for UnderwaterMagmaFeature {
         for dz in -self.radius..=self.radius {
             for dy in -self.radius..=self.radius {
                 for dx in -self.radius..=self.radius {
-                    if ctx.random.next_float() >= self.probability {
+                    if ctx.random()?.next_float() >= self.probability {
                         continue;
                     }
                     let p = [ctx.origin[0] + dx, y + dy, ctx.origin[2] + dz];

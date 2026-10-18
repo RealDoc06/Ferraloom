@@ -76,8 +76,8 @@ impl Feature for FossilFeature {
             Rotation::Clockwise90,
             Rotation::Clockwise180,
             Rotation::CounterClockwise90,
-        ][ctx.random.next_int_bound(4) as usize];
-        let index = ctx.random.next_int_bound(self.base.len() as i32) as usize;
+        ][ctx.random()?.next_int_bound(4) as usize];
+        let index = ctx.random()?.next_int_bound(self.base.len() as i32) as usize;
         let base = self.templates.get_or_create(&self.base[index]);
         let overlay = self.templates.get_or_create(&self.overlay[index]);
         let min = [
@@ -108,7 +108,7 @@ impl Feature for FossilFeature {
                 )?);
             }
         }
-        let y = (lowest - 15 - ctx.random.next_int_bound(10)).max(ctx.level.min_y() + 10);
+        let y = (lowest - 15 - ctx.random()?.next_int_bound(10)).max(ctx.level.min_y() + 10);
         let position =
             base.zero_position_with_transform([corner[0], y, corner[2]], Mirror::None, rotation);
         let bounds = base.bounding_box(&settings, position);
@@ -125,24 +125,22 @@ impl Feature for FossilFeature {
         if empty > self.max_empty {
             return Ok(false);
         }
-        base.place_in_world(
-            &mut ctx.level,
+        base.place_with_access(
+            &mut ctx.placement(),
             position,
             position,
             &mut settings,
             &self.base_processors,
             &self.tags,
-            &mut ctx.random,
             260,
         )?;
-        overlay.place_in_world(
-            &mut ctx.level,
+        overlay.place_with_access(
+            &mut ctx.placement(),
             position,
             position,
             &mut settings,
             &self.overlay_processors,
             &self.tags,
-            &mut ctx.random,
             260,
         )?;
         Ok(true)

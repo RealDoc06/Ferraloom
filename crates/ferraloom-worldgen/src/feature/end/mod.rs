@@ -61,7 +61,7 @@ pub fn register(l: &mut FeatureLoader<'_>) -> Result<(), Error> {
 struct EndIslandFeature;
 impl Feature for EndIslandFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let mut size = ctx.random.next_int_bound(3) as f32 + 4.0;
+        let mut size = ctx.random()?.next_int_bound(3) as f32 + 4.0;
         let mut y = 0;
         while size > 0.5 {
             for x in (-size).floor() as i32..=size.ceil() as i32 {
@@ -75,7 +75,7 @@ impl Feature for EndIslandFeature {
                     }
                 }
             }
-            size -= ctx.random.next_int_bound(2) as f32 + 0.5;
+            size -= ctx.random()?.next_int_bound(2) as f32 + 0.5;
             y -= 1;
         }
         Ok(true)

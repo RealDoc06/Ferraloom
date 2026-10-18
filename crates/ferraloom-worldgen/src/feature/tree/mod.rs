@@ -72,7 +72,7 @@ fn chance(v: &Value, name: &str) -> Result<f32, Error> {
     }
 }
 fn horizontal(c: &mut FeatureContext<'_, '_>) -> Direction {
-    HORIZONTAL[c.random.next_int_bound(4) as usize]
+    HORIZONTAL[c.random()?.next_int_bound(4) as usize]
 }
 fn relative(p: Pos, d: Direction, n: i32) -> Pos {
     let q = step([0; 3], d);
@@ -224,12 +224,14 @@ impl TreeFeature {
         c: &mut FeatureContext<'_, '_>,
         out: &mut TreePositions,
     ) -> Result<bool, Error> {
-        let height = self.trunk.height(&mut c.random);
-        let foliage_height = self.foliage.height(&mut c.random, height);
-        let radius = self.foliage.radius(&mut c.random, height - foliage_height);
+        let height = self.trunk.height(&mut c.random()?);
+        let foliage_height = self.foliage.height(&mut c.random()?, height);
+        let radius = self
+            .foliage
+            .radius(&mut c.random()?, height - foliage_height);
         let origin = c.origin;
         let trunk_origin = if let Some(root) = &self.root {
-            root.origin(origin, &mut c.random)
+            root.origin(origin, &mut c.random()?)
         } else {
             origin
         };

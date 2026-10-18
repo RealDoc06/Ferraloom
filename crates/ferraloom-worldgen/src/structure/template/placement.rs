@@ -19,6 +19,32 @@ impl StructureTemplate {
         blocks: &[StructureBlockInfo],
         random: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<Vec<StructureBlockInfo>, Error> {
+        let mut access =
+            crate::feature::FeaturePlacementAccess::read(region, random.feature_random());
+        self.process_block_infos_with_access(
+            &mut access,
+            position,
+            reference,
+            settings,
+            processors,
+            tags,
+            blocks,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn process_block_infos_with_access(
+        &self,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
+        position: [i32; 3],
+        reference: [i32; 3],
+        settings: &mut StructurePlaceSettings,
+        processors: &[StructureProcessor],
+        tags: &BlockTags,
+        blocks: &[StructureBlockInfo],
+    ) -> Result<Vec<StructureBlockInfo>, Error> {
         let process_only_in_chunk = !processors
             .iter()
             .any(StructureProcessor::evaluates_entire_piece_state);
@@ -46,15 +72,14 @@ impl StructureTemplate {
                 let Some(info) = value else {
                     break;
                 };
-                value = processor.process_block(
-                    region,
+                value = processor.process_block_with_access(
+                    access,
                     position,
                     reference,
                     block.position,
                     info,
                     settings,
                     tags,
-                    random,
                 )?;
             }
             if let Some(info) = value {
@@ -63,15 +88,14 @@ impl StructureTemplate {
             }
         }
         for processor in processors {
-            processor.finalize_processing(
-                region,
+            processor.finalize_processing_with_access(
+                access,
                 position,
                 reference,
                 &original,
                 &mut processed,
                 settings,
                 tags,
-                random,
             )?;
         }
         Ok(processed)
@@ -91,18 +115,48 @@ impl StructureTemplate {
         random: &mut impl crate::feature::FeatureRandomSource,
         flags: u32,
     ) -> Result<bool, Error> {
+        let mut access = crate::feature::FeaturePlacementAccess::new(
+            region,
+            crate::feature::FeatureRandomSelector::External(random.feature_random()),
+        );
+        self.place_with_access(
+            &mut access,
+            position,
+            reference,
+            settings,
+            processors,
+            tags,
+            flags,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_with_access(
+        &self,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
+        position: [i32; 3],
+        reference: [i32; 3],
+        settings: &mut StructurePlaceSettings,
+        processors: &[StructureProcessor],
+        tags: &BlockTags,
+        flags: u32,
+    ) -> Result<bool, Error> {
         if self.palettes.is_empty() {
             return Ok(false);
         }
-        let blocks = &self.random_palette(settings, position, random)?.blocks;
+        let blocks = &self
+            .random_palette(settings, position, &mut access.random()?)?
+            .blocks;
         if (blocks.is_empty() && (settings.ignore_entities || self.entities.is_empty()))
             || self.size.iter().any(|&v| v < 1)
         {
             return Ok(false);
         }
         let apply_waterlogging = settings.liquid_settings == LiquidSettings::ApplyWaterlogging;
-        let processed = self.process_block_infos(
-            region, position, reference, settings, processors, tags, blocks, random,
+        let processed = self.process_block_infos_with_access(
+            access, position, reference, settings, processors, tags, blocks,
         )?;
         let mut to_fill = Vec::new();
         let mut locked_fluids = Vec::new();
@@ -114,7 +168,7 @@ impl StructureTemplate {
                 continue;
             }
             let previous = if apply_waterlogging {
-                Some(region.fluid(p)?)
+                Some(access.level().fluid(p)?)
             } else {
                 None
             };
@@ -123,22 +177,27 @@ impl StructureTemplate {
                 .mirror(settings.mirror)
                 .rotate(settings.rotation);
             if block.nbt.is_some() {
-                region.set_block(p, Block::BARRIER.default_state(), 820)?;
+                access
+                    .level_mut()?
+                    .set_block(p, Block::BARRIER.default_state(), 820)?;
             }
-            if region.set_block(p, state, flags)? {
+            if access.level_mut()?.set_block(p, state, flags)? {
                 let point = BoundingBox::point(p);
                 bounds = Some(bounds.map_or(point, |b| b.encapsulating(point)));
                 if let Some(tag) = block.nbt.clone()
-                    && region.has_block_entity_at(p)?
+                    && access.level().has_block_entity_at(p)?
                 {
-                    region.load_block_entity(p, tag, &mut random.feature_random())?;
+                    {
+                        let (level, random) = access.parts_mut()?;
+                        level.load_block_entity(p, tag, random)?;
+                    }
                 }
                 placed.push((p, block.nbt.is_some()));
                 if let Some(previous) = previous {
                     if state.data().fluid.source {
                         locked_fluids.push(p);
                     } else if state.get(ferraloom_data::properties::WATERLOGGED).is_some() {
-                        region.place_liquid(p, previous)?;
+                        access.level_mut()?.place_liquid(p, previous)?;
                         if !previous.source {
                             to_fill.push(p);
                         }
@@ -159,24 +218,25 @@ impl StructureTemplate {
             let mut index = 0;
             while index < to_fill.len() {
                 let p = to_fill[index];
-                let mut fluid = region.fluid(p)?;
+                let mut fluid = access.level().fluid(p)?;
                 for direction in directions {
                     if fluid.source {
                         break;
                     }
                     let neighbor = relative(p, direction);
-                    let other = region.fluid(neighbor)?;
+                    let other = access.level().fluid(neighbor)?;
                     if other.source && !locked_fluids.contains(&neighbor) {
                         fluid = other;
                     }
                 }
                 if fluid.source
-                    && region
+                    && access
+                        .level()
                         .block(p)?
                         .get(ferraloom_data::properties::WATERLOGGED)
                         .is_some()
                 {
-                    region.place_liquid(p, fluid)?;
+                    access.level_mut()?.place_liquid(p, fluid)?;
                     filled = true;
                     to_fill.remove(index);
                 } else {
@@ -187,7 +247,7 @@ impl StructureTemplate {
         if let Some(bounds) = bounds {
             if !settings.known_shape {
                 update_shape_at_edge(
-                    region,
+                    access.level_mut()?,
                     flags,
                     &placed.iter().map(|&(p, _)| p).collect(),
                     bounds,
@@ -195,19 +255,23 @@ impl StructureTemplate {
             }
             for (p, _) in placed {
                 if !settings.known_shape {
-                    let state = region.block(p)?;
-                    let updated = region.update_from_neighbor_shapes(p, state)?;
+                    let state = access.level().block(p)?;
+                    let updated = access.level_mut()?.update_from_neighbor_shapes(p, state)?;
                     if state != updated {
-                        region.set_block(p, updated, (flags & !1) | 16)?;
+                        access
+                            .level_mut()?
+                            .set_block(p, updated, (flags & !1) | 16)?;
                     }
-                    region.update_neighbors_at(p, updated.block())?;
+                    access
+                        .level_mut()?
+                        .update_neighbors_at(p, updated.block())?;
                 }
                 // Protochunk block-entity NBT is already pending for saving;
                 // the load_block_entity adapter marks instantiated entities dirty.
             }
         }
         if !settings.ignore_entities {
-            self.place_entities(region, position, settings)?;
+            self.place_entities(access.level_mut()?, position, settings)?;
         }
         Ok(true)
     }

@@ -101,19 +101,19 @@ impl DeltaFeature {
 }
 impl Feature for DeltaFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let spawn_rim = ctx.random.next_double() < 0.9;
+        let spawn_rim = ctx.random()?.next_double() < 0.9;
         let rx = if spawn_rim {
-            self.rim_size.sample(&mut ctx.random)
+            self.rim_size.sample(&mut ctx.random()?)
         } else {
             0
         };
         let rz = if spawn_rim {
-            self.rim_size.sample(&mut ctx.random)
+            self.rim_size.sample(&mut ctx.random()?)
         } else {
             0
         };
-        let sx = self.size.sample(&mut ctx.random);
-        let sz = self.size.sample(&mut ctx.random);
+        let sx = self.size.sample(&mut ctx.random()?);
+        let sz = self.size.sample(&mut ctx.random()?);
         let mut placed = false;
         for p in manhattan(ctx.origin, [sx, 0, sz], sx.max(sz)) {
             if self.is_clear(ctx, p)? {
@@ -151,7 +151,8 @@ impl Feature for ReplaceBlobsFeature {
         if p[1] <= ctx.level.min_y() + 1 {
             return Ok(false);
         }
-        let radii = std::array::from_fn(|_| self.radius.sample(&mut ctx.random));
+        let radii =
+            ctx.with_random(|random| std::array::from_fn(|_| self.radius.sample(random)))?;
         let mut placed = false;
         for p in manhattan(p, radii, *radii.iter().max().unwrap()) {
             if ctx.level.block(p)?.block() == self.target {
@@ -262,23 +263,23 @@ impl Feature for SteppedColumnClusterFeature {
         if !self.can_place_at(ctx, ctx.origin)? {
             return Ok(false);
         }
-        let height = self.height.sample(&mut ctx.random);
-        let reach = height.min(self.cluster_reach.sample(&mut ctx.random));
-        let count = self.column_count.sample(&mut ctx.random);
+        let height = self.height.sample(&mut ctx.random()?);
+        let reach = height.min(self.cluster_reach.sample(&mut ctx.random()?));
+        let count = self.column_count.sample(&mut ctx.random()?);
         let mut placed = false;
         for _ in 0..count {
             let x = ctx.origin[0]
                 .wrapping_sub(reach)
-                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
-            let y = ctx.origin[1] + ctx.random.next_int_bound(1);
+                .wrapping_add(ctx.random()?.next_int_bound(2 * reach + 1));
+            let y = ctx.origin[1] + ctx.random()?.next_int_bound(1);
             let z = ctx.origin[2]
                 .wrapping_sub(reach)
-                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
+                .wrapping_add(ctx.random()?.next_int_bound(2 * reach + 1));
             let h = height
                 - x.wrapping_sub(ctx.origin[0]).wrapping_abs()
                 - z.wrapping_sub(ctx.origin[2]).wrapping_abs();
             if h >= 0 {
-                let r = self.column_reach.sample(&mut ctx.random);
+                let r = self.column_reach.sample(&mut ctx.random()?);
                 placed |= self.place_column(ctx, [x, y, z], h, r)?;
             }
         }

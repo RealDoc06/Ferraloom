@@ -21,22 +21,22 @@ struct Shape {
 impl Feature for IcebergFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = [ctx.origin[0], ctx.generator.sea_level(), ctx.origin[2]];
-        let r = &mut ctx.random;
-        let snow = r.next_double() > 0.7;
-        let angle = r.next_double() * 2.0 * std::f64::consts::PI;
-        let ellipse_a = 11 - r.next_int_bound(5);
-        let c = 3 + r.next_int_bound(3);
-        let ellipse = r.next_double() > 0.7;
+        let snow = ctx.random()?.next_double() > 0.7;
+        let angle = ctx.random()?.next_double() * 2.0 * std::f64::consts::PI;
+        let ellipse_a = 11 - ctx.random()?.next_int_bound(5);
+        let c = 3 + ctx.random()?.next_int_bound(3);
+        let ellipse = ctx.random()?.next_double() > 0.7;
         let mut height = if ellipse {
-            r.next_int_bound(6) + 6
+            ctx.random()?.next_int_bound(6) + 6
         } else {
-            r.next_int_bound(15) + 3
+            ctx.random()?.next_int_bound(15) + 3
         };
-        if !ellipse && r.next_double() > 0.9 {
-            height += r.next_int_bound(19) + 7;
+        if !ellipse && ctx.random()?.next_double() > 0.9 {
+            height += ctx.random()?.next_int_bound(19) + 7;
         }
-        let depth = (height + r.next_int_bound(11)).min(18);
-        let width = (height + r.next_int_bound(7) - r.next_int_bound(5)).min(11);
+        let depth = (height + ctx.random()?.next_int_bound(11)).min(18);
+        let width =
+            (height + ctx.random()?.next_int_bound(7) - ctx.random()?.next_int_bound(5)).min(11);
         let a = if ellipse { ellipse_a } else { 11 };
         let shape = Shape {
             origin,
@@ -55,10 +55,10 @@ impl Feature for IcebergFeature {
                     let radius = if ellipse {
                         radius_ellipse(y, height, width)
                     } else {
-                        radius_round(r, y, height, width)
+                        radius_round(&mut ctx.random()?, y, height, width)
                     };
                     if ellipse || x < radius {
-                        shape.generate(&mut ctx.level, r, [x, y, z], radius)?;
+                        shape.generate(&mut ctx.placement(), [x, y, z], radius)?;
                     }
                 }
             }
@@ -73,25 +73,29 @@ impl Feature for IcebergFeature {
                     } else {
                         a
                     };
-                    let radius = radius_steep(r, -y, depth, width);
+                    let radius = radius_steep(&mut ctx.random()?, -y, depth, width);
                     if x < radius {
                         Shape {
                             height: depth,
                             a: new_a,
                             ..shape
                         }
-                        .generate(&mut ctx.level, r, [x, y, z], radius)?;
+                        .generate(
+                            &mut ctx.placement(),
+                            [x, y, z],
+                            radius,
+                        )?;
                     }
                 }
             }
         }
         let cut = if ellipse {
-            r.next_double() > 0.1
+            ctx.random()?.next_double() > 0.1
         } else {
-            r.next_double() > 0.7
+            ctx.random()?.next_double() > 0.7
         };
         if cut {
-            shape.cut_out(&mut ctx.level, r, ellipse_a)?;
+            shape.cut_out(&mut ctx.placement(), ellipse_a)?;
         }
         Ok(true)
     }
@@ -99,8 +103,10 @@ impl Feature for IcebergFeature {
 impl Shape {
     fn generate(
         self,
-        level: &mut impl crate::feature::LiveWorldGenLevel,
-        r: &mut impl RandomSource,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
         [x, y, z]: [i32; 3],
         radius: i32,
     ) -> Result<(), Error> {
@@ -119,7 +125,7 @@ impl Shape {
                 self.angle,
             )
         } else {
-            let off = 10.0 * r.next_float().clamp(0.2, 0.8) / radius as f32;
+            let off = 10.0 * access.random()?.next_float().clamp(0.2, 0.8) / radius as f32;
             f64::from(off) + f64::from(x).powi(2) + f64::from(z).powi(2) - f64::from(radius).powi(2)
         };
         if distance < 0.0 {
@@ -127,24 +133,27 @@ impl Shape {
             let compare = if self.ellipse {
                 -0.5
             } else {
-                f64::from(-6 - r.next_int_bound(3))
+                f64::from(-6 - access.random()?.next_int_bound(3))
             };
-            if distance > compare && r.next_double() > 0.9 {
+            if distance > compare && access.random()?.next_double() > 0.9 {
                 return Ok(());
             }
-            let state = level.block(p)?;
+            let state = access.level().block(p)?;
             if state.is_air()
                 || matches!(state.block(), Block::SNOW_BLOCK | Block::ICE | Block::WATER)
             {
-                let randomness = !self.ellipse || r.next_double() > 0.05;
+                let randomness = !self.ellipse || access.random()?.next_double() > 0.05;
                 let divisor = if self.ellipse { 3 } else { 2 };
                 let snow = self.snow
                     && state.block() != Block::WATER
                     && f64::from(self.height - y)
-                        <= f64::from(r.next_int_bound((self.height / divisor).max(1)))
-                            + f64::from(self.height) * 0.6
+                        <= f64::from(
+                            access
+                                .random()?
+                                .next_int_bound((self.height / divisor).max(1)),
+                        ) + f64::from(self.height) * 0.6
                     && randomness;
-                level.set_block(
+                access.level_mut()?.set_block(
                     p,
                     if snow {
                         Block::SNOW_BLOCK.default_state()
@@ -204,39 +213,71 @@ impl Shape {
     }
     fn cut_out(
         self,
-        level: &mut impl crate::feature::LiveWorldGenLevel,
-        r: &mut impl RandomSource,
+        access: &mut crate::feature::FeaturePlacementAccess<
+            '_,
+            impl crate::feature::LiveWorldGenLevel,
+        >,
         ellipse_a: i32,
     ) -> Result<(), Error> {
-        let sign_x = if r.next_boolean() { -1 } else { 1 };
-        let sign_z = if r.next_boolean() { -1 } else { 1 };
-        let mut x = r.next_int_bound((self.width / 2 - 2).max(1));
-        if r.next_boolean() {
-            x = self.width / 2 + 1 - r.next_int_bound((self.width - self.width / 2 - 1).max(1));
+        let sign_x = if access.random()?.next_boolean() {
+            -1
+        } else {
+            1
+        };
+        let sign_z = if access.random()?.next_boolean() {
+            -1
+        } else {
+            1
+        };
+        let mut x = access.random()?.next_int_bound((self.width / 2 - 2).max(1));
+        if access.random()?.next_boolean() {
+            x = self.width / 2 + 1
+                - access
+                    .random()?
+                    .next_int_bound((self.width - self.width / 2 - 1).max(1));
         }
-        let mut z = r.next_int_bound((self.width / 2 - 2).max(1));
-        if r.next_boolean() {
-            z = self.width / 2 + 1 - r.next_int_bound((self.width - self.width / 2 - 1).max(1));
+        let mut z = access.random()?.next_int_bound((self.width / 2 - 2).max(1));
+        if access.random()?.next_boolean() {
+            z = self.width / 2 + 1
+                - access
+                    .random()?
+                    .next_int_bound((self.width - self.width / 2 - 1).max(1));
         }
         if self.ellipse {
-            z = r.next_int_bound((ellipse_a - 5).max(1));
+            z = access.random()?.next_int_bound((ellipse_a - 5).max(1));
             x = z;
         }
         let local = [sign_x * x, 0, sign_z * z];
         let angle = if self.ellipse {
             self.angle + std::f64::consts::FRAC_PI_2
         } else {
-            r.next_double() * 2.0 * std::f64::consts::PI
+            access.random()?.next_double() * 2.0 * std::f64::consts::PI
         };
         for y in 0..self.height - 3 {
-            let radius = radius_round(r, y, self.height, self.width);
-            self.carve(level, radius, y, false, angle, local, ellipse_a)?;
+            let radius = radius_round(&mut access.random()?, y, self.height, self.width);
+            self.carve(
+                access.level_mut()?,
+                radius,
+                y,
+                false,
+                angle,
+                local,
+                ellipse_a,
+            )?;
         }
         let mut y = -1;
         // The loop condition itself consumes RNG, including the terminating check.
-        while y > -self.height + r.next_int_bound(5) {
-            let radius = radius_steep(r, -y, self.height, self.width);
-            self.carve(level, radius, y, true, angle, local, ellipse_a)?;
+        while y > -self.height + access.random()?.next_int_bound(5) {
+            let radius = radius_steep(&mut access.random()?, -y, self.height, self.width);
+            self.carve(
+                access.level_mut()?,
+                radius,
+                y,
+                true,
+                angle,
+                local,
+                ellipse_a,
+            )?;
             y -= 1;
         }
         Ok(())

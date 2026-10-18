@@ -68,14 +68,14 @@ impl RootPlacer {
         let next = step(p, d);
         let width = manhattan(p, o);
         let positions = if width > self.width - 3 && width <= self.width {
-            if c.random.next_float() < self.skew {
+            if c.random()?.next_float() < self.skew {
                 vec![below, add(next, [0, -1, 0])]
             } else {
                 vec![below]
             }
-        } else if width > self.width || c.random.next_float() < self.skew {
+        } else if width > self.width || c.random()?.next_float() < self.skew {
             vec![below]
-        } else if c.random.next_boolean() {
+        } else if c.random()?.next_boolean() {
             vec![next]
         } else {
             vec![below]
@@ -136,7 +136,7 @@ impl RootPlacer {
                 put(c, p, s, out)?;
                 if let Some((provider, chance)) = &self.above {
                     let above = add(p, [0, 1, 0]);
-                    if c.random.next_float() < *chance && is_air(c.level.block(above)?) {
+                    if c.random()?.next_float() < *chance && is_air(c.level.block(above)?) {
                         let s = provider.get_state(c, above)?;
                         let s = self.state(c, above, s)?;
                         put(c, above, s, out)?;
@@ -231,10 +231,10 @@ impl RootSystem {
                 if result? {
                     for dy in 0..y {
                         for _ in 0..self.attempts {
-                            let x = c.random.next_int_bound(self.radius)
-                                - c.random.next_int_bound(self.radius);
-                            let z = c.random.next_int_bound(self.radius)
-                                - c.random.next_int_bound(self.radius);
+                            let x = c.random()?.next_int_bound(self.radius)
+                                - c.random()?.next_int_bound(self.radius);
+                            let z = c.random()?.next_int_bound(self.radius)
+                                - c.random()?.next_int_bound(self.radius);
                             let q = add(origin, [x, dy, z]);
                             if self.replaceable.contains(&c.level.block(q)?.block()) {
                                 let s = self.provider.get_state(c, q)?;
@@ -257,12 +257,12 @@ impl Feature for RootSystem {
         if self.tree(c)? {
             for _ in 0..self.hanging_attempts {
                 let delta = [
-                    c.random.next_int_bound(self.hanging_radius)
-                        - c.random.next_int_bound(self.hanging_radius),
-                    c.random.next_int_bound(self.hanging_span)
-                        - c.random.next_int_bound(self.hanging_span),
-                    c.random.next_int_bound(self.hanging_radius)
-                        - c.random.next_int_bound(self.hanging_radius),
+                    c.random()?.next_int_bound(self.hanging_radius)
+                        - c.random()?.next_int_bound(self.hanging_radius),
+                    c.random()?.next_int_bound(self.hanging_span)
+                        - c.random()?.next_int_bound(self.hanging_span),
+                    c.random()?.next_int_bound(self.hanging_radius)
+                        - c.random()?.next_int_bound(self.hanging_radius),
                 ];
                 let p = add(c.origin, delta);
                 if is_air(c.level.block(p)?) {

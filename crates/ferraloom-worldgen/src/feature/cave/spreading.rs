@@ -86,7 +86,7 @@ impl MultifaceGrowthFeature {
             };
             ctx.level.set_block(p, state, 3)?;
             ctx.level.mark_post_processing(p)?;
-            if ctx.random.next_float() < self.chance {
+            if ctx.random()?.next_float() < self.chance {
                 ctx.level
                     .multiface_spread(state, p, face, &mut ctx.random, true)?;
             }
@@ -102,7 +102,7 @@ impl Feature for MultifaceGrowthFeature {
             return Ok(false);
         }
         let mut directions = self.directions.clone();
-        shuffle(&mut directions, &mut ctx.random);
+        shuffle(&mut directions, &mut ctx.random()?);
         if self.place_growth(ctx, ctx.origin, old, &directions)? {
             return Ok(true);
         }
@@ -113,7 +113,7 @@ impl Feature for MultifaceGrowthFeature {
                 .copied()
                 .filter(|&d| d != search.opposite())
                 .collect::<Vec<_>>();
-            shuffle(&mut placement, &mut ctx.random);
+            shuffle(&mut placement, &mut ctx.random()?);
             for _ in 0..self.range {
                 // Vanilla 26.3 resets from origin on every iteration here.
                 let p = move_direction(ctx.origin, search);

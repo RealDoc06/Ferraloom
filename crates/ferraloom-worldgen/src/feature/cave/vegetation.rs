@@ -75,8 +75,8 @@ impl VegetationPatchFeature {
 }
 impl Feature for VegetationPatchFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let xr = self.radius.sample(&mut ctx.random) + 1;
-        let zr = self.radius.sample(&mut ctx.random) + 1;
+        let xr = self.radius.sample(&mut ctx.random()?) + 1;
+        let zr = self.radius.sample(&mut ctx.random()?) + 1;
         let mut surface = JavaHashSet::<BlockPos>::new();
         for dx in -xr..=xr {
             for dz in -zr..=zr {
@@ -84,7 +84,7 @@ impl Feature for VegetationPatchFeature {
                 let ze = dz == -zr || dz == zr;
                 if xe && ze
                     || (xe || ze)
-                        && (self.extra_edge == 0.0 || ctx.random.next_float() > self.extra_edge)
+                        && (self.extra_edge == 0.0 || ctx.random()?.next_float() > self.extra_edge)
                 {
                     continue;
                 }
@@ -105,9 +105,10 @@ impl Feature for VegetationPatchFeature {
                         .level
                         .has_sturdy_face(ground, self.direction.opposite())?
                 {
-                    let depth = self.depth.sample(&mut ctx.random)
+                    let depth = self.depth.sample(&mut ctx.random()?)
                         + i32::from(
-                            self.extra_bottom > 0.0 && ctx.random.next_float() < self.extra_bottom,
+                            self.extra_bottom > 0.0
+                                && ctx.random()?.next_float() < self.extra_bottom,
                         );
                     if self.ground(ctx, ground, depth)? {
                         surface.insert(BlockPos::new(ground[0], ground[1], ground[2]));
@@ -141,7 +142,7 @@ impl Feature for VegetationPatchFeature {
         }
         for p in surface.iter() {
             let p = [p.x, p.y, p.z];
-            if self.chance > 0.0 && ctx.random.next_float() < self.chance {
+            if self.chance > 0.0 && ctx.random()?.next_float() < self.chance {
                 let origin = ctx.origin;
                 let vegetation_p = if self.waterlogged {
                     move_direction(p, Direction::Down)

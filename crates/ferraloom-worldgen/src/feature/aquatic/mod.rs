@@ -46,15 +46,15 @@ impl Feature for BlueIceFeature {
         }
         ctx.level.set_block(p, Block::BLUE_ICE.default_state(), 2)?;
         for _ in 0..200 {
-            let dy = ctx.random.next_int_bound(5) - ctx.random.next_int_bound(6);
+            let dy = ctx.random()?.next_int_bound(5) - ctx.random()?.next_int_bound(6);
             let width = 3 + if dy < 2 { dy / 2 } else { 0 };
             if width >= 1 {
                 let q = offset(
                     p,
                     [
-                        ctx.random.next_int_bound(width) - ctx.random.next_int_bound(width),
+                        ctx.random()?.next_int_bound(width) - ctx.random()?.next_int_bound(width),
                         dy,
-                        ctx.random.next_int_bound(width) - ctx.random.next_int_bound(width),
+                        ctx.random()?.next_int_bound(width) - ctx.random()?.next_int_bound(width),
                     ],
                 );
                 let state = ctx.level.block(q)?;
@@ -95,22 +95,22 @@ impl Feature for CoralClawFeature {
         if !place(&self.feature, ctx, origin)? {
             return Ok(false);
         }
-        let claw = Plane::Horizontal.random_direction(&mut ctx.random);
-        let count = ctx.random.next_int_bound(2) + 2;
+        let claw = Plane::Horizontal.random_direction(&mut ctx.random()?);
+        let count = ctx.random()?.next_int_bound(2) + 2;
         let mut directions = [claw, claw.clockwise(), claw.counter_clockwise()];
         for i in (2..=directions.len()).rev() {
-            directions.swap(i - 1, ctx.random.next_int_bound(i as i32) as usize);
+            directions.swap(i - 1, ctx.random()?.next_int_bound(i as i32) as usize);
         }
         for branch in directions.into_iter().take(count as usize) {
-            let sideways = ctx.random.next_int_bound(2) + 1;
+            let sideways = ctx.random()?.next_int_bound(2) + 1;
             let mut p = relative(origin, branch);
             let (segment, inward) = if branch == claw {
-                (claw, ctx.random.next_int_bound(3) + 2)
+                (claw, ctx.random()?.next_int_bound(3) + 2)
             } else {
                 p = relative(p, Direction::Up);
                 (
-                    [branch, Direction::Up][ctx.random.next_int_bound(2) as usize],
-                    ctx.random.next_int_bound(3) + 3,
+                    [branch, Direction::Up][ctx.random()?.next_int_bound(2) as usize],
+                    ctx.random()?.next_int_bound(3) + 3,
                 )
             };
             for _ in 0..sideways {
@@ -125,7 +125,7 @@ impl Feature for CoralClawFeature {
                 if !place(&self.feature, ctx, p)? {
                     break;
                 }
-                if ctx.random.next_float() < 0.25 {
+                if ctx.random()?.next_float() < 0.25 {
                     p = relative(p, Direction::Up);
                 }
             }
@@ -141,7 +141,7 @@ struct CoralTreeFeature {
 impl Feature for CoralTreeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
-        let height = ctx.random.next_int_bound(3) + 1;
+        let height = ctx.random()?.next_int_bound(3) + 1;
         for _ in 0..height {
             if !place(&self.feature, ctx, p)? {
                 return Ok(true);
@@ -149,11 +149,11 @@ impl Feature for CoralTreeFeature {
             p = relative(p, Direction::Up);
         }
         let top = p;
-        let count = ctx.random.next_int_bound(3) + 2;
-        let directions = Plane::Horizontal.shuffled_copy(&mut ctx.random);
+        let count = ctx.random()?.next_int_bound(3) + 2;
+        let directions = Plane::Horizontal.shuffled_copy(&mut ctx.random()?);
         for branch in directions.into_iter().take(count as usize) {
             p = relative(top, branch);
-            let height = ctx.random.next_int_bound(5) + 2;
+            let height = ctx.random()?.next_int_bound(5) + 2;
             let mut length = 0;
             for j in 0..height {
                 if !place(&self.feature, ctx, p)? {
@@ -161,7 +161,7 @@ impl Feature for CoralTreeFeature {
                 }
                 length += 1;
                 p = relative(p, Direction::Up);
-                if j == 0 || length >= 2 && ctx.random.next_float() < 0.25 {
+                if j == 0 || length >= 2 && ctx.random()?.next_float() < 0.25 {
                     p = relative(p, branch);
                     length = 0;
                 }

@@ -91,9 +91,9 @@ impl Feature for BlockBlobFeature {
             return Ok(false);
         }
         for _ in 0..3 {
-            let xr = ctx.random.next_int_bound(2);
-            let yr = ctx.random.next_int_bound(2);
-            let zr = ctx.random.next_int_bound(2);
+            let xr = ctx.random()?.next_int_bound(2);
+            let yr = ctx.random()?.next_int_bound(2);
+            let zr = ctx.random()?.next_int_bound(2);
             let radius = (xr + yr + zr) as f32 * 0.333 + 0.5;
             for z in -zr..=zr {
                 for y in -yr..=yr {
@@ -107,9 +107,9 @@ impl Feature for BlockBlobFeature {
             p = offset(
                 p,
                 [
-                    -1 + ctx.random.next_int_bound(2),
-                    -ctx.random.next_int_bound(2),
-                    -1 + ctx.random.next_int_bound(2),
+                    -1 + ctx.random()?.next_int_bound(2),
+                    -ctx.random()?.next_int_bound(2),
+                    -1 + ctx.random()?.next_int_bound(2),
                 ],
             );
         }
@@ -135,11 +135,11 @@ impl Feature for SpikeFeature {
         {
             return Ok(false);
         }
-        origin[1] += ctx.random.next_int_bound(4);
-        let height = ctx.random.next_int_bound(4) + 7;
-        let width = height / 4 + ctx.random.next_int_bound(2);
-        if width > 1 && ctx.random.next_int_bound(60) == 0 {
-            origin[1] += 10 + ctx.random.next_int_bound(30);
+        origin[1] += ctx.random()?.next_int_bound(4);
+        let height = ctx.random()?.next_int_bound(4) + 7;
+        let width = height / 4 + ctx.random()?.next_int_bound(2);
+        if width > 1 && ctx.random()?.next_int_bound(60) == 0 {
+            origin[1] += 10 + ctx.random()?.next_int_bound(30);
         }
         for y in 0..height {
             let scale = (1.0 - y as f32 / height as f32) * width as f32;
@@ -150,7 +150,7 @@ impl Feature for SpikeFeature {
                     let dz = z.abs() as f32 - 0.25;
                     if (x == 0 && z == 0 || dx * dx + dz * dz <= scale * scale)
                         && (x != -radius && x != radius && z != -radius && z != radius
-                            || ctx.random.next_float() <= 0.75)
+                            || ctx.random()?.next_float() <= 0.75)
                     {
                         let p = offset(origin, [x, y, z]);
                         if ctx.level.block(p)?.is_air()
@@ -175,7 +175,7 @@ impl Feature for SpikeFeature {
             for z in -radius..=radius {
                 let mut p = offset(origin, [x, -1, z]);
                 let mut run = if x.abs() == 1 && z.abs() == 1 {
-                    ctx.random.next_int_bound(5)
+                    ctx.random()?.next_int_bound(5)
                 } else {
                     50
                 };
@@ -191,8 +191,8 @@ impl Feature for SpikeFeature {
                     p[1] -= 1;
                     run -= 1;
                     if run <= 0 {
-                        p[1] -= ctx.random.next_int_bound(5) + 1;
-                        run = ctx.random.next_int_bound(5);
+                        p[1] -= ctx.random()?.next_int_bound(5) + 1;
+                        run = ctx.random()?.next_int_bound(5);
                     }
                 }
             }
