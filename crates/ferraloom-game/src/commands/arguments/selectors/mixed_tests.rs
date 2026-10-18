@@ -65,6 +65,13 @@ impl EntityQuery for Query {
             self.level.entity_by_uuid(uuid)
         }
     }
+    fn players_in_level(&self, _: &str) -> Vec<EntityRef> {
+        self.level
+            .all_entities()
+            .into_iter()
+            .filter(|entity| matches!(self.state(*entity), EntityState::Player(_)))
+            .collect()
+    }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
         let state = self.level.entity_state(entity).ok()?;
         let base = state.as_entity();

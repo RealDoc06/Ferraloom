@@ -520,6 +520,18 @@ impl EntityQuery for MinecraftServer {
             self.level.level.entity_by_uuid(uuid)
         }
     }
+    fn players_in_level(&self, dimension: &str) -> Vec<EntityRef> {
+        if dimension != "minecraft:overworld" {
+            return Vec::new();
+        }
+        // Players are always tracked; the canonical lookup retains level join order.
+        self.level
+            .level
+            .all_entities()
+            .into_iter()
+            .filter(|entity| self.player(*entity).is_ok())
+            .collect()
+    }
     fn bounding_box(&self, entity: EntityRef) -> Option<ferraloom_util::Aabb> {
         self.level
             .level

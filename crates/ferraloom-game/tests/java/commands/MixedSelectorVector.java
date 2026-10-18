@@ -50,6 +50,9 @@ public final class MixedSelectorVector {
             entities.add(entity);identities.put(entity,index+1);lookup.add(entity);sections.getOrCreateSection(SectionPos.of(new net.minecraft.core.BlockPos((int)Math.floor(x),0,0)).asLong()).add(entity);
             var definition=new JsonObject();definition.addProperty("name",names[index]);definition.addProperty("kind",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());definition.addProperty("uuid",uuid.toString());definition.addProperty("x",x);definition.addProperty("alive",index!=3);definition.addProperty("tag",index==1?"pet":"other");definitions.add(definition);
         }
+        var levelPlayers=ServerLevel.class.getDeclaredField("players");levelPlayers.setAccessible(true);
+        levelPlayers.set(level,List.of((ServerPlayer)entities.get(0),(ServerPlayer)entities.get(4)));
+        doCallRealMethod().when(level).getPlayers(any(java.util.function.Predicate.class),anyInt());
         doReturn(List.of((ServerPlayer)entities.get(4),(ServerPlayer)entities.get(0))).when(players).getPlayers();
         doAnswer(call->entities.stream().filter(e->e instanceof ServerPlayer&&e.getPlainTextName().equalsIgnoreCase(call.getArgument(0))).findFirst().orElse(null)).when(players).getPlayerByName(anyString());
         doAnswer(call->entities.stream().filter(e->e instanceof ServerPlayer&&e.getUUID().equals(call.getArgument(0))).findFirst().orElse(null)).when(players).getPlayer(any(UUID.class));

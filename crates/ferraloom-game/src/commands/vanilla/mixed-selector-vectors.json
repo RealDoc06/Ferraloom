@@ -257,7 +257,10 @@
       "selector": "@e[dx\u003d64,dy\u003d2,dz\u003d2]",
       "source_entity": 1,
       "players_only": true,
-      "selected": []
+      "selected": [
+        1,
+        5
+      ]
     },
     {
       "selector": "@e[distance\u003d..64]",
@@ -274,7 +277,10 @@
       "selector": "@e[distance\u003d..64]",
       "source_entity": 1,
       "players_only": true,
-      "selected": []
+      "selected": [
+        1,
+        5
+      ]
     },
     {
       "selector": "@e[distance\u003d1..20,sort\u003darbitrary]",
@@ -305,7 +311,9 @@
       "selector": "@e[x\u003d20,dx\u003d-20,dy\u003d2,dz\u003d2]",
       "source_entity": 1,
       "players_only": true,
-      "selected": []
+      "selected": [
+        5
+      ]
     },
     {
       "selector": "@s",
@@ -594,7 +602,10 @@
       "selector": "@e[dx\u003d64,dy\u003d2,dz\u003d2]",
       "source_entity": 2,
       "players_only": true,
-      "selected": []
+      "selected": [
+        1,
+        5
+      ]
     },
     {
       "selector": "@e[distance\u003d..64]",
@@ -611,7 +622,10 @@
       "selector": "@e[distance\u003d..64]",
       "source_entity": 2,
       "players_only": true,
-      "selected": []
+      "selected": [
+        1,
+        5
+      ]
     },
     {
       "selector": "@e[distance\u003d1..20,sort\u003darbitrary]",
@@ -642,7 +656,9 @@
       "selector": "@e[x\u003d20,dx\u003d-20,dy\u003d2,dz\u003d2]",
       "source_entity": 2,
       "players_only": true,
-      "selected": []
+      "selected": [
+        5
+      ]
     },
     {
       "selector": "@s",

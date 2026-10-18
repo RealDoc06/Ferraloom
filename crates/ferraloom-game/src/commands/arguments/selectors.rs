@@ -693,6 +693,8 @@ impl EntitySelector {
         };
         let candidates = if self.current_entity {
             source.entity.into_iter().collect()
+        } else if players_only && self.world_limited {
+            query.players_in_level(&source.level.dimension)
         } else {
             query.candidates_in(players_only, bounds)
         };
@@ -793,10 +795,21 @@ pub struct SelectorEntity<'a> {
 /// Live entity queries capture owned handles in native lookup/section order.
 pub trait EntityQuery {
     fn candidates(&self, players_only: bool) -> Vec<EntityRef>;
-    /// Unbounded queries use the linked entity lookup; bounded queries use the
-    /// section index. Player queries retain PlayerList order in either case.
+    /// Unbounded entity queries use the linked lookup; bounded ones use the
+    /// section index. Global player queries retain PlayerList order.
     fn candidates_in(&self, players_only: bool, _bounds: Option<Aabb>) -> Vec<EntityRef> {
         self.candidates(players_only)
+    }
+    /// Port of ServerLevel#getPlayers: world-limited player selectors use the
+    /// level's player insertion order, independently of global PlayerList order.
+    fn players_in_level(&self, dimension: &str) -> Vec<EntityRef> {
+        self.candidates(true)
+            .into_iter()
+            .filter(|entity| {
+                self.info(*entity)
+                    .is_some_and(|info| info.dimension == dimension)
+            })
+            .collect()
     }
     fn entity_by_uuid(&self, uuid: Uuid, players_only: bool) -> Option<EntityRef> {
         self.candidates(players_only).into_iter().find(|entity| {
