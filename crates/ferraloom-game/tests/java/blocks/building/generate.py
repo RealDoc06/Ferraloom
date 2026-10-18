@@ -14,12 +14,13 @@ JAVA = CACHE / 'toolchains/jdk-25.0.4.1+1/bin'
 VANILLA = CACHE / 'vanilla/26.3'
 CLASSPATH = os.pathsep.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar'))]))
 parser = argparse.ArgumentParser()
-parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs', 'connected'], default='orientation')
+parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs', 'connected', 'attachments'], default='orientation')
 family = parser.parse_args().family
 source, bootstrap, expected = {
     'orientation': ('OrientationVectors.java', 'OrientationBootstrap', 42012),
     'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 281554),
     'connected': ('ConnectedVectors.java', 'ConnectedBootstrap', 84864),
+    'attachments': ('AttachmentVectors.java', 'AttachmentBootstrap', 268940),
 }[family]
 with tempfile.TemporaryDirectory() as temporary:
     classes = Path(temporary)

@@ -39,7 +39,7 @@ static TAGS: LazyLock<Arc<TagSet<Block>>> = LazyLock::new(|| {
         ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
     Arc::new(TagSet::load(&resources).unwrap())
 });
-fn connected_level() -> Level {
+pub(super) fn connected_level() -> Level {
     let mut level = level();
     level.set_block_tags(Arc::clone(&TAGS));
     level

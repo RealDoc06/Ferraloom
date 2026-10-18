@@ -6,9 +6,13 @@ use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id a
 use ferraloom_util::{BlockPos, Direction};
 
 #[cfg(test)]
+mod attachment_tests;
+mod attachments;
+#[cfg(test)]
 mod connected_tests;
 mod connections;
 mod orientation;
+mod scaffolding;
 mod slab;
 #[cfg(test)]
 mod stair_slab_tests;
@@ -20,6 +24,12 @@ pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if attachments::supports(block, method) {
+        return Some(&attachments::ATTACHMENTS);
+    }
+    if scaffolding::supports(block, method) {
+        return Some(&scaffolding::SCAFFOLDING);
+    }
     if orientation::supports(block, method) {
         return Some(&orientation::ORIENTATION);
     }
