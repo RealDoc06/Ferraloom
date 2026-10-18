@@ -357,11 +357,11 @@ impl BlockBehavior for ShapeBudget {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         assert_eq!(flags, crate::block::UpdateFlags::CLIENTS);
-        level.emit(Observation::Effect(effects::LevelEffect::LevelEvent {
+        level.emit(effects::LevelEffect::LevelEvent {
             pos,
             id: 999,
             data: limit,
-        }));
+        });
         Ok(())
     }
 }

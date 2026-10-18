@@ -188,7 +188,3 @@ pub(crate) fn take(level: &mut Level) -> Vec<Observation> {
     );
     observed
 }
-pub(crate) fn clear(level: &mut Level) {
-    level.take_effects();
-    level.region_mut().game_event_listeners.tests.events.clear();
-}

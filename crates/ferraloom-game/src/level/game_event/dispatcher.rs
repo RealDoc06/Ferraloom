@@ -27,7 +27,7 @@ impl GameEventDispatcher {
             center.z.wrapping_add(radius) >> 4,
         );
         let mut queued = Vec::new();
-        let result = (|| {
+        let result: Result<(), LevelError> = (|| {
             for x in min.x..=max.x {
                 for z in min.z..=max.z {
                     let chunk = ChunkPos::new(x, z);
@@ -35,7 +35,7 @@ impl GameEventDispatcher {
                         continue;
                     }
                     let owner = level.capture_listener_owner(chunk)?;
-                    let result = (|| {
+                    let result: Result<(), LevelError> = (|| {
                         for section in min.y..=max.y {
                             let registry = level.listener_registry(owner, section);
                             visit(level, registry, event, position, context, &mut queued)?;
@@ -90,7 +90,7 @@ fn visit(
     state.visits += 1;
     let mut expected_modification = state.modification_count;
     let mut index = 0;
-    let result = (|| {
+    let result: Result<(), LevelError> = (|| {
         loop {
             let state = &level.region().game_event_listeners.registries[&registry.0];
             // ArrayList.Itr#hasNext checks cursor != size before next checks
