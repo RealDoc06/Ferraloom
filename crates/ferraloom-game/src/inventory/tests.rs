@@ -1,4 +1,5 @@
 use super::*;
+use ferraloom_protocol::component::{EquipmentSlot, Persistent};
 
 #[test]
 fn menu_clone_and_binding_checks_use_independent_player_abilities() {
