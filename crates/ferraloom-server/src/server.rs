@@ -630,6 +630,7 @@ impl MinecraftServer {
                     }
                 }
             }
+            self.level.level.set_handling_tick(true);
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.tick_world_border();
                 self.level.level.advance_weather_cycle(true);
@@ -661,6 +662,7 @@ impl MinecraftServer {
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.run_block_events().map_err(game_error)?;
             }
+            self.level.level.set_handling_tick(false);
             let active = self.level.tickets.should_keep_dimension_active();
             if self
                 .level
