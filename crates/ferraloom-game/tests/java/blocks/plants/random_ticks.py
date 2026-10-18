@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import zipfile
 import urllib.request
+import time
 
 HERE=Path(__file__).resolve().parent
 VANILLA=Path(os.environ.get('FERRALOOM_VANILLA_DIR','/home/doc/code/Ferraloom/.cache/vanilla/26.3'))
@@ -30,10 +31,22 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
     (path/'server.properties').write_text('online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\nlevel-type=minecraft:flat\ngenerator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:bedrock","height":1}]}\nspawn-protection=0\nview-distance=2\nsimulation-distance=2\nmax-tick-time=-1\npause-when-empty-seconds=-1\n')
     output=path/'random.tsv'
     with (path/'server.log').open('w') as log:
+        process=subprocess.Popen([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-Dferraloom.plants.extended='+str('--extended' in sys.argv).lower(),'-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT)
         try:
-            subprocess.run([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-Dferraloom.plants.extended='+str('--extended' in sys.argv).lower(),'-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=240)
+            deadline=time.monotonic()+240
+            while process.poll() is None and not (path/'oracle-done').exists() and not (path/'oracle-error.txt').exists():
+                if time.monotonic()>=deadline:raise TimeoutError('plant oracle did not complete in 240 seconds')
+                time.sleep(0.1)
+            if not (path/'oracle-done').exists():raise RuntimeError('plant oracle exited before completing its fixtures')
         except Exception:
             print((path/'server.log').read_text()[-12000:]);raise
+        finally:
+            # The real callbacks have completed before the marker. Some queued
+            # native chunk saves wait indefinitely during shutdown; this process
+            # owns only the disposable fixture world, so bound its teardown.
+            try:process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill();process.wait()
     if (path/'oracle-error.txt').exists():raise SystemExit((path/'oracle-error.txt').read_text())
     compressed=gzip.compress(output.read_bytes(),mtime=0)
     if '--stdout' in sys.argv:

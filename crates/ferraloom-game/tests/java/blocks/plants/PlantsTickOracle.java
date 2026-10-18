@@ -53,6 +53,7 @@ public final class PlantsTickOracle {
             }
             if (Boolean.getBoolean("ferraloom.plants.extended")) extended(level,pos,lines);
             Files.write(output,lines);
+            Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
         finally{level.getServer().halt(false);}
     }
