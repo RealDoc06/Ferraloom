@@ -765,18 +765,6 @@ impl BlockBehavior for LiquidBlock {
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::empty())
     }
-    fn entity_inside(
-        &self,
-        state: BlockState,
-        _pos: BlockPos,
-        _entity: crate::entity::EntityRef,
-        _level: &mut Level,
-    ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            super::BlockMethod::EntityInside,
-        ))
-    }
     fn on_place(
         &self,
         state: BlockState,
