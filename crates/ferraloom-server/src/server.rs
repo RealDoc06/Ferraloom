@@ -3,6 +3,8 @@
 mod command_level;
 #[path = "command_runtime.rs"]
 mod command_runtime;
+#[path = "generation_completion.rs"]
+pub(crate) mod generation_completion;
 #[path = "interaction.rs"]
 mod interaction;
 use crate::{
@@ -220,6 +222,7 @@ pub struct MinecraftServer {
     enforces_secure_chat: bool,
     listener_task: Option<JoinHandle<Result<()>>>,
     pending_level_hooks: PendingLevelHooks,
+    player_loading_futures: Vec<(ChunkPos, u64)>,
 }
 /// Subsystems with explicit pending effects retain visible counters. Their
 /// eventual ports consume the ordered effects at these same native slots.
@@ -257,7 +260,14 @@ impl MinecraftServer {
         let recipe_manager = RecipeManager::load(&resources, &TagSet::load(&resources)?)?;
         let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
         let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
-        let world = World::open(&options.root, &properties, &resources, &registries)?;
+
+        let world = World::open(
+            &options.root,
+            &properties,
+            &resources,
+            &registries,
+            options.unported_behavior,
+        )?;
         let game_rules = command_runtime::load_game_rules(&world)?;
         let clocks = command_runtime::load_clocks(&world, &resources)?;
         let command_context = command_runtime::command_build_context(
@@ -273,6 +283,7 @@ impl MinecraftServer {
             .into_iter()
             .map(|(id, types)| (id.to_string(), types))
             .collect();
+
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
@@ -413,6 +424,7 @@ impl MinecraftServer {
             enforces_secure_chat,
             listener_task: Some(listener_task),
             pending_level_hooks: PendingLevelHooks::default(),
+            player_loading_futures: Vec::new(),
         };
         server.publish_spawn_protection();
         let task = tokio::spawn(server.run());
@@ -720,7 +732,15 @@ impl MinecraftServer {
                         .tick_fluid_phase(self.level.game_time, 65536)
                         .map_err(game_error)?;
                 }
-                self.level.tickets.purge_stale(self.tick);
+                let holders = &self.level.chunks.holders;
+                let world = &self.world;
+                self.level
+                    .tickets
+                    .purge_stale_with_readiness(self.tick, |pos| {
+                        holders
+                            .get(&pos.pack())
+                            .is_none_or(|holder| world.chunk_ready_for_saving(holder))
+                    });
             }
             self.integrate_jobs()?;
             self.update_chunk_tickets()?;
@@ -945,6 +965,8 @@ impl MinecraftServer {
             .information
             .text_filtering_enabled;
         let center = player.chunk_position();
+        self.level.tickets.add_player_spawn(center, self.tick);
+        self.update_chunk_tickets()?;
         self.request_area(center, 3)?;
         let c = self.connections.get_mut(&connection).unwrap();
         c.player = Some(player);
@@ -1161,6 +1183,15 @@ impl MinecraftServer {
             for change in changes {
                 let holder = self.level.chunks.ensure_holder(change.pos);
                 holder.ticket_level = change.level;
+                self.world
+                    .update_generation_priority(change.pos, change.level);
+                if change.level > 33
+                    && let Some(request) = self.world.cancel_generation(change.pos)
+                {
+                    self.level
+                        .chunks
+                        .cancel_generation_request(change.pos, request);
+                }
                 if change.level <= 33
                     && let Some(request) = self.level.chunks.request(change.pos)
                 {
@@ -1187,15 +1218,18 @@ impl MinecraftServer {
         let positions: Vec<_> = self.level.chunks.holder_positions().collect();
         for pos in positions {
             let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)?
-                && self.level.distance_manager.has_pending_player_loading(pos)
-            {
-                self.level.distance_manager.complete_player_loading(pos);
-            }
+            update_holder_full_status(
+                holder,
+                &self.world.light_ready,
+                &self.world.generation_statuses,
+                &self.world.ready,
+                &mut self.level.level,
+            )?;
             if self.level.level.chunk(pos).is_some() {
                 let requested = holder.requested_full_status();
                 let ticking = requested >= FullChunkStatus::BlockTicking
-                    && full_chunk_range_ready(&self.world.ready, pos, 1);
+                    && self.world.ready.contains(&pos)
+                    && full_chunk_range_ready(&self.world.light_ready, pos, 1);
                 self.level
                     .level
                     .set_chunk_loading_status(pos, requested, ticking)
@@ -1216,14 +1250,128 @@ impl MinecraftServer {
                     .map_err(game_error)?;
             }
         }
+        let waiters = self
+            .level
+            .distance_manager
+            .take_player_loading_waiters(&self.level.tickets);
+        for pos in waiters {
+            if let Some(holder) = self.level.chunks.holders.get(&pos.pack()) {
+                self.player_loading_futures.push((pos, holder.request_id));
+            }
+        }
+        let mut index = 0;
+        while index < self.player_loading_futures.len() {
+            let (pos, request_id) = self.player_loading_futures[index];
+            let current = self
+                .level
+                .chunks
+                .holders
+                .get(&pos.pack())
+                .is_some_and(|holder| holder.request_id == request_id);
+            let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
+                pos,
+                FullChunkStatus::EntityTicking,
+            );
+            if !current
+                || future.is_ready(|p| {
+                    self.world
+                        .light_ready
+                        .contains(&p)
+                        .then_some(ChunkStatus::Full)
+                })
+                || self.world.failed_generation.contains(&(pos, request_id))
+            {
+                self.level.distance_manager.complete_player_loading(pos);
+                self.player_loading_futures.remove(index);
+            } else {
+                index += 1;
+            }
+        }
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
-        for (request, terrain) in self.world.poll_terrain()? {
+        self.world.refresh_generation_snapshots(&self.level.level);
+        let completed = self.world.poll_terrain();
+        for &(pos, request_id) in &self.world.failed_generation {
+            if self.player_loading_futures.contains(&(pos, request_id)) {
+                self.level.distance_manager.complete_player_loading(pos);
+            }
+            self.player_loading_futures
+                .retain(|&waiting| waiting != (pos, request_id));
+        }
+        self.world.failed_generation.clear();
+        let completed = completed?;
+        generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
+        for (request, terrain) in completed {
             self.integrate_command_terrain(request, terrain)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
             self.integrate_command_light(light)?;
+        }
+        generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
+        for (pos, request_id, result) in self.world.poll_unloads()? {
+            if let Err(error) = result {
+                self.level
+                    .level
+                    .mark_chunk_unsaved(pos)
+                    .map_err(game_error)?;
+                return Err(error);
+            }
+            let eligible = self
+                .level
+                .chunks
+                .holders
+                .get(&pos.pack())
+                .is_some_and(|holder| {
+                    holder.ticket_level > 44
+                        && holder.request_id == request_id
+                        && holder.pending_full_status().is_none()
+                        && holder.confirmed_full_status() == FullChunkStatus::Inaccessible
+                });
+            if eligible
+                && self
+                    .level
+                    .level
+                    .chunk(pos)
+                    .is_some_and(|chunk| !chunk.is_unsaved())
+                && !self.world.generation_pins(pos)
+            {
+                self.level
+                    .level
+                    .detach_block_entities_for_unload(pos)
+                    .map_err(game_error)?;
+                ensure!(
+                    self.level.chunks.remove_unloaded_holder(pos).is_some(),
+                    "holder changed during block entity unload"
+                );
+                self.level.level.remove_chunk(pos);
+                self.world.finish_unload(pos)?;
+            }
+        }
+        for pos in self.level.chunks.holder_positions().collect::<Vec<_>>() {
+            let holder = &self.level.chunks.holders[&pos.pack()];
+            if holder.ticket_level > 44
+                && self.level.level.chunk(pos).is_none()
+                && !self.world.generation_pins(pos)
+                && self.world.proto_saves_complete()
+            {
+                if self.level.chunks.remove_unloaded_holder(pos).is_some() {
+                    self.world.forget_proto_holder(pos);
+                }
+                continue;
+            }
+            let holder = &self.level.chunks.holders[&pos.pack()];
+            if holder.ticket_level > 44
+                && self.world.light_ready.contains(&pos)
+                && self.level.level.chunk(pos).is_some()
+            {
+                self.world.schedule_unload(
+                    &mut self.level.level,
+                    pos,
+                    holder.request_id,
+                    self.level.game_time,
+                )?;
+            }
         }
         Ok(())
     }
@@ -2632,12 +2780,16 @@ impl MinecraftServer {
                     if (-3..=3).all(|x| {
                         (-3..=3).all(|z| {
                             self.world
-                                .ready
+                                .light_ready
                                 .contains(&ChunkPos::new(center.x + x, center.z + z))
                         })
                     }) {
                         joining.push(id);
                     }
+                }
+                Phase::Configuration(ConfigTask::Finishing) => {
+                    let center = c.player.as_ref().unwrap().chunk_position();
+                    self.level.tickets.add_player_spawn(center, self.tick);
                 }
                 Phase::Play(entity) => {
                     let player = self
@@ -2658,6 +2810,9 @@ impl MinecraftServer {
         }
         for id in joining {
             let c = self.connections.get_mut(&id).unwrap();
+            self.level
+                .tickets
+                .add_player_spawn(c.player.as_ref().unwrap().chunk_position(), self.tick);
             c.phase = Phase::Configuration(ConfigTask::Finishing);
             c.push(cfg::ClientboundPacket::FinishConfiguration(
                 cfg::FinishConfiguration {},
@@ -2673,6 +2828,7 @@ impl MinecraftServer {
     }
     fn send_chunks(&mut self) -> Result<()> {
         let ready = &self.world.ready;
+        let light_ready = &self.world.light_ready;
         let mut batches = Vec::new();
         for (&connection, c) in &mut self.connections {
             if c.close {
@@ -2680,10 +2836,10 @@ impl MinecraftServer {
             }
             if let Phase::Play(_) = c.phase {
                 let positions = c.chunks.next_batch(c.center.unwrap(), |pos| {
-                    ready.contains(&pos)
-                        && (-1..=1).all(|x| {
-                            (-1..=1).all(|z| ready.contains(&ChunkPos::new(pos.x + x, pos.z + z)))
-                        })
+                    // prepareTickingChunk already awaited the FULL neighborhood
+                    // and post-processing; sending does not await its neighbors'
+                    // own ticking futures. Retain the center light dependency.
+                    ready.contains(&pos) && light_ready.contains(&pos)
                 });
                 if !positions.is_empty() {
                     batches.push((connection, positions));
@@ -3072,25 +3228,32 @@ impl MinecraftServer {
         }
         Ok(())
     }
+
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
+        self.world.finish_generation().await?;
+        self.integrate_jobs()?;
+
         self.world
             .save_live_level_context(&self.level.level)
             .await?;
         self.world
             .save_entities(&mut self.level.level, &self.properties, flush)
             .await?;
+
         self.save_game_rules().await?;
         self.save_command_tickets().await?;
-        let snapshots = self
+        let positions = self
             .level
             .chunks
-            .holders
-            .values()
+            .holder_positions()
             .filter(|_| self.saving_enabled || force)
-            .filter_map(|holder| self.level.level.chunk(holder.position))
-            .map(|chunk| {
+            .filter(|&pos| self.level.level.chunk(pos).is_some())
+            .collect::<Vec<_>>();
+        let snapshots = positions
+            .into_iter()
+            .map(|pos| {
                 self.world
-                    .capture_chunk(&self.level.level, chunk.pos(), self.level.game_time)
+                    .capture_chunk_for_save(&mut self.level.level, pos, self.level.game_time)
             })
             .collect::<Result<Vec<_>>>()?;
         let encoded = self.world.encode_saves(snapshots).await?;
@@ -3132,7 +3295,7 @@ impl MinecraftServer {
             listener.await??;
         }
         self.world.close_entity_storage().await?;
-        self.world.io.shutdown().await?;
+        self.world.close_chunk_storage().await?;
         println!(
             "Server stopped; world and players saved to {}",
             self.root.display()
@@ -3188,17 +3351,29 @@ fn initialize_live_level(
 fn update_holder_full_status(
     holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
     ready: &HashSet<ChunkPos>,
+    completed: &BTreeMap<i64, ChunkStatus>,
+    post_processed: &HashSet<ChunkPos>,
     level: &mut ferraloom_game::level::Level,
 ) -> Result<bool> {
     let mut status = holder.update_full_status();
     if let Some(promotion) = holder.pending_full_status() {
-        let radius = match promotion.status {
-            FullChunkStatus::Inaccessible => unreachable!(),
-            FullChunkStatus::Full => 0,
-            FullChunkStatus::BlockTicking => 1,
-            FullChunkStatus::EntityTicking => 2,
-        };
-        if full_chunk_range_ready(ready, holder.position, radius) {
+        let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
+            holder.position,
+            promotion.status,
+        );
+        if (promotion.status != FullChunkStatus::BlockTicking
+            || post_processed.contains(&holder.position))
+            && future.is_ready(|pos| {
+                if ready.contains(&pos) {
+                    Some(ChunkStatus::Full)
+                } else {
+                    completed
+                        .get(&pos.pack())
+                        .copied()
+                        .filter(|status| *status < ChunkStatus::Full)
+                }
+            })
+        {
             status = holder.confirm_full_status(promotion);
         }
     }
@@ -3431,36 +3606,66 @@ mod live_level_tests {
         let pos = ChunkPos::new(0, 0);
         let mut holder = ChunkHolder::new(pos, 0);
         let mut ready = HashSet::new();
+
+        let mut completed = BTreeMap::new();
         let mut level = Level::new(
             Region::new(&BEHAVIORS),
             ferraloom_game::level::LevelContext::fixture(0, 63),
         );
+
         holder.ticket_level = 33;
-        assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(
+            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
+                .unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
         ready.insert(pos);
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        for x in -1..=1 {
+            for z in -1..=1 {
+                completed.insert(ChunkPos::new(x, z).pack(), ChunkStatus::InitializeLight);
+            }
+        }
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+        holder.ticket_level = 32;
+        for x in -1..=1 {
+            for z in -1..=1 {
+                ready.insert(ChunkPos::new(x, z));
+            }
+        }
+        update_holder_full_status(&mut holder, &ready, &completed, &HashSet::new(), &mut level)
+            .unwrap();
+        assert_eq!(holder.confirmed_full_status(), FullChunkStatus::Full);
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
+        assert_eq!(
+            holder.confirmed_full_status(),
+            FullChunkStatus::BlockTicking
+        );
         holder.ticket_level = 31;
         for x in -1..=1 {
             for z in -1..=1 {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(
+            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
+                .unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         for x in -2..=2 {
             for z in -2..=2 {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(
+            update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
         holder.ticket_level = 32;
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         holder.ticket_level = 45;
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     }
 }
