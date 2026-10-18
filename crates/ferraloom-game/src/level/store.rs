@@ -149,12 +149,12 @@ mod tests {
         snapshots.insert(0, String::from("after"));
         assert_eq!(before, "before");
         assert_eq!(snapshots.get(&0).unwrap(), "after");
+        snapshots.prune();
+        assert_eq!(snapshots.versions.values().count(), 1);
+        assert_eq!(snapshots.get(&0).unwrap(), "after");
         snapshots.remove(&0);
         snapshots.prune();
         assert!(snapshots.get(&0).is_none());
         assert_eq!(snapshots.versions.values().count(), 0);
-        snapshots.prune();
-        assert_eq!(snapshots.versions.values().count(), 1);
-        assert_eq!(snapshots.get(&0).unwrap(), "after");
     }
 }
