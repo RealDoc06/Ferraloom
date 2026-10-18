@@ -498,6 +498,7 @@ pub struct World {
     generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
     active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
+    running_generation: Option<(u64, ChunkPos)>,
     pub failed_generation: Vec<ChunkPos>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     unloading: VecDeque<ChunkUnload>,
@@ -727,6 +728,7 @@ impl World {
             generation_work: None,
             generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
             active_generation: BTreeMap::new(),
+            running_generation: None,
             failed_generation: Vec::new(),
             proto_saves: VecDeque::new(),
             unloading: VecDeque::new(),
@@ -865,11 +867,16 @@ impl World {
         }
     }
     pub fn cancel_generation(&mut self, pos: ChunkPos) {
-        if let Some((request, cancelled)) = self.active_generation.remove(&pos) {
-            cancelled.store(true, Ordering::Relaxed);
-            self.pending.remove(&request);
-            self.failed_generation.push(pos);
-            self.generation_dispatcher.release(pos, true, None);
+        if let Some((request, cancelled)) = self.active_generation.get(&pos) {
+            let request = *request;
+            if !cancelled.swap(true, Ordering::Relaxed) {
+                self.pending.remove(&request);
+                self.failed_generation.push(pos);
+                self.generation_dispatcher.release(pos, true, None);
+            }
+            if self.running_generation != Some((request, pos)) {
+                self.active_generation.remove(&pos);
+            }
         }
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
@@ -919,6 +926,7 @@ impl World {
         self.initial_chunks.remove(&request.pos.pack());
         let registry = self.registry.clone();
         let io = self.io.clone();
+        self.running_generation = Some((request.id, request.pos));
         self.generation_work = Some(self.generation.submit(move || {
             let result = state.generate(
                 request.id,
@@ -944,12 +952,13 @@ impl World {
         } = output;
         let pos = request.pos;
         self.generation_state = Some(state);
+        self.running_generation = None;
+        self.active_generation.remove(&pos);
         self.generation_dispatcher.release(pos, false, None);
         self.generation_dispatcher.complete_batch();
         if request.cancelled.load(Ordering::Relaxed) {
             return Ok(());
         }
-        self.active_generation.remove(&pos);
         if result.is_err() {
             self.failed_generation.push(pos);
         }
@@ -985,7 +994,7 @@ impl World {
     }
     pub fn schedule_unload(
         &mut self,
-        level: &Level,
+        level: &mut Level,
         pos: ChunkPos,
         epoch: u64,
         game_time: i64,
@@ -993,7 +1002,18 @@ impl World {
         if self.generation_pins(pos) || self.unloading.iter().any(|job| job.pos == pos) {
             return Ok(());
         }
-        let snapshot = self.capture_chunk(level, pos, game_time)?;
+        level
+            .try_mark_chunk_saved(pos)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let snapshot = match self.capture_chunk(level, pos, game_time) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                level
+                    .mark_chunk_unsaved(pos)
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                return Err(error);
+            }
+        };
         let registry = self.registry.clone();
         let io = self.io.clone();
         let saving = self.saving.submit(move || -> Result<()> {
@@ -1003,14 +1023,13 @@ impl World {
         self.unloading.push_back(ChunkUnload { pos, epoch, saving });
         Ok(())
     }
-    pub fn poll_unloads(&mut self) -> Result<Vec<(ChunkPos, u64)>> {
+    pub fn poll_unloads(&mut self) -> Result<Vec<(ChunkPos, u64, Result<()>)>> {
         let mut done = Vec::new();
         while let Some(job) = self.unloading.front_mut() {
             match job.saving.try_recv() {
                 Ok(result) => {
-                    result?;
                     let job = self.unloading.pop_front().unwrap();
-                    done.push((job.pos, job.epoch));
+                    done.push((job.pos, job.epoch, result));
                 }
                 Err(oneshot::error::TryRecvError::Empty) => break,
                 Err(error) => return Err(error.into()),

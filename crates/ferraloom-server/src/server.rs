@@ -1168,6 +1168,8 @@ impl MinecraftServer {
         let completed = self.world.poll_terrain();
         for pos in &self.world.failed_generation {
             self.level.distance_manager.complete_player_loading(*pos);
+            self.player_loading_futures
+                .retain(|&(waiting, _)| waiting != *pos);
         }
         self.world.failed_generation.clear();
         let completed = completed?;
@@ -1254,7 +1256,14 @@ impl MinecraftServer {
                 self.world.ready.insert(pos);
             }
         }
-        for (pos, epoch) in self.world.poll_unloads()? {
+        for (pos, epoch, result) in self.world.poll_unloads()? {
+            if let Err(error) = result {
+                self.level
+                    .level
+                    .mark_chunk_unsaved(pos)
+                    .map_err(game_error)?;
+                return Err(error);
+            }
             let eligible = self
                 .level
                 .chunks
@@ -1262,6 +1271,11 @@ impl MinecraftServer {
                 .get(&pos.pack())
                 .is_some_and(|holder| holder.ticket_level > 44 && holder.epoch == epoch);
             if eligible
+                && self
+                    .level
+                    .level
+                    .chunk(pos)
+                    .is_some_and(|chunk| !chunk.is_unsaved())
                 && !self.world.generation_pins(pos)
                 && self.level.chunks.remove_unloaded_holder(pos).is_some()
             {
@@ -1271,9 +1285,12 @@ impl MinecraftServer {
         }
         for pos in self.level.chunks.holder_positions().collect::<Vec<_>>() {
             let holder = &self.level.chunks.holders[&pos.pack()];
-            if holder.ticket_level > 44 && self.level.level.chunk(pos).is_some() {
+            if holder.ticket_level > 44
+                && self.world.light_ready.contains(&pos)
+                && self.level.level.chunk(pos).is_some()
+            {
                 self.world.schedule_unload(
-                    &self.level.level,
+                    &mut self.level.level,
                     pos,
                     holder.epoch,
                     self.level.game_time,

@@ -1,7 +1,10 @@
 //! Run the live status executor against the committed normal-world oracles.
 use super::generation::*;
+use crate::{jobs::JobPool, world::RegistryAdapter};
 use ferraloom_data::datapack::{Pack, ResourceManager};
-use ferraloom_game::level::generation::{ChunkPyramid, WorldGenContext};
+use ferraloom_game::level::generation::{ChunkPyramid, ChunkStatus, WorldGenContext};
+use ferraloom_storage::{self as storage, IoWorker};
+use ferraloom_util::ChunkPos;
 use ferraloom_worldgen::{
     generator::{ChunkGenerator, GenerationData},
     settings::DimensionType,
@@ -74,7 +77,11 @@ fn live_structure_start_executor_matches_6534_vanilla_chunks() {
                     "seed {seed} {pos:?}"
                 );
                 for start in expected["starts"].as_array().unwrap() {
-                    let id = start["structure"].as_str().unwrap().parse().unwrap();
+                    let id = start["structure"]
+                        .as_str()
+                        .unwrap()
+                        .parse::<ferraloom_worldgen::Identifier>()
+                        .unwrap();
                     let actual = chunks[0].structures.starts[&id].to_nbt(pos).unwrap();
                     let expected =
                         ferraloom_nbt::parse_compound(start["nbt"].as_str().unwrap()).unwrap();
@@ -210,4 +217,96 @@ fn twenty_full_feature_chunks_match_vanilla_blocks_and_structure_nbt() {
         }
     }
     assert_eq!(count, 20);
+}
+
+#[test]
+fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays() {
+    let resources = resources();
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let generator=Arc::new(ChunkGenerator::decode(&serde_json::json!({"type":"minecraft:flat","settings":{"layers":[{"height":1,"block":"minecraft:bedrock"},{"height":3,"block":"minecraft:stone"}],"biome":"minecraft:plains","features":false,"lakes":false,"structure_overrides":[]}}),&resources,data,8675309).unwrap());
+    let dimension = DimensionType::decode(
+        &resources
+            .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
+            .unwrap()
+            .json()
+            .unwrap(),
+    )
+    .unwrap();
+    let context =
+        Arc::new(WorldGenContext::load(&resources, generator, dimension, 8675309, true).unwrap());
+    let registry =
+        RegistryAdapter::new(&crate::registries::RegistrySet::load(&resources).unwrap()).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let mut io =
+        IoWorker::new(directory.path(), storage::RegionFileVersion::Deflate, false).unwrap();
+    let light = Arc::new(JobPool::new("resume-light", 1).unwrap());
+    let pos = ChunkPos::new(-2, 3);
+    let mut original = GenerationState::new(context.clone(), light.clone());
+    let full = original
+        .generate(0, pos, ChunkStatus::Full, &registry, &io, None)
+        .unwrap();
+    for (neighbor, disk) in &full.neighbors {
+        io.store(*neighbor, Some(disk.write().unwrap()))
+            .wait()
+            .unwrap();
+    }
+    for status in [
+        ChunkStatus::Terrain,
+        ChunkStatus::InitializeLight,
+        ChunkStatus::Full,
+    ] {
+        let mut disk = full.terrain.disk.clone();
+        disk.status = Some(ferraloom_game::level::generation::status_name(status).into());
+        disk.block_ticks = Some(vec![storage::SavedTick {
+            id: Some("minecraft:stone".into()),
+            x: Some(pos.x * 16 + 1),
+            y: Some(-62),
+            z: Some(pos.z * 16 + 1),
+            delay: Some(17),
+            priority: Some(-2),
+            ..Default::default()
+        }]);
+        let entity = ferraloom_nbt::parse_compound(
+            "{id:\"minecraft:chest\",x:-31,y:-60,z:49,custom:[B;1b,-1b],unknown:-0.0f}",
+        )
+        .unwrap();
+        disk.block_entities = Some(vec![entity.clone()]);
+        disk.extra
+            .insert("future_field", ferraloom_nbt::Tag::Long(42));
+        io.store(pos, Some(disk.write().unwrap())).wait().unwrap();
+        let mut reloaded = GenerationState::new(context.clone(), light.clone());
+        let actual = reloaded
+            .generate(1, pos, ChunkStatus::Full, &registry, &io, None)
+            .unwrap();
+        assert_eq!(
+            actual
+                .terrain
+                .disk
+                .status
+                .as_ref()
+                .unwrap()
+                .to_string_lossy(),
+            "minecraft:full"
+        );
+        assert_eq!(
+            actual.terrain.disk.block_entities.as_deref(),
+            Some(&[entity][..])
+        );
+        let tick = &actual.terrain.disk.block_ticks.as_ref().unwrap()[0];
+        assert_eq!((tick.delay, tick.priority), (Some(17), Some(-2)));
+        assert_eq!(actual.terrain.disk.extra.get_long("future_field"), Some(42));
+        assert_eq!(actual.terrain.disk.heightmaps.as_ref().unwrap().len(), 4);
+        for (expected, actual) in full.terrain.sections.iter().zip(&actual.terrain.sections) {
+            for index in 0..4096 {
+                let x = (index & 15) as u8;
+                let y = (index >> 8) as u8;
+                let z = ((index >> 4) & 15) as u8;
+                assert_eq!(
+                    expected.get_block_state(x, y, z),
+                    actual.get_block_state(x, y, z)
+                );
+            }
+        }
+    }
+    io.close().unwrap();
 }
