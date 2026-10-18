@@ -36,7 +36,8 @@ use ferraloom_game::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
         chunk_map::PlayerChunkSender,
-        distance_manager::tracking_view,
+        distance_manager::{FullChunkStatus, tracking_view},
+        entity::Visibility,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -1012,7 +1013,7 @@ impl MinecraftServer {
                         pos: event.pos,
                         b0: event.param_a as u8,
                         b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.id())),
+                        block: BlockId(i32::from(event.block.protocol_id())),
                     });
                     for &connection in &self.players {
                         let c = &self.connections[&connection];
