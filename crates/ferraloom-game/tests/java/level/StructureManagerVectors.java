@@ -47,7 +47,9 @@ class StructureManagerVectors {
         }
         var refs=new LongOpenHashSet(sources);
         level.getChunk(0,0,ChunkStatus.FULL,true).setAllReferences(Map.of(structure,refs));
-        System.out.println("VECTOR\trefs\t"+String.join(",",refs.longStream().mapToObj(Long::toString).toList()));
+        var referenceOrder=new ArrayList<String>();
+        var iterator=refs.iterator(); while(iterator.hasNext()) referenceOrder.add(Long.toString(iterator.nextLong()));
+        System.out.println("VECTOR\trefs\t"+String.join(",",referenceOrder));
         System.out.println("VECTOR\tstarts\t"+String.join(",",manager.startsForStructure(0,0,structure).stream().map(s->""+s.getReferences()).toList()));
         System.out.println("VECTOR\tstart-nbt\t"+start(structure,0,0,10,true).createTag(net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext.fromLevel(level),new ChunkPos(0,0)));
         var direct=HolderSet.direct(holder);
