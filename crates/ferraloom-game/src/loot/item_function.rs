@@ -4,6 +4,7 @@ use super::{
 };
 use ferraloom_data::Item;
 use ferraloom_protocol::component::*;
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -82,7 +83,7 @@ impl ItemFunction {
                 };
                 for modifier in modifiers {
                     let slot = modifier.slots
-                        [c.random.next_int_bound(modifier.slots.len() as i32) as usize];
+                        [c.random().next_int_bound(modifier.slots.len() as i32) as usize];
                     let amount = f64::from(modifier.amount.get(data, c)?);
                     value.retain(|v: &AttributeEntry| {
                         !(v.attribute == modifier.attribute && v.modifier.id == modifier.id)
@@ -109,7 +110,7 @@ impl ItemFunction {
                         .as_ref()
                         .is_some_and(|s| s.item == Item::PLAYER_HEAD)
                     && let Some(entity) = c.params.entity(*target)
-                    && let Some(profile) = c.facts.player_profile(entity)?
+                    && let Some(profile) = c.facts().player_profile(entity)?
                 {
                     stack
                         .0
@@ -150,7 +151,7 @@ impl ItemFunction {
                     add(*rgb);
                 }
                 for _ in 0..rolls {
-                    add(COLORS[c.random.next_int_bound(16) as usize]);
+                    add(COLORS[c.random().next_int_bound(16) as usize]);
                 }
                 red /= count;
                 green /= count;
