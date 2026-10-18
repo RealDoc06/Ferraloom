@@ -27,8 +27,8 @@ feature, structure piece or structure afterPlace callback requires unported beha
 Warn abandons only that unit, retaining partial writes and continuing to FULL.
 Each (unit, behavior) is logged once, and every abandonment increments
 the shared skip counter. Warn worlds therefore do not have vanilla generation
-parity. Lit proto mutation still needs the relight bridge; block-entity factories,
-UpgradeData and initial mob spawning remain pending. Generation jobs own their
+parity. Lit proto mutation still needs the relight bridge; unsupported block-entity
+factories, UpgradeData and initial mob spawning remain pending. Generation jobs own their
 neighborhoods and integrate in request order. Overlapping feature jobs follow
 vanilla's X-major layer traversal; vanilla's concurrent overlapping writes and
 JVM identity-based cross-structure Beardifier iteration can themselves vary.
