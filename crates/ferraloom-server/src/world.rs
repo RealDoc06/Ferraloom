@@ -728,19 +728,55 @@ impl World {
             pos: terrain.pos,
             sections: terrain.sections.clone(),
         })?;
+        let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections);
+        chunk.set_inhabited_time(terrain.disk.inhabited_time.unwrap_or(0));
+        chunk
+            .load_saved_ticks(&terrain.disk)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         self.saved.insert(terrain.pos.pack(), terrain.disk);
-        Ok(LevelChunk::from_sections(terrain.pos, -4, terrain.sections))
+        Ok(chunk)
     }
     /// Capture owned sections here; palette/NBT encoding runs in the save pool.
-    pub fn capture_chunk(&self, chunk: &LevelChunk, game_time: i64) -> ChunkSaveSnapshot {
-        ChunkSaveSnapshot {
-            pos: chunk.pos(),
-            sections: chunk.sections().cloned().collect(),
-            disk: self.saved[&chunk.pos().pack()].clone(),
-            light: self.lights.get(&chunk.pos().pack()).cloned(),
-            game_time,
-            light_correct: self.ready.contains(&chunk.pos()),
+    pub fn capture_chunk(
+        &self,
+        level: &Level,
+        pos: ChunkPos,
+        game_time: i64,
+    ) -> Result<ChunkSaveSnapshot> {
+        let chunk = level.chunk(pos).context("save of missing full chunk")?;
+        let mut disk = self.saved[&pos.pack()].clone();
+        level
+            .save_chunk_ticks(pos, &mut disk)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        disk.inhabited_time = Some(chunk.inhabited_time());
+        let maps = disk.heightmaps.get_or_insert_with(BTreeMap::new);
+        use ferraloom_game::level::heightmap::Heightmap;
+        for (map, name) in [
+            (Heightmap::WorldSurface, "WORLD_SURFACE"),
+            (Heightmap::OceanFloor, "OCEAN_FLOOR"),
+            (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
+            (
+                Heightmap::MotionBlockingNoLeaves,
+                "MOTION_BLOCKING_NO_LEAVES",
+            ),
+        ] {
+            maps.insert(
+                name.into(),
+                LongArray(heightmap(
+                    chunk
+                        .heightmap(map)
+                        .context("full chunk heightmaps not primed")?,
+                )),
+            );
         }
+        Ok(ChunkSaveSnapshot {
+            pos,
+            sections: chunk.sections().cloned().collect(),
+            disk,
+            light: self.lights.get(&pos.pack()).cloned(),
+            game_time,
+            light_correct: self.ready.contains(&pos),
+        })
     }
     pub async fn encode_saves(
         &self,
@@ -866,10 +902,6 @@ impl ChunkSaveSnapshot {
         self.disk.sections = Some(sections);
         self.disk.last_update = Some(self.game_time);
         self.disk.is_light_on = Some(self.light_correct);
-        let surface = LongArray(heightmap(&surface_heights(&self.sections)));
-        let maps = self.disk.heightmaps.get_or_insert_with(BTreeMap::new);
-        maps.insert("WORLD_SURFACE".into(), surface.clone());
-        maps.insert("MOTION_BLOCKING".into(), surface);
         Ok(self.disk.write()?)
     }
 }

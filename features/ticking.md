@@ -4,6 +4,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
+| ticking.runtime.chunk-state | Load and save registered block/fluid tick queues and inhabited time, prime and serialize all four live heightmaps | `SerializableChunkData; LevelChunk; Heightmap` | `level::tests::saved_ticks; level::tests::heightmaps` | pass | partial |
 | ticking.chunks.player-loading | Radius-32 player ticket tracker and four-slot, four-priority loading dispatcher, including cancellation and reprioritization | `DistanceManager.PlayerTicketTracker; ThrottlingChunkTaskDispatcher; ChunkTaskPriorityQueue` | `chunk_task_dispatcher::tests::native_player_loading_order_throttles_four_slots_and_cancels_moved_tickets` | pass | partial |
 | ticking.runtime.entity-storage | Route entity region IO separately, integrate responses at entity management and synchronize save-all | `ServerLevel#tick; PersistentEntitySectionManager; EntityStorage` | `world::entity_io_tests::entity_region_worker_routes_loads_writes_and_deletions` | - | partial |
 | ticking.server.packet-phase | Process queued packets before the server tick | `MinecraftServer#processPacketsAndTick` | | - | todo |

@@ -10,7 +10,7 @@ use crate::{
     network::{self, ConnectionId, Incoming, Ingress, OutboundBatch, Outgoing},
     properties::{self, ServerProperties},
     registries::{RegistrySet, core_pack, id},
-    world::{ChunkLight, World, heightmap, surface_heights},
+    world::{ChunkLight, World, heightmap},
 };
 use anyhow::{Context, Result, bail, ensure};
 use ferraloom_data::{
@@ -824,6 +824,10 @@ impl MinecraftServer {
                 .add_chunk(chunk)
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             self.level
+                .level
+                .prime_chunk_heightmaps(pos)
+                .map_err(game_error)?;
+            self.level
                 .chunks
                 .holders
                 .get_mut(&pos.pack())
@@ -1575,7 +1579,7 @@ impl MinecraftServer {
                     .level
                     .chunk(pos)
                     .context("ready chunk not owned")?;
-                let heights = surface_heights(&chunk.sections().cloned().collect::<Vec<_>>());
+                use ferraloom_game::level::heightmap::Heightmap as LiveHeightmap;
                 packets.push(cb::Packet::LevelChunkWithLight(cb::LevelChunkWithLight {
                     x: pos.x,
                     z: pos.z,
@@ -1583,11 +1587,19 @@ impl MinecraftServer {
                         heightmaps: vec![
                             Heightmap {
                                 kind: HeightmapType::WorldSurface,
-                                data: heightmap(&heights),
+                                data: heightmap(
+                                    chunk
+                                        .heightmap(LiveHeightmap::WorldSurface)
+                                        .context("unprimed world surface")?,
+                                ),
                             },
                             Heightmap {
                                 kind: HeightmapType::MotionBlocking,
-                                data: heightmap(&heights),
+                                data: heightmap(
+                                    chunk
+                                        .heightmap(LiveHeightmap::MotionBlocking)
+                                        .context("unprimed motion blocking")?,
+                                ),
                             },
                         ],
                         sections: chunk.sections().map(LevelChunkSectionData::from).collect(),
@@ -1948,8 +1960,11 @@ impl MinecraftServer {
             .holders
             .values()
             .filter_map(|holder| self.level.level.chunk(holder.position))
-            .map(|chunk| self.world.capture_chunk(chunk, self.level.game_time))
-            .collect();
+            .map(|chunk| {
+                self.world
+                    .capture_chunk(&self.level.level, chunk.pos(), self.level.game_time)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let encoded = self.world.encode_saves(snapshots).await?;
         for (pos, tag) in encoded {
             self.world.io.store(pos, Some(tag)).await?;

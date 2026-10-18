@@ -91,6 +91,12 @@ impl LevelChunk {
             .get(index)
             .map(|s| s.as_ref().unwrap_or(&self.empty_section))
     }
+    pub fn ticking_ready(&self) -> bool {
+        self.ticking_ready
+    }
+    pub fn heightmap(&self, map: Heightmap) -> Option<&[i32; 256]> {
+        self.heightmaps.as_ref().map(|maps| &maps[map as usize])
+    }
     pub fn height_at(&self, map: Heightmap, x: u8, z: u8) -> Option<i32> {
         self.heightmaps
             .as_ref()

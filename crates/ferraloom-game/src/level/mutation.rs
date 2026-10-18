@@ -20,6 +20,21 @@ impl Level {
     pub fn rules_mut(&mut self) -> &mut LevelRules {
         &mut self.region_mut().rules
     }
+    /// Install LevelChunk's four live heightmaps when a full chunk enters the
+    /// simulation. Raw section writes remain a storage-only operation.
+    pub fn prime_chunk_heightmaps(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        let tags = self
+            .region()
+            .tags
+            .clone()
+            .ok_or(LevelError::MissingBlockTags)?;
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?
+            .prime_heightmaps(&tags);
+        Ok(())
+    }
     pub fn set_block_tags(&mut self, tags: Arc<TagSet<Block>>) {
         self.region_mut().tags = Some(tags);
     }
