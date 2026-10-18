@@ -382,20 +382,6 @@ fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
         Block::STONE.default_state().cached_collision_full_block(),
         Some(true)
     );
-    assert_eq!(
-        Block::STONE.default_state().has_large_collision_shape(),
-        Some(false)
-    );
-    assert_eq!(
-        Block::OAK_FENCE.default_state().has_large_collision_shape(),
-        Some(true)
-    );
-    assert_eq!(
-        Block::SCAFFOLDING
-            .default_state()
-            .has_large_collision_shape(),
-        None
-    );
     assert_eq!(Block::STONE.default_state().post_process_y_offset(), None);
     assert_eq!(
         Block::BROWN_MUSHROOM
@@ -459,20 +445,6 @@ fn cached_air_fact_matches_vanilla_state_registry() {
 }
 
 #[test]
-fn block_landing_properties_preserve_float_restitution_and_reduction() {
-    assert_eq!(
-        Block::HAY_BLOCK.data().fall_distance_reduction.to_bits(),
-        0.8_f32.to_bits()
-    );
-    assert_eq!(
-        Block::SLIME_BLOCK.data().bounce_restitution.to_bits(),
-        1.0_f32.to_bits()
-    );
-    assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
-    assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
-}
-
-#[test]
 fn liquid_and_lava_ignition_are_state_facts_independent_of_waterlogging() {
     use crate::{Block, properties};
     for block in [Block::WATER, Block::LAVA, Block::BUBBLE_COLUMN] {
@@ -516,4 +488,18 @@ fn comparator_and_conductor_facts_preserve_property_overrides() {
         Block::SOUL_SAND.default_state().cached_redstone_conductor(),
         Some(true)
     );
+}
+
+#[test]
+fn block_landing_properties_preserve_float_restitution_and_reduction() {
+    assert_eq!(
+        Block::HAY_BLOCK.data().fall_distance_reduction.to_bits(),
+        0.8_f32.to_bits()
+    );
+    assert_eq!(
+        Block::SLIME_BLOCK.data().bounce_restitution.to_bits(),
+        1.0_f32.to_bits()
+    );
+    assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
+    assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
 }

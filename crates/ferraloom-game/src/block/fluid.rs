@@ -651,6 +651,41 @@ impl LiquidBlock {
     }
 }
 impl BlockBehavior for LiquidBlock {
+    fn collision_shape(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        context: &super::BlockCollisionContext<'_>,
+        _level: &super::LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        use ferraloom_util::shapes::CollisionContext;
+        if context.always_collide_with_fluid() {
+            return Ok(ferraloom_util::shapes::block());
+        }
+        if state.get(properties::LEVEL) != Some(0) {
+            return Ok(ferraloom_util::shapes::empty());
+        }
+        match context {
+            // LiquidBlock consults LivingEntity#getLiquidCollisionShape, which
+            // is empty in the base class. Specialized fluid-walking entities
+            // supply a nonempty shape in their separate behavior port.
+            super::BlockCollisionContext::Empty(_) | super::BlockCollisionContext::Position(_) => {
+                Ok(ferraloom_util::shapes::empty())
+            }
+            super::BlockCollisionContext::Entity(_) => Err(LevelError::UnsupportedBlockMethod(
+                state.block(),
+                super::BlockMethod::CollisionShape,
+            )),
+        }
+    }
+    fn shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &super::LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
+    }
     fn entity_inside(
         &self,
         state: BlockState,

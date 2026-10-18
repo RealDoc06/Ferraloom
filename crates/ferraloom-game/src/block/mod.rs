@@ -6,6 +6,8 @@ pub mod dispatch;
 pub mod flags;
 pub mod fluid;
 mod foundational;
+mod shapes;
+pub use shapes::BlockCollisionContext;
 mod unsupported;
 pub use flags::{UPDATE_LIMIT, UpdateFlags};
 pub(crate) use unsupported::UnportedCalls;
@@ -92,6 +94,41 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getCollisionShape for registered base families.
+    /// Dynamic overrides must implement this method; no extracted baseline is
+    /// treated as a live contextual answer.
+    fn collision_shape(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        _context: &BlockCollisionContext<'_>,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        if state.cached_collision_full_block().is_some() {
+            Ok(state.cached_shapes().collision.get().clone())
+        } else {
+            Err(LevelError::UnsupportedShape(state))
+        }
+    }
+    fn shape(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        state
+            .shape()
+            .cloned()
+            .ok_or(LevelError::UnsupportedShape(state))
+    }
+    fn support_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        self.collision_shape(state, pos, &BlockCollisionContext::empty(), level)
+    }
     fn on_place(
         &self,
         _state: BlockState,
@@ -178,21 +215,21 @@ pub trait BlockBehavior: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
-    /// Port of Block#fallOn. The entity fall-damage virtual and extracted
-    /// fall-distance reduction arrive with entity-core; until then this
-    /// required effect is explicit rather than silently losing damage.
+    /// Port of Block#fallOn, preserving the f32 reduction before multiplying
+    /// fall distance in f64 and dispatching to the canonical entity behavior.
     fn fall_on(
         &self,
         state: BlockState,
         _pos: BlockPos,
-        _entity: crate::entity::EntityRef,
-        _fall_distance: f64,
-        _level: &mut Level,
+        entity: crate::entity::EntityRef,
+        fall_distance: f64,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            BlockMethod::FallOn,
-        ))
+        let reduced =
+            fall_distance * f64::from(1.0_f32 - state.block().data().fall_distance_reduction);
+        let behavior = level.entity_behavior(entity)?;
+        behavior.cause_fall_damage(entity, level, reduced, 1.0)?;
+        Ok(())
     }
     /// Port of Block#stepOn's base no-op.
     fn step_on(
