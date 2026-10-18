@@ -116,6 +116,17 @@ impl PredicateContext for Level {
     fn biome(&self, pos: BlockPos) -> Result<Identifier> {
         identifier(self.biome_at(pos).map_err(required)?)
     }
+    fn in_structure(
+        &self,
+        pos: BlockPos,
+        set: &ferraloom_protocol::codec::HolderSet,
+    ) -> Result<bool> {
+        Ok(self
+            .structure_manager()
+            .get_structure_with_piece_at_in(pos, set)
+            .map_err(required)?
+            .is_some())
+    }
     fn light(&self, pos: BlockPos) -> Result<i32> {
         self.max_local_raw_brightness(pos).map_err(required)
     }
