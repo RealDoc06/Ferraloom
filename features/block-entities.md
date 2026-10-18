@@ -7,7 +7,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | block-entities.lifecycle.type-validation | Validate block-entity type against its block state before ticking | `BlockEntityType#isValid; LevelChunk` | | - | todo |
 | block-entities.lifecycle.load-save | Round-trip custom block-entity data, components and update tags | `BlockEntity#loadWithComponents; BlockEntity#saveWithFullMetadata` | | - | todo |
 | block-entities.lifecycle.remove-ticker | Remove invalid tickers and prevent removed block entities from ticking | `Level#tickBlockEntities; LevelChunk` | | - | todo |
-| block-entities.furnace.progress-fuel | Consume fuel and ingredients, complete smelting and persist burn and cooking progress | `AbstractFurnaceBlockEntity#serverTick` | | - | todo |
+| block-entities.furnace.progress-fuel | Consume fuel and ingredients, complete smelting and persist burn and cooking progress | `AbstractFurnaceBlockEntity#serverTick` | `cooking_timeline_relights_and_preserves_missing_recipe_timer`; `cooking_time_float_order_matches_native` (30 Java cases); live parity pending | pass | partial |
 | block-entities.furnace.experience | Track recipe usage and award smelting experience when output is taken | `AbstractFurnaceBlockEntity; FurnaceResultSlot` | | - | todo |
 | block-entities.brewing.bottles | Resolve brewing ingredients, fuel and bottle transformations with interruption rules | `BrewingStandBlockEntity#serverTick; BrewingRecipe; RecipeManager` | | - | todo |
 | block-entities.chest.double | Combine paired chest inventories and opener counts while respecting blocked lids | `ChestBlock; ChestBlockEntity` | | - | todo |

@@ -114,6 +114,12 @@ impl AbstractFurnaceBlockEntity {
 pub struct FurnaceBehavior;
 pub static FURNACE_ENTITY: FurnaceBehavior = FurnaceBehavior;
 impl BlockEntity for FurnaceBehavior {
+    fn has_server_ticker(&self) -> bool {
+        true
+    }
+    fn tick(&self, handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        super::furnace_tick::server_tick(handle, level)
+    }
     fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
         for key in ["CustomName", "lock", "Items"] {
             tag.remove(key);

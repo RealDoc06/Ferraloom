@@ -47,6 +47,36 @@ registry	minecraft:test_block	minecraft:test_block
 registry	minecraft:test_instance_block	minecraft:test_instance_block
 registry	minecraft:copper_golem_statue	minecraft:copper_golem_statue,minecraft:exposed_copper_golem_statue,minecraft:weathered_copper_golem_statue,minecraft:oxidized_copper_golem_statue,minecraft:waxed_copper_golem_statue,minecraft:waxed_exposed_copper_golem_statue,minecraft:waxed_weathered_copper_golem_statue,minecraft:waxed_oxidized_copper_golem_statue
 registry	minecraft:potent_sulfur	minecraft:potent_sulfur
+cook-time	bf800000	1	1
+cook-time	bf800000	7	7
+cook-time	bf800000	100	100
+cook-time	bf800000	200	200
+cook-time	bf800000	2147483647	2147483647
+cook-time	0	1	1
+cook-time	0	7	7
+cook-time	0	100	100
+cook-time	0	200	200
+cook-time	0	2147483647	2147483647
+cook-time	3f000000	1	2
+cook-time	3f000000	7	14
+cook-time	3f000000	100	200
+cook-time	3f000000	200	400
+cook-time	3f000000	2147483647	2147483647
+cook-time	3f800000	1	1
+cook-time	3f800000	7	7
+cook-time	3f800000	100	100
+cook-time	3f800000	200	200
+cook-time	3f800000	2147483647	2147483647
+cook-time	3fc00000	1	1
+cook-time	3fc00000	7	5
+cook-time	3fc00000	100	67
+cook-time	3fc00000	200	134
+cook-time	3fc00000	2147483647	1431655808
+cook-time	40447ae1	1	1
+cook-time	40447ae1	7	3
+cook-time	40447ae1	100	33
+cook-time	40447ae1	200	66
+cook-time	40447ae1	2147483647	699506112
 sided-slots	minecraft:furnace	down	[2, 1]
 sided-rule	minecraft:furnace	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
 sided-rule	minecraft:furnace	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
