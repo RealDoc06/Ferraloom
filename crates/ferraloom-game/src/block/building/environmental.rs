@@ -4,15 +4,19 @@ use crate::{
         BlockBehavior, BlockMethod, BlockPlaceContext, LevelAccessRef, LevelReaderRef,
         entity::{BlockEntityData, BlockEntityType},
     },
-    level::{LevelError, environment::EnvironmentAttributes},
+    level::{LevelError, environment::AttributeKey},
 };
 use ferraloom_data::{
-    Block, BlockClass as C, BlockState, properties as p, registries::fluid::Id as Fluid,
+    Block, BlockClass as C, BlockState, properties as p,
+    registries::{environment_attribute::Id as EnvironmentAttribute, fluid::Id as Fluid},
     tags::BlockTags,
 };
 use ferraloom_util::{Axis, BlockPos, Direction};
 pub(super) struct Environmental;
 pub(super) static ENVIRONMENTAL: Environmental = Environmental;
+/// Native EnvironmentAttributes.CREAKING_ACTIVE, using its extracted registry ID.
+const CREAKING_ACTIVE: AttributeKey<bool> =
+    AttributeKey::new(EnvironmentAttribute::GAMEPLAY_CREAKING_ACTIVE);
 pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
     matches!(block.class(), C::CreakingHeartBlock | C::PotentSulfurBlock)
         && matches!(
@@ -50,7 +54,7 @@ fn heart(
             return Ok(state);
         }
     }
-    let active = level.get_value(EnvironmentAttributes::CREAKING_ACTIVE, pos)?;
+    let active = level.get_value(CREAKING_ACTIVE, pos)?;
     Ok(state
         .with(
             p::CREAKING_HEART_STATE,
