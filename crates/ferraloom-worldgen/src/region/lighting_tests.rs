@@ -271,3 +271,72 @@ fn raw_bulk_then_checked_write_keeps_canonical_sources_when_light_is_drained() {
         Block::STONE.default_state()
     );
 }
+
+#[test]
+fn full_snapshot_refresh_preserves_canonical_sources_and_pending_payload() {
+    let mut original = generated([0, 0]);
+    original.set_block(8, -1, 8, Block::STONE.default_state());
+    original.post_processing.push([8, -1, 8]);
+    let mut chunks = [RegionChunk::new(original, ChunkStatus::Full)];
+    chunks[0].initialize_light_sources();
+    let sources = chunks[0].sky_light_sources().clone();
+    assert_eq!(sources.lowest_source_y(8, 8), 0);
+    let payload: CompoundTag = [("marker", Tag::Int(1))].into_iter().collect();
+    chunks[0].block_entities.insert([8, 0, 8], payload.clone());
+    chunks[0].entities.push(payload.clone());
+    chunks[0].block_ticks.schedule(SavedTick {
+        position: [8, -1, 8],
+        kind: Block::STONE,
+        priority: 1,
+    });
+    chunks[0].fluid_ticks.schedule(SavedTick {
+        position: [8, 0, 8],
+        kind: ferraloom_data::registries::fluid::Id::WATER,
+        priority: 2,
+    });
+    chunks[0].poi_changes.push((
+        [8, 0, 8],
+        Block::AIR.default_state(),
+        Block::STONE.default_state(),
+    ));
+    chunks[0].structures.references.insert(
+        "minecraft:mineshaft".parse().unwrap(),
+        crate::structure::references::StructureReferences::from_array(&[
+            ChunkPos::new(1, 0).to_long()
+        ]),
+    );
+    let structures = chunks[0].structures.to_nbt().unwrap();
+    {
+        let region = view(&mut chunks, [0, 0]);
+        for map in Heightmap::ALL {
+            assert_eq!(region.height_at(map, 8, 8).unwrap(), 0);
+        }
+    }
+    let mut updated = chunks[0].chunk.clone();
+    updated.set_block(8, 15, 8, Block::STONE.default_state());
+    updated.post_processing.clear();
+    chunks[0].refresh_full_snapshot(updated);
+    assert_eq!(chunks[0].sky_light_sources(), &sources);
+    assert_eq!(chunks[0].chunk.post_processing, [[8, -1, 8]]);
+    assert_eq!(chunks[0].status, ChunkStatus::Full);
+    assert_eq!(chunks[0].block_entities[&[8, 0, 8]], payload);
+    assert_eq!(chunks[0].entities, [payload]);
+    assert_eq!(chunks[0].block_ticks.ticks()[0].priority, 1);
+    assert_eq!(chunks[0].fluid_ticks.ticks()[0].priority, 2);
+    assert_eq!(chunks[0].poi_changes.len(), 1);
+    assert_eq!(chunks[0].structures.to_nbt().unwrap(), structures);
+    for map in Heightmap::ALL {
+        if matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg) {
+            assert_eq!(
+                chunks[0].heightmaps[map as usize].get().unwrap()[8 * 16 + 8],
+                16
+            );
+        } else {
+            assert!(chunks[0].heightmaps[map as usize].get().is_none());
+        }
+    }
+    let region = view(&mut chunks, [0, 0]);
+    for map in Heightmap::ALL {
+        assert_eq!(region.height_at(map, 8, 8).unwrap(), 16);
+    }
+}

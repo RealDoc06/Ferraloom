@@ -104,13 +104,7 @@ pub struct RegionChunk {
 }
 impl RegionChunk {
     pub fn new(chunk: GeneratedChunk, status: ChunkStatus) -> Self {
-        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
-        heightmaps[Heightmap::WorldSurfaceWg as usize]
-            .set(chunk.world_surface)
-            .unwrap();
-        heightmaps[Heightmap::OceanFloorWg as usize]
-            .set(chunk.ocean_floor)
-            .unwrap();
+        let heightmaps = Self::heightmap_caches(&chunk);
         Self {
             sky_light_sources: ferraloom_light::ChunkSkyLightSources::new(chunk.min_y),
             structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
@@ -123,6 +117,33 @@ impl RegionChunk {
             poi_changes: Vec::new(),
             heightmaps,
         }
+    }
+
+    /// Refresh the copied ImposterProtoChunk view of its live LevelChunk. Only
+    /// sections and heightmaps change: the canonical sky sources and pending
+    /// generation payload must survive, including intentionally stale sources.
+    pub fn refresh_full_snapshot(&mut self, chunk: GeneratedChunk) {
+        assert_eq!(self.status, ChunkStatus::Full);
+        assert_eq!(self.chunk.position, chunk.position);
+        assert_eq!(
+            (self.chunk.min_y, self.chunk.height),
+            (chunk.min_y, chunk.height)
+        );
+        self.heightmaps = Self::heightmap_caches(&chunk);
+        self.chunk.sections = chunk.sections;
+        self.chunk.world_surface = chunk.world_surface;
+        self.chunk.ocean_floor = chunk.ocean_floor;
+    }
+
+    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceCell<[i32; 256]>; 6] {
+        let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
+        heightmaps[Heightmap::WorldSurfaceWg as usize]
+            .set(chunk.world_surface)
+            .unwrap();
+        heightmaps[Heightmap::OceanFloorWg as usize]
+            .set(chunk.ocean_floor)
+            .unwrap();
+        heightmaps
     }
 }
 
