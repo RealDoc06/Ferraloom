@@ -429,7 +429,12 @@ impl FlowingFluid {
         } else {
             if !state.is_air() {
                 if self == Self::Water {
-                    level.emit(LevelEffect::DropResources { pos, state });
+                    let block_entity = if state.has_block_entity() {
+                        level.get_or_promote_block_entity(pos)?
+                    } else {
+                        None
+                    };
+                    crate::block::drops::drop_resources(state, pos, block_entity, level)?;
                 } else {
                     fizz(level, pos);
                 }

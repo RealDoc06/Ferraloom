@@ -80,3 +80,6 @@ pub(super) fn source_water(fluid: ferraloom_data::FluidState) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod fixtures;

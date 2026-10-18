@@ -234,7 +234,6 @@ struct PendingLevelHooks {
     custom_spawners: u64,
     poi: u64,
     navigation: u64,
-    drops: u64,
     particles: u64,
     game_events: u64,
 }
@@ -1143,7 +1142,6 @@ impl MinecraftServer {
                 }
                 LevelEffect::PoiChanged { .. } => self.pending_level_hooks.poi += 1,
                 LevelEffect::BlockUpdated { .. } => self.pending_level_hooks.navigation += 1,
-                LevelEffect::DropResources { .. } => self.pending_level_hooks.drops += 1,
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}

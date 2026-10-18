@@ -35,5 +35,8 @@ mod tests {
         assert!(Block::TRIPWIRE.overrides(BlockMethod::PlayerWillDestroy));
         assert!(!Block::REDSTONE_WIRE.overrides(BlockMethod::SpawnDestroyByEntityParticles));
         assert!(Block::FIRE.overrides(BlockMethod::SpawnDestroyByEntityParticles));
+        assert!(!Block::FIRE.overrides(BlockMethod::SpawnDestroyParticles));
+        assert!(!Block::STONE.overrides(BlockMethod::SpawnDestroyParticles));
+        assert!(Block::STRAW_BED.overrides(BlockMethod::SpawnDestroyParticles));
     }
 }

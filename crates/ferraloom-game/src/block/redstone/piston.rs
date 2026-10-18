@@ -243,7 +243,7 @@ use crate::{
         BlockBehavior, BlockMethod, UPDATE_LIMIT, UpdateFlags,
         entity::{BlockEntityData, BlockEntityDataView, BlockEntityState, BlockEntityType},
     },
-    level::{effects::LevelEffect, events::BlockEvent, redstone::Orientation},
+    level::{events::BlockEvent, redstone::Orientation},
 };
 use ferraloom_data::registries::{game_event::Id as GameEvent, sound_event::Id as SoundEvent};
 use ferraloom_protocol::play::SoundSource;
@@ -390,7 +390,12 @@ fn move_blocks(
     };
     for &pos in resolver.to_destroy.iter().rev() {
         let state = level.get_block_state(pos)?;
-        level.emit(LevelEffect::DropResources { pos, state });
+        let block_entity = if state.has_block_entity() {
+            level.get_or_promote_block_entity(pos)?
+        } else {
+            None
+        };
+        crate::block::drops::drop_resources(state, pos, block_entity, level)?;
         level.set_block(
             pos,
             Block::AIR.default_state(),
