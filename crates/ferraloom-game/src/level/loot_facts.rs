@@ -87,7 +87,7 @@ impl PredicateContext for Level {
         }
     }
     fn loaded(&self, pos: BlockPos) -> Result<bool> {
-        Ok(self.is_in_valid_bounds(pos) && self.chunk(ChunkPos::containing(pos)).is_some())
+        Ok(Level::is_loaded(self, pos))
     }
     fn block(&self, pos: BlockPos) -> Result<BlockState> {
         self.get_block_state(pos).map_err(required)

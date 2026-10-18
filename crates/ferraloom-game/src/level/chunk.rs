@@ -13,6 +13,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 /// Port of LevelChunk's section ownership. Absent sections use the supplied
 /// empty-section template, including the dimension's default biome registry.
 pub struct LevelChunk {
+    pub(super) publication_generation: u64,
     pos: ChunkPos,
     min_section: i32,
     sections: Vec<Option<LevelChunkSection>>,
@@ -46,6 +47,7 @@ impl LevelChunk {
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
         Self {
+            publication_generation: 0,
             pos,
             min_section: sections.start,
             sections: sections.map(|_| None).collect(),
@@ -80,6 +82,7 @@ impl LevelChunk {
         Self {
             pos,
             min_section,
+            publication_generation: 0,
             sections: sections.into_iter().map(Some).collect(),
             empty_section,
             heightmaps: None,

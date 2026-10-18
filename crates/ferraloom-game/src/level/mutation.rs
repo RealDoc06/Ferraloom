@@ -138,9 +138,7 @@ impl Level {
             return Ok(false);
         }
         let chunk_pos = ChunkPos::containing(pos);
-        let chunk = self
-            .chunk(chunk_pos)
-            .ok_or(LevelError::MissingChunk(chunk_pos))?;
+        let chunk = self.get_full_chunk(chunk_pos)?;
         if pos.y < chunk.min_y() || pos.y >= chunk.max_y() {
             return Ok(false);
         }

@@ -82,12 +82,55 @@ pub(super) struct BlockEntityRuntime {
     roots: HashMap<BlockEntityRef, usize>,
     pub(super) tickers: RefCell<BlockEntityTickers>,
 }
+impl super::chunk::LevelChunk {
+    /// Carry an already constructed proto receiver into FULL, before attachment.
+    /// Pending raw NBT stays separate and is not activated by this operation.
+    pub fn add_prepared_block_entity(&mut self, state: BlockEntityState) -> Result<(), LevelError> {
+        let data = state.data();
+        if self.publication_generation != 0 || data.generation != 0 {
+            return Err(LevelError::InvalidPendingGenerationData);
+        }
+        if !data.kind.is_valid(self.get_block_state(data.pos)) {
+            return Err(LevelError::UnsupportedBlockEntity(data.block_state.block()));
+        }
+        if self.block_entities.get(data.pos).is_some() {
+            return Err(LevelError::DuplicateBlockEntity(data.reference()));
+        }
+        self.block_entities.insert(state);
+        Ok(())
+    }
+}
+impl BlockEntityRuntime {
+    pub(super) fn register_published_chunk(&self, chunk: &mut super::chunk::LevelChunk) {
+        // Primitive map traversal and stateless has_server_ticker queries invoke
+        // no world callbacks. The cold metadata borrow ends before publication.
+        let mut tickers = self.tickers.borrow_mut();
+        for &index in chunk.block_entities.positions.values() {
+            let state = chunk.block_entities.slots[index].as_mut().unwrap();
+            let generation = self
+                .next_generation
+                .get()
+                .checked_add(1)
+                .expect("block entity generations exhausted");
+            self.next_generation.set(generation);
+            let data = state.data_mut();
+            data.generation = generation;
+            data.has_level = true;
+            data.removed = false;
+            let handle = data.reference();
+            let kind = data.kind;
+            if state.behavior().has_server_ticker() {
+                tickers.bind(handle, kind);
+            }
+        }
+    }
+}
 impl Level {
     /// Current positional receiver. Unactivated raw NBT is a required unsupported
     /// query in both policies, never an absent block entity.
     pub fn block_entity_ref(&self, pos: BlockPos) -> Result<Option<BlockEntityRef>, LevelError> {
         let key = ChunkPos::containing(pos);
-        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        let chunk = self.get_full_chunk(key)?;
         if let Some(state) = chunk.block_entities.get(pos) {
             return Ok(Some(state.data().reference()));
         }
