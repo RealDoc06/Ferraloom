@@ -14,6 +14,9 @@ mod connections;
 mod decorative;
 #[cfg(test)]
 mod decorative_tests;
+mod fire_powder;
+#[cfg(test)]
+mod fire_powder_tests;
 mod orientation;
 mod scaffolding;
 mod slab;
@@ -32,6 +35,9 @@ pub(crate) fn ported_behavior(
     }
     if decorative::supports(block, method) {
         return Some(&decorative::DECORATIVE);
+    }
+    if fire_powder::supports(block, method) {
+        return Some(&fire_powder::FIRE_POWDER);
     }
     if scaffolding::supports(block, method) {
         return Some(&scaffolding::SCAFFOLDING);
