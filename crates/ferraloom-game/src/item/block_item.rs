@@ -212,22 +212,26 @@ pub fn update_custom_block_entity_tag(
             "block entity item data is not a compound",
         ));
     };
-    let old = level
-        .block_entity_state(entity)?
-        .save_custom_only()
-        .map_err(|error| super::stack::item_data_error(item, error))?;
-    let mut merged = old.clone();
     // TypedEntityData strips its discriminator on construction; it is never
     // part of the loadCustomOnly payload, including on a direct wire input.
     let mut custom = custom.clone();
     custom.remove("id");
-    merged.merge(&custom);
-    if merged == old {
-        return Ok(false);
-    }
-    entity.load_custom_only(&merged, level)?;
-    entity.set_changed(level)?;
-    Ok(true)
+    level.with_block_entity_callback(entity, |level| {
+        let old = level
+            .block_entity_state(entity)?
+            .save_custom_only()
+            .map_err(|error| super::stack::item_data_error(item, error))?;
+        let mut merged = old.clone();
+        merged.merge(&custom);
+        if merged == old {
+            return Ok(false);
+        }
+        // Keep TypedEntityData's receiver rooted after the nested load callback
+        // returns, through the subsequent setChanged on that same generation.
+        entity.load_custom_only(&merged, level)?;
+        entity.set_changed(level)?;
+        Ok(true)
+    })
 }
 
 /// Port of BlockItem#updateBlockEntityComponents. Only immutable component values
