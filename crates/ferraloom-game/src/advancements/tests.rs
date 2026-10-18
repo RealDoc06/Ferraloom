@@ -724,7 +724,19 @@ fn vanilla_tree_parent_resolution_removal_and_clear() {
     );
     for row in fixture["steps"].as_array().unwrap() {
         let action = row["action"].as_str().unwrap();
-        if let Some(key) = action.strip_prefix("remove:") {
+        if action == "replace_root" {
+            let value = Advancement::decode(
+                &json!({"parent":"test:child","criteria":{"a":{"trigger":"tick"}}}),
+            )
+            .unwrap();
+            assert!(
+                tree.add_all(&[AdvancementHolder {
+                    id: id("test:root"),
+                    value
+                }])
+                .is_empty()
+            );
+        } else if let Some(key) = action.strip_prefix("remove:") {
             tree.remove(&[id(key)]);
         } else if action == "clear" {
             tree.clear();
@@ -749,5 +761,15 @@ fn vanilla_tree_parent_resolution_removal_and_clear() {
             })
             .collect();
         assert_eq!(Value::Object(children), row["children"]);
+        let roots: serde_json::Map<_, _> = tree
+            .nodes()
+            .map(|node| {
+                (
+                    node.holder.id.to_string(),
+                    json!(tree.root(&node.holder.id).unwrap().holder.id.to_string()),
+                )
+            })
+            .collect();
+        assert_eq!(Value::Object(roots), row["roots"]);
     }
 }

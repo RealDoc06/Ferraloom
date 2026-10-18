@@ -213,8 +213,9 @@ public final class AdvancementVectors {
             var definition=json("{\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}").getAsJsonObject();if(!entry[1].isEmpty())definition.addProperty("parent","test:"+entry[1]);var key=id("test:"+entry[0]);holders.add(new AdvancementHolder(key,Advancement.CODEC.parse(ops,definition).getOrThrow()));var row=new JsonObject();row.addProperty("id",key.toString());row.add("value",definition);input.add(row);
         }
         var tree=new AdvancementTree();tree.addAll(holders);var steps=new JsonArray();
-        for(String action:List.of("initial","remove:test:child","remove:test:unknown","clear")) {
-            if(action.startsWith("remove:"))tree.remove(Set.of(id(action.substring(7))));else if(action.equals("clear"))tree.clear();var row=new JsonObject();row.addProperty("action",action);var nodes=new JsonArray();var children=new JsonObject();for(var node:tree.nodes()){nodes.add(node.holder().id().toString());var list=new JsonArray();for(var child:node.children())list.add(child.holder().id().toString());children.add(node.holder().id().toString(),list);}row.add("nodes",nodes);row.add("children",children);steps.add(row);
+        for(String action:List.of("initial","replace_root","remove:test:child","remove:test:unknown","clear")) {
+            if(action.equals("replace_root")){var value=json("{\"parent\":\"test:child\",\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}");tree.addAll(List.of(new AdvancementHolder(id("test:root"),Advancement.CODEC.parse(ops,value).getOrThrow())));}
+            else if(action.startsWith("remove:"))tree.remove(Set.of(id(action.substring(7))));else if(action.equals("clear"))tree.clear();var row=new JsonObject();row.addProperty("action",action);var nodes=new JsonArray();var children=new JsonObject();for(var node:tree.nodes()){nodes.add(node.holder().id().toString());var list=new JsonArray();for(var child:node.children())list.add(child.holder().id().toString());children.add(node.holder().id().toString(),list);}row.add("nodes",nodes);row.add("children",children);var roots=new JsonObject();for(var node:tree.nodes())roots.addProperty(node.holder().id().toString(),node.root().holder().id().toString());row.add("roots",roots);steps.add(row);
         }
         var output=new JsonObject();output.add("inputs",input);output.add("steps",steps);OUT.add("tree",output);
     }
