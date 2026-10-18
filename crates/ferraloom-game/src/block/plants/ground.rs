@@ -21,7 +21,7 @@ pub(super) fn turn_to_base_block(
     level: &mut Level,
 ) -> Result<(), LevelError> {
     let new_state = level.push_entities_up(state, Block::DIRT.default_state(), pos)?;
-    level.set_block(pos, new_state, UpdateFlags::ALL)?;
+    LevelAccessRef::Server(level).set_block(pos, new_state, UpdateFlags::ALL)?;
     level.game_event(
         GameEvent::BLOCK_CHANGE,
         Vec3::at_center_of(pos.into()),
@@ -76,7 +76,7 @@ impl BlockBehavior for Ground {
             && !level.is_raining_at(pos.above(1))?
         {
             if moisture > 0 {
-                level.set_block(
+                LevelAccessRef::Server(level).set_block(
                     pos,
                     state.with(p::MOISTURE, moisture - 1).unwrap(),
                     UpdateFlags::CLIENTS,
@@ -85,7 +85,7 @@ impl BlockBehavior for Ground {
                 turn_to_base_block(state, pos, level)?;
             }
         } else if moisture < 7 {
-            level.set_block(
+            LevelAccessRef::Server(level).set_block(
                 pos,
                 state.with(p::MOISTURE, 7).unwrap(),
                 UpdateFlags::CLIENTS,
