@@ -3,6 +3,7 @@ pub mod access;
 pub mod assets;
 pub mod chat;
 pub mod commands;
+mod generation;
 pub mod jobs;
 pub mod network;
 pub mod properties;

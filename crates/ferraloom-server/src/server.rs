@@ -224,7 +224,13 @@ impl MinecraftServer {
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
-        let world = World::open(&options.root, &properties, &resources, &registries)?;
+        let world = World::open(
+            &options.root,
+            &properties,
+            &resources,
+            &registries,
+            options.unported_behavior,
+        )?;
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
         level.game_time = game_time;
@@ -1136,7 +1142,11 @@ impl MinecraftServer {
                 .holders
                 .get_mut(&pos.pack())
                 .unwrap()
-                .status = ChunkStatus::InitializeLight;
+                .status = ChunkStatus::Full;
+            self.level
+                .level
+                .post_process_generation(pos)
+                .map_err(game_error)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
             if let Some((request, pos)) = light.initialized {
@@ -1148,7 +1158,14 @@ impl MinecraftServer {
                     .context("unknown light job")?;
                 ensure!(holder.request_id == request, "stale light completion");
                 holder.status = ChunkStatus::Full;
-                self.world.ready.insert(pos);
+                if self
+                    .level
+                    .level
+                    .chunk(pos)
+                    .is_some_and(|chunk| chunk.post_processing_complete())
+                {
+                    self.world.ready.insert(pos);
+                }
             }
             for (key, data) in light.updates {
                 self.level
@@ -2294,6 +2311,8 @@ impl MinecraftServer {
         }
     }
     async fn save_all(&mut self, flush: bool) -> Result<()> {
+        self.world.finish_generation().await?;
+        self.integrate_jobs()?;
         self.world
             .save_live_level_context(&self.level.level)
             .await?;
@@ -2350,7 +2369,7 @@ impl MinecraftServer {
             listener.await??;
         }
         self.world.close_entity_storage().await?;
-        self.world.io.shutdown().await?;
+        self.world.close_chunk_storage().await?;
         println!(
             "Server stopped; world and players saved to {}",
             self.root.display()

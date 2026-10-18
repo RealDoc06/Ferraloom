@@ -124,52 +124,69 @@ impl StructureStart {
             if !piece.bounds().intersects(*bounds) {
                 continue;
             }
-            match piece {
-                StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::Stronghold(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::OceanMonument(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::OceanMonumentRoom(piece) => {
-                    piece.post_process_saved(context, *bounds)?
+            let result = (|| -> Result<(), Error> {
+                match &mut *piece {
+                    StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::Stronghold(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::OceanMonument(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::OceanMonumentRoom(piece) => {
+                        piece.post_process_saved(context, *bounds)?
+                    }
+                    StructurePiece::NetherFortress(piece) => {
+                        piece.post_process(context, *bounds)?
+                    }
+                    StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::RuinedPortal(piece) => {
+                        piece.post_process(context, templates, tags, bounds, reference)?
+                    }
+                    StructurePiece::JungleTemple(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
+                    StructurePiece::OceanRuin(piece) => {
+                        piece.post_process(context, templates, tags, *bounds, reference)?
+                    }
+                    StructurePiece::WoodlandMansion(piece) => {
+                        piece.post_process(context, templates, tags, *bounds, reference)?
+                    }
+                    StructurePiece::EndCity(piece) => {
+                        piece.post_process(context, templates, tags, *bounds, reference)?
+                    }
+                    StructurePiece::NetherFossil(piece) => {
+                        piece.post_process(context, templates, tags, bounds, reference)?
+                    }
+                    StructurePiece::Shipwreck(piece) => {
+                        piece.post_process(context, templates, tags, *bounds, reference)?
+                    }
+                    StructurePiece::Igloo(piece) => {
+                        piece.post_process(context, templates, tags, *bounds, reference)?
+                    }
+                    StructurePiece::BuriedTreasure(piece) => {
+                        piece.post_process(context, *bounds)?
+                    }
+                    StructurePiece::Jigsaw(piece) => {
+                        piece.element.place(
+                            templates,
+                            context,
+                            piece.position,
+                            reference,
+                            piece.rotation,
+                            *bounds,
+                            piece.liquid,
+                            false,
+                            tags,
+                        )?;
+                    }
                 }
-                StructurePiece::NetherFortress(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::RuinedPortal(piece) => {
-                    piece.post_process(context, templates, tags, bounds, reference)?
-                }
-                StructurePiece::JungleTemple(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::OceanRuin(piece) => {
-                    piece.post_process(context, templates, tags, *bounds, reference)?
-                }
-                StructurePiece::WoodlandMansion(piece) => {
-                    piece.post_process(context, templates, tags, *bounds, reference)?
-                }
-                StructurePiece::EndCity(piece) => {
-                    piece.post_process(context, templates, tags, *bounds, reference)?
-                }
-                StructurePiece::NetherFossil(piece) => {
-                    piece.post_process(context, templates, tags, bounds, reference)?
-                }
-                StructurePiece::Shipwreck(piece) => {
-                    piece.post_process(context, templates, tags, *bounds, reference)?
-                }
-                StructurePiece::Igloo(piece) => {
-                    piece.post_process(context, templates, tags, *bounds, reference)?
-                }
-                StructurePiece::BuriedTreasure(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::Jigsaw(piece) => {
-                    piece.element.place(
-                        templates,
-                        context,
-                        piece.position,
-                        reference,
-                        piece.rotation,
-                        *bounds,
-                        piece.liquid,
-                        false,
-                        tags,
-                    )?;
-                }
+                Ok(())
+            })();
+            if let Err(error) = result {
+                let id = piece
+                    .to_nbt()?
+                    .get_string("id")
+                    .map(|s| s.to_string_lossy())
+                    .unwrap_or_else(|| "unknown".into());
+                context
+                    .region
+                    .finish_generation_unit(format!("structure_piece:{id}"), Err(error))?;
             }
         }
         match self.kind.map(|kind| kind.name()) {
