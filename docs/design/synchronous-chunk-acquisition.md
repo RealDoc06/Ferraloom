@@ -82,6 +82,16 @@ FULL/UNKNOWN33 acquisition never waits on them.
 
 ## Ownership in each mode
 
+Single-region runtime ownership: Level owns one `Box<dyn AcquireDriver + Send>`.
+Cold `as_any` access exposes the concrete backend without moving it out; callers
+return owned work and end the backend borrow before callbacks. Installation is
+one-time. `Level::run_distance_manager_updates` runs only the pure graph slots
+against the sole Region simulation tracker and returns owned holder changes.
+The driver publishes requested status/readiness and entity status after all
+backend/graph guards end, invalidating the source cache before nested work.
+Shared light imports use `publish_light_snapshot`; exclusive imports and the
+end-of-chunk-source boundary reclaim superseded immutable versions.
+
 Single-region: a safe insert-only store gives stable chunk references and
 publication through `&self`; reads stay `&Level`, mutation requires `&mut Level`,
 removal/unload only at phase boundaries. Block/chunk lookups have no `RefCell`;

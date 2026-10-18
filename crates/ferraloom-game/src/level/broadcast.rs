@@ -18,7 +18,7 @@ impl Level {
         let chunk_pos = ChunkPos::containing(pos);
         if self
             .chunk(chunk_pos)
-            .is_some_and(|chunk| chunk.ticking_ready)
+            .is_some_and(|chunk| chunk.ticking_ready())
         {
             self.region_mut()
                 .block_changes

@@ -2,7 +2,7 @@
 //! Elsa's safe frozen collections keep heap allocations stable across growth;
 //! mutation/removal still require exclusive access to this store.
 use elsa::{FrozenMap, FrozenVec};
-use std::hash::Hash;
+use std::{cell::Cell, collections::HashSet, hash::Hash};
 
 pub(crate) struct InsertOnlyMap<K, V> {
     entries: FrozenMap<K, Box<V>>,
@@ -64,6 +64,58 @@ impl<K: Copy + Eq + Hash, V> InsertOnlyMap<K, V> {
             .filter_map(|index| self.keys.get_copy(index))
             .filter_map(|key| self.get(&key))
     }
+    fn retain(&mut self, mut keep: impl FnMut(&K, &V) -> bool) {
+        self.entries
+            .as_mut()
+            .retain(|key, value| keep(key, value.as_ref()));
+        self.keys
+            .as_mut()
+            .retain(|key| self.entries.get(key).is_some());
+    }
+}
+
+/// Light imports can replace a snapshot during managedBlock. New versions are
+/// immutable; existing shared references remain valid until an exclusive prune.
+pub(super) struct SnapshotMap<K, V> {
+    current: InsertOnlyMap<K, Cell<u64>>,
+    versions: InsertOnlyMap<u64, V>,
+    next: Cell<u64>,
+}
+impl<K: Copy + Eq + Hash, V> Default for SnapshotMap<K, V> {
+    fn default() -> Self {
+        Self {
+            current: InsertOnlyMap::default(),
+            versions: InsertOnlyMap::default(),
+            next: Cell::new(0),
+        }
+    }
+}
+impl<K: Copy + Eq + Hash, V> SnapshotMap<K, V> {
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.versions.get(&self.current.get(key)?.get())
+    }
+    pub fn insert(&self, key: K, value: V) {
+        let generation = self
+            .next
+            .get()
+            .checked_add(1)
+            .expect("snapshot identities exhausted");
+        self.next.set(generation);
+        assert!(self.versions.publish(generation, value).is_ok());
+        if let Some(current) = self.current.get(&key) {
+            current.set(generation);
+        } else {
+            assert!(self.current.publish(key, Cell::new(generation)).is_ok());
+        }
+    }
+    pub fn prune(&mut self) {
+        let live: HashSet<_> = self.current.values().map(Cell::get).collect();
+        self.versions
+            .retain(|generation, _| live.contains(generation));
+    }
+    pub fn remove(&mut self, key: &K) {
+        self.current.remove(key);
+    }
 }
 
 #[cfg(test)]
@@ -88,5 +140,21 @@ mod tests {
         assert_eq!(store.values().count(), 1024);
         store.get_mut(&0).unwrap().push('!');
         assert_eq!(store.get(&0).unwrap(), "new generation!");
+    }
+    #[test]
+    fn imported_snapshot_versions_keep_existing_reads_valid_until_exclusive_prune() {
+        let mut snapshots = SnapshotMap::default();
+        snapshots.insert(0_u64, String::from("before"));
+        let before = snapshots.get(&0).unwrap();
+        snapshots.insert(0, String::from("after"));
+        assert_eq!(before, "before");
+        assert_eq!(snapshots.get(&0).unwrap(), "after");
+        snapshots.prune();
+        assert_eq!(snapshots.versions.values().count(), 1);
+        assert_eq!(snapshots.get(&0).unwrap(), "after");
+        snapshots.remove(&0);
+        snapshots.prune();
+        assert!(snapshots.get(&0).is_none());
+        assert_eq!(snapshots.versions.values().count(), 0);
     }
 }

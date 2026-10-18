@@ -2453,7 +2453,10 @@ mod generation_order_tests {
         let second = ChunkPos::new(1, 0);
         // The forceload command publishes the ticket before awaiting generation.
         assert!(level.set_chunk_forced(second, true));
-        for change in level.distance_manager.run_all_updates(&mut level.tickets) {
+        for change in level
+            .level
+            .run_distance_manager_updates(&mut level.distance_manager, &mut level.tickets)
+        {
             level.chunks.ensure_holder(change.pos).ticket_level = change.level;
         }
         assert_eq!(level.chunks.request(first), Some(0));
