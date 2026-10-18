@@ -73,8 +73,8 @@ public final class RedstoneVectors extends MutationFixture {
     static String positions(List<BlockPos> list) { return String.join(";",list.stream().map(BlockPos::toShortString).toList()); }
     static final BlockPos ORIGIN = new BlockPos(8,0,8);
     static void signals(RegistryAccess r) {
-        var sources=new ArrayList<>(List.of(Blocks.REDSTONE_BLOCK,Blocks.REDSTONE_TORCH,Blocks.REDSTONE_WALL_TORCH,Blocks.OBSERVER,Blocks.REPEATER,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE));
-        for(var block:BuiltInRegistries.BLOCK)if(block instanceof LightningRodBlock)sources.add(block);
+        var sources=new ArrayList<Block>();
+        for(var block:BuiltInRegistries.BLOCK)if(block instanceof PoweredBlock||block instanceof RedstoneTorchBlock||block instanceof ObserverBlock||block instanceof DiodeBlock||block instanceof LeverBlock||block instanceof ButtonBlock||block instanceof BasePressurePlateBlock||block instanceof LightningRodBlock||block instanceof TripWireHookBlock||block instanceof TripWireBlock||block instanceof LecternBlock||block instanceof DaylightDetectorBlock||block instanceof SculkSensorBlock||block instanceof TargetBlock||block instanceof RedstoneWireBlock)sources.add(block);
         for (var block:sources) {
             for (var state:block.getStateDefinition().getPossibleStates()) {
                 // Every direction, all powered/orientation/delay/button states.
@@ -86,6 +86,14 @@ public final class RedstoneVectors extends MutationFixture {
                 }
                 System.out.println("signal:"+Block.getId(state)+"\t"+String.join(";",values));
             }
+        }
+        for(var state:Blocks.COMPARATOR.getStateDefinition().getPossibleStates())for(int output:new int[]{Integer.MIN_VALUE,-1,0,15,16,Integer.MAX_VALUE}){
+            var level=new RedstoneVectors(r);level.raw(ORIGIN,state);
+            ((net.minecraft.world.level.block.entity.ComparatorBlockEntity)level.getBlockEntity(ORIGIN)).setOutputSignal(output);
+            var receiver=ORIGIN.relative(state.getValue(ComparatorBlock.FACING).getOpposite());level.raw(receiver,Blocks.STONE.defaultBlockState());
+            var values=new ArrayList<String>();values.add(""+state.isSignalSource());values.add(""+state.getOwnSignal(level,ORIGIN));
+            for(var d:Direction.values())values.add(level.getSignal(ORIGIN,d)+":"+level.getDirectSignal(ORIGIN,d)+":"+level.getControlInputSignal(ORIGIN,d,false)+":"+level.getControlInputSignal(ORIGIN,d,true));
+            System.out.println("stored-signal:"+Block.getId(state)+":"+output+"\t"+String.join(";",values)+"|"+level.getSignal(receiver,Direction.DOWN)+":"+level.getDirectSignalTo(receiver)+":"+level.getBestNeighborSignal(receiver)+":"+level.hasNeighborSignal(receiver)+":"+level.getBestOwnOrNeighbourSignal(ORIGIN));
         }
         for(var source:List.of(Blocks.REDSTONE_BLOCK.defaultBlockState(),Blocks.REDSTONE_TORCH.defaultBlockState(),Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.POWERED,true)))for(var d:Direction.values()) {
             var level=new RedstoneVectors(r);level.raw(ORIGIN,Blocks.STONE.defaultBlockState());level.raw(ORIGIN.relative(d),source);

@@ -825,6 +825,27 @@ fn powered_and_activator_rails_preserve_search_limits_and_power_update_order() {
         }
     }
 }
+fn query_signals(level: &Level, state: BlockState) -> String {
+    let reader = LevelReaderRef::Server(level);
+    let mut values = vec![
+        reader.is_signal_source(state).unwrap().to_string(),
+        reader.own_signal(state, ORIGIN).unwrap().to_string(),
+    ];
+    for direction in Direction::VALUES {
+        values.push(format!(
+            "{}:{}:{}:{}",
+            reader.get_signal(ORIGIN, direction).unwrap(),
+            reader.get_direct_signal(ORIGIN, direction).unwrap(),
+            reader
+                .get_control_input_signal(ORIGIN, direction, false)
+                .unwrap(),
+            reader
+                .get_control_input_signal(ORIGIN, direction, true)
+                .unwrap()
+        ));
+    }
+    values.join(";")
+}
 #[test]
 fn signal_sources_directions_and_conductor_relays_match_vanilla() {
     for (name, expected) in cases("signal:") {
@@ -832,21 +853,36 @@ fn signal_sources_directions_and_conductor_relays_match_vanilla() {
             BlockState::from_id(name.strip_prefix("signal:").unwrap().parse().unwrap()).unwrap();
         let mut level = level();
         level.set_block_state(ORIGIN, state).unwrap();
-        let reader = LevelReaderRef::Server(&level);
-        let mut values = vec![
-            reader.is_signal_source(state).unwrap().to_string(),
-            reader.own_signal(state, ORIGIN).unwrap().to_string(),
-        ];
-        for d in Direction::VALUES {
-            values.push(format!(
-                "{}:{}:{}:{}",
-                reader.get_signal(ORIGIN, d).unwrap(),
-                reader.get_direct_signal(ORIGIN, d).unwrap(),
-                reader.get_control_input_signal(ORIGIN, d, false).unwrap(),
-                reader.get_control_input_signal(ORIGIN, d, true).unwrap()
-            ));
-        }
-        assert_eq!(values.join(";"), expected, "{name}");
+        assert_eq!(query_signals(&level, state), expected, "{name}");
+    }
+    for (name, expected) in cases("stored-signal:") {
+        use crate::block::entity::{BlockEntityData, BlockEntityState, BlockEntityType};
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let output = args.next().unwrap().parse::<i32>().unwrap();
+        let mut level = level();
+        level.set_block_state(ORIGIN, state).unwrap();
+        let mut entity = comparator::ComparatorBlockEntity::new(
+            BlockEntityData::new(BlockEntityType::COMPARATOR, ORIGIN, state).unwrap(),
+        );
+        entity.output = output;
+        level
+            .set_block_entity(BlockEntityState::Comparator(Box::new(entity)))
+            .unwrap();
+        let receiver = ORIGIN.relative(state::facing(state).opposite(), 1);
+        level
+            .set_block_state(receiver, Block::STONE.default_state())
+            .unwrap();
+        let actual = format!(
+            "{}|{}:{}:{}:{}:{}",
+            query_signals(&level, state),
+            level.get_signal(receiver, Direction::Down).unwrap(),
+            level.get_direct_signal_to(receiver).unwrap(),
+            level.get_best_neighbor_signal(receiver).unwrap(),
+            level.has_neighbor_signal(receiver).unwrap(),
+            level.get_best_own_or_neighbor_signal(ORIGIN).unwrap()
+        );
+        assert_eq!(actual, expected, "{name}");
     }
     for (name, expected) in cases("relay:") {
         let mut args = name.split(':').skip(1);
