@@ -1362,3 +1362,48 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     entity.remove_latest_movement_recording();
     assert!(entity.movement_this_tick.is_empty());
 }
+
+#[test]
+fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
+    let mut actual = Vec::new();
+    for mode in [
+        player::GameType::Survival,
+        player::GameType::Creative,
+        player::GameType::Adventure,
+        player::GameType::Spectator,
+    ] {
+        for flying in [false, true] {
+            let mut player = player::ServerPlayer::new(
+                Uuid::new(1, 2),
+                "ability".into(),
+                1,
+                Vec3::ZERO,
+                player::GameType::Survival,
+            );
+            player.game_mode = mode;
+            player.flying = flying;
+            player.update_game_mode_abilities();
+            let may_build = player.may_build();
+            let result_flying = player.flying;
+            player.may_build = !may_build;
+            let saved = player.save();
+            let saved_may_build = saved
+                .get_compound("abilities")
+                .unwrap()
+                .get_boolean("mayBuild")
+                .unwrap();
+            actual.push(format!(
+                "player-may-build\t{}\t{flying}\t{may_build},{result_flying},{},{}",
+                mode.id(),
+                player.may_build(),
+                saved_may_build
+            ));
+            assert_eq!(player.game_mode, mode);
+        }
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("player-may-build\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
