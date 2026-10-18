@@ -654,25 +654,12 @@ fn colliding_with_anything_new(
         .iter()
         .any(|shape| !shapes::join_is_not_empty(shape, &old_shape, BooleanOp::And)))
 }
-/// Port of LivingEntity#jumpFromGround with the player's base jump attribute.
-/// Effect/attribute ports feed the same primitive when those modifiers land.
+/// Dispatch the canonical jump body used by packet-driven ground departure.
+/// ServerPlayer's stat/exhaustion producer remains pending its shared hooks.
 fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
-    let power = 0.42_f32 * crate::entity::movement::block_jump_factor(entity, level)?;
-    if power <= 1e-5_f32 {
-        return Ok(());
-    }
-    let player = level.entity_mut::<ServerPlayer>(entity)?;
-    player.velocity.y = ferraloom_util::java::max(f64::from(power), player.velocity.y);
-    if player.shared_flag(3) {
-        let angle = player.yaw * 0.017_453_292_f32;
-        player.velocity = player.velocity.add_xyz(
-            f64::from(-mth::sin(f64::from(angle))) * 0.2,
-            0.0,
-            f64::from(mth::cos(f64::from(angle))) * 0.2,
-        );
-    }
-    player.needs_sync = true;
-    Ok(())
+    level
+        .entity_behavior(entity)?
+        .jump_from_ground(entity, level)
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {

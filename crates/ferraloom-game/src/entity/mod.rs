@@ -670,6 +670,21 @@ pub trait Entity: Sync {
     fn block_speed_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
         movement::block_speed_factor(entity, level)
     }
+    fn block_jump_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        movement::block_jump_factor(entity, level)
+    }
+    fn jump_power(
+        &self,
+        entity: EntityRef,
+        multiplier: f32,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        living::jump::jump_power(self, entity, multiplier, level)
+    }
+    /// LivingEntity parent body; ServerPlayer's stat/exhaustion override follows.
+    fn jump_from_ground(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        living::jump::jump_from_ground(self, entity, level)
+    }
     fn ignite_for_ticks(
         &self,
         entity: EntityRef,

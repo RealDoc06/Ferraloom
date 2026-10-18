@@ -9,6 +9,7 @@ use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
 pub mod freezing;
+pub mod jump;
 pub mod travel;
 
 /// Port of LivingEntity.Fallsounds, selected virtually by the entity family.
