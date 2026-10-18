@@ -1603,3 +1603,43 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
     ));
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }
+
+#[test]
+fn broadcast_membership_drains_separately_from_retained_section_changes() {
+    use crate::block::UpdateFlags;
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let chunk = ChunkPos::new(0, 0);
+    let p = BlockPos::new(8, 0, 8);
+    level
+        .set_block(
+            p,
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::Full, false)
+        .unwrap();
+    // The server skips this holder after its ticking future is cancelled.
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_block(
+            p.above(1),
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    let packets = level.take_block_updates(chunk).unwrap();
+    assert!(
+        matches!(&packets[..],[ferraloom_protocol::play::clientbound::Packet::SectionBlocksUpdate(packet)] if packet.changes.len()==2)
+    );
+}

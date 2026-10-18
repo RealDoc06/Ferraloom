@@ -102,7 +102,7 @@ impl LevelChunk {
             .as_ref()
             .map(|h| h[map as usize][usize::from(x) + usize::from(z) * 16])
     }
-    pub(super) fn prime_heightmaps(&mut self, tags: &ferraloom_data::datapack::TagSet<Block>) {
+    pub fn prime_heightmaps(&mut self, tags: &ferraloom_data::datapack::TagSet<Block>) {
         if self.heightmaps.is_some() {
             return;
         }
