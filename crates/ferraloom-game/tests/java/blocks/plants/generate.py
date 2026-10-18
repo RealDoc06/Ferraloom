@@ -87,3 +87,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     leaves='\n'.join(line for line in lines if line.startswith('leaf-update\t')) + '\n'
     (HERE/'leaf-updates.tsv.gz').write_bytes(gzip.compress(leaves.encode(),mtime=0))
     print(f'{len(leaves.splitlines())} native leaf distance/water update vectors')
+
+    post='\n'.join(line for line in lines if line.startswith('post-place\t')) + '\n'
+    (HERE/'post-placement.tsv.gz').write_bytes(gzip.compress(post.encode(),mtime=0))
+    print(f'{len(post.splitlines())} native double-plant and moss post-placement vectors')

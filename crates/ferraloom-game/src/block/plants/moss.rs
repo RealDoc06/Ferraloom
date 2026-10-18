@@ -95,6 +95,22 @@ pub(super) fn updated(
     Ok(state)
 }
 impl BlockBehavior for MossyCarpet {
+    fn set_placed_by(
+        &self,
+        _state: BlockState,
+        pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        level: &mut crate::level::Level,
+    ) -> Result<(), LevelError> {
+        let mut access = LevelAccessRef::Server(level);
+        let topper = random_topper(&mut access, pos)?;
+        if !topper.is_air() {
+            access.set_block(pos.above(1), topper, UpdateFlags::ALL)?;
+        }
+        Ok(())
+    }
+
     fn can_survive(
         &self,
         state: BlockState,
@@ -141,11 +157,25 @@ pub fn place_at(
         true,
     )?;
     level.set_block(pos, bottom, flags)?;
+    let topper = random_topper(level, pos)?;
+    if !topper.is_air() {
+        level.set_block(pos.above(1), topper, flags)?;
+        let adjusted = updated(bottom, pos, &level.as_reader(), true)?;
+        level.set_block(pos, adjusted, flags)?;
+    }
+    Ok(())
+}
+
+/// Port of createTopperWithSideChance using the canonical level RNG.
+fn random_topper(
+    level: &mut LevelAccessRef<'_, '_>,
+    pos: BlockPos,
+) -> Result<BlockState, LevelError> {
     let above_pos = pos.above(1);
     let old = level.get_block_state(above_pos)?;
     let is_carpet = old.block() == Block::PALE_MOSS_CARPET;
     if (is_carpet && old.get(p::BOTTOM) == Some(true)) || (!is_carpet && !old.data().replaceable) {
-        return Ok(());
+        return Ok(Block::AIR.default_state());
     }
     let mut topper = updated(
         Block::PALE_MOSS_CARPET
@@ -161,12 +191,11 @@ pub fn place_at(
             topper = with_side(topper, d, p::North::None);
         }
     }
-    if has_faces(topper) && topper != old {
-        level.set_block(above_pos, topper, flags)?;
-        let adjusted = updated(bottom, pos, &level.as_reader(), true)?;
-        level.set_block(pos, adjusted, flags)?;
-    }
-    Ok(())
+    Ok(if has_faces(topper) && topper != old {
+        topper
+    } else {
+        Block::AIR.default_state()
+    })
 }
 
 /// Port of createTopperWithSideChance with the bonemeal all-sides predicate.

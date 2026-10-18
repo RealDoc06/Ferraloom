@@ -21,6 +21,7 @@ mod hanging_moss;
 mod harvest;
 mod ice;
 mod leaves;
+mod lifecycle;
 mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
@@ -58,6 +59,14 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     }
     if matches!(block, Block::GRASS_BLOCK | Block::MYCELIUM) && method == M::RandomTick {
         return Some(&spreading::SPREADING_SNOWY);
+    }
+    if block.is_instance_of(C::DoublePlantBlock)
+        && matches!(method, M::SetPlacedBy | M::PlayerWillDestroy)
+    {
+        return Some(&lifecycle::PLANT_LIFECYCLE);
+    }
+    if block.class() == C::MossyCarpetBlock && method == M::SetPlacedBy {
+        return Some(&moss::MOSSY_CARPET);
     }
     if placement::supports(block, method) {
         return Some(&placement::PLANT_PLACEMENT);

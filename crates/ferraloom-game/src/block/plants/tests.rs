@@ -1731,3 +1731,82 @@ fn leaf_distance_and_water_ticks_match_native_updates_in_every_direction() {
     }
     assert_eq!(count, 5376);
 }
+
+#[test]
+fn double_plant_and_moss_post_placement_match_native_updates_and_rng() {
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::{
+        core::Plane,
+        random::{LegacyRandomSource, Random, RandomSource},
+    };
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/post-placement.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level
+            .set_block_state(
+                pos.below(1),
+                BlockState::from_id(f[2].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level
+            .set_block_state(
+                pos.above(1),
+                BlockState::from_id(f[3].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        let mode: u8 = f[4].parse().unwrap();
+        if mode != 0 {
+            for &direction in Plane::Horizontal.faces() {
+                if mode == 1 && direction != Direction::North {
+                    continue;
+                }
+                for y in 0..=1 {
+                    level
+                        .set_block_state(
+                            pos.above(y).relative(direction, 1),
+                            Block::STONE.default_state(),
+                        )
+                        .unwrap();
+                }
+            }
+        }
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[5].parse().unwrap())),
+            0,
+        );
+        level
+            .set_placed_by(state, pos, None, &ItemStack::default())
+            .unwrap();
+        assert_eq!(
+            level.get_block_state(pos).unwrap().id(),
+            f[6].parse::<u16>().unwrap(),
+            "base {line}"
+        );
+        assert_eq!(
+            level.get_block_state(pos.above(1)).unwrap().id(),
+            f[7].parse::<u16>().unwrap(),
+            "upper {line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[8].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 4704);
+}

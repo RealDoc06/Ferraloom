@@ -181,6 +181,21 @@ public final class PlantsVectors {
                 }
             }
         }
+        for(var block:List.of(Blocks.TALL_GRASS,Blocks.LARGE_FERN,Blocks.SUNFLOWER,Blocks.PITCHER_CROP,Blocks.SMALL_DRIPLEAF,Blocks.TALL_SEAGRASS,Blocks.PALE_MOSS_CARPET))
+            for(var state:block.getStateDefinition().getPossibleStates())for(var above:List.of(Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL,1),Blocks.STONE.defaultBlockState()))
+            for(int mode=0;mode<3;mode++)for(int seed=0;seed<4;seed++) {
+            if(state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)&&state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER)continue;
+            if(block==Blocks.PALE_MOSS_CARPET&&!state.getValue(MossyCarpetBlock.BASE))continue;
+            var support=(block==Blocks.SMALL_DRIPLEAF?Blocks.CLAY:block==Blocks.PITCHER_CROP?Blocks.FARMLAND:block==Blocks.TALL_SEAGRASS||block==Blocks.PALE_MOSS_CARPET?Blocks.STONE:Blocks.DIRT).defaultBlockState();
+            level.chunks.clear();level.getChunkAt(pos.below()).setBlockState(pos.below(),support,816);
+            level.getChunkAt(pos).setBlockState(pos,state,816);level.getChunkAt(pos.above()).setBlockState(pos.above(),above,816);
+            if(mode>=1)for(var direction:Direction.Plane.HORIZONTAL) {
+                if(mode==1&&direction!=Direction.NORTH)continue;
+                for(int y=0;y<=1;y++)level.getChunkAt(pos.above(y).relative(direction)).setBlockState(pos.above(y).relative(direction),Blocks.STONE.defaultBlockState(),816);
+            }
+            level.getRandom().setSeed(seed);block.setPlacedBy(level,pos,state,null,net.minecraft.world.item.ItemStack.EMPTY);
+            System.out.println("post-place\t"+Block.getId(state)+"\t"+Block.getId(support)+"\t"+Block.getId(above)+"\t"+mode+"\t"+seed+"\t"+Block.getId(level.getBlockState(pos))+"\t"+Block.getId(level.getBlockState(pos.above()))+"\t"+level.getRandom().nextLong());
+        }
         var leafNeighbors=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.OAK_LOG.defaultBlockState(),Blocks.MANGROVE_ROOTS.defaultBlockState(),
             Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,1),Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,6),
             Blocks.OAK_LEAVES.defaultBlockState(),Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.PERSISTENT,true));

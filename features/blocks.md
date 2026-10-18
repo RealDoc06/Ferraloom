@@ -404,3 +404,6 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 
 | blocks.plants.harvest-loot | Sweet-berry and cave-vine harvest evaluate canonical named BLOCK_INTERACT loot, pop in order, consume source pitch RNG and emit the attributed new state | `SweetBerryBushBlock#useWithoutItem/useItemOn`, `CaveVines#use` | Dedicated ServerLevel harvest oracle; canonical drop helpers | - | todo |
 | blocks.plants.dripleaf-tilt | Native signal reset, entity standing threshold, unstable/partial/full delays, vibration and sound RNG | `BigDripleafBlock#tick/neighborChanged/entityInside` | Dedicated ServerLevel dripleaf oracle | - | todo |
+
+| blocks.plants.post-placement | Double plants create water-aware upper halves, small dripleaf retains facing, pitcher has its explicit no-op, and pale moss draws topper sides | Real native setPlacedBy (4,704 cases) | `plants::tests::double_plant_and_moss_post_placement_match_native_updates_and_rng` | pass | todo |
+| blocks.plants.player-destruction | Creative double-plant removal clears only the matching lower half with native water/particle behavior; survival uses synchronous tool-aware drops before base destruction | `DoublePlantBlock#playerWillDestroy` | Native lifecycle fixture preparation; source-audited shared hooks | - | todo |
