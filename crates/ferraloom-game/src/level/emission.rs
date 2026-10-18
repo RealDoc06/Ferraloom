@@ -375,7 +375,20 @@ mod tests {
     }
     #[test]
     fn emission_captures_audience_before_movement_and_keeps_server_noops_distinct() {
+        use crate::level::chunk::LevelChunk;
+        use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+        use ferraloom_util::ChunkPos;
+        use std::sync::Arc;
+
         let mut level = level();
+        let template = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+            BiomeId(0),
+        );
+        level
+            .add_chunk(LevelChunk::new(ChunkPos::ZERO, -1..1, template))
+            .unwrap();
         game_events::observe(&mut level);
         let a = player(&mut level, 1, Vec3::new(15.999, 0.0, 0.0));
         let b = player(&mut level, 2, Vec3::new(16.0, 0.0, 0.0));
