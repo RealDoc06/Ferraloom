@@ -22,7 +22,7 @@ impl WorldgenBlockBehavior for UnsupportedBehavior {
     ) -> Result<bool, Error> {
         Err(Error(format!(
             "Unsupported: can_survive ({})",
-            state.block().key()
+            state.block().name()
         )))
     }
     fn post_process_pos(
