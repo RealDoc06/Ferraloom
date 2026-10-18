@@ -14,6 +14,7 @@ mod menu;
 mod menus;
 mod operation;
 mod operation_stacks;
+mod remainders;
 mod server_player;
 mod slot;
 mod stack_runtime;
@@ -40,6 +41,7 @@ pub use operation::{
     MenuSynchronizationContext, broadcast_menu_changes, broadcast_menu_full_state,
     send_all_menu_data, set_menu_synchronizer,
 };
+pub use remainders::{CraftingRemainders, apply_crafting_remainders};
 pub use server_player::*;
 pub use slot::*;
 pub use stack_runtime::{StackOperation, swap_player_hands};
