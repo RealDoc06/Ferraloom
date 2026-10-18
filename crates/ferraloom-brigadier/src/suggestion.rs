@@ -1,4 +1,5 @@
 use crate::{MessageRef, StringReader};
+use ferraloom_util::collections::{HashSet, JavaHash};
 use std::cmp::Ordering;
 
 /// Port of StringRange. All offsets count UTF-16 code units.
@@ -30,6 +31,15 @@ impl StringRange {
         StringReader::new(input).slice(self.start, self.end)
     }
 }
+impl JavaHash for StringRange {
+    fn java_hash_code(&self) -> i32 {
+        // Objects.hash(start, end).
+        31i32
+            .wrapping_add(self.start as i32)
+            .wrapping_mul(31)
+            .wrapping_add(self.end as i32)
+    }
+}
 
 /// Port of Suggestion and IntegerSuggestion, retaining numeric ordering and tooltips.
 #[derive(Clone, Debug)]
@@ -48,6 +58,33 @@ impl PartialEq for Suggestion {
     }
 }
 impl Eq for Suggestion {}
+impl JavaHash for Suggestion {
+    fn java_hash_code(&self) -> i32 {
+        // Suggestion uses Objects.hash(range, text, tooltip); integer suggestions
+        // wrap that hash with their numeric value. Messages retain value equality.
+        let base = 31i32
+            .wrapping_add(self.range.java_hash_code())
+            .wrapping_mul(31)
+            .wrapping_add(self.text.java_hash_code())
+            .wrapping_mul(31)
+            .wrapping_add(
+                self.tooltip
+                    .as_ref()
+                    .map_or(0, |message| message.text().java_hash_code()),
+            );
+        self.integer.map_or(base, |value| {
+            31i32
+                .wrapping_add(base)
+                .wrapping_mul(31)
+                .wrapping_add(value)
+        })
+    }
+    fn java_compare(&self, other: &Self) -> Option<Ordering> {
+        // IntegerSuggestion inherits Comparable<Suggestion>, which HashMap's
+        // comparableClassFor deliberately rejects for that concrete subclass.
+        (self.integer.is_none() && other.integer.is_none()).then(|| self.compare(other))
+    }
+}
 impl Suggestion {
     pub fn new(range: StringRange, text: impl Into<String>) -> Self {
         Self {
@@ -140,13 +177,11 @@ impl Suggestions {
         else {
             return Self::default();
         };
-        let mut list = Vec::new();
+        let mut unique = HashSet::new();
         for suggestion in suggestions {
-            let expanded = suggestion.expand(command, range);
-            if !list.contains(&expanded) {
-                list.push(expanded);
-            }
+            unique.insert(suggestion.expand(command, range));
         }
+        let mut list = unique.into_iter().collect::<Vec<_>>();
         // Mixed integer/text suggestions do not define a transitive comparator.
         // Use the binary insertion ordering of JDK TimSort's small-list path;
         // Rust's general sort requires a total order and can produce different results.
