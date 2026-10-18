@@ -59,3 +59,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     grass='\n'.join(line for line in lines if line.startswith('grass-support\t')) + '\n'
     (HERE/'grass-support.tsv.gz').write_bytes(gzip.compress(grass.encode(),mtime=0))
     print(f'{len(grass.splitlines())} vanilla spreading snowy support vectors')
+
+    scans='\n'.join(line for line in lines if line.startswith('eyeblossom-scan\t')) + '\n'
+    (HERE/'eyeblossom-scan.tsv.gz').write_bytes(gzip.compress(scans.encode(),mtime=0))
+    print(f'{len(scans.splitlines())} native section-boundary flower traversals')

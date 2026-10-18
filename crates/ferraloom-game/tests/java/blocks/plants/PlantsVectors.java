@@ -97,6 +97,16 @@ public final class PlantsVectors {
             level.getChunkAt(pos).setBlockState(pos.above(),above,816);
             System.out.println("grass-support\t"+Block.getId(state)+"\t"+Block.getId(above)+"\t"+canStayAlive.invoke(null,state,level,pos)+"\t"+canPropagate.invoke(null,state,level,pos));
         }
+        for(var block:List.of(Blocks.OPEN_EYEBLOSSOM,Blocks.CLOSED_EYEBLOSSOM))for(var origin:List.of(new BlockPos(8,5,8),new BlockPos(15,15,15),new BlockPos(16,16,16))) {
+            level.chunks.clear();var state=block.defaultBlockState();
+            for(int dx:new int[]{-3,0,3})for(int dy:new int[]{-2,0,2})for(int dz:new int[]{-3,0,3}) {
+                var at=origin.offset(dx,dy,dz);level.getChunkAt(at).setBlockState(at,state,816);
+            }
+            var order=new ArrayList<String>();
+            level.findBlocksIn(origin.offset(-3,-2,-3),origin.offset(3,2,3)).filterState(s->s==state)
+                .forEach((at,s)->order.add((at.getX()-origin.getX())+":"+(at.getY()-origin.getY())+":"+(at.getZ()-origin.getZ())));
+            System.out.println("eyeblossom-scan\t"+Block.getId(state)+"\t"+origin.getX()+"\t"+origin.getY()+"\t"+origin.getZ()+"\t"+String.join(",",order));
+        }
         var clickedVines=new ArrayList<BlockState>(Blocks.VINE.getStateDefinition().getPossibleStates());clickedVines.add(Blocks.AIR.defaultBlockState());
         for(var clicked:clickedVines)for(var direction:Direction.values())for(int mode=0;mode<4;mode++) {
             level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,clicked,816);

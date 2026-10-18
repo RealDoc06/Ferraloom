@@ -964,3 +964,67 @@ fn spreading_snowy_support_and_decay_match_native_occlusion_and_full_fluids() {
     }
     assert_eq!(count, 1612);
 }
+
+#[test]
+fn nearby_flower_scan_preserves_native_section_and_cell_order() {
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/eyeblossom-scan.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let mut count = 0;
+    for line in text.lines() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+        let origin = BlockPos::new(
+            fields[2].parse().unwrap(),
+            fields[3].parse().unwrap(),
+            fields[4].parse().unwrap(),
+        );
+        let mut level = level();
+        for pos in [
+            ChunkPos::new(0, 1),
+            ChunkPos::new(1, 0),
+            ChunkPos::new(1, 1),
+        ] {
+            level
+                .add_chunk(LevelChunk::new(
+                    pos,
+                    0..2,
+                    ferraloom_chunk::LevelChunkSection::new(
+                        ferraloom_chunk::Strategy::block_states(),
+                        ferraloom_chunk::Strategy::biomes(Arc::new(
+                            ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                        )),
+                        ferraloom_chunk::BiomeId(0),
+                    ),
+                ))
+                .unwrap();
+        }
+        for dx in [-3, 0, 3] {
+            for dy in [-2, 0, 2] {
+                for dz in [-3, 0, 3] {
+                    level
+                        .set_block_state(origin.offset(dx, dy, dz), state)
+                        .unwrap();
+                }
+            }
+        }
+        let mut actual = Vec::new();
+        eyeblossom::for_each_matching(state, origin, &mut level, |_, at| {
+            actual.push(format!(
+                "{}:{}:{}",
+                at.x - origin.x,
+                at.y - origin.y,
+                at.z - origin.z
+            ));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(actual.join(","), fields[5], "{line}");
+        count += 1;
+    }
+    assert_eq!(count, 6);
+}

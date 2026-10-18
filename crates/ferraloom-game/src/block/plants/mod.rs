@@ -7,6 +7,7 @@ mod column;
 mod coral;
 mod crops;
 mod dripleaf;
+mod eyeblossom;
 mod spread;
 mod spreading;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
@@ -102,6 +103,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         return Some(&geometry::PLANT_SHAPES);
     }
     let behavior: &'static dyn BlockBehavior = match block.class() {
+        C::EyeblossomBlock if matches!(method, M::Tick | M::RandomTick) => &eyeblossom::EYEBLOSSOM,
         C::HangingMossBlock
             if matches!(
                 method,
