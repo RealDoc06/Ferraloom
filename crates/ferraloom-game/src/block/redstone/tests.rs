@@ -41,8 +41,15 @@ fn level() -> Level {
             level
                 .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
                 .unwrap();
+            level.set_chunk_block_ticking(pos, true).unwrap();
         }
     }
+    for request in level.take_entity_storage_requests() {
+        if let crate::level::entity::EntityStorageRequest::Load { id, .. } = request {
+            level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+        }
+    }
+    level.process_pending_entity_loads().unwrap();
     let values = include_str!("../../../tests/java/level/tags.tsv")
         .lines()
         .map(|line| {
@@ -628,5 +635,122 @@ fn hopper_chains_cooldowns_locks_and_each_transfer_match_vanilla() {
             }
         }
         assert_eq!(steps.join("|"), expected, "{name}");
+    }
+}
+
+#[test]
+fn piston_block_events_short_pulses_and_quasi_timelines_match_vanilla() {
+    for (name, expected) in cases("piston-timeline:") {
+        let mut args = name.split(':').skip(1);
+        let sticky = args.next().unwrap().parse::<bool>().unwrap();
+        let quasi = args.next().unwrap().parse::<bool>().unwrap();
+        let length = args.next().unwrap().parse::<i32>().unwrap();
+        let off = args.next().unwrap().parse::<i64>().unwrap();
+        let mut level = level();
+        let piston = state::with_facing(
+            if sticky {
+                Block::STICKY_PISTON
+            } else {
+                Block::PISTON
+            }
+            .default_state(),
+            Direction::East,
+        );
+        level.set_block_state(ORIGIN, piston).unwrap();
+        for i in 1..=length {
+            level
+                .set_block_state(
+                    ORIGIN.relative(Direction::East, i),
+                    Block::STONE.default_state(),
+                )
+                .unwrap();
+        }
+        let power = if quasi {
+            ORIGIN.above(2)
+        } else {
+            ORIGIN.below(1)
+        };
+        level.take_effects();
+        level
+            .set_block(
+                power,
+                Block::REDSTONE_BLOCK.default_state(),
+                UpdateFlags::ALL,
+                UPDATE_LIMIT,
+            )
+            .unwrap();
+        let snapshot = |level: &Level| {
+            (0..=14)
+                .map(|i| {
+                    level
+                        .get_block_state(ORIGIN.relative(Direction::East, i))
+                        .unwrap()
+                        .id()
+                        .to_string()
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let mut steps = Vec::new();
+        if quasi {
+            steps.push(snapshot(&level));
+            level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+        }
+        level.run_block_events().unwrap();
+        steps.push(snapshot(&level));
+        if off == 0 {
+            level
+                .set_block(
+                    power,
+                    Block::AIR.default_state(),
+                    UpdateFlags::ALL,
+                    UPDATE_LIMIT,
+                )
+                .unwrap();
+            if quasi {
+                level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+            }
+            level.run_block_events().unwrap();
+            steps.push(snapshot(&level));
+        }
+        for tick in 1..=7 {
+            level.set_game_time(tick);
+            level.tick_block_entities(true).unwrap();
+            steps.push(snapshot(&level));
+            if tick == off {
+                level
+                    .set_block(
+                        power,
+                        Block::AIR.default_state(),
+                        UpdateFlags::ALL,
+                        UPDATE_LIMIT,
+                    )
+                    .unwrap();
+                if quasi {
+                    level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+                }
+                level.run_block_events().unwrap();
+                steps.push(snapshot(&level));
+            }
+        }
+        let (expected_steps, expected_changes) = expected.split_once('#').unwrap();
+        assert_eq!(steps.join("|"), expected_steps, "{name} tick states");
+        let changes = level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| match effect {
+                LevelEffect::BlockUpdated { pos, state, .. } => {
+                    Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, state.id()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        let expected_changes = expected_changes
+            .split(';')
+            .map(|change| change.split_once('/').unwrap().0)
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(changes, expected_changes, "{name} sub-tick mutation order");
     }
 }
