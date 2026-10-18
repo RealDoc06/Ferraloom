@@ -74,3 +74,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | block-entities.block-entity-type.trapped-chest | `minecraft:trapped_chest` (block entity type); implementation `TrappedChestBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; TrappedChestBlockEntity` | | - | todo |
 | block-entities.block-entity-type.trial-spawner | `minecraft:trial_spawner` (block entity type); implementation `TrialSpawnerBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; TrialSpawnerBlockEntity` | | - | todo |
 | block-entities.block-entity-type.vault | `minecraft:vault` (block entity type); implementation `VaultBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; VaultBlockEntity` | | - | todo |
+
+| block-entities.framework.registry | Type identity, valid blocks, metadata, components, position fixup and update defaults | `BlockEntity; BlockEntityType; BlockEntityTypes` | `block::entity::tests` (5 tests, 56 real vanilla vectors) | pass | pass |
+| block-entities.framework.tickers | Rebindable wrappers, removal, deferred additions and live rebind ordering | `Level#tickBlockEntities; LevelChunk#updateBlockEntityTicker` | `ticker_add_remove_and_rebind_preserve_phase_membership` (runtime Java oracle pending) | - | partial |
