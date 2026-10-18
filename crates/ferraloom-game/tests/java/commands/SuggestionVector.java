@@ -30,6 +30,12 @@ public final class SuggestionVector {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         var vectors = new JsonArray();
+        var entityTags = new JsonObject();
+        net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getTags().forEach(tag -> {
+            var members = new JsonArray();
+            tag.stream().forEach(holder -> members.add(holder.unwrapKey().orElseThrow().identifier().toString()));
+            entityTags.add(tag.key().location().toString(), members);
+        });
         var dispatcher = new CommandDispatcher<CommandSourceStack>();TickCommand.register(dispatcher);
         for (int level : new int[]{0,4}) {
             var source=mock(CommandSourceStack.class);
@@ -127,7 +133,7 @@ public final class SuggestionVector {
             var timelinesForClock=new JsonArray();registries.lookupOrThrow(net.minecraft.core.registries.Registries.TIMELINE).listElements().filter(timeline->timeline.value().clock().equals(clock)).forEach(timeline->timelinesForClock.add(timeline.key().identifier().toString()));
             timelineData.add(clock.key().identifier().toString(),timelinesForClock);
         });
-        clockData.add("markers",markerData);clockData.add("timelines",timelineData);
+        clockData.add("markers",markerData);clockData.add("timelines",timelineData);clockData.add("entity_tags",entityTags);
         Files.writeString(Path.of(args[1]),new GsonBuilder().setPrettyPrinting().create().toJson(clockData)+"\n");
         Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(vectors)+"\n");
     }

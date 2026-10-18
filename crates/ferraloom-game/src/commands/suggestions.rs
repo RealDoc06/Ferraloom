@@ -350,6 +350,10 @@ mod tests {
                     CommandArgument::GameProfile {}
                 };
                 let mut argument_type = MinecraftArgument::new(wire);
+                Arc::make_mut(&mut argument_type.context).tags.insert(
+                    "minecraft:entity_type".into(),
+                    serde_json::from_value(clocks["entity_tags"].clone()).unwrap(),
+                );
                 if vector.kind == "score_holder" {
                     argument_type.suggestion_provider = Some("minecraft:ask_server".into());
                 }
