@@ -486,7 +486,25 @@ fn feature_services() -> Arc<crate::level::LevelContext> {
             let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
                 .expect("builder supplies native datapack");
             let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-            let base = crate::level::LevelContext::fixture(0, -63);
+            use ferraloom_worldgen::generator::{
+                ChunkGenerator, GenerationData,
+                flat::{FlatLevelGeneratorSettings, FlatLevelSource},
+            };
+            let settings = FlatLevelGeneratorSettings::decode(
+                &json!({
+                    "biome":"minecraft:plains",
+                    "layers":[{"block":"minecraft:bedrock","height":1}],
+                }),
+                &resources,
+            )
+            .unwrap();
+            let generator = ChunkGenerator::Flat(Box::new(
+                FlatLevelSource::new(
+                    Arc::new(GenerationData::load(&resources).unwrap()),
+                    settings,
+                )
+                .unwrap(),
+            ));
             let features = ferraloom_worldgen::feature::FeatureLoader::new(&resources)
                 .unwrap()
                 .load_all()
@@ -494,7 +512,7 @@ fn feature_services() -> Arc<crate::level::LevelContext> {
             Arc::new(crate::level::LevelContext::new(
                 0,
                 -63,
-                base.generator.clone(),
+                Arc::new(generator),
                 Arc::new(features),
             ))
         })
