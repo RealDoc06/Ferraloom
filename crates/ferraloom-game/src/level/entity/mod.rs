@@ -178,7 +178,8 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
-    pub border: crate::entity::collision::WorldBorder,
+    movement_effects: Vec<crate::entity::movement::MovementEffect>,
+    pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
     pub sections: EntitySectionStorage,
@@ -223,10 +224,17 @@ impl EntityStorage {
 }
 
 impl Level {
-    pub fn entity_world_border(&self) -> crate::entity::collision::WorldBorder {
-        self.region().entities.border
+    pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
+        self.region_mut().entities.movement_effects.push(effect);
     }
-    pub fn set_entity_world_border(&mut self, border: crate::entity::collision::WorldBorder) {
+    pub fn take_entity_movement_effects(&mut self) -> Vec<crate::entity::movement::MovementEffect> {
+        std::mem::take(&mut self.region_mut().entities.movement_effects)
+    }
+
+    pub fn entity_world_border(&self) -> &crate::level::border::WorldBorder {
+        &self.region().entities.border
+    }
+    pub fn set_entity_world_border(&mut self, border: crate::level::border::WorldBorder) {
         self.region_mut().entities.border = border;
     }
     pub fn add_entity(&mut self, entity: EntityRef, state: EntityState) -> Result<(), LevelError> {

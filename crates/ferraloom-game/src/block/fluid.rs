@@ -100,6 +100,79 @@ impl FlowingFluid {
             },
         )
     }
+    /// Port of FlowingFluid#getFlow. Float height differences are widened only
+    /// after multiplying by the horizontal direction, as in vanilla.
+    pub fn get_flow(
+        self,
+        fluid: FluidState,
+        level: &Level,
+        pos: BlockPos,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let mut flow_x = 0.0;
+        let mut flow_z = 0.0;
+        let own_height = f32::from(fluid.amount) / 9.0;
+        for direction in Plane::Horizontal {
+            let neighbor = pos.relative(direction, 1);
+            let neighbor_state = level.get_block_state(neighbor)?;
+            let neighbor_fluid = neighbor_state.data().fluid;
+            if !neighbor_fluid.empty && !self.same(neighbor_fluid) {
+                continue;
+            }
+            let mut neighbor_height = f32::from(neighbor_fluid.amount) / 9.0;
+            let mut difference = 0.0_f32;
+            if neighbor_height == 0.0 {
+                if !level.block_tags()?.contains_key(
+                    ferraloom_data::tags::BlockTags::BLOCKS_FLUID_FLOW,
+                    neighbor_state.block(),
+                ) {
+                    let below = level.get_block_state(neighbor.below(1))?.data().fluid;
+                    if below.empty || self.same(below) {
+                        neighbor_height = f32::from(below.amount) / 9.0;
+                        if neighbor_height > 0.0 {
+                            difference = own_height - (neighbor_height - 0.888_888_9_f32);
+                        }
+                    }
+                }
+            } else if neighbor_height > 0.0 {
+                difference = own_height - neighbor_height;
+            }
+            if difference != 0.0 {
+                flow_x += f64::from(direction.step().x as f32 * difference);
+                flow_z += f64::from(direction.step().z as f32 * difference);
+            }
+        }
+        let mut flow = ferraloom_util::Vec3::new(flow_x, 0.0, flow_z);
+        if fluid.falling {
+            for direction in Plane::Horizontal {
+                let neighbor = pos.relative(direction, 1);
+                if self.is_solid_flow_face(level, neighbor, direction)?
+                    || self.is_solid_flow_face(level, neighbor.above(1), direction)?
+                {
+                    flow = flow.normalize().add_xyz(0.0, -6.0, 0.0);
+                    break;
+                }
+            }
+        }
+        Ok(flow.normalize())
+    }
+    fn is_solid_flow_face(
+        self,
+        level: &Level,
+        pos: BlockPos,
+        direction: Direction,
+    ) -> Result<bool, LevelError> {
+        let state = level.get_block_state(pos)?;
+        if self.same(state.data().fluid) {
+            return Ok(false);
+        }
+        if direction == Direction::Up {
+            return Ok(true);
+        }
+        if state.block().is_instance_of(BlockClass::IceBlock) {
+            return Ok(false);
+        }
+        super::LevelReaderRef::Server(level).is_face_sturdy(state, pos, direction)
+    }
     fn is_source(self, state: FluidState) -> bool {
         self.same(state) && state.source
     }

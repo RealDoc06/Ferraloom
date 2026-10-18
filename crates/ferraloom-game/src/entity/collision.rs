@@ -7,64 +7,27 @@ use ferraloom_util::{
     shapes::{self, BooleanOp, VoxelShape},
 };
 
-/// Dimension-owned border bounds read by a region during a phase.
-#[derive(Clone, Copy, Debug)]
-pub struct WorldBorder {
-    pub min_x: f64,
-    pub min_z: f64,
-    pub max_x: f64,
-    pub max_z: f64,
-}
-impl Default for WorldBorder {
-    fn default() -> Self {
-        Self {
-            min_x: -29_999_984.0,
-            min_z: -29_999_984.0,
-            max_x: 29_999_984.0,
-            max_z: 29_999_984.0,
-        }
-    }
-}
-impl WorldBorder {
-    pub fn collision_shape(self) -> VoxelShape {
-        shapes::join(
-            &shapes::infinity(),
-            &shapes::box_shape(
-                self.min_x.floor(),
-                f64::NEG_INFINITY,
-                self.min_z.floor(),
-                self.max_x.ceil(),
-                f64::INFINITY,
-                self.max_z.ceil(),
-            ),
-            BooleanOp::OnlyFirst,
-        )
-    }
-    pub fn is_inside_close_to_border(self, position: Vec3, bb: Aabb) -> bool {
-        let size = bb.x_size().abs().max(bb.z_size().abs()).max(1.0);
-        let distance = (position.x - self.min_x)
-            .min(self.max_x - position.x)
-            .min(position.z - self.min_z)
-            .min(self.max_z - position.z);
-        distance < size * 2.0
-            && position.x >= self.min_x - size
-            && position.x < self.max_x + size
-            && position.z >= self.min_z - size
-            && position.z < self.max_z + size
-    }
-}
-
-/// Static native shape cache; dynamic blocks need their live BlockBehavior port.
+/// Block behavior owns all static and contextual collision rules.
 pub fn block_collision_shape(
     state: BlockState,
-    _pos: BlockPos,
-    _source: Option<EntityRef>,
-    _level: &Level,
+    pos: BlockPos,
+    source: Option<EntityRef>,
+    level: &Level,
 ) -> Result<VoxelShape, LevelError> {
-    state
-        .collision_shape()
-        .cloned()
-        .ok_or(LevelError::UnsupportedBlock(state.block()))
+    let context = collision_context(source, level, false)?;
+    level.collision_shape(state, pos, &context)
+}
+fn collision_context(
+    source: Option<EntityRef>,
+    level: &Level,
+    liquids: bool,
+) -> Result<crate::block::BlockCollisionContext<'static>, LevelError> {
+    Ok(match source {
+        Some(id) => crate::block::BlockCollisionContext::Entity(
+            super::collision_context::EntityCollisionView::capture(id, level, liquids)?,
+        ),
+        None => crate::block::BlockCollisionContext::empty_with_fluid_collisions(liquids),
+    })
 }
 fn has_large_collision_shape(state: BlockState) -> bool {
     state.has_large_collision_shape().unwrap_or(true)
@@ -74,6 +37,14 @@ fn has_large_collision_shape(state: BlockState) -> bool {
 pub fn block_collisions(
     level: &Level,
     source: Option<EntityRef>,
+    bb: Aabb,
+) -> Result<Vec<(BlockPos, VoxelShape)>, LevelError> {
+    let context = collision_context(source, level, false)?;
+    block_collisions_from_context(level, &context, bb)
+}
+pub fn block_collisions_from_context(
+    level: &Level,
+    context: &crate::block::BlockCollisionContext<'_>,
     bb: Aabb,
 ) -> Result<Vec<(BlockPos, VoxelShape)>, LevelError> {
     let min = BlockPos::new(
@@ -104,7 +75,7 @@ pub fn block_collisions(
                 {
                     continue;
                 }
-                let shape = block_collision_shape(state, pos, source, level)?.move_by(
+                let shape = level.collision_shape(state, pos, context)?.move_by(
                     f64::from(x),
                     f64::from(y),
                     f64::from(z),
@@ -327,4 +298,35 @@ pub fn find_supporting_block(
         }
     }
     Ok(best)
+}
+
+impl Level {
+    /// Port of CollisionGetter#noCollision. Required shape/ownership failures
+    /// propagate even when optional unported block behavior is configured Warn.
+    pub fn no_collision(
+        &self,
+        source: Option<EntityRef>,
+        bb: Aabb,
+        include_liquids: bool,
+    ) -> Result<bool, LevelError> {
+        let context = collision_context(source, self, include_liquids)?;
+        if !block_collisions_from_context(self, &context, bb)?.is_empty()
+            || !entity_collisions(self, source, bb)?.is_empty()
+        {
+            return Ok(false);
+        }
+        if let Some(id) = source {
+            let border = self.entity_world_border();
+            if border.is_inside_close_to_border(self.entity::<EntityData>(id)?.position, bb)
+                && shapes::join_is_not_empty(
+                    &border.collision_shape(),
+                    &shapes::create_aabb(bb),
+                    BooleanOp::And,
+                )
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
 }
