@@ -362,6 +362,7 @@ impl GameRules {
     /// Supplies the live level's exact rule fields after load and every mutation,
     /// before callbacks or another command can query the simulation.
     pub fn update_level_rules(&self, rules: &mut crate::level::LevelRules) {
+        rules.show_advancement_messages = self.boolean(GameRule::ShowAdvancementMessages);
         rules.tnt_explodes = self.boolean(GameRule::TntExplodes);
         rules.entity_drops = self.boolean(GameRule::EntityDrops);
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;

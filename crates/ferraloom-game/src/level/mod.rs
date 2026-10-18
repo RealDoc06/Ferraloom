@@ -98,6 +98,7 @@ pub enum LevelError {
 pub struct LevelRules {
     /// Published by the canonical GameRules owner after load and each change.
     pub block_drops: Option<bool>,
+    pub show_advancement_messages: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub debug: bool,
@@ -116,6 +117,7 @@ impl Default for LevelRules {
     fn default() -> Self {
         Self {
             block_drops: None,
+            show_advancement_messages: true,
             tnt_explodes: true,
             entity_drops: true,
             debug: false,
