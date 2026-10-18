@@ -229,7 +229,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _direction: Direction,
-        _level: &Level,
+        _level: &mut Level,
     ) -> Result<i32, LevelError> {
         Ok(0)
     }
