@@ -70,10 +70,13 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
     let text = native_vectors();
     let (mut level, player) = level();
     let pos = BlockPos::new(8, 5, 8);
-    let mut calls = 0;
-    for line in text.lines().filter(|line| line.starts_with("place\t")) {
+    let mut calls = [0; 2];
+    for line in text
+        .lines()
+        .filter(|line| line.starts_with("place\t") || line.starts_with("plant\t"))
+    {
         let f: Vec<_> = line.split('\t').collect();
-        assert_eq!(f[0], "place");
+        let plant = f[0] == "plant";
         let item = Item::from_protocol_id(f[1].parse().unwrap()).unwrap();
         let face = Direction::VALUES[f[2].parse::<usize>().unwrap()];
         let occupied = f[3].parse::<u8>().unwrap();
@@ -102,6 +105,13 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
                 .default_state(),
             )
             .unwrap();
+        if plant {
+            let support = BlockState::from_id(f[5].parse().unwrap()).unwrap();
+            level.set_block_state(pos.below(), support).unwrap();
+            if occupied != 0 {
+                level.set_block_state(pos, support).unwrap();
+            }
+        }
         let mut operation = StackOperation::new(&mut level);
         let receiver = operation
             .own(player, ItemStack::new(item, 3, Default::default()))
@@ -113,7 +123,7 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
         } else {
             receiver
         };
-        if f[5] != "0" {
+        if !plant && f[5] != "0" {
             operation
                 .level
                 .stack_mut(held)
@@ -201,9 +211,9 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
             "{line}"
         );
         assert_eq!(operation.level.unported_behavior_stats().skipped_calls, 0);
-        calls += 1;
+        calls[usize::from(plant)] += 1;
     }
-    assert_eq!(calls, 540);
+    assert_eq!(calls, [540, 160]);
 }
 
 #[test]

@@ -71,6 +71,29 @@ public final class BlockItemVectors {
                     + "\t" + String.join(";", level.actions) + "\t" + level.getRandom().nextLong());
             }
         }
+        // Empty collision shapes still require their native support checks.
+        // Exercise both replace-clicked and adjacent placement, with a context
+        // receiver that can differ from the ItemStack#useOn receiver.
+        for (var item : List.of(Items.POPPY, Items.OAK_SAPLING, Items.FERN, Items.CRIMSON_ROOTS, Items.DEAD_BUSH)) {
+            for (var support : List.of(Blocks.AIR, Blocks.STONE, Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.FARMLAND, Blocks.SAND, Blocks.SOUL_SOIL, Blocks.CRIMSON_NYLIUM)) {
+                for (int adjacent = 0; adjacent < 2; adjacent++) for (boolean separate : new boolean[]{false, true}) {
+                    var level = new Fixture(registries);
+                    level.put(POS.below(), support.defaultBlockState());
+                    level.put(POS, (adjacent == 0 ? Blocks.AIR : support).defaultBlockState());
+                    var receiver = new ItemStack(item, 3);
+                    var held = separate ? new ItemStack(Items.DIRT, 7) : receiver;
+                    level.actions.clear(); level.trace.clear(); level.getRandom().setSeed(1234);
+                    var result = receiver.useOn(new Context(level, held, Direction.UP));
+                    String outcome = result instanceof InteractionResult.Success success
+                        ? "success:" + success.swingSource() + ":" + success.wasItemInteraction() + ":" + (success.heldItemTransformedTo() != null)
+                        : result == InteractionResult.FAIL ? "fail" : result == InteractionResult.PASS ? "pass" : "other";
+                    System.out.println("plant\t" + BuiltInRegistries.ITEM.getId(item) + "\t" + Direction.UP.ordinal() + "\t" + adjacent + "\t" + separate + "\t" + Block.getId(support.defaultBlockState())
+                        + "\t" + outcome + "\t" + receiver.getCount() + "\t" + held.getCount()
+                        + "\t" + Block.getId(level.getBlockState(POS)) + "\t" + Block.getId(level.getBlockState(POS.above()))
+                        + "\t" + String.join(";", level.actions) + "\t" + level.getRandom().nextLong());
+                }
+            }
+        }
         var properties = new LinkedHashMap<Block, String>();
         properties.put(Blocks.COCOA, "age");
         properties.put(Blocks.SNOW, "layers");
