@@ -75,3 +75,19 @@ pub(super) fn with_side(state: BlockState, direction: Direction, side: RedstoneS
         _ => unreachable!("horizontal wire direction"),
     }
 }
+
+pub(super) fn with_facing(state: BlockState, direction: Direction) -> BlockState {
+    state
+        .with(
+            p::FACING,
+            match direction {
+                Direction::Down => p::Facing::Down,
+                Direction::Up => p::Facing::Up,
+                Direction::North => p::Facing::North,
+                Direction::South => p::Facing::South,
+                Direction::West => p::Facing::West,
+                Direction::East => p::Facing::East,
+            },
+        )
+        .unwrap()
+}

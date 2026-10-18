@@ -16,7 +16,17 @@ public final class RedstoneVectors extends MutationFixture {
     final List<String> changes = new ArrayList<>();
     final List<String> notifications = new ArrayList<>();
     boolean recording;
-    RedstoneVectors(RegistryAccess registries) { super(registries); }
+    RedstoneVectors(RegistryAccess registries) { super(new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).registries(),registries.registries())).freeze()); }
+    final net.minecraft.world.level.entity.EntityLookup<net.minecraft.world.entity.Entity> actors=new net.minecraft.world.level.entity.EntityLookup<>();
+    final net.minecraft.world.level.entity.EntitySectionStorage<net.minecraft.world.entity.Entity> sections=new net.minecraft.world.level.entity.EntitySectionStorage<>(net.minecraft.world.entity.Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
+    final net.minecraft.world.level.entity.LevelEntityGetter<net.minecraft.world.entity.Entity> getter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(actors,sections);
+    long time;
+    @Override public net.minecraft.world.level.entity.LevelEntityGetter<net.minecraft.world.entity.Entity> getEntities(){return getter;}
+    @Override public long getGameTime(){return time;}
+    @Override public boolean isRaining(){return false;}
+    @Override public java.util.Collection<net.minecraft.world.entity.boss.enderdragon.EnderDragonPart> dragonParts(){return List.of();}
+    void actor(net.minecraft.world.entity.Entity entity){actors.add(entity);sections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).add(entity);}
+
     @Override public net.minecraft.world.level.border.WorldBorder getWorldBorder() { return border; }
     @Override public void sendBlockUpdated(BlockPos pos, BlockState old, BlockState state, int flags) {
         if (recording) changes.add(pos.toShortString()+"="+Block.getId(state)+"/"+flags);
@@ -89,10 +99,44 @@ public final class RedstoneVectors extends MutationFixture {
             }
         }
     }
+    static void moving(RegistryAccess r) throws Exception {
+        var progress=net.minecraft.world.level.block.piston.PistonMovingBlockEntity.class.getDeclaredField("progress");progress.setAccessible(true);
+        var previous=net.minecraft.world.level.block.piston.PistonMovingBlockEntity.class.getDeclaredField("progressO");previous.setAccessible(true);
+        var noClip=net.minecraft.world.level.block.piston.PistonMovingBlockEntity.class.getDeclaredField("NOCLIP");noClip.setAccessible(true);
+        @SuppressWarnings("unchecked") var noclip=(ThreadLocal<Direction>)noClip.get(null);
+        var level=new RedstoneVectors(r);
+        for(var moved:List.of(Blocks.STONE.defaultBlockState(),Blocks.SLIME_BLOCK.defaultBlockState(),Blocks.PISTON.defaultBlockState(),Blocks.STICKY_PISTON.defaultBlockState()))for(var direction:Direction.values())for(boolean extending:new boolean[]{false,true})for(boolean source:new boolean[]{false,true})for(float value:new float[]{0.0F,0.25F,0.5F,0.75F,1.0F})for(boolean suppress:new boolean[]{false,true}){
+            var movedState=moved.hasProperty(BlockStateProperties.FACING)?moved.setValue(BlockStateProperties.FACING,direction):moved;
+            var entity=new net.minecraft.world.level.block.piston.PistonMovingBlockEntity(ORIGIN,Blocks.MOVING_PISTON.defaultBlockState(),movedState,direction,extending,source);
+            progress.setFloat(entity,value);previous.setFloat(entity,value-0.25F);
+            noclip.set(suppress?entity.getMovementDirection():null);
+            var shape=entity.getCollisionShape(level,ORIGIN);var boxes=new ArrayList<String>();
+            for(var box:shape.toAabbs())boxes.add(Long.toHexString(Double.doubleToRawLongBits(box.minX))+","+Long.toHexString(Double.doubleToRawLongBits(box.minY))+","+Long.toHexString(Double.doubleToRawLongBits(box.minZ))+","+Long.toHexString(Double.doubleToRawLongBits(box.maxX))+","+Long.toHexString(Double.doubleToRawLongBits(box.maxY))+","+Long.toHexString(Double.doubleToRawLongBits(box.maxZ)));
+            var samples=new ArrayList<String>();for(float partial:new float[]{-0.25F,0.0F,0.5F,1.0F,2.0F})samples.add(Integer.toHexString(Float.floatToRawIntBits(entity.getProgress(partial))));
+            System.out.println("moving:"+Block.getId(movedState)+":"+direction.get3DDataValue()+":"+extending+":"+source+":"+value+":"+suppress+"\t"+String.join(";",boxes)+"|"+String.join(",",samples));
+        }
+        noclip.set(null);
+    }
+    static void pushing(RegistryAccess r) throws Exception {
+        for(var moved:List.of(Blocks.STONE,Blocks.SLIME_BLOCK,Blocks.HONEY_BLOCK))for(boolean stuck:new boolean[]{false,true}) {
+            var level=new RedstoneVectors(r);var state=Blocks.MOVING_PISTON.defaultBlockState().setValue(BlockStateProperties.FACING,Direction.EAST);level.raw(ORIGIN,state);
+            var entity=new net.minecraft.world.level.block.piston.PistonMovingBlockEntity(ORIGIN,state,moved.defaultBlockState(),Direction.EAST,true,false);
+            level.getChunkAt(ORIGIN).setBlockEntity(entity);
+            var actor=new net.minecraft.world.entity.item.PrimedTnt(net.minecraft.world.entity.EntityTypes.TNT,level);
+            actor.setId(1);actor.setPos(ORIGIN.getX()+(stuck?-0.4:0.1),ORIGIN.getY()+(stuck?0.9375:0.1),ORIGIN.getZ()+0.5);actor.setOnGround(stuck);level.actor(actor);
+            var samples=new ArrayList<String>();
+            for(int tick=1;tick<=3;tick++){
+                level.time=tick;net.minecraft.world.level.block.piston.PistonMovingBlockEntity.tick(level,ORIGIN,state,entity);
+                var position=actor.position();var velocity=actor.getDeltaMovement();
+                samples.add(Long.toHexString(Double.doubleToRawLongBits(position.x))+","+Long.toHexString(Double.doubleToRawLongBits(position.y))+","+Long.toHexString(Double.doubleToRawLongBits(position.z))+"/"+Long.toHexString(Double.doubleToRawLongBits(velocity.x))+","+Long.toHexString(Double.doubleToRawLongBits(velocity.y))+","+Long.toHexString(Double.doubleToRawLongBits(velocity.z))+"/"+Block.getId(level.getBlockState(ORIGIN)));
+            }
+            System.out.println("push:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(moved)+":"+stuck+"\t"+String.join(";",samples));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
-        signals(registries);piston(registries);wires(registries);
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

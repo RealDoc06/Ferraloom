@@ -21,6 +21,7 @@ pub mod wire;
 #[derive(Default)]
 pub struct RedstoneState {
     pub(crate) wire_signals_suppressed: bool,
+    pub(crate) piston_noclip: Option<ferraloom_util::Direction>,
     pub(crate) torch_toggles: std::collections::VecDeque<(ferraloom_util::BlockPos, i64)>,
 }
 
@@ -145,6 +146,32 @@ pub(crate) fn ported_behavior(
             ) =>
         {
             Some(&comparator::COMPARATOR)
+        }
+        BlockClass::MovingPistonBlock
+            if matches!(
+                method,
+                M::OutlineShape | M::CollisionShape | M::CloneItemStack | M::UseWithoutItem
+            ) =>
+        {
+            Some(&moving_piston::MOVING_PISTON)
+        }
+        BlockClass::PistonBaseBlock
+            if matches!(method, M::OnPlace | M::NeighborChanged | M::TriggerEvent) =>
+        {
+            Some(&piston::PISTON)
+        }
+        BlockClass::PistonHeadBlock
+            if matches!(
+                method,
+                M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::NeighborChanged
+                    | M::AffectNeighborsAfterRemoval
+                    | M::CloneItemStack
+            ) =>
+        {
+            Some(&piston::PISTON_HEAD)
         }
         _ => None,
     }

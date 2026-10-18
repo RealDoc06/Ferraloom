@@ -188,7 +188,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.class.mangrove-propagule-block | `MangrovePropaguleBlock`: `minecraft:mangrove_propagule` | `net.minecraft.world.level.block.MangrovePropaguleBlock`; `Blocks#register` | | - | todo |
 | blocks.class.mangrove-roots-block | `MangroveRootsBlock`: `minecraft:mangrove_roots` | `net.minecraft.world.level.block.MangroveRootsBlock`; `Blocks#register` | | - | todo |
 | blocks.class.mossy-carpet-block | `MossyCarpetBlock`: `minecraft:pale_moss_carpet` | `net.minecraft.world.level.block.MossyCarpetBlock`; `Blocks#register` | | - | todo |
-| blocks.class.moving-piston-block | `MovingPistonBlock`: `minecraft:moving_piston` | `net.minecraft.world.level.block.piston.MovingPistonBlock`; `Blocks#register` | | - | todo |
+| blocks.class.moving-piston-block | `MovingPistonBlock`: `minecraft:moving_piston` | `net.minecraft.world.level.block.piston.MovingPistonBlock`; `Blocks#register` | | - | partial |
 | blocks.class.mud-block | `MudBlock`: `minecraft:mud` | `net.minecraft.world.level.block.MudBlock`; `Blocks#register` | | - | todo |
 | blocks.class.multiface-block | `MultifaceBlock`: `minecraft:resin_clump` | `net.minecraft.world.level.block.MultifaceBlock`; `Blocks#register` | | - | todo |
 | blocks.class.mushroom-block | `MushroomBlock`: `minecraft:brown_mushroom`, `minecraft:red_mushroom` | `net.minecraft.world.level.block.MushroomBlock`; `Blocks#register` | | - | todo |
@@ -204,8 +204,8 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.class.observer-block | `ObserverBlock`: `minecraft:observer` | `net.minecraft.world.level.block.ObserverBlock`; `Blocks#register` | `ferraloom-game: block::redstone::tests` (signal methods; wire mutation order) | pass | partial |
 | blocks.class.path-block | `PathBlock`: `minecraft:dirt_path` | `net.minecraft.world.level.block.PathBlock`; `Blocks#register` | | - | todo |
 | blocks.class.piglin-wall-skull-block | `PiglinWallSkullBlock`: `minecraft:piglin_wall_head` | `net.minecraft.world.level.block.PiglinWallSkullBlock`; `Blocks#register` | | - | todo |
-| blocks.class.piston-base-block | `PistonBaseBlock`: `minecraft:piston`, `minecraft:sticky_piston` | `net.minecraft.world.level.block.piston.PistonBaseBlock`; `Blocks#register` | | - | todo |
-| blocks.class.piston-head-block | `PistonHeadBlock`: `minecraft:piston_head` | `net.minecraft.world.level.block.piston.PistonHeadBlock`; `Blocks#register` | | - | todo |
+| blocks.class.piston-base-block | `PistonBaseBlock`: `minecraft:piston`, `minecraft:sticky_piston` | `net.minecraft.world.level.block.piston.PistonBaseBlock`; `Blocks#register` | | - | partial |
+| blocks.class.piston-head-block | `PistonHeadBlock`: `minecraft:piston_head` | `net.minecraft.world.level.block.piston.PistonHeadBlock`; `Blocks#register` | | - | partial |
 | blocks.class.pitcher-crop-block | `PitcherCropBlock`: `minecraft:pitcher_crop` | `net.minecraft.world.level.block.PitcherCropBlock`; `Blocks#register` | | - | todo |
 | blocks.class.player-head-block | `PlayerHeadBlock`: `minecraft:player_head` | `net.minecraft.world.level.block.PlayerHeadBlock`; `Blocks#register` | | - | todo |
 | blocks.class.player-wall-head-block | `PlayerWallHeadBlock`: `minecraft:player_wall_head` | `net.minecraft.world.level.block.PlayerWallHeadBlock`; `Blocks#register` | | - | todo |

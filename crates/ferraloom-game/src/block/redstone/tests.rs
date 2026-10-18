@@ -38,6 +38,9 @@ fn level() -> Level {
             level
                 .set_chunk_loading_status(pos, FullChunkStatus::BlockTicking, true)
                 .unwrap();
+            level
+                .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
+                .unwrap();
         }
     }
     let values = include_str!("../../../tests/java/level/tags.tsv")
@@ -303,5 +306,141 @@ fn default_and_experimental_wire_networks_match_each_vanilla_state_mutation() {
                 assert_eq!(changes, expected_changes, "{name} exact mutation order");
             }
         }
+    }
+}
+
+#[test]
+fn moving_piston_shapes_and_progress_match_vanilla_including_noclip_and_retraction() {
+    use crate::block::entity::{BlockEntityData, BlockEntityState, BlockEntityType};
+    for (name, expected) in cases("moving:") {
+        let mut args = name.split(':').skip(1);
+        let moved = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let extending = args.next().unwrap().parse().unwrap();
+        let source = args.next().unwrap().parse().unwrap();
+        let progress = args.next().unwrap().parse::<f32>().unwrap();
+        let suppress = args.next().unwrap().parse::<bool>().unwrap();
+        let mut level = level();
+        let state = Block::MOVING_PISTON.default_state();
+        level.set_block_state(ORIGIN, state).unwrap();
+        let data = BlockEntityData::new(BlockEntityType::PISTON, ORIGIN, state).unwrap();
+        let mut entity = moving_piston::PistonMovingBlockEntity::moving(
+            data, moved, direction, extending, source,
+        );
+        entity.progress = progress;
+        entity.progress_o = progress - 0.25;
+        let samples = [-0.25, 0.0, 0.5, 1.0, 2.0]
+            .map(|p| format!("{:x}", entity.get_progress(p).to_bits()))
+            .join(",");
+        level.region_mut().redstone.piston_noclip = suppress.then(|| entity.movement_direction());
+        level
+            .set_block_entity(BlockEntityState::MovingPiston(Box::new(entity)))
+            .unwrap();
+        let handle = level.block_entity_ref(ORIGIN).unwrap().unwrap();
+        let boxes = moving_piston::collision_shape(&level, handle)
+            .unwrap()
+            .to_aabbs()
+            .into_iter()
+            .map(|b| {
+                format!(
+                    "{:x},{:x},{:x},{:x},{:x},{:x}",
+                    b.min_x.to_bits(),
+                    b.min_y.to_bits(),
+                    b.min_z.to_bits(),
+                    b.max_x.to_bits(),
+                    b.max_y.to_bits(),
+                    b.max_z.to_bits()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(format!("{boxes}|{samples}"), expected, "{name}");
+    }
+}
+
+#[test]
+fn piston_entity_push_slime_velocity_and_honey_drag_match_real_vanilla_moves() {
+    use crate::{
+        block::entity::{
+            BlockEntity, BlockEntityData, BlockEntityRef, BlockEntityState, BlockEntityType,
+        },
+        entity::{EntityData, EntityRef, EntityState, item::PrimedTnt},
+    };
+    use ferraloom_util::Vec3;
+    for (name, expected) in cases("push:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let stuck = args.next().unwrap().parse::<bool>().unwrap();
+        let mut level = level();
+        let fluid_values = include_str!("../../../tests/java/level/fluid-tags.tsv")
+            .lines()
+            .map(|line| {
+                let (name, fluids) = line.split_once('\t').unwrap();
+                (
+                    name.strip_prefix("fluid-tag:").unwrap().parse().unwrap(),
+                    fluids
+                        .split(',')
+                        .filter(|f| !f.is_empty())
+                        .map(|name| ferraloom_data::registries::fluid::Id::from_name(name).unwrap())
+                        .collect(),
+                )
+            })
+            .collect();
+        level.set_fluid_tags(Arc::new(
+            ferraloom_data::datapack::TagSet::from_tags(
+                ferraloom_data::datapack::Tags {
+                    values: fluid_values,
+                    diagnostics: Vec::new(),
+                },
+                ferraloom_data::registries::fluid::ALL.len(),
+            )
+            .unwrap(),
+        ));
+        let state = state::with_facing(Block::MOVING_PISTON.default_state(), Direction::East);
+        level.set_block_state(ORIGIN, state).unwrap();
+        let data = BlockEntityData::new(BlockEntityType::PISTON, ORIGIN, state).unwrap();
+        let moving = moving_piston::PistonMovingBlockEntity::moving(
+            data,
+            block.default_state(),
+            Direction::East,
+            true,
+            false,
+        );
+        level
+            .set_block_entity(BlockEntityState::MovingPiston(Box::new(moving)))
+            .unwrap();
+        let handle: BlockEntityRef = level.block_entity_ref(ORIGIN).unwrap().unwrap();
+        let actor = EntityRef(1);
+        let mut tnt = PrimedTnt::new(1, 123);
+        tnt.parent.set_pos(Vec3::new(
+            f64::from(ORIGIN.x) + if stuck { -0.4 } else { 0.1 },
+            f64::from(ORIGIN.y) + if stuck { 0.9375 } else { 0.1 },
+            f64::from(ORIGIN.z) + 0.5,
+        ));
+        tnt.parent.on_ground = stuck;
+        level
+            .add_entity(actor, EntityState::PrimedTnt(Box::new(tnt)))
+            .unwrap();
+        let mut samples = Vec::new();
+        for tick in 1..=3 {
+            level.set_game_time(tick);
+            moving_piston::MOVING_PISTON_ENTITY
+                .tick(handle, &mut level)
+                .unwrap();
+            let entity = level.entity::<EntityData>(actor).unwrap();
+            let pos = entity.position;
+            let velocity = entity.velocity;
+            samples.push(format!(
+                "{:x},{:x},{:x}/{:x},{:x},{:x}/{}",
+                pos.x.to_bits(),
+                pos.y.to_bits(),
+                pos.z.to_bits(),
+                velocity.x.to_bits(),
+                velocity.y.to_bits(),
+                velocity.z.to_bits(),
+                level.get_block_state(ORIGIN).unwrap().id()
+            ));
+        }
+        assert_eq!(samples.join(";"), expected, "{name}");
     }
 }
