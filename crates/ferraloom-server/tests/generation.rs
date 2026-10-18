@@ -54,16 +54,18 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     use ferraloom_data::{Block, BlockState};
     use ferraloom_game::{
         Behaviors,
-        block::{BlockBehavior, BlockMethod},
+        block::BlockBehavior,
+        entity::EntityRef,
         level::{Level, LevelContext, LevelError, Region},
     };
     use ferraloom_util::BlockPos;
     struct PendingPolicyFixture;
     impl BlockBehavior for PendingPolicyFixture {
-        fn random_tick(
+        fn step_on(
             &self,
             state: BlockState,
             _: BlockPos,
+            _: EntityRef,
             _: &mut Level,
         ) -> std::result::Result<(), LevelError> {
             Err(LevelError::UnsupportedBlock(state.block()))
@@ -73,19 +75,16 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     let mut level = Level::new(Region::new(&PENDING), LevelContext::fixture(0, 63));
     let state = Block::STONE.default_state();
     ensure!(matches!(
-        level.optional_block_call(Block::STONE, BlockMethod::RandomTick, |behavior, level| {
-            behavior.random_tick(state, BlockPos::ZERO, level)
-        }),
+        level.call_step_on(state, BlockPos::ZERO, EntityRef(0)),
         Err(LevelError::UnsupportedBlock(Block::STONE))
     ));
     ensure!(level.unported_behavior_stats().skipped_calls == 0);
     level.set_unported_behavior(UnportedBehavior::Warn);
-    ensure!(matches!(
-        level.optional_block_call(Block::STONE, BlockMethod::RandomTick, |behavior, level| {
-            behavior.random_tick(state, BlockPos::ZERO, level)
-        }),
-        Ok(None)
-    ));
+    ensure!(
+        level
+            .call_step_on(state, BlockPos::ZERO, EntityRef(0))
+            .is_ok()
+    );
     ensure!(level.unported_behavior_stats().skipped_calls == 1);
     Ok(())
 }
