@@ -361,5 +361,5 @@ fn modify(
     if let Some(extra) = extra {
         args.push(extra);
     }
-    Ok(scoreboard::success(0, &key, args, true))
+    Ok(success(0, &key, args, true))
 }
