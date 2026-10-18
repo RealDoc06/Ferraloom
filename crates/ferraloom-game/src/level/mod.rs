@@ -23,6 +23,7 @@ pub mod effects;
 pub mod entity;
 pub mod events;
 pub mod heightmap;
+pub mod generation;
 mod mutation;
 mod random;
 pub mod redstone;

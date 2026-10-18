@@ -4,7 +4,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| chunks.pipeline.dependencies | Generate chunk statuses with their required neighbor status and radius dependencies | `ChunkPyramid; ChunkStep; ChunkGenerationTask` | | - | todo |
+| chunks.pipeline.dependencies | Generate chunk statuses with their required neighbor status and radius dependencies | `ChunkPyramid; ChunkStep; ChunkGenerationTask` | `generation::pyramid::tests::vanilla_pyramids_match_every_direct_and_accumulated_dependency`; `generation::task::tests::saved_full_uses_loading_footprint_but_a_missing_neighbor_expands_generation` | pass | partial |
 | chunks.pipeline.loading | Distinguish loading an existing chunk from generating missing stages | `ChunkStatusTasks; GenerationChunkHolder` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.pipeline.light-full | Promote chunks through light and full states before exposing ticking access | `ChunkStatusTasks; ChunkMap` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.tickets.level-propagation | Propagate ticket distance levels and choose loaded, block-ticking and entity-ticking states | `DistanceManager; ChunkLevel` | | - | todo |
