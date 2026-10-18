@@ -16,6 +16,9 @@ pub enum BlockMethod {
     AffectNeighborsAfterRemoval,
     NeighborChanged,
     EntityInside,
+    FallOn,
+    StepOn,
+    BounceOn,
     UpdateShape,
     UpdateIndirectNeighborShapes,
     Tick,
@@ -41,6 +44,9 @@ impl BlockMethod {
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
             Self::EntityInside => "entityInside",
+            Self::FallOn => "fallOn",
+            Self::StepOn => "stepOn",
+            Self::BounceOn => "bounceOn",
             Self::UpdateShape => "updateShape",
             Self::UpdateIndirectNeighborShapes => "updateIndirectNeighbourShapes",
             Self::Tick => "tick",
@@ -80,6 +86,41 @@ impl Level {
             BlockMethod::EntityInside,
             |behavior, level| behavior.entity_inside(state, pos, entity, level),
         )?;
+        Ok(())
+    }
+    pub fn call_fall_on(
+        &mut self,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        entity: crate::entity::EntityRef,
+        fall_distance: f64,
+    ) -> Result<(), LevelError> {
+        self.optional_block_call(state.block(), BlockMethod::FallOn, |behavior, level| {
+            behavior.fall_on(state, pos, entity, fall_distance, level)
+        })?;
+        Ok(())
+    }
+    pub fn call_step_on(
+        &mut self,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        entity: crate::entity::EntityRef,
+    ) -> Result<(), LevelError> {
+        self.optional_block_call(state.block(), BlockMethod::StepOn, |behavior, level| {
+            behavior.step_on(state, pos, entity, level)
+        })?;
+        Ok(())
+    }
+    pub fn call_bounce_on(
+        &mut self,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        entity: crate::entity::EntityRef,
+        fall_distance: f64,
+    ) -> Result<(), LevelError> {
+        self.optional_block_call(state.block(), BlockMethod::BounceOn, |behavior, level| {
+            behavior.bounce_on(state, pos, entity, fall_distance, level)
+        })?;
         Ok(())
     }
     pub fn set_unported_behavior(&mut self, policy: UnportedBehavior) {

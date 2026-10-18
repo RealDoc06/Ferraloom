@@ -178,6 +178,43 @@ pub trait BlockBehavior: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
+    /// Port of Block#fallOn. The entity fall-damage virtual and extracted
+    /// fall-distance reduction arrive with entity-core; until then this
+    /// required effect is explicit rather than silently losing damage.
+    fn fall_on(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _fall_distance: f64,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            BlockMethod::FallOn,
+        ))
+    }
+    /// Port of Block#stepOn's base no-op.
+    fn step_on(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#bounceOn's base no-op.
+    fn bounce_on(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _fall_distance: f64,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     fn trigger_event(
         &self,
         _state: BlockState,
