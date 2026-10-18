@@ -616,3 +616,7 @@ fn age_block(
 #[cfg(test)]
 #[path = "processor_tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(test)]
+#[path = "processor_capped_tests.rs"]
+mod capped_tests;
