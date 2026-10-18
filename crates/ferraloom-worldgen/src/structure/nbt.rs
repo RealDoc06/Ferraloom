@@ -8,6 +8,15 @@ use crate::{placement::providers::IntProvider, region::Heightmap};
 use ferraloom_data::BlockState;
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 
+/// NbtOps#getNumberValue followed by Number#intValue. Floating-point codecs
+/// truncate toward zero; CompoundTag#getInt uses the separate NBT floor rule.
+pub(super) fn ops_int(tag: &Tag) -> Option<i32> {
+    match tag {
+        Tag::Float(value) => Some(*value as i32),
+        Tag::Double(value) => Some(*value as i32),
+        _ => tag.as_int(),
+    }
+}
 pub(super) fn string(value: impl ToString) -> Tag {
     Tag::String(value.to_string().into())
 }

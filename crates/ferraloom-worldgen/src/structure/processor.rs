@@ -267,16 +267,34 @@ impl StructureProcessor {
         target: [i32; 3],
         reference: [i32; 3],
         relative: [i32; 3],
-        mut info: StructureBlockInfo,
+        info: StructureBlockInfo,
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
         shared: &mut WorldgenRandom,
     ) -> Result<Option<StructureBlockInfo>, Error> {
+        self.process_block_with_nbt_mutation(
+            region, target, reference, relative, info, settings, tags, shared,
+        )
+        .map(|(info, _)| info)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn process_block_with_nbt_mutation(
+        &self,
+        region: &WorldGenRegion<'_>,
+        target: [i32; 3],
+        reference: [i32; 3],
+        relative: [i32; 3],
+        mut info: StructureBlockInfo,
+        settings: &mut StructurePlaceSettings,
+        tags: &BlockTags,
+        shared: &mut WorldgenRandom,
+    ) -> Result<(Option<StructureBlockInfo>, bool), Error> {
+        let mut mutated_input_nbt = false;
         match self {
             Self::Nop | Self::Capped { .. } => {}
             Self::BlockIgnore(blocks) => {
                 if blocks.contains(&info.state.block()) {
-                    return Ok(None);
+                    return Ok((None, false));
                 }
             }
             Self::BlockRot {
@@ -289,7 +307,7 @@ impl StructureProcessor {
                     && !settings
                         .with_random(info.position, shared, |r| r.next_float() <= *integrity)
                 {
-                    return Ok(None);
+                    return Ok((None, false));
                 }
             }
             Self::BlockAge { mossiness } => {
@@ -313,10 +331,10 @@ impl StructureProcessor {
                         .map(|s| s.to_string_lossy())
                         .unwrap_or_else(|| "minecraft:air".into());
                     let Some(state) = parse_jigsaw_replacement(&state) else {
-                        return Ok(None);
+                        return Ok((None, false));
                     };
                     if state.block() == Block::STRUCTURE_VOID {
-                        return Ok(None);
+                        return Ok((None, false));
                     }
                     info.state = state;
                     info.nbt = None;
@@ -331,7 +349,7 @@ impl StructureProcessor {
             }
             Self::ProtectedBlocks(blocks) => {
                 if blocks.contains(region.block(info.position)?.block(), tags) {
-                    return Ok(None);
+                    return Ok((None, false));
                 }
             }
             Self::Rule(rules) => {
@@ -352,6 +370,14 @@ impl StructureProcessor {
                         )
                         && rule.position.test(info.position, reference, &mut random)
                     {
+                        // AppendStatic mutates the existing CompoundTag in Java.
+                        // Capped compares its old record after that mutation, so
+                        // these NBT changes alone do not count toward the cap.
+                        mutated_input_nbt = info.nbt.is_some()
+                            && matches!(
+                                rule.block_entity_modifier,
+                                RuleBlockEntityModifier::AppendStatic(_)
+                            );
                         info.state = rule.output;
                         info.nbt = rule.block_entity_modifier.apply(&mut random, info.nbt);
                         break;
@@ -360,7 +386,7 @@ impl StructureProcessor {
             }
         }
         let _ = target; // Kept in the vanilla call signature for future processors.
-        Ok(Some(info))
+        Ok((Some(info), mutated_input_nbt))
     }
     #[allow(clippy::too_many_arguments)]
     pub fn finalize_processing(
@@ -394,7 +420,7 @@ impl StructureProcessor {
             if replaced >= max {
                 break;
             }
-            if let Some(altered) = delegate.process_block(
+            let (altered, mutated_input_nbt) = delegate.process_block_with_nbt_mutation(
                 region,
                 target,
                 reference,
@@ -403,10 +429,15 @@ impl StructureProcessor {
                 settings,
                 tags,
                 shared,
-            )? && altered != processed[index]
-            {
-                replaced += 1;
-                processed[index] = altered;
+            )?;
+            if let Some(altered) = altered {
+                if mutated_input_nbt {
+                    processed[index].nbt = altered.nbt.clone();
+                }
+                if altered != processed[index] {
+                    replaced += 1;
+                    processed[index] = altered;
+                }
             }
         }
         Ok(())
@@ -418,7 +449,7 @@ pub(crate) fn shuffle<T>(values: &mut [T], random: &mut impl RandomSource) {
     }
 }
 /// BlockStateParser#parseForBlock accepts a prefix; trailing command text is ignored.
-fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
+pub(super) fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
     let mut reader = ferraloom_brigadier::StringReader::new(text);
     while reader.can_read() && matches!(reader.peek(), 97..=122 | 48..=57 | 95 | 45 | 46 | 58 | 47)
     {
@@ -616,3 +647,7 @@ fn age_block(
 #[cfg(test)]
 #[path = "processor_tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(test)]
+#[path = "processor_capped_tests.rs"]
+mod capped_tests;

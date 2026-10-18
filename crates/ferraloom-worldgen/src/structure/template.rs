@@ -233,6 +233,23 @@ pub struct StructureTemplateManager {
     pub templates: BTreeMap<Identifier, Arc<StructureTemplate>>,
 }
 impl StructureTemplateManager {
+    /// Preload the effective jar/datapack template set before chunk jobs run.
+    /// This includes handwritten structures whose templates are not in pools.
+    pub fn load_all(resources: &ResourceManager) -> Result<Self, Error> {
+        let ids = resources
+            .list("structure/", ".nbt")
+            .into_iter()
+            .map(|id| {
+                let path = id
+                    .path()
+                    .strip_prefix("structure/")
+                    .and_then(|p| p.strip_suffix(".nbt"))
+                    .ok_or_else(|| Error(format!("invalid template path {id}")))?;
+                id.with_path(path).map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::load(resources, ids)
+    }
     pub fn load(
         resources: &ResourceManager,
         ids: impl IntoIterator<Item = Identifier>,

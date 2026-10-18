@@ -73,8 +73,101 @@ fn structure_registry_step_indices_and_empty_starts_rng_match_vanilla() {
                 "step={step:?} prefix={prefix} seed={}",
                 case["seed"]
             );
+            let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(17));
+            let seed = random.set_decoration_seed(case["seed"].as_i64().unwrap(), -112, 176);
+            RegionStructureDecoration::new(
+                &entries[..prefix],
+                &templates,
+                &tags,
+                &generator,
+                &features,
+            )
+            .place_step(step, &mut region, &mut random, seed)
+            .unwrap();
+            assert_eq!(
+                random.next_int(),
+                case["next"][prefix].as_i64().unwrap() as i32
+            );
         }
     }
+}
+
+#[test]
+fn live_start_is_restored_with_piece_mutations_when_game_bridge_is_unsupported() {
+    use crate::structure::{
+        TerrainAdjustment,
+        pipeline::ChunkStructures,
+        start::{StructurePiece, StructureStart},
+        structures::buried_treasure::BuriedTreasurePiece,
+    };
+    use ferraloom_data::Block;
+    let (resources, generator) = generator();
+    let templates = StructureTemplateManager::load_all(&resources).unwrap();
+    let tags = BlockTags::load(&resources).unwrap();
+    let features = FeatureRegistry::default();
+    let id: Identifier = "minecraft:buried_treasure".parse().unwrap();
+    let mut chunk = generator.new_chunk([0, 0]);
+    chunk.set_block(9, 22, 9, Block::STONE.default_state());
+    chunk.ocean_floor.fill(26);
+    let mut chunk = RegionChunk::new(chunk, ChunkStatus::Terrain);
+    chunk.structures = ChunkStructures::new([0, 0]);
+    chunk.structures.starts.insert(
+        id.clone(),
+        StructureStart::new(
+            id.clone(),
+            ferraloom_data::registries::worldgen_structure_type::Id::from_name(
+                "minecraft:buried_treasure",
+            )
+            .unwrap(),
+            [0, 0],
+            0,
+            TerrainAdjustment::None,
+            vec![StructurePiece::BuriedTreasure(BuriedTreasurePiece::new([
+                9, 90, 9,
+            ]))],
+        ),
+    );
+    chunk
+        .structures
+        .references
+        .entry(id.clone())
+        .or_default()
+        .insert(0);
+    let mut chunks = [chunk];
+    let mut region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Terrain],
+        0,
+        None,
+        &StaticBlocks,
+        0,
+        63,
+    )
+    .unwrap();
+    let registry = [StructureStep {
+        id: id.clone(),
+        step: GenerationStep::SurfaceStructures,
+    }];
+    let mut decoration =
+        RegionStructureDecoration::new(&registry, &templates, &tags, &generator, &features);
+    let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(0));
+    let error = decoration
+        .place_step(
+            GenerationStep::SurfaceStructures,
+            &mut region,
+            &mut random,
+            0,
+        )
+        .unwrap_err();
+    assert!(error.0.contains("RandomizableContainer"));
+    let start = &region
+        .chunk([0, 0], ChunkStatus::StructureStarts)
+        .unwrap()
+        .structures
+        .starts[&id];
+    assert_eq!(start.pieces[0].bounds(), BoundingBox::point([9, 23, 9]));
+    assert_eq!(region.block([9, 23, 9]).unwrap().block(), Block::CHEST);
 }
 
 #[test]
