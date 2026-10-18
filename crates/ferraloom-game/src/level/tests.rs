@@ -968,9 +968,37 @@ fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fal
 
 #[test]
 fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides() {
-    use crate::block::{BlockMethod, LevelReaderRef, UnportedBehavior};
+    use crate::block::{
+        BlockBehavior, BlockCollisionContext, BlockMethod, LevelReaderRef, UnportedBehavior,
+    };
     let mut level = flat_pool();
     let pos = BlockPos::new(8, 0, 8);
+    let reader = LevelReaderRef::Server(&level);
+    assert!(
+        crate::block::BASE_BLOCK
+            .shape(Block::AIR.default_state(), pos, &reader)
+            .unwrap()
+            .ptr_eq(&ferraloom_util::shapes::block())
+    );
+    assert!(
+        crate::block::BASE_BLOCK
+            .collision_shape(
+                Block::AIR.default_state(),
+                pos,
+                &BlockCollisionContext::empty(),
+                &reader
+            )
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        level
+            .required_block_behavior(Block::AIR, BlockMethod::OutlineShape)
+            .unwrap()
+            .shape(Block::AIR.default_state(), pos, &reader)
+            .unwrap()
+            .is_empty()
+    );
     // Leaves override random/updateShape, but inherit the full-cube inside
     // query and base survival. These are individually proven vanilla methods.
     let leaves = Block::OAK_LEAVES.default_state();

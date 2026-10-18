@@ -134,3 +134,17 @@ impl BlockBehavior for ChainBlock {
         super::fluid::SimpleWaterloggedBlock::pickup_block(state, pos, level)
     }
 }
+
+/// Port of AirBlock#getShape. All remaining simulation methods inherit base.
+pub struct AirBlock;
+pub static AIR_BLOCK: AirBlock = AirBlock;
+impl BlockBehavior for AirBlock {
+    fn shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
+    }
+}
