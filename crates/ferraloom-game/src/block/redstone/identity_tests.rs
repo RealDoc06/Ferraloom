@@ -231,6 +231,7 @@ fn lazy_first(level: &mut Level, handle: BlockEntityRef) {
     level.set_container_resources(
         Arc::new(ContainerResources {
             recipes: Arc::clone(&resources.recipes),
+            crafting: Arc::clone(&resources.crafting),
             loot: Arc::new(loot),
             advancements: Arc::clone(&resources.advancements),
             recipe_tags: resources.recipe_tags.clone(),
