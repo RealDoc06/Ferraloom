@@ -541,7 +541,7 @@ fn plant_clone_items_match_vanilla_for_all_registered_states() {
         let stack = stack.0.unwrap();
         assert_eq!(
             stack.item.protocol_id(),
-            f[2].parse::<u32>().unwrap(),
+            f[2].parse::<u16>().unwrap(),
             "{line}"
         );
         assert_eq!(stack.count, f[3].parse::<i32>().unwrap(), "{line}");
