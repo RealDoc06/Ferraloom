@@ -85,6 +85,7 @@ type LoadedContainer = Result<SavedData<StorageContainer>, Arc<ferraloom_storage
 pub struct CommandStorageSnapshot {
     namespaces: JavaHashMap<String, LoadedContainer>,
     discovery_error: Option<Arc<ferraloom_storage::Error>>,
+    /// Approved exception: cold, uncontended, metadata-only lock, never held across calls; the Arc snapshot keeps Level Send and stays correct under phase-5 parallel regions.
     touches: Arc<Mutex<Touches>>,
 }
 impl CommandStorageSnapshot {
