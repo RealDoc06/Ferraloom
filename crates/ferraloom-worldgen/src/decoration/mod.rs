@@ -91,6 +91,7 @@ impl DecorationPlan {
         registry: &FeatureRegistry,
         structures: &mut impl StructureDecoration,
     ) -> Result<(), Error> {
+        region.set_block_tags(generator.data().block_tags.clone());
         let center = region.center();
         let origin = [center[0] * 16, region.min_y(), center[1] * 16];
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));

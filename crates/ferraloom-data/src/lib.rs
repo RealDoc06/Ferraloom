@@ -8,7 +8,11 @@
 //! assert_eq!(wet.block(), Block::OAK_STAIRS);
 //! ```
 
+mod block_methods;
+pub use block_methods::BlockMethod;
+
 pub mod datapack;
+pub use datapack::tags;
 
 use std::marker::PhantomData;
 
@@ -413,6 +417,13 @@ impl BlockState {
         } else {
             Some(bits & (1 << 9) != 0)
         }
+    }
+    /// Port of BlockStateBase#getCollisionShape(BlockGetter, BlockPos): cached
+    /// states use Cache.collisionShape, initialized with EmptyBlockGetter at ZERO.
+    /// Dynamic shapes still need the level. Reuses the extracted collision shape.
+    pub fn cached_collision_empty(self) -> Option<bool> {
+        self.cached_collision_full_block()
+            .map(|_| self.data().collision.boxes().is_empty())
     }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
