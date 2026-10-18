@@ -26,7 +26,9 @@ pub use operation::{
 };
 pub use server_player::*;
 pub use slot::*;
-pub use stacks::{StackGenerations, StackRef, StackSlotRef, StackValue};
+pub use stacks::{
+    StackForward, StackGenerations, StackRef, StackReplacement, StackSlotRef, StackValue,
+};
 pub use sync::*;
 pub use transfer::{MenuTransferContext, move_menu_item_stack_to};
 

@@ -16,10 +16,30 @@ pub enum StackValue {
     New(ItemStack),
     Existing(StackRef),
 }
+/// Container-local result of replacing a stack. Live callers bind retained
+/// receivers to their owner handle; pure callers receive the unrooted value.
+#[derive(Debug)]
+pub enum StackReplacement {
+    Owned(ItemStack),
+    Retained(StackSlotRef),
+}
+impl StackReplacement {
+    pub fn into_owned(self) -> Option<ItemStack> {
+        match self {
+            Self::Owned(stack) => Some(stack),
+            Self::Retained(_) => None,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct StackSlotRef {
     pub slot: usize,
     pub generation: u64,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum StackForward {
+    Local(StackSlotRef),
+    External(StackRef),
 }
 impl StackRef {
     pub fn local(self) -> StackSlotRef {
@@ -33,7 +53,7 @@ impl StackRef {
 struct RetainedStack {
     roots: usize,
     detached: Option<ItemStack>,
-    forwarded: Option<StackRef>,
+    forwarded: Option<StackForward>,
 }
 /// One counter per slot; retention bookkeeping exists only while an operation
 /// holds receivers. The containing inventory/menu/BE owns both live and detached data.
@@ -69,6 +89,11 @@ impl StackGenerations {
             generation: *self.generations.get(slot)?,
         })
     }
+    pub fn is_retained(&self, reference: StackSlotRef) -> bool {
+        self.retained
+            .as_ref()
+            .is_some_and(|rows| rows.contains_key(&reference))
+    }
     pub fn retain(&mut self, reference: StackSlotRef) -> bool {
         let current = self.current(reference.slot) == Some(reference);
         let detached = self
@@ -93,23 +118,34 @@ impl StackGenerations {
     }
     /// Release the destination root as well when the final forwarding root
     /// disappears. The owner resolver follows that returned handle recursively.
-    pub fn release(&mut self, reference: StackSlotRef) -> Option<StackRef> {
-        let rows = self.retained.as_mut()?;
-        let mut forwarded = None;
-        if let Some(row) = rows.get_mut(&reference) {
-            row.roots -= 1;
-            if row.roots == 0 {
-                forwarded = rows.remove(&reference).and_then(|row| row.forwarded);
+    pub fn release(&mut self, mut reference: StackSlotRef) -> Option<StackRef> {
+        loop {
+            let rows = self.retained.as_mut()?;
+            let mut forwarded = None;
+            if let Some(row) = rows.get_mut(&reference) {
+                row.roots -= 1;
+                if row.roots == 0 {
+                    forwarded = rows.remove(&reference).and_then(|row| row.forwarded);
+                }
+            }
+            if rows.is_empty() {
+                self.retained = None;
+            }
+            match forwarded {
+                Some(StackForward::Local(next)) => reference = next,
+                Some(StackForward::External(next)) => return Some(next),
+                None => return None,
             }
         }
-        if rows.is_empty() {
-            self.retained = None;
-        }
-        forwarded
     }
     /// Container#setItem's object replacement. Install the new live object and
     /// generation before callers invoke any native callbacks.
-    pub fn replace(&mut self, slot: usize, current: &mut ItemStack, replacement: ItemStack) {
+    pub fn replace(
+        &mut self,
+        slot: usize,
+        current: &mut ItemStack,
+        replacement: ItemStack,
+    ) -> StackReplacement {
         let reference = self.current(slot).expect("container stack slot");
         let next = reference
             .generation
@@ -123,9 +159,12 @@ impl StackGenerations {
             .and_then(|rows| rows.get_mut(&reference))
         {
             row.detached = Some(old);
+            StackReplacement::Retained(reference)
+        } else {
+            StackReplacement::Owned(old)
         }
     }
-    pub fn forwarded(&self, reference: StackSlotRef) -> Option<StackRef> {
+    pub fn forwarded(&self, reference: StackSlotRef) -> Option<StackForward> {
         self.retained.as_ref()?.get(&reference)?.forwarded
     }
     /// Extract a rooted object during an atomic, callback-free move. The
@@ -154,7 +193,54 @@ impl StackGenerations {
             .and_then(|rows| rows.get_mut(&reference))
             .expect("moving a rooted stack");
         assert!(row.detached.is_none() && row.forwarded.is_none());
-        row.forwarded = Some(destination);
+        row.forwarded = Some(StackForward::External(destination));
+    }
+    /// Inventory#pickSlot swaps object identities before any callbacks. Existing
+    /// local roots follow to the new slots without requiring a world handle.
+    pub fn swap(&mut self, items: &mut [ItemStack], left: usize, right: usize) {
+        if left == right {
+            return;
+        }
+        let before = [self.current(left).unwrap(), self.current(right).unwrap()];
+        items.swap(left, right);
+        self.generations[left] = self.generations[left]
+            .checked_add(1)
+            .expect("stack generations exhausted");
+        self.generations[right] = self.generations[right]
+            .checked_add(1)
+            .expect("stack generations exhausted");
+        for (old, slot) in before.into_iter().zip([right, left]) {
+            if self.is_retained(old) {
+                let destination = self.current(slot).unwrap();
+                assert!(self.retain(destination));
+                self.retained
+                    .as_mut()
+                    .unwrap()
+                    .get_mut(&old)
+                    .unwrap()
+                    .forwarded = Some(StackForward::Local(destination));
+            }
+        }
+    }
+    /// An inventory-local object move. The original roots keep following the
+    /// object, while an overwritten destination retains its previous receiver.
+    pub fn move_to(&mut self, items: &mut [ItemStack], source: usize, destination: usize) {
+        if source == destination {
+            return;
+        }
+        let original = self.current(source).unwrap();
+        assert!(self.retain(original));
+        let stack = self.take_for_move(original, &mut items[source]).unwrap();
+        self.replace(destination, &mut items[destination], stack);
+        let moved = self.current(destination).unwrap();
+        assert!(self.retain(moved));
+        self.retained
+            .as_mut()
+            .unwrap()
+            .get_mut(&original)
+            .unwrap()
+            .forwarded = Some(StackForward::Local(moved));
+        assert!(self.release(original).is_none());
     }
     pub fn get<'a>(
         &'a self,
@@ -209,7 +295,14 @@ mod tests {
         }
         fn resolve(&self, mut reference: StackRef) -> StackRef {
             while let Some(next) = self.generations.forwarded(reference.local()) {
-                reference = next;
+                reference = match next {
+                    StackForward::External(next) => next,
+                    StackForward::Local(next) => StackRef {
+                        slot: next.slot,
+                        generation: next.generation,
+                        ..reference
+                    },
+                };
             }
             reference
         }
