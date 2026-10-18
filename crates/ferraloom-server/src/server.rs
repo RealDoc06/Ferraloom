@@ -685,7 +685,6 @@ impl MinecraftServer {
                     self.level.level.pending_precipitation_calls()
                 );
             }
-
         } else {
             self.integrate_jobs()?;
         }
@@ -1762,68 +1761,62 @@ impl MinecraftServer {
         packet: sb::ContainerClick,
     ) -> Result<()> {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-        let (packets, drops) = {
+        let spectator = {
             let player = self
                 .level
                 .level
-                .entity_mut::<ServerPlayer>(entity)
+                .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            let spectator = player.game_mode == GameType::Spectator || player.parent.health <= 0.;
-            let mut callbacks = PendingCraftingCallbacks;
-            let mut hooks = RecipeMenuHooks {
-                manager: &self.recipe_manager,
-                context: &self.crafting_context,
-                synchronization: &self.recipe_synchronization,
-                book: &mut player.recipe_book,
-                // The canonical GameRules owner supplies this hook on integration.
-                limited_crafting: None,
-                callbacks: &mut callbacks,
-            };
-            let menu = player.menus.current_mut();
-            if menu.container_id != packet.container_id.0 {
-                return Ok(());
-            }
-            ensure!(
-                !menu.slots.iter().any(|s| matches!(
-                    s.container,
-                    ferraloom_game::inventory::ContainerId::External(_)
-                )),
-                "Unsupported: canonical external container access"
-            );
-            let mut context = MenuContext::player(
-                &mut player.inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-            );
-            if spectator {
-                menu.send_all_data_to_remote(&context);
-            } else if menu.still_valid(&context)
-                && menu.is_valid_slot_index(i32::from(packet.slot_num))
-            {
-                let mismatch = menu.state_id() != packet.state_id.0;
-                menu.suppress_remote_updates();
-                let result = menu.clicked(
-                    &mut context,
-                    i32::from(packet.slot_num),
-                    i32::from(packet.button_num),
-                    packet.container_input,
-                    &mut hooks,
-                );
-                menu.resume_remote_updates();
-                result?;
-                for changed in packet.changed_slots.0 {
-                    menu.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
-                }
-                menu.set_remote_carried(packet.carried_item);
-                if mismatch {
-                    menu.broadcast_full_state(&context);
-                } else {
-                    menu.broadcast_changes(&context)?;
-                }
-            }
-            menu.changes.clear();
-            (menu.drain_packets(), context.drops)
+            player.game_mode == GameType::Spectator || player.parent.health <= 0.0
         };
+        let (packets, drops) = ferraloom_game::inventory::with_block_menu_context(
+            entity,
+            &mut self.level.level,
+            |menus, book, context| {
+                let mut callbacks = PendingCraftingCallbacks;
+                let mut hooks = RecipeMenuHooks {
+                    manager: &self.recipe_manager,
+                    context: &self.crafting_context,
+                    synchronization: &self.recipe_synchronization,
+                    book,
+                    // The canonical GameRules owner supplies this hook on integration.
+                    limited_crafting: None,
+                    callbacks: &mut callbacks,
+                };
+                let menu = menus.current_mut();
+                if menu.container_id != packet.container_id.0 {
+                    return Ok((Vec::new(), Vec::new()));
+                }
+                if spectator {
+                    menu.send_all_data_to_remote(context);
+                } else if menu.still_valid(context)
+                    && menu.is_valid_slot_index(i32::from(packet.slot_num))
+                {
+                    let mismatch = menu.state_id() != packet.state_id.0;
+                    menu.suppress_remote_updates();
+                    let result = menu.clicked(
+                        context,
+                        i32::from(packet.slot_num),
+                        i32::from(packet.button_num),
+                        packet.container_input,
+                        &mut hooks,
+                    );
+                    menu.resume_remote_updates();
+                    result?;
+                    for changed in packet.changed_slots.0 {
+                        menu.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
+                    }
+                    menu.set_remote_carried(packet.carried_item);
+                    if mismatch {
+                        menu.broadcast_full_state(context);
+                    } else {
+                        menu.broadcast_changes(context)?;
+                    }
+                }
+                menu.changes.clear();
+                Ok((menu.drain_packets(), std::mem::take(&mut context.drops)))
+            },
+        )?;
         for drop in drops {
             self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
@@ -1853,37 +1846,38 @@ impl MinecraftServer {
         packet: sb::ContainerButtonClick,
     ) -> Result<()> {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-        let (packets, drops) = {
+        let may_build = {
             let player = self
                 .level
                 .level
-                .entity_mut::<ServerPlayer>(entity)
+                .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if player.game_mode == GameType::Spectator
                 || player.menus.current().container_id != packet.container_id.0
             {
                 return Ok(());
             }
-            let may_build = player.game_mode != GameType::Adventure;
-            let mut context = MenuContext::player(
-                &mut player.inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-            );
-            let menu = player.menus.current_mut();
-            if !menu.still_valid(&context) {
-                return Ok(());
-            }
-            if menu.click_menu_button(
-                &mut context,
-                packet.button_id.0,
-                may_build,
-                &mut UnsupportedMenuHooks,
-            )? {
-                menu.broadcast_changes(&context)?;
-            }
-            (menu.drain_packets(), context.drops)
+            player.game_mode != GameType::Adventure
         };
+        let (packets, drops) = ferraloom_game::inventory::with_block_menu_context(
+            entity,
+            &mut self.level.level,
+            |menus, _book, context| {
+                let menu = menus.current_mut();
+                if !menu.still_valid(context) {
+                    return Ok((Vec::new(), Vec::new()));
+                }
+                if menu.click_menu_button(
+                    context,
+                    packet.button_id.0,
+                    may_build,
+                    &mut UnsupportedMenuHooks,
+                )? {
+                    menu.broadcast_changes(context)?;
+                }
+                Ok((menu.drain_packets(), std::mem::take(&mut context.drops)))
+            },
+        )?;
         for drop in drops {
             self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
