@@ -121,8 +121,8 @@ pub fn use_item_on(
     let used_stack = operation
         .level
         .stack(receiver)
-        .map_err(item_receiver_error)?
-        .clone();
+        .map_err(item_receiver_error)?;
+    let used_stack = used_stack.copy_with_count(count(used_stack));
     if !suppress {
         let result = operation
             .level
@@ -155,8 +155,25 @@ pub fn use_item_on(
     }
     let infinite_materials = player.instabuild();
     let original_count = count(stack);
-    let item = stack.0.as_ref().expect("nonempty hand").item;
-    let result = item_use_on(item, operation)?;
+    let held = operation
+        .pin(hand_slot(operation.level, context.player, context.hand)?)
+        .map_err(item_receiver_error)?;
+    let use_on = super::UseOnContext::new_retained(
+        Some(context.player),
+        context.hand,
+        held,
+        super::PlacementHit {
+            pos,
+            face: context.hit.direction,
+            location: ferraloom_util::Vec3::new(
+                f64::from(pos.x) + f64::from(context.hit.offset_x),
+                f64::from(pos.y) + f64::from(context.hit.offset_y),
+                f64::from(pos.z) + f64::from(context.hit.offset_z),
+            ),
+            inside: context.hit.inside,
+        },
+    );
+    let result = crate::item::stack::use_on(receiver, &use_on, operation)?;
     if let Some(result) = &result {
         if infinite_materials {
             set_count(
@@ -166,22 +183,29 @@ pub fn use_item_on(
                     .map_err(item_receiver_error)?,
                 original_count,
             );
-        } else if let InteractionResult::Success { item_context, .. } = result
-            && let Some(stack) = &item_context.held_item_transformed_to
-        {
+        } else if let InteractionResult::Success { item_context, .. } = result {
+            let transformed = match item_context.held_item_transformed_to {
+                Some(stack) => stack,
+                None => operation
+                    .pin(hand_slot(operation.level, context.player, context.hand)?)
+                    .map_err(item_receiver_error)?,
+            };
             let same = std::ptr::eq(
                 operation
                     .level
                     .stack(receiver)
                     .map_err(item_receiver_error)?,
-                operation.level.stack(*stack).map_err(item_receiver_error)?,
+                operation
+                    .level
+                    .stack(transformed)
+                    .map_err(item_receiver_error)?,
             );
             if !same {
                 operation
                     .level
                     .replace_stack_object(
                         hand_slot(operation.level, context.player, context.hand)?,
-                        StackValue::Existing(*stack),
+                        StackValue::Existing(transformed),
                     )
                     .map_err(item_receiver_error)?;
             }
@@ -191,16 +215,6 @@ pub fn use_item_on(
         }
     }
     Ok(result)
-}
-
-fn item_use_on(
-    item: ferraloom_data::Item,
-    operation: &mut StackOperation<'_>,
-) -> Result<Option<InteractionResult>, LevelError> {
-    operation
-        .level
-        .unported_operation(super::UnportedOperation::ItemUseOn(item))?;
-    Ok(None)
 }
 
 fn hand_slot(

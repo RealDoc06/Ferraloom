@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-block-item-') as directory:
                                       directory + ':' + CLASSPATH, 'BlockItemVectors'], cwd=directory)
     # Native bootstrap logging is not part of the vectors.
     vectors = b'\n'.join(line for line in native.splitlines()
-                         if line.startswith((b'place\t',))) + b'\n'
+                         if line.startswith((b'place\t', b'property\t', b'be\t'))) + b'\n'
     fixture = HERE / 'block-item.tsv.gz'
     if '--check' in sys.argv:
         if gzip.decompress(fixture.read_bytes()) != vectors:

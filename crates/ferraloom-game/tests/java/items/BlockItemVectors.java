@@ -14,6 +14,7 @@ import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.*;
 
@@ -68,6 +69,37 @@ public final class BlockItemVectors {
                     + "\t" + outcome + "\t" + receiver.getCount() + "\t" + held.getCount()
                     + "\t" + Block.getId(level.getBlockState(POS)) + "\t" + Block.getId(level.getBlockState(POS.relative(face)))
                     + "\t" + String.join(";", level.actions) + "\t" + level.getRandom().nextLong());
+            }
+        }
+        var properties = new LinkedHashMap<Block, String>();
+        properties.put(Blocks.COCOA, "age");
+        properties.put(Blocks.SNOW, "layers");
+        properties.put(Blocks.WHEAT, "age");
+        properties.put(Blocks.RED_MUSHROOM_BLOCK, "north");
+        properties.put(Blocks.OAK_STAIRS, "facing");
+        properties.put(Blocks.STONE, "missing");
+        for (var entry : properties.entrySet()) for (var state : entry.getKey().getStateDefinition().getPossibleStates()) {
+            for (var value : List.of("+1", "01", "١", "１", "𝟙", "1", "-0", "+0", "0002", "2", "2147483647", "2147483648", "-2147483648", "-2147483649", "true", "True", "false", "north", "east", "UP", "unknown", "")) {
+                var patch = new BlockItemStateProperties(Map.of(entry.getValue(), value));
+                System.out.println("property\t" + Block.getId(state) + "\t" + entry.getValue() + "\t" + value + "\t" + Block.getId(patch.apply(state)));
+            }
+        }
+        for (int kind = 0; kind < 3; kind++) for (int patch = 0; patch < 5; patch++) {
+            var level = new Fixture(registries);
+            var block = List.of(Blocks.CHEST, Blocks.BARREL, Blocks.FURNACE).get(kind);
+            var type = List.of(BlockEntityTypes.CHEST, BlockEntityTypes.BARREL, BlockEntityTypes.FURNACE).get(kind);
+            level.put(POS, block.defaultBlockState());
+            var stack = new ItemStack(block.asItem(), 3);
+            var tag = new net.minecraft.nbt.CompoundTag();
+            if (patch == 1 || patch == 2) tag.putString("CustomName", "native");
+            if (patch == 3) tag.putInt("ignored", 1);
+            if (patch == 4) tag.putString("id", "minecraft:furnace");
+            stack.set(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.TypedEntityData.of(patch == 2 ? BlockEntityTypes.SIGN : type, tag));
+            for (int repeat = 0; repeat < 2; repeat++) {
+                boolean result = BlockItem.updateCustomBlockEntityTag(level, null, POS, stack);
+                var entity = level.getBlockEntity(POS);
+                var name = ((net.minecraft.world.Nameable) entity).getCustomName();
+                System.out.println("be\t" + kind + "\t" + patch + "\t" + repeat + "\t" + result + "\t" + (name == null ? "" : name.getString()));
             }
         }
     }
