@@ -65,3 +65,12 @@ a constant: collision-shape defaults, for example, call other virtual methods.
 The extractor additionally exercises the base survival and shape-update methods
 for every applicable state with null level/tick/random arguments, proving those
 two known constants require no level behavior or random draws.
+
+`ExtractData <output-dir> --item-crafting-only` regenerates `item_crafting.json`.
+`Item#getCraftingRemainder` is final, returns the `craftingRemainingItem` field
+copied from `Item.Properties` by the constructor, and takes no stack or level.
+It is a per-item template, independent of the `USE_REMAINDER` data component.
+The generated `CraftingRemainder` holds a typed item id/count and persistent
+component patch JSON; the game resolves the patch through protocol codecs.
+`BannerItem#getColor` is recorded alongside it for component-independent banner
+crafting checks.

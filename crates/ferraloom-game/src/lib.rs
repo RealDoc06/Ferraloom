@@ -4,6 +4,7 @@
 //! complete cow AI, block placement updates, or the server tick loop.
 
 pub mod block;
+pub mod crafting;
 pub mod entity;
 pub mod level;
 pub mod ticks;
