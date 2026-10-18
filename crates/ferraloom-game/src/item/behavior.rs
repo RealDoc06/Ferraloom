@@ -147,6 +147,20 @@ struct ItemBase;
 impl ItemBehavior for ItemBase {}
 static ITEM: ItemBase = ItemBase;
 
+struct BoneMeal;
+impl ItemBehavior for BoneMeal {
+    fn use_on(
+        &self,
+        _item: Item,
+        _receiver: StackRef,
+        context: &UseOnContext<'_>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        super::bone_meal::use_on(context, operation)
+    }
+}
+static BONE_MEAL: BoneMeal = BoneMeal;
+
 struct BlockItem;
 impl ItemBehavior for BlockItem {
     fn use_on(
@@ -169,6 +183,7 @@ pub fn ported_behavior(item: Item, method: ItemMethod) -> Option<&'static dyn It
     }
     match (method, owner) {
         (ItemMethod::UseOn, ItemClass::Item) => Some(&ITEM),
+        (ItemMethod::UseOn, ItemClass::BoneMealItem) => Some(&BONE_MEAL),
         (
             ItemMethod::UseOn
             | ItemMethod::Place

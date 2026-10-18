@@ -92,6 +92,29 @@ pub fn consume(
     Ok(())
 }
 
+/// Port of ItemStack#causeUseVibration; the post-use receiver decides whether
+/// USE_EFFECTS is present, then the causer's current position supplies the event.
+pub fn cause_use_vibration(
+    receiver: StackRef,
+    causer: Option<EntityRef>,
+    event: ferraloom_data::registries::game_event::Id,
+    operation: &mut StackOperation<'_>,
+) -> Result<(), LevelError> {
+    let stack = operation.level.stack(receiver).map_err(receiver_error)?;
+    if matches!(inventory::component(stack, ComponentTypeId::USE_EFFECTS), Some(DataComponent::UseEffects(effects)) if effects.interact_vibrations)
+    {
+        let causer = causer.ok_or(LevelError::Inventory("item vibration causer"))?;
+        let position = operation
+            .level
+            .entity::<crate::entity::EntityData>(causer)?
+            .position;
+        operation
+            .level
+            .game_event(event, position, Some(causer), None);
+    }
+    Ok(())
+}
+
 fn has_infinite_materials(owner: Option<EntityRef>, level: &Level) -> Result<bool, LevelError> {
     if let Some(owner) = owner {
         level.entity::<crate::entity::LivingEntity>(owner)?;
