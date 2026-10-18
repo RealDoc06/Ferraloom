@@ -169,6 +169,38 @@ pub enum AttributeEntry {
     Unported(Value),
 }
 impl AttributeEntry {
+    pub(crate) fn interpolate(
+        id: Id,
+        from: &Self,
+        to: &Self,
+        alpha: f32,
+    ) -> Result<Self, UnsupportedAttribute> {
+        match (from, to) {
+            (
+                Self::Float {
+                    operation,
+                    argument: from,
+                    alpha: from_alpha,
+                },
+                Self::Float {
+                    argument: to,
+                    alpha: to_alpha,
+                    ..
+                },
+            ) => Ok(Self::Float {
+                operation: *operation,
+                argument: mth::lerp_f32(alpha, *from, *to),
+                alpha: mth::lerp_f32(alpha, *from_alpha, *to_alpha),
+            }),
+            (Self::Boolean { .. }, Self::Boolean { .. })
+            | (Self::TriState(_), Self::TriState(_)) => Ok(if alpha >= 1.0 {
+                to.clone()
+            } else {
+                from.clone()
+            }),
+            _ => Err(UnsupportedAttribute(id)),
+        }
+    }
     pub fn decode(id: Id, value: &Value) -> Result<Self, Error> {
         if !supports_scalar(id) {
             return Ok(Self::Unported(value.clone()));

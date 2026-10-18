@@ -1,5 +1,6 @@
 //! Shared immutable environment attribute decoding. Live clocks and biome access
 //! remain with the concrete Level; both live/worldgen readers use these entries.
+mod timeline;
 mod value;
 use crate::{Error, Identifier};
 use ferraloom_data::registries::{
@@ -8,6 +9,7 @@ use ferraloom_data::registries::{
 };
 use serde_json::Value;
 use std::marker::PhantomData;
+pub use timeline::{AttributeTrack, ClockSnapshot, SampleError, TimeMarker, Timeline};
 pub use value::{AttributeEntry, AttributeValue, BooleanModifier, ScalarValue, TriState};
 
 /// A typed registry key, resolved once rather than by strings at each sample.
