@@ -137,6 +137,9 @@ impl StructureStart {
                 StructurePiece::OceanRuin(piece) => {
                     piece.post_process(context, templates, tags, *bounds, reference)?
                 }
+                StructurePiece::WoodlandMansion(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
                 StructurePiece::EndCity(piece) => {
                     piece.post_process(context, templates, tags, *bounds, reference)?
                 }
@@ -170,7 +173,7 @@ impl StructureStart {
                 super::structures::desert_pyramid::after_place(&self.pieces, context, *bounds)?
             }
             Some("minecraft:woodland_mansion") => {
-                return Err(Error("Unsupported woodland mansion afterPlace".into()));
+                super::structures::woodland_mansion::after_place(context, &self.pieces, *bounds)?;
             }
             Some(_) => {}
             None => return Err(Error("valid start has no structure type".into())),

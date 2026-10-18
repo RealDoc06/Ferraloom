@@ -46,6 +46,7 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
         };
         let nether = (case["id"] == "minecraft:nether_fossil"
             || case["id"] == "minecraft:end_city"
+            || case["id"] == "minecraft:mansion"
             || case["id"]
                 .as_str()
                 .unwrap()
@@ -58,10 +59,11 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
                         .require(
                             &if case["id"] == "minecraft:end_city" {
                                 "worldgen/noise_settings/end.json"
-                            } else if case["id"]
-                                .as_str()
-                                .unwrap()
-                                .starts_with("minecraft:mineshaft")
+                            } else if case["id"] == "minecraft:mansion"
+                                || case["id"]
+                                    .as_str()
+                                    .unwrap()
+                                    .starts_with("minecraft:mineshaft")
                             {
                                 "worldgen/noise_settings/overworld.json"
                             } else {

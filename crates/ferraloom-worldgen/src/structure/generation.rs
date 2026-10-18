@@ -23,6 +23,7 @@ enum StructureGenerator {
     BuriedTreasure,
     Igloo,
     EndCity,
+    WoodlandMansion,
     SwampHut,
     JungleTemple,
     NetherFortress,
@@ -76,6 +77,7 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:woodland_mansion" => StructureGenerator::WoodlandMansion,
                     "minecraft:mineshaft" => StructureGenerator::Mineshaft(
                         super::structures::mineshaft::MineshaftType::decode(&resource.json()?)?,
                     ),
@@ -345,7 +347,7 @@ impl StructureGenerators {
                     pieces,
                 ));
             }
-            StructureGenerator::EndCity => {
+            kind @ (StructureGenerator::EndCity | StructureGenerator::WoodlandMansion) => {
                 use ferraloom_util::{
                     Rotation,
                     random::{Algorithm, RandomSource, WorldgenRandom},
@@ -389,15 +391,27 @@ impl StructureGenerators {
                 if !valid(&(context.biome)(position.map(|v| v >> 2))?) {
                     return Ok(StructureStart::invalid());
                 }
-                let pieces = super::structures::end_city::start_house_tower(
-                    context.templates,
-                    position,
-                    rotation,
-                    &mut random,
-                )
-                .into_iter()
-                .map(|p| StructurePiece::EndCity(Box::new(p)))
-                .collect();
+                let pieces = if matches!(kind, StructureGenerator::EndCity) {
+                    super::structures::end_city::start_house_tower(
+                        context.templates,
+                        position,
+                        rotation,
+                        &mut random,
+                    )
+                    .into_iter()
+                    .map(|p| StructurePiece::EndCity(Box::new(p)))
+                    .collect()
+                } else {
+                    super::structures::woodland_mansion::generate(
+                        context.templates,
+                        position,
+                        rotation,
+                        &mut random,
+                    )
+                    .into_iter()
+                    .map(|p| StructurePiece::WoodlandMansion(Box::new(p)))
+                    .collect()
+                };
                 return Ok(StructureStart::new(
                     id.clone(),
                     settings.kind,

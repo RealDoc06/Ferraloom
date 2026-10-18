@@ -208,12 +208,25 @@ impl StructurePieceData {
         bounds: BoundingBox,
         loot: &Identifier,
     ) -> Result<bool, Error> {
+        Self::create_chest_at(context, self.world_position(local), bounds, loot, None)
+    }
+    /// Port of StructurePiece#createChest with world coordinates and an optional
+    /// explicit state. Explicit template-marker facings bypass chest reorientation.
+    pub fn create_chest_at(
+        context: &mut crate::feature::FeatureContext<'_, '_>,
+        p: [i32; 3],
+        bounds: BoundingBox,
+        loot: &Identifier,
+        state: Option<ferraloom_data::BlockState>,
+    ) -> Result<bool, Error> {
         use ferraloom_data::Block;
-        let p = self.world_position(local);
         if !bounds.contains(p) || context.region.block(p)?.block() == Block::CHEST {
             return Ok(false);
         }
-        let state = super::structures::buried_treasure::reorient_chest(context.region, p)?;
+        let state = match state {
+            Some(state) => state,
+            None => super::structures::buried_treasure::reorient_chest(context.region, p)?,
+        };
         context.region.set_block(p, state, 2)?;
         context.region.set_loot_table(p, loot, context.random)?;
         Ok(true)

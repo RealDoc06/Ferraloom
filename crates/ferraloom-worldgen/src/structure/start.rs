@@ -23,6 +23,7 @@ pub enum StructurePiece {
     Shipwreck(Box<super::structures::shipwreck::ShipwreckPiece>),
     NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
     EndCity(Box<super::structures::end_city::EndCityPiece>),
+    WoodlandMansion(Box<super::structures::woodland_mansion::WoodlandMansionPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
     Stronghold(super::structures::stronghold::StrongholdPiece),
     NetherFortress(super::structures::nether_fortress::FortressPiece),
@@ -59,6 +60,7 @@ impl StructurePiece {
             Self::Shipwreck(p) => p.template.data.bounds,
             Self::NetherFossil(p) => p.template.data.bounds,
             Self::EndCity(p) => p.template.data.bounds,
+            Self::WoodlandMansion(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
             Self::Stronghold(p) => p.data.bounds,
             Self::NetherFortress(p) => p.data.bounds,
@@ -77,6 +79,7 @@ impl StructurePiece {
             Self::Shipwreck(p) => Ok(p.to_nbt()),
             Self::NetherFossil(p) => Ok(p.to_nbt()),
             Self::EndCity(p) => Ok(p.to_nbt()),
+            Self::WoodlandMansion(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
             Self::Stronghold(p) => Ok(p.to_nbt()),
             Self::NetherFortress(p) => Ok(p.to_nbt()),
@@ -308,6 +311,15 @@ impl StructureStart {
                             super::structures::ocean_ruin::OceanRuinPiece::from_nbt(templates, tag)
                         {
                             pieces.push(StructurePiece::OceanRuin(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:wmp" => {
+                        if let Ok(piece) =
+                            super::structures::woodland_mansion::WoodlandMansionPiece::from_nbt(
+                                templates, tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::WoodlandMansion(Box::new(piece)));
                         }
                     }
                     "minecraft:ecp" => {
