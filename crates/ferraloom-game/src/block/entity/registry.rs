@@ -16,7 +16,9 @@ fn registry() -> &'static Registry {
         let mut by_block = vec![None; ferraloom_data::registries::block::ALL.len()];
         for line in include_str!("../../../tests/java/blocks/entities/vectors.tsv").lines() {
             let mut fields = line.split('\t');
-            if fields.next() != Some("registry") { continue; }
+            if fields.next() != Some("registry") {
+                continue;
+            }
             let kind = BlockEntityType::from_name(fields.next().expect("type name"))
                 .expect("vanilla block entity type");
             for name in fields.next().expect("valid blocks").split(',') {
@@ -25,7 +27,10 @@ fn registry() -> &'static Registry {
                 by_block[block.protocol_id() as usize] = Some(kind);
             }
         }
-        Registry { valid_blocks, by_block }
+        Registry {
+            valid_blocks,
+            by_block,
+        }
     })
 }
 pub fn valid_blocks(kind: BlockEntityType) -> &'static [Block] {
@@ -39,7 +44,13 @@ pub fn for_block(block: Block) -> Option<BlockEntityType> {
 }
 /// Port of BlockEntityTypes.OP_ONLY_CUSTOM_DATA.
 pub fn only_op_can_set_nbt(kind: BlockEntityType) -> bool {
-    matches!(kind, BlockEntityType::COMMAND_BLOCK | BlockEntityType::LECTERN
-        | BlockEntityType::SIGN | BlockEntityType::HANGING_SIGN
-        | BlockEntityType::MOB_SPAWNER | BlockEntityType::TRIAL_SPAWNER)
+    matches!(
+        kind,
+        BlockEntityType::COMMAND_BLOCK
+            | BlockEntityType::LECTERN
+            | BlockEntityType::SIGN
+            | BlockEntityType::HANGING_SIGN
+            | BlockEntityType::MOB_SPAWNER
+            | BlockEntityType::TRIAL_SPAWNER
+    )
 }

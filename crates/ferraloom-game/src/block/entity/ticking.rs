@@ -28,26 +28,34 @@ pub struct BlockEntityTickers {
 impl BlockEntityTickers {
     /// Rebinding preserves the existing list position; removal then insertion
     /// creates a fresh wrapper and therefore waits when called during a phase.
-    pub fn bind(&mut self,entity: BlockEntityRef,kind: BlockEntityType) -> TickerId {
-        let binding = Some(TickingBlockEntity { entity,kind });
+    pub fn bind(&mut self, entity: BlockEntityRef, kind: BlockEntityType) -> TickerId {
+        let binding = Some(TickingBlockEntity { entity, kind });
         if let Some(id) = self.at_position.get(&entity.0).copied() {
             self.wrappers.get_mut(&id).expect("live wrapper").binding = binding;
             return id;
         }
         let id = TickerId(self.next_id);
-        self.next_id = self.next_id.checked_add(1).expect("block entity ticker identities exhausted");
-        self.wrappers.insert(id,RebindableTickingBlockEntityWrapper { binding });
-        self.at_position.insert(entity.0,id);
-        if self.cursor.is_some() { self.pending.push(id); } else { self.active.push(id); }
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("block entity ticker identities exhausted");
+        self.wrappers
+            .insert(id, RebindableTickingBlockEntityWrapper { binding });
+        self.at_position.insert(entity.0, id);
+        if self.cursor.is_some() {
+            self.pending.push(id);
+        } else {
+            self.active.push(id);
+        }
         id
     }
-    pub fn unbind(&mut self,pos: BlockPos) {
+    pub fn unbind(&mut self, pos: BlockPos) {
         if let Some(id) = self.at_position.remove(&pos) {
             self.wrappers.get_mut(&id).expect("live wrapper").binding = None;
         }
     }
     pub fn begin_phase(&mut self) {
-        assert!(self.cursor.is_none(),"reentrant block entity phase");
+        assert!(self.cursor.is_none(), "reentrant block entity phase");
         self.active.append(&mut self.pending);
         self.cursor = Some(0);
     }
@@ -68,7 +76,13 @@ impl BlockEntityTickers {
         self.cursor = Some(index);
         None
     }
-    pub fn end_phase(&mut self) { self.cursor = None; }
-    pub fn is_ticking(&self) -> bool { self.cursor.is_some() }
-    pub fn wrapper(&self,id: TickerId) -> Option<&RebindableTickingBlockEntityWrapper> { self.wrappers.get(&id) }
+    pub fn end_phase(&mut self) {
+        self.cursor = None;
+    }
+    pub fn is_ticking(&self) -> bool {
+        self.cursor.is_some()
+    }
+    pub fn wrapper(&self, id: TickerId) -> Option<&RebindableTickingBlockEntityWrapper> {
+        self.wrappers.get(&id)
+    }
 }
