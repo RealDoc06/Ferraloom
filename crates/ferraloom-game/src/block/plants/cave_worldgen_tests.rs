@@ -298,11 +298,12 @@ fn cave_multiface_and_vegetation_fixtures_use_real_game_bridge() {
                     "minecraft:multiface_growth"
                         | "minecraft:vegetation_patch"
                         | "minecraft:waterlogged_vegetation_patch"
+                        | "minecraft:sculk_patch"
                 )
             )
         })
         .collect::<Vec<_>>();
-    assert_eq!(selected.len(), 216);
+    assert_eq!(selected.len(), 264);
     let mut loader = FeatureLoader::new(&resources).unwrap();
     let mut features = BTreeMap::new();
     for case in &selected {
@@ -356,7 +357,7 @@ fn cave_multiface_and_vegetation_fixtures_use_real_game_bridge() {
     for (name, (matches, unpended)) in &coverage {
         eprintln!("Cave {name}: {matches} complete matches, {unpended} un-pended");
     }
-    eprintln!("Cave game bridge: 216 complete matches, {unpended} un-pended");
+    eprintln!("Cave game bridge: 264 complete matches, {unpended} un-pended");
     assert!(
         unpended > 0,
         "real plant bridge must complete pending cave fixtures"
