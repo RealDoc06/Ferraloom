@@ -330,7 +330,9 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
                 }
             }
             for (&[x, y, z], &state) in &before {
-                level.set_block_state(BlockPos::new(x, y, z), state).unwrap();
+                level
+                    .set_block_state(BlockPos::new(x, y, z), state)
+                    .unwrap();
             }
             level.set_random_streams(random(&case), 0);
             run(&case, &mut LevelAccessRef::Server(&mut level));
