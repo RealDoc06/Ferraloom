@@ -32,7 +32,9 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
-            requested_full_status: FullChunkStatus::Inaccessible,
+            // LevelChunk#getFullStatus defaults to FULL until a holder's
+            // supplier is attached. This alone never permits broadcasts.
+            requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
             unsaved: false,
         }
@@ -57,7 +59,7 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
-            requested_full_status: FullChunkStatus::Inaccessible,
+            requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
             unsaved: false,
         }
