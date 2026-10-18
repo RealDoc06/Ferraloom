@@ -710,6 +710,20 @@ impl World {
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }
+    /// Capture the dimension's actual generator, configured feature registry and
+    /// WorldOptions seed before constructing the concrete live level.
+    pub fn level_context(
+        &self,
+        resources: &ResourceManager,
+    ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
+        let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
+        Ok(Arc::new(ferraloom_game::level::LevelContext::new(
+            self.seed,
+            self.generator.sea_level(),
+            self.generator.clone(),
+            Arc::new(features),
+        )))
+    }
     /// Attach immutable dimension layers after the sole server clock manager
     /// loads. Callers publish its actual snapshot; no local day counter exists.
     pub fn install_live_environment(
@@ -1442,7 +1456,10 @@ mod entity_io_tests {
         }])
         .unwrap();
         io.worker.synchronize(false).await.unwrap();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(pos, Visibility::Tracked)
             .unwrap();

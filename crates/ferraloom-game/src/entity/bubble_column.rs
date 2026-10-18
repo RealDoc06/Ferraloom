@@ -91,7 +91,10 @@ mod tests {
             .filter(|row| row.starts_with("bubble\t"))
         {
             let fields: Vec<_> = row.split('\t').collect();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             let id = level.next_entity_ref();
             let network = level.next_entity_id();
             let state = if fields[1] != "tnt" {
@@ -149,7 +152,10 @@ mod tests {
     #[test]
     fn above_column_particles_consume_level_random_in_native_packet_order() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let entity = level.next_entity_ref();
         let tnt = PrimedTnt::new(level.next_entity_id(), 123);
         level

@@ -3,7 +3,7 @@ use crate::{
     biome::BiomeSource,
     feature::{FeatureLoader, FeatureRegistry},
     generator::{GenerationData, NoiseBasedChunkGenerator},
-    region::{ChunkStatus, RegionChunk, WorldgenBlockBehavior},
+    region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
     settings::{DimensionType, NoiseGeneratorSettings},
 };
 use ferraloom_data::datapack::{Pack, ResourceManager};
@@ -227,8 +227,10 @@ fn check(
     )
     .unwrap();
     let mut context = FeatureContext {
-        region: &mut region,
-        random: &mut random,
+        level: crate::feature::WorldGenLevel::Region(&mut region),
+        random: crate::feature::FeatureRandomSelector::External(
+            crate::feature::FeatureRandom::Region(&mut random),
+        ),
         origin,
         generator,
         registry,

@@ -25,10 +25,10 @@ impl SpeleothemBlocks {
         state.block() == self.base || self.replaceable.contains(&state.block())
     }
     fn place_base(&self, ctx: &mut FeatureContext<'_, '_>, p: [i32; 3]) -> Result<bool, Error> {
-        if !self.replaceable.contains(&ctx.region.block(p)?.block()) {
+        if !self.replaceable.contains(&ctx.level.block(p)?.block()) {
             return Ok(false);
         }
-        ctx.region.set_block(p, self.base.default_state(), 2)?;
+        ctx.level.set_block(p, self.base.default_state(), 2)?;
         Ok(true)
     }
     fn grow(
@@ -39,7 +39,7 @@ impl SpeleothemBlocks {
         height: i32,
         merged: bool,
     ) -> Result<(), Error> {
-        if !self.is_base(ctx.region.block(move_direction(p, direction.opposite()))?) {
+        if !self.is_base(ctx.level.block(move_direction(p, direction.opposite()))?) {
             return Ok(());
         }
         for i in 0..height {
@@ -69,14 +69,14 @@ impl SpeleothemBlocks {
                 .with(properties::THICKNESS, thickness)
                 .ok_or_else(|| Error("pointed block lacks thickness".into()))?;
             // 26.3 applies waterlogging to pointed_block, including sulfur spikes.
-            let fluid = ctx.region.fluid(p)?;
+            let fluid = ctx.level.fluid(p)?;
             state = state
                 .with(
                     properties::WATERLOGGED,
                     self.water.contains(&fluid.fluid_type),
                 )
                 .ok_or_else(|| Error("pointed block lacks waterlogged".into()))?;
-            ctx.region.set_block(p, state, 2)?;
+            ctx.level.set_block(p, state, 2)?;
             p[1] += if direction == VerticalDirection::Up {
                 1
             } else {
@@ -182,17 +182,16 @@ pub(super) fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
 }
 impl Feature for SpeleothemFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let above = self.blocks.is_base(
-            ctx.region
-                .block(move_direction(ctx.origin, Direction::Up))?,
-        );
+        let above = self
+            .blocks
+            .is_base(ctx.level.block(move_direction(ctx.origin, Direction::Up))?);
         let below = self.blocks.is_base(
-            ctx.region
+            ctx.level
                 .block(move_direction(ctx.origin, Direction::Down))?,
         );
         let direction = match (above, below) {
             (true, true) => {
-                if ctx.random.next_boolean() {
+                if ctx.random()?.next_boolean() {
                     Direction::Down
                 } else {
                     Direction::Up
@@ -205,25 +204,25 @@ impl Feature for SpeleothemFeature {
         let root = move_direction(ctx.origin, direction.opposite());
         self.blocks.place_base(ctx, root)?;
         for d in HORIZONTAL {
-            if ctx.random.next_float() > self.spread {
+            if ctx.random()?.next_float() > self.spread {
                 continue;
             }
             let p = move_direction(root, d);
             self.blocks.place_base(ctx, p)?;
-            if ctx.random.next_float() > self.radius2 {
+            if ctx.random()?.next_float() > self.radius2 {
                 continue;
             }
-            let d = Direction::VALUES[ctx.random.next_int_bound(6) as usize];
+            let d = Direction::VALUES[ctx.random()?.next_int_bound(6) as usize];
             let p = move_direction(p, d);
             self.blocks.place_base(ctx, p)?;
-            if ctx.random.next_float() > self.radius3 {
+            if ctx.random()?.next_float() > self.radius3 {
                 continue;
             }
-            let d = Direction::VALUES[ctx.random.next_int_bound(6) as usize];
+            let d = Direction::VALUES[ctx.random()?.next_int_bound(6) as usize];
             self.blocks.place_base(ctx, move_direction(p, d))?;
         }
-        let height = if ctx.random.next_float() < self.taller
-            && empty_or_water(ctx.region.block(move_direction(ctx.origin, direction))?)
+        let height = if ctx.random()?.next_float() < self.taller
+            && empty_or_water(ctx.level.block(move_direction(ctx.origin, direction))?)
         {
             2
         } else {
@@ -253,16 +252,16 @@ struct SpeleothemClusterFeature {
 }
 impl SpeleothemClusterFeature {
     fn can_pool(&self, ctx: &FeatureContext<'_, '_>, p: [i32; 3]) -> Result<bool, Error> {
-        let state = ctx.region.block(p)?;
+        let state = ctx.level.block(p)?;
         if [Block::WATER, self.blocks.base, self.blocks.pointed].contains(&state.block()) {
             return Ok(false);
         }
         let water = |s: BlockState| self.blocks.water.contains(&s.data().fluid.fluid_type);
-        if water(ctx.region.block(move_direction(p, Direction::Up))?) {
+        if water(ctx.level.block(move_direction(p, Direction::Up))?) {
             return Ok(false);
         }
         for d in HORIZONTAL.into_iter().chain([Direction::Down]) {
-            let state = ctx.region.block(move_direction(p, d))?;
+            let state = ctx.level.block(move_direction(p, d))?;
             if !self.stone.contains(&state.block()) && !water(state) {
                 return Ok(false);
             }
@@ -286,13 +285,13 @@ impl SpeleothemClusterFeature {
     }
     fn height(
         &self,
-        ctx: &mut FeatureContext<'_, '_>,
+        random: &mut impl RandomSource,
         dx: i32,
         dz: i32,
         density: f32,
         max: i32,
     ) -> i32 {
-        if ctx.random.next_float() > density {
+        if random.next_float() > density {
             return 0;
         }
         let distance = (dx.abs() + dz.abs()) as f64;
@@ -303,8 +302,7 @@ impl SpeleothemClusterFeature {
             max as f64 / 2.0,
             0.0,
         ) as f32;
-        (mean + ctx.random.next_gaussian() as f32 * self.deviation as f32).clamp(0.0, max as f32)
-            as i32
+        (mean + random.next_gaussian() as f32 * self.deviation as f32).clamp(0.0, max as f32) as i32
     }
     #[allow(clippy::too_many_arguments)]
     fn column(
@@ -319,7 +317,7 @@ impl SpeleothemClusterFeature {
         density: f32,
     ) -> Result<(), Error> {
         let Some(Column { mut floor, ceiling }) =
-            scan(ctx.region, p, self.range, empty_or_water, |s| {
+            scan(&ctx.level, p, self.range, empty_or_water, |s| {
                 !empty_or_water(s)
             })?
         else {
@@ -328,54 +326,58 @@ impl SpeleothemClusterFeature {
         if floor.is_none() && ceiling.is_none() {
             return Ok(());
         }
-        let want_pool = ctx.random.next_float() < wetness;
+        let want_pool = ctx.random()?.next_float() < wetness;
         if want_pool
             && let Some(y) = floor
             && self.can_pool(ctx, [p[0], y, p[2]])?
         {
-            ctx.region
+            ctx.level
                 .set_block([p[0], y, p[2]], Block::WATER.default_state(), 2)?;
             floor = Some(y - 1);
         }
-        let want = ctx.random.next_double() < chance;
+        let want = ctx.random()?.next_double() < chance;
         let mut down = 0;
         if let Some(y) = ceiling
             && want
-            && ctx.region.block([p[0], y, p[2]])?.block() != Block::LAVA
+            && ctx.level.block([p[0], y, p[2]])?.block() != Block::LAVA
         {
-            let n = self.thickness.sample(ctx.random);
+            let n = self.thickness.sample(&mut ctx.random()?);
             self.replace_base(ctx, [p[0], y, p[2]], n, Direction::Up)?;
             let max = floor.map_or(height, |f| height.min(y - f));
-            down = self.height(ctx, dx, dz, density, max);
+            down = self.height(&mut ctx.random()?, dx, dz, density, max);
         }
-        let want = ctx.random.next_double() < chance;
+        let want = ctx.random()?.next_double() < chance;
         let mut up = 0;
         if let Some(y) = floor
             && want
-            && ctx.region.block([p[0], y, p[2]])?.block() != Block::LAVA
+            && ctx.level.block([p[0], y, p[2]])?.block() != Block::LAVA
         {
-            let n = self.thickness.sample(ctx.random);
+            let n = self.thickness.sample(&mut ctx.random()?);
             self.replace_base(ctx, [p[0], y, p[2]], n, Direction::Down)?;
             up = if ceiling.is_some() {
                 (down
-                    + mth::random_between_inclusive(ctx.random, -self.difference, self.difference))
+                    + mth::random_between_inclusive(
+                        &mut ctx.random()?,
+                        -self.difference,
+                        self.difference,
+                    ))
                 .max(0)
             } else {
-                self.height(ctx, dx, dz, density, height)
+                self.height(&mut ctx.random()?, dx, dz, density, height)
             };
         }
         if let (Some(f), Some(c)) = (floor, ceiling)
             && c - down <= f + up
         {
             let bottom = mth::random_between_inclusive(
-                ctx.random,
+                &mut ctx.random()?,
                 (c - down).max(f + 1),
                 (f + up).min(c - 1) + 1,
             );
             down = c - bottom;
             up = bottom - 1 - f;
         }
-        let merge = ctx.random.next_boolean()
+        let merge = ctx.random()?.next_boolean()
             && down > 0
             && up > 0
             && matches!((floor,ceiling),(Some(f),Some(c)) if down+up==c-f-1);
@@ -392,14 +394,14 @@ impl SpeleothemClusterFeature {
 }
 impl Feature for SpeleothemClusterFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if !empty_or_water(ctx.region.block(ctx.origin)?) {
+        if !empty_or_water(ctx.level.block(ctx.origin)?) {
             return Ok(false);
         }
-        let height = self.height.sample(ctx.random);
-        let wetness = self.wetness.sample(ctx.random);
-        let density = self.density.sample(ctx.random);
-        let xr = self.radius.sample(ctx.random);
-        let zr = self.radius.sample(ctx.random);
+        let height = self.height.sample(&mut ctx.random()?);
+        let wetness = self.wetness.sample(&mut ctx.random()?);
+        let density = self.density.sample(&mut ctx.random()?);
+        let xr = self.radius.sample(&mut ctx.random()?);
+        let zr = self.radius.sample(&mut ctx.random()?);
         for dx in -xr..=xr {
             for dz in -zr..=zr {
                 let distance = (xr - dx.abs()).min(zr - dz.abs());
@@ -484,17 +486,17 @@ impl LargeDripstone {
         while self.radius > 1 {
             let mut root = self.root;
             for _ in 0..10.min(self.height(0.0)) {
-                if ctx.region.block(root)?.block() == Block::LAVA {
+                if ctx.level.block(root)?.block() == Block::LAVA {
                     return Ok(false);
                 }
                 let center = wind.offset(root);
-                let mut embedded = !empty_or_liquid(ctx.region.block(center)?);
+                let mut embedded = !empty_or_liquid(ctx.level.block(center)?);
                 if embedded {
                     let mut angle = 0.0f32;
                     while angle < std::f32::consts::TAU {
                         let dx = (mth::cos(angle as f64) * self.radius as f32) as i32;
                         let dz = (mth::sin(angle as f64) * self.radius as f32) as i32;
-                        if empty_or_liquid(ctx.region.block(offset(center, [dx, 0, dz]))?) {
+                        if empty_or_liquid(ctx.level.block(offset(center, [dx, 0, dz]))?) {
                             embedded = false;
                             break;
                         }
@@ -527,13 +529,14 @@ impl LargeDripstone {
                 if height <= 0 {
                     continue;
                 }
-                if (ctx.random.next_float() as f64) < 0.2 {
-                    height = (height as f32 * mth::random_between(ctx.random, 0.8, 1.0)) as i32;
+                if (ctx.random()?.next_float() as f64) < 0.2 {
+                    height =
+                        (height as f32 * mth::random_between(&mut ctx.random()?, 0.8, 1.0)) as i32;
                 }
                 let mut p = offset(self.root, [dx, 0, dz]);
                 let mut outside = false;
                 let max_y = if self.up {
-                    ctx.region
+                    ctx.level
                         .height_at(crate::region::Heightmap::WorldSurfaceWg, p[0], p[2])?
                 } else {
                     i32::MAX
@@ -543,10 +546,10 @@ impl LargeDripstone {
                         break;
                     }
                     let q = wind.offset(p);
-                    let old = ctx.region.block(q)?;
+                    let old = ctx.level.block(q)?;
                     if empty_or_liquid(old) {
                         outside = true;
-                        ctx.region
+                        ctx.level
                             .set_block(q, Block::DRIPSTONE_BLOCK.default_state(), 2)?;
                     } else if outside && stone.contains(&old.block()) {
                         break;
@@ -563,7 +566,7 @@ impl Feature for LargeDripstoneFeature {
         let Some(Column {
             floor: Some(floor),
             ceiling: Some(ceiling),
-        }) = scan(ctx.region, ctx.origin, self.range, empty_or_water, |s| {
+        }) = scan(&ctx.level, ctx.origin, self.range, empty_or_water, |s| {
             s.block() == Block::DRIPSTONE_BLOCK
                 || s.block() == Block::LAVA
                 || self.replaceable.contains(&s.block())
@@ -577,27 +580,27 @@ impl Feature for LargeDripstoneFeature {
         }
         let (min, max) = self.radius.range();
         let max = ((height as f32 * self.ratio) as i32).clamp(min, max);
-        let radius = mth::random_between_inclusive(ctx.random, min, max);
+        let radius = mth::random_between_inclusive(&mut ctx.random()?, min, max);
         let mut down = LargeDripstone {
             root: [ctx.origin[0], ceiling - 1, ctx.origin[2]],
             up: false,
             radius,
-            bluntness: self.stalactite.sample(ctx.random) as f64,
-            scale: self.scale.sample(ctx.random) as f64,
+            bluntness: self.stalactite.sample(&mut ctx.random()?) as f64,
+            scale: self.scale.sample(&mut ctx.random()?) as f64,
         };
         let mut up = LargeDripstone {
             root: [ctx.origin[0], floor + 1, ctx.origin[2]],
             up: true,
             radius,
-            bluntness: self.stalagmite.sample(ctx.random) as f64,
-            scale: self.scale.sample(ctx.random) as f64,
+            bluntness: self.stalagmite.sample(&mut ctx.random()?) as f64,
+            scale: self.scale.sample(&mut ctx.random()?) as f64,
         };
         let wind = if radius >= self.wind_radius
             && down.bluntness >= self.wind_bluntness as f64
             && up.bluntness >= self.wind_bluntness as f64
         {
-            let speed = self.wind.sample(ctx.random);
-            let d = mth::random_between(ctx.random, 0.0, std::f32::consts::PI);
+            let speed = self.wind.sample(&mut ctx.random()?);
+            let d = mth::random_between(&mut ctx.random()?, 0.0, std::f32::consts::PI);
             Wind {
                 y: ctx.origin[1],
                 speed: Some([

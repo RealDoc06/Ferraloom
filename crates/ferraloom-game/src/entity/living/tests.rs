@@ -69,7 +69,7 @@ fn native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions(
                 .push(DataComponent::UseEffects(UseEffects {
                     can_sprint: true,
                     interact_vibrations: name != "vibration_off",
-                    speed_multiplier: 1.0,
+                    speed_multiplier: 1.0.into(),
                 }));
         }
         if name == "empty_payload" {

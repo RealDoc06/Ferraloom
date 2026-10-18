@@ -9,7 +9,10 @@ use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     level
         .add_chunk(LevelChunk::new(
             ChunkPos::new(0, 0),
@@ -79,6 +82,24 @@ fn multiface_neighbor_loss_removes_only_the_unsupported_face() {
 #[test]
 fn decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles() {
     let mut level = level();
+    use ferraloom_data::datapack::{Pack, ResourceManager, TagSet, load_tags};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+    let resources =
+        ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+    let blocks = load_tags(&resources, "block", |id, _| {
+        Block::from_name(&id.to_string())
+    });
+    let fluids = load_tags(&resources, "fluid", |id, _| {
+        ferraloom_data::registries::fluid::Id::from_name(&id.to_string())
+    });
+    assert!(blocks.diagnostics.is_empty());
+    assert!(fluids.diagnostics.is_empty());
+    level.set_block_tags(Arc::new(
+        TagSet::from_tags(blocks, ferraloom_data::BLOCKS.len()).unwrap(),
+    ));
+    level.set_fluid_tags(Arc::new(
+        TagSet::from_tags(fluids, ferraloom_data::registries::fluid::ALL.len()).unwrap(),
+    ));
     let pos = BlockPos::new(8, 5, 8);
     let decaying = Block::OAK_LEAVES
         .default_state()

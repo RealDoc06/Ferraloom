@@ -234,7 +234,7 @@ pub fn player_touch(
     }
     let mut stack = item.item().clone();
     let org_count = count(&stack);
-    let kind = stack.0.as_ref().map(|stack| stack.item);
+    let kind = stack.item();
     let target = level.entity_mut::<ServerPlayer>(player)?;
     let infinite = target.instabuild();
     let accepted = target
@@ -254,14 +254,12 @@ pub fn player_touch(
                 org_count,
             );
         }
-        if let Some(item) = kind {
-            level.emit_entity_effect(crate::entity::effects::EntityEffect::ItemPickup {
-                player,
-                entity,
-                item,
-                count: org_count,
-            });
-        }
+        level.emit_entity_effect(crate::entity::effects::EntityEffect::ItemPickup {
+            player,
+            entity,
+            item: kind,
+            count: org_count,
+        });
     }
     Ok(())
 }

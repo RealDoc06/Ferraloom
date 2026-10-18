@@ -2,7 +2,7 @@ use super::function::{max_stack_size, stack_count};
 use super::{
     ContextFloatProvider, ContextIntProvider, ContextKeySet, EvalContext, Holder, Identifier,
     LootData, LootFacts, LootItemCondition, LootItemFunction, LootParams, LootPoolEntryContainer,
-    RandomSequences, Result, codec,
+    LootRandomSelection, LootRuntime, RandomSequences, Result, codec, runtime::BorrowedRuntime,
 };
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{
@@ -145,7 +145,7 @@ impl LootPool {
                 if total < 0 {
                     return Err(codec::error("pool total weight overflow"));
                 }
-                let mut index = c.random.next_int_bound(total);
+                let mut index = c.random().next_int_bound(total);
                 for entry in entries {
                     index = index.wrapping_sub(entry.weight);
                     if index < 0 {
@@ -166,12 +166,19 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<i32> {
+        self.evaluate_int_with_runtime(provider, params, &mut BorrowedRuntime::new(random, facts))
+    }
+    pub fn evaluate_int_with_runtime(
+        &self,
+        provider: &Holder<ContextIntProvider>,
+        params: &LootParams,
+        runtime: &mut dyn LootRuntime,
+    ) -> Result<i32> {
         provider.get(
             self,
             &mut EvalContext {
                 params,
-                random,
-                facts,
+                runtime,
                 visited: BTreeSet::new(),
             },
         )
@@ -183,12 +190,19 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<f32> {
+        self.evaluate_float_with_runtime(provider, params, &mut BorrowedRuntime::new(random, facts))
+    }
+    pub fn evaluate_float_with_runtime(
+        &self,
+        provider: &Holder<ContextFloatProvider>,
+        params: &LootParams,
+        runtime: &mut dyn LootRuntime,
+    ) -> Result<f32> {
         provider.get(
             self,
             &mut EvalContext {
                 params,
-                random,
-                facts,
+                runtime,
                 visited: BTreeSet::new(),
             },
         )
@@ -201,20 +215,60 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<Vec<ItemStack>> {
+        self.get_random_items_with_runtime(table, params, &mut BorrowedRuntime::new(random, facts))
+    }
+    /// Evaluate with an invocation that owns canonical live access and stream identity.
+    pub fn get_random_items_with_runtime(
+        &self,
+        table: &Identifier,
+        params: &LootParams,
+        runtime: &mut dyn LootRuntime,
+    ) -> Result<Vec<ItemStack>> {
         let mut output = Vec::new();
         let mut context = EvalContext {
             params,
-            random,
-            facts,
+            runtime,
             visited: BTreeSet::new(),
         };
         Holder::Reference(table.clone()).raw(self, &mut context, &mut |stack, c| {
-            if c.facts.item_enabled(&stack)? {
+            if c.facts().item_enabled(&stack)? {
                 split_stack(stack, &mut output)?;
             }
             Ok(())
         })?;
         Ok(output)
+    }
+    /// Port of LootTable#getRandomItems(LootParams), including inline holders.
+    /// The table's own random_sequence chooses a stream, independently of its key.
+    pub fn get_random_items_from_holder(
+        &self,
+        table: &Holder<LootTable>,
+        params: &LootParams,
+        sources: &mut LootRandomSources<'_>,
+        facts: &dyn LootFacts,
+    ) -> Result<Vec<ItemStack>> {
+        let evaluate = |random: &mut dyn RandomSource| {
+            let mut output = Vec::new();
+            let mut runtime = BorrowedRuntime::new(random, facts);
+            let mut context = EvalContext {
+                params,
+                runtime: &mut runtime,
+                visited: BTreeSet::new(),
+            };
+            table.raw(self, &mut context, &mut |stack, c| {
+                if c.facts().item_enabled(&stack)? {
+                    split_stack(stack, &mut output)?;
+                }
+                Ok(())
+            })?;
+            Ok(output)
+        };
+        if let Some(sequence) = &table.resolve(self)?.random_sequence {
+            let mut random = sources.sequences.get(sequence, sources.world_seed);
+            evaluate(&mut random)
+        } else {
+            evaluate(sources.level_random)
+        }
     }
     /// Port of LootContext.Builder's seed precedence. Zero leaves the table's
     /// named sequence (or level random) selected; a nonzero seed is legacy RNG.
@@ -226,8 +280,24 @@ impl LootData {
         sources: &mut LootRandomSources<'_>,
         facts: &dyn LootFacts,
     ) -> Result<Vec<ItemStack>> {
+        match self.random_selection(table, seed)? {
+            LootRandomSelection::Seeded(seed) => {
+                self.get_random_items(table, params, &mut LegacyRandomSource::new(seed), facts)
+            }
+            LootRandomSelection::Sequence(id) => {
+                let mut random = sources.sequences.get(&id, sources.world_seed);
+                self.get_random_items(table, params, &mut random, facts)
+            }
+            LootRandomSelection::Level => {
+                self.get_random_items(table, params, sources.level_random, facts)
+            }
+        }
+    }
+    /// Select once for the invocation. Live adapters retain this identity and
+    /// borrow its canonical stream only inside LootRuntime::with_random.
+    pub fn random_selection(&self, table: &Identifier, seed: i64) -> Result<LootRandomSelection> {
         if seed != 0 {
-            return self.get_random_items(table, params, &mut LegacyRandomSource::new(seed), facts);
+            return Ok(LootRandomSelection::Seeded(seed));
         }
         let value = self
             .tables
@@ -236,13 +306,14 @@ impl LootData {
                 registry: "loot_table",
                 id: table.clone(),
             })?;
-        if let Some(sequence) = &value.random_sequence {
-            let mut random = sources.sequences.get(sequence, sources.world_seed);
-            self.get_random_items(table, params, &mut random, facts)
-        } else {
-            self.get_random_items(table, params, sources.level_random, facts)
-        }
+        Ok(value
+            .random_sequence
+            .as_ref()
+            .map_or(LootRandomSelection::Level, |id| {
+                LootRandomSelection::Sequence(id.clone())
+            }))
     }
+
     pub fn test_predicate(
         &self,
         predicate: &Holder<LootItemCondition>,
@@ -250,16 +321,28 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<bool> {
+        self.test_predicate_with_runtime(
+            predicate,
+            params,
+            &mut BorrowedRuntime::new(random, facts),
+        )
+    }
+    pub fn test_predicate_with_runtime(
+        &self,
+        predicate: &Holder<LootItemCondition>,
+        params: &LootParams,
+        runtime: &mut dyn LootRuntime,
+    ) -> Result<bool> {
         predicate.test(
             self,
             &mut EvalContext {
                 params,
-                random,
-                facts,
+                runtime,
                 visited: BTreeSet::new(),
             },
         )
     }
+
     /// Item modifier registry API for `/item modify`, preserving sequential RNG use.
     pub fn apply_modifier(
         &self,
@@ -269,17 +352,31 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<ItemStack> {
+        self.apply_modifier_with_runtime(
+            modifier,
+            stack,
+            params,
+            &mut BorrowedRuntime::new(random, facts),
+        )
+    }
+    pub fn apply_modifier_with_runtime(
+        &self,
+        modifier: &Holder<LootItemFunction>,
+        stack: ItemStack,
+        params: &LootParams,
+        runtime: &mut dyn LootRuntime,
+    ) -> Result<ItemStack> {
         modifier.apply(
             stack,
             self,
             &mut EvalContext {
                 params,
-                random,
-                facts,
+                runtime,
                 visited: BTreeSet::new(),
             },
         )
     }
+
     /// Port of LootTable#fill. Existing slots stay occupied; an overfull result
     /// stops insertion at vanilla's capture point after all shuffling draws.
     pub fn fill(
@@ -315,10 +412,27 @@ impl LootData {
         facts: &dyn LootFacts,
         available_slots: impl FnOnce() -> Result<Vec<usize>>,
     ) -> Result<Vec<(usize, ItemStack)>> {
-        let mut items = self.get_random_items(table, params, random, facts)?;
-        let mut slots = available_slots()?;
-        shuffle(&mut slots, random);
-        shuffle_and_split_items(&mut items, slots.len(), random);
+        self.fill_placements_with_runtime(
+            table,
+            params,
+            &mut BorrowedRuntime::new(random, facts),
+            |_| available_slots(),
+        )
+    }
+    /// The availability callback receives the concrete live adapter after all
+    /// generation/feature checks, and before any slot shuffling.
+    pub fn fill_placements_with_runtime<R: LootRuntime>(
+        &self,
+        table: &Identifier,
+        params: &LootParams,
+        runtime: &mut R,
+        available_slots: impl FnOnce(&mut R) -> Result<Vec<usize>>,
+    ) -> Result<Vec<(usize, ItemStack)>> {
+        let mut items = self.get_random_items_with_runtime(table, params, runtime)?;
+        let mut slots = available_slots(runtime)?;
+        let mut random = super::runtime::RuntimeRandom(runtime);
+        shuffle(&mut slots, &mut random);
+        shuffle_and_split_items(&mut items, slots.len(), &mut random);
         let mut placements = Vec::with_capacity(items.len().min(slots.len()));
         for item in items {
             let Some(slot) = slots.pop() else {
@@ -335,6 +449,7 @@ impl LootData {
         }
         Ok(placements)
     }
+
     /// Port of LootTable#fill's optional seed and named sequence selection.
     pub fn fill_seeded(
         &self,
@@ -369,30 +484,25 @@ impl LootData {
         facts: &dyn LootFacts,
         available_slots: impl FnOnce() -> Result<Vec<usize>>,
     ) -> Result<Vec<(usize, ItemStack)>> {
-        if seed != 0 {
-            return self.fill_placements(
+        match self.random_selection(table, seed)? {
+            LootRandomSelection::Seeded(seed) => self.fill_placements(
                 table,
                 params,
                 &mut LegacyRandomSource::new(seed),
                 facts,
                 available_slots,
-            );
-        }
-        let value = self
-            .tables
-            .get(table)
-            .ok_or_else(|| super::LootError::MissingReference {
-                registry: "loot_table",
-                id: table.clone(),
-            })?;
-        if let Some(sequence) = &value.random_sequence {
-            let mut random = sources.sequences.get(sequence, sources.world_seed);
-            self.fill_placements(table, params, &mut random, facts, available_slots)
-        } else {
-            self.fill_placements(table, params, sources.level_random, facts, available_slots)
+            ),
+            LootRandomSelection::Sequence(id) => {
+                let mut random = sources.sequences.get(&id, sources.world_seed);
+                self.fill_placements(table, params, &mut random, facts, available_slots)
+            }
+            LootRandomSelection::Level => {
+                self.fill_placements(table, params, sources.level_random, facts, available_slots)
+            }
         }
     }
 }
+
 pub(crate) fn split_stack(stack: ItemStack, output: &mut Vec<ItemStack>) -> Result<()> {
     let max = max_stack_size(&stack)?;
     let mut count = stack_count(&stack);

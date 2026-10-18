@@ -180,8 +180,10 @@ fn run_cases(require_pending: bool) {
         let seed = case["seed"].as_i64().unwrap();
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
         let result = feature.place(&mut FeatureContext {
-            region: &mut region,
-            random: &mut random,
+            level: crate::feature::WorldGenLevel::Region(&mut region),
+            random: crate::feature::FeatureRandomSelector::External(
+                crate::feature::FeatureRandom::Region(&mut random),
+            ),
             origin,
             generator: &generator,
             registry: &registry,
@@ -370,6 +372,66 @@ fn leaf_and_mushroom_property_identity_matches_every_vanilla_state() {
             plants::has_sides(state),
             data["mushroom_sides"][id].as_bool().unwrap(),
             "mushroom faces of state {id}"
+        );
+    }
+}
+
+#[test]
+fn minimum_height_is_only_the_actual_tree_trunk_base() {
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    let mut oak = resources
+        .require(&"worldgen/feature/oak.json".parse().unwrap())
+        .unwrap()
+        .json()
+        .unwrap();
+    for base in [0, 4, 32] {
+        oak["trunk_placer"]["base_height"] = base.into();
+        let tree = loader.feature(&oak).unwrap();
+        assert_eq!(tree.tree_minimum_height(), Some(base));
+    }
+    // A similarly named field on another feature never supplies tree metadata.
+    oak["type"] = "minecraft:no_op".into();
+    assert_eq!(loader.feature(&oak).unwrap().tree_minimum_height(), None);
+}
+
+#[test]
+fn mushroom_foliage_radius_requires_an_actual_huge_mushroom() {
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    for name in ["huge_brown_mushroom", "huge_red_mushroom"] {
+        let mut config = resources
+            .require(&format!("worldgen/feature/{name}.json").parse().unwrap())
+            .unwrap()
+            .json()
+            .unwrap();
+        config.as_object_mut().unwrap().remove("foliage_radius");
+        assert_eq!(
+            loader
+                .feature(&config)
+                .unwrap()
+                .huge_mushroom_foliage_radius(),
+            Some(2)
+        );
+        for radius in [-3, 0, 2, 7, i32::MAX] {
+            config["foliage_radius"] = radius.into();
+            assert_eq!(
+                loader
+                    .feature(&config)
+                    .unwrap()
+                    .huge_mushroom_foliage_radius(),
+                Some(radius)
+            );
+        }
+        config["type"] = "minecraft:no_op".into();
+        assert_eq!(
+            loader
+                .feature(&config)
+                .unwrap()
+                .huge_mushroom_foliage_radius(),
+            None
         );
     }
 }

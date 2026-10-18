@@ -8,6 +8,7 @@ use ferraloom_protocol::{
     codec::{Holder, HolderSet},
     component::*,
 };
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -173,20 +174,18 @@ impl ComponentFunction {
                         .map(ItemStack::components)
                         .transpose()?,
                     ComponentSource::BlockEntity => {
-                        if let Some(map) = &c.params.block_entity_components {
-                            Some(map.clone())
-                        } else if c.params.block_entity.is_some() {
+                        let map = c.runtime.block_entity_components(c.params)?;
+                        if map.is_none() && c.params.block_entity.is_some() {
                             return Err(LootError::Unsupported(
                                 "loot.block_entity_components".into(),
                             ));
-                        } else {
-                            None
                         }
+                        map
                     }
                     ComponentSource::Entity(target) => c
                         .params
                         .entity(*target)
-                        .map(|entity| c.facts.entity_components(entity))
+                        .map(|entity| c.facts().entity_components(entity))
                         .transpose()?,
                 };
                 if let Some(map) = map {
@@ -201,26 +200,30 @@ impl ComponentFunction {
                 }
             }
             Self::CopyName(source) => {
-                let name = match source {
-                    NbtSource::Entity(target) => c
-                        .params
-                        .entity(*target)
-                        .map(|entity| c.facts.entity_custom_name(entity))
-                        .transpose()?
-                        .flatten(),
+                let (name, present) = match source {
+                    NbtSource::Entity(target) => {
+                        let entity = c.params.entity(*target);
+                        (
+                            entity
+                                .map(|entity| c.facts().entity_custom_name(entity))
+                                .transpose()?
+                                .flatten(),
+                            entity.is_some(),
+                        )
+                    }
                     NbtSource::BlockEntity => {
-                        if c.params.block_entity.is_some() {
-                            return Err(LootError::Unsupported("block_entity.custom_name".into()));
+                        if c.params.block_entity.is_none()
+                            && c.params.block_entity_components.is_none()
+                        {
+                            (None, false)
+                        } else if let Some(name) = c.runtime.block_entity_display_name(c.params)? {
+                            (name.custom_name, true)
                         } else {
-                            None
+                            (None, false)
                         }
                     }
                 };
                 // A present Nameable with a null custom name removes the target.
-                let present = match source {
-                    NbtSource::Entity(target) => c.params.entity(*target).is_some(),
-                    NbtSource::BlockEntity => false,
-                };
                 if let Some(name) = name {
                     set(&mut stack, DataComponent::CustomName(Box::new(name)));
                 } else if present && let Some(s) = &mut stack.0 {
@@ -261,7 +264,7 @@ impl ComponentFunction {
                 if let Some(name) = name {
                     let name =
                         if let Some(entity) = entity.and_then(|target| c.params.entity(target)) {
-                            c.facts.resolve_component(name, entity)?
+                            c.facts().resolve_component(name, entity)?
                         } else {
                             name.as_ref().clone()
                         };
@@ -290,7 +293,7 @@ impl ComponentFunction {
                 let ids =
                     resolve_options(options, crate::predicates::PredicateRegistry::Instrument, c)?;
                 if !ids.is_empty() {
-                    let id = ids[c.random.next_int_bound(ids.len() as i32) as usize].clone();
+                    let id = ids[c.random().next_int_bound(ids.len() as i32) as usize].clone();
                     set(
                         &mut stack,
                         DataComponent::Instrument(InstrumentHolder(Holder::Reference(id))),
@@ -302,10 +305,10 @@ impl ComponentFunction {
                 let ids = if let Some(options) = options {
                     resolve_options(options, registry, c)?
                 } else {
-                    c.facts.registry_values(registry)?
+                    c.facts().registry_values(registry)?
                 };
                 if !ids.is_empty() {
-                    let id = ids[c.random.next_int_bound(ids.len() as i32) as usize].clone();
+                    let id = ids[c.random().next_int_bound(ids.len() as i32) as usize].clone();
                     let mut value = match stack.components()?.get(ComponentTypeId::POTION_CONTENTS)
                     {
                         Some(DataComponent::PotionContents(value)) => value.clone(),
@@ -362,6 +365,6 @@ fn resolve_options(
 ) -> Result<Vec<Identifier>> {
     match options {
         HolderSet::Direct(ids) => Ok(ids.clone()),
-        HolderSet::Named(tag) => c.facts.registry_tag_values(registry, tag),
+        HolderSet::Named(tag) => c.facts().registry_tag_values(registry, tag),
     }
 }

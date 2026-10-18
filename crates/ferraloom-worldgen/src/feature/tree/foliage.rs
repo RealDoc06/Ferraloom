@@ -1,6 +1,6 @@
 use super::trunk::Attachment;
 use super::*;
-use ferraloom_util::random::WorldgenRandom;
+use ferraloom_util::random::RandomSource;
 /// Port of all twelve registered 26.3 FoliagePlacer implementations.
 #[derive(Debug)]
 pub(super) struct FoliagePlacer {
@@ -74,7 +74,7 @@ impl FoliagePlacer {
             },
         })
     }
-    pub fn height(&self, r: &mut WorldgenRandom, tree_height: i32) -> i32 {
+    pub fn height(&self, r: &mut impl RandomSource, tree_height: i32) -> i32 {
         match &self.kind {
             Kind::Blob(h) | Kind::Bush(h) | Kind::Fancy(h) | Kind::Jungle(h) => *h,
             Kind::Acacia => 0,
@@ -87,7 +87,7 @@ impl FoliagePlacer {
             | Kind::Poplar { height: h, .. } => h.sample(r),
         }
     }
-    pub fn radius(&self, r: &mut WorldgenRandom, trunk: i32) -> i32 {
+    pub fn radius(&self, r: &mut impl RandomSource, trunk: i32) -> i32 {
         let radius = self.radius.sample(r);
         radius
             + if matches!(self.kind, Kind::Pine(_)) {
@@ -105,7 +105,7 @@ impl FoliagePlacer {
         radius: i32,
         out: &mut Positions,
     ) -> Result<(), Error> {
-        let offset = self.offset.sample(c.random);
+        let offset = self.offset.sample(&mut c.random()?);
         let h = height + a.height;
         let mut row = |c: &mut FeatureContext<'_, '_>, p: Pos, r: i32, y: i32| {
             self.row(t, c, p, r, y, a.double, out)
@@ -143,7 +143,7 @@ impl FoliagePlacer {
                     row(c, p, radius + 2, -1)?;
                     row(c, p, radius + 3, 0)?;
                     row(c, p, radius + 2, 1)?;
-                    if c.random.next_boolean() {
+                    if c.random()?.next_boolean() {
                         row(c, p, radius, 2)?;
                     }
                 } else {
@@ -155,7 +155,7 @@ impl FoliagePlacer {
                 let h = if a.double {
                     height
                 } else {
-                    1 + c.random.next_int_bound(2)
+                    1 + c.random()?.next_int_bound(2)
                 } + a.height;
                 for y in (offset - h..=offset).rev() {
                     row(c, a.pos, radius + a.radius + 1 - y, y)?;
@@ -187,7 +187,7 @@ impl FoliagePlacer {
                 }
             }
             Kind::Spruce(_) => {
-                let mut r = c.random.next_int_bound(2);
+                let mut r = c.random()?.next_int_bound(2);
                 let mut max = 1;
                 let mut min = 0;
                 for y in (-h..=offset).rev() {
@@ -204,9 +204,9 @@ impl FoliagePlacer {
             Kind::Spread { attempts, .. } => {
                 for _ in 0..*attempts {
                     let delta = [
-                        c.random.next_int_bound(radius) - c.random.next_int_bound(radius),
-                        c.random.next_int_bound(height) - c.random.next_int_bound(height),
-                        c.random.next_int_bound(radius) - c.random.next_int_bound(radius),
+                        c.random()?.next_int_bound(radius) - c.random()?.next_int_bound(radius),
+                        c.random()?.next_int_bound(height) - c.random()?.next_int_bound(height),
+                        c.random()?.next_int_bound(radius) - c.random()?.next_int_bound(radius),
                     ];
                     leaf(t, c, add(a.pos, delta), out)?;
                 }
@@ -227,7 +227,7 @@ impl FoliagePlacer {
             Kind::Poplar { hole, .. } => {
                 let p = add(a.pos, [0, offset, 0]);
                 let r = radius + a.radius - 1;
-                let flip = c.random.next_boolean();
+                let flip = c.random()?.next_boolean();
                 for (r, y) in [(r - 2, h - 1), (r - 1, h - 2), (r - 1, h - 3)]
                     .into_iter()
                     .chain((1..=h - 4).rev().map(|y| (r, y)))
@@ -246,7 +246,7 @@ impl FoliagePlacer {
                             && (z == 0 && r - x.abs() >= 4 || x == 0 && r - z.abs() >= 4)
                         {
                             let q = add(p, [x, h - 4, z]);
-                            let old = c.region.block(q)?;
+                            let old = c.level.block(q)?;
                             let expected = t.foliage_provider.get_state(c, q)?;
                             if old == expected {
                                 let s = axis_state(
@@ -275,7 +275,15 @@ impl FoliagePlacer {
         }
         Ok(())
     }
-    fn skip(&self, rng: &mut WorldgenRandom, x: i32, y: i32, z: i32, r: i32, double: bool) -> bool {
+    fn skip(
+        &self,
+        rng: &mut impl RandomSource,
+        x: i32,
+        y: i32,
+        z: i32,
+        r: i32,
+        double: bool,
+    ) -> bool {
         match &self.kind {
             Kind::Blob(_) => x == r && z == r && (rng.next_int_bound(2) == 0 || y == 0),
             Kind::Bush(_) => x == r && z == r && rng.next_int_bound(2) == 0,
@@ -342,7 +350,7 @@ impl FoliagePlacer {
                 } else {
                     z.abs()
                 };
-                if !self.skip(c.random, dx, y, dz, r, double) {
+                if !self.skip(&mut c.random()?, dx, y, dz, r, double) {
                     leaf(t, c, add(p, [x, y, z]), out)?;
                 }
             }
@@ -372,11 +380,11 @@ impl FoliagePlacer {
             for _ in -r..r + i32::from(double) {
                 if out.contains(add(q, [0, 1, 0]))
                     && manhattan(q, log) < 7
-                    && c.random.next_float() <= chance
+                    && c.random()?.next_float() <= chance
                     && leaf(t, c, q, out)?
                 {
                     let below = add(q, [0, -1, 0]);
-                    if manhattan(below, log) < 7 && c.random.next_float() <= extension {
+                    if manhattan(below, log) < 7 && c.random()?.next_float() <= extension {
                         leaf(t, c, below, out)?;
                     }
                 }
@@ -405,7 +413,7 @@ impl FoliagePlacer {
                 if partial && (x.abs() == r || z.abs() == r) {
                     continue;
                 }
-                let extra = i32::from(c.random.next_float() <= hole);
+                let extra = i32::from(c.random()?.next_float() <= hole);
                 if x.abs() + z.abs() <= r * 2 - (poplar_cut(x, z, r, h, y, flip) + extra) {
                     leaf(t, c, add(p, [x, y, z]), out)?;
                 }
@@ -434,7 +442,7 @@ fn leaf(
     p: Pos,
     out: &mut Positions,
 ) -> Result<bool, Error> {
-    let old = c.region.block(p)?;
+    let old = c.level.block(p)?;
     if old.get(properties::PERSISTENT).unwrap_or(false) || !t.valid(c, p)? {
         return Ok(false);
     }

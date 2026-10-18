@@ -3,9 +3,9 @@ use crate::{
     Error, Identifier,
     biome_manager::BiomeTemperatures,
     codec,
-    feature::FeatureContext,
     generator::ChunkGeneratorAccess,
     region::Heightmap,
+    structure::StructurePlacementContext,
     structure::{
         BoundingBox,
         processor::{BlockSet, ProcessorRule, StructureProcessor},
@@ -428,7 +428,7 @@ impl RuinedPortalPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: &mut BoundingBox,
@@ -489,7 +489,7 @@ impl RuinedPortalPiece {
     }
     fn place_netherrack(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         tags: &BlockTags,
         p: [i32; 3],
     ) -> Result<(), Error> {
@@ -505,7 +505,7 @@ impl RuinedPortalPiece {
     }
     fn drip_column(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         tags: &BlockTags,
         mut p: [i32; 3],
     ) -> Result<(), Error> {
@@ -519,7 +519,11 @@ impl RuinedPortalPiece {
         }
         Ok(())
     }
-    fn maybe_leaves(&self, context: &mut FeatureContext<'_, '_>, p: [i32; 3]) -> Result<(), Error> {
+    fn maybe_leaves(
+        &self,
+        context: &mut StructurePlacementContext<'_, '_>,
+        p: [i32; 3],
+    ) -> Result<(), Error> {
         let above = [p[0], p[1] + 1, p[2]];
         if context.random.next_float() < 0.5
             && context.region.block(p)?.block() == Block::NETHERRACK
@@ -536,7 +540,11 @@ impl RuinedPortalPiece {
         }
         Ok(())
     }
-    fn maybe_vines(&self, context: &mut FeatureContext<'_, '_>, p: [i32; 3]) -> Result<(), Error> {
+    fn maybe_vines(
+        &self,
+        context: &mut StructurePlacementContext<'_, '_>,
+        p: [i32; 3],
+    ) -> Result<(), Error> {
         let state = context.region.block(p)?;
         if state.is_air() || state.block() == Block::VINE {
             return Ok(());
@@ -570,7 +578,7 @@ impl RuinedPortalPiece {
     }
     fn spread_netherrack(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         tags: &BlockTags,
     ) -> Result<(), Error> {
         const PROBABILITIES: [f32; 14] = [
@@ -780,7 +788,7 @@ mod tests {
             )
             .unwrap();
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(seed));
-            let mut context = FeatureContext {
+            let mut context = StructurePlacementContext {
                 region: &mut region,
                 random: &mut random,
                 origin: [0; 3],

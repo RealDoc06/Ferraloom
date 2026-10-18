@@ -377,27 +377,57 @@ mod tests {
                 .fluid_ticks
                 .has_scheduled_tick(chain, &ferraloom_data::registries::fluid::Id::WATER)
         );
-        let wire = [11, p[1], 8];
-        region
-            .set_block(wire, Block::REDSTONE_WIRE.default_state(), 16)
-            .unwrap();
-        assert!(
-            region
-                .update_shape(
-                    wire,
-                    Direction::Down,
-                    [11, p[1] - 1, 8],
-                    Block::DIRT.default_state()
-                )
-                .unwrap_err()
-                .0
-                .contains("UnsupportedBlockMethod")
-        );
         assert_eq!(
             LevelReaderRef::Worldgen(&region).get_block_state(BlockPos::new(32, p[1], 8)),
             Err(LevelError::MissingChunk(ferraloom_util::ChunkPos::new(
                 2, 0
             )))
+        );
+        struct PendingWorldgenQuery;
+        impl WorldgenBlockBehavior for PendingWorldgenQuery {
+            fn post_process_pos(
+                &self,
+                _: BlockState,
+                _: &WorldGenRegion<'_>,
+                _: [i32; 3],
+            ) -> Result<Option<[i32; 3]>, Error> {
+                Err(Error("test: required postProcessPos".into()))
+            }
+            fn update_shape(
+                &self,
+                _: &mut WorldGenRegion<'_>,
+                _: [i32; 3],
+                _: Direction,
+                _: [i32; 3],
+                _: BlockState,
+            ) -> Result<BlockState, Error> {
+                Err(Error("test: required updateShape".into()))
+            }
+        }
+        // The preceding checks use the actual game bridge. Required-service
+        // failures use an explicit receiver rather than an unported family.
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Features],
+            0,
+            None,
+            &PendingWorldgenQuery,
+            0,
+            63,
+        )
+        .unwrap();
+        assert_eq!(
+            region
+                .update_shape(
+                    p,
+                    Direction::Down,
+                    [p[0], p[1] - 1, p[2]],
+                    Block::DIRT.default_state()
+                )
+                .unwrap_err()
+                .0,
+            "test: required updateShape"
         );
     }
 }

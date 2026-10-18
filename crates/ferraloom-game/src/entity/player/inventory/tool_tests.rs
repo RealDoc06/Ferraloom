@@ -19,7 +19,10 @@ use std::sync::Arc;
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
-    Level::new(Region::new(&EMPTY))
+    Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    )
 }
 fn direct(blocks: &[Block]) -> BlockSet {
     BlockSet(HolderSet::Direct(
@@ -35,7 +38,7 @@ fn named(name: &str) -> BlockSet {
 fn rule(blocks: BlockSet, correct_for_drops: Option<bool>) -> ToolRule {
     ToolRule {
         blocks,
-        speed: Some(2.0),
+        speed: Some(2.0.into()),
         correct_for_drops,
     }
 }
@@ -49,7 +52,7 @@ fn custom(item: Item, rules: Vec<ToolRule>) -> ItemStack {
         DataComponentPatch {
             added: vec![DataComponent::Tool(Tool {
                 rules,
-                default_mining_speed: 1.0,
+                default_mining_speed: 1.0.into(),
                 damage_per_block: VarInt(1),
                 can_destroy_blocks_in_creative: true,
             })],

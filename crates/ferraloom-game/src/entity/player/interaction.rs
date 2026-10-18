@@ -20,7 +20,7 @@ pub(super) fn range_modifiers() -> [Arc<AttributeModifier>; 2] {
     .map(|(id, amount)| {
         Arc::new(AttributeModifier {
             id: Identifier::parse(id).expect("native modifier identifier"),
-            amount,
+            amount: amount.into(),
             operation: AttributeOperation::AddValue,
         })
     })
@@ -210,13 +210,7 @@ mod tests {
                 player.is_secondary_use_active(),
                 player.inventory.selected_slot(),
                 inventory::count(player.get_item_in_hand(InteractionHand::MainHand)),
-                player
-                    .get_item_in_hand(InteractionHand::OffHand)
-                    .0
-                    .as_ref()
-                    .unwrap()
-                    .item
-                    == Item::SHIELD,
+                player.get_item_in_hand(InteractionHand::OffHand).item() == Item::SHIELD,
             ));
         }
         for (i, range) in [4.5, 5.0, 5.000000000000001, 0.0, f64::NAN]

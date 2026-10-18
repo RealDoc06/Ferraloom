@@ -330,11 +330,12 @@ impl<'a> Writer<'a> {
         }
         Ok(())
     }
+    /// Port of FriendlyByteBuf#writeNbt, using Netty's raw floating-point bits.
     pub fn nbt(&mut self, tag: &Tag) -> Result<()> {
         if tag == &Tag::End {
             return Err(Error::invalid("NBT", "Expected non-null tag"));
         }
-        NbtIo::write_any_tag(&mut self.bytes, tag)?;
+        NbtIo::write_network(&mut self.bytes, tag)?;
         Ok(())
     }
     pub fn optional_nbt(&mut self, tag: Option<&Tag>) -> Result<()> {

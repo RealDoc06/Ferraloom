@@ -9,7 +9,10 @@ use ferraloom_util::{Uuid, Vec3};
 
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(Region::new(&BEHAVIORS))
+    Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    )
 }
 fn orb_tag(number: i64, position: Vec3) -> CompoundTag {
     let mut orb = ExperienceOrb::new(1, number);

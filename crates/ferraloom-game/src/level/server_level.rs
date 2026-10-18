@@ -9,9 +9,13 @@ pub struct ServerLevel {
     pub dimension: String,
 }
 impl ServerLevel {
-    pub fn new(region: Region, dimension: impl Into<String>) -> Self {
+    pub fn new(
+        region: Region,
+        dimension: impl Into<String>,
+        context: std::sync::Arc<super::LevelContext>,
+    ) -> Self {
         Self {
-            level: Level::new(region),
+            level: Level::new(region, context),
             chunks: ChunkMap::default(),
             tickets: TicketStorage::default(),
             distance_manager: Default::default(),

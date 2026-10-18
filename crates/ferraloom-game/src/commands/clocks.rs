@@ -363,7 +363,7 @@ impl ServerClockManager {
                         "commands.time.rate.already_same",
                         vec![
                             builtins::string(&clock),
-                            Argument::Number(Numeric::Float(*rate)),
+                            Argument::Number(Numeric::Float((*rate).into())),
                         ],
                     ));
                 }
@@ -375,7 +375,7 @@ impl ServerClockManager {
                         "commands.time.rate",
                         vec![
                             builtins::string(&clock),
-                            Argument::Number(Numeric::Float(*rate)),
+                            Argument::Number(Numeric::Float((*rate).into())),
                         ],
                     ),
                     true,

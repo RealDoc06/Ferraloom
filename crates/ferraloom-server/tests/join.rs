@@ -75,6 +75,18 @@ async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<(
 async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
     let root = tempfile::tempdir()?;
     support::properties(root.path())?;
+    // Keep Strict while grass random ticks await the plants landing on restart.
+    let properties_path = root.path().join("server.properties");
+    let properties = std::fs::read_to_string(&properties_path)?;
+    let config = serde_json::json!({
+        "layers": [{"height":4,"block":"minecraft:bedrock"}],
+        "biome":"minecraft:plains", "features":false, "lakes":false,
+        "structure_overrides":[]
+    });
+    std::fs::write(
+        &properties_path,
+        format!("{properties}level-type=flat\ngenerator-settings={config}\n"),
+    )?;
     let mut options = ServerOptions::new(root.path());
     options.console = false;
     options.port = Some(0);

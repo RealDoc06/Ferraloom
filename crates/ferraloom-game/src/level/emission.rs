@@ -56,7 +56,8 @@ impl Level {
         pitch: f32,
         seed: i64,
     ) -> Result<(), LevelError> {
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::Sound(cb::Sound {
@@ -99,7 +100,8 @@ impl Level {
     ) -> Result<(), LevelError> {
         let data = self.entity::<EntityData>(entity)?;
         let (position, id) = (data.position, data.network_id);
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::SoundEntity(cb::SoundEntity {
@@ -115,7 +117,9 @@ impl Level {
         });
         Ok(())
     }
-    fn sound_audience(
+    /// Port of PlayerList#broadcast's dimension-local distance/exclusion filter.
+    /// Capture before subsequent callbacks can move any recipient.
+    pub(super) fn broadcast_audience(
         &self,
         except: Option<EntityRef>,
         position: Vec3,
@@ -236,7 +240,10 @@ mod tests {
     use ferraloom_util::Uuid;
     static EMPTY: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        Level::new(Region::new(&EMPTY))
+        Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        )
     }
     fn player(level: &mut Level, id: u64, position: Vec3) -> EntityRef {
         let handle = EntityRef(id);
@@ -357,6 +364,10 @@ mod tests {
             )
             .unwrap();
         level.set_entity_pos(a, Vec3::new(40.0, 0.0, 0.0)).unwrap();
+        assert_eq!(
+            level.take_player_section_changes(),
+            vec![(a, ferraloom_util::SectionPos::new(2, 0, 0))],
+        );
         assert_eq!(only_packet(&mut level).0, vec![a]);
         level
             .play_seeded_entity_sound(None, except, sound, SoundSource::Players, 1.0, 1.0, 7)

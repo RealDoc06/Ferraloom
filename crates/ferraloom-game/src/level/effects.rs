@@ -1,6 +1,5 @@
 //! Ordered integration points for subsystem ports. Effects are captured at the
 //! vanilla call site and consumed at its phase boundary, never from hash order.
-use super::events::BlockEvent;
 use ferraloom_data::BlockState;
 use ferraloom_util::{BlockPos, ChunkPos};
 
@@ -44,7 +43,6 @@ pub enum LevelEffect {
         id: i32,
         data: i32,
     },
-    BlockEvent(BlockEvent),
     WeatherEvent {
         event: u8,
         param: f32,
@@ -94,7 +92,10 @@ mod tests {
         };
         use ferraloom_util::SectionPos;
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let player = EntityRef(1);
         let a = SectionPos::new(0, 4, 0);
         let b = SectionPos::new(1, 4, 0);

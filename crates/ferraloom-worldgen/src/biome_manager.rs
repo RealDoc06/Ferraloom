@@ -176,13 +176,13 @@ impl BiomeTemperatures {
     pub fn should_freeze(
         &self,
         id: &Identifier,
-        region: &crate::region::WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         p: [i32; 3],
         check_neighbors: bool,
     ) -> Result<bool, Error> {
         use crate::region::LightLayer;
         use ferraloom_data::{BlockClass, registries::fluid};
-        if self.warm_enough_to_rain(id, p, region.sea_level) {
+        if self.warm_enough_to_rain(id, p, region.sea_level()) {
             return Ok(false);
         }
         if p[1] < region.min_y()
@@ -224,11 +224,11 @@ impl BiomeTemperatures {
     pub fn should_snow(
         &self,
         id: &Identifier,
-        region: &crate::region::WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         p: [i32; 3],
     ) -> Result<bool, Error> {
         use ferraloom_data::Block;
-        if self.precipitation_at(id, p, region.sea_level) != Precipitation::Snow {
+        if self.precipitation_at(id, p, region.sea_level()) != Precipitation::Snow {
             return Ok(false);
         }
         if p[1] < region.min_y()

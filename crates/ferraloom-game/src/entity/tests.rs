@@ -504,7 +504,10 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
         ),
         row("happy-ghast", &ghast),
     ];
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "dimensions".into(),
@@ -805,7 +808,10 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(Region::new(behaviors));
+    let mut level = Level::new(
+        Region::new(behaviors),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     // Explicit controlled dimension with native constants and no timelines.
     install_test_environment(&mut level, false);
     for x in -2..=2 {

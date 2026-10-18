@@ -265,7 +265,11 @@ impl MinecraftServer {
             .map(|(id, types)| (id.to_string(), types))
             .collect();
         let game_time = world.level_data.data.get_long_or("Time", 0);
-        let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
+        let mut level = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources)?,
+        );
         level.game_time = game_time;
         initialize_live_level(
             &mut level,
@@ -1077,32 +1081,6 @@ impl MinecraftServer {
                 }
                 LevelEffect::WeatherEvent { event, param } => {
                     self.broadcast(cb::Packet::GameEvent(cb::GameEvent { event, param }))
-                }
-                LevelEffect::BlockEvent(event) => {
-                    let packet = cb::Packet::BlockEvent(cb::BlockEvent {
-                        pos: event.pos,
-                        b0: event.param_a as u8,
-                        b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.protocol_id())),
-                    });
-                    for &connection in &self.players {
-                        let c = &self.connections[&connection];
-                        let Phase::Play(entity) = c.phase else {
-                            continue;
-                        };
-                        let position = self.player(entity)?.position;
-                        if position.distance_to_sqr(Vec3::new(
-                            f64::from(event.pos.x),
-                            f64::from(event.pos.y),
-                            f64::from(event.pos.z),
-                        )) < 4096.0
-                        {
-                            self.connections
-                                .get_mut(&connection)
-                                .unwrap()
-                                .push(packet.clone());
-                        }
-                    }
                 }
                 LevelEffect::LevelEvent { pos, id, data } => {
                     self.broadcast(cb::Packet::LevelEvent(cb::LevelEvent {
@@ -3425,7 +3403,10 @@ mod live_level_tests {
         let pos = ChunkPos::new(0, 0);
         let mut holder = ChunkHolder::new(pos, 0);
         let mut ready = HashSet::new();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         holder.ticket_level = 33;
         assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);

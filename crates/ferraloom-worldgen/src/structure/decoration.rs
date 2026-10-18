@@ -7,10 +7,11 @@ use super::{
     start::{StructurePiece, StructureStart},
     template::StructureTemplateManager,
 };
+use crate::structure::StructurePlacementContext;
 use crate::{
     Error, Identifier,
     decoration::{GenerationStep, StructureDecoration},
-    feature::{FeatureContext, FeatureRegistry},
+    feature::FeatureRegistry,
     generator::{ChunkGeneratorAccess, NoiseBasedChunkGenerator},
     region::{ChunkStatus, WorldGenRegion},
 };
@@ -75,7 +76,7 @@ impl JigsawStart {
     /// inherit Structure#afterPlace's empty implementation.
     pub fn place_in_chunk(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,
@@ -109,7 +110,7 @@ impl StructureStart {
     /// postProcess may change piece bounds, chest flags or entity-spawn flags.
     pub fn place_in_chunk(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: &mut BoundingBox,
@@ -248,7 +249,7 @@ impl StructureDecoration for RegionStructureDecoration<'_> {
                 let mut piece_bounds = bounds;
                 let result = if start.is_valid() {
                     start.place_in_chunk(
-                        &mut FeatureContext {
+                        &mut StructurePlacementContext {
                             region,
                             random,
                             origin: [x, bounds.min[1], z],
@@ -302,7 +303,7 @@ impl StructureDecoration for JigsawStructureDecoration<'_> {
             if let Some(starts) = self.starts.get(&structure.id) {
                 for start in starts {
                     start.place_in_chunk(
-                        &mut FeatureContext {
+                        &mut StructurePlacementContext {
                             region,
                             random,
                             origin: [min_x, bounds.min[1], min_z],
