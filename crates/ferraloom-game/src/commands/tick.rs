@@ -26,8 +26,6 @@ pub trait TickRateAccess {
     fn stop_stepping(&mut self) -> bool;
     fn request_game_to_sprint(&mut self, ticks: i32) -> bool;
     fn stop_sprinting(&mut self) -> bool;
-    /// Drain manager-generated client packets and sprint reports before command feedback.
-    fn flush_events(&mut self);
 }
 fn one_decimal(value: f32) -> String {
     // Formatter's fixed-point conversion rounds a tie away from zero.
@@ -42,6 +40,8 @@ fn feedback(key: &str, args: Vec<ferraloom_protocol::chat::Argument>, broadcast:
         broadcast,
     }
 }
+/// Mutates the live manager and returns feedback. The runtime drains its ordered
+/// events before emitting this feedback or reporting a command error.
 pub fn run<A: TickRateAccess>(
     command: &PreparedCommand,
     access: &mut A,
@@ -178,7 +178,6 @@ pub fn run<A: TickRateAccess>(
         }
         _ => unreachable!(),
     }
-    access.flush_events();
     Ok(result)
 }
 
@@ -232,9 +231,6 @@ mod tests {
             self.calls.push("stop_sprint");
             self.outcome
         }
-        fn flush_events(&mut self) {
-            self.calls.push("flush");
-        }
     }
     #[test]
     fn tick_feedback_and_errors_match_java_command_methods() {
@@ -275,9 +271,8 @@ mod tests {
                         "{}",
                         vector.command
                     );
-                    assert_eq!(host.calls.last(), Some(&"flush"));
                     if vector.command == "tick freeze" {
-                        assert_eq!(host.calls, ["stop_sprint", "stop_step", "freeze", "flush"]);
+                        assert_eq!(host.calls, ["stop_sprint", "stop_step", "freeze"]);
                     }
                 }
                 (result, error) => panic!(

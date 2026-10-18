@@ -133,7 +133,17 @@ impl MinecraftServer {
                 .map_err(|error| match error {
                     PlacementError::Syntax(error) => anyhow::Error::new(error),
                     PlacementError::Level(error) => anyhow::Error::new(CommandLevelFailure(error)),
-                })?;
+                });
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result?);
+            }
+            "tick" => {
+                let result = ferraloom_game::commands::tick::run(command, self);
+                self.apply_tick_rate_events()?;
+                self.apply_command_result(source, &command.source, result?);
+            }
+            "teleport" => {
+                let result = self.teleport_command(command)?;
                 self.apply_command_result(source, &command.source, result);
             }
             "weather" => {
@@ -144,6 +154,7 @@ impl MinecraftServer {
                 let output =
                     ferraloom_game::commands::forceload::run(command, &mut ForcedChunks(self))
                         .await?;
+                self.apply_level_effects()?;
                 if let Some(message) = output.failure {
                     self.command_failure(source, &command.source, message);
                 }
@@ -306,5 +317,38 @@ impl ferraloom_game::commands::forceload::ForceLoadAccess for ForcedChunks<'_> {
             self.0.command_get_chunk(position).await?;
         }
         Ok(changed)
+    }
+}
+
+impl ferraloom_game::commands::tick::TickRateAccess for MinecraftServer {
+    fn snapshot(&self) -> ferraloom_game::commands::tick::TickRateSnapshot {
+        let manager = &self.tick_rate_manager;
+        ferraloom_game::commands::tick::TickRateSnapshot {
+            rate: manager.tickrate(),
+            nanoseconds_per_tick: manager.nanoseconds_per_tick(),
+            average_tick_time_nanos: self.average_tick_time_nanos(),
+            tick_times_nanos: *self.tick_times_nanos(),
+            frozen: manager.is_frozen(),
+            stepping: manager.is_stepping_forward(),
+            sprinting: manager.is_sprinting(),
+        }
+    }
+    fn set_tick_rate(&mut self, rate: f32) {
+        self.tick_rate_manager.set_tick_rate(rate);
+    }
+    fn set_frozen(&mut self, frozen: bool) {
+        self.tick_rate_manager.set_frozen(frozen);
+    }
+    fn step_game_if_paused(&mut self, ticks: i32) -> bool {
+        self.tick_rate_manager.step_game_if_paused(ticks)
+    }
+    fn stop_stepping(&mut self) -> bool {
+        self.tick_rate_manager.stop_stepping()
+    }
+    fn request_game_to_sprint(&mut self, ticks: i32) -> bool {
+        self.tick_rate_manager.request_game_to_sprint(ticks)
+    }
+    fn stop_sprinting(&mut self) -> bool {
+        self.tick_rate_manager.stop_sprinting()
     }
 }

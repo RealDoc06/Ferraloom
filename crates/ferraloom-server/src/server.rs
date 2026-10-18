@@ -485,14 +485,21 @@ impl MinecraftServer {
                     self.autosave = self.autosave.min(self.next_autosave_interval())
                 }
                 TickRateEvent::SprintReport {
-                    completed_ticks,
+                    completed_ticks: _,
                     ticks_per_second,
                     milliseconds_per_tick,
                 } => {
-                    // The commands branch connects the server command source's
-                    // operator feedback when its canonical adapter lands.
-                    println!(
-                        "commands.tick.sprint.report: {completed_ticks} {ticks_per_second} {milliseconds_per_tick}"
+                    self.command_success(
+                        None,
+                        &CommandSourceStack::server(4, Vec3::ZERO),
+                        Component::translatable(
+                            "commands.tick.sprint.report",
+                            vec![
+                                ferraloom_game::commands::builtins::integer(ticks_per_second),
+                                ferraloom_game::commands::builtins::string(milliseconds_per_tick),
+                            ],
+                        ),
+                        true,
                     );
                 }
             }
@@ -675,7 +682,10 @@ impl MinecraftServer {
             self.level.level.set_handling_tick(true);
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.tick_world_border();
-                self.level.level.advance_weather_cycle(true);
+                self.level.level.advance_weather_cycle(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::AdvanceWeather),
+                );
                 self.apply_level_effects()?;
                 self.level.game_time = self.level.game_time.wrapping_add(1);
                 self.level.level.set_game_time(self.level.game_time);
@@ -902,6 +912,7 @@ impl MinecraftServer {
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
+            player.update_game_mode_abilities();
         }
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         let center = player.chunk_position();

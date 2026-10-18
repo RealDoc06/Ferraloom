@@ -762,3 +762,114 @@ async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
     Ok(log)
 }
 parity_test!(parity_command_limited_crafting, limited_crafting);
+
+async fn tick_control(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    let mut log = ObservationLog::default();
+    for (label, text, frozen, rate, key) in [
+        (
+            "freeze",
+            "tick freeze",
+            true,
+            20.,
+            "commands.tick.status.frozen",
+        ),
+        (
+            "rate",
+            "tick rate 10",
+            true,
+            10.,
+            "commands.tick.rate.success",
+        ),
+        (
+            "restore_rate",
+            "tick rate 20",
+            true,
+            20.,
+            "commands.tick.rate.success",
+        ),
+    ] {
+        bot.command(text).await?;
+        let packet = bot.wait_for("tick state before feedback", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+                || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,key)))
+        }).await?;
+        let cb::Packet::TickingState(packet) = packet.as_ref() else {
+            anyhow::bail!("tick feedback preceded its state packet");
+        };
+        ensure!(
+            packet.is_frozen == frozen && packet.tick_rate == rate,
+            "wrong live tick state"
+        );
+        log.record(format!("{label}.state"), format!("{packet:?}"))?;
+        log.record(format!("{label}.feedback"), feedback(bot, key).await?)?;
+    }
+    let baseline =
+        command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+            .as_i64()
+            .expect("numeric long gametime");
+    bot.synchronize().await?;
+    let frozen_time =
+        command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+            .as_i64()
+            .unwrap();
+    ensure!(frozen_time == baseline, "frozen game time advanced");
+    bot.command("tick step 30t").await?;
+    let packet = bot.wait_for("step packet before feedback", Ticks::DEFAULT, |_,packet| {
+        matches!(packet,cb::Packet::TickingStep(_))
+            || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.step.success")))
+    }).await?;
+    let cb::Packet::TickingStep(packet) = packet.as_ref() else {
+        anyhow::bail!("step feedback preceded its step packet");
+    };
+    ensure!(packet.tick_steps.0 == 30, "step count lost");
+    log.record("step.packet", packet.tick_steps.0)?;
+    log.record(
+        "step.feedback",
+        feedback(bot, "commands.tick.step.success").await?,
+    )?;
+    let mut delta = 0;
+    for _ in 0..80 {
+        let current =
+            command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+                .as_i64()
+                .unwrap();
+        delta = current - baseline;
+        ensure!(delta <= 30, "stepping advanced beyond its requested count");
+        if delta == 30 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    ensure!(delta == 30, "stepping never reached thirty game ticks");
+    log.record("step.game_time_delta", delta)?;
+    log.record(
+        "step.stop.error",
+        command(bot, "tick step stop", "commands.tick.step.stop.fail").await?,
+    )?;
+    log.record(
+        "sprint.stop.error",
+        command(bot, "tick sprint stop", "commands.tick.sprint.stop.fail").await?,
+    )?;
+    bot.command("tick unfreeze").await?;
+    let packet = bot
+        .wait_for("unfreeze packet", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+        })
+        .await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        unreachable!()
+    };
+    ensure!(
+        !packet.is_frozen && packet.tick_rate == 20.,
+        "unfreeze state lost"
+    );
+    log.record("unfreeze.state", format!("{packet:?}"))?;
+    log.record(
+        "unfreeze.feedback",
+        feedback(bot, "commands.tick.status.running").await?,
+    )?;
+    Ok(log)
+}
+parity_test!(parity_command_tick_control, tick_control);
