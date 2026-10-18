@@ -2,7 +2,7 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    bamboo, crops, hanging_moss, moss, multiface_spreader, survival,
+    bamboo, crops, hanging_moss, moss, multiface_spreader, pitcher, sea_pickle, survival,
 };
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -63,6 +63,8 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     matches!(
         block.class(),
         C::MossyCarpetBlock
+            | C::PitcherCropBlock
+            | C::SeaPickleBlock
             | C::HangingMossBlock
             | C::BambooStalkBlock
             | C::BambooSaplingBlock
@@ -108,6 +110,17 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<bool, LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::PitcherCropBlock => {
+                let Some((pos, lower)) = pitcher::lower_half(state, pos, level)? else {
+                    return Ok(false);
+                };
+                pitcher::can_grow(lower, pos, lower.get(p::AGE).unwrap() + 1, level)
+            }
+            C::SeaPickleBlock => Ok(state.get(p::WATERLOGGED) == Some(true)
+                && level.block_tags()?.contains_key(
+                    ferraloom_data::tags::BlockTags::CORAL_BLOCKS,
+                    level.get_block_state(pos.below(1))?.block(),
+                )),
             C::MossyCarpetBlock => {
                 Ok(state.get(p::BOTTOM) == Some(true)
                     && !moss::bonemeal_topper(level, pos)?.is_air())
@@ -178,6 +191,12 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::PitcherCropBlock => {
+                if let Some((pos, lower)) = pitcher::lower_half(state, pos, &level.as_reader())? {
+                    pitcher::grow(lower, pos, level)?;
+                }
+            }
+            C::SeaPickleBlock => sea_pickle::grow(state, pos, level)?,
             C::MossyCarpetBlock => {
                 let topper = moss::bonemeal_topper(&level.as_reader(), pos)?;
                 if !topper.is_air() {

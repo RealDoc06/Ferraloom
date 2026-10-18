@@ -15,7 +15,9 @@ mod leaves;
 mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
+mod pitcher;
 mod powder_snow;
+mod sea_pickle;
 mod snow;
 mod survival;
 mod vines;
@@ -110,11 +112,12 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         C::FarmlandBlock | C::PathBlock
             if matches!(
                 method,
-                M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes
+                M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes | M::Tick
             ) =>
         {
             &ground::GROUND
         }
+        C::FarmlandBlock if method == M::RandomTick => &ground::GROUND,
         C::SnowyBlock | C::SpreadingSnowyBlock | C::GrassBlock
             if matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes) =>
         {
@@ -126,6 +129,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &crops::CROP
         }
         C::NetherWartBlock if method == M::RandomTick => &crops::NETHER_WART,
+        C::PitcherCropBlock if method == M::RandomTick => &pitcher::PITCHER,
         C::LeavesBlock
         | C::TintedParticleLeavesBlock
         | C::UntintedParticleLeavesBlock

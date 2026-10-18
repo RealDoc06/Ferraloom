@@ -449,3 +449,70 @@ fn bamboo_crown_rewrites_and_stage_draws_match_vanilla() {
     }
     assert_eq!(count, 384);
 }
+
+#[test]
+fn farmland_water_boundary_and_crop_protection_preserve_random_stream() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    for (water_offset, crop, moisture, expected) in [
+        (Some((4, 1, 4)), false, 0, Some(7)),
+        (Some((5, 1, 4)), false, 1, Some(0)),
+        (Some((4, 2, 4)), false, 1, Some(0)),
+        (None, true, 0, Some(0)),
+        (None, false, 0, None),
+    ] {
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        let state = Block::FARMLAND
+            .default_state()
+            .with(p::MOISTURE, moisture)
+            .unwrap();
+        level.set_block_state(pos, state).unwrap();
+        if let Some((x, y, z)) = water_offset {
+            level
+                .set_block_state(pos.offset(x, y, z), Block::WATER.default_state())
+                .unwrap();
+        }
+        if crop {
+            level
+                .set_block_state(pos.above(1), Block::WHEAT.default_state())
+                .unwrap();
+        }
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(7331)), 0);
+        ground::GROUND.random_tick(state, pos, &mut level).unwrap();
+        let actual = level.get_block_state(pos).unwrap();
+        assert_eq!(
+            actual,
+            expected.map_or(Block::DIRT.default_state(), |m| state
+                .with(p::MOISTURE, m)
+                .unwrap())
+        );
+        assert_eq!(
+            level.random().next_long(),
+            LegacyRandomSource::new(7331).next_long()
+        );
+        let effects = level.take_effects();
+        assert_eq!(effects.iter().filter(|effect| matches!(effect, LevelEffect::GameEvent { event: ferraloom_data::registries::game_event::Id::BLOCK_CHANGE, affected_state: Some(state), .. } if *state == Block::DIRT.default_state())).count(), usize::from(expected.is_none()));
+    }
+}
+
+#[test]
+fn ground_scheduled_tick_retains_farmland_but_always_converts_path() {
+    let pos = BlockPos::new(8, 5, 8);
+    for block in [Block::FARMLAND, Block::DIRT_PATH] {
+        let mut level = level();
+        let state = block.default_state();
+        level.set_block_state(pos, state).unwrap();
+        ground::GROUND.tick(state, pos, &mut level).unwrap();
+        assert_eq!(
+            level.get_block_state(pos).unwrap(),
+            if block == Block::FARMLAND {
+                state
+            } else {
+                Block::DIRT.default_state()
+            }
+        );
+    }
+}

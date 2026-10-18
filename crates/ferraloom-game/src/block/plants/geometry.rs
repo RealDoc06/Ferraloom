@@ -31,6 +31,8 @@ pub fn supports(class: BlockClass) -> bool {
     matches!(
         class,
         C::FlowerBlock
+            | C::FarmlandBlock
+            | C::PathBlock
             | C::WitherRoseBlock
             | C::EyeblossomBlock
             | C::BambooStalkBlock
