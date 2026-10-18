@@ -266,7 +266,7 @@ impl ListFunction {
                     let values = edit
                         .values
                         .iter()
-                        .map(|v| v.get(data, c))
+                        .map(|v| v.get(data, c).map(Into::into))
                         .collect::<Result<Vec<_>>>()?;
                     original.floats =
                         edit.operation

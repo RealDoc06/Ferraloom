@@ -91,7 +91,7 @@ impl ItemFunction {
                         attribute: modifier.attribute.clone(),
                         modifier: AttributeModifier {
                             id: modifier.id.clone(),
-                            amount,
+                            amount: amount.into(),
                             operation: modifier.operation,
                         },
                         slot,
