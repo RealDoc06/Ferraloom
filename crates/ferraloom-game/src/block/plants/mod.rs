@@ -19,6 +19,7 @@ pub mod multiface;
 pub mod multiface_spreader;
 mod nylium;
 mod pitcher;
+mod placement;
 mod powder_snow;
 mod sea_pickle;
 mod snow;
@@ -35,6 +36,9 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if placement::supports(block, method) {
+        return Some(&placement::PLANT_PLACEMENT);
+    }
     if method == M::CloneItemStack && clone_item::item(block).is_some() {
         return Some(&clone_item::PLANT_CLONE);
     }

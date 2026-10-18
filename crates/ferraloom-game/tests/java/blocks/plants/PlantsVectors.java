@@ -77,6 +77,29 @@ public final class PlantsVectors {
             var placed=Blocks.VINE.getStateForPlacement(context);
             System.out.println("vine-place\t"+Block.getId(clicked)+"\t"+direction.ordinal()+"\t"+mode+"\t"+(placed==null?-1:Block.getId(placed)));
         }
+        for(var block:List.of(Blocks.OAK_LEAVES,Blocks.MANGROVE_LEAVES,Blocks.MANGROVE_PROPAGULE,Blocks.TALL_GRASS,Blocks.TALL_SEAGRASS,
+            Blocks.PITCHER_CROP,Blocks.BAMBOO,Blocks.KELP,Blocks.KELP_PLANT,Blocks.CAVE_VINES,Blocks.TWISTING_VINES,Blocks.WEEPING_VINES,
+            Blocks.SEAGRASS,Blocks.SEA_PICKLE,Blocks.TUBE_CORAL,Blocks.TUBE_CORAL_FAN,Blocks.TUBE_CORAL_WALL_FAN,Blocks.DEAD_TUBE_CORAL_WALL_FAN,
+            Blocks.PALE_MOSS_CARPET,Blocks.PINK_PETALS,Blocks.LEAF_LITTER,Blocks.SNOW,Blocks.PODZOL,Blocks.GRASS_BLOCK,Blocks.MYCELIUM,
+            Blocks.FARMLAND,Blocks.BIG_DRIPLEAF,Blocks.SMALL_DRIPLEAF,Blocks.GLOW_LICHEN)) {
+            for(var below:List.of(Blocks.AIR,Blocks.DIRT,Blocks.STONE,Blocks.FARMLAND,Blocks.CLAY,Blocks.BAMBOO,Blocks.BAMBOO_SAPLING,Blocks.BIG_DRIPLEAF,Blocks.BIG_DRIPLEAF_STEM,Blocks.OAK_LOG))
+            for(var clicked:List.of(Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL,8),Blocks.LAVA.defaultBlockState(),block.defaultBlockState()))
+            for(var above:List.of(Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.STONE.defaultBlockState(),block.defaultBlockState()))
+            for(var direction:Direction.values())for(long seed:new long[]{0,1234}) {
+                level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,clicked,816);
+                level.getChunkAt(pos).setBlockState(pos.below(),below.defaultBlockState(),816);
+                level.getChunkAt(pos).setBlockState(pos.above(),above,816);
+                // Walls for lateral attachment; retaining an empty east side
+                // distinguishes looking order from a hard-coded facing.
+                level.getChunkAt(pos).setBlockState(pos.north(),Blocks.STONE.defaultBlockState(),816);
+                level.getChunkAt(pos).setBlockState(pos.south(),Blocks.STONE.defaultBlockState(),816);
+                level.getChunkAt(pos).setBlockState(pos.west(),Blocks.STONE.defaultBlockState(),816);
+                level.getRandom().setSeed(seed);
+                var context=new net.minecraft.world.item.context.DirectionalPlaceContext(level,pos,direction,net.minecraft.world.item.ItemStack.EMPTY,Direction.UP);
+                var result=block.getStateForPlacement(context);
+                System.out.println("plant-place\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+seed+"\t"+Block.getId(below.defaultBlockState())+"\t"+Block.getId(clicked)+"\t"+Block.getId(above)+"\t"+direction.ordinal()+"\t"+(result==null?-1:Block.getId(result))+"\t"+level.getRandom().nextLong());
+            }
+        }
         for(var block:plants) {
             var states=new ArrayList<BlockState>();states.add(block.defaultBlockState());
             if(block.defaultBlockState().hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) states.add(block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));

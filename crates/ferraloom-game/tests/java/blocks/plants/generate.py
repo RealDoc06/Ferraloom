@@ -46,3 +46,6 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     placement='\n'.join(line for line in lines if line.startswith('vine-place\t')) + '\n'
     (HERE/'placement.tsv.gz').write_bytes(gzip.compress(placement.encode(),mtime=0))
     print(f'{len(placement.splitlines())} vanilla vine placement vectors')
+    states='\n'.join(line for line in lines if line.startswith('plant-place\t')) + '\n'
+    (HERE/'placement-states.tsv.gz').write_bytes(gzip.compress(states.encode(),mtime=0))
+    print(f'{len(states.splitlines())} vanilla plant placement states and RNG vectors')

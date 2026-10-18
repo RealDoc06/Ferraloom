@@ -672,3 +672,149 @@ fn disabled_vine_spreading_does_not_consume_random() {
         LegacyRandomSource::new(1234).next_long()
     );
 }
+
+#[test]
+fn crop_random_ticks_match_real_server_outcomes_and_rng() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/random-ticks.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_light_snapshot(
+            ChunkPos::new(0, 0),
+            crate::level::weather::ChunkLightSnapshot {
+                sky: [(0, ferraloom_light::DataLayer::new(f[5].parse().unwrap()))].into(),
+                block: Default::default(),
+            },
+        );
+        let soil = if state.block() == Block::NETHER_WART {
+            Block::SOUL_SAND.default_state()
+        } else {
+            Block::FARMLAND
+                .default_state()
+                .with(p::MOISTURE, f[2].parse().unwrap())
+                .unwrap()
+        };
+        for x in -1..=1 {
+            for z in -1..=1 {
+                level
+                    .set_block_state(pos.below(1).offset(x, 0, z), soil)
+                    .unwrap();
+            }
+        }
+        level.set_block_state(pos, state).unwrap();
+        let pattern: u8 = f[3].parse().unwrap();
+        if pattern & 1 != 0 {
+            level
+                .set_block_state(pos.west(1), state.block().default_state())
+                .unwrap();
+        }
+        if pattern & 2 != 0 {
+            level
+                .set_block_state(pos.north(1), state.block().default_state())
+                .unwrap();
+        }
+        if pattern == 4 {
+            level
+                .set_block_state(pos.west(1).north(1), state.block().default_state())
+                .unwrap();
+        }
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[4].parse().unwrap())),
+            0,
+        );
+        level
+            .required_block_behavior(state.block(), crate::block::BlockMethod::RandomTick)
+            .unwrap()
+            .random_tick(state, pos, &mut level)
+            .unwrap();
+        assert_eq!(
+            level.get_block_state(pos).unwrap().id(),
+            f[6].parse::<u16>().unwrap(),
+            "{line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[7].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 5760);
+}
+
+#[test]
+fn plant_placement_states_and_rng_match_real_vanilla_contexts() {
+    use crate::block::DirectionalPlaceContext;
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/placement-states.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let mut level = level();
+    level.set_block_tags(blocks);
+    level.set_fluid_tags(fluids);
+    let pos = BlockPos::new(8, 5, 8);
+    for face in [Direction::North, Direction::South, Direction::West] {
+        level
+            .set_block_state(pos.relative(face, 1), Block::STONE.default_state())
+            .unwrap();
+    }
+    let stack = ItemStack::default();
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let block = Block::from_protocol_id(f[1].parse().unwrap()).unwrap();
+        let below = BlockState::from_id(f[3].parse().unwrap()).unwrap();
+        let clicked = BlockState::from_id(f[4].parse().unwrap()).unwrap();
+        let above = BlockState::from_id(f[5].parse().unwrap()).unwrap();
+        level.set_block_state(pos, clicked).unwrap();
+        level.set_block_state(pos.below(1), below).unwrap();
+        level.set_block_state(pos.above(1), above).unwrap();
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap())),
+            0,
+        );
+        let direction = Direction::VALUES[f[6].parse::<usize>().unwrap()];
+        let context = DirectionalPlaceContext::new(
+            &LevelReaderRef::Server(&level),
+            pos,
+            direction,
+            &stack,
+            Direction::Up,
+        )
+        .unwrap();
+        let result = LevelAccessRef::Server(&mut level)
+            .get_state_for_placement(block, &context)
+            .unwrap();
+        assert_eq!(
+            result.map_or(-1, |state| i32::from(state.id())),
+            f[7].parse::<i32>().unwrap(),
+            "{line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[8].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 69600);
+}

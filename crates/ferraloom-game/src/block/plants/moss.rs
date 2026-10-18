@@ -58,7 +58,7 @@ fn has_faces(state: BlockState) -> bool {
             .iter()
             .any(|&d| side(state, d) != p::North::None)
 }
-fn updated(
+pub(super) fn updated(
     mut state: BlockState,
     pos: BlockPos,
     level: &LevelReaderRef<'_, '_>,
