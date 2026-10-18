@@ -15,10 +15,13 @@ pub enum UnportedBehavior {
 pub enum UnportedOperation {
     WeatherStrike,
     PackReload,
+    SnowAccumulation,
+    PushEntitiesUp,
 }
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
     OnPlace,
+    HandlePrecipitation,
     AffectNeighborsAfterRemoval,
     NeighborChanged,
     EntityInside,
@@ -51,6 +54,7 @@ impl BlockMethod {
         use ferraloom_data::BlockMethod as Vanilla;
         Some(match self {
             Self::OnPlace => Vanilla::OnPlace,
+            Self::HandlePrecipitation => Vanilla::HandlePrecipitation,
             Self::AffectNeighborsAfterRemoval => Vanilla::AffectNeighborsAfterRemoval,
             Self::NeighborChanged => Vanilla::NeighborChanged,
             Self::EntityInside => Vanilla::EntityInside,
@@ -97,6 +101,7 @@ impl BlockMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::OnPlace => "onPlace",
+            Self::HandlePrecipitation => "handlePrecipitation",
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
             Self::EntityInside => "entityInside",
@@ -158,6 +163,14 @@ impl UnportedCalls {
                     "Unported behavior skipped: ServerLevel#tickThunder strike (skipped calls: {}; RNG parity pending)",
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Operation(UnportedOperation::SnowAccumulation) => eprintln!(
+                    "Unported behavior skipped: ServerLevel#tickPrecipitation snow accumulation (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::Operation(UnportedOperation::PushEntitiesUp) => eprintln!(
+                    "Unported behavior skipped: Block#pushEntitiesUp (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
                 UnportedCall::Operation(UnportedOperation::PackReload) => eprintln!(
                     "Pack reload not yet supported (skipped calls: {})",
                     self.stats.skipped_calls
@@ -175,6 +188,10 @@ impl Level {
             return Err(match operation {
                 UnportedOperation::WeatherStrike => LevelError::UnsupportedWeatherQuery,
                 UnportedOperation::PackReload => LevelError::UnsupportedPackReload,
+                UnportedOperation::SnowAccumulation => {
+                    LevelError::UnsupportedBlockMethod(Block::SNOW, BlockMethod::CanSurvive)
+                }
+                UnportedOperation::PushEntitiesUp => LevelError::UnsupportedPushEntitiesUp,
             });
         }
         calls.record(UnportedCall::Operation(operation));

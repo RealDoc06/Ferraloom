@@ -1042,7 +1042,7 @@ impl MinecraftServer {
     /// Apply accepted section transitions immediately, including Y-only moves.
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
-    fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+    pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
         self.level
             .distance_manager
@@ -1151,6 +1151,9 @@ impl MinecraftServer {
                 self.world.ready.insert(pos);
             }
             for (key, data) in light.updates {
+                self.level
+                    .level
+                    .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
                 self.world.lights.insert(key, data);
             }
             for (key, mask) in light.dirty {

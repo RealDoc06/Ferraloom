@@ -126,6 +126,30 @@ pub struct LightDirtySections {
     pub sky: u64,
     pub block: u64,
 }
+impl ChunkLight {
+    pub fn snapshot(&self) -> ferraloom_game::level::weather::ChunkLightSnapshot {
+        let convert = |layers: &BTreeMap<i32, Vec<u8>>| {
+            layers
+                .iter()
+                .map(|(&y, data)| {
+                    (
+                        y,
+                        ferraloom_light::DataLayer::from_bytes(
+                            data.clone()
+                                .into_boxed_slice()
+                                .try_into()
+                                .expect("light engine publishes 2048-byte sections"),
+                        ),
+                    )
+                })
+                .collect()
+        };
+        ferraloom_game::level::weather::ChunkLightSnapshot {
+            sky: convert(&self.sky),
+            block: convert(&self.block),
+        }
+    }
+}
 pub struct LitChunk {
     /// Delta relighting never completes or resets a generation request.
     pub initialized: Option<(u64, ChunkPos)>,
@@ -200,6 +224,7 @@ fn run_light_worker(
         let mut dirty = BTreeMap::<i64, LightDirtySections>::new();
         if let Some((_, pos)) = initialized {
             affected.insert(pos.pack());
+            lights.entry(pos.pack()).or_default();
         }
         for change in changes {
             let key = change.section.chunk().pack();
@@ -671,6 +696,13 @@ impl World {
         })
     }
     pub fn configure_live_rules(&self, level: &mut Level) {
+        let data = self.generator.data();
+        level.set_weather_environment(ferraloom_game::level::weather::WeatherEnvironment {
+            temperatures: data.temperatures.clone(),
+            biome_names: Arc::new(data.biome_names.clone()),
+            biome_zoom_seed: ferraloom_worldgen::biome_manager::obfuscate_seed(self.seed),
+            sea_level: self.generator.sea_level(),
+        });
         let rules = level.rules_mut();
         rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
         rules.fast_lava = self.dimension.fast_lava;

@@ -246,6 +246,16 @@ pub trait BlockBehavior: Sync {
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         level.collision_shape(state, pos, &BlockCollisionContext::empty())
     }
+    /// Port of Block#handlePrecipitation's inherited no-op.
+    fn handle_precipitation(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _precipitation: ferraloom_worldgen::biome_manager::Precipitation,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     fn on_place(
         &self,
         _state: BlockState,

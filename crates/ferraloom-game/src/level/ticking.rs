@@ -188,7 +188,7 @@ impl Level {
             if self.random().next_int_bound(48) == 0 {
                 let pos = self
                     .get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
-                self.tick_precipitation(pos);
+                self.tick_precipitation(pos)?;
             }
         }
         if speed == 0 {

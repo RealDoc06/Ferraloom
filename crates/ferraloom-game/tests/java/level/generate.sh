@@ -8,8 +8,9 @@ classes=$(mktemp -d)
 trap 'rm -rf "$classes"' EXIT
 classpath="$vanilla/versions/26.3/server-26.3.jar"
 while IFS= read -r -d '' library; do classpath="$classpath:$library"; done < <(find "$vanilla/libraries" -name '*.jar' -print0)
-"$jdk/javac" -cp "$classpath" -d "$classes" "$root/crates/ferraloom-game/tests/java/level/TickVectors.java" "$root/crates/ferraloom-game/tests/java/level/NeighborVectors.java" "$root/crates/ferraloom-game/tests/java/level/SimulationVectors.java" "$root/crates/ferraloom-game/tests/java/level/TickRateVectors.java" "$root/crates/ferraloom-game/tests/java/level/SpawnChunkVectors.java" "$root/crates/ferraloom-game/tests/java/level/LoadingVectors.java" "$root/crates/ferraloom-game/tests/java/level/PlayerLoadingVectors.java"
+"$jdk/javac" -cp "$classpath" -d "$classes" "$root/crates/ferraloom-game/tests/java/level/TickVectors.java" "$root/crates/ferraloom-game/tests/java/level/NeighborVectors.java" "$root/crates/ferraloom-game/tests/java/level/SimulationVectors.java" "$root/crates/ferraloom-game/tests/java/level/TickRateVectors.java" "$root/crates/ferraloom-game/tests/java/level/SpawnChunkVectors.java" "$root/crates/ferraloom-game/tests/java/level/LoadingVectors.java" "$root/crates/ferraloom-game/tests/java/level/PlayerLoadingVectors.java" "$root/crates/ferraloom-game/tests/java/level/WeatherVectors.java"
 cd "$classes"
+"$jdk/java" -Xmx512M -cp "$classes:$classpath" WeatherVectors > "$root/crates/ferraloom-game/tests/java/level/weather.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" PlayerLoadingVectors > "$root/crates/ferraloom-game/tests/java/level/player-loading.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" LoadingVectors > "$root/crates/ferraloom-game/tests/java/level/loading.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" TickRateVectors > "$root/crates/ferraloom-game/tests/java/level/tick-rate.tsv"
