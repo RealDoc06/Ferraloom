@@ -373,6 +373,21 @@ fn vanilla_all_recipe_display_bytes_and_update_packet() {
     packet.encode(&mut writer).unwrap();
     assert_eq!(writer.as_slice(), bytes);
     let sync = RecipeSynchronization::new(&manager, |_| true);
+    for test in oracle["displays"].as_array().unwrap() {
+        let id = test["id"].as_str().unwrap().parse().unwrap();
+        let actual: Vec<_> = sync.displays_for_recipe(&id).collect();
+        let expected = test["entries"].as_array().unwrap();
+        assert_eq!(actual.len(), expected.len(), "{id}");
+        for (actual, expected) in actual.iter().zip(expected) {
+            let mut writer = Writer::with_context(&context);
+            actual.encode(&mut writer).unwrap();
+            assert_eq!(
+                writer.as_slice(),
+                unhex(expected.as_str().unwrap()),
+                "{id} display entry"
+            );
+        }
+    }
     assert_eq!(sync.update.stonecutter_recipes, packet.stonecutter_recipes);
     for property in &sync.update.item_sets {
         let expected = packet

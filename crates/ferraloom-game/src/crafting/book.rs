@@ -7,7 +7,8 @@ use ferraloom_protocol::play::{
 };
 
 /// Port of ServerRecipeBook. Gameplay owns sending packets and advancement callbacks;
-/// these methods return packet data before the caller performs those synchronous effects.
+/// unlock_recipe returns one iteration so callers can release the book borrow
+/// before invoking synchronous advancement effects.
 #[derive(Clone, Debug)]
 pub struct ServerRecipeBook {
     known: Vec<Identifier>,
@@ -53,8 +54,32 @@ impl ServerRecipeBook {
     pub fn remove_highlight(&mut self, id: &Identifier) {
         self.highlight.retain(|highlight| highlight != id);
     }
-    /// Port of ServerRecipeBook#addRecipes. `unlocked` drives RECIPE_UNLOCKED in
-    /// encounter order, including recipes whose displays were feature-filtered.
+    /// One iteration of ServerRecipeBook#addRecipes. A live caller releases its
+    /// player/book borrow, appends these entries, then triggers RECIPE_UNLOCKED
+    /// immediately before processing the next recipe. This preserves reentrancy.
+    pub fn unlock_recipe(
+        &mut self,
+        recipe: &RecipeHolder,
+        sync: &RecipeSynchronization,
+    ) -> Option<Vec<RecipeBookEntry>> {
+        if self.contains(&recipe.id) || recipe.value.is_special() {
+            return None;
+        }
+        self.add(recipe.id.clone());
+        if !self.highlight.contains(&recipe.id) {
+            self.highlight.push(recipe.id.clone());
+        }
+        Some(
+            sync.displays_for_recipe(&recipe.id)
+                .map(|display| RecipeBookEntry {
+                    contents: display.clone(),
+                    flags: 2 | u8::from(recipe.value.show_notification),
+                })
+                .collect(),
+        )
+    }
+    /// State-only batch helper. Live gameplay uses unlock_recipe per iteration so
+    /// advancement callbacks observe the same progressively updated book as Java.
     pub fn add_recipes<'a>(
         &mut self,
         recipes: impl IntoIterator<Item = &'a RecipeHolder>,
@@ -63,17 +88,8 @@ impl ServerRecipeBook {
         let mut entries = Vec::new();
         let mut unlocked = Vec::new();
         for recipe in recipes {
-            if !self.contains(&recipe.id) && !recipe.value.is_special() {
-                self.add(recipe.id.clone());
-                if !self.highlight.contains(&recipe.id) {
-                    self.highlight.push(recipe.id.clone());
-                }
-                for display in sync.displays_for_recipe(&recipe.id) {
-                    entries.push(RecipeBookEntry {
-                        contents: display.clone(),
-                        flags: 2 | u8::from(recipe.value.show_notification),
-                    });
-                }
+            if let Some(addition) = self.unlock_recipe(recipe, sync) {
+                entries.extend(addition);
                 unlocked.push(recipe.id.clone());
             }
         }

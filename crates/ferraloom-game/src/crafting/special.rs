@@ -299,10 +299,15 @@ impl Recipe {
                 add_material_count,
                 ..
             } => {
-                let source = input
+                let mut sources = input
                     .items()
                     .iter()
-                    .find(|stack| !stack.is_empty() && source.test(stack));
+                    .filter(|stack| !stack.is_empty() && source.test(stack));
+                let source = if *add_material_count {
+                    sources.next_back()
+                } else {
+                    sources.next()
+                };
                 let Some(source) = source else {
                     return Ok(ItemStack::default());
                 };
@@ -471,9 +476,8 @@ impl Recipe {
                         found = Some(source);
                     }
                 }
-                let Some(source) = found else {
-                    return Ok(ItemStack::default());
-                };
+                let empty = ItemStack::default();
+                let source = found.unwrap_or(&empty);
                 let mut result = stack::transmute(result, source, 0);
                 match patterns {
                     Some(patterns) => stack::set(&mut result, patterns),

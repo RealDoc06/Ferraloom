@@ -126,6 +126,7 @@ impl StackedItemContents {
                     .map(|(_, count)| *count)
                     .max()
                     .unwrap_or(0)
+                    .max(0)
             })
             .min()
             .unwrap_or(i32::MAX);

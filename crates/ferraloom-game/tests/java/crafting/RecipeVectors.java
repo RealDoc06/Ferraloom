@@ -155,7 +155,8 @@ public final class RecipeVectors {
             var displayCase=new JsonObject();displayCase.addProperty("id",id);var list=new JsonArray();for(var display:recipe.display())list.add(wireDisplay(display));displayCase.add("displays",list);
             var placementCases=new JsonArray();
             for(int size=1;size<=3;size++){var placed=new JsonArray();net.minecraft.recipebook.PlaceRecipeHelper.placeRecipe(size,size,recipe,recipe.placementInfo().slotsToIngredientIndex(),(ingredient,index,x,y)->{var pair=new JsonArray();pair.add(index);pair.add(ingredient);placed.add(pair);});placementCases.add(placed);}
-            displayCase.add("placements",placementCases);displays.add(displayCase);
+            displayCase.add("placements",placementCases);
+            var entries=new JsonArray();manager.listDisplaysForRecipe(holder.id(),entry->{var buf=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);RecipeDisplayEntry.STREAM_CODEC.encode(buf,entry);var bytes=new byte[buf.readableBytes()];buf.readBytes(bytes);buf.release();entries.add(HexFormat.of().formatHex(bytes));});displayCase.add("entries",entries);displays.add(displayCase);
             for(int variant=0;variant<3;variant++) {
                 if(recipe instanceof BrewingRecipe brewing) {var input=choose(brewing.getInput().ingredient(),variant);brewing.getInput().potions().flatMap(p->p.potions()).ifPresent(p->p.stream().findFirst().ifPresent(potion->input.set(DataComponents.POTION_CONTENTS,new net.minecraft.world.item.alchemy.PotionContents(potion))));record(id+"/"+variant,RecipeType.BREWING,new BrewingInput(input,choose(brewing.getReagent().ingredient(),variant)),2,1);continue;}
                 var items=seed(recipe,variant);
