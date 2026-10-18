@@ -5,6 +5,7 @@ pub mod bonemeal;
 mod column;
 mod coral;
 mod crops;
+mod dripleaf;
 mod spread;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
 mod geometry;
@@ -69,7 +70,9 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     {
         return Some(&super::BASE_BLOCK);
     }
-    if matches!(method, M::OutlineShape | M::CollisionShape) && geometry::supports(block.class()) {
+    if matches!(method, M::OutlineShape | M::CollisionShape)
+        && (geometry::supports(block.class()) || block == Block::MOSS_CARPET)
+    {
         return Some(&geometry::PLANT_SHAPES);
     }
     let behavior: &'static dyn BlockBehavior = match block.class() {
@@ -118,14 +121,20 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &ground::GROUND
         }
         C::FarmlandBlock if method == M::RandomTick => &ground::GROUND,
-        C::SnowyBlock | C::SpreadingSnowyBlock | C::GrassBlock
+        C::SnowyBlock | C::SpreadingSnowyBlock | C::GrassBlock | C::MyceliumBlock
             if matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes) =>
         {
             &ground::GROUND
         }
         C::SnowLayerBlock if matches!(method, M::RandomTick | M::IsFaceSturdy) => &snow::SNOW,
 
-        C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock if method == M::RandomTick => {
+        C::CropBlock
+        | C::CarrotBlock
+        | C::PotatoBlock
+        | C::BeetrootBlock
+        | C::TorchflowerCropBlock
+            if method == M::RandomTick =>
+        {
             &crops::CROP
         }
         C::NetherWartBlock if method == M::RandomTick => &crops::NETHER_WART,

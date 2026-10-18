@@ -79,6 +79,9 @@ fn multiface_neighbor_loss_removes_only_the_unsupported_face() {
 #[test]
 fn leaf_decay_gates_preserve_persistent_and_connected_leaves() {
     let mut level = level();
+    let (blocks, fluids) = tags();
+    level.set_block_tags(blocks);
+    level.set_fluid_tags(fluids);
     let pos = BlockPos::new(8, 5, 8);
     let decaying = Block::OAK_LEAVES
         .default_state()

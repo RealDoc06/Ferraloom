@@ -9,7 +9,7 @@ use ferraloom_worldgen::{
     biome::BiomeSource,
     feature::{FeatureContext, FeatureLoader},
     generator::{GenerationData, NoiseBasedChunkGenerator},
-    region::{ChunkStatus, LightLayer, RegionChunk, WorldGenRegion},
+    region::{ChunkStatus, RegionChunk, WorldGenRegion},
     settings::NoiseGeneratorSettings,
 };
 use serde_json::{Value, json};

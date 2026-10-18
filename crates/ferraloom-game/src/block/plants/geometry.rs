@@ -38,6 +38,13 @@ pub fn supports(class: BlockClass) -> bool {
             | C::BambooStalkBlock
             | C::BambooSaplingBlock
             | C::MangrovePropaguleBlock
+            | C::LilyPadBlock
+            | C::BaseCoralPlantBlock
+            | C::BaseCoralFanBlock
+            | C::BaseCoralWallFanBlock
+            | C::CoralPlantBlock
+            | C::CoralFanBlock
+            | C::CoralWallFanBlock
             | C::TallGrassBlock
             | C::DryVegetationBlock
             | C::ShortDryGrassBlock
@@ -67,6 +74,8 @@ pub fn supports(class: BlockClass) -> bool {
             | C::BigDripleafBlock
             | C::PitcherCropBlock
             | C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
             | C::TorchflowerCropBlock
             | C::BeetrootBlock
             | C::CactusBlock

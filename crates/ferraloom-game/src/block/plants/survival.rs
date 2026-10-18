@@ -35,6 +35,8 @@ pub fn supports(block: Block, method: BlockMethod) -> bool {
             | C::AzaleaBlock
             | C::MangrovePropaguleBlock
             | C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
             | C::BeetrootBlock
             | C::TorchflowerCropBlock
             | C::PitcherCropBlock
@@ -126,9 +128,12 @@ fn may_place_on(
         }
         C::AzaleaBlock => T::SUPPORTS_AZALEA,
         C::MangrovePropaguleBlock => T::SUPPORTS_MANGROVE_PROPAGULE,
-        C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock | C::PitcherCropBlock => {
-            T::SUPPORTS_CROPS
-        }
+        C::CropBlock
+        | C::CarrotBlock
+        | C::PotatoBlock
+        | C::BeetrootBlock
+        | C::TorchflowerCropBlock
+        | C::PitcherCropBlock => T::SUPPORTS_CROPS,
         C::StemBlock | C::AttachedStemBlock => {
             if matches!(
                 state.block(),
@@ -230,7 +235,12 @@ impl BlockBehavior for Plant {
                         || (level.get_raw_brightness(pos, 0)? < 13 && below.data().solid_render),
                 )
             }
-            C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock | C::PitcherCropBlock => {
+            C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
+            | C::BeetrootBlock
+            | C::TorchflowerCropBlock
+            | C::PitcherCropBlock => {
                 if !(level.get_raw_brightness(pos, 0)? >= 8) {
                     return Ok(false);
                 }

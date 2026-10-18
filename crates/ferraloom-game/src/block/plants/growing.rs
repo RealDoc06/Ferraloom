@@ -5,7 +5,7 @@ use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id, 
 use ferraloom_util::{BlockPos, Direction, random::RandomSource};
 pub struct GrowingPlant;
 pub static GROWING_PLANT: GrowingPlant = GrowingPlant;
-fn family(block: Block) -> (Block, Block, Direction) {
+pub(super) fn family(block: Block) -> (Block, Block, Direction) {
     match block {
         Block::KELP | Block::KELP_PLANT => (Block::KELP, Block::KELP_PLANT, Direction::Up),
         Block::TWISTING_VINES | Block::TWISTING_VINES_PLANT => (
@@ -23,6 +23,67 @@ fn family(block: Block) -> (Block, Block, Direction) {
         }
         _ => unreachable!("registered growing plant"),
     }
+}
+
+pub(super) fn can_grow_into(head: Block, state: BlockState) -> bool {
+    if head == Block::KELP {
+        state.block() == Block::WATER
+    } else {
+        state.is_air()
+    }
+}
+
+/// Port of GrowingPlantBodyBlock#getHeadPos and BlockUtil#getTopConnectedBlock.
+pub(super) fn head_pos(
+    state: BlockState,
+    mut pos: BlockPos,
+    level: &LevelReaderRef<'_, '_>,
+) -> Result<Option<BlockPos>, LevelError> {
+    let (head, body, direction) = family(state.block());
+    if state.block() == head {
+        return Ok(Some(pos));
+    }
+    loop {
+        pos = pos.relative(direction, 1);
+        let forward = level.get_block_state(pos)?;
+        if forward.block() != body {
+            return Ok((forward.block() == head).then_some(pos));
+        }
+    }
+}
+
+/// Port of GrowingPlantHeadBlock#performBonemeal and NetherVines' decreasing
+/// probability. The length draw is consumed before examining the first target.
+pub(super) fn bonemeal(
+    state: BlockState,
+    pos: BlockPos,
+    level: &mut LevelAccessRef<'_, '_>,
+) -> Result<(), LevelError> {
+    let (head, _, direction) = family(state.block());
+    let mut at = pos.relative(direction, 1);
+    let mut age = (state.get(p::AGE).unwrap() + 1).min(25);
+    let count = if head == Block::KELP {
+        1
+    } else {
+        let mut probability = 1.0;
+        let mut count = 0;
+        while level.random()?.next_double() < probability {
+            count += 1;
+            probability *= 0.826;
+        }
+        count
+    };
+    for _ in 0..count {
+        if !can_grow_into(head, level.get_block_state(at)?)
+            || !super::bonemeal::inside_height(&level.as_reader(), at)
+        {
+            break;
+        }
+        level.set_block(at, state.with(p::AGE, age).unwrap(), UpdateFlags::ALL)?;
+        at = at.relative(direction, 1);
+        age = (age + 1).min(25);
+    }
+    Ok(())
 }
 impl BlockBehavior for GrowingPlant {
     fn can_survive(
@@ -103,11 +164,7 @@ impl BlockBehavior for GrowingPlant {
         if age < 25 && level.random().next_double() < probability {
             let at = pos.relative(direction, 1);
             let old = level.get_block_state(at)?;
-            if if head == Block::KELP {
-                old.block() == Block::WATER
-            } else {
-                old.is_air()
-            } {
+            if can_grow_into(head, old) {
                 let mut next = state.with(p::AGE, age + 1).unwrap();
                 if head == Block::CAVE_VINES {
                     next = next

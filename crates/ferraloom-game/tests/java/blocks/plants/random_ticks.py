@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
     output=path/'random.tsv'
     with (path/'server.log').open('w') as log:
         try:
-            subprocess.run([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=240)
+            subprocess.run([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-Dferraloom.plants.extended='+str('--extended' in sys.argv).lower(),'-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=240)
         except Exception:
             print((path/'server.log').read_text()[-12000:]);raise
     if (path/'oracle-error.txt').exists():raise SystemExit((path/'oracle-error.txt').read_text())

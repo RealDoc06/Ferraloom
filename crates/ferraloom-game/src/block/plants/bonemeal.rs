@@ -2,7 +2,8 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    bamboo, crops, hanging_moss, moss, multiface_spreader, pitcher, sea_pickle, survival,
+    bamboo, crops, dripleaf, growing, hanging_moss, moss, multiface_spreader, pitcher, sea_pickle,
+    spread, survival,
 };
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -63,6 +64,16 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     matches!(
         block.class(),
         C::MossyCarpetBlock
+            | C::BigDripleafBlock
+            | C::BigDripleafStemBlock
+            | C::SmallDripleafBlock
+            | C::StemBlock
+            | C::KelpBlock
+            | C::KelpPlantBlock
+            | C::WeepingVinesBlock
+            | C::WeepingVinesPlantBlock
+            | C::TwistingVinesBlock
+            | C::TwistingVinesPlantBlock
             | C::PitcherCropBlock
             | C::SeaPickleBlock
             | C::HangingMossBlock
@@ -70,6 +81,8 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
             | C::BambooSaplingBlock
             | C::FireflyBushBlock
             | C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
             | C::BeetrootBlock
             | C::TorchflowerCropBlock
             | C::TallGrassBlock
@@ -110,6 +123,30 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<bool, LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::SmallDripleafBlock => Ok(true),
+            C::BigDripleafBlock | C::BigDripleafStemBlock => {
+                let Some(head) = dripleaf::head_pos(state, pos, level)? else {
+                    return Ok(false);
+                };
+                dripleaf::can_grow_into(level, head.above(1))
+            }
+            C::StemBlock => Ok(state.get(p::AGE) != Some(7)),
+            C::KelpBlock
+            | C::KelpPlantBlock
+            | C::WeepingVinesBlock
+            | C::WeepingVinesPlantBlock
+            | C::TwistingVinesBlock
+            | C::TwistingVinesPlantBlock => {
+                let Some(head) = growing::head_pos(state, pos, level)? else {
+                    return Ok(false);
+                };
+                let (block, _, direction) = growing::family(state.block());
+                let forward = head.relative(direction, 1);
+                Ok(
+                    growing::can_grow_into(block, level.get_block_state(forward)?)
+                        && inside_height(level, forward),
+                )
+            }
             C::PitcherCropBlock => {
                 let Some((pos, lower)) = pitcher::lower_half(state, pos, level)? else {
                     return Ok(false);
@@ -146,7 +183,11 @@ impl BonemealableBlock for PlantBonemeal {
                     && level.get_block_state(growth)?.is_air())
             }
 
-            C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock => {
+            C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
+            | C::BeetrootBlock
+            | C::TorchflowerCropBlock => {
                 Ok(state.get(p::AGE).unwrap() < crops::max_age(state.block()))
             }
             C::SweetBerryBushBlock => Ok(state.get(p::AGE).unwrap() < 3),
@@ -191,6 +232,30 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::BigDripleafBlock | C::BigDripleafStemBlock | C::SmallDripleafBlock => {
+                dripleaf::bonemeal(state, pos, level)?
+            }
+            C::StemBlock => {
+                let age = (state.get(p::AGE).unwrap()
+                    + (level.random()?.next_int_bound(4) + 2) as u8)
+                    .min(7);
+                let grown = state.with(p::AGE, age).unwrap();
+                level.set_block(pos, grown, UpdateFlags::CLIENTS)?;
+                if age == 7 {
+                    spread::grow_stem(grown, pos, level)?;
+                }
+            }
+            C::KelpBlock
+            | C::KelpPlantBlock
+            | C::WeepingVinesBlock
+            | C::WeepingVinesPlantBlock
+            | C::TwistingVinesBlock
+            | C::TwistingVinesPlantBlock => {
+                if let Some(head) = growing::head_pos(state, pos, &level.as_reader())? {
+                    let state = level.get_block_state(head)?;
+                    growing::bonemeal(state, head, level)?;
+                }
+            }
             C::PitcherCropBlock => {
                 if let Some((pos, lower)) = pitcher::lower_half(state, pos, &level.as_reader())? {
                     pitcher::grow(lower, pos, level)?;
@@ -236,9 +301,11 @@ impl BonemealableBlock for PlantBonemeal {
                 }
             }
 
-            C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock => {
-                crops::grow_crops(state, pos, level)?
-            }
+            C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
+            | C::BeetrootBlock
+            | C::TorchflowerCropBlock => crops::grow_crops(state, pos, level)?,
             C::SweetBerryBushBlock => {
                 level.set_block(
                     pos,
