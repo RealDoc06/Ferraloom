@@ -28,11 +28,19 @@ impl<T> EntityDataAccessor<T> {
 
 pub trait SynchedValue: Clone + PartialEq {
     fn from_value(value: &EntityDataValue) -> Option<&Self>;
+    fn from_value_mut(value: &mut EntityDataValue) -> Option<&mut Self>;
     fn into_value(self) -> EntityDataValue;
 }
 macro_rules! value {
     ($ty:ty, $variant:ident) => {
         impl SynchedValue for $ty {
+            fn from_value_mut(value: &mut EntityDataValue) -> Option<&mut Self> {
+                if let EntityDataValue::$variant(value) = value {
+                    Some(value)
+                } else {
+                    None
+                }
+            }
             fn from_value(value: &EntityDataValue) -> Option<&Self> {
                 if let EntityDataValue::$variant(value) = value {
                     Some(value)
@@ -51,6 +59,9 @@ value!(VarInt, Int);
 value!(bool, Boolean);
 value!(Pose, Pose);
 value!(Option<Box<Component>>, OptionalComponent);
+value!(ferraloom_data::BlockState, BlockState);
+value!(ferraloom_util::BlockPos, BlockPos);
+value!(ferraloom_protocol::component::ItemStack, ItemStack);
 
 pub const SHARED_FLAGS: EntityDataAccessor<i8> = EntityDataAccessor::new(0);
 pub const AIR_SUPPLY: EntityDataAccessor<VarInt> = EntityDataAccessor::new(1);
@@ -103,6 +114,12 @@ impl SynchedEntityData {
     }
     pub fn get<T: SynchedValue>(&self, accessor: EntityDataAccessor<T>) -> &T {
         T::from_value(&self.items[usize::from(accessor.id)].value).expect("metadata accessor type")
+    }
+    /// Java returns mutable stack references without dirtying the DataItem.
+    /// Call set_forced when an owning setter explicitly requests synchronization.
+    pub fn get_mut<T: SynchedValue>(&mut self, accessor: EntityDataAccessor<T>) -> &mut T {
+        T::from_value_mut(&mut self.items[usize::from(accessor.id)].value)
+            .expect("metadata accessor type")
     }
     /// Returns whether the onSyncedDataUpdated callback must run at this call site.
     pub fn set<T: SynchedValue>(&mut self, accessor: EntityDataAccessor<T>, value: T) -> bool {

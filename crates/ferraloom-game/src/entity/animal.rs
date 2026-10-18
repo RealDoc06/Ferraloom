@@ -67,6 +67,18 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    /// Port of Mob#getPickResult for the concrete Cow type.
+    fn get_pick_result(
+        &self,
+        _entity: super::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<Option<ferraloom_protocol::component::ItemStack>, crate::level::LevelError> {
+        Ok(Some(ferraloom_protocol::component::ItemStack::new(
+            ferraloom_data::Item::COW_SPAWN_EGG,
+            1,
+            Default::default(),
+        )))
+    }
     fn default_gravity(&self) -> f64 {
         0.08
     }

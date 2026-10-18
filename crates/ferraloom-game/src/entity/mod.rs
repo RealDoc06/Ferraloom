@@ -3,6 +3,8 @@ use ferraloom_data::EntityType;
 use crate::level::{Level, LevelError};
 
 pub mod animal;
+pub mod effects;
+pub mod item;
 pub mod player;
 
 /// Server-lifetime identity, independent of storage location and network ID.
@@ -95,6 +97,8 @@ pub struct AgeableMob {
 pub enum EntityState {
     Cow(animal::Cow),
     Player(Box<player::ServerPlayer>),
+    PrimedTnt(Box<item::PrimedTnt>),
+    Item(Box<item::ItemEntity>),
 }
 
 impl EntityState {
@@ -102,20 +106,22 @@ impl EntityState {
         match self {
             Self::Cow(_) => EntityType::COW,
             Self::Player(_) => EntityType::PLAYER,
+            Self::PrimedTnt(_) => EntityType::TNT,
+            Self::Item(_) => EntityType::ITEM,
         }
     }
 
     pub fn as_mob(&self) -> Option<&Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
     pub fn as_mob_mut(&mut self) -> Option<&mut Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob_mut()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
@@ -135,12 +141,16 @@ impl EntityState {
         match self {
             Self::Cow(cow) => &cow.as_living().parent,
             Self::Player(p) => &p.parent.parent,
+            Self::PrimedTnt(tnt) => &tnt.parent,
+            Self::Item(item) => &item.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
         match self {
             Self::Cow(cow) => &mut cow.as_living_mut().parent,
             Self::Player(p) => &mut p.parent.parent,
+            Self::PrimedTnt(tnt) => &mut tnt.parent,
+            Self::Item(item) => &mut item.parent,
         }
     }
 }
@@ -155,13 +165,13 @@ impl EntityDataView for animal::Cow {
     fn view(state: &EntityState) -> Option<&Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
     }
     fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
     }
 }
@@ -206,6 +216,22 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#getPickResult. Vanilla returns null; empty ItemStack is a
+    /// distinct successful result and must not erase that distinction.
+    fn get_pick_result(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(None)
+    }
+    fn block_pos_below_that_affects_my_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::BlockPos, LevelError> {
+        movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
     fn fire_immune_ticks(&self) -> i32 {
         0
     }
@@ -442,6 +468,8 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
     match kind {
         EntityType::COW => Some(&animal::CowBehavior),
         EntityType::PLAYER => Some(&player::PlayerBehavior),
+        EntityType::TNT => Some(&item::PrimedTntBehavior),
+        EntityType::ITEM => Some(&item::ItemEntityBehavior),
         _ => None,
     }
 }

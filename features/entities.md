@@ -4,7 +4,9 @@ Includes every entity type, concrete goal implementation (including nested goals
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | `entity::persistence::tests; level::entity::tests::supplied_zero_network_id_retains_player_identity; level::entity::tests::first_player_gets_one_and_shares_allocation_with_other_entities` | - | partial |
+| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | `entity::persistence::tests; level::entity::tests::supplied_zero_network_id_retains_player_identity; level::entity::tests::first_player_gets_one_and_shares_allocation_with_other_entities; level::entity::identity_tests` | - | partial |
+| entities.lifecycle.removal-visibility | Stop query and tick visibility immediately while retaining canonical state until management | `Entity#setRemoved; PersistentEntitySectionManager.Callback#onRemove` | `level::entity::removal_tests::removal_hides_indexes_before_canonical_retirement` | - | partial |
+| entities.interaction.pick-result | Preserve nullable entity pick results and the inherited mob spawn egg result | `Entity#getPickResult; Mob#getPickResult` | `entity::tests::pick_result_preserves_null_and_cow_spawn_egg` | - | partial |
 | entities.lifecycle.metadata | Track synchronized entity data and send dirty metadata to watchers | `SynchedEntityData; ServerEntity#sendChanges` | `entity::synched_data::tests::dirty_metadata_preserves_accessor_order_and_forced_updates` | - | partial |
 | entities.lifecycle.passengers | Maintain riding chains, controlling passengers, dismount positions and recursive saving | `Entity#startRiding; Entity#stopRiding` | `entity::lifecycle` | - | partial |
 | entities.lifecycle.pose-dimensions | Update entity dimensions and collision bounds when pose or size changes | `Entity#refreshDimensions; LivingEntity` | `entity::EntityDimensions` | - | partial |
@@ -245,7 +247,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.entity-type.illusioner | `minecraft:illusioner` (entity type); implementation `Illusioner` | `net.minecraft.world.entity.EntityTypes#register; Illusioner` | | - | todo |
 | entities.entity-type.interaction | `minecraft:interaction` (entity type); implementation `Interaction` | `net.minecraft.world.entity.EntityTypes#register; Interaction` | | - | todo |
 | entities.entity-type.iron-golem | `minecraft:iron_golem` (entity type); implementation `IronGolem` | `net.minecraft.world.entity.EntityTypes#register; IronGolem` | | - | todo |
-| entities.entity-type.item | `minecraft:item` (entity type); implementation `ItemEntity` | `net.minecraft.world.entity.EntityTypes#register; ItemEntity` | | - | todo |
+| entities.entity-type.item | `minecraft:item` (entity type); implementation `ItemEntity` | `net.minecraft.world.entity.EntityTypes#register; ItemEntity` | `entity::tests::vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay; entity::tests::item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_return` | - | partial |
 | entities.entity-type.item-display | `minecraft:item_display` (entity type); implementation `Display.ItemDisplay` | `net.minecraft.world.entity.EntityTypes#register; Display.ItemDisplay` | | - | todo |
 | entities.entity-type.item-frame | `minecraft:item_frame` (entity type); implementation `ItemFrame` | `net.minecraft.world.entity.EntityTypes#register; ItemFrame` | | - | todo |
 | entities.entity-type.jungle-boat | `minecraft:jungle_boat` (entity type); implementation `Boat` | `net.minecraft.world.entity.EntityTypes#register; Boat` | | - | todo |
@@ -310,7 +312,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.entity-type.sulfur-cube | `minecraft:sulfur_cube` (entity type); implementation `SulfurCube` | `net.minecraft.world.entity.EntityTypes#register; SulfurCube` | | - | todo |
 | entities.entity-type.tadpole | `minecraft:tadpole` (entity type); implementation `Tadpole` | `net.minecraft.world.entity.EntityTypes#register; Tadpole` | | - | todo |
 | entities.entity-type.text-display | `minecraft:text_display` (entity type); implementation `Display.TextDisplay` | `net.minecraft.world.entity.EntityTypes#register; Display.TextDisplay` | | - | todo |
-| entities.entity-type.tnt | `minecraft:tnt` (entity type); implementation `PrimedTnt` | `net.minecraft.world.entity.EntityTypes#register; PrimedTnt` | | - | todo |
+| entities.entity-type.tnt | `minecraft:tnt` (entity type); implementation `PrimedTnt` | `net.minecraft.world.entity.EntityTypes#register; PrimedTnt` | `entity::tests::vanilla_primed_tnt_tick_motion_fuse_and_removal_bits; entity::item::primed_tnt::tests` | - | partial |
 | entities.entity-type.tnt-minecart | `minecraft:tnt_minecart` (entity type); implementation `MinecartTNT` | `net.minecraft.world.entity.EntityTypes#register; MinecartTNT` | | - | todo |
 | entities.entity-type.trader-llama | `minecraft:trader_llama` (entity type); implementation `TraderLlama` | `net.minecraft.world.entity.EntityTypes#register; TraderLlama` | | - | todo |
 | entities.entity-type.trident | `minecraft:trident` (entity type); implementation `ThrownTrident` | `net.minecraft.world.entity.EntityTypes#register; ThrownTrident` | | - | todo |

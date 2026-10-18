@@ -156,7 +156,13 @@ impl Default for EntityData {
 impl EntityData {
     /// RandomSource.create's seed is supplied by the owning server RNG allocator.
     pub fn new(kind: EntityType, network_id: i32, seed: i64) -> Self {
-        let mut random = LegacyRandomSource::new(seed);
+        Self::from_random(kind, network_id, LegacyRandomSource::new(seed))
+    }
+    pub(crate) fn from_random(
+        kind: EntityType,
+        network_id: i32,
+        mut random: LegacyRandomSource,
+    ) -> Self {
         let uuid = Uuid::insecure(&mut random);
         let dimensions = EntityDimensions::for_type(kind);
         Self {

@@ -178,6 +178,9 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
+    next_ref: u64,
+    effects: Vec<crate::entity::effects::EntityEffect>,
+    pending_retire: Vec<EntityRef>,
     movement_effects: Vec<crate::entity::movement::MovementEffect>,
     pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
@@ -196,6 +199,7 @@ impl EntityStorage {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
+        self.next_ref = self.next_ref.max(id.0);
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -222,9 +226,43 @@ impl EntityStorage {
             self.sections.remove(id);
         }
     }
+    fn stop_accessing(&mut self, id: EntityRef) {
+        if let Some(state) = self.states.get(&id) {
+            self.lookup.remove(state.as_entity());
+            self.sections.remove(id);
+        }
+        if !self.pending_retire.contains(&id) {
+            self.pending_retire.push(id);
+        }
+    }
 }
 
 impl Level {
+    /// Server-lifetime handles never reuse a retired identity. Regional blocks
+    /// are assigned by the scheduler before parallel execution is enabled.
+    pub fn next_entity_ref(&mut self) -> EntityRef {
+        let next = &mut self.region_mut().entities.next_ref;
+        *next = next
+            .checked_add(1)
+            .expect("entity reference space exhausted");
+        EntityRef(*next)
+    }
+    /// Entity constructors share RandomSource.create's seed uniquifier with the
+    /// level factory, while retaining a separate random stream per entity.
+    pub fn create_entity_data(&mut self, kind: ferraloom_data::EntityType) -> EntityData {
+        let network_id = self.next_entity_id();
+        let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random()
+        else {
+            unreachable!("RandomSource.create uses LegacyRandomSource")
+        };
+        EntityData::from_random(kind, network_id, random)
+    }
+    pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
+        self.region_mut().entities.effects.push(effect);
+    }
+    pub fn take_entity_effects(&mut self) -> Vec<crate::entity::effects::EntityEffect> {
+        std::mem::take(&mut self.region_mut().entities.effects)
+    }
     /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
     /// players, draws from this region's canonical creation-order allocator.
     pub fn next_entity_id(&mut self) -> i32 {
@@ -266,15 +304,29 @@ impl Level {
         reason: RemovalReason,
     ) -> Result<(), LevelError> {
         self.entity_mut::<EntityData>(entity)?.set_removed(reason);
-        if reason.should_destroy() {
+        if self
+            .entity::<EntityData>(entity)?
+            .removal_reason
+            .expect("removed entity reason")
+            .should_destroy()
+        {
             crate::entity::stop_riding(entity, self)?;
         }
-        crate::entity::eject_passengers(entity, self)?;
+        let passengers = self.entity::<EntityData>(entity)?.passengers.clone();
+        for passenger in passengers {
+            crate::entity::stop_riding(passenger, self)?;
+        }
+        let network_id = self.entity::<EntityData>(entity)?.network_id;
+        let region = self.region_mut();
+        region.entity_tick_list.remove(network_id);
+        region.entities.stop_accessing(entity);
         Ok(())
     }
     pub fn set_entity_pos(&mut self, entity: EntityRef, pos: Vec3) -> Result<(), LevelError> {
         self.entity_mut::<EntityData>(entity)?.set_pos(pos);
-        self.region_mut().entities.sections.move_entity(entity, pos);
+        if !self.entity::<EntityData>(entity)?.removed {
+            self.region_mut().entities.sections.move_entity(entity, pos);
+        }
         Ok(())
     }
     pub fn entities_in(
@@ -372,11 +424,7 @@ impl Level {
         Ok(())
     }
     pub fn finish_entity_management(&mut self) {
-        let removed: Vec<_> = self
-            .all_entities()
-            .into_iter()
-            .filter(|id| self.region().entities.get(id).unwrap().as_entity().removed)
-            .collect();
+        let removed = std::mem::take(&mut self.region_mut().entities.pending_retire);
         for id in removed {
             let network_id = self
                 .region()
@@ -457,5 +505,60 @@ mod tests {
             2
         );
         assert_eq!(level.next_entity_id(), 3);
+    }
+}
+
+#[cfg(test)]
+mod removal_tests {
+    use super::*;
+    use crate::{Behaviors, entity::animal::Cow, level::Region};
+    #[test]
+    fn removal_hides_indexes_before_canonical_retirement() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let id = EntityRef(1);
+        level
+            .add_entity(id, EntityState::Cow(Cow::default()))
+            .unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        let (uuid, network, bounds) = (base.uuid, base.network_id, base.bounding_box);
+        level
+            .remove_entity_with_reason(id, RemovalReason::UnloadedToChunk)
+            .unwrap();
+        level
+            .remove_entity_with_reason(id, RemovalReason::Killed)
+            .unwrap();
+        assert_eq!(
+            level.entity::<EntityData>(id).unwrap().removal_reason,
+            Some(RemovalReason::UnloadedToChunk)
+        );
+        assert!(level.all_entities().is_empty());
+        assert!(level.entities_in(bounds, |_, _| true).is_empty());
+        assert_eq!(level.entity_by_uuid(uuid), None);
+        assert_eq!(level.entity_by_network_id(network), None);
+        level.tick_entities().unwrap();
+        assert_eq!(level.entity::<EntityData>(id).unwrap().tick_count, 0);
+        level.finish_entity_management();
+        assert!(level.entity_state(id).is_err());
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    use crate::{Behaviors, entity::animal::Cow, level::Region};
+    #[test]
+    fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        let existing = EntityRef(40);
+        level
+            .add_entity(existing, EntityState::Cow(Cow::default()))
+            .unwrap();
+        level.remove_entity(existing).unwrap();
+        level.finish_entity_management();
+        assert_eq!(level.next_entity_ref(), EntityRef(41));
+        assert_eq!(level.next_entity_ref(), EntityRef(42));
     }
 }
