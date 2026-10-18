@@ -113,6 +113,15 @@ public final class PrimitiveCodecs {
             nested.add(row);
         }
         root.add("nested",nested);
+        var collectionShapes=new JsonArray();
+        var collectionCodec=net.minecraft.advancements.predicates.CollectionPredicate.codec(net.minecraft.advancements.predicates.MobEffectsPredicate.CODEC);
+        for(String input:List.of("null","false","0","\"x\"","[]","{}","{\"size\":1}","{\"contains\":[]}")) {
+            var parsed=JsonParser.parseString(input);var row=new JsonObject();row.addProperty("input",input);
+            row.addProperty("json_accepted",collectionCodec.parse(JsonOps.INSTANCE,parsed).isSuccess());
+            row.addProperty("nbt_accepted",collectionCodec.parse(NbtOps.INSTANCE,JsonOps.INSTANCE.convertTo(NbtOps.INSTANCE,parsed)).isSuccess());
+            collectionShapes.add(row);
+        }
+        root.add("collection_shapes",collectionShapes);
         var bounds = new JsonArray();
         for (String name : List.of("negative_nan","infinity","signed_zero","nan_max","nan_min","swapped")) {
             Tag input;
