@@ -271,7 +271,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.class.tall-flower-block | `TallFlowerBlock`: `minecraft:lilac`, `minecraft:peony`, `minecraft:rose_bush`, `minecraft:sunflower` | `net.minecraft.world.level.block.TallFlowerBlock`; `Blocks#register` | | - | todo |
 | blocks.class.tall-grass-block | `TallGrassBlock`: `minecraft:fern`, `minecraft:short_grass` | `net.minecraft.world.level.block.TallGrassBlock`; `Blocks#register` | | - | todo |
 | blocks.class.tall-seagrass-block | `TallSeagrassBlock`: `minecraft:tall_seagrass` | `net.minecraft.world.level.block.TallSeagrassBlock`; `Blocks#register` | | - | todo |
-| blocks.class.target-block | `TargetBlock`: `minecraft:target` | `net.minecraft.world.level.block.TargetBlock`; `Blocks#register` | `ferraloom-game: block::redstone::tests` (signal methods; wire mutation order) | - | partial |
+| blocks.class.target-block | `TargetBlock`: `minecraft:target` | `net.minecraft.world.level.block.TargetBlock`; `Blocks#register` | `ferraloom-game: block::redstone::tests::target_placement_preserves_scheduled_pulses_and_resets_unscheduled_power` (signals and placement reset; projectile impact pending) | pass | partial |
 | blocks.class.test-block | `TestBlock`: `minecraft:test_block` | `net.minecraft.world.level.block.TestBlock`; `Blocks#register` | | - | todo |
 | blocks.class.test-instance-block | `TestInstanceBlock`: `minecraft:test_instance_block` | `net.minecraft.world.level.block.TestInstanceBlock`; `Blocks#register` | | - | todo |
 | blocks.class.tinted-glass-block | `TintedGlassBlock`: `minecraft:tinted_glass` | `net.minecraft.world.level.block.TintedGlassBlock`; `Blocks#register` | | - | todo |

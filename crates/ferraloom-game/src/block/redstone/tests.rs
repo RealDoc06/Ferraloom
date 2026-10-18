@@ -117,6 +117,55 @@ fn native_mutations(value: &str) -> String {
 }
 
 #[test]
+fn target_placement_preserves_scheduled_pulses_and_resets_unscheduled_power() {
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("target-place:") {
+        let mut args = name.split(':').skip(1);
+        let power = args.next().unwrap().parse().unwrap();
+        let scheduled = args.next().unwrap().parse::<bool>().unwrap();
+        let same = args.next().unwrap().parse::<bool>().unwrap();
+        let mut level = level();
+        let state = Block::TARGET.default_state().with(p::POWER, power).unwrap();
+        level.set_block_state(ORIGIN, state).unwrap();
+        if scheduled {
+            level
+                .schedule_block_tick_after(ORIGIN, Block::TARGET, 8)
+                .unwrap();
+        }
+        level.take_effects();
+        level
+            .required_block_behavior(Block::TARGET, BlockMethod::OnPlace)
+            .unwrap()
+            .on_place(
+                state,
+                ORIGIN,
+                if same { Block::TARGET } else { Block::AIR }.default_state(),
+                false,
+                &mut level,
+            )
+            .unwrap();
+        let mut expected = expected.split('|');
+        assert_eq!(
+            level.get_block_state(ORIGIN).unwrap().id().to_string(),
+            expected.next().unwrap(),
+            "{name} state"
+        );
+        assert_eq!(
+            state_mutations(&mut level),
+            native_mutations(expected.next().unwrap()),
+            "{name} state changes"
+        );
+        assert_eq!(
+            level
+                .has_scheduled_block_tick(ORIGIN, Block::TARGET)
+                .to_string(),
+            expected.next().unwrap(),
+            "{name} pulse scheduling"
+        );
+    }
+}
+
+#[test]
 fn piston_push_reactions_entities_height_and_border_rules_match_vanilla() {
     let mut level = level();
     let mut border = crate::level::border::WorldBorder::default();

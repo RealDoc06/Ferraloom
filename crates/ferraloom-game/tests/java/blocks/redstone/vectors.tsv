@@ -19269,3 +19269,67 @@ plate:1028:1:0	26101/false/8, 0, 8=26101/2/G:4:0:-1|26101/false//|26101/false//|
 plate:1028:1:1	26100/true/8, 0, 8=26100/2/G:0:1:-1|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26100/true//|26101/false/8, 0, 8=26101/2/G:4:0:-1|26101/false//|26101/false//|26101/false//|26101/false//
 plate:1028:2:0	26101/false/8, 0, 8=26101/2/G:4:0:-1|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//
 plate:1028:2:1	26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//|26101/false//
+target-place:0:false:false	25109||false
+target-place:0:false:true	25109||false
+target-place:0:true:false	25109||true
+target-place:0:true:true	25109||true
+target-place:1:false:false	25109|8, 0, 8=25109/18|false
+target-place:1:false:true	25110||false
+target-place:1:true:false	25110||true
+target-place:1:true:true	25110||true
+target-place:2:false:false	25109|8, 0, 8=25109/18|false
+target-place:2:false:true	25111||false
+target-place:2:true:false	25111||true
+target-place:2:true:true	25111||true
+target-place:3:false:false	25109|8, 0, 8=25109/18|false
+target-place:3:false:true	25112||false
+target-place:3:true:false	25112||true
+target-place:3:true:true	25112||true
+target-place:4:false:false	25109|8, 0, 8=25109/18|false
+target-place:4:false:true	25113||false
+target-place:4:true:false	25113||true
+target-place:4:true:true	25113||true
+target-place:5:false:false	25109|8, 0, 8=25109/18|false
+target-place:5:false:true	25114||false
+target-place:5:true:false	25114||true
+target-place:5:true:true	25114||true
+target-place:6:false:false	25109|8, 0, 8=25109/18|false
+target-place:6:false:true	25115||false
+target-place:6:true:false	25115||true
+target-place:6:true:true	25115||true
+target-place:7:false:false	25109|8, 0, 8=25109/18|false
+target-place:7:false:true	25116||false
+target-place:7:true:false	25116||true
+target-place:7:true:true	25116||true
+target-place:8:false:false	25109|8, 0, 8=25109/18|false
+target-place:8:false:true	25117||false
+target-place:8:true:false	25117||true
+target-place:8:true:true	25117||true
+target-place:9:false:false	25109|8, 0, 8=25109/18|false
+target-place:9:false:true	25118||false
+target-place:9:true:false	25118||true
+target-place:9:true:true	25118||true
+target-place:10:false:false	25109|8, 0, 8=25109/18|false
+target-place:10:false:true	25119||false
+target-place:10:true:false	25119||true
+target-place:10:true:true	25119||true
+target-place:11:false:false	25109|8, 0, 8=25109/18|false
+target-place:11:false:true	25120||false
+target-place:11:true:false	25120||true
+target-place:11:true:true	25120||true
+target-place:12:false:false	25109|8, 0, 8=25109/18|false
+target-place:12:false:true	25121||false
+target-place:12:true:false	25121||true
+target-place:12:true:true	25121||true
+target-place:13:false:false	25109|8, 0, 8=25109/18|false
+target-place:13:false:true	25122||false
+target-place:13:true:false	25122||true
+target-place:13:true:true	25122||true
+target-place:14:false:false	25109|8, 0, 8=25109/18|false
+target-place:14:false:true	25123||false
+target-place:14:true:false	25123||true
+target-place:14:true:true	25123||true
+target-place:15:false:false	25109|8, 0, 8=25109/18|false
+target-place:15:false:true	25124||false
+target-place:15:true:false	25124||true
+target-place:15:true:true	25124||true

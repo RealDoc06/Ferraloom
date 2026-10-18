@@ -20,6 +20,7 @@ mod sources;
 mod state;
 pub mod storage;
 pub mod switches;
+pub mod target;
 pub mod torch;
 pub mod tripwire;
 pub mod wire;
@@ -117,6 +118,7 @@ pub(crate) fn ported_behavior(
         BlockClass::RedstoneLampBlock if matches!(method, M::NeighborChanged | M::Tick) => {
             Some(&lamp::LAMP)
         }
+        BlockClass::TargetBlock if matches!(method, M::OnPlace | M::Tick) => Some(&target::TARGET),
         BlockClass::TripWireBlock
             if matches!(
                 method,

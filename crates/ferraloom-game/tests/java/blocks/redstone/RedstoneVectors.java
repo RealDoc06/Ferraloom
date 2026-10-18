@@ -221,6 +221,14 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("container-comparator:"+BuiltInRegistries.BLOCK.getId(block)+":"+pattern+":"+gap+":"+blocked+"\t"+String.join("|",outputs));
         }
     }
+    static void targets(RegistryAccess r){
+        for(int power=0;power<=15;power++)for(boolean scheduled:new boolean[]{false,true})for(boolean same:new boolean[]{false,true}){
+            var level=new RedstoneVectors(r);var state=Blocks.TARGET.defaultBlockState().setValue(BlockStateProperties.POWER,power);level.raw(ORIGIN,state);
+            if(scheduled)level.scheduleTick(ORIGIN,Blocks.TARGET,8);
+            level.begin();state.onPlace(level,ORIGIN,(same?Blocks.TARGET:Blocks.AIR).defaultBlockState(),false);
+            System.out.println("target-place:"+power+":"+scheduled+":"+same+"\t"+Block.getId(level.getBlockState(ORIGIN))+"|"+String.join(";",level.changes)+"|"+level.blockTicks.hasScheduledTick(ORIGIN,Blocks.TARGET));
+        }
+    }
     static void placements(RegistryAccess r) {
         var blocks=new ArrayList<>(List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE,Blocks.REDSTONE_LAMP,Blocks.RAIL,Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL,Blocks.DETECTOR_RAIL,Blocks.NOTE_BLOCK,Blocks.TRIPWIRE,Blocks.TRIPWIRE_HOOK));
         for(var block:BuiltInRegistries.BLOCK)if(block instanceof LightningRodBlock)blocks.add(block);
@@ -509,7 +517,7 @@ public final class RedstoneVectors extends MutationFixture {
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);targets(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 
