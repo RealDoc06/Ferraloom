@@ -14,12 +14,18 @@ mod connections;
 mod decorative;
 #[cfg(test)]
 mod decorative_tests;
+mod environmental;
+#[cfg(test)]
+mod environmental_tests;
 mod fire_powder;
 #[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
 mod scaffolding;
 mod slab;
+mod speleothem;
+#[cfg(test)]
+mod speleothem_tests;
 #[cfg(test)]
 mod stair_slab_tests;
 mod stairs;
@@ -38,6 +44,12 @@ pub(crate) fn ported_behavior(
     }
     if fire_powder::supports(block, method) {
         return Some(&fire_powder::FIRE_POWDER);
+    }
+    if environmental::supports(block, method) {
+        return Some(&environmental::ENVIRONMENTAL);
+    }
+    if speleothem::supports(block, method) {
+        return Some(&speleothem::SPELEOTHEM);
     }
     if scaffolding::supports(block, method) {
         return Some(&scaffolding::SCAFFOLDING);
