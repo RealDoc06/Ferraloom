@@ -26,6 +26,24 @@ pub enum StructurePiece {
     Shipwreck(super::structures::shipwreck::ShipwreckPiece),
 }
 impl StructurePiece {
+    pub fn terrain_piece(&self, adjustment: TerrainAdjustment) -> super::TerrainPiece<'_> {
+        match self {
+            Self::Jigsaw(piece) => super::TerrainPiece {
+                bounds: piece.bounds,
+                adjustment,
+                ground_level_delta: piece.ground_level_delta,
+                projection: Some(piece.element.projection()),
+                junctions: &piece.junctions,
+            },
+            _ => super::TerrainPiece {
+                bounds: self.bounds(),
+                adjustment,
+                ground_level_delta: 0,
+                projection: None,
+                junctions: &[],
+            },
+        }
+    }
     pub fn bounds(&self) -> BoundingBox {
         match self {
             Self::Jigsaw(p) => p.bounds,

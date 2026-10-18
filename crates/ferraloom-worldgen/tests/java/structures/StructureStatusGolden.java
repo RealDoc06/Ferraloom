@@ -17,19 +17,20 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.*;
 
 /** Real ChunkGenerator status methods with small authored structure generators. */
 public final class StructureStatusGolden {
+    static final class Elements {static final StructurePoolElement RIGID=StructurePoolElement.single("test:probe").apply(StructureTemplatePool.Projection.RIGID);}
     static final class Probe extends Structure {
         final int index;final String id;final List<String> calls;
         Probe(int index,Holder<Biome> biome,List<String> calls) {super(new StructureSettings(HolderSet.direct(biome),Map.of(),GenerationStep.Decoration.SURFACE_STRUCTURES,TerrainAdjustment.values()[index]));this.index=index;this.id="test:"+(char)('a'+index);this.calls=calls;}
         public Optional<GenerationStub> findGenerationPoint(GenerationContext context) {
             calls.add(id);var random=context.random();if(random.nextInt(5)==index)return Optional.empty();
             var p=new BlockPos(context.chunkPos().getMinBlockX()+random.nextInt(16),12+random.nextInt(17),context.chunkPos().getMinBlockZ()+random.nextInt(16));
-            return Optional.of(new GenerationStub(p,b->{int width=8+random.nextInt(40);int depth=8+random.nextInt(40);var rotation=net.minecraft.world.level.block.Rotation.values()[random.nextInt(4)];b.addPiece(new PoolElementStructurePiece(context.structureTemplateManager(),EmptyPoolElement.INSTANCE,p,index-1,rotation,new BoundingBox(p.getX(),p.getY(),p.getZ(),p.getX()+width-1,p.getY()+7,p.getZ()+depth-1),index%2==0?LiquidSettings.APPLY_WATERLOGGING:LiquidSettings.IGNORE_WATERLOGGING));}));
+            return Optional.of(new GenerationStub(p,b->{int width=8+random.nextInt(40);int depth=8+random.nextInt(40);var rotation=net.minecraft.world.level.block.Rotation.values()[random.nextInt(4)];b.addPiece(new PoolElementStructurePiece(context.structureTemplateManager(),Elements.RIGID,p,index-1,rotation,new BoundingBox(p.getX(),p.getY(),p.getZ(),p.getX()+width-1,p.getY()+7,p.getZ()+depth-1),index%2==0?LiquidSettings.APPLY_WATERLOGGING:LiquidSettings.IGNORE_WATERLOGGING));}));
         }
         public StructureType<?> type(){return StructureType.JIGSAW;}
     }
     static StructureStart initial(Probe structure,ChunkPos p,boolean valid) {
         var position=new BlockPos(p.getMinBlockX()+1,20,p.getMinBlockZ()+2);
-        var pieces=valid?List.<StructurePiece>of(new PoolElementStructurePiece(null,EmptyPoolElement.INSTANCE,position,1,net.minecraft.world.level.block.Rotation.NONE,new BoundingBox(position.getX(),20,position.getZ(),position.getX()+5,27,position.getZ()+5),LiquidSettings.APPLY_WATERLOGGING)):List.<StructurePiece>of();
+        var pieces=valid?List.<StructurePiece>of(new PoolElementStructurePiece(null,Elements.RIGID,position,1,net.minecraft.world.level.block.Rotation.NONE,new BoundingBox(position.getX(),20,position.getZ(),position.getX()+5,27,position.getZ()+5),LiquidSettings.APPLY_WATERLOGGING)):List.<StructurePiece>of();
         return new StructureStart(structure,p,valid?2:9,new PiecesContainer(pieces));
     }
     static void capture(RegistryAccess.Frozen base,Path directory)throws Exception {
@@ -57,8 +58,17 @@ public final class StructureStatusGolden {
             }
             var level=(WorldGenLevel)java.lang.reflect.Proxy.newProxyInstance(StructureStatusGolden.class.getClassLoader(),new Class<?>[]{WorldGenLevel.class},(proxy,method,args)->{if(method.getName().equals("getChunk")){var chunk=chunks.get(ChunkPos.pack((Integer)args[0],(Integer)args[1]));if(chunk==null)throw new IllegalStateException("missing authored dependency");return chunk;}throw new UnsupportedOperationException(method.toString());});
             var references=new JsonArray();for(int x=-8;x<=8;x++)for(int z=-8;z<=8;z++){var p=new ChunkPos(x,z);var chunk=chunks.get(p.pack());generator.createReferences(level,manager,chunk);generator.createReferences(level,manager,chunk);var item=new JsonObject();item.add("position",StructureGolden.ints(x,z));item.addProperty("references",((CompoundTag)pack.invoke(null,context,p,chunk.getAllStarts(),chunk.getAllReferences())).getCompoundOrEmpty("References").toString());references.add(item);}
-            var item=new JsonObject();item.addProperty("seed",seed);item.add("sets",input);item.add("chunks",results);item.add("references",references);var possible=new JsonArray();state.possibleStructureSets().forEach(s->possible.add(setNames.get(s.value())));item.add("possible_sets",possible);out.add(item);
+            var regionManager=new StructureManager(level,new WorldOptions(seed,true,false),null);
+            var beardCases=new JsonArray();
+            for(int[] coordinate:new int[][]{{0,0},{-3,4},{2,-1}}) {
+                var p=new ChunkPos(coordinate[0],coordinate[1]);var chunk=chunks.get(p.pack());
+                var beard=Beardifier.forStructuresInChunk(regionManager,p);var sample=new JsonObject();sample.add("position",StructureGolden.ints(coordinate));
+                var order=new JsonArray();chunk.getAllReferences().keySet().forEach(structure->order.add(registryAccess.lookupOrThrow(Registries.STRUCTURE).getKey(structure).toString()));sample.add("order",order);
+                var values=new JsonArray();for(int z=p.getMinBlockZ();z<p.getMinBlockZ()+16;z+=3)for(int x=p.getMinBlockX();x<p.getMinBlockX()+16;x+=3)for(int y=0;y<=48;y+=3)values.add(Integer.toUnsignedLong(Float.floatToRawIntBits(beard.sampleValue(net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED,x,y,z))));sample.add("values",values);beardCases.add(sample);
+            }
+            var item=new JsonObject();item.addProperty("seed",seed);item.add("sets",input);item.add("chunks",results);item.add("references",references);item.add("beard",beardCases);var possible=new JsonArray();state.possibleStructureSets().forEach(s->possible.add(setNames.get(s.value())));item.add("possible_sets",possible);out.add(item);
         }
         StructureGolden.write(directory.resolve("structure_statuses.json.gz"),out);
     }
+    public static void main(String[]args)throws Exception {net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();capture(StructureGolden.load(),Path.of(args[0]));}
 }

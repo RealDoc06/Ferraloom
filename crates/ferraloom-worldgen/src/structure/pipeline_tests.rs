@@ -122,10 +122,26 @@ fn jigsaw_structure_compounds_round_trip_through_storage_chunk_model() {
     }
 }
 
+fn probe_element() -> Arc<super::super::pool::StructurePoolElement> {
+    use super::super::{
+        Projection,
+        pool::{ProcessorList, StructurePoolElement},
+    };
+    Arc::new(StructurePoolElement::Single {
+        location: "test:probe".parse().unwrap(),
+        processors: ProcessorList {
+            id: None,
+            processors: Arc::new(Vec::new()),
+        },
+        projection: Projection::Rigid,
+        liquid: None,
+        legacy: false,
+    })
+}
 fn probe_start(id: Identifier, seed: i64, chunk: [i32; 2], references: i32) -> StructureStart {
     use crate::structure::{
-        BoundingBox, jigsaw::PoolElementStructurePiece, pool::StructurePoolElement,
-        start::StructurePiece, template::LiquidSettings,
+        BoundingBox, jigsaw::PoolElementStructurePiece, start::StructurePiece,
+        template::LiquidSettings,
     };
     use ferraloom_util::{
         Rotation,
@@ -157,7 +173,7 @@ fn probe_start(id: Identifier, seed: i64, chunk: [i32; 2], references: i32) -> S
             TerrainAdjustment::Encapsulate,
         ][index as usize],
         vec![StructurePiece::Jigsaw(PoolElementStructurePiece {
-            element: Arc::new(StructurePoolElement::Empty),
+            element: probe_element(),
             position,
             ground_level_delta: index - 1,
             rotation,
@@ -184,9 +200,10 @@ fn probe_start(id: Identifier, seed: i64, chunk: [i32; 2], references: i32) -> S
 fn structure_start_and_reference_statuses_match_vanilla_weighted_retries_and_bounds() {
     use super::super::{
         BoundingBox, jigsaw::PoolElementStructurePiece, placement::StructureSet,
-        pool::StructurePoolElement, start::StructurePiece, template::LiquidSettings,
+        start::StructurePiece, template::LiquidSettings,
     };
     use ferraloom_util::Rotation;
+    let (_, generator) = generator();
     let cases = golden(include_bytes!("testdata/structure_statuses.json.gz"));
     let registry = StructureRegistry {
         structures: (0..5)
@@ -261,7 +278,7 @@ fn structure_start_and_reference_statuses_match_vanilla_weighted_retries_and_bou
                         2,
                         TerrainAdjustment::BeardThin,
                         vec![StructurePiece::Jigsaw(PoolElementStructurePiece {
-                            element: Arc::new(StructurePoolElement::Empty),
+                            element: probe_element(),
                             position,
                             ground_level_delta: 1,
                             rotation: Rotation::None,
@@ -336,6 +353,58 @@ fn structure_start_and_reference_statuses_match_vanilla_weighted_retries_and_bou
                         .unwrap()
                 ),
                 "seed={seed} chunk={p:?}"
+            );
+        }
+        for expected in case["beard"].as_array().unwrap() {
+            use crate::region::{ChunkStatus, RegionChunk, WorldGenRegion};
+            let center: [i32; 2] =
+                std::array::from_fn(|i| expected["position"][i].as_i64().unwrap() as i32);
+            let mut neighbors = Vec::new();
+            for x in center[0] - 8..=center[0] + 8 {
+                for z in center[1] - 8..=center[1] + 8 {
+                    let mut neighbor = RegionChunk::new(
+                        generator.new_chunk([x, z]),
+                        ChunkStatus::StructureReferences,
+                    );
+                    neighbor.structures = chunks[&[x, z]].clone();
+                    neighbors.push(neighbor);
+                }
+            }
+            let region = WorldGenRegion::new(
+                &mut neighbors,
+                center,
+                &[ChunkStatus::StructureReferences; 9],
+                0,
+                None,
+                &crate::structure::processor::tests::StaticBlocks,
+                seed,
+                63,
+            )
+            .unwrap();
+            let order = expected["order"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s.as_str().unwrap().parse().unwrap())
+                .collect::<Vec<_>>();
+            let beard = crate::structure::Beardifier::from_region(&region, &order).unwrap();
+            let mut values = Vec::new();
+            for z in (center[1] * 16..center[1] * 16 + 16).step_by(3) {
+                for x in (center[0] * 16..center[0] * 16 + 16).step_by(3) {
+                    for y in (0..=48).step_by(3) {
+                        values.push(u64::from(beard.sample_value([x, y, z]).to_bits()));
+                    }
+                }
+            }
+            assert_eq!(
+                values,
+                expected["values"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_u64().unwrap())
+                    .collect::<Vec<_>>(),
+                "beard seed={seed} center={center:?}"
             );
         }
     }
