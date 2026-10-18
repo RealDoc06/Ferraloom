@@ -97,11 +97,7 @@ impl BlockEntity for DispenserEntityBehavior {
         entity: BlockEntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        let _ = entity;
-        let _ = level;
-        Err(LevelError::UnsupportedBlockEntity(
-            ferraloom_data::Block::DISPENSER,
-        ))
+        crate::block::containers::drops::drop_contents(entity, level)
     }
 }
 pub struct HopperEntityBehavior;
@@ -141,18 +137,14 @@ impl BlockEntity for HopperEntityBehavior {
     fn has_server_ticker(&self) -> bool {
         true
     }
-    fn tick(&self, _entity: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            ferraloom_data::Block::HOPPER,
-        ))
+    fn tick(&self, entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        super::hopper::push_items_tick(level, entity)
     }
     fn pre_remove_side_effects(
         &self,
-        _entity: BlockEntityRef,
-        _level: &mut Level,
+        entity: BlockEntityRef,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            ferraloom_data::Block::HOPPER,
-        ))
+        crate::block::containers::drops::drop_contents(entity, level)
     }
 }

@@ -776,3 +776,11 @@ flow	minecraft:lava	1	bff0000000000000,0,0
 flow	minecraft:lava	2	0,0,3ff0000000000000
 flow	minecraft:lava	3	0,0,0
 flow	minecraft:lava	4	0,bff0000000000000,0
+player-may-build	0	false	true,false,false,false
+player-may-build	0	true	true,false,false,false
+player-may-build	1	false	true,false,false,false
+player-may-build	1	true	true,true,false,false
+player-may-build	2	false	false,false,true,true
+player-may-build	2	true	false,false,true,true
+player-may-build	3	false	false,true,true,true
+player-may-build	3	true	false,true,true,true
