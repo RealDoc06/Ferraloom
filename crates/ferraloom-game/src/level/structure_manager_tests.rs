@@ -177,6 +177,11 @@ fn native_reference_start_piece_and_holder_queries_match_vanilla() {
                     .unwrap(),
                 ferraloom_nbt::parse_compound(fields[1]).unwrap()
             ),
+            "save-nbt" => assert_eq!(
+                level.chunk(origin).unwrap().structures().to_nbt().unwrap(),
+                ferraloom_nbt::parse_compound(fields[1]).unwrap()
+            ),
+            "reload-nbt" => {}
             "query" => {
                 let p: Vec<i32> = fields[1].split(',').map(|v| v.parse().unwrap()).collect();
                 let pos = BlockPos::new(p[0], p[1], p[2]);
@@ -269,7 +274,7 @@ fn native_reference_start_piece_and_holder_queries_match_vanilla() {
         }
         rows += 1;
     }
-    assert_eq!(rows, 16);
+    assert_eq!(rows, 18);
 }
 #[test]
 fn missing_referenced_chunk_is_required_even_when_an_earlier_start_matches() {
@@ -401,12 +406,13 @@ fn structure_payload_survives_existing_seed_aware_storage_codec() {
         },
     )
     .unwrap();
-    assert_eq!(restored.to_nbt().unwrap(), saved);
+    let expected = include_str!("../../tests/java/level/structure-manager.tsv")
+        .lines()
+        .find_map(|row| row.strip_prefix("reload-nbt\t"))
+        .map(|tag| ferraloom_nbt::parse_compound(tag).unwrap())
+        .unwrap();
+    assert_eq!(restored.to_nbt().unwrap(), expected);
     let id: Identifier = "minecraft:buried_treasure".parse().unwrap();
-    assert_eq!(
-        restored.references[&id].iter().collect::<Vec<_>>(),
-        native.references[&id].iter().collect::<Vec<_>>()
-    );
     assert_eq!(
         restored.starts[&id].pieces[0].bounds(),
         native.starts[&id].pieces[0].bounds()

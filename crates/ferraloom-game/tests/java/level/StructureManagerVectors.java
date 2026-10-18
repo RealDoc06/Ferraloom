@@ -52,6 +52,18 @@ class StructureManagerVectors {
         System.out.println("VECTOR\trefs\t"+String.join(",",referenceOrder));
         System.out.println("VECTOR\tstarts\t"+String.join(",",manager.startsForStructure(0,0,structure).stream().map(s->""+s.getReferences()).toList()));
         System.out.println("VECTOR\tstart-nbt\t"+start(structure,0,0,10,true).createTag(net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext.fromLevel(level),new ChunkPos(0,0)));
+        var serialization=net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext.fromLevel(level);
+        var pack=net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethod("packStructureData",serialization.getClass(),ChunkPos.class,Map.class,Map.class);
+        var unpackStarts=net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethod("unpackStructureStart",serialization.getClass(),CompoundTag.class,long.class);
+        var unpackReferences=net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethod("unpackStructureReferences",RegistryAccess.class,ChunkPos.class,CompoundTag.class);
+        pack.setAccessible(true); unpackStarts.setAccessible(true); unpackReferences.setAccessible(true);
+        var origin=new ChunkPos(0,0);
+        var originChunk=level.getChunk(0,0,ChunkStatus.FULL,true);
+        var saved=(CompoundTag)pack.invoke(null,serialization,origin,originChunk.getAllStarts(),originChunk.getAllReferences());
+        var restoredStarts=unpackStarts.invoke(null,serialization,saved,0L);
+        var restoredReferences=unpackReferences.invoke(null,server.registryAccess(),origin,saved);
+        System.out.println("VECTOR\tsave-nbt\t"+saved);
+        System.out.println("VECTOR\treload-nbt\t"+pack.invoke(null,serialization,origin,restoredStarts,restoredReferences));
         var direct=HolderSet.direct(holder);
         var treasure=registry.getOrThrow(TagKey.create(Registries.STRUCTURE,Identifier.parse("minecraft:on_treasure_maps")));
         var other=registry.getOrThrow(TagKey.create(Registries.STRUCTURE,Identifier.parse("minecraft:on_mineshaft_maps")));
