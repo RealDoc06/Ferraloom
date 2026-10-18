@@ -17,7 +17,7 @@ use crate::{
     commands::{CommandAction, CommandSourceStack, Commands},
     network::{self, ConnectionId, Incoming, Ingress, OutboundBatch, Outgoing},
     properties::{self, ServerProperties},
-    registries::{RegistrySet, core_pack, id},
+    registries::{LootRegistryLookup, RegistrySet, core_pack, id},
     world::{ChunkLight, World, heightmap},
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -27,7 +27,7 @@ use ferraloom_data::{
 };
 use ferraloom_game::{
     Behaviors,
-    block::UnportedBehavior,
+    block::{UnportedBehavior, containers::runtime::ContainerResources},
     crafting::{RecipeManager, RecipeSynchronization},
     entity::{
         EntityRef, EntityState,
@@ -50,6 +50,7 @@ use ferraloom_game::{
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
+    loot::LootData,
 };
 use ferraloom_protocol::{
     self as protocol, Uuid,
@@ -189,7 +190,7 @@ pub struct MinecraftServer {
     properties: Arc<ServerProperties>,
     root: PathBuf,
     registries: RegistrySet,
-    recipe_manager: RecipeManager,
+    recipe_manager: Arc<RecipeManager>,
     recipe_synchronization: RecipeSynchronization,
     crafting_context: RuntimeCraftingContext,
     access: AccessLists,
@@ -257,8 +258,12 @@ impl MinecraftServer {
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
-        let recipe_manager = RecipeManager::load(&resources, &TagSet::load(&resources)?)?;
+        let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
+        let loot = Arc::new(LootData::load(
+            &resources,
+            Some(&LootRegistryLookup::new(&registries, &resources)),
+        )?);
         let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
 
         let world = World::open(
@@ -310,6 +315,13 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        level.level.set_container_resources(
+            Arc::new(ContainerResources {
+                recipes: Arc::clone(&recipe_manager),
+                loot,
+            }),
+            world.seed,
+        );
         game_rules.update_level_rules(level.level.rules_mut());
         level.level.set_scoreboard(scoreboard.snapshot());
         world.install_live_environment(
