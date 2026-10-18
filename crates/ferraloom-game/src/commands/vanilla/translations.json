@@ -139,6 +139,8 @@
   "chat.copy.click": "Click to Copy to Clipboard",
   "chat.square_brackets": "[%s]",
   "chat.type.admin": "[%s: %s]",
+  "chat.type.announcement": "[%s] %s",
+  "chat.type.emote": "* %s %s",
   "chat.type.team.hover": "Message Team",
   "command.compute.result.named.exact": "%s returned value %s",
   "command.compute.result.named.invalid": "%s returned invalid value (%s)",

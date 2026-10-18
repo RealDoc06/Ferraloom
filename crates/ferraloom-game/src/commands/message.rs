@@ -1,6 +1,50 @@
 //! Port of MessageArgument#resolveChatMessage and OutgoingChatMessage#create.
 use super::source::{CommandSigningContext, SignedArgument};
+use ferraloom_protocol::chat::Component;
 use ferraloom_util::Uuid;
+
+/// Native chat types used by SayCommand and EmoteCommands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BroadcastChatType {
+    Say,
+    Emote,
+}
+impl BroadcastChatType {
+    pub fn registry_key(self) -> &'static str {
+        match self {
+            Self::Say => "say_command",
+            Self::Emote => "emote_command",
+        }
+    }
+    /// Port of PlayerList#verifyChatTrusted and MinecraftServer#logChatMessage.
+    pub fn console_line(
+        self,
+        name: Component,
+        content: Component,
+        signed_timestamp: Option<i64>,
+        now_nanos: i128,
+    ) -> String {
+        let key = match self {
+            Self::Say => "chat.type.announcement",
+            Self::Emote => "chat.type.emote",
+        };
+        let decorated = super::exceptions::plain_text(&Component::translatable(
+            key,
+            vec![
+                super::builtins::component(name),
+                super::builtins::component(content),
+            ],
+        ));
+        let trusted = signed_timestamp.is_some_and(|timestamp| {
+            now_nanos <= i128::from(timestamp) * 1_000_000 + 300_000_000_000
+        });
+        if trusted {
+            decorated
+        } else {
+            format!("[Not Secure] {decorated}")
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutgoingChatKind {
@@ -30,6 +74,36 @@ impl CommandSigningContext {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    #[test]
+    fn broadcast_console_decoration_and_signature_expiry_match_java() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            command: String,
+            signed: bool,
+            timestamp: i64,
+            #[serde(rename = "nowNanos")]
+            now_nanos: i128,
+            line: String,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/command-chat-log-vectors.json")).unwrap();
+        for vector in vectors {
+            let chat_type = if vector.command == "say" {
+                BroadcastChatType::Say
+            } else {
+                BroadcastChatType::Emote
+            };
+            assert_eq!(
+                chat_type.console_line(
+                    Component::literal("Doc"),
+                    Component::literal("hello 👋"),
+                    vector.signed.then_some(vector.timestamp),
+                    vector.now_nanos,
+                ),
+                vector.line
+            );
+        }
+    }
     #[test]
     fn unsigned_player_argument_and_absent_argument_match_java_packet_variants() {
         let expected: std::collections::BTreeMap<String, String> =

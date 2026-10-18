@@ -752,11 +752,24 @@ impl MinecraftServer {
             }
             targets.len() as i32
         } else {
+            use ferraloom_game::commands::message::BroadcastChatType;
             let chat_type = if command.command == "me" {
-                "emote_command"
+                BroadcastChatType::Emote
             } else {
-                "say_command"
+                BroadcastChatType::Say
             };
+            println!(
+                "{}",
+                chat_type.console_line(
+                    name.clone(),
+                    content.clone(),
+                    signed
+                        .as_ref()
+                        .filter(|message| message.signature.is_some())
+                        .map(|message| message.timestamp),
+                    time::OffsetDateTime::now_utc().unix_timestamp_nanos(),
+                )
+            );
             let receivers = self.players.clone();
             for receiver in receivers {
                 self.send_command_chat_to(
@@ -764,7 +777,7 @@ impl MinecraftServer {
                     signed.as_ref(),
                     &content,
                     ChatTypeBound {
-                        chat_type: ChatTypeHolder(Holder::Reference(id(chat_type))),
+                        chat_type: ChatTypeHolder(Holder::Reference(id(chat_type.registry_key()))),
                         name: name.clone(),
                         target_name: None,
                     },
