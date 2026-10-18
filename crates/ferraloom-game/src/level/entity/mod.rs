@@ -539,17 +539,22 @@ impl Level {
                 }
                 crate::entity::stop_riding(entity, self)?;
             }
-            self.tick_non_passenger(entity)?;
+            self.tick_non_passenger(entity, tick_rate)?;
         }
         Ok(())
     }
     /// Port of ServerLevel#tickNonPassenger. Callbacks retain no canonical borrow.
-    fn tick_non_passenger(&mut self, mut entity: EntityRef) -> Result<(), LevelError> {
+    fn tick_non_passenger(
+        &mut self,
+        entity: EntityRef,
+        tick_rate: &super::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
         crate::entity::common_tick(entity, self)?;
-        entity.tick(self)?;
+        self.entity_behavior(entity)?
+            .tick_with_tick_rate(entity, self, tick_rate)?;
         let passengers = self.entity::<EntityData>(entity)?.passengers.clone();
         for passenger in passengers {
-            self.tick_passenger(entity, passenger)?;
+            self.tick_passenger(entity, passenger, tick_rate)?;
         }
         Ok(())
     }
@@ -557,6 +562,7 @@ impl Level {
         &mut self,
         vehicle: EntityRef,
         passenger: EntityRef,
+        tick_rate: &super::tick_rate::TickRateManager,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
         if base.removed || base.vehicle.get() != Some(vehicle) {
@@ -570,10 +576,10 @@ impl Level {
         }
         crate::entity::common_tick(passenger, self)?;
         self.entity_behavior(passenger)?
-            .ride_tick(passenger, self)?;
+            .ride_tick_with_tick_rate(passenger, self, tick_rate)?;
         let passengers = self.entity::<EntityData>(passenger)?.passengers.clone();
         for child in passengers {
-            self.tick_passenger(passenger, child)?;
+            self.tick_passenger(passenger, child, tick_rate)?;
         }
         Ok(())
     }

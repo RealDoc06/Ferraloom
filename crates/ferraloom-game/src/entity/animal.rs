@@ -151,6 +151,15 @@ impl Entity for CowBehavior {
         super::living_ride_tick(self, entity, level)
     }
 
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living_ride_tick_with_tick_rate(self, entity, level, tick_rate)
+    }
+
     fn trace_entity_refs(
         &self,
         state: &super::EntityState,

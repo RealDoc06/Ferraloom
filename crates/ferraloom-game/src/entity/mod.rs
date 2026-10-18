@@ -75,7 +75,8 @@ pub mod teleport;
 mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
-    position_rider, ride_tick, start_riding, stop_riding,
+    living_ride_tick_with_tick_rate, position_rider, ride_tick, ride_tick_with_tick_rate,
+    start_riding, stop_riding,
 };
 pub mod persistence;
 pub mod reference;
@@ -688,8 +689,28 @@ pub trait Entity: Sync {
         base_tick(self, entity, level)
     }
 
+    /// Entity phase context borrows the server's canonical manager. Dispatchers
+    /// that do not read tick-rate state retain their existing tick override.
+    fn tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        self.tick(entity, level)
+    }
+
     fn ride_tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         ride_tick(self, entity, level)
+    }
+
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        self.ride_tick(entity, level)
     }
 
     fn hurt_server(

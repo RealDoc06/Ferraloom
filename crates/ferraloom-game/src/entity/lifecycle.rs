@@ -175,8 +175,23 @@ pub fn ride_tick<E: super::Entity + ?Sized>(
     entity: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    ride_tick_with_tick_rate(
+        behavior,
+        entity,
+        level,
+        &crate::level::tick_rate::TickRateManager::default(),
+    )
+}
+
+/// Entity#rideTick with the caller's borrowed entity-phase context.
+pub fn ride_tick_with_tick_rate<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &crate::level::tick_rate::TickRateManager,
+) -> Result<(), LevelError> {
     level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
-    behavior.tick(entity, level)?;
+    behavior.tick_with_tick_rate(entity, level, tick_rate)?;
     if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle.get() {
         position_rider(vehicle, entity, level)?;
     }
@@ -190,7 +205,22 @@ pub fn living_ride_tick<E: super::Entity + ?Sized>(
     entity: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    ride_tick(behavior, entity, level)?;
+    living_ride_tick_with_tick_rate(
+        behavior,
+        entity,
+        level,
+        &crate::level::tick_rate::TickRateManager::default(),
+    )
+}
+
+/// LivingEntity#rideTick keeps the same context through the virtual tick call.
+pub fn living_ride_tick_with_tick_rate<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &crate::level::tick_rate::TickRateManager,
+) -> Result<(), LevelError> {
+    ride_tick_with_tick_rate(behavior, entity, level, tick_rate)?;
     level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
     Ok(())
 }

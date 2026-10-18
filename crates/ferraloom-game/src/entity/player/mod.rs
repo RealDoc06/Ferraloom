@@ -624,11 +624,24 @@ impl crate::entity::Entity for PlayerBehavior {
         entity: crate::entity::EntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
+        self.ride_tick_with_tick_rate(
+            entity,
+            level,
+            &crate::level::tick_rate::TickRateManager::default(),
+        )
+    }
+
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
         let player = level.entity::<ServerPlayer>(entity)?;
         if player.shared_flag(1) && player.vehicle.get().is_some() {
             crate::entity::stop_riding(entity, level)
         } else {
-            crate::entity::living_ride_tick(self, entity, level)
+            crate::entity::living_ride_tick_with_tick_rate(self, entity, level, tick_rate)
         }
     }
 
