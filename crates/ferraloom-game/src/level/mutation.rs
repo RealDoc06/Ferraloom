@@ -245,7 +245,7 @@ impl Level {
             .chunks
             .get_mut(&chunk_pos)
             .unwrap()
-            .unsaved = true;
+            .mark_unsaved();
         let new = self.get_block_state(pos)?;
         if new == state {
             if flags.contains(UpdateFlags::CLIENTS)

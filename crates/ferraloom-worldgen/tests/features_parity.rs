@@ -1202,3 +1202,98 @@ fn protochunk_heightmap_priming_freezing_and_bulk_writes_match_vanilla() {
         assert_eq!(serde_json::to_value(output).unwrap(), case["output"]);
     }
 }
+
+#[test]
+fn freezing_neighbors_use_datapack_water_tags_but_center_uses_water_identity() {
+    use ferraloom_data::{
+        Block, BlockState,
+        datapack::{TagSet, Tags},
+        registries::fluid,
+    };
+    use ferraloom_worldgen::region::{ChunkStatus, RegionChunk, WorldGenRegion};
+    use std::{collections::BTreeMap, sync::Arc};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let state = |name: &str| match name {
+        "water" => Block::WATER.default_state(),
+        "flowing_water" => BlockState::from_properties(Block::WATER, [("level", "1")]).unwrap(),
+        "lava" => Block::LAVA.default_state(),
+        _ => panic!("unknown freeze fixture state"),
+    };
+    for case in golden(include_bytes!("golden/freeze.json.gz"))
+        .as_array()
+        .unwrap()
+    {
+        let members = case["water_tag"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| {
+                fluid::Id::from_name(&format!("minecraft:{}", name.as_str().unwrap())).unwrap()
+            })
+            .collect();
+        let tags = TagSet::from_tags(
+            Tags {
+                values: BTreeMap::from([("minecraft:water".parse().unwrap(), members)]),
+                diagnostics: Vec::new(),
+            },
+            fluid::ALL.len(),
+        )
+        .unwrap();
+        let mut chunks = vec![RegionChunk::new(
+            generator.new_chunk([0, 0]),
+            ChunkStatus::Terrain,
+        )];
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Terrain],
+            0,
+            None,
+            &FixtureBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        let p = [8, 64, 8];
+        region
+            .set_block_in_section(p, state(case["center"].as_str().unwrap()))
+            .unwrap();
+        for q in [[7, 64, 8], [9, 64, 8], [8, 64, 7], [8, 64, 9]] {
+            region
+                .set_block_in_section(q, state(case["neighbor"].as_str().unwrap()))
+                .unwrap();
+        }
+        let check = case["check_neighbors"].as_bool().unwrap();
+        let biome = "snowy_plains".parse().unwrap();
+        let result_without_tags = generator
+            .data
+            .temperatures
+            .should_freeze(&biome, &region, p, check);
+        if case["center"] == "water" && check {
+            assert!(
+                result_without_tags
+                    .unwrap_err()
+                    .0
+                    .starts_with("Unsupported:")
+            );
+        } else {
+            assert_eq!(
+                result_without_tags.unwrap(),
+                case["freeze"].as_bool().unwrap(),
+                "{case}"
+            );
+        }
+        region.set_fluid_tags(Arc::new(tags));
+        assert_eq!(
+            generator
+                .data
+                .temperatures
+                .should_freeze(&biome, &region, p, check)
+                .unwrap(),
+            case["freeze"].as_bool().unwrap(),
+            "{case}"
+        );
+    }
+}

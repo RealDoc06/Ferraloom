@@ -195,6 +195,11 @@ impl TicketStorage {
     pub fn level(&self, pos: ChunkPos) -> Option<i32> {
         self.tickets.get(&pos.pack())?.iter().map(|t| t.level).min()
     }
+    pub fn contains_type(&self, pos: ChunkPos, kind: TicketType) -> bool {
+        self.tickets
+            .get(&pos.pack())
+            .is_some_and(|tickets| tickets.iter().any(|ticket| ticket.kind == kind))
+    }
     pub fn source_level(&self, pos: ChunkPos, tracker: TicketTracker) -> i32 {
         minimum_level(
             self.tickets.get(&pos.pack()).map_or(&[], Vec::as_slice),

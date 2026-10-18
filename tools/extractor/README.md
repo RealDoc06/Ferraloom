@@ -61,6 +61,13 @@ up/down, and `East` covers boolean connections, redstone sides and wall heights.
 unsupported values. Numeric property values are `u8`, boolean values are `bool`.
 Other values are generated enums; none require string lookup during simulation.
 
+`ExtractData <output-dir> --sound-events-only` records each registered
+`SoundEvent.fixedRange` in protocol order. This is pure immutable registry data;
+`SoundEvent#getRange` uses the fixed value when present, otherwise 16 or
+`16 * volume` with native float arithmetic. All 1,991 registered 26.3 events
+currently use variable range. Direct unregistered sound records can still have
+fixed ranges and are represented separately by the protocol codec.
+
 `ExtractTagKeys` separately records tag key names and their registry identities,
 including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 `tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;

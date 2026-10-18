@@ -20,10 +20,12 @@ pub mod chunk_map;
 pub mod chunk_task_dispatcher;
 pub mod distance_manager;
 pub mod effects;
+pub mod emission;
 pub mod entity;
 pub mod events;
 pub mod heightmap;
 mod mutation;
+mod post_processing;
 mod random;
 pub mod redstone;
 mod saved_ticks;
@@ -40,6 +42,7 @@ pub enum LevelError {
     MissingChunk(ChunkPos),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
+    UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
@@ -58,6 +61,8 @@ pub enum LevelError {
     UnsupportedPushEntitiesUp,
     UnsupportedPackReload,
     InvalidSavedTick,
+    InvalidPendingGenerationData,
+    UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
 }
 
@@ -110,10 +115,13 @@ pub struct Region {
     max_y: i32,
     rules: LevelRules,
     random: ferraloom_util::random::Random,
+    sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
     block_ticking_chunks: HashSet<ChunkPos>,
     entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
+    // The family owner replaces its pending state/registration stub together.
+    pub(crate) redstone: crate::block::redstone::RedstoneState,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
     block_changes: broadcast::BlockChanges,
@@ -141,10 +149,12 @@ impl Region {
             max_y: 320,
             rules: LevelRules::default(),
             random: random::new_level_random(),
+            sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
             entity_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
+            redstone: crate::block::redstone::RedstoneState::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),

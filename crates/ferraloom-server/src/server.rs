@@ -1048,6 +1048,18 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::PlayerPacket { recipients, packet } => {
+                    for entity in recipients {
+                        for &connection in &self.players {
+                            let c = self.connections.get_mut(&connection).unwrap();
+                            if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
+                                c.push(*packet.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
             }
         }
         self.world
@@ -1099,7 +1111,9 @@ impl MinecraftServer {
         let positions: Vec<_> = self.level.chunks.holder_positions().collect();
         for pos in positions {
             let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)? {
+            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)?
+                && self.level.distance_manager.has_pending_player_loading(pos)
+            {
                 self.level.distance_manager.complete_player_loading(pos);
             }
             if self.level.level.chunk(pos).is_some() {

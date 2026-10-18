@@ -1,34 +1,7 @@
 use super::distance_manager::{FullChunkStatus, MAX_LOADED_LEVEL, full_status};
 use ferraloom_util::ChunkPos;
-/// Port of ChunkStatus's status chain. Carvers, features and structures are
-/// explicit passthrough stages until their generation ports land.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ChunkStatus {
-    Empty,
-    StructureStarts,
-    StructureReferences,
-    Biomes,
-    Noise,
-    Surface,
-    Carvers,
-    Features,
-    InitializeLight,
-    Light,
-    Spawn,
-    Full,
-}
-impl ChunkStatus {
-    pub fn is_passthrough(self) -> bool {
-        matches!(
-            self,
-            Self::StructureStarts
-                | Self::StructureReferences
-                | Self::Carvers
-                | Self::Features
-                | Self::Spawn
-        )
-    }
-}
+/// The native 26.3 status chain: TERRAIN combines noise, surface and carvers.
+pub use ferraloom_worldgen::region::ChunkStatus;
 /// Port of GenerationChunkHolder's request identity and status visibility.
 #[derive(Debug)]
 pub struct ChunkHolder {
