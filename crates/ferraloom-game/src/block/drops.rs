@@ -227,6 +227,34 @@ pub(super) fn get_base_drops(
     context: BlockLootContext,
     level: &mut Level,
 ) -> Result<Vec<ItemStack>, LevelError> {
+    get_base_drops_with_dynamic(state, context, None, level)
+}
+/// Port of ShulkerBoxBlock#getDrops. Register the actual receiver's lazy contents
+/// before evaluating the ordinary block table; each ordinal is a fresh getItem.
+pub(super) fn get_shulker_drops(
+    state: BlockState,
+    context: BlockLootContext,
+    level: &mut Level,
+) -> Result<Vec<ItemStack>, LevelError> {
+    let contents = match context.block_entity {
+        Some(handle)
+            if matches!(
+                level.block_entity_state(handle)?,
+                crate::block::entity::BlockEntityState::ShulkerBox(_)
+            ) =>
+        {
+            Some(handle)
+        }
+        _ => None,
+    };
+    get_base_drops_with_dynamic(state, context, contents, level)
+}
+fn get_base_drops_with_dynamic(
+    state: BlockState,
+    context: BlockLootContext,
+    contents: Option<BlockEntityRef>,
+    level: &mut Level,
+) -> Result<Vec<ItemStack>, LevelError> {
     let Some(name) = state.block().loot_table_name() else {
         return Ok(Vec::new());
     };
@@ -249,6 +277,14 @@ pub(super) fn get_base_drops(
         runtime
             .bind_block_entity_source(handle)
             .map_err(|_| LevelError::Inventory("block loot receiver"))?;
+    }
+    if let Some(handle) = contents {
+        runtime
+            .register_dynamic_drop(
+                Identifier::parse("minecraft:contents").expect("built-in dynamic drop"),
+                crate::block::containers::loot_runtime::DynamicDrop::ContainerContents(handle),
+            )
+            .map_err(|_| LevelError::Inventory("shulker contents dynamic drop"))?;
     }
     resources
         .loot
@@ -363,5 +399,124 @@ mod tests {
             checked += 1;
         }
         assert_eq!(checked, 18);
+    }
+    #[test]
+    fn shulker_drops_read_retained_components_names_and_lazy_contents() {
+        use crate::{
+            block::{containers::runtime::ContainerResources, entity::create},
+            crafting::RecipeManager,
+            level::chunk::LevelChunk,
+            loot::{LootData, LootTable},
+        };
+        use ferraloom_protocol::{
+            chat::Component,
+            component::{ComponentTypeId, DataComponent},
+        };
+        use std::sync::Arc;
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let pos = BlockPos::new(3, 3, 3);
+        let section = ferraloom_chunk::LevelChunkSection::new(
+            ferraloom_chunk::Strategy::block_states(),
+            ferraloom_chunk::Strategy::biomes(Arc::new(
+                ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+            )),
+            ferraloom_chunk::BiomeId(0),
+        );
+        let state = ferraloom_data::Block::SHULKER_BOX.default_state();
+        let mut chunk = LevelChunk::new(ferraloom_util::ChunkPos::new(0, 0), 0..1, section);
+        chunk.set_block_state(pos, state);
+        level.add_chunk(chunk).unwrap();
+        level.set_block_entity(create(pos, state).unwrap()).unwrap();
+        let original = level.block_entity_ref(pos).unwrap().unwrap();
+        level.retain_block_entity(original).unwrap();
+        let params = LootParams {
+            origin: Some(Vec3::new(3.5, 3.5, 3.5)),
+            block_state: Some(state),
+            tool: Some(ItemStack::default()),
+            block_entity: Some(ferraloom_nbt::Tag::Compound(
+                ferraloom_nbt::CompoundTag::new(),
+            )),
+            ..Default::default()
+        };
+        level.set_block_entity(create(pos, state).unwrap()).unwrap();
+        {
+            let receiver = level
+                .block_entity_state_mut(original)
+                .unwrap()
+                .container_mut()
+                .unwrap();
+            receiver.custom_name = Some(Component::literal("retained"));
+            receiver.items[0] = ItemStack::new(Item::STONE, 3, Default::default());
+        }
+        let table = Identifier::parse(state.block().loot_table_name().unwrap()).unwrap();
+        for contents in [false, true] {
+            let entry = if contents {
+                serde_json::json!({"type":"dynamic","name":"contents"})
+            } else {
+                serde_json::json!({"type":"item","name":"shulker_box","functions":[
+                    {"function":"copy_components","source":"block_entity","include":["minecraft:container"]},
+                    {"function":"copy_name","source":"block_entity"}
+                ]})
+            };
+            let mut loot = LootData::default();
+            loot.tables.insert(
+                table.clone(),
+                LootTable::decode(
+                    &serde_json::json!({"type":"block","pools":[{"rolls":1,"entries":[entry]}]}),
+                )
+                .unwrap(),
+            );
+            level.set_container_resources(
+                Arc::new(ContainerResources {
+                    recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
+                    loot: Arc::new(loot),
+                }),
+                0,
+            );
+            let drops = get_drops_from_context(
+                state,
+                BlockLootContext {
+                    params: params.clone(),
+                    block_entity: Some(original),
+                },
+                &mut level,
+            )
+            .unwrap();
+            assert_eq!(drops.len(), 1);
+            if contents {
+                assert_eq!(drops[0].0.as_ref().unwrap().item, Item::STONE);
+                assert_eq!(crate::entity::player::inventory::count(&drops[0]), 3);
+            } else {
+                let components = drops[0].components().unwrap();
+                assert_eq!(
+                    components.get(ComponentTypeId::CUSTOM_NAME),
+                    Some(&DataComponent::CustomName(Box::new(Component::literal(
+                        "retained"
+                    ))))
+                );
+                let Some(DataComponent::Container(items)) =
+                    components.get(ComponentTypeId::CONTAINER)
+                else {
+                    panic!("missing shulker container");
+                };
+                assert_eq!(items.0[0].as_ref().unwrap().item, Item::STONE);
+                assert_eq!(items.0[0].as_ref().unwrap().count, 3);
+            }
+        }
+        let current = level.block_entity_ref(pos).unwrap().unwrap();
+        assert!(
+            level
+                .block_entity_state(current)
+                .unwrap()
+                .container()
+                .unwrap()
+                .items
+                .iter()
+                .all(ItemStack::is_empty)
+        );
+        level.release_block_entity(original);
     }
 }

@@ -62,7 +62,10 @@ pub(crate) fn ported_behavior(
         return Some(&CONTAINER_BLOCK);
     }
     if block.class() == BlockClass::ShulkerBoxBlock
-        && matches!(method, M::AnalogOutputSignal | M::GetMenuProvider)
+        && matches!(
+            method,
+            M::AnalogOutputSignal | M::GetMenuProvider | M::GetDrops
+        )
     {
         return Some(&CONTAINER_BLOCK);
     }
@@ -91,6 +94,14 @@ pub(crate) fn ported_behavior(
     None
 }
 impl BlockBehavior for ContainerBlock {
+    fn get_drops(
+        &self,
+        state: BlockState,
+        context: crate::block::drops::BlockLootContext,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        crate::block::drops::get_shulker_drops(state, context, level)
+    }
     fn get_menu_provider(
         &self,
         state: BlockState,
