@@ -348,6 +348,28 @@ pub trait Entity: Sync {
             .push_impulse(impulse);
         Ok(())
     }
+    /// Port of LivingEntity#pushEntities. The player override reads the caller's
+    /// canonical tick manager, rather than keeping a second freeze flag.
+    fn push_entities(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_living().is_some() {
+            pushing::living_push_entities(self, entity, level)?;
+        }
+        Ok(())
+    }
+    /// Port of LivingEntity#doPush. Dispatch on the other entity as vanilla does.
+    fn do_push(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_behavior(other)?.push(other, entity, level)
+    }
     fn controlling_passenger(
         &self,
         _entity: EntityRef,

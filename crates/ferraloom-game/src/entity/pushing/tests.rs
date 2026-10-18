@@ -200,3 +200,212 @@ fn native_push_predicate_captures_source_rule_and_short_circuits_target_reads() 
     }
     assert_eq!(count, 2);
 }
+
+struct CrammingProbe;
+fn append_event(entity: EntityRef, level: &mut Level, event: String) -> Result<(), LevelError> {
+    let base = level.entity_mut::<EntityData>(entity)?;
+    let mut events = base
+        .custom_data
+        .get_string("push-events")
+        .map(|value| value.to_string_lossy())
+        .unwrap_or_default();
+    if !events.is_empty() {
+        events.push(',');
+    }
+    events.push_str(&event);
+    base.custom_data
+        .insert("push-events", Tag::String(events.into()));
+    Ok(())
+}
+impl Entity for CrammingProbe {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        source: crate::entity::DamageSource,
+        damage: f32,
+    ) -> Result<bool, LevelError> {
+        append_event(
+            entity,
+            level,
+            format!(
+                "hurt:{}:{:x}",
+                source.damage_type().message_id,
+                damage.to_bits()
+            ),
+        )?;
+        let target = level
+            .entity::<EntityData>(entity)?
+            .custom_data
+            .get_long("last-target")
+            .unwrap();
+        level.remove_entity(EntityRef(target as u64))?;
+        Ok(false)
+    }
+    fn do_push(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let other = level.entity::<EntityData>(other)?;
+        let event = format!("push:{}:{}", other.id, other.removed);
+        append_event(entity, level, event)
+    }
+}
+
+#[test]
+fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_captured_pushes() {
+    use crate::entity::animal::Cow;
+    let mut count = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-cramming\t"))
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = level();
+        let mut cow = Cow::default();
+        cow.as_living_mut().parent.uuid = Uuid::new(0, 1000);
+        cow.as_living_mut().parent.id = 1000;
+        level
+            .add_entity(EntityRef(1000), EntityState::Cow(Box::new(cow)))
+            .unwrap();
+        let entity = EntityRef(1000);
+        let mut targets = Vec::new();
+        add(&mut level, 99, Vec3::ZERO, Vec3::ZERO, true, true);
+        let total: usize = fields[1].parse().unwrap();
+        let passengers: i32 = fields[3].parse().unwrap();
+        for index in 0..total {
+            let id = 100 + index as u64;
+            add(&mut level, id, Vec3::ZERO, Vec3::ZERO, true, true);
+            let target = EntityRef(id);
+            if passengers == 1 || passengers == 2 && index > 0 {
+                crate::entity::start_riding(target, EntityRef(99), true, &mut level).unwrap();
+            }
+            targets.push(target);
+        }
+        if let Some(target) = targets.last() {
+            level
+                .entity_mut::<EntityData>(entity)
+                .unwrap()
+                .custom_data
+                .insert("last-target", Tag::Long(target.0 as i64));
+        }
+        level.rules_mut().max_entity_cramming = fields[2].parse().unwrap();
+        level
+            .entity_mut::<EntityData>(entity)
+            .unwrap()
+            .random
+            .set_seed(fields[4].parse().unwrap());
+        push_captured_entities(&CrammingProbe, entity, targets, &mut level).unwrap();
+        let events = level
+            .entity::<EntityData>(entity)
+            .unwrap()
+            .custom_data
+            .get_string("push-events")
+            .map(|value| value.to_string_lossy())
+            .unwrap_or_default();
+        assert_eq!(events, fields[5], "{row}");
+        assert_eq!(
+            level
+                .entity_mut::<EntityData>(entity)
+                .unwrap()
+                .random
+                .next_long()
+                .to_string(),
+            fields[6],
+            "{row}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 15);
+}
+
+struct GateProbe;
+impl Entity for GateProbe {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+    fn is_pushable(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        // An owned Cell is the synthetic receiver's observation of its query.
+        level
+            .entity::<EntityData>(entity)?
+            .in_block_state
+            .set(Some(ferraloom_data::Block::STONE.default_state()));
+        Ok(false)
+    }
+}
+
+#[test]
+fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
+    use crate::{
+        entity::player::{GameType, ServerPlayer},
+        level::{entity::Visibility, tick_rate::TickRateManager},
+    };
+    let mut count = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-push-rate\t"))
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        let stage: i32 = fields[1].parse().unwrap();
+        static BEHAVIORS: Behaviors =
+            Behaviors::EMPTY.with_entity(ferraloom_data::EntityType::TNT, &GateProbe);
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let player = ServerPlayer::new(
+            Uuid::new(0, 1),
+            "push".into(),
+            1,
+            Vec3::new(0.0, 64.0, 0.0),
+            GameType::Survival,
+        );
+        level
+            .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+            .unwrap();
+        add(
+            &mut level,
+            2,
+            Vec3::new(0.5, 64.0, 0.0),
+            Vec3::ZERO,
+            true,
+            true,
+        );
+        level
+            .update_entity_chunk_status(ferraloom_util::ChunkPos::ZERO, Visibility::Ticking)
+            .unwrap();
+        let mut tick_rate = TickRateManager::default();
+        if stage > 0 {
+            tick_rate.set_frozen(true);
+        }
+        if stage == 2 {
+            tick_rate.tick();
+        }
+        level
+            .entity_behavior(EntityRef(1))
+            .unwrap()
+            .push_entities(EntityRef(1), &mut level, &tick_rate)
+            .unwrap();
+        assert_eq!(tick_rate.runs_normally().to_string(), fields[2]);
+        assert_eq!(
+            usize::from(
+                level
+                    .entity::<EntityData>(EntityRef(2))
+                    .unwrap()
+                    .in_block_state
+                    .get()
+                    .is_some()
+            )
+            .to_string(),
+            fields[3],
+            "{row}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 3);
+}

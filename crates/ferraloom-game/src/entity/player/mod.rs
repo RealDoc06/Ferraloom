@@ -650,6 +650,18 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<bool, crate::level::LevelError> {
         crate::entity::living::climbable::is_pushable(self, entity, level)
     }
+    /// Port of ServerPlayer#pushEntities: frozen players do not push neighbors.
+    fn push_entities(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        if tick_rate.runs_normally() {
+            crate::entity::pushing::living_push_entities(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn passenger_riding_position(
         &self,
         entity: crate::entity::EntityRef,

@@ -3,6 +3,7 @@ use super::{Entity, EntityData, EntityRef, EntityState, LivingEntity, synched_da
 use crate::level::{Level, LevelError};
 pub use crate::scoreboard::TeamRead;
 use ferraloom_protocol::play::TeamCollisionRule;
+use ferraloom_util::random::RandomSource;
 use ferraloom_util::{Vec3, mth};
 
 fn entity_team<T: TeamRead>(
@@ -128,6 +129,66 @@ pub fn living_push<E: Entity + ?Sized>(
         .is_none()
     {
         push(behavior, entity, other, level)?;
+    }
+    Ok(())
+}
+
+/// Port of Level#getPushableEntities. The pusher's team rule is captured before
+/// the section query; target virtual queries retain the native traversal order.
+pub fn pushable_entities(entity: EntityRef, level: &Level) -> Result<Vec<EntityRef>, LevelError> {
+    let bounds = level.entity::<EntityData>(entity)?.bounding_box;
+    let predicate = PushableBy::new(entity, level, level.scoreboard())?;
+    let mut pushable = Vec::new();
+    for other in level.entities_in(bounds, |id, _| id != entity) {
+        if predicate.test(other, level)? {
+            pushable.push(other);
+        }
+    }
+    Ok(pushable)
+}
+
+/// Port of LivingEntity#pushEntities. Capture the query before damage or push
+/// callbacks; every captured target is visited even when an earlier call removes it.
+pub fn living_push_entities<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let pushable = pushable_entities(entity, level)?;
+    push_captured_entities(behavior, entity, pushable, level)
+}
+
+fn push_captured_entities<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    pushable: Vec<EntityRef>,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if pushable.is_empty() {
+        return Ok(());
+    }
+    let max_cramming = level.rules().max_entity_cramming;
+    if max_cramming > 0
+        && pushable.len() > (max_cramming - 1) as usize
+        && level
+            .entity_mut::<EntityData>(entity)?
+            .random
+            .next_int_bound(4)
+            == 0
+    {
+        let mut count = 0;
+        for &other in &pushable {
+            if level.entity::<EntityData>(other)?.vehicle.get().is_none() {
+                count += 1;
+            }
+        }
+        if count > max_cramming - 1 {
+            let source = level.damage_sources().cramming();
+            behavior.hurt_server(entity, level, source, 6.0)?;
+        }
+    }
+    for other in pushable {
+        behavior.do_push(entity, other, level)?;
     }
     Ok(())
 }

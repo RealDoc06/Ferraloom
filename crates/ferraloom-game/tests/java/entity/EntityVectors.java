@@ -111,6 +111,7 @@ public final class EntityVectors {
         FreezingVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
+        CrammingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
