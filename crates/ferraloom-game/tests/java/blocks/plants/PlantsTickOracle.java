@@ -80,7 +80,7 @@ public final class PlantsTickOracle {
     static void groundTicks(ServerLevel level,BlockPos pos,List<String> lines) {
         var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
         var covers=List.of(AIR.defaultBlockState(),STONE.defaultBlockState(),WATER.defaultBlockState(),SNOW.defaultBlockState(),SNOW.defaultBlockState().setValue(LAYERS,8));
-        for(var block:List.of(GRASS_BLOCK,MYCELIUM,ICE,FROSTED_ICE))for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<5;mode++)for(int seed=0;seed<16;seed++) {
+        for(var block:List.of(GRASS_BLOCK,MYCELIUM,ICE,FROSTED_ICE,SNOW))for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<5;mode++)for(int seed=0;seed<16;seed++) {
             clear(level,pos);
             if(block==GRASS_BLOCK||block==MYCELIUM) {
                 for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++)for(int y=-3;y<=0;y++)level.setBlock(pos.offset(x,y,z),DIRT.defaultBlockState(),816);
@@ -90,12 +90,12 @@ public final class PlantsTickOracle {
             }
             level.setBlock(pos,state,816);
             if(block!=FROSTED_ICE)level.setBlock(pos.above(),covers.get(mode),816);
-            if(block==ICE&&mode>=2) {
+            if((block==ICE||block==SNOW)&&mode>=2) {
                 level.setBlock(pos.below(),GLOWSTONE.defaultBlockState(),816);
                 long deadline=System.nanoTime()+2_000_000_000L;
                 while(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos)<=8) {
                     level.getChunkSource().getLightEngine().tryScheduleUpdate();
-                    if(System.nanoTime()>=deadline)throw new IllegalStateException("native ice light engine did not finish");
+                    if(System.nanoTime()>=deadline)throw new IllegalStateException("native melt light engine did not finish");
                     try{Thread.sleep(1);}catch(InterruptedException error){throw new RuntimeException(error);}
                 }
             }
