@@ -126,6 +126,8 @@ pub fn spawn_item(
 }
 /// Port of DefaultDispenseItemBehavior#dispense/execute. Splitting changes the
 /// live inventory before addFreshEntity, so reentrant comparator reads see it.
+/// Keeping that original ItemStack receiver through callbacks remains pending
+/// the canonical StackRef pin/read/mutate API.
 pub fn default_dispense(
     source: DispenseSource,
     level: &mut Level,
@@ -176,6 +178,8 @@ fn projectile_dispense(source: DispenseSource, level: &mut Level) -> Result<Item
         },
         level,
     )?;
+    // Pending StackRef: shrink the original input receiver after the projectile
+    // callback, including when that callback replaced the inventory slot.
     let remaining = {
         let stack = &mut level
             .block_entity_mut::<BaseContainerBlockEntity>(source.entity)?
@@ -322,6 +326,8 @@ impl BlockBehavior for DispenserBlock {
                         Some(direction.opposite()),
                         level,
                     )?;
+                    // Pending StackRef: native copies the original getItem
+                    // receiver here, even after reentrant destination callbacks.
                     let mut result = level
                         .block_entity::<BaseContainerBlockEntity>(handle)?
                         .items[slot]

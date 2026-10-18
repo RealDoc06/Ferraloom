@@ -110,6 +110,8 @@ fn is_full(
 }
 /// Port of HopperBlockEntity#addItem. The destination generation(s) stay rooted
 /// through synchronous setItem and comparator callbacks, including double chests.
+/// Original ItemStack identity across reentrant slot replacement remains pending
+/// the canonical StackRef pin/read/mutate API; block-entity roots do not pin stacks.
 pub fn add_item(
     from: Option<&ContainerRef>,
     into: &ContainerRef,
@@ -191,11 +193,13 @@ fn restore_failed_take(
     original: ItemStack,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    // Pending StackRef: native restores the original getItem receiver even if a
+    // transfer callback replaced this slot. A fresh slot read loses that identity.
     let (handle, local) = source.slot(slot, level)?;
     if count(&original) == 1 {
         access::set_item(handle, local, original, level)?;
     } else {
-        let current = &mut level
+                    let current = &mut level
             .block_entity_mut::<BaseContainerBlockEntity>(handle)?
             .items[local];
         let size = count(&original);
