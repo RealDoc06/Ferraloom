@@ -14,6 +14,10 @@ components use vanilla's registry-aware `DataComponentMap.CODEC`. JSON objects
 have recursively sorted keys; registry arrays retain protocol order. No Mojang
 binaries, assets or Java sources are committed.
 
+`ExtractData <output-dir> --entities-only` regenerates only `entity_types.json`,
+including `EntityType#trackDeltas`. Delta tracking is independent of tracking
+range and update interval; game code must use the extracted boolean.
+
 Shapes are AABB lists in block-local coordinates, queried with
 `EmptyBlockGetter.INSTANCE`, `BlockPos.ZERO`, and an empty collision context.
 The shared shape table deduplicates collision, outline and occlusion shapes.

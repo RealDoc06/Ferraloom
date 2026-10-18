@@ -315,9 +315,33 @@ public final class ExtractData {
         write(dir, "air_states", ids);
     }
 
+    private static void entityTypes(Path dir) throws Exception {
+        var entities = new JsonArray();
+        for (var type : BuiltInRegistries.ENTITY_TYPE) {
+            var out = new JsonObject();
+            var dimensions = type.getDimensions();
+            out.addProperty("id", BuiltInRegistries.ENTITY_TYPE.getId(type));
+            out.addProperty("name", BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+            out.addProperty("width", dimensions.width());
+            out.addProperty("height", dimensions.height());
+            out.addProperty("eye_height", dimensions.eyeHeight());
+            out.addProperty("fixed_dimensions", dimensions.fixed());
+            out.addProperty("category", type.getCategory().getName());
+            out.addProperty("tracking_range", type.clientTrackingRange());
+            out.addProperty("update_interval", type.updateInterval());
+            out.addProperty("track_deltas", type.trackDeltas());
+            out.addProperty("fire_immune", type.fireImmune());
+            out.addProperty("summonable", type.canSummon());
+            out.add("attributes", attributes(type));
+            entities.add(out);
+        }
+        write(dir, "entity_types", entities);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
@@ -395,24 +419,6 @@ public final class ExtractData {
         }
         write(dir, "items", items);
 
-        var entities = new JsonArray();
-        for (var type : BuiltInRegistries.ENTITY_TYPE) {
-            var out = new JsonObject();
-            var dimensions = type.getDimensions();
-            out.addProperty("id", BuiltInRegistries.ENTITY_TYPE.getId(type));
-            out.addProperty("name", BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
-            out.addProperty("width", dimensions.width());
-            out.addProperty("height", dimensions.height());
-            out.addProperty("eye_height", dimensions.eyeHeight());
-            out.addProperty("fixed_dimensions", dimensions.fixed());
-            out.addProperty("category", type.getCategory().getName());
-            out.addProperty("tracking_range", type.clientTrackingRange());
-            out.addProperty("update_interval", type.updateInterval());
-            out.addProperty("fire_immune", type.fireImmune());
-            out.addProperty("summonable", type.canSummon());
-            out.add("attributes", attributes(type));
-            entities.add(out);
-        }
-        write(dir, "entity_types", entities);
+        entityTypes(dir);
     }
 }

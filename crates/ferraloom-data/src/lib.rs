@@ -302,6 +302,7 @@ pub struct EntityTypeData {
     pub category: MobCategory,
     pub tracking_range: u32,
     pub update_interval: u32,
+    pub track_deltas: bool,
     pub fire_immune: bool,
     pub summonable: bool,
     pub attributes: &'static [(registries::attribute::Id, f64)],

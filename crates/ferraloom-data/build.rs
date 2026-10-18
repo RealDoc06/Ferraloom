@@ -504,6 +504,7 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             "fixed_dimensions",
             "tracking_range",
             "update_interval",
+            "track_deltas",
             "fire_immune",
             "summonable",
         ] {

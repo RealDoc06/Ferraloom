@@ -2,6 +2,29 @@ use super::*;
 use serde_json::Value;
 use std::fmt::Debug;
 
+#[test]
+fn entity_delta_tracking_is_native_type_data_independent_of_update_intervals() {
+    for kind in [
+        EntityType::PLAYER,
+        EntityType::BAT,
+        EntityType::ITEM_FRAME,
+        EntityType::WITHER,
+    ] {
+        assert!(!kind.data().track_deltas, "{}", kind.name());
+    }
+    for kind in [
+        EntityType::COW,
+        EntityType::ITEM,
+        EntityType::EXPERIENCE_ORB,
+        EntityType::TNT,
+        EntityType::FALLING_BLOCK,
+    ] {
+        assert!(kind.data().track_deltas, "{}", kind.name());
+    }
+    assert_ne!(EntityType::PLAYER.data().update_interval, i32::MAX as u32);
+    assert_ne!(EntityType::BAT.data().update_interval, i32::MAX as u32);
+}
+
 fn check_property<T: PropertyValue + Debug>(
     state: BlockState,
     property: Property<T>,
