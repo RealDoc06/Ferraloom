@@ -2,8 +2,10 @@
 //! as ordinary gameplay. Region writes remain in the worldgen crate.
 use super::{Level, LevelError};
 use crate::{
-    block::{BlockMethod, LevelAccessRef, LevelReaderRef, UPDATE_LIMIT, UpdateFlags, plants},
-    entity::{EntityState, player::GameType},
+    block::{
+        BlockCollisionContext, BlockMethod, LevelAccessRef, LevelReaderRef, UPDATE_LIMIT,
+        UpdateFlags, plants,
+    },
     ticks::{ScheduledTick, TickPriority},
 };
 use ferraloom_data::{Block, BlockState, FluidState};
@@ -207,25 +209,12 @@ impl LiveWorldGenLevel for Level {
         required(Level::can_survive(self, state, pos(p)))
     }
     fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
-        let shape =
-            required(LevelReaderRef::Server(self).collision_shape_without_context(state, pos(p)))?;
-        if shape.is_empty() {
-            return Ok(true);
-        }
-        let shape = shape.move_by(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
-        // EntityGetter#isUnobstructed(null,shape): this is the blocksBuilding
-        // predicate, not the distinct canBeCollidedWith query used by noCollision.
-        for entity in self.entities_in(shape.bounds(), |_, state| {
-            !matches!(state, EntityState::Player(player) if player.game_mode == GameType::Spectator)
-        }) {
-            let entity = required(self.entity_state(entity))?.as_entity();
-            if !entity.removed && entity.blocks_building
-                && shapes::join_is_not_empty(&shape, &shapes::create_aabb(entity.bounding_box), shapes::BooleanOp::And)
-            {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+        required(Level::is_unobstructed(
+            self,
+            state,
+            pos(p),
+            &BlockCollisionContext::empty(),
+        ))
     }
     fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
         let state = self.block(p)?;

@@ -2,7 +2,7 @@
 //! caches are authoritative; contextual queries call the actual block family.
 use super::{BlockMethod, LevelReaderRef};
 use crate::{
-    entity::collision_context::EntityCollisionView,
+    entity::{EntityState, collision_context::EntityCollisionView, player::GameType},
     level::{Level, LevelError},
 };
 use ferraloom_data::{BlockState, FluidState, Item};
@@ -159,4 +159,39 @@ impl Level {
     ) -> Result<VoxelShape, LevelError> {
         LevelReaderRef::Server(self).collision_shape(state, pos, context)
     }
+
+    /// Port of CollisionGetter#isUnobstructed(BlockState,BlockPos,CollisionContext)
+    /// and EntityGetter#isUnobstructed(null,shape). The context affects the block
+    /// shape; its entity is not excluded from the native null-source query.
+    pub fn is_unobstructed(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+    ) -> Result<bool, LevelError> {
+        let shape = self.collision_shape(state, pos, context)?;
+        if shape.is_empty() {
+            return Ok(true);
+        }
+        let shape = shape.move_by(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
+        for entity in self.entities_in(shape.bounds(), |_, state| {
+            !matches!(state, EntityState::Player(player) if player.game_mode == GameType::Spectator)
+        }) {
+            let entity = self.entity_state(entity)?.as_entity();
+            if !entity.removed
+                && entity.blocks_building
+                && shapes::join_is_not_empty(
+                    &shape,
+                    &shapes::create_aabb(entity.bounding_box),
+                    shapes::BooleanOp::And,
+                )
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
 }
+
+#[cfg(test)]
+mod tests;
