@@ -152,3 +152,9 @@ against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated serve
 currently advertises precisely that set. The generated const queries are named
 `is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
 them for checks against an arbitrary live feature set.
+
+`ExtractData <output-dir> --item-names-only` writes immutable item description IDs
+and potion effect-name suffixes to `item_names.json`. `Item#getDescriptionId` and
+`Potion#name` return their final constructor fields, independent of stacks or
+world context. Potion suffixes deliberately differ from registry keys for strong
+and long variants. No state-fact bits are allocated.

@@ -10,6 +10,7 @@
 
 mod block_methods;
 mod environment_attributes;
+mod item_names;
 mod sound_events;
 pub use block_methods::BlockMethod;
 pub use environment_attributes::EnvironmentAttributeData;
