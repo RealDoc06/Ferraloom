@@ -1,7 +1,7 @@
 //! Canonical stack receiver access. An operation owns roots, never inventories.
 use super::{
-    Container, ContainerHandle, ContainerSlot, ItemStack, MenuError, Result, StackForward,
-    StackGenerations, StackRef, StackSlotRef, StackValue,
+    Container, ContainerHandle, ContainerSlot, ItemStack, ListenerCopyRef, MenuError, Result,
+    StackForward, StackGenerations, StackRef, StackSlotRef, StackValue,
 };
 use crate::{
     entity::{EntityRef, player::ServerPlayer},
@@ -41,6 +41,9 @@ impl Level {
                 Ok((&menu.carried_generations, &menu.carried, 0))
             }
             ContainerHandle::MenuCarried { .. } => Err(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::MenuListenerCopies { .. } => Err(MenuError::Unsupported(
+                "listener copy objects use the menu arena",
+            )),
             ContainerHandle::Entity(_) => {
                 Err(MenuError::Unsupported("entity stack generation storage"))
             }
@@ -84,6 +87,9 @@ impl Level {
                 Ok((&mut menu.carried_generations, &mut menu.carried, 0))
             }
             ContainerHandle::MenuCarried { .. } => Err(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::MenuListenerCopies { .. } => Err(MenuError::Unsupported(
+                "listener copy objects use the menu arena",
+            )),
             ContainerHandle::Entity(_) => {
                 Err(MenuError::Unsupported("entity stack generation storage"))
             }
@@ -112,7 +118,7 @@ impl Level {
                     .menus
                     .retain_menu(menu)?;
             }
-            ContainerHandle::PlayerInventory(_) => {}
+            ContainerHandle::PlayerInventory(_) | ContainerHandle::MenuListenerCopies { .. } => {}
             ContainerHandle::Entity(_) => {
                 return Err(MenuError::Unsupported("entity stack generation storage"));
             }
@@ -139,6 +145,19 @@ impl Level {
     }
     /// Capture identity after the caller's native getItem has finished.
     pub fn stack_ref(&self, slot: ContainerSlot) -> Result<StackRef> {
+        if let ContainerHandle::MenuListenerCopies { player } = slot.container {
+            let reference = self
+                .entity::<ServerPlayer>(player)?
+                .menus
+                .listener_copies
+                .reference(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32))?;
+            return Ok(StackRef {
+                container: slot.container,
+                slot: reference.slot,
+                generation: reference.generation,
+            });
+        }
         let (generations, _, index) = self.stack_parts(slot)?;
         Ok(StackRef {
             container: slot.container,
@@ -155,6 +174,18 @@ impl Level {
         Ok(generations.is_retained(generations.current(index).unwrap()))
     }
     pub fn retain_stack(&mut self, reference: StackRef) -> Result<()> {
+        if let ContainerHandle::MenuListenerCopies { player } = reference.container {
+            return self
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .listener_copies
+                .retain(ListenerCopyRef {
+                    slot: reference.slot,
+                    generation: reference.generation,
+                })
+                .then_some(())
+                .ok_or(MenuError::MissingStack(reference));
+        }
         self.retain_stack_owner(reference.container)?;
         let retained =
             self.stack_parts_mut(reference.address())
@@ -172,6 +203,15 @@ impl Level {
     }
     pub fn release_stack(&mut self, mut reference: StackRef) {
         loop {
+            if let ContainerHandle::MenuListenerCopies { player } = reference.container {
+                if let Ok(player) = self.entity_mut::<ServerPlayer>(player) {
+                    player.menus.listener_copies.release(ListenerCopyRef {
+                        slot: reference.slot,
+                        generation: reference.generation,
+                    });
+                }
+                return;
+            }
             let Ok((generations, _, index)) = self.stack_parts_mut(reference.address()) else {
                 return;
             };
@@ -188,6 +228,12 @@ impl Level {
     }
     fn resolve_stack(&self, mut reference: StackRef) -> Result<StackRef> {
         loop {
+            if matches!(
+                reference.container,
+                ContainerHandle::MenuListenerCopies { .. }
+            ) {
+                return Ok(reference);
+            }
             let (generations, _, index) = self.stack_parts(reference.address())?;
             match generations.forwarded(StackSlotRef {
                 slot: index,
@@ -206,6 +252,17 @@ impl Level {
     }
     pub fn stack(&self, reference: StackRef) -> Result<&ItemStack> {
         let resolved = self.resolve_stack(reference)?;
+        if let ContainerHandle::MenuListenerCopies { player } = resolved.container {
+            return self
+                .entity::<ServerPlayer>(player)?
+                .menus
+                .listener_copies
+                .get(ListenerCopyRef {
+                    slot: resolved.slot,
+                    generation: resolved.generation,
+                })
+                .ok_or(MenuError::MissingStack(reference));
+        }
         let (generations, item, index) = self.stack_parts(resolved.address())?;
         generations
             .get(
@@ -219,6 +276,17 @@ impl Level {
     }
     pub fn stack_mut(&mut self, reference: StackRef) -> Result<&mut ItemStack> {
         let resolved = self.resolve_stack(reference)?;
+        if let ContainerHandle::MenuListenerCopies { player } = resolved.container {
+            return self
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .listener_copies
+                .get_mut(ListenerCopyRef {
+                    slot: resolved.slot,
+                    generation: resolved.generation,
+                })
+                .ok_or(MenuError::MissingStack(reference));
+        }
         let (generations, item, index) = self.stack_parts_mut(resolved.address())?;
         generations
             .get_mut(
@@ -233,6 +301,14 @@ impl Level {
     /// Replace/move the object atomically, before the container invokes any
     /// native callbacks. The caller keeps the Existing receiver rooted.
     pub fn replace_stack_object(&mut self, slot: ContainerSlot, value: StackValue) -> Result<()> {
+        if matches!(slot.container, ContainerHandle::MenuListenerCopies { .. })
+            || matches!(&value, StackValue::Existing(reference)
+                if matches!(reference.container, ContainerHandle::MenuListenerCopies { .. }))
+        {
+            return Err(MenuError::Unsupported(
+                "listener copy assignment to an inventory slot",
+            ));
+        }
         match value {
             StackValue::New(item) => {
                 let (generations, current, index) = self.stack_parts_mut(slot)?;

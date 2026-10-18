@@ -9,6 +9,33 @@ import net.minecraft.world.item.*;
 
 /** Real broadcastChanges callbacks replace the slot or mutate its held receiver. */
 public final class ListenerVectors {
+  static ItemStack last(AbstractContainerMenu menu, int slot) throws Exception {
+    var field = AbstractContainerMenu.class.getDeclaredField("lastSlots");
+    field.setAccessible(true);
+    return (ItemStack)((List<?>)field.get(menu)).get(slot);
+  }
+  static void alias(RegistryAccess registries, boolean replaceSource) throws Exception {
+    var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
+    var source = InventoryVectors.menu("inventory", player);
+    var target = InventoryVectors.menu("inventory", player);
+    player.getInventory().setItem(0, new ItemStack(Items.STONE, 5));
+    source.broadcastChanges();
+    var held = last(source, 36);
+    target.transferState(source);
+    var events = new ArrayList<String>();
+    events.add("alias:" + (held == last(target, 36)));
+    held.grow(3);
+    events.add("shared:" + InventoryVectors.item(last(source, 36)) + ":" + InventoryVectors.item(last(target, 36)));
+    if (replaceSource) {
+      player.getInventory().setItem(0, new ItemStack(Items.DIRT, 2));
+      source.broadcastChanges();
+    } else target.broadcastChanges();
+    events.add("owners:" + (held == last(source, 36)) + ":" + (held == last(target, 36)));
+    held.grow(1);
+    events.add("held:" + InventoryVectors.item(held));
+    events.add("final:" + InventoryVectors.item(last(source, 36)) + ":" + InventoryVectors.item(last(target, 36)));
+    System.out.println("listener\talias-" + (replaceSource ? "source" : "target") + "\t" + String.join(";", events));
+  }
   static void scenario(RegistryAccess registries, boolean replace) {
     var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
     var menu = InventoryVectors.menu("inventory", player);
@@ -58,5 +85,7 @@ public final class ListenerVectors {
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(DataComponentInitializers.PendingComponents::apply);
     scenario(registries, true);
     scenario(registries, false);
+    alias(registries, true);
+    alias(registries, false);
   }
 }
