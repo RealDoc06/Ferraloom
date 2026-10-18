@@ -47,6 +47,240 @@ registry	minecraft:test_block	minecraft:test_block
 registry	minecraft:test_instance_block	minecraft:test_instance_block
 registry	minecraft:copper_golem_statue	minecraft:copper_golem_statue,minecraft:exposed_copper_golem_statue,minecraft:weathered_copper_golem_statue,minecraft:oxidized_copper_golem_statue,minecraft:waxed_copper_golem_statue,minecraft:waxed_exposed_copper_golem_statue,minecraft:waxed_weathered_copper_golem_statue,minecraft:waxed_oxidized_copper_golem_statue
 registry	minecraft:potent_sulfur	minecraft:potent_sulfur
+sided-slots	minecraft:furnace	down	[2, 1]
+sided-rule	minecraft:furnace	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:furnace	up	[0]
+sided-rule	minecraft:furnace	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	north	[1]
+sided-rule	minecraft:furnace	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	south	[1]
+sided-rule	minecraft:furnace	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	west	[1]
+sided-rule	minecraft:furnace	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	east	[1]
+sided-rule	minecraft:furnace	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	down	[2, 1]
+sided-rule	minecraft:smoker	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:smoker	up	[0]
+sided-rule	minecraft:smoker	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	north	[1]
+sided-rule	minecraft:smoker	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	south	[1]
+sided-rule	minecraft:smoker	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	west	[1]
+sided-rule	minecraft:smoker	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	east	[1]
+sided-rule	minecraft:smoker	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	down	[2, 1]
+sided-rule	minecraft:blast_furnace	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:blast_furnace	up	[0]
+sided-rule	minecraft:blast_furnace	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	north	[1]
+sided-rule	minecraft:blast_furnace	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	south	[1]
+sided-rule	minecraft:blast_furnace	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	west	[1]
+sided-rule	minecraft:blast_furnace	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	east	[1]
+sided-rule	minecraft:blast_furnace	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
 ticker-phase	first	a
 ticker-phase	second	a,c
 ticker-phase	frozen	

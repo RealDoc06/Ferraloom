@@ -1,4 +1,5 @@
 //! Vanilla container block states and their stateless behaviors.
+pub mod access;
 mod behavior;
 pub mod chest;
 pub mod crafter;
