@@ -111,6 +111,41 @@ async fn record(session: &mut Session) -> Result<ObservationLog> {
             ],
         )?;
     }
+    command(
+        bot,
+        "setblock 20 -59 16 minecraft:observer[facing=east]",
+        "commands.setblock.success",
+    )
+    .await?;
+    command(
+        bot,
+        "setblock 21 -59 16 minecraft:observer[facing=west]",
+        "commands.setblock.success",
+    )
+    .await?;
+    set(bot, BlockPos::new(19, -59, 16), Block::REDSTONE_LAMP).await?;
+    set(bot, BlockPos::new(22, -59, 16), Block::REDSTONE_LAMP).await?;
+    let mut powered = [0_u8; 2];
+    for tick in 1..=24 {
+        step(bot, 1).await?;
+        let a = block(bot, BlockPos::new(20, -59, 16))?;
+        let b = block(bot, BlockPos::new(21, -59, 16))?;
+        powered[0] += u8::from(a.get(p::POWERED) == Some(true));
+        powered[1] += u8::from(b.get(p::POWERED) == Some(true));
+        log.record(
+            format!("observer-clock.{tick}"),
+            [
+                a.id(),
+                b.id(),
+                block(bot, BlockPos::new(19, -59, 16))?.id(),
+                block(bot, BlockPos::new(22, -59, 16))?.id(),
+            ],
+        )?;
+    }
+    ensure!(
+        powered.into_iter().all(|ticks| ticks >= 2),
+        "both observers must pulse in the clock"
+    );
     Ok(log)
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
