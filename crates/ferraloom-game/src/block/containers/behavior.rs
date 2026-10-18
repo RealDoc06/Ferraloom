@@ -148,6 +148,9 @@ impl BlockBehavior for ContainerBlock {
                 level,
             )?;
         }
+        if chest(state.block()) || state.block().class() == BlockClass::BarrelBlock {
+            crate::entity::monster::piglin::ai::anger_nearby_piglins(level, context.player, true)?;
+        }
         Ok(InteractionResult::SUCCESS)
     }
     fn trigger_event(
