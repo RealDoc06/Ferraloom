@@ -286,12 +286,14 @@ public final class PlantsTickOracle {
             String before=snapshot(level,pos);
             int sky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos);
             int blockLight=level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos);
+            int lowerSky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos.below());
+            int lowerBlockLight=level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos.below());
             var behavior=(BonemealableBlock)block;
             level.getRandom().setSeed(seed);
             boolean valid=behavior.isValidBonemealTarget(level,pos,state,BonemealSource.INTERACTION);
             boolean success=valid&&behavior.isBonemealSuccess(level,level.getRandom(),pos,state,BonemealSource.INTERACTION);
             if(success)behavior.performBonemeal(level,level.getRandom(),pos,state,BonemealSource.INTERACTION);
-            lines.add("bonemeal\t"+Block.getId(state)+"\t"+seed+"\t"+valid+"\t"+success+"\t"+before+"\t"+snapshot(level,pos)+"\t"+level.getRandom().nextLong()+"\t"+sky+"\t"+blockLight);
+            lines.add("bonemeal\t"+Block.getId(state)+"\t"+seed+"\t"+valid+"\t"+success+"\t"+before+"\t"+snapshot(level,pos)+"\t"+level.getRandom().nextLong()+"\t"+sky+"\t"+blockLight+"\t"+lowerSky+"\t"+lowerBlockLight);
         }
     }
 }

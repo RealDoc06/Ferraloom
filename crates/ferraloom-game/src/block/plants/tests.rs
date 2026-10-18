@@ -1268,19 +1268,30 @@ pub(super) fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
         level.rules_mut().block_drops = Some(false);
         super::fixtures::install_loot(&mut level);
         if f.len() >= 10 {
+            let mut sky = ferraloom_light::DataLayer::new(f[8].parse().unwrap());
+            let mut block = ferraloom_light::DataLayer::new(f[9].parse().unwrap());
+            if f.len() >= 12 {
+                // Upper pitcher halves query the lower cell's real light, which
+                // can differ even within this section.
+                let below = pos.below(1);
+                sky.set(
+                    (below.x & 15) as u8,
+                    (below.y & 15) as u8,
+                    (below.z & 15) as u8,
+                    f[10].parse().unwrap(),
+                );
+                block.set(
+                    (below.x & 15) as u8,
+                    (below.y & 15) as u8,
+                    (below.z & 15) as u8,
+                    f[11].parse().unwrap(),
+                );
+            }
             level.set_light_snapshot(
                 ChunkPos::containing(pos),
                 crate::level::weather::ChunkLightSnapshot {
-                    sky: [(
-                        pos.y >> 4,
-                        ferraloom_light::DataLayer::new(f[8].parse().unwrap()),
-                    )]
-                    .into(),
-                    block: [(
-                        pos.y >> 4,
-                        ferraloom_light::DataLayer::new(f[9].parse().unwrap()),
-                    )]
-                    .into(),
+                    sky: [(pos.y >> 4, sky)].into(),
+                    block: [(pos.y >> 4, block)].into(),
                 },
             );
         }
