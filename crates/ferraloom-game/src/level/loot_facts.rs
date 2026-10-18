@@ -6,7 +6,10 @@ use super::{
 };
 use crate::{
     block::{LevelReaderRef, entity::BlockEntityRef},
-    entity::{EntityData, EntityRef, EntityState},
+    entity::{
+        EntityData, EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    },
     loot::{EnvironmentValue, Identifier, LootError, LootFacts, LootParams, Result},
     predicates::{EntityFlags, PredicateContext, PredicateRegistry},
 };
@@ -134,6 +137,95 @@ impl PredicateContext for Level {
         LevelReaderRef::Server(self)
             .can_see_sky(pos)
             .map_err(required)
+    }
+    fn player_experience_level(&self, entity: EntityRef) -> Result<Option<i32>> {
+        if self
+            .entity::<EntityData>(entity)
+            .map_err(required)?
+            .entity_type
+            != EntityType::PLAYER
+        {
+            return Ok(None);
+        }
+        Ok(Some(
+            self.entity::<ServerPlayer>(entity)
+                .map_err(required)?
+                .experience_level,
+        ))
+    }
+    fn player_gamemode(&self, entity: EntityRef) -> Result<ferraloom_protocol::play::GameType> {
+        use ferraloom_protocol::play::GameType as Wire;
+        Ok(
+            match self
+                .entity::<ServerPlayer>(entity)
+                .map_err(required)?
+                .game_mode
+            {
+                GameType::Survival => Wire::Survival,
+                GameType::Creative => Wire::Creative,
+                GameType::Adventure => Wire::Adventure,
+                GameType::Spectator => Wire::Spectator,
+            },
+        )
+    }
+    fn player_stat(
+        &self,
+        entity: EntityRef,
+        stat_type: &Identifier,
+        stat: &Identifier,
+    ) -> Result<i32> {
+        let kind = crate::stats::StatType::from_name(stat_type.as_str()).ok_or_else(|| {
+            LootError::MissingReference {
+                registry: "stat_type",
+                id: stat_type.clone(),
+            }
+        })?;
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .stats
+            .get_value(kind.decode_stat(stat)?))
+    }
+    fn player_recipe(&self, entity: EntityRef, recipe: &Identifier) -> Result<bool> {
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .recipe_book
+            .contains(&recipe.as_str().parse()?))
+    }
+    fn player_advancement(
+        &self,
+        entity: EntityRef,
+        id: &Identifier,
+    ) -> Result<Option<crate::predicates::AdvancementFacts>> {
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .advancements
+            .get_progress(id)
+            .map(|progress| crate::predicates::AdvancementFacts {
+                done: progress.is_done(),
+                criteria: progress
+                    .criteria
+                    .iter()
+                    .map(|(name, criterion)| (name.clone(), criterion.obtained.is_some()))
+                    .collect(),
+            }))
+    }
+    fn player_input(&self, entity: EntityRef) -> Result<[bool; 7]> {
+        let input = self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .last_client_input;
+        Ok([
+            input.forward,
+            input.backward,
+            input.left,
+            input.right,
+            input.jump,
+            input.shift,
+            input.sprint,
+        ])
     }
     fn entity_type(&self, entity: EntityRef) -> Result<EntityType> {
         Ok(self

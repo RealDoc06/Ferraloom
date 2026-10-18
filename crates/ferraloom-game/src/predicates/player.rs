@@ -167,9 +167,12 @@ impl PlayerPredicate {
         if !self.level.matches(level) {
             return Ok(false);
         }
-        let (food, saturation) = facts.player_food(entity)?;
-        if !self.food.matches(food, saturation) {
-            return Ok(false);
+        // Unconstrained bounds always match; native food getters have no side effects.
+        if self.food != FoodPredicate::default() {
+            let (food, saturation) = facts.player_food(entity)?;
+            if !self.food.matches(food, saturation) {
+                return Ok(false);
+            }
         }
         if let Some(test) = &self.gamemode
             && !test.matches(facts.player_gamemode(entity)?)
@@ -219,5 +222,26 @@ impl PlayerPredicate {
             return Ok(false);
         }
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct WithoutFood;
+    impl PredicateContext for WithoutFood {
+        fn player_experience_level(&self, _: EntityRef) -> Result<Option<i32>> {
+            Ok(Some(0))
+        }
+    }
+    #[test]
+    fn unconstrained_food_needs_no_unavailable_state() {
+        let empty = PlayerPredicate::decode(&serde_json::json!({})).unwrap();
+        assert!(empty.matches(EntityRef(1), &WithoutFood).unwrap());
+        let bounded = PlayerPredicate::decode(&serde_json::json!({"food":{"level":20}})).unwrap();
+        assert!(matches!(
+            bounded.matches(EntityRef(1), &WithoutFood),
+            Err(crate::loot::LootError::Unsupported(_))
+        ));
     }
 }
