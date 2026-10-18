@@ -7,7 +7,7 @@ use ferraloom_data::{
 use ferraloom_util::random::{Random, RandomSource, WorldgenRandom, XoroshiroRandomSource};
 use ferraloom_worldgen::{
     biome::BiomeSource,
-    feature::{FeatureContext, FeatureLoader},
+    feature::{FeatureContext, FeatureLoader, FeatureRandom, FeatureRandomSelector, WorldGenLevel},
     generator::{GenerationData, NoiseBasedChunkGenerator},
     region::{ChunkStatus, RegionChunk, WorldGenRegion},
     settings::NoiseGeneratorSettings,
@@ -210,8 +210,8 @@ fn replay(require_pending: bool) {
             )));
             let registry = Default::default();
             let mut context = FeatureContext {
-                region: &mut region,
-                random: &mut random,
+                level: WorldGenLevel::Region(&mut region),
+                random: FeatureRandomSelector::External(FeatureRandom::Region(&mut random)),
                 origin,
                 generator: &generator,
                 registry: &registry,
@@ -250,8 +250,8 @@ fn replay(require_pending: bool) {
         region.set_random(Random::Xoroshiro(XoroshiroRandomSource::new(7331)));
         let registry = Default::default();
         let mut ctx = FeatureContext {
-            region: &mut region,
-            random: &mut random,
+            level: WorldGenLevel::Region(&mut region),
+            random: FeatureRandomSelector::External(FeatureRandom::Region(&mut random)),
             origin,
             generator: &generator,
             registry: &registry,
