@@ -104,7 +104,8 @@ fn native_food_state_numeric_load_defaults_roundtrip_and_float_arithmetic() {
                     "default" => tag = CompoundTag::new(),
                     "negative" => {
                         tag.insert("foodLevel", Tag::Int(-8));
-                        tag.insert("foodSaturationLevel", Tag::Float(-0.0));
+                        // CompoundTag#putFloat uses FloatTag.valueOf, whose ZERO is positive.
+                        tag.insert("foodSaturationLevel", Tag::Float(0.0));
                         tag.insert("foodExhaustionLevel", Tag::Float(-7.5));
                         tag.insert("foodTickTimer", Tag::Int(-9));
                     }

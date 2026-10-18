@@ -197,6 +197,7 @@ mod tests {
     #[test]
     fn dropped_item_retains_disconnected_thrower_until_owner_lookup() {
         let mut level = level();
+        level.install_shared(Box::default());
         let player = level.next_entity_ref();
         let uuid = Uuid::new(1, 2);
         let state = ServerPlayer::new(

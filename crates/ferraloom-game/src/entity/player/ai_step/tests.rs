@@ -41,6 +41,9 @@ fn event(entity: EntityRef, text: String, level: &mut Level) -> Result<(), Level
 }
 struct Probe;
 impl Entity for Probe {
+    fn can_freeze(&self, _: EntityRef, _: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,
@@ -185,7 +188,10 @@ fn auto_spin_uses_the_native_predecrement_guard_and_stops_before_push_in_strict(
         rate.tick();
         let result = ai_step(&Probe, id, &mut level, &rate);
         let p = level.entity::<ServerPlayer>(id).unwrap();
-        assert_eq!(p.auto_spin_attack_ticks, initial.saturating_sub(1));
+        assert_eq!(
+            p.auto_spin_attack_ticks,
+            if initial > 0 { initial - 1 } else { initial }
+        );
         if initial > 0 {
             assert_eq!(
                 result,

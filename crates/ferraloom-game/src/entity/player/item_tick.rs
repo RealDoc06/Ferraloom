@@ -147,7 +147,7 @@ mod tests {
             Vec3::ZERO,
             GameType::Survival,
         );
-        player.inventory.set_selected_slot(10);
+        player.inventory.set_selected_slot(8);
         player
             .inventory
             .set_item(0, stack(Item::COMPASS, 0), &mut player.parent.equipment);
@@ -169,7 +169,7 @@ mod tests {
         {
             let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
             player.inventory.set_item(
-                8,
+                7,
                 stack(Item::OCEAN_MONUMENT_MAP, 1),
                 &mut player.parent.equipment,
             );
