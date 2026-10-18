@@ -11,10 +11,10 @@ use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::{collections::BTreeSet, io::Read, sync::Arc};
 
-const POS: BlockPos = BlockPos::new(8, 64, 8);
+pub(super) const POS: BlockPos = BlockPos::new(8, 64, 8);
 static EMPTY: Behaviors = Behaviors::EMPTY;
 
-fn level() -> Level {
+pub(super) fn level() -> Level {
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
     let biome = ferraloom_chunk::BiomeId(0);
     level

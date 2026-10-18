@@ -6,6 +6,10 @@ use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id a
 use ferraloom_util::{BlockPos, Direction};
 
 mod orientation;
+mod slab;
+#[cfg(test)]
+mod stair_slab_tests;
+mod stairs;
 #[cfg(test)]
 mod tests;
 
@@ -15,6 +19,12 @@ pub(crate) fn ported_behavior(
 ) -> Option<&'static dyn BlockBehavior> {
     if orientation::supports(block, method) {
         return Some(&orientation::ORIENTATION);
+    }
+    if stairs::supports(block, method) {
+        return Some(&stairs::STAIRS);
+    }
+    if slab::supports(block, method) {
+        return Some(&slab::SLAB);
     }
     None
 }
@@ -31,6 +41,26 @@ fn with_facing(state: BlockState, direction: Direction) -> BlockState {
     state
         .with(p::FACING, facing)
         .expect("building facing property")
+}
+
+fn facing(state: BlockState) -> Direction {
+    match state.get(p::FACING).expect("building facing property") {
+        p::Facing::Down => Direction::Down,
+        p::Facing::Up => Direction::Up,
+        p::Facing::North => Direction::North,
+        p::Facing::South => Direction::South,
+        p::Facing::West => Direction::West,
+        p::Facing::East => Direction::East,
+    }
+}
+
+/// StairBlock/SlabBlock's click-height rule, preserving the native greater-than
+/// comparison for NaN and the exact half-block boundary.
+fn top_half(context: &super::BlockPlaceContext<'_>) -> bool {
+    let face = context.clicked_face();
+    face == Direction::Down
+        || (face != Direction::Up
+            && context.click_location().y - f64::from(context.clicked_pos().y) > 0.5)
 }
 
 /// Port of the waterlogged building blocks' updateShape scheduling. Water's
