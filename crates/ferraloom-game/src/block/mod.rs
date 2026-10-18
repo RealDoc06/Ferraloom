@@ -10,7 +10,7 @@ pub mod fluid;
 mod foundational;
 mod placement;
 pub mod plants;
-pub use placement::DirectionalPlaceContext;
+pub use placement::{BlockPlaceContext, DirectionalPlaceContext, PlacementHit, UseOnContext};
 pub use plants::multiface_spreader;
 mod shapes;
 pub use shapes::BlockCollisionContext;
@@ -165,6 +165,15 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of Block#getStateForPlacement's inherited implementation.
+    fn get_state_for_placement(
+        &self,
+        block: Block,
+        _context: &BlockPlaceContext<'_>,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<Option<BlockState>, LevelError> {
+        Ok(Some(block.default_state()))
+    }
     /// Port of BlockBehaviour#isSignalSource.
     fn is_signal_source(&self, _state: BlockState) -> bool {
         false
@@ -232,7 +241,7 @@ pub trait BlockBehavior: Sync {
     fn can_be_replaced(
         &self,
         state: BlockState,
-        context: &DirectionalPlaceContext<'_>,
+        context: &BlockPlaceContext<'_>,
         _level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(state.data().replaceable

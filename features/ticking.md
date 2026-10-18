@@ -175,3 +175,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.level.inactive-entity-phase | Stop entity and block-entity phases after 300 running inactive ticks; active tickets reset inactivity during freeze | `ServerLevel#tick; ServerChunkCache#hasActiveTickets` | `ferraloom-game: level::tests::inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze (server phase wiring pending)` | - | todo |
 
 | ticking.block.worldgen-bridge | Share concrete live/worldgen readers and mutation access; dispatch survival, shapes, waterlogging, postprocessing and proto ticks through the same per-method registry | `WorldGenRegion; LevelReader; LevelAccessor; BlockBehaviour` | `ferraloom-game: block::worldgen::tests::generation_uses_the_same_survival_shape_waterlogging_and_tick_dispatch (unported overrides remain explicit errors)` | - | todo |
+
+| ticking.block.placement-context | Share native UseOnContext and BlockPlaceContext, constructor replacement routing, directional looking order and inherited base placement state | `BlockPlaceContext; DirectionalPlaceContext; Block#getStateForPlacement` | `block::placement::tests::native_context_construction_and_directional_looking_orders (18 real-Level Java cases)` | pass | todo |
+
