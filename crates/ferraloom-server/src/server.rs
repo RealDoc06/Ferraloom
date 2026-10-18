@@ -3066,11 +3066,20 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
+            let progress = ferraloom_game::advancements::PlayerProgressSave::capture(
+                player,
+                self.world.access.path(),
+            )?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
             let name = player.display_name();
             let access = self.world.access.clone();
-            tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag)).await??;
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                access.player_data().save(&uuid, &tag)?;
+                progress.write()?;
+                Ok(())
+            })
+            .await??;
             self.level
                 .distance_manager
                 .update_player(entity, None, &mut self.level.tickets);
