@@ -221,6 +221,70 @@ pub(super) fn get_base_drops(
         .map_err(|_| LevelError::Inventory("block loot evaluation"))
 }
 
+/// Port of Block#dropFromBlockInteractLootTable with Block#popResource as the
+/// consumer. The returned boolean reflects generated drops, even if BLOCK_DROPS
+/// suppresses entity creation. All loot is evaluated before the first pop.
+pub fn drop_from_block_interact_loot_table(
+    level: &mut Level,
+    table: &Identifier,
+    pos: BlockPos,
+    state: BlockState,
+    block_entity: Option<BlockEntityRef>,
+    tool: Option<&ItemStack>,
+    interacting_entity: Option<EntityRef>,
+) -> Result<bool, LevelError> {
+    let operation = |level: &mut Level| {
+        let mut params = LootParams {
+            origin: Some(Vec3::new(
+                f64::from(pos.x) + 0.5,
+                f64::from(pos.y) + 0.5,
+                f64::from(pos.z) + 0.5,
+            )),
+            block_state: Some(state),
+            tool: tool.cloned(),
+            interacting_entity,
+            ..Default::default()
+        };
+        if let Some(handle) = block_entity {
+            let receiver = level.block_entity_state(handle)?;
+            params.block_entity =
+                Some(Tag::Compound(receiver.save_with_full_metadata().map_err(
+                    |_| LevelError::Inventory("block interact loot block entity codec"),
+                )?));
+            params.block_entity_components = Some(receiver.collect_components());
+        }
+        params
+            .validate(
+                &ContextKeySet::vanilla(
+                    &Identifier::parse("block_interact").expect("built-in context"),
+                )
+                .expect("block interact context"),
+            )
+            .map_err(|_| LevelError::Inventory("block interact loot context"))?;
+        let resources = level.container_resources()?;
+        let drops = level
+            .with_loot_sources(|sources| {
+                resources.loot.get_random_items_seeded(
+                    table,
+                    &params,
+                    0,
+                    sources,
+                    resources.facts.as_ref(),
+                )
+            })
+            .map_err(|_| LevelError::Inventory("block interact loot evaluation"))?;
+        let generated = !drops.is_empty();
+        for stack in drops {
+            pop_resource(level, pos, stack)?;
+        }
+        Ok(generated)
+    };
+    match block_entity {
+        Some(handle) => level.with_block_entity_callback(handle, operation),
+        None => operation(level),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
