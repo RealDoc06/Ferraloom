@@ -19,7 +19,7 @@ rsa = "0.9"
 rand = "0.8"
 sha1 = "0.10"
 flate2 = { version = "1.1", default-features = false, features = ["zlib"] }
-serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_json = { version = "1.0", features = ["preserve_order", "arbitrary_precision"] }
 base64 = "0.22"
 
 [lints]
