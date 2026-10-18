@@ -150,7 +150,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
                 )
                 .unwrap();
         }
-        let mut id = EntityRef(1);
+        let id = EntityRef(1);
         let position = vector(f[4]);
         let state = if f[2] == "player" {
             EntityState::Player(Box::new(player::ServerPlayer::new(
@@ -174,7 +174,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
             base.fall_distance = double(f[8]);
             base.velocity = delta;
         }
-        id.clone()
+        EntityRef(id.0)
             .move_by(&mut level, movement::MoverType::SelfMovement, delta)
             .unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
