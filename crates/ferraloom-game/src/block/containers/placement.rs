@@ -236,4 +236,6 @@ impl BlockBehavior for ContainerPlacement {
 #[cfg(test)]
 mod furniture_tests;
 #[cfg(test)]
+mod post_tests;
+#[cfg(test)]
 mod tests;
