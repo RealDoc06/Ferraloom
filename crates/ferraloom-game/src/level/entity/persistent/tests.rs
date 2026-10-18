@@ -43,10 +43,12 @@ fn load_completion_order_does_not_change_entity_creation_or_callbacks() {
     let mut level = level();
     let a = ChunkPos::new(0, 0);
     let b = ChunkPos::new(1, 0);
+    assert!(!level.are_entities_loaded(a));
     level
         .update_entity_chunk_status(a, Visibility::Ticking)
         .unwrap();
     let (first, _) = load_request(&mut level);
+    assert!(!level.are_entities_loaded(a));
     level
         .update_entity_chunk_status(b, Visibility::Ticking)
         .unwrap();
@@ -60,6 +62,7 @@ fn load_completion_order_does_not_change_entity_creation_or_callbacks() {
     level.process_pending_entity_loads().unwrap();
     assert!(level.all_entities().is_empty());
     assert_eq!(level.entity_chunk_load_status(b), ChunkLoadStatus::Pending);
+    assert!(!level.are_entities_loaded(b));
     level
         .complete_entity_chunk_load(
             first,
@@ -68,6 +71,8 @@ fn load_completion_order_does_not_change_entity_creation_or_callbacks() {
         .unwrap();
     level.process_pending_entity_loads().unwrap();
     let entities = level.all_entities();
+    assert!(level.are_entities_loaded(a));
+    assert!(level.are_entities_loaded(b));
     assert_eq!(entities.len(), 2);
     for (index, id) in entities.iter().enumerate() {
         let base = level.entity::<EntityData>(*id).unwrap();

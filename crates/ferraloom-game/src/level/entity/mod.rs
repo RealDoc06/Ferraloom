@@ -203,6 +203,12 @@ pub struct EntityStorage {
     pub ids: EntityIdAllocator,
 }
 impl EntityStorage {
+    /// Port of PersistentEntitySectionManager#areEntitiesLoaded. Visibility and
+    /// simulation range do not establish that entity chunk loading completed.
+    pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
+        self.persistent.status(pos) == ChunkLoadStatus::Loaded
+    }
+
     pub fn get(&self, id: &EntityRef) -> Option<&EntityState> {
         self.states.get(id)
     }
@@ -273,6 +279,10 @@ pub enum EntityManagementEvent {
 }
 
 impl Level {
+    pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
+        self.region().entities.are_entities_loaded(pos)
+    }
+
     /// Server-lifetime handles never reuse a retired identity. Regional blocks
     /// are assigned by the scheduler before parallel execution is enabled.
     pub fn next_entity_ref(&mut self) -> EntityRef {
