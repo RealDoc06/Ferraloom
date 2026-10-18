@@ -135,22 +135,6 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
-    pub fn can_support_center(
-        &self,
-        position: [i32; 3],
-        face: ferraloom_util::Direction,
-    ) -> Result<bool, Error> {
-        self.behavior.can_support_center(self, position, face)
-    }
-    pub fn spawn_structure_chest_minecart(
-        &mut self,
-        position: [f64; 3],
-        table: &crate::Identifier,
-        random: &mut ferraloom_util::random::WorldgenRandom,
-    ) -> Result<bool, Error> {
-        self.behavior
-            .spawn_structure_chest_minecart(self, position, table, random)
-    }
     /// Block#canSupportCenter includes the unstable-bottom-center tag and the
     /// live SupportType.CENTER face query.
     fn can_support_center(
@@ -171,15 +155,6 @@ pub trait WorldgenBlockBehavior: Sync {
         _random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: structure chest minecart".into()))
-    }
-    pub fn is_collision_face_full(
-        &self,
-        state: BlockState,
-        position: [i32; 3],
-        face: ferraloom_util::Direction,
-    ) -> Result<bool, Error> {
-        self.behavior
-            .is_collision_face_full(self, state, position, face)
     }
     /// Port of Block#isFaceFull on the live collision shape, used by portal vines.
     fn is_collision_face_full(
@@ -636,6 +611,31 @@ impl<'a> WorldGenRegion<'a> {
             .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
+    pub fn can_support_center(
+        &self,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.can_support_center(self, position, face)
+    }
+    pub fn spawn_structure_chest_minecart(
+        &mut self,
+        position: [f64; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .spawn_structure_chest_minecart(self, position, table, random)
+    }
+    pub fn is_collision_face_full(
+        &self,
+        state: BlockState,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .is_collision_face_full(self, state, position, face)
+    }
     pub fn set_loot_table_seed(
         &mut self,
         position: [i32; 3],
