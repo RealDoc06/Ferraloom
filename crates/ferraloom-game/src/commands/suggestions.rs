@@ -271,7 +271,9 @@ mod tests {
                 );
                 builder.build()
             } else {
-                let wire = if vector.kind == "entity" {
+                let wire = if vector.kind == "item" {
+                    CommandArgument::ItemStack {}
+                } else if vector.kind == "entity" {
                     CommandArgument::Entity {
                         flags: EntityArgumentFlags {
                             single: false,

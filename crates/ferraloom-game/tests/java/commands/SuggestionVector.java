@@ -45,6 +45,15 @@ public final class SuggestionVector {
                 vectors.add(capture("command",input,level,dispatcher.getCompletionSuggestions(dispatcher.parse(input,source)).join()));
             }
         }
+        var registries=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
+        net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(p->p.apply());
+        var buildContext=net.minecraft.commands.CommandBuildContext.simple(registries,net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
+        var item=net.minecraft.commands.arguments.item.ItemArgument.item(buildContext);
+        var itemSource=mock(CommandSourceStack.class);
+        for(var input:List.of("","sto","stone","stone ","stone[","stone[dam","stone[damage","stone[damage=","stone[damage=1","stone[damage=1,","stone[!","stone[!damage","stone[!damage]","stone[damage=1]","stone[creative_slot_lock","stone[unknown","stone[custom_name='x'","stone[damage=1, damage")) {
+            var itemContext=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
+            vectors.add(capture("item",input,4,item.listSuggestions(itemContext,new SuggestionsBuilder(input,0)).join()));
+        }
         var resources = List.of(net.minecraft.resources.Identifier.parse("example:thing"),net.minecraft.resources.Identifier.parse("minecraft:thing"),net.minecraft.resources.Identifier.parse("example:other"));
         for (var input : List.of("","!","#","!#","!#th","thing","example:")) {
             vectors.add(capture("resource_prefix",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0),"!#").join()));

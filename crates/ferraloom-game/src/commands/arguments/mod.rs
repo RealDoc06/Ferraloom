@@ -571,6 +571,9 @@ impl ArgumentType for MinecraftArgument {
         _context: &CommandContext<S>,
         mut builder: SuggestionsBuilder,
     ) -> Result<Suggestions, CommandSyntaxException> {
+        if matches!(self.wire, CommandArgument::ItemStack {}) {
+            return Ok(items::suggestions(&self.context, builder));
+        }
         let values: &[&str] = match self.wire {
             CommandArgument::Bool {} => &["true", "false"],
             CommandArgument::Gamemode {} => &["survival", "creative", "adventure", "spectator"],
