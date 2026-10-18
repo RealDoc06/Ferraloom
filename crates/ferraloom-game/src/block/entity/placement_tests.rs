@@ -24,7 +24,7 @@ fn vectors() -> String {
 fn state(id: &str) -> BlockState {
     BlockState::from_id(id.parse().unwrap()).unwrap()
 }
-fn bare_level() -> Level {
+pub(super) fn bare_level() -> Level {
     let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
     level
         .add_chunk(LevelChunk::new(

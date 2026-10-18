@@ -6,6 +6,7 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataCompo
 use ferraloom_util::{BlockPos, ChunkPos};
 
 mod components;
+pub mod potent_sulfur;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
     crafter::CrafterBlockEntity,
@@ -176,6 +177,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    PotentSulfur(Box<potent_sulfur::PotentSulfurBlockEntity>),
     Command(Box<super::containers::command::CommandBlockEntity>),
     Structure(Box<super::containers::structure::StructureBlockEntity>),
     Skull(Box<super::containers::skull::SkullBlockEntity>),
@@ -194,6 +196,7 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::PotentSulfur(entity) => &entity.parent,
             Self::Command(entity) => &entity.parent,
             Self::Structure(entity) => &entity.parent,
             Self::Skull(entity) => &entity.parent,
@@ -212,6 +215,7 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::PotentSulfur(entity) => &mut entity.parent,
             Self::Command(entity) => &mut entity.parent,
             Self::Structure(entity) => &mut entity.parent,
             Self::Skull(entity) => &mut entity.parent,
@@ -230,6 +234,7 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
             Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
             Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
@@ -242,6 +247,21 @@ impl BlockEntityState {
             Self::Comparator(_) => &super::redstone::comparator::COMPARATOR_ENTITY,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
             _ => &super::containers::chest::STORAGE_ENTITY,
+        }
+    }
+    /// Port of BlockEntity#setLevel and the supported subclass initialization.
+    /// These assignments use the current clock without invoking world callbacks.
+    pub fn set_level(&mut self, game_time: i64) {
+        match self {
+            Self::PotentSulfur(entity) => entity.set_level(game_time),
+            _ => self.data_mut().has_level = true,
+        }
+    }
+    /// Native ticker eligibility can depend on the current cached block state.
+    pub fn has_server_ticker(&self) -> bool {
+        match self {
+            Self::PotentSulfur(entity) => entity.has_server_ticker(),
+            _ => self.behavior().has_server_ticker(),
         }
     }
     pub fn randomizable(&self) -> Option<&RandomizableContainerBlockEntity> {
@@ -404,6 +424,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::POTENT_SULFUR => Ok(BlockEntityState::PotentSulfur(Box::new(
+            potent_sulfur::PotentSulfurBlockEntity::new(data),
+        ))),
         BlockEntityType::COMMAND_BLOCK => Ok(BlockEntityState::Command(Box::new(
             super::containers::command::CommandBlockEntity::new(data),
         ))),
@@ -485,7 +508,8 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::COMMAND_BLOCK
+            BlockEntityType::POTENT_SULFUR
+                | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
                 | BlockEntityType::END_PORTAL
@@ -593,3 +617,5 @@ projection!(
 
 #[cfg(test)]
 mod placement_tests;
+
+projection!(potent_sulfur::PotentSulfurBlockEntity, PotentSulfur);
