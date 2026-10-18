@@ -92,6 +92,75 @@ struct Invertible {
     limitation: Limitation,
     tags: BTreeSet<String>,
 }
+#[derive(Clone, Debug, Default)]
+pub(crate) enum CompletionMode {
+    #[default]
+    NamesOrSelector,
+    Names,
+    Selector,
+    OpenOptions,
+    OptionKey,
+    NextOrClose,
+    GameMode {
+        positive: bool,
+        negative: bool,
+    },
+    Type {
+        positive: bool,
+        negative: bool,
+        used_tags: Vec<String>,
+    },
+    Sort,
+    None,
+}
+#[derive(Default)]
+pub(crate) struct CompletionState {
+    pub enabled: bool,
+    pub mode: CompletionMode,
+    pub options: Vec<&'static str>,
+}
+const OPTION_NAMES: [&str; 21] = [
+    "name",
+    "distance",
+    "level",
+    "x",
+    "y",
+    "z",
+    "dx",
+    "dy",
+    "dz",
+    "x_rotation",
+    "y_rotation",
+    "limit",
+    "sort",
+    "gamemode",
+    "team",
+    "type",
+    "tag",
+    "nbt",
+    "scores",
+    "advancements",
+    "predicate",
+];
+impl CompletionState {
+    fn options(
+        &mut self,
+        once: &BTreeSet<String>,
+        invertibles: &BTreeMap<String, Invertible>,
+        current: bool,
+    ) {
+        if self.enabled {
+            self.options = OPTION_NAMES
+                .into_iter()
+                .filter(|key| {
+                    (!current || !matches!(*key, "limit" | "sort"))
+                        && (!once.contains(*key) || matches!(*key, "tag" | "nbt" | "predicate"))
+                        && invertibles.get(*key).is_none_or(Invertible::available)
+                })
+                .collect();
+        }
+    }
+}
 impl Invertible {
     fn available(&self) -> bool {
         !matches!(self.limitation, Limitation::Single)
@@ -160,6 +229,13 @@ impl EntitySelector {
         reader: &mut StringReader,
         allow_selectors: bool,
     ) -> Result<Self, CommandSyntaxException> {
+        Self::parse_suggesting(reader, allow_selectors, &mut CompletionState::default())
+    }
+    pub(crate) fn parse_suggesting(
+        reader: &mut StringReader,
+        allow_selectors: bool,
+        completion: &mut CompletionState,
+    ) -> Result<Self, CommandSyntaxException> {
         let mut selector = Self {
             max_results: 1,
             includes_entities: false,
@@ -176,6 +252,9 @@ impl EntitySelector {
         };
         if !reader.can_read() || reader.peek() != 64 {
             let start = reader.cursor();
+            if reader.can_read() {
+                completion.mode = CompletionMode::Names;
+            }
             let name = reader.read_string()?;
             if let Some(uuid) = parse_uuid(&name) {
                 selector.uuid = Some(uuid);
@@ -196,6 +275,7 @@ impl EntitySelector {
         }
         reader.skip();
         selector.uses_selectors = true;
+        completion.mode = CompletionMode::Selector;
         if !reader.can_read() {
             return Err(error_at(reader, "argument.entity.selector.missing", &[]));
         }
@@ -234,6 +314,7 @@ impl EntitySelector {
                 inverted: false,
             });
         }
+        completion.mode = CompletionMode::OpenOptions;
         if !reader.can_read() || reader.peek() != 91 {
             return Ok(selector);
         }
@@ -241,6 +322,8 @@ impl EntitySelector {
         reader.skip_whitespace();
         let mut once = BTreeSet::new();
         let mut invertibles: BTreeMap<String, Invertible> = BTreeMap::new();
+        completion.mode = CompletionMode::OptionKey;
+        completion.options(&once, &invertibles, selector.current_entity);
         let mut level = None;
         let mut pitch = None;
         let mut yaw = None;
@@ -302,8 +385,26 @@ impl EntitySelector {
             reader.skip();
             reader.skip_whitespace();
             let value_start = reader.cursor();
+            completion.mode = CompletionMode::None;
             match key.as_str() {
                 "name" | "gamemode" | "team" | "type" => {
+                    if completion.enabled && matches!(key.as_str(), "gamemode" | "type") {
+                        let previous = invertibles.get(&key);
+                        let positive = previous
+                            .is_none_or(|state| matches!(state.limitation, Limitation::None));
+                        let negative = previous.is_none_or(Invertible::available);
+                        completion.mode = if key == "gamemode" {
+                            CompletionMode::GameMode { positive, negative }
+                        } else {
+                            CompletionMode::Type {
+                                positive,
+                                negative,
+                                used_tags: previous
+                                    .map(|state| state.tags.iter().cloned().collect())
+                                    .unwrap_or_default(),
+                            }
+                        };
+                    }
                     let inverted = invert(reader);
                     let state = invertibles.entry(key.clone()).or_default();
                     let tag = key == "type" && reader.can_read() && reader.peek() == 35;
@@ -424,6 +525,7 @@ impl EntitySelector {
                     selector.max_results = limit as usize;
                 }
                 "sort" => {
+                    completion.mode = CompletionMode::Sort;
                     let value = reader.read_unquoted_string();
                     selector.sort = match value.as_str() {
                         "nearest" => SelectorSort::Nearest,
@@ -497,9 +599,12 @@ impl EntitySelector {
                 once.insert(key);
             }
             reader.skip_whitespace();
+            completion.mode = CompletionMode::NextOrClose;
+            completion.options(&once, &invertibles, selector.current_entity);
             if reader.can_read() {
                 if reader.peek() == 44 {
                     reader.skip();
+                    completion.mode = CompletionMode::OptionKey;
                 } else if reader.peek() == 93 {
                     break;
                 } else {
@@ -519,6 +624,7 @@ impl EntitySelector {
             ));
         }
         reader.skip();
+        completion.mode = CompletionMode::None;
         if let Some(range) = pitch {
             selector.predicates.push(SelectorPredicate::Pitch(range));
         }

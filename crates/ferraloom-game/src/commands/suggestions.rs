@@ -96,57 +96,137 @@ pub fn argument(
         argument.wire,
         CommandArgument::Entity { .. } | CommandArgument::GameProfile {}
     ) {
-        return entity(&context.source, data, builder);
+        return entity(argument, &context.source, data, builder);
     }
     argument.list_suggestions(context, builder)
 }
 
 fn entity(
+    argument: &MinecraftArgument,
     source: &CommandSourceStack,
     data: &SuggestionData,
-    mut builder: SuggestionsBuilder,
+    builder: SuggestionsBuilder,
 ) -> Result<Suggestions, CommandSyntaxException> {
-    let remaining = builder.remaining();
+    use super::arguments::selectors::{CompletionMode, CompletionState, EntitySelector};
+    let start = builder.start;
     let allow = source
         .permissions
         .has(&Permission::Atom(Permission::ENTITY_SELECTORS.into()));
-    if remaining.is_empty() || !remaining.starts_with('@') {
-        words(&mut builder, data.players.iter().map(String::as_str));
-        if !remaining.is_empty() || !allow {
-            return Ok(builder.build());
+    let mut reader = StringReader::new(&builder.input);
+    reader.set_cursor(start);
+    let mut completion = CompletionState {
+        enabled: true,
+        ..Default::default()
+    };
+    let _ = EntitySelector::parse_suggesting(&mut reader, allow, &mut completion);
+    let mut builder = builder.create_offset(reader.cursor());
+    match completion.mode {
+        CompletionMode::NamesOrSelector => {
+            words(&mut builder, data.players.iter().map(String::as_str));
+            if allow {
+                selector_names(&mut builder);
+            }
         }
-    } else if !allow {
-        return Ok(builder.build());
-    }
-    if remaining.is_empty()
-        || remaining.len() == 1
-        || !matches!(
-            remaining.as_bytes().get(1),
-            Some(b'p' | b'a' | b'r' | b's' | b'e' | b'n')
-        )
-    {
-        for (selector, key) in [
-            ("@p", "nearestPlayer"),
-            ("@a", "allPlayers"),
-            ("@r", "randomPlayer"),
-            ("@s", "self"),
-            ("@e", "allEntities"),
-            ("@n", "nearestEntity"),
-        ] {
-            builder.suggest_with_tooltip(
-                selector,
-                Arc::new(translated(&format!("argument.entity.selector.{key}"), &[])),
-            );
+        CompletionMode::Names => {
+            builder = builder.create_offset(start);
+            words(&mut builder, data.players.iter().map(String::as_str));
         }
-        return Ok(builder.build());
-    }
-    if remaining.as_bytes().get(2) != Some(&b'[') {
-        return Ok(builder
-            .create_offset(builder.start + 2)
-            .suggest("[")
-            .build());
+        CompletionMode::Selector => {
+            builder = builder.create_offset(builder.start.saturating_sub(1));
+            selector_names(&mut builder);
+        }
+        CompletionMode::OpenOptions => {
+            builder.suggest("[");
+        }
+        CompletionMode::OptionKey => {
+            let remaining = builder.remaining_lower_case();
+            for key in completion.options {
+                if key.starts_with(&remaining) {
+                    builder.suggest_with_tooltip(
+                        format!("{key}="),
+                        Arc::new(translated(
+                            &format!("argument.entity.options.{key}.description"),
+                            &[],
+                        )),
+                    );
+                }
+            }
+        }
+        CompletionMode::NextOrClose => {
+            builder.suggest(",");
+            builder.suggest("]");
+        }
+        CompletionMode::Sort => words(&mut builder, ["nearest", "furthest", "random", "arbitrary"]),
+        CompletionMode::GameMode { positive, negative } => {
+            if positive {
+                words(
+                    &mut builder,
+                    ["survival", "creative", "adventure", "spectator"],
+                );
+            }
+            if negative {
+                words(
+                    &mut builder,
+                    ["!survival", "!creative", "!adventure", "!spectator"],
+                );
+            }
+        }
+        CompletionMode::Type {
+            positive,
+            negative,
+            used_tags,
+        } => {
+            if negative {
+                resources(
+                    &mut builder,
+                    argument.context.entries("minecraft:entity_type"),
+                    "!",
+                );
+            }
+            if positive {
+                resources(
+                    &mut builder,
+                    argument.context.entries("minecraft:entity_type"),
+                    "",
+                );
+            }
+            if positive || negative {
+                if let Some(tags) = argument.context.tags.get("minecraft:entity_type") {
+                    resources(
+                        &mut builder,
+                        tags.keys()
+                            .filter(|tag| !used_tags.contains(tag))
+                            .map(String::as_str),
+                        "#",
+                    );
+                    resources(
+                        &mut builder,
+                        tags.keys()
+                            .filter(|tag| !used_tags.contains(tag))
+                            .map(String::as_str),
+                        "!#",
+                    );
+                }
+            }
+        }
+        CompletionMode::None => {}
     }
     Ok(builder.build())
+}
+fn selector_names(builder: &mut SuggestionsBuilder) {
+    for (selector, key) in [
+        ("@p", "nearestPlayer"),
+        ("@a", "allPlayers"),
+        ("@r", "randomPlayer"),
+        ("@s", "self"),
+        ("@e", "allEntities"),
+        ("@n", "nearestEntity"),
+    ] {
+        builder.suggest_with_tooltip(
+            selector,
+            Arc::new(translated(&format!("argument.entity.selector.{key}"), &[])),
+        );
+    }
 }
 
 #[cfg(test)]

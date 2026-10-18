@@ -195,6 +195,326 @@
   },
   {
     "kind": "entity",
+    "input": "@a[",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[lim",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[lim",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d1",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d1",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d1,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d1,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@s[",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@s[",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[name\u003dDoc,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[name\u003dDoc,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[name\u003d!Doc,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[name\u003d!Doc,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[sort\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[sort\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[sort\u003dn",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[sort\u003dn",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d!s",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d!s",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d!creative,gamemode\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d!creative,gamemode\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003dminecraft:pl",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003dminecraft:pl",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003d!minecraft:player,type\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003d!minecraft:player,type\u003d",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[x\u003d1 ,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[x\u003d1 ,",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[x\u003d1!]",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[x\u003d1!]",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[]",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[]",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
     "input": "",
     "level": 4,
     "start": 0,
@@ -646,6 +966,4976 @@
         "text": "["
       }
     ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[",
+    "level": 4,
+    "start": 3,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[",
+    "level": 4,
+    "start": 3,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[lim",
+    "level": 4,
+    "start": 3,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[lim",
+    "level": 4,
+    "start": 3,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit",
+    "level": 4,
+    "start": 3,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit",
+    "level": 4,
+    "start": 3,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d1",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d1",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[limit\u003d1,",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[limit\u003d1,",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@s[",
+    "level": 4,
+    "start": 3,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@s[",
+    "level": 4,
+    "start": 3,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[name\u003dDoc,",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[name\u003dDoc,",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[name\u003d!Doc,",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[name\u003d!Doc,",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[sort\u003d",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "arbitrary"
+      },
+      {
+        "text": "furthest"
+      },
+      {
+        "text": "nearest"
+      },
+      {
+        "text": "random"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[sort\u003d",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "arbitrary"
+      },
+      {
+        "text": "furthest"
+      },
+      {
+        "text": "nearest"
+      },
+      {
+        "text": "random"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[sort\u003dn",
+    "level": 4,
+    "start": 8,
+    "end": 9,
+    "suggestions": [
+      {
+        "text": "nearest"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[sort\u003dn",
+    "level": 4,
+    "start": 8,
+    "end": 9,
+    "suggestions": [
+      {
+        "text": "nearest"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "!adventure"
+      },
+      {
+        "text": "!creative"
+      },
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      },
+      {
+        "text": "adventure"
+      },
+      {
+        "text": "creative"
+      },
+      {
+        "text": "spectator"
+      },
+      {
+        "text": "survival"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "!adventure"
+      },
+      {
+        "text": "!creative"
+      },
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      },
+      {
+        "text": "adventure"
+      },
+      {
+        "text": "creative"
+      },
+      {
+        "text": "spectator"
+      },
+      {
+        "text": "survival"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d!s",
+    "level": 4,
+    "start": 12,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d!s",
+    "level": 4,
+    "start": 12,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[gamemode\u003d!creative,gamemode\u003d",
+    "level": 4,
+    "start": 31,
+    "end": 31,
+    "suggestions": [
+      {
+        "text": "!adventure"
+      },
+      {
+        "text": "!creative"
+      },
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[gamemode\u003d!creative,gamemode\u003d",
+    "level": 4,
+    "start": 31,
+    "end": 31,
+    "suggestions": [
+      {
+        "text": "!adventure"
+      },
+      {
+        "text": "!creative"
+      },
+      {
+        "text": "!spectator"
+      },
+      {
+        "text": "!survival"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003dminecraft:pl",
+    "level": 4,
+    "start": 8,
+    "end": 20,
+    "suggestions": [
+      {
+        "text": "minecraft:player"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003dminecraft:pl",
+    "level": 4,
+    "start": 8,
+    "end": 20,
+    "suggestions": [
+      {
+        "text": "minecraft:player"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003d",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "!#minecraft:can_equip_harness"
+      },
+      {
+        "text": "!#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "!#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "!#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "!minecraft:acacia_boat"
+      },
+      {
+        "text": "!minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "!minecraft:allay"
+      },
+      {
+        "text": "!minecraft:area_effect_cloud"
+      },
+      {
+        "text": "!minecraft:armadillo"
+      },
+      {
+        "text": "!minecraft:armor_stand"
+      },
+      {
+        "text": "!minecraft:arrow"
+      },
+      {
+        "text": "!minecraft:axolotl"
+      },
+      {
+        "text": "!minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "!minecraft:bamboo_raft"
+      },
+      {
+        "text": "!minecraft:bat"
+      },
+      {
+        "text": "!minecraft:bee"
+      },
+      {
+        "text": "!minecraft:birch_boat"
+      },
+      {
+        "text": "!minecraft:birch_chest_boat"
+      },
+      {
+        "text": "!minecraft:blaze"
+      },
+      {
+        "text": "!minecraft:block_display"
+      },
+      {
+        "text": "!minecraft:bogged"
+      },
+      {
+        "text": "!minecraft:breeze"
+      },
+      {
+        "text": "!minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "!minecraft:camel"
+      },
+      {
+        "text": "!minecraft:camel_husk"
+      },
+      {
+        "text": "!minecraft:cat"
+      },
+      {
+        "text": "!minecraft:cave_spider"
+      },
+      {
+        "text": "!minecraft:cherry_boat"
+      },
+      {
+        "text": "!minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "!minecraft:chest_minecart"
+      },
+      {
+        "text": "!minecraft:chicken"
+      },
+      {
+        "text": "!minecraft:cod"
+      },
+      {
+        "text": "!minecraft:command_block_minecart"
+      },
+      {
+        "text": "!minecraft:copper_golem"
+      },
+      {
+        "text": "!minecraft:cow"
+      },
+      {
+        "text": "!minecraft:creaking"
+      },
+      {
+        "text": "!minecraft:creeper"
+      },
+      {
+        "text": "!minecraft:cushion"
+      },
+      {
+        "text": "!minecraft:dark_oak_boat"
+      },
+      {
+        "text": "!minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:dolphin"
+      },
+      {
+        "text": "!minecraft:donkey"
+      },
+      {
+        "text": "!minecraft:dragon_fireball"
+      },
+      {
+        "text": "!minecraft:drowned"
+      },
+      {
+        "text": "!minecraft:egg"
+      },
+      {
+        "text": "!minecraft:elder_guardian"
+      },
+      {
+        "text": "!minecraft:end_crystal"
+      },
+      {
+        "text": "!minecraft:ender_dragon"
+      },
+      {
+        "text": "!minecraft:ender_pearl"
+      },
+      {
+        "text": "!minecraft:enderman"
+      },
+      {
+        "text": "!minecraft:endermite"
+      },
+      {
+        "text": "!minecraft:evoker"
+      },
+      {
+        "text": "!minecraft:evoker_fangs"
+      },
+      {
+        "text": "!minecraft:experience_bottle"
+      },
+      {
+        "text": "!minecraft:experience_orb"
+      },
+      {
+        "text": "!minecraft:eye_of_ender"
+      },
+      {
+        "text": "!minecraft:falling_block"
+      },
+      {
+        "text": "!minecraft:fireball"
+      },
+      {
+        "text": "!minecraft:firework_rocket"
+      },
+      {
+        "text": "!minecraft:fishing_bobber"
+      },
+      {
+        "text": "!minecraft:fox"
+      },
+      {
+        "text": "!minecraft:frog"
+      },
+      {
+        "text": "!minecraft:furnace_minecart"
+      },
+      {
+        "text": "!minecraft:ghast"
+      },
+      {
+        "text": "!minecraft:giant"
+      },
+      {
+        "text": "!minecraft:glow_item_frame"
+      },
+      {
+        "text": "!minecraft:glow_squid"
+      },
+      {
+        "text": "!minecraft:goat"
+      },
+      {
+        "text": "!minecraft:guardian"
+      },
+      {
+        "text": "!minecraft:happy_ghast"
+      },
+      {
+        "text": "!minecraft:hoglin"
+      },
+      {
+        "text": "!minecraft:hopper_minecart"
+      },
+      {
+        "text": "!minecraft:horse"
+      },
+      {
+        "text": "!minecraft:husk"
+      },
+      {
+        "text": "!minecraft:illusioner"
+      },
+      {
+        "text": "!minecraft:interaction"
+      },
+      {
+        "text": "!minecraft:iron_golem"
+      },
+      {
+        "text": "!minecraft:item"
+      },
+      {
+        "text": "!minecraft:item_display"
+      },
+      {
+        "text": "!minecraft:item_frame"
+      },
+      {
+        "text": "!minecraft:jungle_boat"
+      },
+      {
+        "text": "!minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "!minecraft:leash_knot"
+      },
+      {
+        "text": "!minecraft:lightning_bolt"
+      },
+      {
+        "text": "!minecraft:lingering_potion"
+      },
+      {
+        "text": "!minecraft:llama"
+      },
+      {
+        "text": "!minecraft:llama_spit"
+      },
+      {
+        "text": "!minecraft:magma_cube"
+      },
+      {
+        "text": "!minecraft:mangrove_boat"
+      },
+      {
+        "text": "!minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "!minecraft:mannequin"
+      },
+      {
+        "text": "!minecraft:marker"
+      },
+      {
+        "text": "!minecraft:minecart"
+      },
+      {
+        "text": "!minecraft:mooshroom"
+      },
+      {
+        "text": "!minecraft:mule"
+      },
+      {
+        "text": "!minecraft:nautilus"
+      },
+      {
+        "text": "!minecraft:oak_boat"
+      },
+      {
+        "text": "!minecraft:oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:ocelot"
+      },
+      {
+        "text": "!minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "!minecraft:painting"
+      },
+      {
+        "text": "!minecraft:pale_oak_boat"
+      },
+      {
+        "text": "!minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:panda"
+      },
+      {
+        "text": "!minecraft:parched"
+      },
+      {
+        "text": "!minecraft:parrot"
+      },
+      {
+        "text": "!minecraft:phantom"
+      },
+      {
+        "text": "!minecraft:pig"
+      },
+      {
+        "text": "!minecraft:piglin"
+      },
+      {
+        "text": "!minecraft:piglin_brute"
+      },
+      {
+        "text": "!minecraft:pillager"
+      },
+      {
+        "text": "!minecraft:player"
+      },
+      {
+        "text": "!minecraft:polar_bear"
+      },
+      {
+        "text": "!minecraft:poplar_boat"
+      },
+      {
+        "text": "!minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "!minecraft:pufferfish"
+      },
+      {
+        "text": "!minecraft:rabbit"
+      },
+      {
+        "text": "!minecraft:ravager"
+      },
+      {
+        "text": "!minecraft:salmon"
+      },
+      {
+        "text": "!minecraft:sheep"
+      },
+      {
+        "text": "!minecraft:shulker"
+      },
+      {
+        "text": "!minecraft:shulker_bullet"
+      },
+      {
+        "text": "!minecraft:silverfish"
+      },
+      {
+        "text": "!minecraft:skeleton"
+      },
+      {
+        "text": "!minecraft:skeleton_horse"
+      },
+      {
+        "text": "!minecraft:slime"
+      },
+      {
+        "text": "!minecraft:small_fireball"
+      },
+      {
+        "text": "!minecraft:sniffer"
+      },
+      {
+        "text": "!minecraft:snow_golem"
+      },
+      {
+        "text": "!minecraft:snowball"
+      },
+      {
+        "text": "!minecraft:spawner_minecart"
+      },
+      {
+        "text": "!minecraft:spectral_arrow"
+      },
+      {
+        "text": "!minecraft:spider"
+      },
+      {
+        "text": "!minecraft:splash_potion"
+      },
+      {
+        "text": "!minecraft:spruce_boat"
+      },
+      {
+        "text": "!minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "!minecraft:squid"
+      },
+      {
+        "text": "!minecraft:stray"
+      },
+      {
+        "text": "!minecraft:strider"
+      },
+      {
+        "text": "!minecraft:sulfur_cube"
+      },
+      {
+        "text": "!minecraft:tadpole"
+      },
+      {
+        "text": "!minecraft:text_display"
+      },
+      {
+        "text": "!minecraft:tnt"
+      },
+      {
+        "text": "!minecraft:tnt_minecart"
+      },
+      {
+        "text": "!minecraft:trader_llama"
+      },
+      {
+        "text": "!minecraft:trident"
+      },
+      {
+        "text": "!minecraft:tropical_fish"
+      },
+      {
+        "text": "!minecraft:turtle"
+      },
+      {
+        "text": "!minecraft:vex"
+      },
+      {
+        "text": "!minecraft:villager"
+      },
+      {
+        "text": "!minecraft:vindicator"
+      },
+      {
+        "text": "!minecraft:wandering_trader"
+      },
+      {
+        "text": "!minecraft:warden"
+      },
+      {
+        "text": "!minecraft:wind_charge"
+      },
+      {
+        "text": "!minecraft:witch"
+      },
+      {
+        "text": "!minecraft:wither"
+      },
+      {
+        "text": "!minecraft:wither_skeleton"
+      },
+      {
+        "text": "!minecraft:wither_skull"
+      },
+      {
+        "text": "!minecraft:wolf"
+      },
+      {
+        "text": "!minecraft:zoglin"
+      },
+      {
+        "text": "!minecraft:zombie"
+      },
+      {
+        "text": "!minecraft:zombie_horse"
+      },
+      {
+        "text": "!minecraft:zombie_nautilus"
+      },
+      {
+        "text": "!minecraft:zombie_villager"
+      },
+      {
+        "text": "!minecraft:zombified_piglin"
+      },
+      {
+        "text": "#minecraft:can_equip_harness"
+      },
+      {
+        "text": "#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "minecraft:acacia_boat"
+      },
+      {
+        "text": "minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "minecraft:allay"
+      },
+      {
+        "text": "minecraft:area_effect_cloud"
+      },
+      {
+        "text": "minecraft:armadillo"
+      },
+      {
+        "text": "minecraft:armor_stand"
+      },
+      {
+        "text": "minecraft:arrow"
+      },
+      {
+        "text": "minecraft:axolotl"
+      },
+      {
+        "text": "minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "minecraft:bamboo_raft"
+      },
+      {
+        "text": "minecraft:bat"
+      },
+      {
+        "text": "minecraft:bee"
+      },
+      {
+        "text": "minecraft:birch_boat"
+      },
+      {
+        "text": "minecraft:birch_chest_boat"
+      },
+      {
+        "text": "minecraft:blaze"
+      },
+      {
+        "text": "minecraft:block_display"
+      },
+      {
+        "text": "minecraft:bogged"
+      },
+      {
+        "text": "minecraft:breeze"
+      },
+      {
+        "text": "minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "minecraft:camel"
+      },
+      {
+        "text": "minecraft:camel_husk"
+      },
+      {
+        "text": "minecraft:cat"
+      },
+      {
+        "text": "minecraft:cave_spider"
+      },
+      {
+        "text": "minecraft:cherry_boat"
+      },
+      {
+        "text": "minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "minecraft:chest_minecart"
+      },
+      {
+        "text": "minecraft:chicken"
+      },
+      {
+        "text": "minecraft:cod"
+      },
+      {
+        "text": "minecraft:command_block_minecart"
+      },
+      {
+        "text": "minecraft:copper_golem"
+      },
+      {
+        "text": "minecraft:cow"
+      },
+      {
+        "text": "minecraft:creaking"
+      },
+      {
+        "text": "minecraft:creeper"
+      },
+      {
+        "text": "minecraft:cushion"
+      },
+      {
+        "text": "minecraft:dark_oak_boat"
+      },
+      {
+        "text": "minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "minecraft:dolphin"
+      },
+      {
+        "text": "minecraft:donkey"
+      },
+      {
+        "text": "minecraft:dragon_fireball"
+      },
+      {
+        "text": "minecraft:drowned"
+      },
+      {
+        "text": "minecraft:egg"
+      },
+      {
+        "text": "minecraft:elder_guardian"
+      },
+      {
+        "text": "minecraft:end_crystal"
+      },
+      {
+        "text": "minecraft:ender_dragon"
+      },
+      {
+        "text": "minecraft:ender_pearl"
+      },
+      {
+        "text": "minecraft:enderman"
+      },
+      {
+        "text": "minecraft:endermite"
+      },
+      {
+        "text": "minecraft:evoker"
+      },
+      {
+        "text": "minecraft:evoker_fangs"
+      },
+      {
+        "text": "minecraft:experience_bottle"
+      },
+      {
+        "text": "minecraft:experience_orb"
+      },
+      {
+        "text": "minecraft:eye_of_ender"
+      },
+      {
+        "text": "minecraft:falling_block"
+      },
+      {
+        "text": "minecraft:fireball"
+      },
+      {
+        "text": "minecraft:firework_rocket"
+      },
+      {
+        "text": "minecraft:fishing_bobber"
+      },
+      {
+        "text": "minecraft:fox"
+      },
+      {
+        "text": "minecraft:frog"
+      },
+      {
+        "text": "minecraft:furnace_minecart"
+      },
+      {
+        "text": "minecraft:ghast"
+      },
+      {
+        "text": "minecraft:giant"
+      },
+      {
+        "text": "minecraft:glow_item_frame"
+      },
+      {
+        "text": "minecraft:glow_squid"
+      },
+      {
+        "text": "minecraft:goat"
+      },
+      {
+        "text": "minecraft:guardian"
+      },
+      {
+        "text": "minecraft:happy_ghast"
+      },
+      {
+        "text": "minecraft:hoglin"
+      },
+      {
+        "text": "minecraft:hopper_minecart"
+      },
+      {
+        "text": "minecraft:horse"
+      },
+      {
+        "text": "minecraft:husk"
+      },
+      {
+        "text": "minecraft:illusioner"
+      },
+      {
+        "text": "minecraft:interaction"
+      },
+      {
+        "text": "minecraft:iron_golem"
+      },
+      {
+        "text": "minecraft:item"
+      },
+      {
+        "text": "minecraft:item_display"
+      },
+      {
+        "text": "minecraft:item_frame"
+      },
+      {
+        "text": "minecraft:jungle_boat"
+      },
+      {
+        "text": "minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "minecraft:leash_knot"
+      },
+      {
+        "text": "minecraft:lightning_bolt"
+      },
+      {
+        "text": "minecraft:lingering_potion"
+      },
+      {
+        "text": "minecraft:llama"
+      },
+      {
+        "text": "minecraft:llama_spit"
+      },
+      {
+        "text": "minecraft:magma_cube"
+      },
+      {
+        "text": "minecraft:mangrove_boat"
+      },
+      {
+        "text": "minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "minecraft:mannequin"
+      },
+      {
+        "text": "minecraft:marker"
+      },
+      {
+        "text": "minecraft:minecart"
+      },
+      {
+        "text": "minecraft:mooshroom"
+      },
+      {
+        "text": "minecraft:mule"
+      },
+      {
+        "text": "minecraft:nautilus"
+      },
+      {
+        "text": "minecraft:oak_boat"
+      },
+      {
+        "text": "minecraft:oak_chest_boat"
+      },
+      {
+        "text": "minecraft:ocelot"
+      },
+      {
+        "text": "minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "minecraft:painting"
+      },
+      {
+        "text": "minecraft:pale_oak_boat"
+      },
+      {
+        "text": "minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "minecraft:panda"
+      },
+      {
+        "text": "minecraft:parched"
+      },
+      {
+        "text": "minecraft:parrot"
+      },
+      {
+        "text": "minecraft:phantom"
+      },
+      {
+        "text": "minecraft:pig"
+      },
+      {
+        "text": "minecraft:piglin"
+      },
+      {
+        "text": "minecraft:piglin_brute"
+      },
+      {
+        "text": "minecraft:pillager"
+      },
+      {
+        "text": "minecraft:player"
+      },
+      {
+        "text": "minecraft:polar_bear"
+      },
+      {
+        "text": "minecraft:poplar_boat"
+      },
+      {
+        "text": "minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "minecraft:pufferfish"
+      },
+      {
+        "text": "minecraft:rabbit"
+      },
+      {
+        "text": "minecraft:ravager"
+      },
+      {
+        "text": "minecraft:salmon"
+      },
+      {
+        "text": "minecraft:sheep"
+      },
+      {
+        "text": "minecraft:shulker"
+      },
+      {
+        "text": "minecraft:shulker_bullet"
+      },
+      {
+        "text": "minecraft:silverfish"
+      },
+      {
+        "text": "minecraft:skeleton"
+      },
+      {
+        "text": "minecraft:skeleton_horse"
+      },
+      {
+        "text": "minecraft:slime"
+      },
+      {
+        "text": "minecraft:small_fireball"
+      },
+      {
+        "text": "minecraft:sniffer"
+      },
+      {
+        "text": "minecraft:snow_golem"
+      },
+      {
+        "text": "minecraft:snowball"
+      },
+      {
+        "text": "minecraft:spawner_minecart"
+      },
+      {
+        "text": "minecraft:spectral_arrow"
+      },
+      {
+        "text": "minecraft:spider"
+      },
+      {
+        "text": "minecraft:splash_potion"
+      },
+      {
+        "text": "minecraft:spruce_boat"
+      },
+      {
+        "text": "minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "minecraft:squid"
+      },
+      {
+        "text": "minecraft:stray"
+      },
+      {
+        "text": "minecraft:strider"
+      },
+      {
+        "text": "minecraft:sulfur_cube"
+      },
+      {
+        "text": "minecraft:tadpole"
+      },
+      {
+        "text": "minecraft:text_display"
+      },
+      {
+        "text": "minecraft:tnt"
+      },
+      {
+        "text": "minecraft:tnt_minecart"
+      },
+      {
+        "text": "minecraft:trader_llama"
+      },
+      {
+        "text": "minecraft:trident"
+      },
+      {
+        "text": "minecraft:tropical_fish"
+      },
+      {
+        "text": "minecraft:turtle"
+      },
+      {
+        "text": "minecraft:vex"
+      },
+      {
+        "text": "minecraft:villager"
+      },
+      {
+        "text": "minecraft:vindicator"
+      },
+      {
+        "text": "minecraft:wandering_trader"
+      },
+      {
+        "text": "minecraft:warden"
+      },
+      {
+        "text": "minecraft:wind_charge"
+      },
+      {
+        "text": "minecraft:witch"
+      },
+      {
+        "text": "minecraft:wither"
+      },
+      {
+        "text": "minecraft:wither_skeleton"
+      },
+      {
+        "text": "minecraft:wither_skull"
+      },
+      {
+        "text": "minecraft:wolf"
+      },
+      {
+        "text": "minecraft:zoglin"
+      },
+      {
+        "text": "minecraft:zombie"
+      },
+      {
+        "text": "minecraft:zombie_horse"
+      },
+      {
+        "text": "minecraft:zombie_nautilus"
+      },
+      {
+        "text": "minecraft:zombie_villager"
+      },
+      {
+        "text": "minecraft:zombified_piglin"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003d",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "!#minecraft:can_equip_harness"
+      },
+      {
+        "text": "!#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "!#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "!#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "!minecraft:acacia_boat"
+      },
+      {
+        "text": "!minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "!minecraft:allay"
+      },
+      {
+        "text": "!minecraft:area_effect_cloud"
+      },
+      {
+        "text": "!minecraft:armadillo"
+      },
+      {
+        "text": "!minecraft:armor_stand"
+      },
+      {
+        "text": "!minecraft:arrow"
+      },
+      {
+        "text": "!minecraft:axolotl"
+      },
+      {
+        "text": "!minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "!minecraft:bamboo_raft"
+      },
+      {
+        "text": "!minecraft:bat"
+      },
+      {
+        "text": "!minecraft:bee"
+      },
+      {
+        "text": "!minecraft:birch_boat"
+      },
+      {
+        "text": "!minecraft:birch_chest_boat"
+      },
+      {
+        "text": "!minecraft:blaze"
+      },
+      {
+        "text": "!minecraft:block_display"
+      },
+      {
+        "text": "!minecraft:bogged"
+      },
+      {
+        "text": "!minecraft:breeze"
+      },
+      {
+        "text": "!minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "!minecraft:camel"
+      },
+      {
+        "text": "!minecraft:camel_husk"
+      },
+      {
+        "text": "!minecraft:cat"
+      },
+      {
+        "text": "!minecraft:cave_spider"
+      },
+      {
+        "text": "!minecraft:cherry_boat"
+      },
+      {
+        "text": "!minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "!minecraft:chest_minecart"
+      },
+      {
+        "text": "!minecraft:chicken"
+      },
+      {
+        "text": "!minecraft:cod"
+      },
+      {
+        "text": "!minecraft:command_block_minecart"
+      },
+      {
+        "text": "!minecraft:copper_golem"
+      },
+      {
+        "text": "!minecraft:cow"
+      },
+      {
+        "text": "!minecraft:creaking"
+      },
+      {
+        "text": "!minecraft:creeper"
+      },
+      {
+        "text": "!minecraft:cushion"
+      },
+      {
+        "text": "!minecraft:dark_oak_boat"
+      },
+      {
+        "text": "!minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:dolphin"
+      },
+      {
+        "text": "!minecraft:donkey"
+      },
+      {
+        "text": "!minecraft:dragon_fireball"
+      },
+      {
+        "text": "!minecraft:drowned"
+      },
+      {
+        "text": "!minecraft:egg"
+      },
+      {
+        "text": "!minecraft:elder_guardian"
+      },
+      {
+        "text": "!minecraft:end_crystal"
+      },
+      {
+        "text": "!minecraft:ender_dragon"
+      },
+      {
+        "text": "!minecraft:ender_pearl"
+      },
+      {
+        "text": "!minecraft:enderman"
+      },
+      {
+        "text": "!minecraft:endermite"
+      },
+      {
+        "text": "!minecraft:evoker"
+      },
+      {
+        "text": "!minecraft:evoker_fangs"
+      },
+      {
+        "text": "!minecraft:experience_bottle"
+      },
+      {
+        "text": "!minecraft:experience_orb"
+      },
+      {
+        "text": "!minecraft:eye_of_ender"
+      },
+      {
+        "text": "!minecraft:falling_block"
+      },
+      {
+        "text": "!minecraft:fireball"
+      },
+      {
+        "text": "!minecraft:firework_rocket"
+      },
+      {
+        "text": "!minecraft:fishing_bobber"
+      },
+      {
+        "text": "!minecraft:fox"
+      },
+      {
+        "text": "!minecraft:frog"
+      },
+      {
+        "text": "!minecraft:furnace_minecart"
+      },
+      {
+        "text": "!minecraft:ghast"
+      },
+      {
+        "text": "!minecraft:giant"
+      },
+      {
+        "text": "!minecraft:glow_item_frame"
+      },
+      {
+        "text": "!minecraft:glow_squid"
+      },
+      {
+        "text": "!minecraft:goat"
+      },
+      {
+        "text": "!minecraft:guardian"
+      },
+      {
+        "text": "!minecraft:happy_ghast"
+      },
+      {
+        "text": "!minecraft:hoglin"
+      },
+      {
+        "text": "!minecraft:hopper_minecart"
+      },
+      {
+        "text": "!minecraft:horse"
+      },
+      {
+        "text": "!minecraft:husk"
+      },
+      {
+        "text": "!minecraft:illusioner"
+      },
+      {
+        "text": "!minecraft:interaction"
+      },
+      {
+        "text": "!minecraft:iron_golem"
+      },
+      {
+        "text": "!minecraft:item"
+      },
+      {
+        "text": "!minecraft:item_display"
+      },
+      {
+        "text": "!minecraft:item_frame"
+      },
+      {
+        "text": "!minecraft:jungle_boat"
+      },
+      {
+        "text": "!minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "!minecraft:leash_knot"
+      },
+      {
+        "text": "!minecraft:lightning_bolt"
+      },
+      {
+        "text": "!minecraft:lingering_potion"
+      },
+      {
+        "text": "!minecraft:llama"
+      },
+      {
+        "text": "!minecraft:llama_spit"
+      },
+      {
+        "text": "!minecraft:magma_cube"
+      },
+      {
+        "text": "!minecraft:mangrove_boat"
+      },
+      {
+        "text": "!minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "!minecraft:mannequin"
+      },
+      {
+        "text": "!minecraft:marker"
+      },
+      {
+        "text": "!minecraft:minecart"
+      },
+      {
+        "text": "!minecraft:mooshroom"
+      },
+      {
+        "text": "!minecraft:mule"
+      },
+      {
+        "text": "!minecraft:nautilus"
+      },
+      {
+        "text": "!minecraft:oak_boat"
+      },
+      {
+        "text": "!minecraft:oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:ocelot"
+      },
+      {
+        "text": "!minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "!minecraft:painting"
+      },
+      {
+        "text": "!minecraft:pale_oak_boat"
+      },
+      {
+        "text": "!minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:panda"
+      },
+      {
+        "text": "!minecraft:parched"
+      },
+      {
+        "text": "!minecraft:parrot"
+      },
+      {
+        "text": "!minecraft:phantom"
+      },
+      {
+        "text": "!minecraft:pig"
+      },
+      {
+        "text": "!minecraft:piglin"
+      },
+      {
+        "text": "!minecraft:piglin_brute"
+      },
+      {
+        "text": "!minecraft:pillager"
+      },
+      {
+        "text": "!minecraft:player"
+      },
+      {
+        "text": "!minecraft:polar_bear"
+      },
+      {
+        "text": "!minecraft:poplar_boat"
+      },
+      {
+        "text": "!minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "!minecraft:pufferfish"
+      },
+      {
+        "text": "!minecraft:rabbit"
+      },
+      {
+        "text": "!minecraft:ravager"
+      },
+      {
+        "text": "!minecraft:salmon"
+      },
+      {
+        "text": "!minecraft:sheep"
+      },
+      {
+        "text": "!minecraft:shulker"
+      },
+      {
+        "text": "!minecraft:shulker_bullet"
+      },
+      {
+        "text": "!minecraft:silverfish"
+      },
+      {
+        "text": "!minecraft:skeleton"
+      },
+      {
+        "text": "!minecraft:skeleton_horse"
+      },
+      {
+        "text": "!minecraft:slime"
+      },
+      {
+        "text": "!minecraft:small_fireball"
+      },
+      {
+        "text": "!minecraft:sniffer"
+      },
+      {
+        "text": "!minecraft:snow_golem"
+      },
+      {
+        "text": "!minecraft:snowball"
+      },
+      {
+        "text": "!minecraft:spawner_minecart"
+      },
+      {
+        "text": "!minecraft:spectral_arrow"
+      },
+      {
+        "text": "!minecraft:spider"
+      },
+      {
+        "text": "!minecraft:splash_potion"
+      },
+      {
+        "text": "!minecraft:spruce_boat"
+      },
+      {
+        "text": "!minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "!minecraft:squid"
+      },
+      {
+        "text": "!minecraft:stray"
+      },
+      {
+        "text": "!minecraft:strider"
+      },
+      {
+        "text": "!minecraft:sulfur_cube"
+      },
+      {
+        "text": "!minecraft:tadpole"
+      },
+      {
+        "text": "!minecraft:text_display"
+      },
+      {
+        "text": "!minecraft:tnt"
+      },
+      {
+        "text": "!minecraft:tnt_minecart"
+      },
+      {
+        "text": "!minecraft:trader_llama"
+      },
+      {
+        "text": "!minecraft:trident"
+      },
+      {
+        "text": "!minecraft:tropical_fish"
+      },
+      {
+        "text": "!minecraft:turtle"
+      },
+      {
+        "text": "!minecraft:vex"
+      },
+      {
+        "text": "!minecraft:villager"
+      },
+      {
+        "text": "!minecraft:vindicator"
+      },
+      {
+        "text": "!minecraft:wandering_trader"
+      },
+      {
+        "text": "!minecraft:warden"
+      },
+      {
+        "text": "!minecraft:wind_charge"
+      },
+      {
+        "text": "!minecraft:witch"
+      },
+      {
+        "text": "!minecraft:wither"
+      },
+      {
+        "text": "!minecraft:wither_skeleton"
+      },
+      {
+        "text": "!minecraft:wither_skull"
+      },
+      {
+        "text": "!minecraft:wolf"
+      },
+      {
+        "text": "!minecraft:zoglin"
+      },
+      {
+        "text": "!minecraft:zombie"
+      },
+      {
+        "text": "!minecraft:zombie_horse"
+      },
+      {
+        "text": "!minecraft:zombie_nautilus"
+      },
+      {
+        "text": "!minecraft:zombie_villager"
+      },
+      {
+        "text": "!minecraft:zombified_piglin"
+      },
+      {
+        "text": "#minecraft:can_equip_harness"
+      },
+      {
+        "text": "#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "minecraft:acacia_boat"
+      },
+      {
+        "text": "minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "minecraft:allay"
+      },
+      {
+        "text": "minecraft:area_effect_cloud"
+      },
+      {
+        "text": "minecraft:armadillo"
+      },
+      {
+        "text": "minecraft:armor_stand"
+      },
+      {
+        "text": "minecraft:arrow"
+      },
+      {
+        "text": "minecraft:axolotl"
+      },
+      {
+        "text": "minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "minecraft:bamboo_raft"
+      },
+      {
+        "text": "minecraft:bat"
+      },
+      {
+        "text": "minecraft:bee"
+      },
+      {
+        "text": "minecraft:birch_boat"
+      },
+      {
+        "text": "minecraft:birch_chest_boat"
+      },
+      {
+        "text": "minecraft:blaze"
+      },
+      {
+        "text": "minecraft:block_display"
+      },
+      {
+        "text": "minecraft:bogged"
+      },
+      {
+        "text": "minecraft:breeze"
+      },
+      {
+        "text": "minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "minecraft:camel"
+      },
+      {
+        "text": "minecraft:camel_husk"
+      },
+      {
+        "text": "minecraft:cat"
+      },
+      {
+        "text": "minecraft:cave_spider"
+      },
+      {
+        "text": "minecraft:cherry_boat"
+      },
+      {
+        "text": "minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "minecraft:chest_minecart"
+      },
+      {
+        "text": "minecraft:chicken"
+      },
+      {
+        "text": "minecraft:cod"
+      },
+      {
+        "text": "minecraft:command_block_minecart"
+      },
+      {
+        "text": "minecraft:copper_golem"
+      },
+      {
+        "text": "minecraft:cow"
+      },
+      {
+        "text": "minecraft:creaking"
+      },
+      {
+        "text": "minecraft:creeper"
+      },
+      {
+        "text": "minecraft:cushion"
+      },
+      {
+        "text": "minecraft:dark_oak_boat"
+      },
+      {
+        "text": "minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "minecraft:dolphin"
+      },
+      {
+        "text": "minecraft:donkey"
+      },
+      {
+        "text": "minecraft:dragon_fireball"
+      },
+      {
+        "text": "minecraft:drowned"
+      },
+      {
+        "text": "minecraft:egg"
+      },
+      {
+        "text": "minecraft:elder_guardian"
+      },
+      {
+        "text": "minecraft:end_crystal"
+      },
+      {
+        "text": "minecraft:ender_dragon"
+      },
+      {
+        "text": "minecraft:ender_pearl"
+      },
+      {
+        "text": "minecraft:enderman"
+      },
+      {
+        "text": "minecraft:endermite"
+      },
+      {
+        "text": "minecraft:evoker"
+      },
+      {
+        "text": "minecraft:evoker_fangs"
+      },
+      {
+        "text": "minecraft:experience_bottle"
+      },
+      {
+        "text": "minecraft:experience_orb"
+      },
+      {
+        "text": "minecraft:eye_of_ender"
+      },
+      {
+        "text": "minecraft:falling_block"
+      },
+      {
+        "text": "minecraft:fireball"
+      },
+      {
+        "text": "minecraft:firework_rocket"
+      },
+      {
+        "text": "minecraft:fishing_bobber"
+      },
+      {
+        "text": "minecraft:fox"
+      },
+      {
+        "text": "minecraft:frog"
+      },
+      {
+        "text": "minecraft:furnace_minecart"
+      },
+      {
+        "text": "minecraft:ghast"
+      },
+      {
+        "text": "minecraft:giant"
+      },
+      {
+        "text": "minecraft:glow_item_frame"
+      },
+      {
+        "text": "minecraft:glow_squid"
+      },
+      {
+        "text": "minecraft:goat"
+      },
+      {
+        "text": "minecraft:guardian"
+      },
+      {
+        "text": "minecraft:happy_ghast"
+      },
+      {
+        "text": "minecraft:hoglin"
+      },
+      {
+        "text": "minecraft:hopper_minecart"
+      },
+      {
+        "text": "minecraft:horse"
+      },
+      {
+        "text": "minecraft:husk"
+      },
+      {
+        "text": "minecraft:illusioner"
+      },
+      {
+        "text": "minecraft:interaction"
+      },
+      {
+        "text": "minecraft:iron_golem"
+      },
+      {
+        "text": "minecraft:item"
+      },
+      {
+        "text": "minecraft:item_display"
+      },
+      {
+        "text": "minecraft:item_frame"
+      },
+      {
+        "text": "minecraft:jungle_boat"
+      },
+      {
+        "text": "minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "minecraft:leash_knot"
+      },
+      {
+        "text": "minecraft:lightning_bolt"
+      },
+      {
+        "text": "minecraft:lingering_potion"
+      },
+      {
+        "text": "minecraft:llama"
+      },
+      {
+        "text": "minecraft:llama_spit"
+      },
+      {
+        "text": "minecraft:magma_cube"
+      },
+      {
+        "text": "minecraft:mangrove_boat"
+      },
+      {
+        "text": "minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "minecraft:mannequin"
+      },
+      {
+        "text": "minecraft:marker"
+      },
+      {
+        "text": "minecraft:minecart"
+      },
+      {
+        "text": "minecraft:mooshroom"
+      },
+      {
+        "text": "minecraft:mule"
+      },
+      {
+        "text": "minecraft:nautilus"
+      },
+      {
+        "text": "minecraft:oak_boat"
+      },
+      {
+        "text": "minecraft:oak_chest_boat"
+      },
+      {
+        "text": "minecraft:ocelot"
+      },
+      {
+        "text": "minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "minecraft:painting"
+      },
+      {
+        "text": "minecraft:pale_oak_boat"
+      },
+      {
+        "text": "minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "minecraft:panda"
+      },
+      {
+        "text": "minecraft:parched"
+      },
+      {
+        "text": "minecraft:parrot"
+      },
+      {
+        "text": "minecraft:phantom"
+      },
+      {
+        "text": "minecraft:pig"
+      },
+      {
+        "text": "minecraft:piglin"
+      },
+      {
+        "text": "minecraft:piglin_brute"
+      },
+      {
+        "text": "minecraft:pillager"
+      },
+      {
+        "text": "minecraft:player"
+      },
+      {
+        "text": "minecraft:polar_bear"
+      },
+      {
+        "text": "minecraft:poplar_boat"
+      },
+      {
+        "text": "minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "minecraft:pufferfish"
+      },
+      {
+        "text": "minecraft:rabbit"
+      },
+      {
+        "text": "minecraft:ravager"
+      },
+      {
+        "text": "minecraft:salmon"
+      },
+      {
+        "text": "minecraft:sheep"
+      },
+      {
+        "text": "minecraft:shulker"
+      },
+      {
+        "text": "minecraft:shulker_bullet"
+      },
+      {
+        "text": "minecraft:silverfish"
+      },
+      {
+        "text": "minecraft:skeleton"
+      },
+      {
+        "text": "minecraft:skeleton_horse"
+      },
+      {
+        "text": "minecraft:slime"
+      },
+      {
+        "text": "minecraft:small_fireball"
+      },
+      {
+        "text": "minecraft:sniffer"
+      },
+      {
+        "text": "minecraft:snow_golem"
+      },
+      {
+        "text": "minecraft:snowball"
+      },
+      {
+        "text": "minecraft:spawner_minecart"
+      },
+      {
+        "text": "minecraft:spectral_arrow"
+      },
+      {
+        "text": "minecraft:spider"
+      },
+      {
+        "text": "minecraft:splash_potion"
+      },
+      {
+        "text": "minecraft:spruce_boat"
+      },
+      {
+        "text": "minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "minecraft:squid"
+      },
+      {
+        "text": "minecraft:stray"
+      },
+      {
+        "text": "minecraft:strider"
+      },
+      {
+        "text": "minecraft:sulfur_cube"
+      },
+      {
+        "text": "minecraft:tadpole"
+      },
+      {
+        "text": "minecraft:text_display"
+      },
+      {
+        "text": "minecraft:tnt"
+      },
+      {
+        "text": "minecraft:tnt_minecart"
+      },
+      {
+        "text": "minecraft:trader_llama"
+      },
+      {
+        "text": "minecraft:trident"
+      },
+      {
+        "text": "minecraft:tropical_fish"
+      },
+      {
+        "text": "minecraft:turtle"
+      },
+      {
+        "text": "minecraft:vex"
+      },
+      {
+        "text": "minecraft:villager"
+      },
+      {
+        "text": "minecraft:vindicator"
+      },
+      {
+        "text": "minecraft:wandering_trader"
+      },
+      {
+        "text": "minecraft:warden"
+      },
+      {
+        "text": "minecraft:wind_charge"
+      },
+      {
+        "text": "minecraft:witch"
+      },
+      {
+        "text": "minecraft:wither"
+      },
+      {
+        "text": "minecraft:wither_skeleton"
+      },
+      {
+        "text": "minecraft:wither_skull"
+      },
+      {
+        "text": "minecraft:wolf"
+      },
+      {
+        "text": "minecraft:zoglin"
+      },
+      {
+        "text": "minecraft:zombie"
+      },
+      {
+        "text": "minecraft:zombie_horse"
+      },
+      {
+        "text": "minecraft:zombie_nautilus"
+      },
+      {
+        "text": "minecraft:zombie_villager"
+      },
+      {
+        "text": "minecraft:zombified_piglin"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@e[type\u003d!minecraft:player,type\u003d",
+    "level": 4,
+    "start": 31,
+    "end": 31,
+    "suggestions": [
+      {
+        "text": "!#minecraft:can_equip_harness"
+      },
+      {
+        "text": "!#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "!#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "!#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "!minecraft:acacia_boat"
+      },
+      {
+        "text": "!minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "!minecraft:allay"
+      },
+      {
+        "text": "!minecraft:area_effect_cloud"
+      },
+      {
+        "text": "!minecraft:armadillo"
+      },
+      {
+        "text": "!minecraft:armor_stand"
+      },
+      {
+        "text": "!minecraft:arrow"
+      },
+      {
+        "text": "!minecraft:axolotl"
+      },
+      {
+        "text": "!minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "!minecraft:bamboo_raft"
+      },
+      {
+        "text": "!minecraft:bat"
+      },
+      {
+        "text": "!minecraft:bee"
+      },
+      {
+        "text": "!minecraft:birch_boat"
+      },
+      {
+        "text": "!minecraft:birch_chest_boat"
+      },
+      {
+        "text": "!minecraft:blaze"
+      },
+      {
+        "text": "!minecraft:block_display"
+      },
+      {
+        "text": "!minecraft:bogged"
+      },
+      {
+        "text": "!minecraft:breeze"
+      },
+      {
+        "text": "!minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "!minecraft:camel"
+      },
+      {
+        "text": "!minecraft:camel_husk"
+      },
+      {
+        "text": "!minecraft:cat"
+      },
+      {
+        "text": "!minecraft:cave_spider"
+      },
+      {
+        "text": "!minecraft:cherry_boat"
+      },
+      {
+        "text": "!minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "!minecraft:chest_minecart"
+      },
+      {
+        "text": "!minecraft:chicken"
+      },
+      {
+        "text": "!minecraft:cod"
+      },
+      {
+        "text": "!minecraft:command_block_minecart"
+      },
+      {
+        "text": "!minecraft:copper_golem"
+      },
+      {
+        "text": "!minecraft:cow"
+      },
+      {
+        "text": "!minecraft:creaking"
+      },
+      {
+        "text": "!minecraft:creeper"
+      },
+      {
+        "text": "!minecraft:cushion"
+      },
+      {
+        "text": "!minecraft:dark_oak_boat"
+      },
+      {
+        "text": "!minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:dolphin"
+      },
+      {
+        "text": "!minecraft:donkey"
+      },
+      {
+        "text": "!minecraft:dragon_fireball"
+      },
+      {
+        "text": "!minecraft:drowned"
+      },
+      {
+        "text": "!minecraft:egg"
+      },
+      {
+        "text": "!minecraft:elder_guardian"
+      },
+      {
+        "text": "!minecraft:end_crystal"
+      },
+      {
+        "text": "!minecraft:ender_dragon"
+      },
+      {
+        "text": "!minecraft:ender_pearl"
+      },
+      {
+        "text": "!minecraft:enderman"
+      },
+      {
+        "text": "!minecraft:endermite"
+      },
+      {
+        "text": "!minecraft:evoker"
+      },
+      {
+        "text": "!minecraft:evoker_fangs"
+      },
+      {
+        "text": "!minecraft:experience_bottle"
+      },
+      {
+        "text": "!minecraft:experience_orb"
+      },
+      {
+        "text": "!minecraft:eye_of_ender"
+      },
+      {
+        "text": "!minecraft:falling_block"
+      },
+      {
+        "text": "!minecraft:fireball"
+      },
+      {
+        "text": "!minecraft:firework_rocket"
+      },
+      {
+        "text": "!minecraft:fishing_bobber"
+      },
+      {
+        "text": "!minecraft:fox"
+      },
+      {
+        "text": "!minecraft:frog"
+      },
+      {
+        "text": "!minecraft:furnace_minecart"
+      },
+      {
+        "text": "!minecraft:ghast"
+      },
+      {
+        "text": "!minecraft:giant"
+      },
+      {
+        "text": "!minecraft:glow_item_frame"
+      },
+      {
+        "text": "!minecraft:glow_squid"
+      },
+      {
+        "text": "!minecraft:goat"
+      },
+      {
+        "text": "!minecraft:guardian"
+      },
+      {
+        "text": "!minecraft:happy_ghast"
+      },
+      {
+        "text": "!minecraft:hoglin"
+      },
+      {
+        "text": "!minecraft:hopper_minecart"
+      },
+      {
+        "text": "!minecraft:horse"
+      },
+      {
+        "text": "!minecraft:husk"
+      },
+      {
+        "text": "!minecraft:illusioner"
+      },
+      {
+        "text": "!minecraft:interaction"
+      },
+      {
+        "text": "!minecraft:iron_golem"
+      },
+      {
+        "text": "!minecraft:item"
+      },
+      {
+        "text": "!minecraft:item_display"
+      },
+      {
+        "text": "!minecraft:item_frame"
+      },
+      {
+        "text": "!minecraft:jungle_boat"
+      },
+      {
+        "text": "!minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "!minecraft:leash_knot"
+      },
+      {
+        "text": "!minecraft:lightning_bolt"
+      },
+      {
+        "text": "!minecraft:lingering_potion"
+      },
+      {
+        "text": "!minecraft:llama"
+      },
+      {
+        "text": "!minecraft:llama_spit"
+      },
+      {
+        "text": "!minecraft:magma_cube"
+      },
+      {
+        "text": "!minecraft:mangrove_boat"
+      },
+      {
+        "text": "!minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "!minecraft:mannequin"
+      },
+      {
+        "text": "!minecraft:marker"
+      },
+      {
+        "text": "!minecraft:minecart"
+      },
+      {
+        "text": "!minecraft:mooshroom"
+      },
+      {
+        "text": "!minecraft:mule"
+      },
+      {
+        "text": "!minecraft:nautilus"
+      },
+      {
+        "text": "!minecraft:oak_boat"
+      },
+      {
+        "text": "!minecraft:oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:ocelot"
+      },
+      {
+        "text": "!minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "!minecraft:painting"
+      },
+      {
+        "text": "!minecraft:pale_oak_boat"
+      },
+      {
+        "text": "!minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:panda"
+      },
+      {
+        "text": "!minecraft:parched"
+      },
+      {
+        "text": "!minecraft:parrot"
+      },
+      {
+        "text": "!minecraft:phantom"
+      },
+      {
+        "text": "!minecraft:pig"
+      },
+      {
+        "text": "!minecraft:piglin"
+      },
+      {
+        "text": "!minecraft:piglin_brute"
+      },
+      {
+        "text": "!minecraft:pillager"
+      },
+      {
+        "text": "!minecraft:player"
+      },
+      {
+        "text": "!minecraft:polar_bear"
+      },
+      {
+        "text": "!minecraft:poplar_boat"
+      },
+      {
+        "text": "!minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "!minecraft:pufferfish"
+      },
+      {
+        "text": "!minecraft:rabbit"
+      },
+      {
+        "text": "!minecraft:ravager"
+      },
+      {
+        "text": "!minecraft:salmon"
+      },
+      {
+        "text": "!minecraft:sheep"
+      },
+      {
+        "text": "!minecraft:shulker"
+      },
+      {
+        "text": "!minecraft:shulker_bullet"
+      },
+      {
+        "text": "!minecraft:silverfish"
+      },
+      {
+        "text": "!minecraft:skeleton"
+      },
+      {
+        "text": "!minecraft:skeleton_horse"
+      },
+      {
+        "text": "!minecraft:slime"
+      },
+      {
+        "text": "!minecraft:small_fireball"
+      },
+      {
+        "text": "!minecraft:sniffer"
+      },
+      {
+        "text": "!minecraft:snow_golem"
+      },
+      {
+        "text": "!minecraft:snowball"
+      },
+      {
+        "text": "!minecraft:spawner_minecart"
+      },
+      {
+        "text": "!minecraft:spectral_arrow"
+      },
+      {
+        "text": "!minecraft:spider"
+      },
+      {
+        "text": "!minecraft:splash_potion"
+      },
+      {
+        "text": "!minecraft:spruce_boat"
+      },
+      {
+        "text": "!minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "!minecraft:squid"
+      },
+      {
+        "text": "!minecraft:stray"
+      },
+      {
+        "text": "!minecraft:strider"
+      },
+      {
+        "text": "!minecraft:sulfur_cube"
+      },
+      {
+        "text": "!minecraft:tadpole"
+      },
+      {
+        "text": "!minecraft:text_display"
+      },
+      {
+        "text": "!minecraft:tnt"
+      },
+      {
+        "text": "!minecraft:tnt_minecart"
+      },
+      {
+        "text": "!minecraft:trader_llama"
+      },
+      {
+        "text": "!minecraft:trident"
+      },
+      {
+        "text": "!minecraft:tropical_fish"
+      },
+      {
+        "text": "!minecraft:turtle"
+      },
+      {
+        "text": "!minecraft:vex"
+      },
+      {
+        "text": "!minecraft:villager"
+      },
+      {
+        "text": "!minecraft:vindicator"
+      },
+      {
+        "text": "!minecraft:wandering_trader"
+      },
+      {
+        "text": "!minecraft:warden"
+      },
+      {
+        "text": "!minecraft:wind_charge"
+      },
+      {
+        "text": "!minecraft:witch"
+      },
+      {
+        "text": "!minecraft:wither"
+      },
+      {
+        "text": "!minecraft:wither_skeleton"
+      },
+      {
+        "text": "!minecraft:wither_skull"
+      },
+      {
+        "text": "!minecraft:wolf"
+      },
+      {
+        "text": "!minecraft:zoglin"
+      },
+      {
+        "text": "!minecraft:zombie"
+      },
+      {
+        "text": "!minecraft:zombie_horse"
+      },
+      {
+        "text": "!minecraft:zombie_nautilus"
+      },
+      {
+        "text": "!minecraft:zombie_villager"
+      },
+      {
+        "text": "!minecraft:zombified_piglin"
+      },
+      {
+        "text": "#minecraft:can_equip_harness"
+      },
+      {
+        "text": "#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "#minecraft:can_wear_nautilus_armor"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@e[type\u003d!minecraft:player,type\u003d",
+    "level": 4,
+    "start": 31,
+    "end": 31,
+    "suggestions": [
+      {
+        "text": "!#minecraft:can_equip_harness"
+      },
+      {
+        "text": "!#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "!#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "!#minecraft:can_wear_nautilus_armor"
+      },
+      {
+        "text": "!minecraft:acacia_boat"
+      },
+      {
+        "text": "!minecraft:acacia_chest_boat"
+      },
+      {
+        "text": "!minecraft:allay"
+      },
+      {
+        "text": "!minecraft:area_effect_cloud"
+      },
+      {
+        "text": "!minecraft:armadillo"
+      },
+      {
+        "text": "!minecraft:armor_stand"
+      },
+      {
+        "text": "!minecraft:arrow"
+      },
+      {
+        "text": "!minecraft:axolotl"
+      },
+      {
+        "text": "!minecraft:bamboo_chest_raft"
+      },
+      {
+        "text": "!minecraft:bamboo_raft"
+      },
+      {
+        "text": "!minecraft:bat"
+      },
+      {
+        "text": "!minecraft:bee"
+      },
+      {
+        "text": "!minecraft:birch_boat"
+      },
+      {
+        "text": "!minecraft:birch_chest_boat"
+      },
+      {
+        "text": "!minecraft:blaze"
+      },
+      {
+        "text": "!minecraft:block_display"
+      },
+      {
+        "text": "!minecraft:bogged"
+      },
+      {
+        "text": "!minecraft:breeze"
+      },
+      {
+        "text": "!minecraft:breeze_wind_charge"
+      },
+      {
+        "text": "!minecraft:camel"
+      },
+      {
+        "text": "!minecraft:camel_husk"
+      },
+      {
+        "text": "!minecraft:cat"
+      },
+      {
+        "text": "!minecraft:cave_spider"
+      },
+      {
+        "text": "!minecraft:cherry_boat"
+      },
+      {
+        "text": "!minecraft:cherry_chest_boat"
+      },
+      {
+        "text": "!minecraft:chest_minecart"
+      },
+      {
+        "text": "!minecraft:chicken"
+      },
+      {
+        "text": "!minecraft:cod"
+      },
+      {
+        "text": "!minecraft:command_block_minecart"
+      },
+      {
+        "text": "!minecraft:copper_golem"
+      },
+      {
+        "text": "!minecraft:cow"
+      },
+      {
+        "text": "!minecraft:creaking"
+      },
+      {
+        "text": "!minecraft:creeper"
+      },
+      {
+        "text": "!minecraft:cushion"
+      },
+      {
+        "text": "!minecraft:dark_oak_boat"
+      },
+      {
+        "text": "!minecraft:dark_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:dolphin"
+      },
+      {
+        "text": "!minecraft:donkey"
+      },
+      {
+        "text": "!minecraft:dragon_fireball"
+      },
+      {
+        "text": "!minecraft:drowned"
+      },
+      {
+        "text": "!minecraft:egg"
+      },
+      {
+        "text": "!minecraft:elder_guardian"
+      },
+      {
+        "text": "!minecraft:end_crystal"
+      },
+      {
+        "text": "!minecraft:ender_dragon"
+      },
+      {
+        "text": "!minecraft:ender_pearl"
+      },
+      {
+        "text": "!minecraft:enderman"
+      },
+      {
+        "text": "!minecraft:endermite"
+      },
+      {
+        "text": "!minecraft:evoker"
+      },
+      {
+        "text": "!minecraft:evoker_fangs"
+      },
+      {
+        "text": "!minecraft:experience_bottle"
+      },
+      {
+        "text": "!minecraft:experience_orb"
+      },
+      {
+        "text": "!minecraft:eye_of_ender"
+      },
+      {
+        "text": "!minecraft:falling_block"
+      },
+      {
+        "text": "!minecraft:fireball"
+      },
+      {
+        "text": "!minecraft:firework_rocket"
+      },
+      {
+        "text": "!minecraft:fishing_bobber"
+      },
+      {
+        "text": "!minecraft:fox"
+      },
+      {
+        "text": "!minecraft:frog"
+      },
+      {
+        "text": "!minecraft:furnace_minecart"
+      },
+      {
+        "text": "!minecraft:ghast"
+      },
+      {
+        "text": "!minecraft:giant"
+      },
+      {
+        "text": "!minecraft:glow_item_frame"
+      },
+      {
+        "text": "!minecraft:glow_squid"
+      },
+      {
+        "text": "!minecraft:goat"
+      },
+      {
+        "text": "!minecraft:guardian"
+      },
+      {
+        "text": "!minecraft:happy_ghast"
+      },
+      {
+        "text": "!minecraft:hoglin"
+      },
+      {
+        "text": "!minecraft:hopper_minecart"
+      },
+      {
+        "text": "!minecraft:horse"
+      },
+      {
+        "text": "!minecraft:husk"
+      },
+      {
+        "text": "!minecraft:illusioner"
+      },
+      {
+        "text": "!minecraft:interaction"
+      },
+      {
+        "text": "!minecraft:iron_golem"
+      },
+      {
+        "text": "!minecraft:item"
+      },
+      {
+        "text": "!minecraft:item_display"
+      },
+      {
+        "text": "!minecraft:item_frame"
+      },
+      {
+        "text": "!minecraft:jungle_boat"
+      },
+      {
+        "text": "!minecraft:jungle_chest_boat"
+      },
+      {
+        "text": "!minecraft:leash_knot"
+      },
+      {
+        "text": "!minecraft:lightning_bolt"
+      },
+      {
+        "text": "!minecraft:lingering_potion"
+      },
+      {
+        "text": "!minecraft:llama"
+      },
+      {
+        "text": "!minecraft:llama_spit"
+      },
+      {
+        "text": "!minecraft:magma_cube"
+      },
+      {
+        "text": "!minecraft:mangrove_boat"
+      },
+      {
+        "text": "!minecraft:mangrove_chest_boat"
+      },
+      {
+        "text": "!minecraft:mannequin"
+      },
+      {
+        "text": "!minecraft:marker"
+      },
+      {
+        "text": "!minecraft:minecart"
+      },
+      {
+        "text": "!minecraft:mooshroom"
+      },
+      {
+        "text": "!minecraft:mule"
+      },
+      {
+        "text": "!minecraft:nautilus"
+      },
+      {
+        "text": "!minecraft:oak_boat"
+      },
+      {
+        "text": "!minecraft:oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:ocelot"
+      },
+      {
+        "text": "!minecraft:ominous_item_spawner"
+      },
+      {
+        "text": "!minecraft:painting"
+      },
+      {
+        "text": "!minecraft:pale_oak_boat"
+      },
+      {
+        "text": "!minecraft:pale_oak_chest_boat"
+      },
+      {
+        "text": "!minecraft:panda"
+      },
+      {
+        "text": "!minecraft:parched"
+      },
+      {
+        "text": "!minecraft:parrot"
+      },
+      {
+        "text": "!minecraft:phantom"
+      },
+      {
+        "text": "!minecraft:pig"
+      },
+      {
+        "text": "!minecraft:piglin"
+      },
+      {
+        "text": "!minecraft:piglin_brute"
+      },
+      {
+        "text": "!minecraft:pillager"
+      },
+      {
+        "text": "!minecraft:player"
+      },
+      {
+        "text": "!minecraft:polar_bear"
+      },
+      {
+        "text": "!minecraft:poplar_boat"
+      },
+      {
+        "text": "!minecraft:poplar_chest_boat"
+      },
+      {
+        "text": "!minecraft:pufferfish"
+      },
+      {
+        "text": "!minecraft:rabbit"
+      },
+      {
+        "text": "!minecraft:ravager"
+      },
+      {
+        "text": "!minecraft:salmon"
+      },
+      {
+        "text": "!minecraft:sheep"
+      },
+      {
+        "text": "!minecraft:shulker"
+      },
+      {
+        "text": "!minecraft:shulker_bullet"
+      },
+      {
+        "text": "!minecraft:silverfish"
+      },
+      {
+        "text": "!minecraft:skeleton"
+      },
+      {
+        "text": "!minecraft:skeleton_horse"
+      },
+      {
+        "text": "!minecraft:slime"
+      },
+      {
+        "text": "!minecraft:small_fireball"
+      },
+      {
+        "text": "!minecraft:sniffer"
+      },
+      {
+        "text": "!minecraft:snow_golem"
+      },
+      {
+        "text": "!minecraft:snowball"
+      },
+      {
+        "text": "!minecraft:spawner_minecart"
+      },
+      {
+        "text": "!minecraft:spectral_arrow"
+      },
+      {
+        "text": "!minecraft:spider"
+      },
+      {
+        "text": "!minecraft:splash_potion"
+      },
+      {
+        "text": "!minecraft:spruce_boat"
+      },
+      {
+        "text": "!minecraft:spruce_chest_boat"
+      },
+      {
+        "text": "!minecraft:squid"
+      },
+      {
+        "text": "!minecraft:stray"
+      },
+      {
+        "text": "!minecraft:strider"
+      },
+      {
+        "text": "!minecraft:sulfur_cube"
+      },
+      {
+        "text": "!minecraft:tadpole"
+      },
+      {
+        "text": "!minecraft:text_display"
+      },
+      {
+        "text": "!minecraft:tnt"
+      },
+      {
+        "text": "!minecraft:tnt_minecart"
+      },
+      {
+        "text": "!minecraft:trader_llama"
+      },
+      {
+        "text": "!minecraft:trident"
+      },
+      {
+        "text": "!minecraft:tropical_fish"
+      },
+      {
+        "text": "!minecraft:turtle"
+      },
+      {
+        "text": "!minecraft:vex"
+      },
+      {
+        "text": "!minecraft:villager"
+      },
+      {
+        "text": "!minecraft:vindicator"
+      },
+      {
+        "text": "!minecraft:wandering_trader"
+      },
+      {
+        "text": "!minecraft:warden"
+      },
+      {
+        "text": "!minecraft:wind_charge"
+      },
+      {
+        "text": "!minecraft:witch"
+      },
+      {
+        "text": "!minecraft:wither"
+      },
+      {
+        "text": "!minecraft:wither_skeleton"
+      },
+      {
+        "text": "!minecraft:wither_skull"
+      },
+      {
+        "text": "!minecraft:wolf"
+      },
+      {
+        "text": "!minecraft:zoglin"
+      },
+      {
+        "text": "!minecraft:zombie"
+      },
+      {
+        "text": "!minecraft:zombie_horse"
+      },
+      {
+        "text": "!minecraft:zombie_nautilus"
+      },
+      {
+        "text": "!minecraft:zombie_villager"
+      },
+      {
+        "text": "!minecraft:zombified_piglin"
+      },
+      {
+        "text": "#minecraft:can_equip_harness"
+      },
+      {
+        "text": "#minecraft:can_equip_saddle"
+      },
+      {
+        "text": "#minecraft:can_wear_horse_armor"
+      },
+      {
+        "text": "#minecraft:can_wear_nautilus_armor"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[x\u003d1 ,",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[x\u003d1 ,",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "advancements\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.advancements.description"
+        }
+      },
+      {
+        "text": "distance\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.distance.description"
+        }
+      },
+      {
+        "text": "dx\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dx.description"
+        }
+      },
+      {
+        "text": "dy\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dy.description"
+        }
+      },
+      {
+        "text": "dz\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.dz.description"
+        }
+      },
+      {
+        "text": "gamemode\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.gamemode.description"
+        }
+      },
+      {
+        "text": "level\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.level.description"
+        }
+      },
+      {
+        "text": "limit\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.limit.description"
+        }
+      },
+      {
+        "text": "name\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.name.description"
+        }
+      },
+      {
+        "text": "nbt\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.nbt.description"
+        }
+      },
+      {
+        "text": "predicate\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.predicate.description"
+        }
+      },
+      {
+        "text": "scores\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.scores.description"
+        }
+      },
+      {
+        "text": "sort\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.sort.description"
+        }
+      },
+      {
+        "text": "tag\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.tag.description"
+        }
+      },
+      {
+        "text": "team\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.team.description"
+        }
+      },
+      {
+        "text": "type\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.type.description"
+        }
+      },
+      {
+        "text": "x_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.x_rotation.description"
+        }
+      },
+      {
+        "text": "y\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y.description"
+        }
+      },
+      {
+        "text": "y_rotation\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.y_rotation.description"
+        }
+      },
+      {
+        "text": "z\u003d",
+        "tooltip": {
+          "translate": "argument.entity.options.z.description"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[x\u003d1!]",
+    "level": 4,
+    "start": 6,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[x\u003d1!]",
+    "level": 4,
+    "start": 6,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a[]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a[]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
   },
   {
     "kind": "command",

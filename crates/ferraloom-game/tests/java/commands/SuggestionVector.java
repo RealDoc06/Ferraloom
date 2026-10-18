@@ -36,7 +36,7 @@ public final class SuggestionVector {
             doReturn(LevelBasedPermissionSet.forLevel(PermissionLevel.byId(level))).when(source).permissions();
             doReturn(List.of("Alex","Alice","Doc")).when(source).getOnlinePlayerNames();
             doReturn(List.of()).when(source).getSelectedEntities();
-            for (var input : List.of("","A","Alex","@","@z","@p","@p ","@pfoo","@a","@n")) {
+            for (var input : List.of("","A","Alex","@","@z","@p","@p ","@pfoo","@a","@n","@a[","@a[lim","@a[limit","@a[limit=","@a[limit=1","@a[limit=1,","@s[","@a[name=Doc,","@a[name=!Doc,","@a[sort=","@a[sort=n","@a[gamemode=","@a[gamemode=!s","@a[gamemode=!creative,gamemode=","@e[type=minecraft:pl","@e[type=","@e[type=!minecraft:player,type=","@a[x=1 ,","@a[x=1!]","@a[]")) {
                 var context = new CommandContextBuilder<>(dispatcher,source,dispatcher.getRoot(),0).build(input);
                 vectors.add(capture("entity",input,level,EntityArgument.entities().listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
                 vectors.add(capture("game_profile",input,level,GameProfileArgument.gameProfile().listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
