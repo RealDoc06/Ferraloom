@@ -1,7 +1,7 @@
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{
     Identifier,
-    component::{DataComponent, DataComponentMap, DataComponentPatch},
+    component::{DataComponent, DataComponentMap},
 };
 
 pub(super) fn load(tag: Option<&CompoundTag>) -> DataComponentMap {
@@ -23,12 +23,6 @@ pub(super) fn save(map: &DataComponentMap) -> ferraloom_protocol::Result<Compoun
         result.insert(value.key().as_str(), value.to_nbt()?);
     }
     Ok(result)
-}
-pub(crate) fn set(map: &mut DataComponentMap, component: DataComponent) {
-    map.apply(&DataComponentPatch {
-        added: vec![component],
-        removed: Vec::new(),
-    });
 }
 pub(super) fn save_field(
     tag: &mut CompoundTag,
