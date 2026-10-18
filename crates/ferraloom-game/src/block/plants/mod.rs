@@ -1,5 +1,8 @@
 //! Shared vanilla vegetation, foliage and ground behavior, on live and generation levels.
 mod access;
+pub mod bonemeal;
+mod crops;
+pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
 mod growing;
 mod leaves;
 mod moss;
@@ -45,6 +48,10 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         return Some(&growing::GROWING_PLANT);
     }
     let behavior: &'static dyn BlockBehavior = match block.class() {
+        C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock if method == M::RandomTick => {
+            &crops::CROP
+        }
+        C::NetherWartBlock if method == M::RandomTick => &crops::NETHER_WART,
         C::LeavesBlock
         | C::TintedParticleLeavesBlock
         | C::UntintedParticleLeavesBlock

@@ -34,7 +34,7 @@ impl LevelReaderRef<'_, '_> {
                     .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?,
             ),
         };
-        Ok(i32::from(block).max(i32::from(sky) - sky_darken))
+        Ok(i32::from(block).max(i32::from(sky).wrapping_sub(sky_darken)))
     }
     /// Port of BlockAndLightGetter#canSeeSky, independent of day time.
     pub fn can_see_sky(&self, pos: BlockPos) -> Result<bool, LevelError> {

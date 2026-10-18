@@ -227,3 +227,87 @@ fn survival_and_six_direction_shape_updates_match_vanilla_levels() {
     }
     assert_eq!(count, 75040);
 }
+
+#[test]
+fn crop_bonemeal_and_growth_speed_match_real_vanilla_methods() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/growth.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let chunk = ChunkPos::new(0, 0);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_light_snapshot(
+            chunk,
+            crate::level::weather::ChunkLightSnapshot {
+                sky: [(0, ferraloom_light::DataLayer::new(15))].into(),
+                block: Default::default(),
+            },
+        );
+        if f[0] == "grow" {
+            level.set_random_streams(
+                Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap())),
+                0,
+            );
+            level.set_block_state(pos, state).unwrap();
+            level
+                .set_block_state(pos.below(1), Block::FARMLAND.default_state())
+                .unwrap();
+            crops::grow_crops(state, pos, &mut LevelAccessRef::Server(&mut level)).unwrap();
+            assert_eq!(
+                level.get_block_state(pos).unwrap().id(),
+                f[3].parse::<u16>().unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                level.random().next_long(),
+                f[4].parse::<i64>().unwrap(),
+                "RNG {line}"
+            );
+        } else {
+            let moisture = f[2].parse().unwrap();
+            let pattern = f[3].parse::<u8>().unwrap();
+            let soil = Block::FARMLAND
+                .default_state()
+                .with(p::MOISTURE, moisture)
+                .unwrap();
+            for x in -1..=1 {
+                for z in -1..=1 {
+                    level
+                        .set_block_state(pos.below(1).offset(x, 0, z), soil)
+                        .unwrap();
+                }
+            }
+            for (bit, at) in [
+                (1, pos.west(1)),
+                (2, pos.north(1)),
+                (4, pos.west(1).north(1)),
+                (8, pos.east(1).south(1)),
+            ] {
+                if pattern & bit != 0 {
+                    level.set_block_state(at, state).unwrap();
+                }
+            }
+            assert_eq!(
+                crops::growth_speed(state.block(), pos, &LevelReaderRef::Server(&level))
+                    .unwrap()
+                    .to_bits(),
+                f[4].parse::<u32>().unwrap(),
+                "{line}"
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 592);
+}

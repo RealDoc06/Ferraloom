@@ -66,5 +66,30 @@ public final class PlantsVectors {
                 }
             }
         }
+        var growthSpeed=CropBlock.class.getDeclaredMethod("getGrowthSpeed",Block.class,BlockGetter.class,BlockPos.class);
+        growthSpeed.setAccessible(true);
+        for(var block:List.of(Blocks.WHEAT,Blocks.BEETROOTS,Blocks.TORCHFLOWER_CROP)) {
+            var crop=(CropBlock)block;
+            int states=block.getStateDefinition().getPossibleStates().size();
+            for(int age=0;age<states;age++)for(int seed=0;seed<32;seed++) {
+                level.chunks.clear();level.trace.clear();level.light=15;level.getRandom().setSeed(seed);
+                var state=crop.getStateForAge(age);
+                level.getChunkAt(pos).setBlockState(pos,state,816);
+                level.getChunkAt(pos.below()).setBlockState(pos.below(),Blocks.FARMLAND.defaultBlockState(),816);
+                crop.growCrops(level,pos,state);
+                System.out.println("grow\t"+Block.getId(state)+"\t"+seed+"\t"+Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
+            }
+            for(int moisture:new int[]{0,1,7})for(int pattern=0;pattern<16;pattern++) {
+                level.chunks.clear();level.trace.clear();
+                var soil=Blocks.FARMLAND.defaultBlockState().setValue(BlockStateProperties.MOISTURE,moisture);
+                for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)level.getChunkAt(pos).setBlockState(pos.below().offset(x,0,z),soil,816);
+                if((pattern&1)!=0)level.getChunkAt(pos).setBlockState(pos.west(),block.defaultBlockState(),816);
+                if((pattern&2)!=0)level.getChunkAt(pos).setBlockState(pos.north(),block.defaultBlockState(),816);
+                if((pattern&4)!=0)level.getChunkAt(pos).setBlockState(pos.west().north(),block.defaultBlockState(),816);
+                if((pattern&8)!=0)level.getChunkAt(pos).setBlockState(pos.east().south(),block.defaultBlockState(),816);
+                float speed=(Float)growthSpeed.invoke(null,block,level,pos);
+                System.out.println("speed\t"+Block.getId(block.defaultBlockState())+"\t"+moisture+"\t"+pattern+"\t"+Float.floatToIntBits(speed));
+            }
+        }
     }
 }

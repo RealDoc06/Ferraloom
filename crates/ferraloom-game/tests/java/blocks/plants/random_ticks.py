@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Run only on the builder: a real vanilla server with a disposable fixture world."""
+from pathlib import Path
+import gzip
+import base64
+import sys
+import os
+import subprocess
+import tempfile
+import zipfile
+
+HERE=Path(__file__).resolve().parent
+VANILLA=Path(os.environ.get('FERRALOOM_VANILLA_DIR','/home/doc/code/Ferraloom/.cache/vanilla/26.3'))
+JDK=Path(os.environ.get('JAVA_HOME','/home/doc/code/Ferraloom/.cache/toolchains/jdk-25.0.4.1+1'))/'bin'
+MOCK_CACHE=VANILLA/'tree-harness'
+BYTEBUDDY=MOCK_CACHE/'byte-buddy-1.15.4.jar'
+if not BYTEBUDDY.exists():
+    raise SystemExit('Missing cached ByteBuddy from existing Java feature harness')
+classpath=':'.join(map(str,[VANILLA/'versions/26.3/server-26.3.jar',*sorted((VANILLA/'libraries').rglob('*.jar')),BYTEBUDDY]))
+with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
+    path=Path(temp)
+    subprocess.run([str(JDK/'javac'),'-cp',classpath,'-d',temp,str(HERE/'PlantsTickOracle.java')],check=True)
+    agent=path/'oracle-agent.jar'
+    with zipfile.ZipFile(agent,'w') as jar:
+        jar.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\nPremain-Class: PlantsTickOracle\n\n')
+        for file in path.glob('*.class'):jar.write(file,file.name)
+    (path/'eula.txt').write_text('eula=true\n')
+    (path/'server.properties').write_text('online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\nlevel-type=minecraft:flat\ngenerator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:bedrock","height":1}]}\nspawn-protection=0\nview-distance=2\nsimulation-distance=2\nmax-tick-time=-1\npause-when-empty-seconds=-1\n')
+    output=path/'random.tsv'
+    with (path/'server.log').open('w') as log:
+        try:
+            subprocess.run([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=240)
+        except Exception:
+            print((path/'server.log').read_text()[-12000:]);raise
+    if (path/'oracle-error.txt').exists():raise SystemExit((path/'oracle-error.txt').read_text())
+    compressed=gzip.compress(output.read_bytes(),mtime=0)
+    if '--stdout' in sys.argv:
+        print('PLANTS_RANDOM_FIXTURE='+base64.b64encode(compressed).decode())
+    else:
+        (HERE/'random-ticks.tsv.gz').write_bytes(compressed)
+    print(f'{len(output.read_text().splitlines())} real ServerLevel crop random-tick vectors')

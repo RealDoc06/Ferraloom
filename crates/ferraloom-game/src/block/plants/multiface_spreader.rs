@@ -164,3 +164,24 @@ pub fn spread_all(
     }
     Ok(count)
 }
+
+/// The gameplay overload draws from the same level stream that neighbor
+/// callbacks can consume, with no RNG clone across a reentrant setBlock.
+pub fn spread_using_level_random(
+    level: &mut LevelAccessRef<'_, '_>,
+    state: BlockState,
+    pos: BlockPos,
+) -> Result<Option<SpreadPos>, LevelError> {
+    for from in shuffled(level.random()?) {
+        if multiface::has_face(state, from) {
+            for toward in shuffled(level.random()?) {
+                if let Some(spread) =
+                    spread_from_face_toward_direction(level, state, pos, from, toward, false)?
+                {
+                    return Ok(Some(spread));
+                }
+            }
+        }
+    }
+    Ok(None)
+}

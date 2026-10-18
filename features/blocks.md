@@ -328,3 +328,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 
 | blocks.plants.support-and-neighbor-vectors | Plant survival and all six neighbor directions over relevant supports and light thresholds | Real vanilla `Level` methods | `plants::tests::survival_and_six_direction_shape_updates_match_vanilla_levels` (75,040 vectors) | pass | todo |
 | blocks.plants.worldgen-bridge | Replay vegetation placement through the real shared block registry | Vanilla feature fixtures | `plants::worldgen_tests::vegetation_fixtures_use_real_game_bridge` | pass | todo |
+
+| blocks.plants.crop-bonemeal-growth-speed | Crop bonemeal increments, torchflower conversion, moisture and crowding growth speed | `CropBlock`, `BeetrootBlock`, `TorchflowerCropBlock` on a real vanilla Level | `plants::tests::crop_bonemeal_and_growth_speed_match_real_vanilla_methods` | pass | todo |
