@@ -1,7 +1,7 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
 use std::{cell::Cell, collections::HashSet};
 
-use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3, collections::Long2ObjectOpenHashMap};
+use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3};
 
 use super::{Level, LevelError, store::InsertOnlyMap};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
@@ -77,7 +77,6 @@ impl EntityIdAllocator {
 pub struct EntityStorage {
     persistent: PersistentEntitySectionManager,
     registration: EntityRegistration,
-    chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pub border: crate::level::border::WorldBorder,
@@ -141,10 +140,7 @@ impl EntityStorage {
         self.registration.queue_retirement(id);
     }
     fn visibility(&self, chunk: ChunkPos) -> Visibility {
-        self.chunk_visibility
-            .get(&chunk.pack())
-            .copied()
-            .unwrap_or(Visibility::Hidden)
+        self.persistent.visibility(chunk)
     }
 }
 
@@ -258,7 +254,7 @@ impl Level {
             .expect("new entity handle");
         storage.registration.retain_unmanaged(entity);
     }
-    pub fn take_entity_management_events(&mut self) -> Vec<EntityManagementEvent> {
+    pub fn take_entity_management_events(&self) -> Vec<EntityManagementEvent> {
         self.region().entities.registration.take_events()
     }
     pub fn entity_chunk_visibility(&self, pos: ChunkPos) -> Visibility {
@@ -268,10 +264,10 @@ impl Level {
         self.entity::<EntityData>(entity)
             .is_ok_and(|base| base.entity_type == ferraloom_data::EntityType::PLAYER)
     }
-    fn start_entity_tracking(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+    fn start_entity_tracking(&self, entity: EntityRef) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(entity)?;
         let (network, uuid) = (base.network_id, base.uuid);
-        let storage = &mut self.region_mut().entities;
+        let storage = &self.region().entities;
         if !storage.lookup.add(network, uuid, entity) {
             return Err(LevelError::DuplicateEntity(entity));
         }
@@ -280,8 +276,8 @@ impl Level {
             .push_event(EntityManagementEvent::TrackingStart(entity));
         Ok(())
     }
-    fn stop_entity_tracking(&mut self, entity: EntityRef) {
-        let storage = &mut self.region_mut().entities;
+    fn stop_entity_tracking(&self, entity: EntityRef) {
+        let storage = &self.region().entities;
         storage
             .registration
             .push_event(EntityManagementEvent::TrackingEnd(entity));
@@ -289,8 +285,8 @@ impl Level {
             .lookup
             .remove(storage.states.get(&entity).unwrap().as_entity());
     }
-    fn start_entity_ticking(&mut self, entity: EntityRef) {
-        let region = self.region_mut();
+    fn start_entity_ticking(&self, entity: EntityRef) {
+        let region = self.region();
         let id = region
             .entities
             .states
@@ -304,8 +300,8 @@ impl Level {
             .registration
             .push_event(EntityManagementEvent::TickingStart(entity));
     }
-    fn stop_entity_ticking(&mut self, entity: EntityRef) {
-        let region = self.region_mut();
+    fn stop_entity_ticking(&self, entity: EntityRef) {
+        let region = self.region();
         let id = region
             .entities
             .states
@@ -322,19 +318,12 @@ impl Level {
     /// Port of PersistentEntitySectionManager#updateChunkStatus. This is driven
     /// by FullChunkStatus/ticket eligibility, independently of loaded chunks.
     pub fn update_entity_chunk_status(
-        &mut self,
+        &self,
         pos: ChunkPos,
         status: Visibility,
     ) -> Result<(), LevelError> {
-        let storage = &mut self.region_mut().entities;
-        if status == Visibility::Hidden {
-            storage.chunk_visibility.remove(&pos.pack());
-            storage.persistent.chunks_to_unload.insert(pos.pack());
-        } else {
-            storage.chunk_visibility.insert(pos.pack(), status);
-            storage.persistent.chunks_to_unload.remove(&pos.pack());
-            storage.persistent.ensure_chunk_queued_for_load(pos);
-        }
+        let storage = &self.region().entities;
+        storage.persistent.update_visibility(pos, status);
         let sections = storage.sections.sections_in_chunk(pos);
         for section_key in sections {
             let (previous, entities) = self

@@ -405,6 +405,11 @@ player-tracking	3	-
 player-tracking	4	S:attributes:minecraft:max_health=4041800000000000[minecraft:bonus=4008000000000000:0]|T:head:64
 player-tracking	5	T:motion:3fc0000000000000,0,0|S:data:0:-128
 player-tracking	6	-
+entity-visibility	TRACKED	TrackingStart:1,TrackingStart:2	3,1,2
+entity-visibility	TICKING	TickingStart:1,TickingStart:2	3,1,2
+entity-visibility	TRACKED	TickingEnd:1,TickingEnd:2	3,1,2
+entity-visibility	HIDDEN	TrackingEnd:1,TrackingEnd:2	3
+entity-visibility	TICKING	TrackingStart:1,TrackingStart:2,TickingStart:1,TickingStart:2	3,1,2
 entity-creation-order	minecraft:cow	1
 entity-creation-order	minecraft:item	2
 entity-creation-order	minecraft:tnt	3

@@ -42,6 +42,91 @@ fn load_request(level: &mut Level) -> (EntityLoadRequestId, ChunkPos) {
 }
 
 #[test]
+fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
+    use crate::entity::player::{GameType, ServerPlayer};
+    let mut level = level();
+    let pos = ChunkPos::ZERO;
+    level
+        .add_worldgen_chunk_entities_shared(
+            pos,
+            vec![
+                orb_tag(1, Vec3::new(1.5, 64.0, 1.5)),
+                orb_tag(2, Vec3::new(1.5, 64.0, 1.5)),
+            ],
+        )
+        .unwrap();
+    let player = level.next_entity_ref();
+    let state = ServerPlayer::new(
+        Uuid::new(0, 3),
+        "visibility".into(),
+        level.next_entity_id(),
+        Vec3::new(1.5, 64.0, 1.5),
+        GameType::Survival,
+    );
+    level
+        .add_entity(player, EntityState::Player(Box::new(state)))
+        .unwrap();
+    let shared = &level;
+    let captured = shared.entity::<EntityData>(EntityRef(1)).unwrap();
+    shared.take_entity_management_events();
+    let mut count = 0;
+    for row in include_str!("../../../../tests/java/entity/vectors.tsv")
+        .lines()
+        .filter(|row| row.starts_with("entity-visibility\t"))
+    {
+        let values: Vec<_> = row.split('\t').collect();
+        let status = match values[1] {
+            "TRACKED" => Visibility::Tracked,
+            "TICKING" => Visibility::Ticking,
+            "HIDDEN" => Visibility::Hidden,
+            _ => panic!("unknown visibility"),
+        };
+        shared.update_entity_chunk_status(pos, status).unwrap();
+        let events: Vec<_> = shared
+            .take_entity_management_events()
+            .into_iter()
+            .map(|event| match event {
+                EntityManagementEvent::TrackingStart(id) => format!("TrackingStart:{}", id.0),
+                EntityManagementEvent::TrackingEnd(id) => format!("TrackingEnd:{}", id.0),
+                EntityManagementEvent::TickingStart(id) => format!("TickingStart:{}", id.0),
+                EntityManagementEvent::TickingEnd(id) => format!("TickingEnd:{}", id.0),
+                _ => panic!("unexpected status event {event:?}"),
+            })
+            .collect();
+        assert_eq!(events.join(","), values[2]);
+        assert_eq!(
+            shared
+                .all_entities()
+                .iter()
+                .map(|id| id.0.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+            values[3]
+        );
+        assert_eq!(captured.uuid, Uuid::new(0, 1));
+        assert_eq!(captured.tick_count, 0);
+        count += 1;
+    }
+    assert_eq!(count, 5);
+    let requests = shared.take_entity_storage_requests();
+    assert_eq!(requests.len(), 1);
+    let EntityStorageRequest::Load { id, pos: loaded } = requests[0] else {
+        panic!("expected load")
+    };
+    assert_eq!(loaded, pos);
+    shared.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    assert!(matches!(
+        shared.complete_entity_chunk_load(id, Ok(None)),
+        Err(EntityStorageError::DuplicateLoadResponse(_))
+    ));
+    assert_eq!(
+        shared.entity_chunk_load_status(pos),
+        ChunkLoadStatus::Pending
+    );
+    assert!(shared.take_entity_storage_requests().is_empty());
+}
+
+#[test]
 fn load_completion_order_does_not_change_entity_creation_or_callbacks() {
     let mut level = level();
     let a = ChunkPos::new(0, 0);

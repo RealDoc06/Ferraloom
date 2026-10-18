@@ -5,9 +5,39 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.entity.*;
 import net.minecraft.world.level.storage.TagValueInput;
+import java.util.concurrent.CompletableFuture;
 
 /** Executes the real proto-chunk entity stream and section-manager callbacks. */
 public final class WorldgenVectors {
+  static void visibility(Level level) {
+    var events=new ArrayList<String>();
+    var callbacks=new LevelCallback<Entity>() {
+      void add(String name,Entity entity){events.add(name+":"+entity.getUUID().getLeastSignificantBits());}
+      public void onCreated(Entity e){add("Created",e);}
+      public void onDestroyed(Entity e){add("Destroyed",e);}
+      public void onTickingStart(Entity e){add("TickingStart",e);}
+      public void onTickingEnd(Entity e){add("TickingEnd",e);}
+      public void onTrackingStart(Entity e){add("TrackingStart",e);}
+      public void onTrackingEnd(Entity e){add("TrackingEnd",e);}
+      public void onSectionChange(Entity e){add("SectionChange",e);}
+    };
+    var storage=new EntityPersistentStorage<Entity>() {
+      public CompletableFuture<ChunkEntities<Entity>> loadEntities(ChunkPos pos){return new CompletableFuture<>();}
+      public void storeEntities(ChunkEntities<Entity> entities){throw new AssertionError();}
+      public void flush(boolean durable){throw new AssertionError();}
+    };
+    var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,storage);
+    for(int index=1;index<=3;index++) {
+      Entity entity=index==3?new LivingVectors(level):new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,level);
+      entity.setId(index);entity.setUUID(new UUID(0,index));entity.setPos(1.5,64,1.5);manager.addNewEntity(entity);
+    }
+    events.clear();
+    for(var status:List.of(Visibility.TRACKED,Visibility.TICKING,Visibility.TRACKED,Visibility.HIDDEN,Visibility.TICKING)) {
+      manager.updateChunkStatus(new ChunkPos(0,0),status);
+      var visible=new ArrayList<String>();manager.getEntityGetter().getAll().forEach(e->visible.add(Long.toString(e.getUUID().getLeastSignificantBits())));
+      System.out.println("entity-visibility\t"+status+"\t"+String.join(",",events)+"\t"+String.join(",",visible));events.clear();
+    }
+  }
   static CompoundTag tag(String type,int uuid) {
     var tag=new CompoundTag();tag.putString("id",type);tag.putIntArray("UUID",new int[]{0,0,0,uuid});
     var pos=new ListTag();pos.add(DoubleTag.valueOf(1.5));pos.add(DoubleTag.valueOf(64));pos.add(DoubleTag.valueOf(1.5));tag.put("Pos",pos);return tag;
@@ -74,6 +104,7 @@ public final class WorldgenVectors {
     } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
   }
   public static void run(Level level) {
+    visibility(level);
     creationOrder(level);
     sharedPublication(level);
     var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
