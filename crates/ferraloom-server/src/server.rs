@@ -1968,10 +1968,21 @@ impl MinecraftServer {
                     player.set_shared_flag(1, p.input.shift);
                 }
             }
-            sb::Packet::CustomPayload(_)
-            | sb::Packet::Pong(_)
-            | sb::Packet::PlayerCommand(_)
-            | sb::Packet::SeenAdvancements(_) => {}
+            sb::Packet::SeenAdvancements(packet) => {
+                ferraloom_game::advancements::seen_advancements(
+                    &mut self.level.level,
+                    entity,
+                    &packet,
+                )
+                .map_err(game_error)?;
+            }
+            sb::Packet::ClientCommand(packet)
+                if packet.action == play::ClientCommandAction::RequestStats =>
+            {
+                ferraloom_game::advancements::request_stats(&mut self.level.level, entity)
+                    .map_err(game_error)?;
+            }
+            sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
             _ => {}
         }

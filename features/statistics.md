@@ -101,3 +101,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.counter.partial-json | Keep valid siblings when statistic names or values fail codec parsing | `ServerStatsCounter.STATS_CODEC` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | pass |
 | statistics.counter.jdk25-copy-order | Preserve JDK 25 HashSet copy capacities when draining 12, 24 or all custom dirty statistics into the packet map | `ServerStatsCounter#getDirty; HashSet(Collection)` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
 | statistics.counter.loaded-map-order | Preserve JDK 25 per-group putAll and fastutil destination sizing when loading saved statistics | `ServerStatsCounter.STATS_CODEC; ServerStatsCounter#parse` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
+
+| statistics.request-stats.live | REQUEST_STATS sends and clears the canonical player dirty set through ordered player output | `ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests` | pass | partial |
