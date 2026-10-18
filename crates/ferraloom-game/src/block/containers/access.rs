@@ -252,12 +252,12 @@ pub fn can_place_item_through_face(
     match state {
         BlockEntityState::Furnace(furnace) => furnace.can_place_item(slot, stack),
         BlockEntityState::ShulkerBox(_) => !stack.0.as_ref().is_some_and(|stack| {
-            // Block#byItem is immutable registry data. Restrict the scan to the
-            // seventeen ShulkerBoxBlock entries before comparing their item.
             stack.count > 0
-                && ferraloom_data::registries::block::ALL.iter().any(|block| {
-                    block.class() == BlockClass::ShulkerBoxBlock && block.as_item() == stack.item
-                })
+                && stack
+                    .item
+                    .data()
+                    .block
+                    .is_some_and(|block| block.class() == BlockClass::ShulkerBoxBlock)
         }),
         _ => true,
     }
