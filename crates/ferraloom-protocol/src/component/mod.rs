@@ -21,6 +21,12 @@ pub(crate) fn invalid(kind: &'static str) -> crate::Error {
     crate::Error::invalid(kind, "invalid value")
 }
 
+fn unordered_eq<T: PartialEq>(left: &[T], right: &[T]) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|value| right.contains(value))
+        && right.iter().all(|value| left.contains(value))
+}
+
 /// Static vanilla data-component registry ID, generated from registry reports.
 pub type ComponentTypeId = ferraloom_data::registries::data_component_type::Id;
 #[cfg(test)]
