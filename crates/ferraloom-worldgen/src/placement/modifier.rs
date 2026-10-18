@@ -164,8 +164,8 @@ impl PlacementModifier {
         top_feature: Option<&PlacedFeature>,
         p: [i32; 3],
     ) -> Result<Vec<[i32; 3]>, Error> {
-        let region = &*context.region;
-        let random = &mut *context.random;
+        let region = &context.level;
+        let random = &mut context.random;
         let generator = context.generator;
         let mut result = Vec::new();
         match self {
@@ -274,7 +274,7 @@ impl PlacementModifier {
                     .as_ref()
                     .ok_or_else(|| Error("biome check on an unregistered feature".into()))?;
                 let quart = crate::biome_manager::zoom_quart(
-                    crate::biome_manager::obfuscate_seed(region.seed),
+                    crate::biome_manager::obfuscate_seed(region.seed()),
                     p,
                 );
                 let biome = &generator.data().biome_names[region.noise_biome(quart)?.0 as usize];

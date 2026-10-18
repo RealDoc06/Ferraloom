@@ -3,17 +3,12 @@ use super::{
     rule::{BlockTags, PosRuleTest, RuleTest},
     template::{StructureBlockInfo, StructurePlaceSettings},
 };
-use crate::{
-    Error, Identifier,
-    codec::*,
-    placement::providers::IntProvider,
-    region::{Heightmap, WorldGenRegion},
-};
+use crate::{Error, Identifier, codec::*, placement::providers::IntProvider, region::Heightmap};
 use ferraloom_data::{Block, BlockState, datapack::decode_block_state, properties};
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 use ferraloom_util::{
     mth,
-    random::{LegacyRandomSource, RandomSource, SingleThreadedRandomSource, WorldgenRandom},
+    random::{LegacyRandomSource, RandomSource, SingleThreadedRandomSource},
 };
 use serde_json::Value;
 
@@ -263,14 +258,14 @@ impl StructureProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_block(
         &self,
-        region: &WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         target: [i32; 3],
         reference: [i32; 3],
         relative: [i32; 3],
         info: StructureBlockInfo,
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
-        shared: &mut WorldgenRandom,
+        shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<Option<StructureBlockInfo>, Error> {
         self.process_block_with_nbt_mutation(
             region, target, reference, relative, info, settings, tags, shared,
@@ -280,14 +275,14 @@ impl StructureProcessor {
     #[allow(clippy::too_many_arguments)]
     fn process_block_with_nbt_mutation(
         &self,
-        region: &WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         target: [i32; 3],
         reference: [i32; 3],
         relative: [i32; 3],
         mut info: StructureBlockInfo,
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
-        shared: &mut WorldgenRandom,
+        shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<(Option<StructureBlockInfo>, bool), Error> {
         let mut mutated_input_nbt = false;
         match self {
@@ -391,14 +386,14 @@ impl StructureProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn finalize_processing(
         &self,
-        region: &WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         target: [i32; 3],
         reference: [i32; 3],
         original: &[&StructureBlockInfo],
         processed: &mut [StructureBlockInfo],
         settings: &mut StructurePlaceSettings,
         tags: &BlockTags,
-        shared: &mut WorldgenRandom,
+        shared: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<(), Error> {
         let Self::Capped { delegate, limit } = self else {
             return Ok(());
@@ -406,7 +401,7 @@ impl StructureProcessor {
         if limit.range().1 == 0 || processed.is_empty() || original.len() != processed.len() {
             return Ok(());
         }
-        let mut random = SingleThreadedRandomSource::new(region.seed)
+        let mut random = SingleThreadedRandomSource::new(region.seed())
             .fork_positional()
             .at(target[0], target[1], target[2]);
         let max = limit.sample(&mut random).min(processed.len() as i32);

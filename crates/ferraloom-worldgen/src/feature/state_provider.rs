@@ -199,7 +199,7 @@ impl BlockStateProvider {
     ) -> Result<BlockState, Error> {
         match self.get_optional_state(context, p)? {
             Some(state) => Ok(state),
-            None => context.region.block(p),
+            None => context.level.block(p),
         }
     }
     pub fn get_optional_state(
@@ -209,7 +209,7 @@ impl BlockStateProvider {
     ) -> Result<Option<BlockState>, Error> {
         Ok(Some(match self {
             Self::Simple(state) => *state,
-            Self::Weighted(list) => *list.sample(context.random),
+            Self::Weighted(list) => *list.sample(&mut context.random),
             Self::RandomBlock(blocks) => {
                 if blocks.is_empty() {
                     return Ok(None);
@@ -218,7 +218,7 @@ impl BlockStateProvider {
             }
             Self::CopyProperties(source) => source
                 .get_state(context, p)?
-                .with_properties_of(context.region.block(p)?),
+                .with_properties_of(context.level.block(p)?),
             Self::RandomizedInt {
                 source,
                 property,
@@ -229,7 +229,7 @@ impl BlockStateProvider {
                     return Ok(Some(state));
                 }
                 state
-                    .with_integer_property(property, values.sample(context.random))
+                    .with_integer_property(property, values.sample(&mut context.random))
                     .map_err(|e| Error(format!("{e:?}")))?
             }
             Self::Rotated { source, direction } => {
@@ -267,7 +267,7 @@ impl BlockStateProvider {
             }
             Self::RuleBased { fallback, rules } => {
                 for (predicate, then) in rules {
-                    if predicate.test(context.region, p, context.generator)?
+                    if predicate.test(&mut context.level, p, context.generator)?
                         && let Some(state) = then.get_optional_state(context, p)?
                     {
                         return Ok(Some(state));

@@ -26,8 +26,8 @@ impl MonsterRoomFeature {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<(), Error> {
-        if !self.protected.contains(&ctx.region.block(p)?.block()) {
-            ctx.region.set_block(p, state, 2)?;
+        if !self.protected.contains(&ctx.level.block(p)?.block()) {
+            ctx.level.set_block(p, state, 2)?;
         }
         Ok(())
     }
@@ -36,7 +36,7 @@ impl MonsterRoomFeature {
         let state = Block::CHEST.default_state();
         let mut solid = None;
         for d in HORIZONTAL {
-            let old = ctx.region.block(move_direction(p, d))?;
+            let old = ctx.level.block(move_direction(p, d))?;
             if old.block() == Block::CHEST {
                 return Ok(state);
             }
@@ -52,13 +52,13 @@ impl MonsterRoomFeature {
             d.opposite()
         } else {
             let mut d = Direction::North;
-            if ctx.region.block(move_direction(p, d))?.data().solid_render {
+            if ctx.level.block(move_direction(p, d))?.data().solid_render {
                 d = d.opposite();
             }
-            if ctx.region.block(move_direction(p, d))?.data().solid_render {
+            if ctx.level.block(move_direction(p, d))?.data().solid_render {
                 d = d.clockwise();
             }
-            if ctx.region.block(move_direction(p, d))?.data().solid_render {
+            if ctx.level.block(move_direction(p, d))?.data().solid_render {
                 d = d.opposite();
             }
             d
@@ -82,14 +82,14 @@ impl Feature for MonsterRoomFeature {
             for dy in -1..=4 {
                 for dz in -zr - 1..=zr + 1 {
                     let p = offset(ctx.origin, [dx, dy, dz]);
-                    let solid = ctx.region.is_solid(p)?;
+                    let solid = ctx.level.is_solid(p)?;
                     if (dy == -1 || dy == 4) && !solid {
                         return Ok(false);
                     }
                     if (dx == -xr - 1 || dx == xr + 1 || dz == -zr - 1 || dz == zr + 1)
                         && dy == 0
-                        && is_air(ctx.region.block(p)?)
-                        && is_air(ctx.region.block(move_direction(p, Direction::Up))?)
+                        && is_air(ctx.level.block(p)?)
+                        && is_air(ctx.level.block(move_direction(p, Direction::Up))?)
                     {
                         holes += 1;
                     }
@@ -103,14 +103,13 @@ impl Feature for MonsterRoomFeature {
             for dy in (-1..=3).rev() {
                 for dz in -zr - 1..=zr + 1 {
                     let p = offset(ctx.origin, [dx, dy, dz]);
-                    let old = ctx.region.block(p)?;
+                    let old = ctx.level.block(p)?;
                     if dx == -xr - 1 || dy == -1 || dz == -zr - 1 || dx == xr + 1 || dz == zr + 1 {
-                        if p[1] >= ctx.region.min_y()
-                            && !ctx.region.is_solid(move_direction(p, Direction::Down))?
+                        if p[1] >= ctx.level.min_y()
+                            && !ctx.level.is_solid(move_direction(p, Direction::Down))?
                         {
-                            ctx.region
-                                .set_block(p, Block::CAVE_AIR.default_state(), 2)?;
-                        } else if ctx.region.is_solid(p)? && old.block() != Block::CHEST {
+                            ctx.level.set_block(p, Block::CAVE_AIR.default_state(), 2)?;
+                        } else if ctx.level.is_solid(p)? && old.block() != Block::CHEST {
                             let block = if dy == -1 && ctx.random.next_int_bound(4) != 0 {
                                 Block::MOSSY_COBBLESTONE
                             } else {
@@ -131,19 +130,22 @@ impl Feature for MonsterRoomFeature {
                     ctx.origin[1],
                     ctx.origin[2] + ctx.random.next_int_bound(zr * 2 + 1) - zr,
                 ];
-                if !is_air(ctx.region.block(p)?) {
+                if !is_air(ctx.level.block(p)?) {
                     continue;
                 }
                 let mut walls = 0;
                 for d in HORIZONTAL {
-                    if ctx.region.is_solid(move_direction(p, d))? {
+                    if ctx.level.is_solid(move_direction(p, d))? {
                         walls += 1;
                     }
                 }
                 if walls == 1 {
                     self.safe_set(ctx, p, self.chest_state(ctx, p)?)?;
-                    ctx.region
-                        .set_loot_table(p, &"chests/simple_dungeon".parse()?, ctx.random)?;
+                    ctx.level.set_loot_table(
+                        p,
+                        &"chests/simple_dungeon".parse()?,
+                        &mut ctx.random,
+                    )?;
                     break;
                 }
             }
@@ -152,8 +154,8 @@ impl Feature for MonsterRoomFeature {
         // The placed vanilla spawner always creates a SpawnerBlockEntity.
         // A protected replacement can leave a different block in the origin;
         // vanilla then skips both mob selection and spawner initialization.
-        if ctx.region.block(ctx.origin)?.block() == Block::SPAWNER
-            && ctx.region.block_entity(ctx.origin)?.is_some()
+        if ctx.level.block(ctx.origin)?.block() == Block::SPAWNER
+            && ctx.level.has_block_entity_at(ctx.origin)?
         {
             let mob = [
                 EntityType::SKELETON,
@@ -161,7 +163,8 @@ impl Feature for MonsterRoomFeature {
                 EntityType::ZOMBIE,
                 EntityType::SPIDER,
             ][ctx.random.next_int_bound(4) as usize];
-            ctx.region.set_spawner_entity(ctx.origin, mob, ctx.random)?;
+            ctx.level
+                .set_spawner_entity(ctx.origin, mob, &mut ctx.random)?;
         }
         Ok(true)
     }

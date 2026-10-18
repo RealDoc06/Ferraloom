@@ -136,11 +136,11 @@ struct BambooFeature {
 impl Feature for BambooFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = ctx.origin;
-        if !ctx.region.block(origin)?.is_air() {
+        if !ctx.level.block(origin)?.is_air() {
             return Ok(false);
         }
         if ctx
-            .region
+            .level
             .can_survive(Block::BAMBOO.default_state(), origin)?
         {
             let height = ctx.random.next_int_bound(12) + 5;
@@ -151,14 +151,14 @@ impl Feature for BambooFeature {
                         if (x - origin[0]).pow(2) + (z - origin[2]).pow(2) <= r * r {
                             let p = [
                                 x,
-                                ctx.region.height_at(Heightmap::WorldSurface, x, z)? - 1,
+                                ctx.level.height_at(Heightmap::WorldSurface, x, z)? - 1,
                                 z,
                             ];
                             if self
                                 .podzol_replaceable
-                                .contains(&ctx.region.block(p)?.block())
+                                .contains(&ctx.level.block(p)?.block())
                             {
-                                ctx.region.set_block(p, Block::PODZOL.default_state(), 2)?;
+                                ctx.level.set_block(p, Block::PODZOL.default_state(), 2)?;
                             }
                         }
                     }
@@ -166,18 +166,18 @@ impl Feature for BambooFeature {
             }
             let mut p = origin;
             for _ in 0..height {
-                if !ctx.region.block(p)?.is_air() {
+                if !ctx.level.block(p)?.is_air() {
                     break;
                 }
-                ctx.region.set_block(p, bamboo("none", "0"), 2)?;
+                ctx.level.set_block(p, bamboo("none", "0"), 2)?;
                 p[1] += 1;
             }
             if p[1] - origin[1] >= 3 {
-                ctx.region.set_block(p, bamboo("large", "1"), 2)?;
+                ctx.level.set_block(p, bamboo("large", "1"), 2)?;
                 p[1] -= 1;
-                ctx.region.set_block(p, bamboo("large", "0"), 2)?;
+                ctx.level.set_block(p, bamboo("large", "0"), 2)?;
                 p[1] -= 1;
-                ctx.region.set_block(p, bamboo("small", "0"), 2)?;
+                ctx.level.set_block(p, bamboo("small", "0"), 2)?;
             }
         }
         Ok(true)
@@ -202,7 +202,7 @@ impl Feature for BlockColumnFeature {
         let mut heights = self
             .layers
             .iter()
-            .map(|l| l.height.sample(ctx.random))
+            .map(|l| l.height.sample(&mut ctx.random))
             .collect::<Vec<_>>();
         let total = heights.iter().fold(0i32, |a, b| a.wrapping_add(*b));
         if total == 0 {
@@ -212,7 +212,7 @@ impl Feature for BlockColumnFeature {
         for y in 0..total {
             if !self
                 .allowed_placement
-                .test(ctx.region, next, ctx.generator)?
+                .test(&mut ctx.level, next, ctx.generator)?
             {
                 let mut remove = total - y;
                 for index in 0..heights.len() {
@@ -236,7 +236,7 @@ impl Feature for BlockColumnFeature {
         for (layer, height) in self.layers.iter().zip(heights) {
             for _ in 0..height {
                 let state = layer.state.get_state(ctx, p)?;
-                ctx.region.set_block(p, state, 2)?;
+                ctx.level.set_block(p, state, 2)?;
                 p = relative(p, self.direction);
             }
         }
@@ -250,7 +250,7 @@ struct BlockPileFeature {
 }
 impl Feature for BlockPileFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if ctx.origin[1] < ctx.region.min_y() + 5 {
+        if ctx.origin[1] < ctx.level.min_y() + 5 {
             return Ok(false);
         }
         let xr = 2 + ctx.random.next_int_bound(2);
@@ -262,19 +262,19 @@ impl Feature for BlockPileFeature {
                         <= ctx.random.next_float() * 10.0 - ctx.random.next_float() * 6.0;
                     if selected || f64::from(ctx.random.next_float()) < 0.031 {
                         let p = offset(ctx.origin, [x, y, z]);
-                        if ctx.region.block(p)?.is_air() {
+                        if ctx.level.block(p)?.is_air() {
                             let below = relative(p, Direction::Down);
-                            let allowed = if ctx.region.block(below)?.block() == Block::DIRT_PATH {
+                            let allowed = if ctx.level.block(below)?.block() == Block::DIRT_PATH {
                                 ctx.random.next_boolean()
                             } else {
-                                match ctx.region.block(below)?.cached_sturdy_face(Direction::Up) {
+                                match ctx.level.block(below)?.cached_sturdy_face(Direction::Up) {
                                     Some(sturdy) => sturdy,
-                                    None => ctx.region.has_sturdy_face(below, Direction::Up)?,
+                                    None => ctx.level.has_sturdy_face(below, Direction::Up)?,
                                 }
                             };
                             if allowed {
                                 let state = self.state.get_state(ctx, p)?;
-                                ctx.region.set_block(p, state, 260)?;
+                                ctx.level.set_block(p, state, 260)?;
                             }
                         }
                     }
@@ -296,28 +296,31 @@ impl Feature for SimpleBlockFeature {
         let Some(state) = self.state.get_optional_state(ctx, p)? else {
             return Ok(false);
         };
-        if !ctx.region.can_survive(state, p)? {
+        if !ctx.level.can_survive(state, p)? {
             return Ok(false);
         }
         if state.block().is_instance_of(BlockClass::DoublePlantBlock) {
-            let above = ctx.region.block(relative(p, Direction::Up))?;
+            let above = ctx.level.block(relative(p, Direction::Up))?;
             if !above.is_air()
                 && (state.data().fluid != above.data().fluid || !above.data().replaceable)
             {
                 return Ok(false);
             }
-            ctx.region.place_double_plant(state, p, 2)?;
+            ctx.level.place_double_plant(state, p, 2)?;
         } else if state.block().is_instance_of(BlockClass::MossyCarpetBlock) {
-            ctx.region.place_mossy_carpet(p, 2)?;
+            ctx.level.place_mossy_carpet(p, 2)?;
         } else {
-            ctx.region.set_block(p, state, 2)?;
+            ctx.level.set_block(p, state, 2)?;
         }
         if self.schedule_tick {
-            ctx.region.schedule_block_tick(SavedTick {
-                kind: ctx.region.block(p)?.block(),
-                position: p,
-                priority: 0,
-            })?;
+            ctx.level.schedule_block_tick(
+                SavedTick {
+                    kind: ctx.level.block(p)?.block(),
+                    position: p,
+                    priority: 0,
+                },
+                1,
+            )?;
         }
         Ok(true)
     }
@@ -327,17 +330,17 @@ impl Feature for SimpleBlockFeature {
 struct VinesFeature;
 impl Feature for VinesFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if !ctx.region.block(ctx.origin)?.is_air() {
+        if !ctx.level.block(ctx.origin)?.is_air() {
             return Ok(false);
         }
         for d in Direction::VALUES {
             if d != Direction::Down
                 && ctx
-                    .region
+                    .level
                     .vine_acceptable_neighbor(relative(ctx.origin, d), d)?
             {
                 let state = BlockState::from_properties(Block::VINE, [(d.name(), "true")]).unwrap();
-                ctx.region.set_block(ctx.origin, state, 2)?;
+                ctx.level.set_block(ctx.origin, state, 2)?;
                 return Ok(true);
             }
         }
@@ -357,23 +360,23 @@ struct RandomNeighborSpreadFeature {
 impl Feature for RandomNeighborSpreadFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let state = self.block.get_state(ctx, ctx.origin)?;
-        ctx.region.set_block(ctx.origin, state, 2)?;
-        let attempts = self.attempts.sample(ctx.random);
+        ctx.level.set_block(ctx.origin, state, 2)?;
+        let attempts = self.attempts.sample(&mut ctx.random);
         for _ in 0..attempts {
             let p = offset(
                 ctx.origin,
                 [
-                    self.xz_offset.sample(ctx.random),
-                    self.y_offset.sample(ctx.random),
-                    self.xz_offset.sample(ctx.random),
+                    self.xz_offset.sample(&mut ctx.random),
+                    self.y_offset.sample(&mut ctx.random),
+                    self.xz_offset.sample(&mut ctx.random),
                 ],
             );
-            if self.can_replace.test(ctx.region, p, ctx.generator)? {
+            if self.can_replace.test(&mut ctx.level, p, ctx.generator)? {
                 let mut count = 0;
                 for d in Direction::VALUES {
                     if self
                         .neighbors
-                        .contains(&ctx.region.block(relative(p, d))?.block())
+                        .contains(&ctx.level.block(relative(p, d))?.block())
                     {
                         count += 1;
                     }
@@ -383,7 +386,7 @@ impl Feature for RandomNeighborSpreadFeature {
                 }
                 if count == 1 {
                     let state = self.block.get_state(ctx, p)?;
-                    ctx.region.set_block(p, state, 2)?;
+                    ctx.level.set_block(p, state, 2)?;
                 }
             }
         }
@@ -400,7 +403,7 @@ struct ProjectedRandomPatchySquare {
 }
 impl Feature for ProjectedRandomPatchySquare {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let size = self.size.sample(ctx.random);
+        let size = self.size.sample(&mut ctx.random);
         let bound = size * size + 1;
         for x in -size..=size {
             for z in -size..=size {
@@ -408,7 +411,7 @@ impl Feature for ProjectedRandomPatchySquare {
                     let mut p = offset(ctx.origin, [x, 0, z]);
                     let mut drop = self.max_projection_height;
                     while self.project_through.test(
-                        ctx.region,
+                        &mut ctx.level,
                         relative(p, Direction::Down),
                         ctx.generator,
                     )? {
@@ -419,7 +422,7 @@ impl Feature for ProjectedRandomPatchySquare {
                         }
                     }
                     if let Some(state) = self.block.get_optional_state(ctx, p)? {
-                        ctx.region.set_block(p, state, 2)?;
+                        ctx.level.set_block(p, state, 2)?;
                     }
                 }
             }
@@ -453,13 +456,13 @@ struct SingleBlockPillarFeature {
 impl Feature for SingleBlockPillarFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
-        while self.can_replace.test(ctx.region, p, ctx.generator)?
+        while self.can_replace.test(&mut ctx.level, p, ctx.generator)?
             && ctx.random.next_float() < self.chance
-            && p[1] >= ctx.region.min_y()
-            && p[1] < ctx.region.min_y() + ctx.region.height()
+            && p[1] >= ctx.level.min_y()
+            && p[1] < ctx.level.min_y() + ctx.level.height()
         {
             let state = self.block.get_state(ctx, p)?;
-            ctx.region.set_block(p, state, 2)?;
+            ctx.level.set_block(p, state, 2)?;
             p = relative(p, self.direction);
         }
         if let Some(cap) = &self.cap {

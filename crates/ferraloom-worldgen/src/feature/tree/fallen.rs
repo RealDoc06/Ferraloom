@@ -19,12 +19,12 @@ impl FallenTree {
         })
     }
     fn valid(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        let s = c.region.block(p)?;
+        let s = c.level.block(p)?;
         Ok(is_air(s) || self.replaceable.contains(&s.block()))
     }
     fn supported(c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        let below = c.region.block(add(p, [0, -1, 0]))?;
-        c.region.state_has_sturdy_face(below, p, Direction::Up)
+        let below = c.level.block(add(p, [0, -1, 0]))?;
+        c.level.state_has_sturdy_face(below, p, Direction::Up)
     }
     fn log(
         &self,
@@ -34,15 +34,15 @@ impl FallenTree {
         out: &mut Positions,
     ) -> Result<(), Error> {
         let s = self.provider.get_state(c, p)?;
-        c.region
+        c.level
             .set_block(p, axis.map_or(s, |a| axis_state(s, a)), 3)?;
         out.insert(p);
         for y in 1..=2 {
             let q = add(p, [0, y, 0]);
-            if is_air(c.region.block(q)?) {
+            if is_air(c.level.block(q)?) {
                 break;
             }
-            c.region.mark_post_processing(q)?;
+            c.level.mark_post_processing(q)?;
         }
         Ok(())
     }
@@ -60,7 +60,7 @@ impl Feature for FallenTree {
             &mut Positions::default(),
         )?;
         let d = horizontal(c);
-        let length = self.length.sample(c.random) - 2;
+        let length = self.length.sample(&mut c.random) - 2;
         let distance = 2 + c.random.next_int_bound(2);
         let mut p = add(relative(c.origin, d, distance), [0, 1, 0]);
         for _ in 0..6 {

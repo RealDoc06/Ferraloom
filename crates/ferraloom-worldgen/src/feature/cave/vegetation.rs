@@ -60,14 +60,14 @@ impl VegetationPatchFeature {
     ) -> Result<bool, Error> {
         for i in 0..depth {
             let state = self.ground.get_state(ctx, p)?;
-            let old = ctx.region.block(p)?;
+            let old = ctx.level.block(p)?;
             if state.block() == old.block() {
                 continue;
             }
             if !self.replaceable.contains(&old.block()) {
                 return Ok(i != 0);
             }
-            ctx.region.set_block(p, state, 2)?;
+            ctx.level.set_block(p, state, 2)?;
             p = move_direction(p, self.direction);
         }
         Ok(true)
@@ -75,8 +75,8 @@ impl VegetationPatchFeature {
 }
 impl Feature for VegetationPatchFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let xr = self.radius.sample(ctx.random) + 1;
-        let zr = self.radius.sample(ctx.random) + 1;
+        let xr = self.radius.sample(&mut ctx.random) + 1;
+        let zr = self.radius.sample(&mut ctx.random) + 1;
         let mut surface = JavaHashSet::<BlockPos>::new();
         for dx in -xr..=xr {
             for dz in -zr..=zr {
@@ -90,22 +90,22 @@ impl Feature for VegetationPatchFeature {
                 }
                 let mut p = offset(ctx.origin, [dx, 0, dz]);
                 let mut n = 0;
-                while is_air(ctx.region.block(p)?) && n < self.range {
+                while is_air(ctx.level.block(p)?) && n < self.range {
                     p = move_direction(p, self.direction);
                     n += 1;
                 }
                 let mut n = 0;
-                while !is_air(ctx.region.block(p)?) && n < self.range {
+                while !is_air(ctx.level.block(p)?) && n < self.range {
                     p = move_direction(p, self.direction.opposite());
                     n += 1;
                 }
                 let ground = move_direction(p, self.direction);
-                if is_air(ctx.region.block(p)?)
+                if is_air(ctx.level.block(p)?)
                     && ctx
-                        .region
+                        .level
                         .has_sturdy_face(ground, self.direction.opposite())?
                 {
-                    let depth = self.depth.sample(ctx.random)
+                    let depth = self.depth.sample(&mut ctx.random)
                         + i32::from(
                             self.extra_bottom > 0.0 && ctx.random.next_float() < self.extra_bottom,
                         );
@@ -122,7 +122,7 @@ impl Feature for VegetationPatchFeature {
                 let mut exposed = false;
                 for d in HORIZONTAL.into_iter().chain([Direction::Down]) {
                     if !ctx
-                        .region
+                        .level
                         .has_sturdy_face(move_direction(p, d), d.opposite())?
                     {
                         exposed = true;
@@ -135,7 +135,7 @@ impl Feature for VegetationPatchFeature {
             }
             for p in water.iter() {
                 let p = [p.x, p.y, p.z];
-                ctx.region.set_block(p, Block::WATER.default_state(), 2)?;
+                ctx.level.set_block(p, Block::WATER.default_state(), 2)?;
             }
             surface = water;
         }
@@ -152,9 +152,9 @@ impl Feature for VegetationPatchFeature {
                 let result = self.vegetation.place(ctx, false);
                 ctx.origin = origin;
                 if result? && self.waterlogged {
-                    let state = ctx.region.block(p)?;
+                    let state = ctx.level.block(p)?;
                     if state.get(properties::WATERLOGGED) == Some(false) {
-                        ctx.region.set_block(
+                        ctx.level.set_block(
                             p,
                             state.with(properties::WATERLOGGED, true).unwrap(),
                             2,

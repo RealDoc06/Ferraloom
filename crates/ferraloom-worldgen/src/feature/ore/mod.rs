@@ -64,9 +64,9 @@ impl OreFeature {
         ctx: &mut FeatureContext<'_, '_>,
         p: [i32; 3],
     ) -> Result<Option<BlockState>, Error> {
-        let old = ctx.region.block(p)?;
+        let old = ctx.level.block(p)?;
         for target in &self.targets {
-            if !target.target.test(old, p, &self.tags, ctx.random) {
+            if !target.target.test(old, p, &self.tags, &mut ctx.random) {
                 continue;
             }
             if self.discard <= 0.0
@@ -76,7 +76,7 @@ impl OreFeature {
             }
             let mut exposed = false;
             for direction in Direction::VALUES {
-                if is_air(ctx.region.block(move_direction(p, direction))?) {
+                if is_air(ctx.level.block(move_direction(p, direction))?) {
                     exposed = true;
                     break;
                 }
@@ -96,7 +96,7 @@ impl OreFeature {
                 ctx.origin[axis].wrapping_add((offset + 0.5).floor() as i32)
             });
             if let Some(state) = self.replacement(ctx, p)? {
-                ctx.region.set_block(p, state, 2)?;
+                ctx.level.set_block(p, state, 2)?;
             }
         }
         Ok(true)
@@ -127,7 +127,7 @@ impl OreFeature {
         let mut below_surface = false;
         'probe: for px in start[0]..=start[0] + size_xz {
             for pz in start[2]..=start[2] + size_xz {
-                if start[1] <= ctx.region.height_at(Heightmap::OceanFloorWg, px, pz)? {
+                if start[1] <= ctx.level.height_at(Heightmap::OceanFloorWg, px, pz)? {
                     below_surface = true;
                     break 'probe;
                 }
@@ -194,8 +194,8 @@ impl OreFeature {
                     for pz in min[2]..=max[2] {
                         let dz = (pz as f64 + 0.5 - z) / radius;
                         if dx * dx + dy * dy + dz * dz >= 1.0
-                            || py < ctx.region.min_y()
-                            || py >= ctx.region.min_y() + ctx.region.height()
+                            || py < ctx.level.min_y()
+                            || py >= ctx.level.min_y() + ctx.level.height()
                         {
                             continue;
                         }
@@ -206,10 +206,10 @@ impl OreFeature {
                             continue;
                         }
                         let p = [px, py, pz];
-                        if ctx.region.ensure_can_write(p)
+                        if ctx.level.ensure_can_write(p)
                             && let Some(state) = self.replacement(ctx, p)?
                         {
-                            ctx.region.set_block_in_section(p, state)?;
+                            ctx.level.set_block_in_section(p, state)?;
                             placed = true;
                         }
                     }

@@ -124,12 +124,12 @@ impl Decorator {
                         };
                         if yes {
                             let mut p = step(p, d);
-                            if is_air(c.region.block(p)?) {
+                            if is_air(c.level.block(p)?) {
                                 vine(c, p, d.opposite(), out)?;
                                 if matches!(self, Self::LeaveVine(_)) {
                                     for _ in 0..4 {
                                         p[1] -= 1;
-                                        if !is_air(c.region.block(p)?) {
+                                        if !is_air(c.level.block(p)?) {
                                             break;
                                         }
                                         vine(c, p, d.opposite(), out)?;
@@ -149,7 +149,7 @@ impl Decorator {
                         for d in HORIZONTAL {
                             if c.random.next_float() <= 0.25 {
                                 let p = step(p, d.opposite());
-                                if is_air(c.region.block(p)?) {
+                                if is_air(c.level.block(p)?) {
                                     let age = c.random.next_int_bound(3);
                                     let s = Block::COCOA
                                         .default_state()
@@ -168,11 +168,11 @@ impl Decorator {
                 directions,
             } => {
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, c.random);
+                shuffle(&mut positions, &mut c.random);
                 for p in positions {
                     let d = directions[c.random.next_int_bound(directions.len() as i32) as usize];
                     let p = step(p, d);
-                    if c.random.next_float() <= *probability && is_air(c.region.block(p)?) {
+                    if c.random.next_float() <= *probability && is_air(c.level.block(p)?) {
                         let s = provider.get_state(c, p)?;
                         put(c, p, s, out)?;
                     }
@@ -187,7 +187,7 @@ impl Decorator {
                 directions,
             } => {
                 let mut positions = leaves.to_vec();
-                shuffle(&mut positions, c.random);
+                shuffle(&mut positions, &mut c.random);
                 let mut blacklist = BTreeSet::new();
                 for leaf in positions {
                     let d = directions[c.random.next_int_bound(directions.len() as i32) as usize];
@@ -197,7 +197,7 @@ impl Decorator {
                     }
                     let mut air = true;
                     for i in 1..=*empty {
-                        if !is_air(c.region.block(relative(leaf, d, i))?) {
+                        if !is_air(c.level.block(relative(leaf, d, i))?) {
                             air = false;
                             break;
                         }
@@ -234,10 +234,10 @@ impl Decorator {
                         [Direction::East, Direction::South, Direction::West].map(|d| step(p, d))
                     })
                     .collect::<Vec<_>>();
-                shuffle(&mut positions, c.random);
+                shuffle(&mut positions, &mut c.random);
                 for p in positions {
-                    if is_air(c.region.block(p)?)
-                        && is_air(c.region.block(step(p, Direction::South))?)
+                    if is_air(c.level.block(p)?)
+                        && is_air(c.level.block(step(p, Direction::South))?)
                     {
                         put(
                             c,
@@ -245,7 +245,7 @@ impl Decorator {
                             facing(Block::BEE_NEST.default_state(), Direction::South),
                             out,
                         )?;
-                        c.region.populate_worldgen_beehive(p, c.random)?;
+                        c.level.populate_worldgen_beehive(p, &mut c.random)?;
                         break;
                     }
                 }
@@ -258,11 +258,11 @@ impl Decorator {
                     return Ok(());
                 }
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, c.random);
+                shuffle(&mut positions, &mut c.random);
                 for p in positions {
                     let mut enclosed = true;
                     for d in Direction::VALUES {
-                        if !log_blocks.contains(&c.region.block(step(p, d))?.block()) {
+                        if !log_blocks.contains(&c.level.block(step(p, d))?.block()) {
                             enclosed = false;
                             break;
                         }
@@ -327,10 +327,10 @@ impl Decorator {
                             min[i] + c.random.next_int_bound(max[i] - min[i] + 1)
                         });
                         let above = add(p, [0, 1, 0]);
-                        let s = c.region.block(above)?;
+                        let s = c.level.block(above)?;
                         if (is_air(s) || s.block() == Block::VINE)
-                            && c.region.block(p)?.data().solid_render
-                            && c.region
+                            && c.level.block(p)?.data().solid_render
+                            && c.level
                                 .height_at(Heightmap::MotionBlockingNoLeaves, p[0], p[2])?
                                 <= above[1]
                         {
@@ -347,7 +347,7 @@ impl Decorator {
                 patch,
             } => {
                 let mut positions = logs.to_vec();
-                shuffle(&mut positions, c.random);
+                shuffle(&mut positions, &mut c.random);
                 if let Some(&origin) = positions.iter().min_by_key(|p| p[1]) {
                     if c.random.next_float() < *ground
                         && let Some(feature) = c.registry.features.get(patch).cloned()
@@ -365,8 +365,8 @@ impl Decorator {
                     {
                         if c.random.next_float() < chance {
                             let mut p = add(p, [0, -1, 0]);
-                            if is_air(c.region.block(p)?) {
-                                while is_air(c.region.block(add(p, [0, -1, 0]))?)
+                            if is_air(c.level.block(p)?) {
+                                while is_air(c.level.block(add(p, [0, -1, 0]))?)
                                     && f64::from(c.random.next_float()) >= 0.5
                                 {
                                     put(
@@ -427,7 +427,7 @@ impl Decorator {
                             if shelf_near(c, q)? || shelf_near(c, p)? {
                                 continue;
                             }
-                        } else if c.region.block(add(q, [0, -1, 0]))?.block()
+                        } else if c.level.block(add(q, [0, -1, 0]))?.block()
                             == Block::SHELF_MUSHROOM
                         {
                             continue;
@@ -524,7 +524,7 @@ fn circle(
                     put(c, q, s, out)?;
                     break;
                 }
-                if y < 0 && !is_air(c.region.block(q)?) {
+                if y < 0 && !is_air(c.level.block(q)?) {
                     break;
                 }
             }
@@ -533,7 +533,7 @@ fn circle(
     Ok(())
 }
 fn shelf_replaceable(c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-    if !c.region.block(p)?.data().replaceable {
+    if !c.level.block(p)?.data().replaceable {
         return Ok(false);
     }
     for q in std::iter::once(p).chain(
@@ -545,7 +545,7 @@ fn shelf_replaceable(c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> 
         ]
         .map(|d| step(p, d)),
     ) {
-        if c.region.block(q)?.block() == Block::WATER {
+        if c.level.block(q)?.block() == Block::WATER {
             return Ok(false);
         }
     }
@@ -553,7 +553,7 @@ fn shelf_replaceable(c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> 
 }
 fn shelf_near(c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
     for d in HORIZONTAL {
-        if c.region.block(step(p, d))?.block() == Block::SHELF_MUSHROOM {
+        if c.level.block(step(p, d))?.block() == Block::SHELF_MUSHROOM {
             return Ok(true);
         }
     }

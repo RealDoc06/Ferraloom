@@ -1,7 +1,6 @@
 //! Port of IcebergFeature. Keep Java float intermediates and random call order.
 use super::*;
-use crate::region::WorldGenRegion;
-use ferraloom_util::random::WorldgenRandom;
+use ferraloom_util::random::RandomSource;
 
 #[derive(Debug)]
 pub(super) struct IcebergFeature {
@@ -22,7 +21,7 @@ struct Shape {
 impl Feature for IcebergFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = [ctx.origin[0], ctx.generator.sea_level(), ctx.origin[2]];
-        let r = &mut *ctx.random;
+        let r = &mut ctx.random;
         let snow = r.next_double() > 0.7;
         let angle = r.next_double() * 2.0 * std::f64::consts::PI;
         let ellipse_a = 11 - r.next_int_bound(5);
@@ -59,12 +58,12 @@ impl Feature for IcebergFeature {
                         radius_round(r, y, height, width)
                     };
                     if ellipse || x < radius {
-                        shape.generate(ctx.region, r, [x, y, z], radius)?;
+                        shape.generate(&mut ctx.level, r, [x, y, z], radius)?;
                     }
                 }
             }
         }
-        shape.smooth(ctx.region, ellipse_a)?;
+        shape.smooth(&mut ctx.level, ellipse_a)?;
         for x in -a..a {
             for z in -a..a {
                 for y in (-depth + 1..=-1).rev() {
@@ -81,7 +80,7 @@ impl Feature for IcebergFeature {
                             a: new_a,
                             ..shape
                         }
-                        .generate(ctx.region, r, [x, y, z], radius)?;
+                        .generate(&mut ctx.level, r, [x, y, z], radius)?;
                     }
                 }
             }
@@ -92,7 +91,7 @@ impl Feature for IcebergFeature {
             r.next_double() > 0.7
         };
         if cut {
-            shape.cut_out(ctx.region, r, ellipse_a)?;
+            shape.cut_out(&mut ctx.level, r, ellipse_a)?;
         }
         Ok(true)
     }
@@ -100,8 +99,8 @@ impl Feature for IcebergFeature {
 impl Shape {
     fn generate(
         self,
-        level: &mut WorldGenRegion<'_>,
-        r: &mut WorldgenRandom,
+        level: &mut impl crate::feature::LiveWorldGenLevel,
+        r: &mut impl RandomSource,
         [x, y, z]: [i32; 3],
         radius: i32,
     ) -> Result<(), Error> {
@@ -158,7 +157,11 @@ impl Shape {
         }
         Ok(())
     }
-    fn smooth(self, level: &mut WorldGenRegion<'_>, ellipse_a: i32) -> Result<(), Error> {
+    fn smooth(
+        self,
+        level: &mut impl crate::feature::LiveWorldGenLevel,
+        ellipse_a: i32,
+    ) -> Result<(), Error> {
         let a = if self.ellipse {
             ellipse_a
         } else {
@@ -201,8 +204,8 @@ impl Shape {
     }
     fn cut_out(
         self,
-        level: &mut WorldGenRegion<'_>,
-        r: &mut WorldgenRandom,
+        level: &mut impl crate::feature::LiveWorldGenLevel,
+        r: &mut impl RandomSource,
         ellipse_a: i32,
     ) -> Result<(), Error> {
         let sign_x = if r.next_boolean() { -1 } else { 1 };
@@ -241,7 +244,7 @@ impl Shape {
     #[allow(clippy::too_many_arguments)]
     fn carve(
         self,
-        level: &mut WorldGenRegion<'_>,
+        level: &mut impl crate::feature::LiveWorldGenLevel,
         radius: i32,
         y: i32,
         water: bool,
@@ -296,7 +299,7 @@ fn distance_ellipse(x: i32, z: i32, origin: [i32; 3], a: i32, c: i32, angle: f64
         .powi(2)
         - 1.0
 }
-fn radius_round(r: &mut WorldgenRandom, y: i32, height: i32, width: i32) -> i32 {
+fn radius_round(r: &mut impl RandomSource, y: i32, height: i32, width: i32) -> i32 {
     let k = 3.5 - r.next_float();
     let mut scale = (1.0 - f64::from(y).powi(2) as f32 / (height as f32 * k)) * width as f32;
     if height > 15 + r.next_int_bound(5) {
@@ -312,7 +315,7 @@ fn radius_round(r: &mut WorldgenRandom, y: i32, height: i32, width: i32) -> i32 
 fn radius_ellipse(y: i32, height: i32, width: i32) -> i32 {
     (((1.0 - f64::from(y).powi(2) as f32 / height as f32) * width as f32) / 2.0).ceil() as i32
 }
-fn radius_steep(r: &mut WorldgenRandom, y: i32, height: i32, width: i32) -> i32 {
+fn radius_steep(r: &mut impl RandomSource, y: i32, height: i32, width: i32) -> i32 {
     let k = 1.0 + r.next_float() / 2.0;
     (((1.0 - y as f32 / (height as f32 * k)) * width as f32) / 2.0).ceil() as i32
 }

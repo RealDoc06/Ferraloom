@@ -5,16 +5,20 @@ use crate::{
     codec::*,
     generator::ChunkGeneratorAccess,
     placement::{modifier::PlacementModifier, predicate::PredicateDecodeData},
-    region::WorldGenRegion,
 };
 use ferraloom_data::datapack::ResourceManager;
-use ferraloom_util::random::WorldgenRandom;
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     sync::Arc,
 };
+
+pub mod level;
+pub mod random;
+pub use level::{LiveWorldGenLevel, WorldGenLevel};
+pub use random::{FeatureRandom, FeatureRandomSource};
 
 pub mod aquatic;
 pub mod cave;
@@ -31,11 +35,34 @@ pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
 }
 pub struct FeatureContext<'a, 'r> {
-    pub region: &'a mut WorldGenRegion<'r>,
-    pub random: &'a mut WorldgenRandom,
+    pub level: WorldGenLevel<'a, 'r>,
+    pub random: FeatureRandom<'a>,
     pub origin: [i32; 3],
     pub generator: &'a dyn ChunkGeneratorAccess,
     pub registry: &'a FeatureRegistry,
+}
+/// Port of Feature#place on a live ServerLevel, with the caller's RNG and
+/// registered configured feature. TreeGrower performs its sapling removal and
+/// restoration around this call; placement itself does not reseed or decorate.
+pub fn place_configured_feature(
+    live: &mut dyn LiveWorldGenLevel,
+    generator: &dyn ChunkGeneratorAccess,
+    registry: &FeatureRegistry,
+    feature_id: &Identifier,
+    origin: [i32; 3],
+    random: &mut dyn RandomSource,
+) -> Result<bool, Error> {
+    let feature = registry
+        .features
+        .get(feature_id)
+        .ok_or_else(|| Error(format!("unknown configured feature {feature_id}")))?;
+    feature.place(&mut FeatureContext {
+        level: WorldGenLevel::Live(live),
+        random: FeatureRandom::Live(random),
+        origin,
+        generator,
+        registry,
+    })
 }
 pub type FeatureFactory =
     for<'a> fn(&Value, &mut FeatureLoader<'a>) -> Result<Arc<dyn Feature>, Error>;

@@ -82,12 +82,12 @@ impl Feature for FossilFeature {
         let overlay = self.templates.get_or_create(&self.overlay[index]);
         let min = [
             (ctx.origin[0] >> 4) * 16 - 16,
-            ctx.region.min_y(),
+            ctx.level.min_y(),
             (ctx.origin[2] >> 4) * 16 - 16,
         ];
         let max = [
             (ctx.origin[0] >> 4) * 16 + 31,
-            ctx.region.min_y() + ctx.region.height() - 1,
+            ctx.level.min_y() + ctx.level.height() - 1,
             (ctx.origin[2] >> 4) * 16 + 31,
         ];
         let mut settings = StructurePlaceSettings {
@@ -101,14 +101,14 @@ impl Feature for FossilFeature {
         let mut lowest = ctx.origin[1];
         for x in 0..size[0] {
             for z in 0..size[2] {
-                lowest = lowest.min(ctx.region.height_at(
+                lowest = lowest.min(ctx.level.height_at(
                     Heightmap::OceanFloorWg,
                     corner[0] + x,
                     corner[2] + z,
                 )?);
             }
         }
-        let y = (lowest - 15 - ctx.random.next_int_bound(10)).max(ctx.region.min_y() + 10);
+        let y = (lowest - 15 - ctx.random.next_int_bound(10)).max(ctx.level.min_y() + 10);
         let position =
             base.zero_position_with_transform([corner[0], y, corner[2]], Mirror::None, rotation);
         let bounds = base.bounding_box(&settings, position);
@@ -116,7 +116,7 @@ impl Feature for FossilFeature {
         for x in [bounds.min[0], bounds.max[0]] {
             for y in [bounds.min[1], bounds.max[1]] {
                 for z in [bounds.min[2], bounds.max[2]] {
-                    if empty_or_liquid(ctx.region.block([x, y, z])?) {
+                    if empty_or_liquid(ctx.level.block([x, y, z])?) {
                         empty += 1;
                     }
                 }
@@ -126,23 +126,23 @@ impl Feature for FossilFeature {
             return Ok(false);
         }
         base.place_in_world(
-            ctx.region,
+            &mut ctx.level,
             position,
             position,
             &mut settings,
             &self.base_processors,
             &self.tags,
-            ctx.random,
+            &mut ctx.random,
             260,
         )?;
         overlay.place_in_world(
-            ctx.region,
+            &mut ctx.level,
             position,
             position,
             &mut settings,
             &self.overlay_processors,
             &self.tags,
-            ctx.random,
+            &mut ctx.random,
             260,
         )?;
         Ok(true)

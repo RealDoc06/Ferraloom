@@ -181,7 +181,7 @@ impl Feature for VoidStartPlatformFeature {
                     } else {
                         Block::STONE
                     };
-                    ctx.region.set_block(
+                    ctx.level.set_block(
                         [x, ctx.origin[1].wrapping_add(3), z],
                         block.default_state(),
                         2,
@@ -216,13 +216,14 @@ impl Feature for BonusChestFeature {
             for &z in &zs {
                 let p = [
                     x,
-                    ctx.region
+                    ctx.level
                         .height_at(Heightmap::MotionBlockingNoLeaves, x, z)?,
                     z,
                 ];
-                if is_air(ctx.region.block(p)?) || ctx.region.is_collision_empty(p)? {
-                    ctx.region.set_block(p, Block::CHEST.default_state(), 2)?;
-                    ctx.region.set_loot_table(p, &self.loot_table, ctx.random)?;
+                if is_air(ctx.level.block(p)?) || ctx.level.is_collision_empty(p)? {
+                    ctx.level.set_block(p, Block::CHEST.default_state(), 2)?;
+                    ctx.level
+                        .set_loot_table(p, &self.loot_table, &mut ctx.random)?;
                     let torch = Block::TORCH.default_state();
                     for d in [
                         Direction::North,
@@ -231,8 +232,8 @@ impl Feature for BonusChestFeature {
                         Direction::West,
                     ] {
                         let p = move_direction(p, d);
-                        if ctx.region.can_survive(torch, p)? {
-                            ctx.region.set_block(p, torch, 2)?;
+                        if ctx.level.can_survive(torch, p)? {
+                            ctx.level.set_block(p, torch, 2)?;
                         }
                     }
                     return Ok(true);

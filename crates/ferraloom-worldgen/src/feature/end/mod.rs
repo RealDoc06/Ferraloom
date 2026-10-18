@@ -67,7 +67,7 @@ impl Feature for EndIslandFeature {
             for x in (-size).floor() as i32..=size.ceil() as i32 {
                 for z in (-size).floor() as i32..=size.ceil() as i32 {
                     if (x * x + z * z) as f32 <= (size + 1.0) * (size + 1.0) {
-                        ctx.region.set_block(
+                        ctx.level.set_block(
                             offset(ctx.origin, [x, y, z]),
                             Block::END_STONE.default_state(),
                             2,
@@ -91,8 +91,8 @@ impl Feature for EndPlatformFeature {
                 for y in -1..3 {
                     let block = if y == -1 { Block::OBSIDIAN } else { Block::AIR };
                     let p = offset(ctx.origin, [x, y, z]);
-                    if ctx.region.block(p)?.block() != block {
-                        ctx.region.set_block(p, block.default_state(), 3)?;
+                    if ctx.level.block(p)?.block() != block {
+                        ctx.level.set_block(p, block.default_state(), 3)?;
                     }
                 }
             }
@@ -122,11 +122,11 @@ impl Feature for EndGatewayFeature {
                     } else {
                         Block::AIR
                     };
-                    ctx.region.set_block(p, block.default_state(), 2)?;
+                    ctx.level.set_block(p, block.default_state(), 2)?;
                     if block == Block::END_GATEWAY
                         && let Some(exit) = self.exit
                     {
-                        ctx.region.configure_end_gateway(p, exit, self.exact)?;
+                        ctx.level.configure_end_gateway(p, exit, self.exact)?;
                     }
                 }
             }
@@ -141,13 +141,13 @@ struct ChorusPlantFeature {
 }
 impl Feature for ChorusPlantFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if is_air(ctx.region.block(ctx.origin)?)
+        if is_air(ctx.level.block(ctx.origin)?)
             && self
                 .supports
-                .contains(&ctx.region.block(offset(ctx.origin, [0, -1, 0]))?.block())
+                .contains(&ctx.level.block(offset(ctx.origin, [0, -1, 0]))?.block())
         {
-            ctx.region
-                .generate_chorus_plant(ctx.origin, ctx.random, 8)?;
+            ctx.level
+                .generate_chorus_plant(ctx.origin, &mut ctx.random, 8)?;
             Ok(true)
         } else {
             Ok(false)
@@ -186,18 +186,18 @@ impl Feature for EndPodiumFeature {
                     };
                     let p = offset(ctx.origin, [x, y, z]);
                     if self.active && (y > 0 || y < 0 && !inside || y == 0 && inside) {
-                        if ctx.region.block(p)?.block() != block {
-                            ctx.region.destroy_block(p, true)?;
-                            ctx.region.set_block(p, block.default_state(), 2)?;
+                        if ctx.level.block(p)?.block() != block {
+                            ctx.level.destroy_block(p, true)?;
+                            ctx.level.set_block(p, block.default_state(), 2)?;
                         }
                     } else {
-                        ctx.region.set_block(p, block.default_state(), 2)?;
+                        ctx.level.set_block(p, block.default_state(), 2)?;
                     }
                 }
             }
         }
         for y in 0..4 {
-            ctx.region.set_block(
+            ctx.level.set_block(
                 offset(ctx.origin, [0, y, 0]),
                 Block::BEDROCK.default_state(),
                 2,
@@ -211,7 +211,7 @@ impl Feature for EndPodiumFeature {
         ] {
             let state =
                 BlockState::from_properties(Block::WALL_TORCH, [("facing", facing)]).unwrap();
-            ctx.region.set_block(offset(ctx.origin, delta), state, 2)?;
+            ctx.level.set_block(offset(ctx.origin, delta), state, 2)?;
         }
         Ok(true)
     }
@@ -263,7 +263,7 @@ impl EndSpikeFeature {
         // negative radii and heights accepted by EndSpike's unrestricted codec.
         let a = [
             spike.x.wrapping_sub(r),
-            ctx.region.min_y(),
+            ctx.level.min_y(),
             spike.z.wrapping_sub(r),
         ];
         let b = [
@@ -278,10 +278,10 @@ impl EndSpikeFeature {
                     let dx = f64::from(x) - f64::from(spike.x);
                     let dz = f64::from(z) - f64::from(spike.z);
                     if dx * dx + dz * dz <= radius_squared && y < spike.height {
-                        ctx.region
+                        ctx.level
                             .set_block([x, y, z], Block::OBSIDIAN.default_state(), 2)?;
                     } else if y > 65 {
-                        ctx.region
+                        ctx.level
                             .set_block([x, y, z], Block::AIR.default_state(), 2)?;
                     }
                 }
@@ -305,7 +305,7 @@ impl EndSpikeFeature {
                                 ],
                             )
                             .unwrap();
-                            ctx.region.set_block(
+                            ctx.level.set_block(
                                 [
                                     spike.x.wrapping_add(x),
                                     spike.height.wrapping_add(y),
@@ -319,11 +319,11 @@ impl EndSpikeFeature {
                 }
             }
         }
-        ctx.region.create_end_spike_crystal(
+        ctx.level.create_end_spike_crystal(
             [spike.x, spike.height.wrapping_add(1), spike.z],
             self.beam,
             self.invulnerable,
-            ctx.random,
+            &mut ctx.random,
         )
     }
 }
@@ -331,7 +331,7 @@ impl Feature for EndSpikeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let generated;
         let spikes = if self.spikes.is_empty() {
-            generated = Self::for_seed(ctx.region.seed);
+            generated = Self::for_seed(ctx.level.seed());
             &generated
         } else {
             &self.spikes

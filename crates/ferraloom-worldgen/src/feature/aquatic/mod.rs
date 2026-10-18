@@ -25,18 +25,17 @@ struct BlueIceFeature;
 impl Feature for BlueIceFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let p = ctx.origin;
-        if p[1] > ctx.region.sea_level - 1 {
+        if p[1] > ctx.level.sea_level() - 1 {
             return Ok(false);
         }
-        if ctx.region.block(p)?.block() != Block::WATER
-            && ctx.region.block(relative(p, Direction::Down))?.block() != Block::WATER
+        if ctx.level.block(p)?.block() != Block::WATER
+            && ctx.level.block(relative(p, Direction::Down))?.block() != Block::WATER
         {
             return Ok(false);
         }
         let mut found = false;
         for d in Direction::VALUES {
-            if d != Direction::Down
-                && ctx.region.block(relative(p, d))?.block() == Block::PACKED_ICE
+            if d != Direction::Down && ctx.level.block(relative(p, d))?.block() == Block::PACKED_ICE
             {
                 found = true;
                 break;
@@ -45,8 +44,7 @@ impl Feature for BlueIceFeature {
         if !found {
             return Ok(false);
         }
-        ctx.region
-            .set_block(p, Block::BLUE_ICE.default_state(), 2)?;
+        ctx.level.set_block(p, Block::BLUE_ICE.default_state(), 2)?;
         for _ in 0..200 {
             let dy = ctx.random.next_int_bound(5) - ctx.random.next_int_bound(6);
             let width = 3 + if dy < 2 { dy / 2 } else { 0 };
@@ -59,14 +57,13 @@ impl Feature for BlueIceFeature {
                         ctx.random.next_int_bound(width) - ctx.random.next_int_bound(width),
                     ],
                 );
-                let state = ctx.region.block(q)?;
+                let state = ctx.level.block(q)?;
                 if state.is_air()
                     || matches!(state.block(), Block::WATER | Block::PACKED_ICE | Block::ICE)
                 {
                     for d in Direction::VALUES {
-                        if ctx.region.block(relative(q, d))?.block() == Block::BLUE_ICE {
-                            ctx.region
-                                .set_block(q, Block::BLUE_ICE.default_state(), 2)?;
+                        if ctx.level.block(relative(q, d))?.block() == Block::BLUE_ICE {
+                            ctx.level.set_block(q, Block::BLUE_ICE.default_state(), 2)?;
                             break;
                         }
                     }
@@ -98,7 +95,7 @@ impl Feature for CoralClawFeature {
         if !place(&self.feature, ctx, origin)? {
             return Ok(false);
         }
-        let claw = Plane::Horizontal.random_direction(ctx.random);
+        let claw = Plane::Horizontal.random_direction(&mut ctx.random);
         let count = ctx.random.next_int_bound(2) + 2;
         let mut directions = [claw, claw.clockwise(), claw.counter_clockwise()];
         for i in (2..=directions.len()).rev() {
@@ -153,7 +150,7 @@ impl Feature for CoralTreeFeature {
         }
         let top = p;
         let count = ctx.random.next_int_bound(3) + 2;
-        let directions = Plane::Horizontal.shuffled_copy(ctx.random);
+        let directions = Plane::Horizontal.shuffled_copy(&mut ctx.random);
         for branch in directions.into_iter().take(count as usize) {
             p = relative(top, branch);
             let height = ctx.random.next_int_bound(5) + 2;

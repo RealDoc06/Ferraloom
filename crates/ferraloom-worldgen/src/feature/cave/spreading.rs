@@ -74,21 +74,21 @@ impl MultifaceGrowthFeature {
         for &face in directions {
             if !self
                 .support
-                .contains(&ctx.region.block(move_direction(p, face))?.block())
+                .contains(&ctx.level.block(move_direction(p, face))?.block())
             {
                 continue;
             }
             let Some(state) = ctx
-                .region
+                .level
                 .multiface_state_for_placement(self.block, old, p, face)?
             else {
                 return Ok(false);
             };
-            ctx.region.set_block(p, state, 3)?;
-            ctx.region.mark_post_processing(p)?;
+            ctx.level.set_block(p, state, 3)?;
+            ctx.level.mark_post_processing(p)?;
             if ctx.random.next_float() < self.chance {
-                ctx.region
-                    .multiface_spread(state, p, face, ctx.random, true)?;
+                ctx.level
+                    .multiface_spread(state, p, face, &mut ctx.random, true)?;
             }
             return Ok(true);
         }
@@ -97,12 +97,12 @@ impl MultifaceGrowthFeature {
 }
 impl Feature for MultifaceGrowthFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let old = ctx.region.block(ctx.origin)?;
+        let old = ctx.level.block(ctx.origin)?;
         if !empty_or_water(old) {
             return Ok(false);
         }
         let mut directions = self.directions.clone();
-        shuffle(&mut directions, ctx.random);
+        shuffle(&mut directions, &mut ctx.random);
         if self.place_growth(ctx, ctx.origin, old, &directions)? {
             return Ok(true);
         }
@@ -113,11 +113,11 @@ impl Feature for MultifaceGrowthFeature {
                 .copied()
                 .filter(|&d| d != search.opposite())
                 .collect::<Vec<_>>();
-            shuffle(&mut placement, ctx.random);
+            shuffle(&mut placement, &mut ctx.random);
             for _ in 0..self.range {
                 // Vanilla 26.3 resets from origin on every iteration here.
                 let p = move_direction(ctx.origin, search);
-                let old = ctx.region.block(p)?;
+                let old = ctx.level.block(p)?;
                 if !empty_or_water(old) && old.block() != self.block {
                     break;
                 }
@@ -131,7 +131,7 @@ impl Feature for MultifaceGrowthFeature {
 }
 impl Feature for SculkPatchFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let state = ctx.region.block(ctx.origin)?;
+        let state = ctx.level.block(ctx.origin)?;
         let mut can_spread = state
             .block()
             .is_instance_of(ferraloom_data::BlockClass::SculkBehaviour);
@@ -140,10 +140,7 @@ impl Feature for SculkPatchFeature {
         {
             for direction in Direction::VALUES {
                 let p = move_direction(ctx.origin, direction);
-                if ctx
-                    .region
-                    .is_collision_full_block(ctx.region.block(p)?, p)?
-                {
+                if ctx.level.is_collision_full_block(ctx.level.block(p)?, p)? {
                     can_spread = true;
                     break;
                 }
@@ -152,9 +149,9 @@ impl Feature for SculkPatchFeature {
         if !can_spread {
             return Ok(false);
         }
-        ctx.region.sculk_spread(
+        ctx.level.sculk_spread(
             ctx.origin,
-            ctx.random,
+            &mut ctx.random,
             self.charges,
             self.amount,
             self.attempts,

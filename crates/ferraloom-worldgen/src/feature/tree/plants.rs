@@ -32,9 +32,9 @@ impl HugeMushroom {
         p: Pos,
         state: BlockState,
     ) -> Result<(), Error> {
-        let old = ctx.region.block(p)?;
+        let old = ctx.level.block(p)?;
         if is_air(old) || self.replaceable.contains(&old.block()) {
-            ctx.region.set_block(p, state, 3)?;
+            ctx.level.set_block(p, state, 3)?;
         }
         Ok(())
     }
@@ -46,11 +46,11 @@ impl Feature for HugeMushroom {
         if ctx.random.next_int_bound(12) == 0 {
             height *= 2;
         }
-        if origin[1] < ctx.region.min_y() + 1
-            || origin[1] + height + 1 > ctx.region.min_y() + ctx.region.height() - 1
+        if origin[1] < ctx.level.min_y() + 1
+            || origin[1] + height + 1 > ctx.level.min_y() + ctx.level.height() - 1
             || !self
                 .can_place_on
-                .test(ctx.region, add(origin, [0, -1, 0]), ctx.generator)?
+                .test(&mut ctx.level, add(origin, [0, -1, 0]), ctx.generator)?
         {
             return Ok(false);
         }
@@ -59,7 +59,7 @@ impl Feature for HugeMushroom {
             let radius = if self.red || y <= 3 { 0 } else { self.radius };
             for x in -radius..=radius {
                 for z in -radius..=radius {
-                    let state = ctx.region.block(add(origin, [x, y, z]))?;
+                    let state = ctx.level.block(add(origin, [x, y, z]))?;
                     if !is_air(state) && !self.leaves.contains(&state.block()) {
                         return Ok(false);
                     }
@@ -188,8 +188,8 @@ impl HugeFungus {
         })
     }
     fn replaceable(&self, c: &FeatureContext<'_, '_>, p: Pos, plants: bool) -> Result<bool, Error> {
-        Ok(c.region.block(p)?.data().replaceable
-            || plants && self.replaceable.test(c.region, p, c.generator)?)
+        Ok(c.level.block(p)?.data().replaceable
+            || plants && self.replaceable.test(&mut c.level, p, c.generator)?)
     }
     fn hat_block(
         &self,
@@ -200,9 +200,9 @@ impl HugeFungus {
         vines: f32,
     ) -> Result<(), Error> {
         if c.random.next_float() < decor {
-            c.region.set_block(p, self.decor, 3)?;
+            c.level.set_block(p, self.decor, 3)?;
         } else if c.random.next_float() < hat {
-            c.region.set_block(p, self.hat, 3)?;
+            c.level.set_block(p, self.hat, 3)?;
             if c.random.next_float() < vines {
                 Self::vines(c, p)?;
             }
@@ -211,7 +211,7 @@ impl HugeFungus {
     }
     fn vines(c: &mut FeatureContext<'_, '_>, p: Pos) -> Result<(), Error> {
         let mut p = add(p, [0, -1, 0]);
-        if !is_air(c.region.block(p)?) {
+        if !is_air(c.level.block(p)?) {
             return Ok(());
         }
         let mut height = c.random.next_int_bound(5) + 1;
@@ -219,16 +219,16 @@ impl HugeFungus {
             height *= 2;
         }
         for y in 0..=height {
-            if is_air(c.region.block(p)?) {
-                if y == height || !is_air(c.region.block(add(p, [0, -1, 0]))?) {
+            if is_air(c.level.block(p)?) {
+                if y == height || !is_air(c.level.block(add(p, [0, -1, 0]))?) {
                     let state = Block::WEEPING_VINES
                         .default_state()
                         .with_integer_property("age", c.random.next_int_bound(3) + 23)
                         .map_err(|e| Error(format!("{e:?}")))?;
-                    c.region.set_block(p, state, 2)?;
+                    c.level.set_block(p, state, 2)?;
                     break;
                 }
-                c.region
+                c.level
                     .set_block(p, Block::WEEPING_VINES_PLANT.default_state(), 2)?;
             }
             p[1] -= 1;
@@ -239,7 +239,7 @@ impl HugeFungus {
 impl Feature for HugeFungus {
     fn place(&self, c: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = c.origin;
-        if c.region.block(add(origin, [0, -1, 0]))?.block() != self.base.block() {
+        if c.level.block(add(origin, [0, -1, 0]))?.block() != self.base.block() {
             return Ok(false);
         }
         let mut height = c.random.next_int_bound(10) + 4;
@@ -250,8 +250,7 @@ impl Feature for HugeFungus {
             return Ok(false);
         }
         let huge = !self.planted && c.random.next_float() < 0.06;
-        c.region
-            .set_block(origin, Block::AIR.default_state(), 260)?;
+        c.level.set_block(origin, Block::AIR.default_state(), 260)?;
         let radius = if huge { 1i32 } else { 0 };
         for x in -radius..=radius {
             for z in -radius..=radius {
@@ -259,11 +258,11 @@ impl Feature for HugeFungus {
                 for y in 0..height {
                     let p = add(origin, [x, y, z]);
                     if self.replaceable(c, p, true)? {
-                        if self.planted && !is_air(c.region.block(add(p, [0, -1, 0]))?) {
-                            c.region.destroy_block(p, true)?;
+                        if self.planted && !is_air(c.level.block(add(p, [0, -1, 0]))?) {
+                            c.level.destroy_block(p, true)?;
                         }
                         if self.planted || !corner || c.random.next_float() < 0.1 {
-                            c.region.set_block(p, self.stem, 3)?;
+                            c.level.set_block(p, self.stem, 3)?;
                         }
                     }
                 }
@@ -291,15 +290,15 @@ impl Feature for HugeFungus {
                     let inside = !xe && !ze && y != height;
                     let p = add(origin, [x, y, z]);
                     if self.replaceable(c, p, false)? {
-                        if self.planted && !is_air(c.region.block(add(p, [0, -1, 0]))?) {
-                            c.region.destroy_block(p, true)?;
+                        if self.planted && !is_air(c.level.block(add(p, [0, -1, 0]))?) {
+                            c.level.destroy_block(p, true)?;
                         }
                         if y < start + 3 {
                             if !inside {
-                                if c.region.block(add(p, [0, -1, 0]))?.block() == self.hat.block() {
-                                    c.region.set_block(p, self.hat, 3)?;
+                                if c.level.block(add(p, [0, -1, 0]))?.block() == self.hat.block() {
+                                    c.level.set_block(p, self.hat, 3)?;
                                 } else if f64::from(c.random.next_float()) < 0.15 {
-                                    c.region.set_block(p, self.hat, 3)?;
+                                    c.level.set_block(p, self.hat, 3)?;
                                     if vines && c.random.next_int_bound(11) == 0 {
                                         Self::vines(c, p)?;
                                     }

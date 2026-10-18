@@ -42,7 +42,7 @@ fn boundary(grid: &[bool; 2048], x: usize, y: usize, z: usize) -> bool {
 }
 impl Feature for LakeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if ctx.origin[1] <= ctx.region.min_y() + 4 {
+        if ctx.origin[1] <= ctx.level.min_y() + 4 {
             return Ok(false);
         }
         let origin = offset(ctx.origin, [-8, -4, -8]);
@@ -76,14 +76,14 @@ impl Feature for LakeFeature {
                         continue;
                     }
                     let p = offset(origin, [x as i32, y as i32, z as i32]);
-                    let old = ctx.region.block(p)?;
+                    let old = ctx.level.block(p)?;
                     if y >= 4 && matches!(old.block(), Block::WATER | Block::LAVA) {
                         return Ok(false);
                     }
-                    if y < 4 && !ctx.region.is_solid(p)? && old != fluid {
+                    if y < 4 && !ctx.level.is_solid(p)? && old != fluid {
                         return Ok(false);
                     }
-                    if !self.can_place.test(ctx.region, p, ctx.generator)? {
+                    if !self.can_place.test(&mut ctx.level, p, ctx.generator)? {
                         return Ok(false);
                     }
                 }
@@ -94,10 +94,10 @@ impl Feature for LakeFeature {
                 for y in 0..8 {
                     let p = offset(origin, [x as i32, y as i32, z as i32]);
                     if grid[index(x, y, z)]
-                        && self.replace_fluid.test(ctx.region, p, ctx.generator)?
+                        && self.replace_fluid.test(&mut ctx.level, p, ctx.generator)?
                     {
                         let air = y >= 4;
-                        ctx.region.set_block(
+                        ctx.level.set_block(
                             p,
                             if air {
                                 Block::CAVE_AIR.default_state()
@@ -107,12 +107,15 @@ impl Feature for LakeFeature {
                             2,
                         )?;
                         if air {
-                            ctx.region.schedule_block_tick(SavedTick {
-                                position: p,
-                                kind: Block::CAVE_AIR,
-                                priority: 0,
-                            })?;
-                            mark_above(ctx.region, p)?;
+                            ctx.level.schedule_block_tick(
+                                SavedTick {
+                                    position: p,
+                                    kind: Block::CAVE_AIR,
+                                    priority: 0,
+                                },
+                                0,
+                            )?;
+                            mark_above(&mut ctx.level, p)?;
                         }
                     }
                 }
@@ -126,11 +129,13 @@ impl Feature for LakeFeature {
                         if boundary(&grid, x, y, z) && (y < 4 || ctx.random.next_int_bound(2) != 0)
                         {
                             let p = offset(origin, [x as i32, y as i32, z as i32]);
-                            if ctx.region.is_solid(p)?
-                                && self.replace_barrier.test(ctx.region, p, ctx.generator)?
+                            if ctx.level.is_solid(p)?
+                                && self
+                                    .replace_barrier
+                                    .test(&mut ctx.level, p, ctx.generator)?
                             {
-                                ctx.region.set_block(p, barrier, 2)?;
-                                mark_above(ctx.region, p)?;
+                                ctx.level.set_block(p, barrier, 2)?;
+                                mark_above(&mut ctx.level, p)?;
                             }
                         }
                     }
@@ -142,19 +147,19 @@ impl Feature for LakeFeature {
                 for z in 0..16 {
                     let p = offset(origin, [x, 4, z]);
                     let quart = crate::biome_manager::zoom_quart(
-                        crate::biome_manager::obfuscate_seed(ctx.region.seed),
+                        crate::biome_manager::obfuscate_seed(ctx.level.seed()),
                         p,
                     );
-                    let biome = ctx.region.noise_biome(quart)?;
+                    let biome = ctx.level.noise_biome(quart)?;
                     let biome = &ctx.generator.data().biome_names[biome.0 as usize];
-                    if ctx
-                        .generator
-                        .data()
-                        .temperatures
-                        .should_freeze(biome, ctx.region, p, false)?
-                        && self.replace_fluid.test(ctx.region, p, ctx.generator)?
+                    if ctx.generator.data().temperatures.should_freeze(
+                        biome,
+                        &mut ctx.level,
+                        p,
+                        false,
+                    )? && self.replace_fluid.test(&mut ctx.level, p, ctx.generator)?
                     {
-                        ctx.region.set_block(p, Block::ICE.default_state(), 2)?;
+                        ctx.level.set_block(p, Block::ICE.default_state(), 2)?;
                     }
                 }
             }

@@ -127,13 +127,13 @@ impl Feature for TemplateFeature {
             ..StructurePlaceSettings::default()
         };
         template.place_in_world(
-            ctx.region,
+            &mut ctx.level,
             position,
             position,
             &mut settings,
             &self.processors,
             &self.tags,
-            ctx.random,
+            &mut ctx.random,
             3,
         )
     }

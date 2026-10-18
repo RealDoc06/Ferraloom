@@ -27,3 +27,24 @@ pub use beardifier::{
     Beardifier, JigsawJunction, Projection, Rigid, TerrainAdjustment, TerrainPiece,
 };
 pub use bounding_box::BoundingBox;
+
+/// Region-only placement inputs shared by structure pieces. Features reborrow
+/// this context through their region/live boundary without changing either RNG.
+pub struct StructurePlacementContext<'a, 'r> {
+    pub region: &'a mut crate::region::WorldGenRegion<'r>,
+    pub random: &'a mut ferraloom_util::random::WorldgenRandom,
+    pub origin: [i32; 3],
+    pub generator: &'a dyn crate::generator::ChunkGeneratorAccess,
+    pub registry: &'a crate::feature::FeatureRegistry,
+}
+impl<'r> StructurePlacementContext<'_, 'r> {
+    pub fn reborrow_feature(&mut self) -> crate::feature::FeatureContext<'_, 'r> {
+        crate::feature::FeatureContext {
+            level: crate::feature::WorldGenLevel::Region(self.region),
+            random: crate::feature::FeatureRandom::Region(self.random),
+            origin: self.origin,
+            generator: self.generator,
+            registry: self.registry,
+        }
+    }
+}

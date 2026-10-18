@@ -1,10 +1,7 @@
 use super::*;
-use crate::{
-    region::WorldGenRegion,
-    structure::{processor::StructureProcessor, rule::BlockTags},
-};
+use crate::structure::{processor::StructureProcessor, rule::BlockTags};
 use ferraloom_nbt::ListTag;
-use ferraloom_util::{Direction, random::WorldgenRandom};
+use ferraloom_util::Direction;
 use std::collections::BTreeSet;
 
 impl StructureTemplate {
@@ -13,14 +10,14 @@ impl StructureTemplate {
     #[allow(clippy::too_many_arguments)]
     pub fn process_block_infos(
         &self,
-        region: &WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         position: [i32; 3],
         reference: [i32; 3],
         settings: &mut StructurePlaceSettings,
         processors: &[StructureProcessor],
         tags: &BlockTags,
         blocks: &[StructureBlockInfo],
-        random: &mut WorldgenRandom,
+        random: &mut impl crate::feature::FeatureRandomSource,
     ) -> Result<Vec<StructureBlockInfo>, Error> {
         let process_only_in_chunk = !processors
             .iter()
@@ -85,13 +82,13 @@ impl StructureTemplate {
     #[allow(clippy::too_many_arguments)]
     pub fn place_in_world(
         &self,
-        region: &mut WorldGenRegion<'_>,
+        region: &mut impl crate::feature::LiveWorldGenLevel,
         position: [i32; 3],
         reference: [i32; 3],
         settings: &mut StructurePlaceSettings,
         processors: &[StructureProcessor],
         tags: &BlockTags,
-        random: &mut WorldgenRandom,
+        random: &mut impl crate::feature::FeatureRandomSource,
         flags: u32,
     ) -> Result<bool, Error> {
         if self.palettes.is_empty() {
@@ -132,9 +129,9 @@ impl StructureTemplate {
                 let point = BoundingBox::point(p);
                 bounds = Some(bounds.map_or(point, |b| b.encapsulating(point)));
                 if let Some(tag) = block.nbt.clone()
-                    && region.block_entity(p)?.is_some()
+                    && region.has_block_entity_at(p)?
                 {
-                    region.load_block_entity(p, tag, random)?;
+                    region.load_block_entity(p, tag, &mut random.feature_random())?;
                 }
                 placed.push((p, block.nbt.is_some()));
                 if let Some(previous) = previous {
@@ -216,7 +213,7 @@ impl StructureTemplate {
     }
     fn place_entities(
         &self,
-        region: &mut WorldGenRegion<'_>,
+        region: &mut impl crate::feature::LiveWorldGenLevel,
         position: [i32; 3],
         settings: &StructurePlaceSettings,
     ) -> Result<(), Error> {
@@ -275,7 +272,7 @@ pub(crate) fn relative(p: [i32; 3], direction: Direction) -> [i32; 3] {
 /// Port of StructureTemplate#updateShapeAtEdge and
 /// DiscreteVoxelShape#forAllFaces. Axis runs preserve callback/RNG order.
 fn update_shape_at_edge(
-    region: &mut WorldGenRegion<'_>,
+    region: &mut impl crate::feature::LiveWorldGenLevel,
     flags: u32,
     filled: &BTreeSet<[i32; 3]>,
     bounds: BoundingBox,
@@ -309,7 +306,7 @@ fn update_shape_at_edge(
     Ok(())
 }
 fn update_edge_face(
-    region: &mut WorldGenRegion<'_>,
+    region: &mut impl crate::feature::LiveWorldGenLevel,
     flags: u32,
     p: [i32; 3],
     direction: Direction,

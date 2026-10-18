@@ -167,8 +167,8 @@ impl DecorationPlan {
                 random.set_feature_seed(decoration_seed, index as i32, step as i32);
                 feature.place(
                     &mut FeatureContext {
-                        region,
-                        random: &mut random,
+                        level: crate::feature::WorldGenLevel::Region(region),
+                        random: crate::feature::FeatureRandom::Region(&mut random),
                         origin,
                         generator,
                         registry,

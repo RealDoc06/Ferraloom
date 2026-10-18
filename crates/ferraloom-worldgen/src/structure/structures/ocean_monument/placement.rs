@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     Error,
-    feature::FeatureContext,
+    structure::StructurePlacementContext,
     structure::{BoundingBox, piece::StructurePieceData},
 };
 use ferraloom_data::{Block, BlockState};
@@ -16,7 +16,7 @@ const BLACK: Block = Block::DARK_PRISMARINE;
 const LAMP: Block = Block::SEA_LANTERN;
 struct RoomPlacer<'a, 'b, 'c, 'd> {
     data: &'a StructurePieceData,
-    context: &'b mut FeatureContext<'c, 'd>,
+    context: &'b mut StructurePlacementContext<'c, 'd>,
     bounds: BoundingBox,
 }
 impl RoomPlacer<'_, '_, '_, '_> {
@@ -882,7 +882,7 @@ impl MonumentRoom {
     }
     pub fn post_process_saved(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let mut placer = RoomPlacer {
@@ -903,7 +903,7 @@ impl MonumentRoom {
     /// creation remains an explicit game-adapter operation.
     pub fn post_process(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         graph: &RoomGraph,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
@@ -1023,7 +1023,7 @@ mod tests {
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             child
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],

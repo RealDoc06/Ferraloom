@@ -1,5 +1,5 @@
 use super::*;
-use ferraloom_util::{mth, random::WorldgenRandom};
+use ferraloom_util::{mth, random::RandomSource};
 /// Port of FoliagePlacer.FoliageAttachment. Poplar uses the height-offset field.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Attachment {
@@ -103,15 +103,15 @@ impl TrunkPlacer {
             },
         })
     }
-    pub fn height(&self, r: &mut WorldgenRandom) -> i32 {
+    pub fn height(&self, r: &mut impl RandomSource) -> i32 {
         self.base + r.next_int_bound(self.rand_a + 1) + r.next_int_bound(self.rand_b + 1)
     }
     fn valid(&self, t: &TreeFeature, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
         Ok(t.valid(c, p)?
-            || matches!(&self.kind,Kind::Upwards{grow,..} if grow.contains(&c.region.block(p)?.block())))
+            || matches!(&self.kind,Kind::Upwards{grow,..} if grow.contains(&c.level.block(p)?.block())))
     }
     pub fn free(&self, t: &TreeFeature, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        Ok(self.valid(t, c, p)? || t.logs.contains(&c.region.block(p)?.block()))
+        Ok(self.valid(t, c, p)? || t.logs.contains(&c.level.block(p)?.block()))
     }
     fn log(
         &self,
@@ -269,7 +269,7 @@ impl TrunkPlacer {
                     }
                     p[1] += 1;
                 }
-                let length = length.sample(c.random);
+                let length = length.sample(&mut c.random);
                 for _ in 0..=length {
                     if t.valid(c, p)? {
                         self.log(t, c, p, None, out)?;
@@ -292,7 +292,7 @@ impl TrunkPlacer {
                 if second >= first {
                     second += 1;
                 }
-                let count = count.sample(c.random);
+                let count = count.sample(&mut c.random);
                 let trunk_h = if count == 3 {
                     h
                 } else if count >= 2 {
@@ -311,9 +311,9 @@ impl TrunkPlacer {
                     .chain((count >= 2).then_some((second, d.opposite())))
                 {
                     let mut p = add(o, [0, start, 0]);
-                    let ey = h - 1 + end.sample(c.random);
+                    let ey = h - 1 + end.sample(&mut c.random);
                     let extend = start < trunk_h - 1 || ey < start;
-                    let distance = length.sample(c.random) + i32::from(extend);
+                    let distance = length.sample(&mut c.random) + i32::from(extend);
                     let target = relative(add(o, [0, ey, 0]), d, distance);
                     for _ in 0..if extend { 2 } else { 1 } {
                         p = step(p, d);
@@ -335,13 +335,13 @@ impl TrunkPlacer {
             }
             Kind::Poplar { above, amount } => {
                 t.below(c, add(o, [0, -1, 0]), out)?;
-                let top = h - above.sample(c.random);
+                let top = h - above.sample(&mut c.random);
                 for y in 0..h {
                     self.log(t, c, add(o, [0, y, 0]), None, out)?;
                     let mut directions = Direction::VALUES;
-                    shuffle(&mut directions, c.random);
+                    shuffle(&mut directions, &mut c.random);
                     if top - 1 == y {
-                        let amount = amount.sample(c.random) as usize;
+                        let amount = amount.sample(&mut c.random) as usize;
                         for d in directions
                             .into_iter()
                             .filter(|d| d.axis() != Axis::Y)
@@ -366,9 +366,9 @@ impl TrunkPlacer {
                         && c.random.next_float() < *probability
                     {
                         let d = horizontal(c);
-                        let len = length.sample(c.random);
-                        let start = (len - length.sample(c.random) - 1).max(0);
-                        let steps = steps.sample(c.random);
+                        let len = length.sample(&mut c.random);
+                        let start = (len - length.sample(&mut c.random) - 1).max(0);
+                        let steps = steps.sample(&mut c.random);
                         let mut top = p[1] + start;
                         for i in start..h.min(start + steps) {
                             if i >= 1 {
