@@ -206,7 +206,11 @@ impl AttributeInstance {
             modifiers: self
                 .modifier_by_id
                 .iter()
-                .map(|modifier| modifier.as_ref().clone())
+                .map(|modifier| ferraloom_protocol::play::AttributeModifier {
+                    id: modifier.id.clone(),
+                    amount: modifier.amount,
+                    operation: modifier.operation,
+                })
                 .collect(),
         }
     }
