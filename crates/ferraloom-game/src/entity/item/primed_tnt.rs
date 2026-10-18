@@ -195,7 +195,10 @@ mod tests {
         assert_eq!(tnt.explosion_power, 128.0);
         assert_eq!(tnt.owner, Some(owner));
         let saved = tnt.save_without_id();
-        assert_eq!(saved.get_string("future").unwrap(), "retained");
+        assert_eq!(
+            saved.get_string("future").unwrap().to_string_lossy(),
+            "retained"
+        );
         assert_eq!(
             saved.get("block_state"),
             Some(&Tag::String("minecraft:tnt".into()))
