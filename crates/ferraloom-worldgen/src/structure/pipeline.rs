@@ -203,6 +203,72 @@ impl ChunkStructures {
     }
 }
 
+/// Port of ChunkGenerator#createStructures. Each selected structure gets a
+/// fresh generation context in the callback; selection uses a separate stream.
+pub fn create_structures(
+    state: &ChunkGeneratorStructureState,
+    possible_sets: &[Identifier],
+    chunk: &mut ChunkStructures,
+    generate: &mut impl FnMut(&Identifier, i32) -> Result<StructureStart, Error>,
+) -> Result<(), Error> {
+    for id in possible_sets {
+        let set = state
+            .sets
+            .get(id)
+            .ok_or_else(|| Error(format!("unknown structure set {id}")))?;
+        if set.structures.iter().any(|e| {
+            chunk
+                .starts
+                .get(&e.structure)
+                .is_some_and(StructureStart::is_valid)
+        }) {
+            continue;
+        }
+        if !state.is_structure_chunk(&set.placement, chunk.position)? {
+            continue;
+        }
+        set.try_select(state.seed, chunk.position, |entry| {
+            let references = chunk
+                .starts
+                .get(&entry.structure)
+                .map_or(0, |start| start.references);
+            let start = generate(&entry.structure, references)?;
+            if !start.is_valid() {
+                return Ok(false);
+            }
+            chunk.starts.insert(entry.structure.clone(), start);
+            Ok(true)
+        })?;
+    }
+    Ok(())
+}
+/// Port of ChunkGenerator#createReferences: X-major 17x17 scan, inclusive X/Z
+/// box intersection, adjusted start bounds, and the packed *source* chunk key.
+/// Dependency reads must fail if a structure_starts chunk is unavailable.
+pub fn create_references<'a>(
+    position: [i32; 2],
+    references: &mut BTreeMap<Identifier, StructureReferences>,
+    starts: &mut impl FnMut([i32; 2]) -> Result<&'a BTreeMap<Identifier, StructureStart>, Error>,
+) -> Result<(), Error> {
+    let min = position.map(|p| p.wrapping_mul(16));
+    let max = min.map(|p| p.wrapping_add(15));
+    for x in position[0] - 8..=position[0] + 8 {
+        for z in position[1] - 8..=position[1] + 8 {
+            let source = ChunkPos::new(x, z).pack();
+            for start in starts([x, z])?.values() {
+                if start.is_valid() && start.bounding_box()?.intersects_xz(min, max) {
+                    let id = start
+                        .structure
+                        .as_ref()
+                        .ok_or_else(|| Error("valid start has no structure".into()))?;
+                    references.entry(id.clone()).or_default().insert(source);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "pipeline_tests.rs"]
 mod tests;
