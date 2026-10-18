@@ -86,10 +86,7 @@ impl ProtoChunk {
             let heights = std::array::from_fn(|index| {
                 let x = (index & 15) as u8;
                 let z = (index >> 4) as u8;
-                (chunk.region.chunk.min_y..chunk.region.chunk.min_y + chunk.region.chunk.height)
-                    .rev()
-                    .find(|&y| data.heightmap_matches(map, chunk.region.chunk.block(x, y, z)))
-                    .map_or(chunk.region.chunk.min_y, |y| y + 1)
+                column_height(&chunk.region.chunk, data, map, x, z)
             });
             if surface {
                 chunk.region.chunk.world_surface = heights;
@@ -272,17 +269,13 @@ impl ProtoChunk {
                 continue;
             }
             let heights: [u64; 256] = std::array::from_fn(|index| {
-                (self.region.chunk.min_y..self.region.chunk.min_y + self.region.chunk.height)
-                    .rev()
-                    .find(|&y| {
-                        data.heightmap_matches(
-                            map,
-                            self.region
-                                .chunk
-                                .block((index & 15) as u8, y, (index >> 4) as u8),
-                        )
-                    })
-                    .map_or(0, |y| (y + 1 - self.region.chunk.min_y) as u64)
+                (column_height(
+                    &self.region.chunk,
+                    data,
+                    map,
+                    (index & 15) as u8,
+                    (index >> 4) as u8,
+                ) - self.region.chunk.min_y) as u64
             });
             let bits = 32 - (self.region.chunk.height as u32).leading_zeros();
             let per_word = 64 / bits as usize;
@@ -295,6 +288,29 @@ impl ProtoChunk {
         Ok(disk)
     }
 }
+
+/// Heightmap#primeHeightmaps starts below empty upper sections. All six native
+/// predicates reject air, so lower empty sections can be skipped as well.
+fn column_height(
+    chunk: &ferraloom_worldgen::generator::GeneratedChunk,
+    data: &ferraloom_worldgen::generator::GenerationData,
+    map: Heightmap,
+    x: u8,
+    z: u8,
+) -> i32 {
+    for (index, section) in chunk.sections.iter().enumerate().rev() {
+        if section.has_only_air() {
+            continue;
+        }
+        for y in (0..16).rev() {
+            if data.heightmap_matches(map, section.get_block_state(x, y, z)) {
+                return chunk.min_y + index as i32 * 16 + i32::from(y) + 1;
+            }
+        }
+    }
+    chunk.min_y
+}
+
 fn retained_tick(
     saved: Option<&[storage::SavedTick]>,
     position: [i32; 3],
