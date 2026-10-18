@@ -76,7 +76,7 @@ pub mod movement;
 mod names;
 pub mod sounds;
 pub mod teleport;
-mod trace;
+pub mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
     living_ride_tick_with_tick_rate, position_rider, ride_tick, ride_tick_with_tick_rate,
