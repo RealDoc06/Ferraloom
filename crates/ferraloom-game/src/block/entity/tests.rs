@@ -85,7 +85,9 @@ fn components_keep_only_unconsumed_added_patch_values() {
     );
     let mut loaded = portal();
     loaded.load_with_components(&saved);
-    assert_eq!(loaded.collect_components(), entity.collect_components());
+    // Native DataComponentMap equality ignores its backing-map traversal order.
+    // Compare the loaded persistent map, rather than the Rust entry vector.
+    assert_eq!(loaded.save_without_metadata().unwrap(), saved);
 }
 #[test]
 fn wrong_chunk_positions_follow_vanilla_local_coordinate_fixup() {
