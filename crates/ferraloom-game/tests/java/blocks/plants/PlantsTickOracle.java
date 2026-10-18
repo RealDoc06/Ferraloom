@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); chorusTicks(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -128,6 +128,27 @@ public final class PlantsTickOracle {
             if(scheduled)block.defaultBlockState().tick(level,pos,level.getRandom());else block.defaultBlockState().randomTick(level,pos,level.getRandom());
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             lines.add("eyeblossom-tick\t"+Block.getId(block.defaultBlockState())+"\t"+seed+"\t"+scheduled+"\t"+attribute.getSerializedName()+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
+        }
+    }
+    static void chorusTicks(ServerLevel level,BlockPos pos,List<String> lines) {
+        var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
+        for(var state:CHORUS_FLOWER.getStateDefinition().getPossibleStates())for(int mode=0;mode<7;mode++)for(int seed=0;seed<32;seed++) {
+            clear(level,pos);
+            if(mode==0)level.setBlock(pos.below(),END_STONE.defaultBlockState(),816);
+            if(mode==1||mode==2||mode==3||mode==6) {
+                int height=mode==1?1:mode==3?4:2;
+                for(int y=1;y<=height;y++)level.setBlock(pos.below(y),CHORUS_PLANT.defaultBlockState(),816);
+                if(mode!=3)level.setBlock(pos.below(height+1),END_STONE.defaultBlockState(),816);
+            }
+            if(mode==4)level.setBlock(pos.below(),STONE.defaultBlockState(),816);
+            if(mode==5)level.setBlock(pos.above(),STONE.defaultBlockState(),816);
+            if(mode==6)level.setBlock(pos.above(2),STONE.defaultBlockState(),816);
+            level.setBlock(pos,state,816);
+            level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
+            String before=snapshot(level,pos);level.getRandom().setSeed(seed);
+            state.randomTick(level,pos,level.getRandom());
+            String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
+            lines.add("chorus-tick\t"+Block.getId(state)+"\t"+seed+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
         }
     }
     static void grassBonemeal(ServerLevel level,BlockPos pos,List<String> lines) {

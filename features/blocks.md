@@ -395,3 +395,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.chorus-growth | Chorus support and connections, one-tick invalidation, flower pillar/branch/death RNG and events; projectile callback awaits framework | `ChorusPlantBlock`, `ChorusFlowerBlock` | Dedicated ServerLevel chorus oracle and support/shape fixtures (capture pending) | - | todo |
 
 | blocks.plants.tree-worldgen-bridge | Re-run all tree fixtures through shared real leaf updates, survival, moss and fluids; retained bee prefixes stay explicit dependencies | Real vanilla TreeFeature and decorators | `plants::tree_worldgen_tests::tree_fixtures_use_real_leaf_and_plant_bridge` (2,444 native cases) | pass | todo |
+
+| blocks.plants.chorus-support-vectors | Chorus flower/plant support across vertical and horizontal topologies, exact six-direction states, delayed invalidation and unchanged RNG | Real native `canSurvive/updateShape` | `plants::tests::chorus_survival_and_six_neighbor_updates_match_native_topologies` (20,160 vectors) | pass | todo |

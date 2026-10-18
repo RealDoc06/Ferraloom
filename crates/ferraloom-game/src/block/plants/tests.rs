@@ -1325,3 +1325,105 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
         "plant bonemeal: {matched} complete matches; {pending} awaiting drops/redstone owners"
     );
 }
+
+#[test]
+fn chorus_survival_and_six_neighbor_updates_match_native_topologies() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/chorus-support.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let below = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+        let mode: i32 = f[4].parse().unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_block_state(pos, state).unwrap();
+        level.set_block_state(pos.below(1), below).unwrap();
+        if f[3] == "true" {
+            level
+                .set_block_state(pos.above(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        if (1..=3).contains(&mode) {
+            level
+                .set_block_state(pos.north(1), Block::CHORUS_PLANT.default_state())
+                .unwrap();
+            if mode == 1 {
+                level
+                    .set_block_state(pos.north(1).below(1), Block::END_STONE.default_state())
+                    .unwrap();
+            }
+            if mode == 3 {
+                level
+                    .set_block_state(pos.south(1), Block::CHORUS_PLANT.default_state())
+                    .unwrap();
+            }
+        }
+        if mode == 4 {
+            level
+                .set_block_state(pos.east(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        if mode == 5 {
+            level
+                .set_block_state(pos.west(1), Block::CHORUS_FLOWER.default_state())
+                .unwrap();
+        }
+        assert_eq!(
+            level.can_survive(state, pos).unwrap(),
+            f[5] == "true",
+            "survival {line}"
+        );
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(1234)), 0);
+        let direction = Direction::VALUES[f[6].parse::<usize>().unwrap()];
+        let at = pos.relative(direction, 1);
+        let neighbor = level.get_block_state(at).unwrap();
+        let behavior = level
+            .required_block_behavior(state.block(), BlockMethod::UpdateShape)
+            .unwrap();
+        let updated = behavior
+            .update_shape(
+                state,
+                pos,
+                direction,
+                at,
+                neighbor,
+                &mut LevelAccessRef::Server(&mut level),
+            )
+            .unwrap();
+        assert_eq!(updated.id(), f[7].parse::<u16>().unwrap(), "update {line}");
+        assert_eq!(
+            level.random().next_long(),
+            f[8].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        let mut saved = ferraloom_storage::SerializableChunkData::default();
+        level
+            .save_chunk_ticks(ChunkPos::new(0, 0), &mut saved)
+            .unwrap();
+        let ticks: Vec<_> = saved
+            .block_ticks
+            .unwrap()
+            .into_iter()
+            .map(|tick| format!("schedule:{}", tick.delay.unwrap()))
+            .collect();
+        let expected: Vec<_> = f[9]
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(ticks, expected, "ticks {line}");
+        count += 1;
+    }
+    assert_eq!(count, 20160);
+}

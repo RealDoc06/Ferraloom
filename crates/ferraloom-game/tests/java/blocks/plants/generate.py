@@ -67,3 +67,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     targets='\n'.join(line for line in lines if line.startswith('non-server-target\t')) + '\n'
     (HERE/'non-server-targets.tsv.gz').write_bytes(gzip.compress(targets.encode(),mtime=0))
     print(f'{len(targets.splitlines())} native non-ServerLevel bonemeal targets and RNG vectors')
+
+    chorus='\n'.join(line for line in lines if line.startswith('chorus-support\t')) + '\n'
+    (HERE/'chorus-support.tsv.gz').write_bytes(gzip.compress(chorus.encode(),mtime=0))
+    print(f'{len(chorus.splitlines())} native chorus support and shape-update vectors')

@@ -171,6 +171,27 @@ public final class PlantsVectors {
                 }
             }
         }
+        for(var block:List.of(Blocks.CHORUS_PLANT,Blocks.CHORUS_FLOWER))for(var state:block.getStateDefinition().getPossibleStates())
+            for(var below:List.of(Blocks.AIR,Blocks.STONE,Blocks.END_STONE,Blocks.CHORUS_PLANT))for(boolean above:new boolean[]{false,true})for(int mode=0;mode<6;mode++) {
+            level.chunks.clear();level.trace.clear();
+            level.getChunkAt(pos).setBlockState(pos,state,816);
+            level.getChunkAt(pos.below()).setBlockState(pos.below(),below.defaultBlockState(),816);
+            if(above)level.getChunkAt(pos.above()).setBlockState(pos.above(),Blocks.STONE.defaultBlockState(),816);
+            if(mode>=1&&mode<=3) {
+                level.getChunkAt(pos.north()).setBlockState(pos.north(),Blocks.CHORUS_PLANT.defaultBlockState(),816);
+                if(mode==1)level.getChunkAt(pos.north().below()).setBlockState(pos.north().below(),Blocks.END_STONE.defaultBlockState(),816);
+                if(mode==3)level.getChunkAt(pos.south()).setBlockState(pos.south(),Blocks.CHORUS_PLANT.defaultBlockState(),816);
+            }
+            if(mode==4)level.getChunkAt(pos.east()).setBlockState(pos.east(),Blocks.STONE.defaultBlockState(),816);
+            if(mode==5)level.getChunkAt(pos.west()).setBlockState(pos.west(),Blocks.CHORUS_FLOWER.defaultBlockState(),816);
+            boolean survives=state.canSurvive(level,pos);
+            for(var direction:Direction.values()) {
+                level.trace.clear();var random=RandomSource.create(1234);
+                var at=pos.relative(direction);var neighbor=level.getBlockState(at);
+                var result=state.updateShape(level,level,pos,direction,at,neighbor,random);
+                System.out.println("chorus-support\t"+Block.getId(state)+"\t"+Block.getId(below.defaultBlockState())+"\t"+above+"\t"+mode+"\t"+survives+"\t"+direction.ordinal()+"\t"+Block.getId(result)+"\t"+random.nextLong()+"\t"+String.join(",",level.trace));
+            }
+        }
         var shapeBlocks=new ArrayList<Block>(plants);shapeBlocks.add(Blocks.POWDER_SNOW);shapeBlocks.add(Blocks.OPEN_EYEBLOSSOM);
         for(var block:shapeBlocks)for(var state:block.getStateDefinition().getPossibleStates())for(var at:List.of(BlockPos.ZERO,pos,new BlockPos(-7,11,17))){
             for(boolean collision:new boolean[]{false,true}){
