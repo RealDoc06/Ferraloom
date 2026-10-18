@@ -200,26 +200,30 @@ impl ComponentFunction {
                 }
             }
             Self::CopyName(source) => {
-                let name = match source {
-                    NbtSource::Entity(target) => c
-                        .params
-                        .entity(*target)
-                        .map(|entity| c.facts().entity_custom_name(entity))
-                        .transpose()?
-                        .flatten(),
+                let (name, present) = match source {
+                    NbtSource::Entity(target) => {
+                        let entity = c.params.entity(*target);
+                        (
+                            entity
+                                .map(|entity| c.facts().entity_custom_name(entity))
+                                .transpose()?
+                                .flatten(),
+                            entity.is_some(),
+                        )
+                    }
                     NbtSource::BlockEntity => {
-                        if c.params.block_entity.is_some() {
-                            return Err(LootError::Unsupported("block_entity.custom_name".into()));
+                        if c.params.block_entity.is_none()
+                            && c.params.block_entity_components.is_none()
+                        {
+                            (None, false)
+                        } else if let Some(name) = c.runtime.block_entity_display_name(c.params)? {
+                            (name.custom_name, true)
                         } else {
-                            None
+                            (None, false)
                         }
                     }
                 };
                 // A present Nameable with a null custom name removes the target.
-                let present = match source {
-                    NbtSource::Entity(target) => c.params.entity(*target).is_some(),
-                    NbtSource::BlockEntity => false,
-                };
                 if let Some(name) = name {
                     set(&mut stack, DataComponent::CustomName(Box::new(name)));
                 } else if present && let Some(s) = &mut stack.0 {

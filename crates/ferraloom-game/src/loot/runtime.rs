@@ -1,6 +1,7 @@
 //! Per-invocation access to canonical facts, random streams and dynamic drops.
 use super::{EnchantmentOperation, Identifier, LootError, LootFacts, LootParams, Result};
 use ferraloom_nbt::Tag;
+use ferraloom_protocol::chat::Component;
 use ferraloom_protocol::component::{DataComponentMap, ItemStack};
 use ferraloom_util::random::{PositionalRandomFactory, Random, RandomSource};
 
@@ -25,6 +26,17 @@ pub trait LootRuntime {
     /// collects components afresh from the same retained context receiver.
     fn block_entity_components(&self, params: &LootParams) -> Result<Option<DataComponentMap>> {
         Ok(params.block_entity_components.clone())
+    }
+
+    /// Port of CopyNameFunction's Nameable#getCustomName read. None identifies
+    /// a non-Nameable receiver; Some with a null custom name removes the target
+    /// name. Live adapters use the retained receiver's actual class and state.
+    fn block_entity_display_name(&self, params: &LootParams) -> Result<Option<NameableName>> {
+        if params.block_entity.is_none() && params.block_entity_components.is_none() {
+            Ok(None)
+        } else {
+            Err(LootError::Unsupported("block_entity.custom_name".into()))
+        }
     }
 
     /// Read one dynamic drop lazily. Ordinals start at zero for each expansion;
@@ -52,6 +64,12 @@ pub trait LootRuntime {
             "enchantment.selection_and_application".into(),
         ))
     }
+}
+
+/// Port of a Nameable receiver's nullable getCustomName result.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NameableName {
+    pub custom_name: Option<Component>,
 }
 
 pub(crate) struct BorrowedRuntime<'a> {
@@ -158,7 +176,7 @@ pub enum LootRandomSelection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::loot::{Holder, LootData, LootItemCondition, LootTable};
+    use crate::loot::{Holder, LootData, LootItemCondition, LootItemFunction, LootTable};
     use ferraloom_data::{Block, Item};
     use ferraloom_nbt::CompoundTag;
     use ferraloom_protocol::{chat::Component, component::*};
@@ -178,6 +196,7 @@ mod tests {
         random: LegacyRandomSource,
         phase: i32,
         reads: RefCell<Vec<&'static str>>,
+        name: Option<NameableName>,
     }
     impl RetainedSource {
         fn new() -> Self {
@@ -185,6 +204,7 @@ mod tests {
                 random: LegacyRandomSource::new(42),
                 phase: 0,
                 reads: RefCell::new(Vec::new()),
+                name: None,
             }
         }
     }
@@ -223,6 +243,10 @@ mod tests {
                     self.phase.to_string(),
                 )))],
             }))
+        }
+        fn block_entity_display_name(&self, _params: &LootParams) -> Result<Option<NameableName>> {
+            self.reads.borrow_mut().push("name");
+            Ok(self.name.clone())
         }
     }
 
@@ -297,5 +321,79 @@ mod tests {
             );
             assert_eq!(*runtime.reads.borrow(), reads);
         }
+    }
+
+    #[test]
+    fn copy_name_distinguishes_non_nameable_null_and_present_custom_name() {
+        let data = LootData::default();
+        let modifier = Holder::direct(
+            LootItemFunction::decode(&json!({
+                "type":"copy_name","source":"block_entity"
+            }))
+            .unwrap(),
+        );
+        let original = Component::literal("target");
+        let source = Component::literal("source");
+        let stack = ItemStack::from_json(&json!({"id":"stone","components":{
+            "minecraft:custom_name":"target"
+        }}))
+        .unwrap();
+        let params = LootParams {
+            block_entity: Some(Tag::Compound(CompoundTag::new())),
+            ..Default::default()
+        };
+        let mut runtime = RetainedSource::new();
+        for (name, expected) in [
+            (None, Some(original)),
+            (Some(NameableName { custom_name: None }), None),
+            (
+                Some(NameableName {
+                    custom_name: Some(source.clone()),
+                }),
+                Some(source),
+            ),
+        ] {
+            runtime.name = name;
+            runtime.reads.borrow_mut().clear();
+            let result = data
+                .apply_modifier_with_runtime(&modifier, stack.clone(), &params, &mut runtime)
+                .unwrap();
+            let components = result.components().unwrap();
+            let expected = expected.map(|name| DataComponent::CustomName(Box::new(name)));
+            assert_eq!(
+                components.get(ComponentTypeId::CUSTOM_NAME),
+                expected.as_ref()
+            );
+            assert_eq!(*runtime.reads.borrow(), ["name"]);
+        }
+        runtime.reads.borrow_mut().clear();
+        assert_eq!(
+            data.apply_modifier_with_runtime(
+                &modifier,
+                stack.clone(),
+                &LootParams::default(),
+                &mut runtime
+            )
+            .unwrap(),
+            stack
+        );
+        assert!(runtime.reads.borrow().is_empty());
+
+        let mut random = LegacyRandomSource::new(42);
+        assert_eq!(
+            data.apply_modifier(
+                &modifier,
+                stack.clone(),
+                &LootParams::default(),
+                &mut random,
+                &Facts
+            )
+            .unwrap(),
+            stack
+        );
+        assert!(
+            matches!(data.apply_modifier(&modifier, stack, &params, &mut random, &Facts),
+            Err(LootError::Unsupported(fact)) if fact == "block_entity.custom_name")
+        );
     }
 }
