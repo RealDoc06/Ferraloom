@@ -43,6 +43,11 @@ pub fn argument(
     mut builder: SuggestionsBuilder,
 ) -> Result<Suggestions, CommandSyntaxException> {
     if let Some(provider) = argument.suggestion_provider.as_deref() {
+        if provider == "minecraft:ask_server"
+            && matches!(argument.wire, CommandArgument::ScoreHolder { .. })
+        {
+            return entity(argument, &context.source, data, builder);
+        }
         match provider {
             "minecraft:available_sounds" => resources(
                 &mut builder,
@@ -320,6 +325,12 @@ mod tests {
                     CommandArgument::ItemPredicate {}
                 } else if vector.kind == "item" {
                     CommandArgument::ItemStack {}
+                } else if vector.kind == "criteria" {
+                    CommandArgument::ObjectiveCriteria {}
+                } else if vector.kind == "score_holder" {
+                    CommandArgument::ScoreHolder {
+                        flags: ferraloom_protocol::play::ScoreHolderFlags { multiple: true },
+                    }
                 } else if vector.kind == "entity" {
                     CommandArgument::Entity {
                         flags: EntityArgumentFlags {
@@ -331,6 +342,9 @@ mod tests {
                     CommandArgument::GameProfile {}
                 };
                 let mut argument_type = MinecraftArgument::new(wire);
+                if vector.kind == "score_holder" {
+                    argument_type.suggestion_provider = Some("minecraft:ask_server".into());
+                }
                 if vector.kind.starts_with("block") {
                     Arc::make_mut(&mut argument_type.context).tags.insert(
                         "minecraft:block".into(),

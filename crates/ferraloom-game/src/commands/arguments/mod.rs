@@ -599,6 +599,15 @@ impl ArgumentType for MinecraftArgument {
         if matches!(self.wire, CommandArgument::ItemStack {}) {
             return Ok(items::suggestions(&self.context, builder));
         }
+        if matches!(self.wire, CommandArgument::ObjectiveCriteria {}) {
+            let remaining = builder.remaining_lower_case();
+            for name in scoreboard::criteria_names() {
+                if suggestions::matches_substring(&remaining, &name.to_lowercase()) {
+                    builder.suggest(name);
+                }
+            }
+            return Ok(builder.build());
+        }
         let values: &[&str] = match self.wire {
             CommandArgument::Bool {} => &["true", "false"],
             CommandArgument::Gamemode {} => &["survival", "creative", "adventure", "spectator"],

@@ -42,6 +42,53 @@ pub const DISPLAY_SLOTS: &[&str] = &[
     "sidebar.team.yellow",
     "sidebar.team.white",
 ];
+const CUSTOM_CRITERIA: &[&str] = &[
+    "dummy",
+    "trigger",
+    "deathCount",
+    "playerKillCount",
+    "totalKillCount",
+    "health",
+    "food",
+    "air",
+    "armor",
+    "xp",
+    "level",
+];
+const STAT_TYPES: &[(&str, &str)] = &[
+    ("minecraft:mined", "minecraft:block"),
+    ("minecraft:crafted", "minecraft:item"),
+    ("minecraft:used", "minecraft:item"),
+    ("minecraft:broken", "minecraft:item"),
+    ("minecraft:picked_up", "minecraft:item"),
+    ("minecraft:dropped", "minecraft:item"),
+    ("minecraft:killed", "minecraft:entity_type"),
+    ("minecraft:killed_by", "minecraft:entity_type"),
+    ("minecraft:custom", "minecraft:custom_stat"),
+];
+/// Port of ObjectiveCriteriaArgument#listSuggestions and Stat#buildName.
+pub fn criteria_names() -> &'static [String] {
+    static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = CUSTOM_CRITERIA
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect::<Vec<_>>();
+        for prefix in ["teamkill.", "killedByTeam."] {
+            names.extend(COLORS.iter().map(|color| format!("{prefix}{color}")));
+        }
+        for (kind, registry) in STAT_TYPES {
+            for value in ferraloom_data::registry_entries(registry).unwrap_or_default() {
+                names.push(format!(
+                    "{}:{}",
+                    kind.replace(':', "."),
+                    value.replace(':', ".")
+                ));
+            }
+        }
+        names
+    })
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectiveCriteria {
     pub name: String,
@@ -59,35 +106,15 @@ pub fn display_slot(reader: &mut StringReader) -> Result<u8, CommandSyntaxExcept
 pub fn criteria(reader: &mut StringReader) -> Result<ObjectiveCriteria, CommandSyntaxException> {
     let start = reader.cursor();
     let name = word(reader);
-    let custom = matches!(
-        name.as_str(),
-        "dummy"
-            | "trigger"
-            | "deathCount"
-            | "playerKillCount"
-            | "totalKillCount"
-            | "health"
-            | "food"
-            | "air"
-            | "armor"
-            | "xp"
-            | "level"
-    ) || ["teamkill.", "killedByTeam."].iter().any(|prefix| {
-        name.strip_prefix(prefix)
-            .is_some_and(|color| COLORS.contains(&color))
-    });
+    let custom = CUSTOM_CRITERIA.contains(&name.as_str())
+        || ["teamkill.", "killedByTeam."].iter().any(|prefix| {
+            name.strip_prefix(prefix)
+                .is_some_and(|color| COLORS.contains(&color))
+        });
     let stat = name.split_once(':').is_some_and(|(kind, value)| {
         let kind = by_separator(kind);
-        let registry = match kind.as_str() {
-            "minecraft:mined" => "minecraft:block",
-            "minecraft:crafted"
-            | "minecraft:used"
-            | "minecraft:broken"
-            | "minecraft:picked_up"
-            | "minecraft:dropped" => "minecraft:item",
-            "minecraft:killed" | "minecraft:killed_by" => "minecraft:entity_type",
-            "minecraft:custom" => "minecraft:custom_stat",
-            _ => return false,
+        let Some((_, registry)) = STAT_TYPES.iter().find(|(id, _)| *id == kind) else {
+            return false;
         };
         let value = by_separator(value);
         ferraloom_data::registry_entries(registry)

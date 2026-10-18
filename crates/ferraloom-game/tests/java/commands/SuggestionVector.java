@@ -40,6 +40,7 @@ public final class SuggestionVector {
                 var context = new CommandContextBuilder<>(dispatcher,source,dispatcher.getRoot(),0).build(input);
                 vectors.add(capture("entity",input,level,EntityArgument.entities().listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
                 vectors.add(capture("game_profile",input,level,GameProfileArgument.gameProfile().listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
+                vectors.add(capture("score_holder",input,level,ScoreHolderArgument.SUGGEST_SCORE_HOLDERS.getSuggestions(context,new SuggestionsBuilder(input,0)).join()));
             }
             if (level==4) for (var input : List.of("tick ","tick rate ","tick rate 2","tick step ","tick step 1","tick sprint ","tick sprint 1")) {
                 vectors.add(capture("command",input,level,dispatcher.getCompletionSuggestions(dispatcher.parse(input,source)).join()));
@@ -53,6 +54,11 @@ public final class SuggestionVector {
         for(var input:List.of("","sto","stone","stone ","stone[","stone[dam","stone[damage","stone[damage=","stone[damage=1","stone[damage=1,","stone[!","stone[!damage","stone[!damage]","stone[damage=1]","stone[creative_slot_lock","stone[unknown","stone[custom_name='x'","stone[damage=1, damage")) {
             var itemContext=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
             vectors.add(capture("item",input,4,item.listSuggestions(itemContext,new SuggestionsBuilder(input,0)).join()));
+        }
+        var criteria=ObjectiveCriteriaArgument.criteria();
+        for(var input:List.of("dum","death","teamkill.r","killedByTeam.b","minecraft.mined:minecraft.dirt","minecraft.custom:minecraft.jump","minecraft.killed:minecraft.player","minecraft.crafted:minecraft.stone","minecraft.used:minecraft.apple","minecraft.broken:minecraft.diamond_pickaxe","minecraft.picked_up:minecraft.diamond","minecraft.dropped:minecraft.diamond","minecraft.killed_by:minecraft.zombie","unknown")) {
+            var context=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
+            vectors.add(capture("criteria",input,4,criteria.listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
         }
         // Bound tags are explicit: the datagen provider otherwise invents unknown tag holders.
         var blockKey=net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK,net.minecraft.resources.Identifier.parse("example:mixed"));
