@@ -240,23 +240,9 @@ async fn default_noise_join_and_configuration_sequence_matches_vanilla() -> Resu
         process::{Command, Stdio},
         time::{Duration, Instant},
     };
-    fn properties(root: &std::path::Path) -> Result<()> {
-        support::properties(root)?;
-        let path = root.join("server.properties");
-        let mut properties = std::fs::read_to_string(&path)?
-            .lines()
-            .filter(|line| {
-                !line.starts_with("level-type=") && !line.starts_with("generator-settings=")
-            })
-            .map(|line| format!("{line}\n"))
-            .collect::<String>();
-        properties.push_str("level-type=minecraft:normal\n");
-        std::fs::write(path, properties)?;
-        Ok(())
-    }
     let vanilla_started = Instant::now();
     let vanilla_root = tempfile::tempdir()?;
-    properties(vanilla_root.path())?;
+    default_noise_properties(vanilla_root.path())?;
     let reservation = TcpListener::bind("127.0.0.1:0")?;
     let address = reservation.local_addr()?;
     drop(reservation);
@@ -318,7 +304,7 @@ async fn default_noise_join_and_configuration_sequence_matches_vanilla() -> Resu
     );
     let ferraloom_started = Instant::now();
     let root = tempfile::tempdir()?;
-    properties(root.path())?;
+    default_noise_properties(root.path())?;
     let mut options = ServerOptions::new(root.path());
     options.unported_behavior = ferraloom_game::block::UnportedBehavior::Strict;
     options.console = false;
@@ -375,4 +361,40 @@ async fn default_noise_join_and_configuration_sequence_matches_vanilla() -> Resu
         }
     }
     Ok(())
+}
+
+fn default_noise_properties(root: &std::path::Path) -> Result<()> {
+    support::properties(root)?;
+    let path = root.join("server.properties");
+    let mut properties = std::fs::read_to_string(&path)?
+        .lines()
+        .filter(|line| !line.starts_with("level-type=") && !line.starts_with("generator-settings="))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    properties.push_str("level-type=minecraft:normal\n");
+    std::fs::write(path, properties)?;
+    Ok(())
+}
+
+/// Diagnostic only: Warn enumerates reached missing operations and proves no parity.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "diagnostic only; default-noise Ferraloom Warn, never a parity result"]
+async fn default_noise_join_warn_diagnostic() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    default_noise_properties(root.path())?;
+    let mut options = ServerOptions::new(root.path());
+    options.unported_behavior = ferraloom_game::block::UnportedBehavior::Warn;
+    options.console = false;
+    options.port = Some(0);
+    let started = std::time::Instant::now();
+    let result = async {
+        let server = MinecraftServer::start(options).await?;
+        ferraloom_scenario(server, true).await
+    }
+    .await;
+    eprintln!(
+        "Warn diagnostic only, no parity assertion; elapsed: {:?}",
+        started.elapsed()
+    );
+    result.map(|_| ())
 }
