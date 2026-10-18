@@ -8,6 +8,7 @@ mod experience;
 pub mod food;
 mod interaction;
 pub(crate) mod item_tick;
+pub mod shoulders;
 mod spawn;
 pub mod travel;
 pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
@@ -58,6 +59,9 @@ pub struct ServerPlayer {
     pub advancements: crate::advancements::PlayerAdvancements,
     pub stats: crate::stats::ServerStatsCounter,
     pub food_data: food::FoodData,
+    shoulder_entity_left: CompoundTag,
+    shoulder_entity_right: CompoundTag,
+    time_entity_sat_on_shoulder: i64,
     pub experience_level: i32,
     pub experience_progress: f32,
     pub total_experience: i32,
@@ -214,6 +218,9 @@ impl ServerPlayer {
             advancements: Default::default(),
             stats: Default::default(),
             food_data: Default::default(),
+            shoulder_entity_left: CompoundTag::new(),
+            shoulder_entity_right: CompoundTag::new(),
+            time_entity_sat_on_shoulder: 0,
             experience_level: 0,
             experience_progress: 0.0,
             total_experience: 0,
@@ -303,6 +310,18 @@ impl ServerPlayer {
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
         self.food_data.load(&self.saved);
+        self.set_shoulder_entity_left(
+            self.saved
+                .get_compound("ShoulderEntityLeft")
+                .cloned()
+                .unwrap_or_default(),
+        );
+        self.set_shoulder_entity_right(
+            self.saved
+                .get_compound("ShoulderEntityRight")
+                .cloned()
+                .unwrap_or_default(),
+        );
         self.experience_progress = self.saved.get_float_or("XpP", 0.0);
         self.experience_level = self.saved.get_int_or("XpLevel", 0);
         self.total_experience = self.saved.get_int_or("XpTotal", 0);
@@ -398,6 +417,20 @@ impl ServerPlayer {
             Tag::Int(self.inventory.selected_slot() as i32),
         );
         self.food_data.save(&mut tag);
+        tag.remove("ShoulderEntityLeft");
+        tag.remove("ShoulderEntityRight");
+        if !self.shoulder_entity_left().is_empty() {
+            tag.insert(
+                "ShoulderEntityLeft",
+                Tag::Compound(self.shoulder_entity_left().clone()),
+            );
+        }
+        if !self.shoulder_entity_right().is_empty() {
+            tag.insert(
+                "ShoulderEntityRight",
+                Tag::Compound(self.shoulder_entity_right().clone()),
+            );
+        }
         let creative = matches!(self.game_mode, GameType::Creative | GameType::Spectator);
         let mut abilities = CompoundTag::new();
         abilities.insert("invulnerable", Tag::Byte(i8::from(creative)));

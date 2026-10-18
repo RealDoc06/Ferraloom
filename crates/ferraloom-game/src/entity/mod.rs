@@ -223,12 +223,16 @@ impl EntityDataView for LivingEntity {
 pub enum EntityMethod {
     PlayerTouch,
     SwingAndResetAttackStrength,
+    PlayShoulderEntityAmbientSound,
+    RespawnEntityOnShoulder,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::PlayerTouch => "playerTouch",
             Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+            Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
+            Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
         }
     }
 }
