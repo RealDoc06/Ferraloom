@@ -35,6 +35,14 @@ impl Level {
         let value = region.rand_value >> 2;
         origin.offset(value & 15, (value >> 16) & y_mask, (value >> 8) & 15)
     }
+    /// Port of Util.shuffle at ServerChunkCache's spawning-chunk slot. This
+    /// consumes Level#random even when SPAWN_MOBS disables spawn attempts.
+    pub fn shuffle_spawning_chunks(&mut self, chunks: &mut [ChunkPos]) {
+        for size in (2..=chunks.len()).rev() {
+            let other = self.random().next_int_bound(size as i32) as usize;
+            chunks.swap(size - 1, other);
+        }
+    }
     pub fn schedule_block_tick_after(
         &mut self,
         pos: BlockPos,
@@ -127,7 +135,7 @@ impl Level {
             .ok_or(LevelError::MissingChunk(chunk_pos))?;
         if self.is_raining() && self.is_thundering() && self.random().next_int_bound(100_000) == 0 {
             self.get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
-            self.unported_weather_strike()?;
+            self.unported_operation(crate::block::UnportedOperation::WeatherStrike)?;
         }
         Ok(())
     }

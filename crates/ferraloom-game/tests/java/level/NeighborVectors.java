@@ -50,6 +50,7 @@ public final class NeighborVectors {
             final Map<BlockPos,BlockState> blocks=new HashMap<>();
             final List<String> trace=new ArrayList<>();
             boolean nested;
+            boolean experiments;
             @Override public BlockState getBlockState(BlockPos p){
               trace.add(p.toShortString());
               if(nested && p.equals(new BlockPos(-1,0,0))){
@@ -58,7 +59,7 @@ public final class NeighborVectors {
               }
               return Blocks.AIR.defaultBlockState();
             }
-            @Override public FeatureFlagSet enabledFeatures(){return FeatureFlags.DEFAULT_FLAGS;}
+            @Override public FeatureFlagSet enabledFeatures(){return experiments?FeatureFlagSet.of(FeatureFlags.VANILLA,FeatureFlags.REDSTONE_EXPERIMENTS):FeatureFlags.DEFAULT_FLAGS;}
             static void scenario(RegistryAccess r,String name,int max,boolean nested,Direction skip){
               var f=new NeighborFixture(r,max);f.nested=nested;var block=Blocks.STONE;
               for(Direction d:Direction.values())f.blocks.put(BlockPos.ZERO.relative(d),block.defaultBlockState());
@@ -93,6 +94,20 @@ public final class NeighborVectors {
                 System.out.println("thunder-slots:"+seed+":"+weather+"\\t"+strike+"|"+slots.random.nextInt()+"|"+slots.getBlockRandomPos(0,0,0,15).toShortString());
               }
               System.out.println("valid-chunk-bound\\t"+net.minecraft.world.level.chunk.status.ChunkPyramid.MAX_CHUNK_COORDINATE_VALUE);
+              for(var block:List.of(Blocks.STONE,Blocks.AIR,Blocks.WALL_TORCH,Blocks.CHEST))for(boolean includeData:new boolean[]{false,true}){
+                var stack=block.defaultBlockState().getCloneItemStack(null,BlockPos.ZERO,includeData);
+                System.out.println("clone-item:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+includeData+"\\t"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem())+":"+stack.getCount());
+              }
+              for(int i=0;i<48;i++){
+                var orientation=Orientation.fromIndex(i);var fronts=new ArrayList<String>();var ups=new ArrayList<String>();
+                for(var direction:Direction.values()){fronts.add(""+orientation.withFront(direction).getIndex());ups.add(""+orientation.withUp(direction).getIndex());}
+                System.out.println("orientation:"+i+"\\t"+orientation.getUp().get3DDataValue()+":"+orientation.getFront().get3DDataValue()+":"+orientation.getSideBias().ordinal()+"|"+String.join(",",fronts)+"|"+String.join(",",ups));
+              }
+              for(boolean experiments:new boolean[]{false,true})for(Direction front:new Direction[]{null,Direction.WEST,Direction.UP}){
+                var oriented=new NeighborFixture(r,100);oriented.experiments=experiments;oriented.random.setSeed(0);
+                var orientation=ExperimentalRedstoneUtils.initialOrientation(oriented,front,null);
+                System.out.println("initial-orientation:"+experiments+":"+(front==null?-1:front.get3DDataValue())+"\\t"+(orientation==null?-1:orientation.getIndex())+":"+oriented.random.nextInt());
+              }
 
               for(var block:List.of(Blocks.WATER,Blocks.LAVA))for(int liquidLevel=0;liquidLevel<16;liquidLevel++){
                 var state=block.defaultBlockState().setValue(net.minecraft.world.level.block.LiquidBlock.LEVEL,liquidLevel);var fluid=state.getFluidState();
@@ -162,6 +177,16 @@ public final class NeighborVectors {
                 analog.trace.clear();analog.updateNeighbourForOutputSignal(center,Blocks.CAKE);
                 System.out.println("analog-neighbors\\t"+String.join(";",analog.trace));
                 var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
+                for(var type:net.minecraft.world.level.block.state.properties.SlabType.values())for(var liquid:List.of(net.minecraft.world.level.material.Fluids.WATER.getSource(false),net.minecraft.world.level.material.Fluids.FLOWING_WATER.getFlowing(7,false),net.minecraft.world.level.material.Fluids.LAVA.getSource(false))){
+                  var slabLevel=new MutationFixture(r);var slab=Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,type);
+                  slabLevel.setBlock(pos,slab,816,512);
+                  var behavior=(net.minecraft.world.level.block.LiquidBlockContainer)Blocks.STONE_SLAB;
+                  boolean can=behavior.canPlaceLiquid(null,slabLevel,pos,slab,liquid.getType());
+                  boolean placed=behavior.placeLiquid(slabLevel,pos,slab,liquid);
+                  boolean wet=slabLevel.getBlockState(pos).getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED);
+                  var bucket=((net.minecraft.world.level.block.BucketPickup)Blocks.STONE_SLAB).pickupBlock(null,slabLevel,pos,slabLevel.getBlockState(pos));
+                  System.out.println("slab-waterlogged:"+type.getSerializedName()+":"+net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(liquid.getType())+"\\t"+can+":"+placed+":"+wet+":"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(bucket.getItem()));
+                }
                 waterlogged.setBlock(pos,Blocks.IRON_CHAIN.defaultBlockState(),528,512);waterlogged.trace.clear();
                 var fluid=net.minecraft.world.level.material.Fluids.WATER.getSource(false);
                 boolean placed=((net.minecraft.world.level.block.LiquidBlockContainer)Blocks.IRON_CHAIN).placeLiquid(waterlogged,pos,waterlogged.getBlockState(pos),fluid);

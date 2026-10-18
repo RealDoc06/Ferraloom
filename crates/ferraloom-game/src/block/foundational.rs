@@ -148,3 +148,46 @@ impl BlockBehavior for AirBlock {
         Ok(ferraloom_util::shapes::empty())
     }
 }
+
+/// Port of SlabBlock's waterlogging overrides. A double slab rejects liquid
+/// even though the class implements SimpleWaterloggedBlock.
+pub struct SlabWaterlogging;
+pub static SLAB_WATERLOGGING: SlabWaterlogging = SlabWaterlogging;
+impl BlockBehavior for SlabWaterlogging {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        neighbor_pos: BlockPos,
+        neighbor: BlockState,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<BlockState, LevelError> {
+        // SlabBlock and ChainBlock schedule the same water tick, then return
+        // BlockBehaviour's identity shape update.
+        CHAIN_BLOCK.update_shape(state, pos, direction, neighbor_pos, neighbor, level)
+    }
+    fn can_place_liquid(
+        &self,
+        state: BlockState,
+        fluid: ferraloom_data::registries::fluid::Id,
+    ) -> bool {
+        state.get(ferraloom_data::properties::TYPE)
+            != Some(ferraloom_data::properties::Type::Double)
+            && fluid == ferraloom_data::registries::fluid::Id::WATER
+    }
+    fn place_liquid(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        fluid: ferraloom_data::FluidState,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<bool, LevelError> {
+        if state.get(ferraloom_data::properties::TYPE)
+            == Some(ferraloom_data::properties::Type::Double)
+        {
+            return Ok(false);
+        }
+        super::fluid::SimpleWaterloggedBlock::place_liquid(state, pos, fluid, level)
+    }
+}

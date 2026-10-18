@@ -50,6 +50,7 @@ pub enum LevelError {
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
+    UnsupportedPackReload,
     InvalidSavedTick,
     WrongChunkHeight(ChunkPos),
 }

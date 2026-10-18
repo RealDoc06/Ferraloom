@@ -56,6 +56,7 @@ static VANILLA_CLASSES: [Option<&'static dyn super::BlockBehavior>;
     classes[BlockClass::TallGrassBlock as usize] = Some(&super::foundational::VEGETATION_BLOCK);
     classes[BlockClass::BushBlock as usize] = Some(&super::foundational::VEGETATION_BLOCK);
     classes[BlockClass::ChainBlock as usize] = Some(&super::foundational::CHAIN_BLOCK);
+    classes[BlockClass::SlabBlock as usize] = Some(&super::foundational::SLAB_WATERLOGGING);
     classes[BlockClass::LiquidBlock as usize] = Some(&super::fluid::LIQUID_BLOCK);
     classes
 };
@@ -96,6 +97,13 @@ pub(crate) fn ported_behavior(
                 | Method::CanPlaceLiquid
                 | Method::PlaceLiquid
                 | Method::PickupBlock
+        ),
+        BlockClass::SlabBlock => matches!(
+            method,
+            Method::CanPlaceLiquid
+                | Method::PlaceLiquid
+                | Method::UpdateShape
+                | Method::UpdateFromNeighbourShapes
         ),
         BlockClass::LiquidBlock => matches!(
             method,
