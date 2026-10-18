@@ -40,6 +40,14 @@ fn capped_finalization_shuffle_changed_nbt_clipping_and_settings_rng_match_vanil
         .collect::<Vec<_>>();
     for (index, case) in cases.as_array().unwrap().iter().enumerate() {
         let seed = case["seed"].as_i64().unwrap();
+        let mut input = blocks.clone();
+        if case["sparse_nbt"].as_bool().unwrap() {
+            for (i, block) in input.iter_mut().enumerate() {
+                if i % 2 != 0 {
+                    block.nbt = None;
+                }
+            }
+        }
         let mut chunks = Vec::new();
         for z in -1..=1 {
             for x in -1..=1 {
@@ -92,7 +100,7 @@ fn capped_finalization_shuffle_changed_nbt_clipping_and_settings_rng_match_vanil
                 &mut settings,
                 &processors,
                 &tags,
-                &blocks,
+                &input,
                 &mut shared,
             )
             .unwrap();
