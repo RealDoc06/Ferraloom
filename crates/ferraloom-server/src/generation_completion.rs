@@ -126,7 +126,7 @@ impl MinecraftServer {
         self.update_chunk_tickets()?;
         self.request_area(position, 0)?;
         loop {
-            self.integrate_jobs()?;
+            self.progress_chunk_jobs()?;
             self.update_chunk_tickets()?;
             if self.world.ready.contains(&position) {
                 return Ok(());

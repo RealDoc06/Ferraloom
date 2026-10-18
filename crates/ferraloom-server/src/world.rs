@@ -2,7 +2,7 @@
 use crate::{
     generation::{
         GenerationCompletion, GenerationOutput, GenerationRequest, GenerationRevision,
-        GenerationState, StructureSnapshot,
+        GenerationState, ReadyGeneration, StructureSnapshot,
     },
     jobs::JobPool,
     properties::ServerProperties,
@@ -621,6 +621,7 @@ pub struct World {
     evictions: Vec<ChunkPos>,
     saving: JobPool,
     pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
+    completed_generation: VecDeque<ReadyGeneration>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
     pub saved: BTreeMap<i64, SerializableChunkData>,
@@ -888,6 +889,7 @@ impl World {
             evictions: Vec::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
+            completed_generation: VecDeque::new(),
             light_tx,
             light_rx,
             saved: BTreeMap::new(),
@@ -1080,6 +1082,15 @@ impl World {
                 {
                     self.cancelled_outputs.push(output);
                 }
+                if let Some(index) = self
+                    .completed_generation
+                    .iter()
+                    .position(|completion| completion.request == request)
+                    && let Some(completion) = self.completed_generation.remove(index)
+                    && let Ok(output) = completion.result
+                {
+                    self.cancelled_outputs.push(output);
+                }
                 self.failed_generation.push((pos, request));
                 self.generation_dispatcher.release(pos, true, None);
             }
@@ -1091,6 +1102,10 @@ impl World {
         None
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
+        self.request_status(request, pos, ChunkStatus::Full);
+    }
+    /// Status acquisition also uses the canonical owned worker and request order.
+    pub fn request_status(&mut self, request: u64, pos: ChunkPos, status: ChunkStatus) {
         let (reply, answer) = oneshot::channel();
         self.pending.insert(request, (pos, answer));
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -1102,6 +1117,7 @@ impl World {
             GenerationRequest {
                 id: request,
                 pos,
+                status,
                 reply,
                 cancelled,
             },
@@ -1160,7 +1176,7 @@ impl World {
             let mut result = state.generate(
                 request.id,
                 request.pos,
-                ChunkStatus::Full,
+                request.status,
                 &registry,
                 &io,
                 Some(&request.cancelled),
@@ -1342,6 +1358,16 @@ impl World {
     }
     pub async fn close_chunk_storage(&mut self) -> Result<()> {
         self.finish_generation().await?;
+        for (_, (_, mut answer)) in std::mem::take(&mut self.pending) {
+            if let Ok(Ok(output)) = answer.try_recv() {
+                self.cancelled_outputs.push(output);
+            }
+        }
+        for completion in self.completed_generation.drain(..) {
+            if let Ok(output) = completion.result {
+                self.cancelled_outputs.push(output);
+            }
+        }
         self.persist_cancelled_outputs()?;
         while let Some(save) = self.proto_saves.pop_front() {
             save.await?;
@@ -1362,18 +1388,22 @@ impl World {
             state.refresh_full_chunks(level);
         }
     }
-    /// Poll at ServerChunkCache's integration point, strictly by request ordinal.
-    pub fn poll_terrain(&mut self) -> Result<Vec<(u64, Terrain)>> {
+    /// Receive owned results in request order without taking main-thread tasks
+    /// off the canonical queue. No Level borrow or promotion callback runs here.
+    pub fn poll_generation_progress(&mut self) -> Result<bool> {
+        let mut progressed = false;
         if let Some(work) = &mut self.generation_work {
             match work.try_recv() {
                 Ok(output) => {
                     self.generation_work = None;
                     self.complete_generation(output)?;
+                    progressed = true;
                 }
                 Err(oneshot::error::TryRecvError::Empty) => {}
                 Err(error) => return Err(error.into()),
             }
         }
+        progressed |= !self.cancelled_outputs.is_empty();
         self.persist_cancelled_outputs()?;
         let mut context = TaskContext::from_waker(Waker::noop());
         while let Some(task) = self.proto_saves.front_mut() {
@@ -1382,54 +1412,85 @@ impl World {
             };
             self.proto_saves.pop_front();
             result?;
+            progressed = true;
         }
-        let mut done = Vec::new();
         while let Some((&request, _)) = self.pending.first_key_value() {
             let (position, answer) = self.pending.get_mut(&request).unwrap();
             let position = *position;
-            match answer.try_recv() {
-                Ok(result) => {
-                    self.pending.remove(&request);
-                    if self
-                        .active_generation
-                        .get(&position.pack())
-                        .is_some_and(|(id, _)| *id == request)
-                    {
-                        self.active_generation.remove(&position.pack());
-                    }
-                    if result.is_err() {
-                        self.failed_generation.push((position, request));
-                    }
-                    let output = result?;
-                    if output.initial_mob_spawning_pending {
-                        self.pending_initial_spawns
-                            .insert(output.terrain.pos.pack());
-                    }
-                    self.generation_skips.extend(output.skips);
-                    for (pos, status) in output.statuses {
-                        self.generation_statuses
-                            .entry(pos.pack())
-                            .and_modify(|known| *known = (*known).max(status))
-                            .or_insert(status);
-                    }
-                    for snapshot in output.full_structures {
-                        self.integrate_structure_snapshot(snapshot)?;
-                    }
-                    for (pos, disk) in output.neighbors {
-                        self.store_generation_chunk(pos, output.terrain.revision, disk)?;
-                    }
-                    done.push((request, output.terrain));
-                }
+            let result = match answer.try_recv() {
+                Ok(result) => result,
                 Err(oneshot::error::TryRecvError::Empty) => break,
-                Err(error) => return Err(error.into()),
-            }
+                Err(error) => Err(error.into()),
+            };
+            self.pending.remove(&request);
+            self.completed_generation.push_back(ReadyGeneration {
+                request,
+                pos: position,
+                result,
+            });
+            progressed = true;
         }
         // Integrate completed results before capturing the next job's live
         // imposter snapshots, including post-processing writes and heightmaps.
-        if done.is_empty() {
+        if self.completed_generation.is_empty() {
+            let running = self.generation_work.is_some();
             self.start_generation()?;
+            progressed |= !running && self.generation_work.is_some();
         }
-        Ok(done)
+        Ok(progressed)
+    }
+    /// Begin just one ordered integration. A nested managed-block pump can
+    /// still reach every later completion, including an ordered failure.
+    pub fn take_generation_completion(&mut self) -> Result<Option<(u64, Terrain)>> {
+        let Some(completion) = self.completed_generation.pop_front() else {
+            return Ok(None);
+        };
+        let ReadyGeneration {
+            request,
+            pos,
+            result,
+        } = completion;
+        if self
+            .active_generation
+            .get(&pos.pack())
+            .is_some_and(|(id, _)| *id == request)
+        {
+            self.active_generation.remove(&pos.pack());
+        }
+        let output = match result {
+            Ok(output) => output,
+            Err(error) => {
+                self.failed_generation.push((pos, request));
+                return Err(error);
+            }
+        };
+        if output.initial_mob_spawning_pending {
+            self.pending_initial_spawns
+                .insert(output.terrain.pos.pack());
+        }
+        self.generation_skips.extend(output.skips);
+        for (pos, status) in output.statuses {
+            self.generation_statuses
+                .entry(pos.pack())
+                .and_modify(|known| *known = (*known).max(status))
+                .or_insert(status);
+        }
+        for snapshot in output.full_structures {
+            self.integrate_structure_snapshot(snapshot)?;
+        }
+        for (pos, disk) in output.neighbors {
+            self.store_generation_chunk(pos, output.terrain.revision, disk)?;
+        }
+        Ok(Some((request, output.terrain)))
+    }
+    #[cfg(test)]
+    fn poll_terrain(&mut self) -> Result<Vec<(u64, Terrain)>> {
+        self.poll_generation_progress()?;
+        let mut completed = Vec::new();
+        while let Some(terrain) = self.take_generation_completion()? {
+            completed.push(terrain);
+        }
+        Ok(completed)
     }
     pub fn queue_block_light_changes(
         &self,
@@ -2550,6 +2611,35 @@ mod generation_order_tests {
         .unwrap();
         assert_eq!(completed.len(), 1);
         assert_eq!((completed[0].0, completed[0].1.pos), (5, retry));
+        // Taking A's task must not strand B in an outer local Vec while A's
+        // callback is parked. A later failed request must not discard either.
+        let (a_reply, a_result) = oneshot::channel();
+        let (b_reply, b_result) = oneshot::channel();
+        let (failed_reply, failed_result) = oneshot::channel();
+        world.pending.insert(6, (first, a_result));
+        world.pending.insert(7, (second, b_result));
+        world.pending.insert(8, (cancelled, failed_result));
+        assert!(a_reply.send(Ok(output(first, "outer"))).is_ok());
+        assert!(b_reply.send(Ok(output(second, "nested"))).is_ok());
+        assert!(
+            failed_reply
+                .send(Err(anyhow::anyhow!("owned failure")))
+                .is_ok()
+        );
+        assert!(world.poll_generation_progress().unwrap());
+        assert_eq!(world.take_generation_completion().unwrap().unwrap().0, 6);
+        world.poll_generation_progress().unwrap();
+        assert_eq!(world.take_generation_completion().unwrap().unwrap().0, 7);
+        assert_eq!(
+            world
+                .take_generation_completion()
+                .err()
+                .unwrap()
+                .to_string(),
+            "owned failure"
+        );
+        assert!(world.failed_generation.contains(&(cancelled, 8)));
+        assert!(world.take_generation_completion().unwrap().is_none());
         world.close_chunk_storage().await.unwrap();
     }
 }

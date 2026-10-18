@@ -42,8 +42,16 @@ pub(crate) struct StructureSnapshot {
 pub(crate) struct GenerationRequest {
     pub id: u64,
     pub pos: ChunkPos,
+    pub status: ChunkStatus,
     pub reply: tokio::sync::oneshot::Sender<Result<GenerationOutput>>,
     pub cancelled: Arc<AtomicBool>,
+}
+/// Mailbox completion retained until its ordered main-thread integration starts.
+/// A parked callback must leave subsequent results reachable by a nested pump.
+pub(crate) struct ReadyGeneration {
+    pub request: u64,
+    pub pos: ChunkPos,
+    pub result: Result<GenerationOutput>,
 }
 pub(crate) struct GenerationCompletion {
     pub state: GenerationState,

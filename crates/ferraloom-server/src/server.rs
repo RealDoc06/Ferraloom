@@ -1276,8 +1276,21 @@ impl MinecraftServer {
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
+        self.progress_chunk_jobs()?;
+        self.evict_unloaded_chunks()
+    }
+    /// Progress without eviction. The shared-publication driver uses this split
+    /// after its Level-facing publication seam has landed.
+    fn progress_chunk_jobs(&mut self) -> Result<()> {
         self.world.refresh_generation_snapshots(&self.level.level);
-        let completed = self.world.poll_terrain();
+        let completed = (|| -> Result<()> {
+            self.world.poll_generation_progress()?;
+            while let Some((request, terrain)) = self.world.take_generation_completion()? {
+                generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
+                self.integrate_command_terrain(request, terrain)?;
+            }
+            Ok(())
+        })();
         for &(pos, request_id) in &self.world.failed_generation {
             if self.player_loading_futures.contains(&(pos, request_id)) {
                 self.level.distance_manager.complete_player_loading(pos);
@@ -1286,15 +1299,15 @@ impl MinecraftServer {
                 .retain(|&waiting| waiting != (pos, request_id));
         }
         self.world.failed_generation.clear();
-        let completed = completed?;
+        completed?;
         generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
-        for (request, terrain) in completed {
-            self.integrate_command_terrain(request, terrain)?;
-        }
         while let Ok(light) = self.world.light_rx.try_recv() {
             self.integrate_command_light(light)?;
         }
         generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
+        Ok(())
+    }
+    fn evict_unloaded_chunks(&mut self) -> Result<()> {
         for (pos, request_id, result) in self.world.poll_unloads()? {
             if let Err(error) = result {
                 self.level
