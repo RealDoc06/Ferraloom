@@ -136,7 +136,7 @@ fn fixture() -> Level {
 }
 #[test]
 fn native_reference_start_piece_and_holder_queries_match_vanilla() {
-    let mut level = fixture();
+    let level = fixture();
     let id: Identifier = "minecraft:buried_treasure".parse().unwrap();
     let direct = HolderSet::Direct(vec![id.to_string().parse().unwrap()]);
     let tag = HolderSet::Named("minecraft:on_treasure_maps".parse().unwrap());
@@ -326,7 +326,7 @@ fn missing_referenced_chunk_is_required_even_when_an_earlier_start_matches() {
 }
 #[test]
 fn holder_order_uses_identifier_keys_and_retains_native_reference_value_order() {
-    let mut level = fixture();
+    let level = fixture();
     let origin = ChunkPos::new(0, 0);
     let a: Identifier = "minecraft:buried_treasure".parse().unwrap();
     let b: Identifier = "minecraft:mineshaft".parse().unwrap();
