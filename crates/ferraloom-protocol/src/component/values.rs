@@ -1,10 +1,28 @@
-use super::{ComponentPredicate, ItemStackTemplate, invalid, registry};
+use super::{ComponentPredicate, ItemStackTemplate, JavaF32, JavaF64, invalid, registry};
+use ferraloom_util::collections::{JavaHash, record_hash_code};
 use crate::chat::Component;
 use crate::{
     Identifier, Reader, Result, Uuid, Wire, Writer,
     codec::{Either, GlobalPos, Holder, HolderSet, VarInt},
 };
 use ferraloom_nbt::Tag;
+
+impl Wire for JavaF32 {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        f32::decode(r).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0.encode(w)
+    }
+}
+impl Wire for JavaF64 {
+    fn decode(r: &mut Reader<'_>) -> Result<Self> {
+        f64::decode(r).map(Self)
+    }
+    fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
+        self.0.encode(w)
+    }
+}
 
 macro_rules! record {
     ($name:ident { $($field:ident: $ty:ty),* $(,)? }) => {
@@ -316,7 +334,7 @@ impl Wire for LlamaVariant {
     }
 }
 wire_enum!(AxolotlVariant { Lucy = 0, Wild = 1, Gold = 2, Cyan = 3, Blue = 4 });
-record!(SoundEvent { location: Identifier, fixed_range: Option<f32> });
+record!(SoundEvent { location: Identifier, fixed_range: Option<JavaF32> });
 record!(TrimMaterial {
     palette_id: Identifier,
     description: Component
@@ -328,15 +346,15 @@ record!(TrimPattern {
 });
 record!(Instrument {
     sound_event: Sound,
-    use_duration: f32,
-    range: f32,
+    use_duration: JavaF32,
+    range: JavaF32,
     durability_damage: VarInt,
     description: Component
 });
 record!(JukeboxSong {
     sound_event: Sound,
     description: Component,
-    length_in_seconds: f32,
+    length_in_seconds: JavaF32,
     comparator_output: VarInt
 });
 record!(BannerPattern {
@@ -373,50 +391,82 @@ impl Wire for PaintingVariant {
 record!(UseEffects {
     can_sprint: bool,
     interact_vibrations: bool,
-    speed_multiplier: f32
+    speed_multiplier: JavaF32
 });
 record!(FoodProperties {
     nutrition: VarInt,
-    saturation: f32,
+    saturation: JavaF32,
     can_always_eat: bool
 });
 record!(Weapon {
     item_damage_per_attack: VarInt,
-    disable_blocking_for_seconds: f32
+    disable_blocking_for_seconds: JavaF32
 });
-record!(UseCooldown { seconds: f32, cooldown_group: Option<Identifier> });
+record!(UseCooldown { seconds: JavaF32, cooldown_group: Option<Identifier> });
 record!(AttackRange {
-    min_reach: f32,
-    max_reach: f32,
-    min_creative_reach: f32,
-    max_creative_reach: f32,
-    hitbox_margin: f32,
-    mob_factor: f32
+    min_reach: JavaF32,
+    max_reach: JavaF32,
+    min_creative_reach: JavaF32,
+    max_creative_reach: JavaF32,
+    hitbox_margin: JavaF32,
+    mob_factor: JavaF32
 });
-record!(Consumable { consume_seconds: f32, animation: ItemUseAnimation, sound: Sound, has_consume_particles: bool, on_consume_effects: Vec<ConsumeEffect> });
+
+/// Port of the pure-value records' generated ObjectMethods#hashCode.
+impl JavaHash for FoodProperties {
+    fn java_hash_code(&self) -> i32 {
+        record_hash_code([
+            self.nutrition.0.java_hash_code(),
+            self.saturation.java_hash_code(),
+            self.can_always_eat.java_hash_code(),
+        ])
+    }
+}
+impl JavaHash for UseEffects {
+    fn java_hash_code(&self) -> i32 {
+        record_hash_code([
+            self.can_sprint.java_hash_code(),
+            self.interact_vibrations.java_hash_code(),
+            self.speed_multiplier.java_hash_code(),
+        ])
+    }
+}
+impl JavaHash for AttackRange {
+    fn java_hash_code(&self) -> i32 {
+        record_hash_code([
+            self.min_reach.java_hash_code(),
+            self.max_reach.java_hash_code(),
+            self.min_creative_reach.java_hash_code(),
+            self.max_creative_reach.java_hash_code(),
+            self.hitbox_margin.java_hash_code(),
+            self.mob_factor.java_hash_code(),
+        ])
+    }
+}
+record!(Consumable { consume_seconds: JavaF32, animation: ItemUseAnimation, sound: Sound, has_consume_particles: bool, on_consume_effects: Vec<ConsumeEffect> });
 record!(DeathProtection { death_effects: Vec<ConsumeEffect> });
-record!(Tool { rules: Vec<ToolRule>, default_mining_speed: f32, damage_per_block: VarInt, can_destroy_blocks_in_creative: bool });
-record!(ToolRule { blocks: BlockSet, speed: Option<f32>, correct_for_drops: Option<bool> });
+record!(Tool { rules: Vec<ToolRule>, default_mining_speed: JavaF32, damage_per_block: VarInt, can_destroy_blocks_in_creative: bool });
+record!(ToolRule { blocks: BlockSet, speed: Option<JavaF32>, correct_for_drops: Option<bool> });
 record!(Equippable { slot: EquipmentSlot, equip_sound: Sound, asset_id: Option<Identifier>, camera_overlay: Option<Identifier>, allowed_entities: Option<EntityTypeSet>, dispensable: bool, swappable: bool, damage_on_hurt: bool, equip_on_interact: bool, can_be_sheared: bool, shearing_sound: Sound });
-record!(BlocksAttacks { block_delay_seconds: f32, disable_cooldown_scale: f32, damage_reductions: Vec<DamageReduction>, item_damage: ItemDamageFunction, bypassed_by: Option<DamageTypeSet>, block_sound: Option<Sound>, disable_sound: Option<Sound> });
-record!(DamageReduction { horizontal_blocking_angle: f32, types: Option<DamageTypeSet>, base: f32, factor: f32 });
+record!(BlocksAttacks { block_delay_seconds: JavaF32, disable_cooldown_scale: JavaF32, damage_reductions: Vec<DamageReduction>, item_damage: ItemDamageFunction, bypassed_by: Option<DamageTypeSet>, block_sound: Option<Sound>, disable_sound: Option<Sound> });
+record!(DamageReduction { horizontal_blocking_angle: JavaF32, types: Option<DamageTypeSet>, base: JavaF32, factor: JavaF32 });
 record!(ItemDamageFunction {
-    threshold: f32,
-    base: f32,
-    factor: f32
+    threshold: JavaF32,
+    base: JavaF32,
+    factor: JavaF32
 });
 record!(PiercingWeapon { deals_knockback: bool, dismounts: bool, sound: Option<Sound>, hit_sound: Option<Sound> });
-record!(KineticWeapon { contact_cooldown_ticks: VarInt, delay_ticks: VarInt, dismount_conditions: Option<KineticCondition>, knockback_conditions: Option<KineticCondition>, damage_conditions: Option<KineticCondition>, forward_movement: f32, damage_multiplier: f32, sound: Option<Sound>, hit_sound: Option<Sound> });
+record!(KineticWeapon { contact_cooldown_ticks: VarInt, delay_ticks: VarInt, dismount_conditions: Option<KineticCondition>, knockback_conditions: Option<KineticCondition>, damage_conditions: Option<KineticCondition>, forward_movement: JavaF32, damage_multiplier: JavaF32, sound: Option<Sound>, hit_sound: Option<Sound> });
 record!(KineticCondition {
     max_duration_ticks: VarInt,
-    min_speed: f32,
-    min_relative_speed: f32
+    min_speed: JavaF32,
+    min_relative_speed: JavaF32
 });
 record!(SwingAnimation {
     animation_type: SwingAnimationType,
     duration: VarInt
 });
-record!(CustomModelData { floats: Vec<f32>, flags: Vec<bool>, strings: Vec<String>, colors: Vec<i32> });
+record!(CustomModelData { floats: Vec<JavaF32>, flags: Vec<bool>, strings: Vec<String>, colors: Vec<i32> });
 record!(FireworkExplosion { shape: FireworkShape, colors: Vec<i32>, fade_colors: Vec<i32>, has_trail: bool, has_twinkle: bool });
 record!(Fireworks { flight_duration: VarInt, explosions: BoundedList<FireworkExplosion, 256> });
 record!(LodestoneTracker { target: Option<GlobalPos>, tracked: bool });
@@ -430,7 +480,7 @@ record!(BannerLayer {
 });
 record!(AttributeModifier {
     id: Identifier,
-    amount: f64,
+    amount: JavaF64,
     operation: AttributeOperation
 });
 record!(AttributeEntry {
@@ -465,11 +515,11 @@ record!(BeeOccupant {
 });
 record!(PotDecorations { back: Option<ItemStackTemplate>, left: Option<ItemStackTemplate>, right: Option<ItemStackTemplate>, front: Option<ItemStackTemplate> });
 record!(Compostable { layers: Either<i32, Identifier> });
-record!(CookingFuel { burn_time: Either<i32, Identifier>, speed_multiplier: Either<f32, Identifier> });
-record!(BrewingFuel { uses: Either<i32, Identifier>, speed_multiplier: Either<f32, Identifier> });
+record!(CookingFuel { burn_time: Either<i32, Identifier>, speed_multiplier: Either<JavaF32, Identifier> });
+record!(BrewingFuel { uses: Either<i32, Identifier>, speed_multiplier: Either<JavaF32, Identifier> });
 record!(MobVisibility {
     targeting_entity_types: EntityTypeSet,
-    visibility: f32
+    visibility: JavaF32
 });
 registry_holder!(Sound, SoundEvent, "sound_event");
 registry_holder!(TrimMaterialHolder, TrimMaterial, "trim_material");
@@ -527,12 +577,12 @@ impl Wire for AttributeDisplay {
 pub enum ConsumeEffect {
     ApplyEffects {
         effects: Vec<MobEffectInstance>,
-        probability: f32,
+        probability: JavaF32,
     },
     RemoveEffects(MobEffectSet),
     ClearAllEffects,
     TeleportRandomly {
-        diameter: f32,
+        diameter: JavaF32,
         directional_particles: bool,
     },
     PlaySound(Sound),
@@ -683,9 +733,9 @@ pub struct MapDecorations(pub Vec<(String, MapDecoration)>);
 #[derive(Clone, Debug, PartialEq)]
 pub struct MapDecoration {
     pub decoration_type: Identifier,
-    pub x: f64,
-    pub z: f64,
-    pub rotation: f32,
+    pub x: JavaF64,
+    pub z: JavaF64,
+    pub rotation: JavaF32,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct DebugStickState(pub Vec<(ferraloom_data::Block, String)>);

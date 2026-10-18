@@ -491,10 +491,10 @@ fn vanilla_persistent_primitive_coercions() {
             "{name}"
         );
         if let Ok(value) = decoded {
-            let bits = |n: f64| {
+            let bits = |n: JavaF64| {
                 format!(
                     "{:x}",
-                    if n.is_nan() {
+                    if n.0.is_nan() {
                         f64::NAN.to_bits()
                     } else {
                         n.to_bits()

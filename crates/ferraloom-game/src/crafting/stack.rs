@@ -67,17 +67,7 @@ pub(super) fn apply_patch(target: &mut DataComponentPatch, patch: &DataComponent
     }
 }
 pub(super) fn same_item_components(a: &ItemStack, b: &ItemStack) -> Result<bool> {
-    if a.is_empty() || b.is_empty() {
-        return Ok(a.is_empty() && b.is_empty());
-    }
-    let a_components = a.components()?;
-    let b_components = b.components()?;
-    Ok(item(a) == item(b)
-        && a_components.entries.len() == b_components.entries.len()
-        && a_components
-            .entries
-            .iter()
-            .all(|entry| b_components.get(entry.component_type()) == Some(entry)))
+    a.is_same_item_same_components(b)
 }
 
 /// Port of ItemStackTemplate#validate / ItemStack#validateStrict. These runtime
