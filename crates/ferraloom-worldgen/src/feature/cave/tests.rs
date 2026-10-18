@@ -160,9 +160,34 @@ fn chunks(
 }
 fn pending(case: &Value) -> Option<&'static str> {
     match case["config"]["type"].as_str().unwrap() {
-        "minecraft:fossil" => Some("template placement game callbacks"),
         "minecraft:vegetation_patch" | "minecraft:waterlogged_vegetation_patch" => {
-            Some("nested vegetation_feature and block survival")
+            if case["result"] != true {
+                return None;
+            }
+            // These fixture inputs finish without reaching an unported plant
+            // method. Their blocks, result, ticks and following RNG were checked.
+            let feature = case["feature"].as_str().unwrap();
+            let terrain = case["terrain"].as_str().unwrap();
+            let seed = case["seed"].as_i64().unwrap();
+            match (feature, terrain, seed) {
+                ("moss_patch_ceiling", _, _)
+                | ("clay_pool_with_dripleaves" | "clay_with_dripleaves", "pockets" | "room", _)
+                | ("pale_moss_patch", "pockets", 8675309) => None,
+                ("clay_pool_with_dripleaves" | "clay_with_dripleaves", _, _) => {
+                    Some("SmallDripleafBlock#canSurvive")
+                }
+                ("moss_patch", _, _)
+                | ("moss_patch_bonemeal", _, -1)
+                | ("pale_moss_patch_bonemeal", _, 8675309) => {
+                    Some("TallGrassBlock#canSurvive")
+                }
+                ("moss_patch_bonemeal", _, 0) => Some("AzaleaBlock#canSurvive"),
+                ("moss_patch_bonemeal", _, 8675309) => Some("CarpetBlock#canSurvive"),
+                ("pale_moss_patch" | "pale_moss_patch_bonemeal", _, _) => {
+                    Some("MossyCarpetBlock#canSurvive")
+                }
+                _ => None,
+            }
         }
         "minecraft:multiface_growth" if case["result"] == true => {
             Some("MultifaceSpreadeableBlock placement and MultifaceSpreader")
@@ -353,30 +378,25 @@ fn real_ore_and_cave_feature_placements_match_vanilla() {
 #[test]
 #[ignore = "needs shared MultifaceSpreadeableBlock placement and MultifaceSpreader"]
 fn pending_multiface_behavior() {
-    run(|case| case["config"]["type"] == "minecraft:multiface_growth");
+    run(|case| case["config"]["type"] == "minecraft:multiface_growth" && pending(case).is_some());
 }
 #[test]
 #[ignore = "needs shared SculkSpreader#updateCursors"]
 fn pending_sculk_behavior() {
-    run(|case| case["config"]["type"] == "minecraft:sculk_patch");
+    run(|case| case["config"]["type"] == "minecraft:sculk_patch" && pending(case).is_some());
 }
 #[test]
-#[ignore = "needs nested vegetation_feature implementations and block survival"]
+#[ignore = "needs dripleaf, grass, azalea and carpet canSurvive behavior"]
 fn pending_vegetation_behavior() {
     run(|case| {
         matches!(
             case["config"]["type"].as_str(),
             Some("minecraft:vegetation_patch" | "minecraft:waterlogged_vegetation_patch")
-        )
+        ) && pending(case).is_some()
     });
 }
 #[test]
 #[ignore = "needs RandomizableContainer#setBlockEntityLootTable and SpawnerBlockEntity#setEntityId"]
 fn pending_monster_room_block_entities() {
     run(|case| case["config"]["type"] == "minecraft:monster_room" && case["result"] == true);
-}
-#[test]
-#[ignore = "needs template placement game block callbacks"]
-fn pending_fossil_behavior() {
-    run(|case| case["config"]["type"] == "minecraft:fossil");
 }
