@@ -1,8 +1,8 @@
 //! Synchronous crafting callbacks at the menu's canonical mutation sites.
 use super::*;
 use crate::crafting::{
-    CraftingContext, CraftingInput, CraftingInputAccess, RecipeHolder, RecipeInput, RecipeManager,
-    RecipeSynchronization, RecipeType, ServerRecipeBook,
+    CraftingContext, CraftingInputAccess, CraftingInputView, RecipeHolder, RecipeInput,
+    RecipeManager, RecipeSynchronization, RecipeType, ServerRecipeBook,
 };
 use ferraloom_data::datapack::Identifier;
 
@@ -214,14 +214,14 @@ impl AbstractContainerMenu {
             _ => unreachable!("crafting grid"),
         }
     }
-    fn crafting_input(&self) -> Result<crate::crafting::PositionedCraftingInput> {
+    fn crafting_input(&self) -> Result<crate::crafting::PositionedCraftingInputView<'_>> {
         let width = self
             .crafting_grid_size()
             .ok_or(MenuError::Unsupported("non-crafting menu"))?;
-        Ok(CraftingInput::of_positioned(
+        Ok(CraftingInputView::of_positioned(
             width,
             width,
-            self.crafting_grid().to_vec(),
+            self.crafting_grid(),
         )?)
     }
     /// Port of TransientCraftingContainer#setItem followed immediately by
