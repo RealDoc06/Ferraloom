@@ -444,7 +444,7 @@ fn move_stuck_entities(
 pub fn final_tick(level: &mut Level, handle: BlockEntityRef) -> Result<(), LevelError> {
     level.with_block_entity_callback(handle, |level| {
         let e = level.block_entity::<PistonMovingBlockEntity>(handle)?;
-        if !e.parent.has_level || !(e.progress_o < 1.0) {
+        if !e.parent.has_level || e.progress_o >= 1.0 || e.progress_o.is_nan() {
             return Ok(());
         }
         let e = level.block_entity_mut::<PistonMovingBlockEntity>(handle)?;

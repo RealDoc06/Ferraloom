@@ -35,6 +35,7 @@ pub(super) fn supports(block: Block) -> bool {
 }
 /// Port of DoorBlock#getHinge. Neighbor solidity is captured before click-side
 /// tie breaking, and either neighboring lower door participates regardless of type.
+#[allow(clippy::neg_cmp_op_on_partial_ord)] // Native negation includes unordered click coordinates.
 fn hinge(
     context: &BlockPlaceContext<'_>,
     reader: &LevelReaderRef<'_, '_>,

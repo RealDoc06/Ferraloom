@@ -231,15 +231,10 @@ fn method(level: &Level, stack: &ItemStack) -> Result<Option<DispenseHook>, Leve
 }
 fn random_slot(level: &mut Level, handle: BlockEntityRef) -> Result<Option<usize>, LevelError> {
     unpack_loot_table(handle, None, level)?;
-    let occupied: [bool; 9] = std::array::from_fn(|slot| {
-        !level
-            .block_entity::<DispenserBlockEntity>(handle)
-            .expect("dispenser receiver")
-            .parent
-            .parent
-            .items[slot]
-            .is_empty()
-    });
+    let occupied: [bool; 9] = {
+        let receiver = level.block_entity::<DispenserBlockEntity>(handle)?;
+        std::array::from_fn(|slot| !receiver.parent.parent.items[slot].is_empty())
+    };
     let mut selected = None;
     let mut odds = 1;
     for (slot, occupied) in occupied.into_iter().enumerate() {
