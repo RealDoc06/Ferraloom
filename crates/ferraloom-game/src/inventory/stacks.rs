@@ -97,6 +97,16 @@ impl StackGenerations {
             retained: None,
         }
     }
+    pub(crate) fn append_slot(&mut self) -> usize {
+        let slot = self.generations.len();
+        self.generations.push(1);
+        slot
+    }
+    pub(crate) fn retains_slot(&self, slot: usize) -> bool {
+        self.retained
+            .as_ref()
+            .is_some_and(|rows| rows.keys().any(|reference| reference.slot == slot))
+    }
     pub fn current(&self, slot: usize) -> Option<StackSlotRef> {
         Some(StackSlotRef {
             slot,

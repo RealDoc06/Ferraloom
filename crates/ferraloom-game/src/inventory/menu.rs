@@ -70,7 +70,9 @@ pub struct AbstractContainerMenu {
     quickcraft_type: i32,
     quickcraft_status: i32,
     quickcraft_slots: Vec<usize>,
-    pub(super) last_slots: Vec<ItemStack>,
+    pub(super) last_slots: Vec<Option<ListenerCopyRef>>,
+    pub(super) standalone_listener_copies: Option<ListenerCopyArena>,
+    pub(super) player_listener: bool,
     pub(super) last_data: Vec<i32>,
     pub(super) remote_slots: Vec<RemoteSlot>,
     pub(super) remote_carried: RemoteSlot,
@@ -100,6 +102,8 @@ impl AbstractContainerMenu {
             quickcraft_status: 0,
             quickcraft_slots: Vec::new(),
             last_slots: Vec::new(),
+            standalone_listener_copies: Some(ListenerCopyArena::default()),
+            player_listener: false,
             last_data: Vec::new(),
             remote_slots: Vec::new(),
             remote_carried: RemoteSlot::Placeholder,
@@ -128,7 +132,7 @@ impl AbstractContainerMenu {
     pub(crate) fn add_slot(&mut self, mut slot: Slot) {
         slot.index = self.slots.len();
         self.slots.push(slot);
-        self.last_slots.push(ItemStack::default());
+        self.last_slots.push(None);
         self.remote_slots.push(if self.synchronized {
             RemoteSlot::Unknown
         } else {
@@ -233,6 +237,7 @@ impl AbstractContainerMenu {
         super::operation::set_menu_synchronizer(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
         .expect("in-memory menu synchronization");
     }
@@ -240,6 +245,7 @@ impl AbstractContainerMenu {
         super::operation::send_all_menu_data(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
         .expect("in-memory menu synchronization");
     }
@@ -247,6 +253,7 @@ impl AbstractContainerMenu {
         super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
     }
     pub fn broadcast_full_state(&mut self, ctx: &MenuContext<'_>) {
@@ -254,6 +261,7 @@ impl AbstractContainerMenu {
             &mut super::operation::PureMenuSynchronization {
                 menu: self,
                 context: ctx,
+                copies: None,
             },
         )
         .expect("in-memory menu synchronization");
@@ -274,18 +282,6 @@ impl AbstractContainerMenu {
     }
     pub fn set_remote_carried(&mut self, hash: HashedStack) {
         self.remote_carried.receive(hash);
-    }
-    pub fn transfer_state(&mut self, other: &Self) {
-        for (i, slot) in self.slots.iter().enumerate() {
-            if let Some(j) = other.slots.iter().position(|s| {
-                s.container == slot.container && s.container_slot == slot.container_slot
-            }) {
-                self.last_slots[i] = other.last_slots[j].clone();
-                if self.synchronized && other.synchronized {
-                    self.remote_slots[i] = other.remote_slots[j].clone();
-                }
-            }
-        }
     }
     pub fn drain_packets(&mut self) -> Vec<ferraloom_protocol::play::clientbound::Packet> {
         std::mem::take(&mut self.updates)
@@ -362,24 +358,17 @@ impl AbstractContainerMenu {
         amount: i32,
         hooks: &mut dyn MenuHooks,
     ) -> Result<ItemStack> {
-        if input.is_empty() || !slot.may_place(&input, hooks)? {
-            return Ok(input);
-        }
-        let mut target = self.get_item(ctx, slot.index);
-        let n = amount
-            .min(count(&input))
-            .min(slot.max_stack_size(self.container(ctx, slot.container), &input) - count(&target));
-        if n > 0 {
-            if target.is_empty() {
-                self.set_item_live(ctx, slot.index, split(&mut input, n), hooks)?;
-            } else if is_same_item_same_components(&target, &input) {
-                let left = count(&input) - n;
-                let total = count(&target) + n;
-                set_count(&mut input, left);
-                set_count(&mut target, total);
-                self.set_item_live(ctx, slot.index, target, hooks)?;
-            }
-        }
+        super::transfer::safe_insert_menu_item_stack(
+            &mut super::transfer::PureMenuTransfer {
+                menu: self,
+                context: ctx,
+                source: &mut input,
+            },
+            slot.index,
+            super::transfer::PureStackRef::Source,
+            amount,
+            hooks,
+        )?;
         Ok(input)
     }
     fn safe_take(
