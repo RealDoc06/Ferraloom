@@ -54,13 +54,21 @@ pub struct ServerPlayer {
     pub received_moves: u32,
 }
 impl ServerPlayer {
-    /// Port of Player#getDisplayName and #decorateDisplayNameComponent (without a team).
+    /// Port of Player#getDisplayName (without a team).
     pub fn display_name(&self) -> ferraloom_protocol::chat::Component {
+        self.decorate_display_name_component(ferraloom_protocol::chat::Component::literal(
+            &self.name,
+        ))
+    }
+    /// Port of Player#decorateDisplayNameComponent, preserving the formatted name's other styles.
+    pub fn decorate_display_name_component(
+        &self,
+        mut name: ferraloom_protocol::chat::Component,
+    ) -> ferraloom_protocol::chat::Component {
         use ferraloom_protocol::{
             Identifier,
             chat::{ClickEvent, Component, HoverEvent},
         };
-        let mut name = Component::literal(&self.name);
         name.style.click_event = Some(ClickEvent::SuggestCommand(format!("/tell {} ", self.name)));
         name.style.hover_event = Some(HoverEvent::ShowEntity {
             entity_type: Identifier::parse("minecraft:player").expect("built-in player identifier"),
@@ -681,6 +689,25 @@ mod tests {
             ferraloom_protocol::chat::Component::from_json(include_str!("display-name.json"))
                 .unwrap();
         assert_eq!(player.display_name(), expected);
+    }
+    #[test]
+    fn display_name_decoration_preserves_formatted_input_like_java() {
+        use ferraloom_protocol::chat::{ClickEvent, Component, TextColor};
+        let player = ServerPlayer::new(
+            Uuid::new(0x0123456789abcdef, 0x0123456789abcdef),
+            "Doc".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        let mut name = Component::literal("Styled");
+        name.extra.push(Component::literal(" tail"));
+        name.style.color = Some(TextColor::parse("red").unwrap());
+        name.style.bold = Some(true);
+        name.style.click_event = Some(ClickEvent::RunCommand("/old".into()));
+        name.style.insertion = Some("old".into());
+        let expected = Component::from_json(include_str!("decorated-name.json")).unwrap();
+        assert_eq!(player.decorate_display_name_component(name), expected);
     }
     #[test]
     fn movement_sweep_cannot_tunnel_through_terrain() {

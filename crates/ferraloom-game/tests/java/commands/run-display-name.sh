@@ -9,4 +9,4 @@ while IFS= read -r jar; do CP="$CP:$jar"; done < <(find "$VANILLA/libraries" "$V
 mkdir -p "$CLASSES"
 "$JDK/bin/javac" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/crates/ferraloom-game/tests/java/commands/DisplayNameVector.java"
 cd "$VANILLA"
-"$JDK/bin/java" -Xmx512m -Dnet.bytebuddy.experimental=true -XX:+EnableDynamicAgentLoading -cp "$CLASSES:$CP" DisplayNameVector "$ROOT/crates/ferraloom-game/src/entity/player/display-name.json"
+"$JDK/bin/java" -Xmx512m -Dnet.bytebuddy.experimental=true -XX:+EnableDynamicAgentLoading -cp "$CLASSES:$CP" DisplayNameVector "$ROOT/crates/ferraloom-game/src/entity/player/display-name.json" "$ROOT/crates/ferraloom-game/src/entity/player/decorated-name.json"
