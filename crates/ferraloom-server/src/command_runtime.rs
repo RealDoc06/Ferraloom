@@ -1367,10 +1367,10 @@ impl MinecraftServer {
         }
     }
     fn command_text_name(&self, source: &CommandSourceStack) -> String {
-        exceptions::plain_text(&source.display_name(|entity| {
+        source.text_name(|entity| {
             self.player(entity)
-                .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
-        }))
+                .map_or_else(|_| String::new(), |player| player.name.clone())
+        })
     }
     fn ban_player_command(
         &mut self,

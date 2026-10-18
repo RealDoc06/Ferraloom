@@ -163,6 +163,15 @@ impl CommandSourceStack {
         self.callback = self.callback.chain(callback);
         self
     }
+    /// Port of the callback-combiner overload of CommandSourceStack#withCallback.
+    pub fn with_callback_combiner(
+        self,
+        callback: CommandResultCallback,
+        combine: impl FnOnce(CommandResultCallback, CommandResultCallback) -> CommandResultCallback,
+    ) -> Self {
+        let combined = combine(self.callback.clone(), callback);
+        self.with_callback(combined)
+    }
     pub fn with_suppressed_output(mut self) -> Self {
         if !self.always_accepts {
             self.silent = true;
@@ -226,6 +235,13 @@ impl CommandSourceStack {
                 .unwrap_or_else(|| Component::literal("")),
         }
     }
+    /// Port of CommandSourceStack#getTextName, using the entity's plain name.
+    pub fn text_name(&self, entity_name: impl FnOnce(EntityRef) -> String) -> String {
+        match &self.names {
+            NamesProvider::Constant(name) => super::exceptions::plain_text(name),
+            NamesProvider::Entity => self.entity.map(entity_name).unwrap_or_default(),
+        }
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -245,5 +261,126 @@ mod tests {
             nether.with_entity(EntityRef(9)).position,
             Vec3::new(10., 64., -2.)
         );
+    }
+}
+
+#[cfg(test)]
+mod java_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[test]
+    fn owned_source_transformations_match_java() {
+        let vectors: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("vanilla/source-vectors.json")).unwrap();
+        for vector in vectors {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let callback = |name: &'static str| {
+                let events = events.clone();
+                CommandResultCallback::new(move |success, value| {
+                    events
+                        .lock()
+                        .unwrap()
+                        .push(format!("{name}:{success}:{value}"));
+                })
+            };
+            let base =
+                CommandSourceStack::server(4, Vec3::new(80., 64., -16.)).with_rotation(Rotation {
+                    pitch: 15.,
+                    yaw: -37.,
+                });
+            let nether = CommandLevel {
+                dimension: "minecraft:the_nether".into(),
+                coordinate_scale: 8.,
+            };
+            let operation = vector["operation"].as_str().unwrap();
+            let source = match operation {
+                "base" => base.clone(),
+                "source" => base.clone().with_source(CommandSource::Other(1)),
+                "entity" => base.clone().with_entity(EntityRef(1)),
+                "entity_again" => base
+                    .clone()
+                    .with_entity(EntityRef(1))
+                    .with_entity(EntityRef(2)),
+                "position" => base.clone().with_position(Vec3::new(-2., 99., 3.)),
+                "rotation" => base.clone().with_rotation(Rotation {
+                    pitch: -91.,
+                    yaw: 540.,
+                }),
+                "callback" => base.clone().with_callback(callback("first")),
+                "combined" => base
+                    .clone()
+                    .with_callback(callback("first"))
+                    .with_callback_combiner(callback("second"), CommandResultCallback::chain),
+                "replaced" => base
+                    .clone()
+                    .with_callback(callback("first"))
+                    .with_callback_combiner(callback("second"), |_, right| right),
+                "suppressed" => base.clone().with_suppressed_output(),
+                "always" => {
+                    let mut source = base.clone().with_source(CommandSource::Other(2));
+                    source.always_accepts = true;
+                    source.with_suppressed_output()
+                }
+                "permission" => base.clone().with_permission(PermissionSet::for_level(1)),
+                "maximum" => base
+                    .clone()
+                    .with_maximum_permission(PermissionSet::for_level(0)),
+                "anchor" => base.clone().with_anchor(EntityAnchor::Eyes),
+                "level" => base.clone().with_entity(EntityRef(1)).with_level(nether),
+                "level_roundtrip" => base
+                    .clone()
+                    .with_level(nether)
+                    .with_level(CommandLevel::default()),
+                "signing" => base
+                    .clone()
+                    .with_signing_context(CommandSigningContext::default(), 1),
+                _ => {
+                    let (mode, coordinates) = operation.split_once(':').unwrap();
+                    let coordinates = coordinates
+                        .split(',')
+                        .map(|value| value.parse::<f64>().unwrap())
+                        .collect::<Vec<_>>();
+                    let source = if mode == "eyes_facing" {
+                        base.clone()
+                            .with_entity(EntityRef(1))
+                            .with_anchor(EntityAnchor::Eyes)
+                    } else {
+                        base.clone()
+                    };
+                    source.facing(
+                        Vec3::new(coordinates[0], coordinates[1], coordinates[2]),
+                        Some(1.625),
+                    )
+                }
+            };
+            source.callback.on_success(17);
+            let name = source.display_name(|entity| {
+                Component::literal(if entity == EntityRef(1) {
+                    "DisplayA"
+                } else {
+                    "DisplayB"
+                })
+            });
+            let observed = serde_json::json!({
+                "operation":operation,
+                "position":[source.position.x,source.position.y,source.position.z],
+                "rotation":[source.rotation.pitch.to_bits() as i32,source.rotation.yaw.to_bits() as i32],
+                "source":match source.source { CommandSource::Server => "normal",CommandSource::Other(2) => "always",_=>"other" },
+                "entity":match source.entity {Some(EntityRef(1))=>"a",Some(EntityRef(2))=>"b",_=>"none"},
+                "level":if source.level.dimension == "minecraft:the_nether" {"nether"} else {"overworld"},
+                "name":super::super::exceptions::plain_text(&name),
+                "text_name":source.text_name(|entity| if entity == EntityRef(1) {"PlainA".into()} else {"PlainB".into()}),
+                "silent":source.silent,
+                "eyes":source.anchor == EntityAnchor::Eyes,
+                "signing":operation == "signing",
+                "chainer":source.chat_message_chainer == 1,
+                "permissions":(0..5).map(|level|source.permissions.has_level(level)).collect::<Vec<_>>(),
+                "callbacks":*events.lock().unwrap(),
+            });
+            assert_eq!(observed, vector, "{operation}");
+            assert_eq!(base.position, Vec3::new(80., 64., -16.));
+            assert!(base.entity.is_none());
+        }
     }
 }
