@@ -54,15 +54,31 @@ impl LevelChunk {
         data: &mut ferraloom_storage::SerializableChunkData,
     ) {
         data.block_ticks = Some(
-            self.block_ticks
-                .pack(game_time)
+            self.staged_publication
+                .as_ref()
+                .and_then(|stage| {
+                    stage
+                        .block_ticks
+                        .borrow()
+                        .as_ref()
+                        .map(|ticks| ticks.pack(game_time))
+                })
+                .unwrap_or_else(|| self.block_ticks.pack(game_time))
                 .into_iter()
                 .map(|tick| tick.to_nbt(tick.block.name()))
                 .collect(),
         );
         data.fluid_ticks = Some(
-            self.fluid_ticks
-                .pack(game_time)
+            self.staged_publication
+                .as_ref()
+                .and_then(|stage| {
+                    stage
+                        .fluid_ticks
+                        .borrow()
+                        .as_ref()
+                        .map(|ticks| ticks.pack(game_time))
+                })
+                .unwrap_or_else(|| self.fluid_ticks.pack(game_time))
                 .into_iter()
                 .map(|tick| tick.to_nbt(tick.block.name()))
                 .collect(),
@@ -77,24 +93,45 @@ impl Level {
         data: &mut ferraloom_storage::SerializableChunkData,
     ) -> Result<(), LevelError> {
         let region = self.region();
-        let blocks = region
-            .block_ticks
-            .container(pos)
+        let chunk = self.chunk(pos).ok_or(LevelError::MissingChunk(pos))?;
+        let pending_blocks = chunk.staged_publication.as_ref().and_then(|stage| {
+            stage
+                .block_ticks
+                .borrow()
+                .as_ref()
+                .map(|ticks| ticks.pack(region.game_time))
+        });
+        let pending_fluids = chunk.staged_publication.as_ref().and_then(|stage| {
+            stage
+                .fluid_ticks
+                .borrow()
+                .as_ref()
+                .map(|ticks| ticks.pack(region.game_time))
+        });
+        let blocks = pending_blocks
+            .or_else(|| {
+                region
+                    .block_ticks
+                    .container(pos)
+                    .map(|ticks| ticks.pack(region.game_time))
+            })
             .ok_or(LevelError::MissingChunk(pos))?;
-        let fluids = region
-            .fluid_ticks
-            .container(pos)
+        let fluids = pending_fluids
+            .or_else(|| {
+                region
+                    .fluid_ticks
+                    .container(pos)
+                    .map(|ticks| ticks.pack(region.game_time))
+            })
             .ok_or(LevelError::MissingChunk(pos))?;
         data.block_ticks = Some(
             blocks
-                .pack(region.game_time)
                 .into_iter()
                 .map(|tick| tick.to_nbt(tick.block.name()))
                 .collect(),
         );
         data.fluid_ticks = Some(
             fluids
-                .pack(region.game_time)
                 .into_iter()
                 .map(|tick| tick.to_nbt(tick.block.name()))
                 .collect(),
