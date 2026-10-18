@@ -9,7 +9,10 @@ use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     level
         .add_chunk(LevelChunk::new(
             ChunkPos::new(0, 0),

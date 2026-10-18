@@ -21,7 +21,7 @@ pub fn drop_item(
         return Ok(None);
     }
     let count = inventory::count(&stack);
-    let kind = stack.0.as_ref().unwrap().item;
+    let kind = stack.item();
     let owner = level.entity::<EntityData>(player)?;
     let position = Vec3::new(
         owner.position.x,

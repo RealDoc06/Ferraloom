@@ -20,12 +20,18 @@ pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
 mod container_runtime;
+mod context;
+pub use context::LevelContext;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod environment;
 pub mod events;
+mod features;
 pub mod heightmap;
+mod lighting;
+pub mod loot_facts;
 mod mutation;
 mod post_processing;
 mod random;
@@ -40,6 +46,7 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),
@@ -60,9 +67,15 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    UnsupportedGameRule(&'static str),
+    UnsupportedLightQuery,
+    UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
+    MissingEnvironmentContext,
     MissingBlockTags,
+    MissingBlockTag,
     MissingFluidTags,
     MissingEntityTypeTags,
+    MissingItemTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -78,6 +91,8 @@ pub enum LevelError {
 /// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
+    /// Published by the canonical GameRules owner after load and each change.
+    pub block_drops: Option<bool>,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub debug: bool,
@@ -95,6 +110,7 @@ pub struct LevelRules {
 impl Default for LevelRules {
     fn default() -> Self {
         Self {
+            block_drops: None,
             tnt_explodes: true,
             entity_drops: true,
             debug: false,
@@ -129,6 +145,8 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    has_skylight: Option<bool>,
+    environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
@@ -136,6 +154,7 @@ pub struct Region {
     entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
     // The family owner replaces its pending state/registration stub together.
+    #[allow(dead_code)]
     pub(crate) redstone: crate::block::redstone::RedstoneState,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
@@ -144,6 +163,7 @@ pub struct Region {
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
+    item_tags: Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::Item>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -166,6 +186,8 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            has_skylight: None,
+            environment: None,
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
@@ -179,6 +201,7 @@ impl Region {
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
+            item_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
@@ -192,13 +215,24 @@ impl Region {
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
     region: Option<Region>,
+    context: Arc<LevelContext>,
 }
 
 impl Level {
-    pub fn new(region: Region) -> Self {
+    pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             region: Some(region),
+            context,
         }
+    }
+    pub fn context(&self) -> &Arc<LevelContext> {
+        &self.context
+    }
+    pub fn seed(&self) -> i64 {
+        self.context.seed
+    }
+    pub fn sea_level(&self) -> i32 {
+        self.context.sea_level
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")

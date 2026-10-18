@@ -261,12 +261,7 @@ impl BlockBehavior for TripWireBlock {
             .entity::<crate::entity::player::ServerPlayer>(player)?
             .inventory
             .selected_item();
-        if !held.is_empty()
-            && held
-                .0
-                .as_ref()
-                .is_some_and(|s| s.item == ferraloom_data::Item::SHEARS)
-        {
+        if held.item() == ferraloom_data::Item::SHEARS {
             level.set_block(
                 pos,
                 state.with(p::DISARMED, true).unwrap(),

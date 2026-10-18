@@ -2,12 +2,15 @@
 //!
 pub mod advancements;
 pub mod block;
+pub mod commands;
 pub mod crafting;
 pub mod entity;
+pub mod gamerules;
 pub mod inventory;
 pub mod level;
 pub mod loot;
 pub mod predicates;
+pub mod stats;
 pub mod ticks;
 
 pub use block::dispatch::Behaviors;

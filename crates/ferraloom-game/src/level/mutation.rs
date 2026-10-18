@@ -20,6 +20,13 @@ impl Level {
     pub fn rules_mut(&mut self) -> &mut LevelRules {
         &mut self.region_mut().rules
     }
+    /// Port of the GameRules.BLOCK_DROPS query used by Block's drop helpers.
+    /// An unpublished rule is a required-query error under either policy.
+    pub fn block_drops_enabled(&self) -> Result<bool, LevelError> {
+        self.rules()
+            .block_drops
+            .ok_or(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+    }
     /// Install LevelChunk's four live heightmaps when a full chunk enters the
     /// simulation. Raw section writes remain a storage-only operation.
     pub fn prime_chunk_heightmaps(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
@@ -43,6 +50,15 @@ impl Level {
     }
     pub fn set_entity_type_tags(&mut self, tags: Arc<TagSet<ferraloom_data::EntityType>>) {
         self.region_mut().entity_type_tags = Some(tags);
+    }
+    pub fn set_item_tags(&mut self, tags: Arc<TagSet<ferraloom_data::Item>>) {
+        self.region_mut().item_tags = Some(tags);
+    }
+    pub fn item_tags(&self) -> Result<&TagSet<ferraloom_data::Item>, LevelError> {
+        self.region()
+            .item_tags
+            .as_deref()
+            .ok_or(LevelError::MissingItemTags)
     }
     pub fn entity_type_tags(&self) -> Result<&TagSet<ferraloom_data::EntityType>, LevelError> {
         self.region()

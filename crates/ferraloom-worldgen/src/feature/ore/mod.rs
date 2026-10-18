@@ -64,19 +64,19 @@ impl OreFeature {
         ctx: &mut FeatureContext<'_, '_>,
         p: [i32; 3],
     ) -> Result<Option<BlockState>, Error> {
-        let old = ctx.region.block(p)?;
+        let old = ctx.level.block(p)?;
         for target in &self.targets {
-            if !target.target.test(old, p, &self.tags, ctx.random) {
+            if !target.target.test(old, p, &self.tags, &mut ctx.random()?) {
                 continue;
             }
             if self.discard <= 0.0
-                || (self.discard < 1.0 && ctx.random.next_float() >= self.discard)
+                || (self.discard < 1.0 && ctx.random()?.next_float() >= self.discard)
             {
                 return Ok(Some(target.state));
             }
             let mut exposed = false;
             for direction in Direction::VALUES {
-                if is_air(ctx.region.block(move_direction(p, direction))?) {
+                if is_air(ctx.level.block(move_direction(p, direction))?) {
                     exposed = true;
                     break;
                 }
@@ -88,21 +88,24 @@ impl OreFeature {
         Ok(None)
     }
     fn scattered(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let tries = ctx.random.next_int_bound(self.size + 1);
+        let tries = ctx.random()?.next_int_bound(self.size + 1);
         for i in 0..tries {
             let distance = i.min(7) as f32;
-            let p = std::array::from_fn(|axis| {
-                let offset = (ctx.random.next_float() - ctx.random.next_float()) * distance;
-                ctx.origin[axis].wrapping_add((offset + 0.5).floor() as i32)
-            });
+            let origin = ctx.origin;
+            let p = ctx.with_random(|random| {
+                std::array::from_fn(|axis| {
+                    let offset = (random.next_float() - random.next_float()) * distance;
+                    origin[axis].wrapping_add((offset + 0.5).floor() as i32)
+                })
+            })?;
             if let Some(state) = self.replacement(ctx, p)? {
-                ctx.region.set_block(p, state, 2)?;
+                ctx.level.set_block(p, state, 2)?;
             }
         }
         Ok(true)
     }
     fn vein(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let dir = ctx.random.next_float() * std::f32::consts::PI;
+        let dir = ctx.random()?.next_float() * std::f32::consts::PI;
         let spread = self.size as f32 / 8.0;
         let max_radius = ((self.size as f32 / 16.0 * 2.0 + 1.0) / 2.0).ceil() as i32;
         let x = [
@@ -114,8 +117,8 @@ impl OreFeature {
             ctx.origin[2] as f64 - (dir as f64).cos() * spread as f64,
         ];
         let y = [
-            (ctx.origin[1] + ctx.random.next_int_bound(3) - 2) as f64,
-            (ctx.origin[1] + ctx.random.next_int_bound(3) - 2) as f64,
+            (ctx.origin[1] + ctx.random()?.next_int_bound(3) - 2) as f64,
+            (ctx.origin[1] + ctx.random()?.next_int_bound(3) - 2) as f64,
         ];
         let start = [
             ctx.origin[0] - spread.ceil() as i32 - max_radius,
@@ -127,7 +130,7 @@ impl OreFeature {
         let mut below_surface = false;
         'probe: for px in start[0]..=start[0] + size_xz {
             for pz in start[2]..=start[2] + size_xz {
-                if start[1] <= ctx.region.height_at(Heightmap::OceanFloorWg, px, pz)? {
+                if start[1] <= ctx.level.height_at(Heightmap::OceanFloorWg, px, pz)? {
                     below_surface = true;
                     break 'probe;
                 }
@@ -139,7 +142,7 @@ impl OreFeature {
         let mut spheres = Vec::with_capacity(self.size as usize);
         for i in 0..self.size {
             let step = (i as f32 / self.size as f32) as f64;
-            let scale = ctx.random.next_double() * self.size as f64 / 16.0;
+            let scale = ctx.random()?.next_double() * self.size as f64 / 16.0;
             let radius = ((mth::sin((std::f32::consts::PI * step as f32) as f64) + 1.0) as f64
                 * scale
                 + 1.0)
@@ -194,8 +197,8 @@ impl OreFeature {
                     for pz in min[2]..=max[2] {
                         let dz = (pz as f64 + 0.5 - z) / radius;
                         if dx * dx + dy * dy + dz * dz >= 1.0
-                            || py < ctx.region.min_y()
-                            || py >= ctx.region.min_y() + ctx.region.height()
+                            || py < ctx.level.min_y()
+                            || py >= ctx.level.min_y() + ctx.level.height()
                         {
                             continue;
                         }
@@ -206,10 +209,10 @@ impl OreFeature {
                             continue;
                         }
                         let p = [px, py, pz];
-                        if ctx.region.ensure_can_write(p)
+                        if ctx.level.ensure_can_write(p)
                             && let Some(state) = self.replacement(ctx, p)?
                         {
-                            ctx.region.set_block_in_section(p, state)?;
+                            ctx.level.set_block_in_section(p, state)?;
                             placed = true;
                         }
                     }

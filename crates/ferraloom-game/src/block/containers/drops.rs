@@ -55,13 +55,18 @@ pub fn drop_item_stack(
 /// Live-slot counterpart of Containers#dropContents. The same receiver generation
 /// is reborrowed after every spawn, even if an entity callback replaced its block.
 pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
-    use super::storage::BaseContainerBlockEntity;
+    use super::storage::{BaseContainerBlockEntity, RandomizableContainerBlockEntity};
+    if let Ok(container) = level.block_entity::<RandomizableContainerBlockEntity>(entity)
+        && container.loot_table.is_some()
+    {
+        return Err(LevelError::UnsupportedBlockEntity(
+            container.parent.parent.block_state.block(),
+        ));
+    }
     let size = level
         .block_entity::<BaseContainerBlockEntity>(entity)?
         .size();
     for slot in 0..size {
-        // Containers reads each stack through getItem before its scatter draws.
-        super::access::get_item(entity, slot, level)?;
         let origin = scatter_origin(
             level,
             Vec3::new(
@@ -104,7 +109,10 @@ mod tests {
             let fields: Vec<_> = line.split('\t').collect();
             let seed = fields[1].parse().unwrap();
             let count = fields[2].parse().unwrap();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
             let mut stack = ItemStack::new(Item::STONE, count, Default::default());
             let ids = drop_item_stack(&mut level, Vec3::new(-1.2, 64.7, 2.8), &mut stack).unwrap();

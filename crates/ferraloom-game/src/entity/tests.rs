@@ -139,6 +139,252 @@ fn lava_fall_distance_starts_after_the_first_base_tick() {
 }
 
 #[test]
+fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
+    use crate::level::effects::LevelEffect;
+    use ferraloom_protocol::{codec::Holder, play::clientbound::Packet};
+    use ferraloom_util::random::RandomSource;
+    fn bits(position: Vec3) -> String {
+        format!(
+            "{:x},{:x},{:x}",
+            position.x.to_bits(),
+            position.y.to_bits(),
+            position.z.to_bits()
+        )
+    }
+    let mut actual = Vec::new();
+    for row in VECTORS
+        .lines()
+        .filter(|line| line.starts_with("entity-sound\t"))
+    {
+        let name = row.split('\t').nth(1).unwrap();
+        let mut level = level(false);
+        let pos = BlockPos::new(8, 63, 8);
+        level
+            .set_block_state(pos, Block::STONE.default_state())
+            .unwrap();
+        level.set_sound_seed(321);
+        let id = EntityRef(1);
+        let is_player = name.starts_with("player-")
+            || name == "sprint-player-spectator"
+            || name.starts_with("extinguish-player");
+        let state = if is_player {
+            EntityState::Player(Box::new(player::ServerPlayer::new(
+                Uuid::new(1, 2),
+                "sound".into(),
+                1,
+                Vec3::new(8.5, 64.0, 8.5),
+                player::GameType::Survival,
+            )))
+        } else if name.starts_with("orb-") {
+            EntityState::ExperienceOrb(Box::new(experience_orb::ExperienceOrb::new(1, 123)))
+        } else if name == "item-swim" {
+            EntityState::Item(Box::new(item::ItemEntity::new(1, 123)))
+        } else if name == "controller-splash" {
+            EntityState::Cow(Box::new(animal::Cow::with_parent(EntityData::new(
+                ferraloom_data::EntityType::COW,
+                1,
+                123,
+            ))))
+        } else {
+            EntityState::PrimedTnt(Box::new(item::PrimedTnt::new(1, 123)))
+        };
+        level.add_entity(id, state).unwrap();
+        let observer = EntityRef(99);
+        level
+            .add_entity(
+                observer,
+                EntityState::Player(Box::new(player::ServerPlayer::new(
+                    Uuid::new(9, 9),
+                    "listener".into(),
+                    99,
+                    Vec3::new(8.5, 64.0, 8.5),
+                    player::GameType::Survival,
+                ))),
+            )
+            .unwrap();
+        level.set_entity_pos(id, Vec3::new(8.5, 64.0, 8.5)).unwrap();
+        {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.velocity = Vec3::new(0.25, -0.5, 0.125);
+            base.random.set_seed(123);
+            base.entity_data
+                .set(synched_data::SILENT, name.contains("silent"));
+        }
+        if name == "player-snow" {
+            level
+                .set_block_state(pos.above(1), Block::SNOW.default_state())
+                .unwrap();
+        }
+        if name == "player-lichen" {
+            level
+                .set_block_state(pos.above(1), Block::GLOW_LICHEN.default_state())
+                .unwrap();
+        }
+        if name == "player-water-step" {
+            level
+                .entity_mut::<EntityData>(id)
+                .unwrap()
+                .was_touching_water = true;
+        }
+        if name == "player-splash-high" {
+            level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(2.0, -3.0, 1.0);
+        }
+        if name.ends_with("spectator") {
+            level
+                .entity_mut::<player::ServerPlayer>(id)
+                .unwrap()
+                .game_mode = player::GameType::Spectator;
+        }
+        if name == "controller-splash" {
+            let mut rider =
+                animal::Cow::with_parent(EntityData::new(ferraloom_data::EntityType::COW, 2, 124));
+            rider.as_living_mut().velocity = Vec3::new(2.0, -3.0, 1.0);
+            level
+                .add_entity(EntityRef(2), EntityState::Cow(Box::new(rider)))
+                .unwrap();
+            start_riding(EntityRef(2), id, true, &mut level).unwrap();
+        }
+        level.take_effects();
+        let behavior = level.entity_behavior(id).unwrap();
+        if name == "crystal" {
+            level
+                .set_block_state(pos, Block::AMETHYST_BLOCK.default_state())
+                .unwrap();
+            level.take_effects();
+            for tick in [0, 20, 21, 40, 100] {
+                level.entity_mut::<EntityData>(id).unwrap().tick_count = tick;
+                sounds::walking_step_sound(
+                    behavior,
+                    id,
+                    pos,
+                    Block::AMETHYST_BLOCK.default_state(),
+                    &mut level,
+                )
+                .unwrap();
+            }
+        } else if name == "player-move-step" {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.move_dist = 2.0;
+            base.on_ground = true;
+            behavior
+                .move_by(
+                    id,
+                    &mut level,
+                    movement::MoverType::SelfMovement,
+                    Vec3::new(0.4, -0.01, 0.0),
+                )
+                .unwrap();
+        } else if name.contains("step") || matches!(name, "player-snow" | "player-lichen") {
+            sounds::walking_step_sound(behavior, id, pos, Block::STONE.default_state(), &mut level)
+                .unwrap();
+        } else if name.ends_with("swim") {
+            sounds::water_swim_sound(behavior, id, &mut level).unwrap();
+        } else if name.contains("splash") {
+            behavior.do_water_splash_effect(id, &mut level).unwrap();
+        } else if name.starts_with("sprint-") {
+            if name == "sprint-barrier" {
+                level
+                    .set_block_state(pos, Block::BARRIER.default_state())
+                    .unwrap();
+            }
+            if name == "sprint-water" {
+                level
+                    .set_block_state(pos, Block::WATER.default_state())
+                    .unwrap();
+            }
+            if name == "sprint-crouch" {
+                dimensions::set_pose(
+                    id,
+                    ferraloom_protocol::entity_data::Pose::Crouching,
+                    &mut level,
+                )
+                .unwrap();
+            }
+            level
+                .entity_mut::<EntityData>(id)
+                .unwrap()
+                .set_shared_flag(3, true);
+            level.take_effects();
+            sounds::maybe_spawn_sprint_particle(behavior, id, &mut level).unwrap();
+        } else if name.starts_with("extinguish") {
+            behavior
+                .play_fire_extinguished_sound(id, &mut level)
+                .unwrap();
+        } else {
+            panic!("unknown native sound scenario {name}");
+        }
+        let random = level
+            .entity_mut::<EntityData>(id)
+            .unwrap()
+            .random
+            .next_int() as u32;
+        let mut packets = Vec::new();
+        let mut events = Vec::new();
+        for effect in level.take_effects() {
+            match effect {
+                LevelEffect::PlayerPacket { recipients, packet } => {
+                    assert!(
+                        recipients.contains(&observer),
+                        "{name}: listener should be in range"
+                    );
+                    let Packet::Sound(packet) = *packet else {
+                        panic!("unexpected particle or entity sound output in {name}");
+                    };
+                    let Holder::Reference(sound) = packet.sound.0 else {
+                        panic!("registered sound");
+                    };
+                    let except = if is_player && !recipients.contains(&id) {
+                        "1"
+                    } else {
+                        "none"
+                    };
+                    packets.push(format!(
+                        "{except}:{sound}:{}:{},{},{}:{:x}:{:x}:{:x}",
+                        packet.source as i32,
+                        packet.x,
+                        packet.y,
+                        packet.z,
+                        packet.volume.to_bits(),
+                        packet.pitch.to_bits(),
+                        packet.seed as u64
+                    ));
+                }
+                LevelEffect::GameEvent {
+                    event,
+                    position,
+                    source,
+                    affected_state,
+                } => {
+                    events.push(format!(
+                        "{}:{}:{}:{}",
+                        event.name(),
+                        source.map_or_else(|| "none".into(), |id| id.0.to_string()),
+                        affected_state
+                            .map_or_else(|| "none".into(), |state| state.id().to_string()),
+                        bits(position)
+                    ));
+                }
+                other => panic!("unexpected effect {other:?} in {name}"),
+            }
+        }
+        actual.push(format!(
+            "entity-sound\t{name}\t{}\t{random:x}\t{}",
+            packets.join(";"),
+            if events.is_empty() {
+                "-".into()
+            } else {
+                events.join(";")
+            }
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("entity-sound\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     use ferraloom_data::registries::attribute::Id as Attribute;
     use ferraloom_protocol::codec::VarInt;
@@ -258,7 +504,10 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
         ),
         row("happy-ghast", &ghast),
     ];
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "dimensions".into(),
@@ -446,6 +695,34 @@ fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_posit
     check("player-growth", player, &level);
 }
 pub(super) fn tags(level: &mut Level) {
+    let entity_values = VECTORS
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            if fields.next()? != "entity-tag" {
+                return None;
+            }
+            let name = fields.next()?.parse().unwrap();
+            let values = fields
+                .next()?
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| ferraloom_data::EntityType::from_name(s).unwrap())
+                .collect();
+            Some((name, values))
+        })
+        .collect();
+    level.set_entity_type_tags(Arc::new(
+        TagSet::from_tags(
+            Tags {
+                values: entity_values,
+                diagnostics: Vec::new(),
+            },
+            ferraloom_data::ENTITY_TYPES.len(),
+        )
+        .unwrap(),
+    ));
+
     let block_values = VECTORS
         .lines()
         .filter_map(|line| {
@@ -501,9 +778,29 @@ pub(super) fn tags(level: &mut Level) {
         .unwrap(),
     ));
 }
-fn level(floor: bool) -> Level {
+pub(super) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
+fn install_test_environment(level: &mut Level, fast_lava: bool) {
+    use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
+    let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
+    let definitions = Arc::new(EnvironmentDefinitions::load(&resources).unwrap());
+    let dimension = definitions
+        .dimension(&serde_json::json!({
+            "attributes": {"gameplay/fast_lava": fast_lava}, "timelines": [],
+        }))
+        .unwrap();
+    level
+        .set_environment_attributes(
+            definitions,
+            &dimension,
+            "test".parse().unwrap(),
+            &[],
+            ClockSnapshot::default(),
+        )
+        .unwrap();
+}
+
 fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
@@ -511,7 +808,12 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(Region::new(behaviors));
+    let mut level = Level::new(
+        Region::new(behaviors),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    // Explicit controlled dimension with native constants and no timelines.
+    install_test_environment(&mut level, false);
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -911,6 +1213,38 @@ fn vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay() {
         n += 1;
     }
     assert_eq!(n, 12);
+}
+
+#[test]
+fn item_pickup_uses_mutable_instabuild_when_inventory_is_full() {
+    use ferraloom_data::Item;
+    use ferraloom_protocol::component::ItemStack;
+    for mode in [player::GameType::Survival, player::GameType::Creative] {
+        for instabuild in [false, true] {
+            let mut level = level(false);
+            let mut player =
+                player::ServerPlayer::new(Uuid::new(1, 2), "pickup".into(), 1, Vec3::ZERO, mode);
+            player.instabuild = instabuild;
+            player
+                .inventory
+                .items
+                .fill_with(|| ItemStack::new(Item::STONE, 64, Default::default()));
+            level
+                .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+                .unwrap();
+            let mut item = item::ItemEntity::new(2, 2);
+            item.set_item(ItemStack::new(Item::STONE, 2, Default::default()));
+            level
+                .add_entity(EntityRef(2), EntityState::Item(Box::new(item)))
+                .unwrap();
+            item::item_entity::player_touch(EntityRef(2), EntityRef(1), &mut level).unwrap();
+            assert_eq!(
+                level.entity::<EntityData>(EntityRef(2)).unwrap().removed,
+                instabuild
+            );
+            assert_eq!(level.take_entity_effects().is_empty(), !instabuild);
+        }
+    }
 }
 
 #[test]
@@ -1315,6 +1649,383 @@ fn orb_merges_only_matching_value_and_modulo_forty_group() {
 }
 
 #[test]
+fn relative_teleports_match_native_transform_state_and_packet_flags() {
+    use super::teleport::{calculate_absolute, position_move_rotation, teleport_player};
+    use crate::level::effects::LevelEffect;
+    use ferraloom_protocol::play::clientbound as cb;
+    let source = position_move_rotation(
+        Vec3::new(8.5, 64.25, -12.75),
+        Vec3::new(0.25, -0.125, 0.5),
+        721.25,
+        -28.125,
+    );
+    let change = position_move_rotation(
+        Vec3::new(-0.0, 0.0625, 14.0),
+        Vec3::new(-0.0, 0.2, -0.3),
+        -91.5,
+        120.25,
+    );
+    let mut actual = Vec::new();
+    for flags in [
+        0,
+        1,
+        2,
+        4,
+        8,
+        16,
+        32,
+        64,
+        128,
+        256,
+        511,
+        504,
+        31,
+        255,
+        257,
+        288,
+        384,
+        i32::MAX,
+    ] {
+        let absolute = calculate_absolute(source.clone(), change.clone(), flags);
+        let text = |value: &ferraloom_protocol::play::PositionMoveRotation| {
+            format!(
+                "{:x},{:x},{:x}\t{:x},{:x},{:x}\t{:x},{:x}",
+                value.position.x.to_bits(),
+                value.position.y.to_bits(),
+                value.position.z.to_bits(),
+                value.delta_movement.x.to_bits(),
+                value.delta_movement.y.to_bits(),
+                value.delta_movement.z.to_bits(),
+                value.y_rot.to_bits(),
+                value.x_rot.to_bits()
+            )
+        };
+        actual.push(format!("teleport-transform\t{flags}\t{}", text(&absolute)));
+        let mut level = level(true);
+        let id = EntityRef(1);
+        let mut player = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "teleport".into(),
+            1,
+            Vec3::new(8.5, 64.25, -12.75),
+            player::GameType::Survival,
+        );
+        player.set_y_rot(721.25);
+        player.set_x_rot(-28.125);
+        player.velocity = Vec3::new(0.25, -0.125, 0.5);
+        player.known_movement = player.velocity;
+        player.connection_ticks = 42;
+        let position = player.position;
+        player.movement_this_tick.push_back(Movement {
+            from: Vec3::ZERO,
+            to: position,
+            axis_dependent_original_movement: None,
+        });
+        level
+            .add_entity(id, EntityState::Player(Box::new(player)))
+            .unwrap();
+        teleport_player(id, change.clone(), flags, &mut level).unwrap();
+        let player = level.entity::<player::ServerPlayer>(id).unwrap();
+        let state =
+            position_move_rotation(player.position, player.velocity, player.yaw, player.pitch);
+        actual.push(format!(
+            "teleport-set\t{flags}\t{}\t{:x}\t{:x},{:x},{:x}",
+            text(&state),
+            player.y_head_rot.to_bits(),
+            player.old_position.x.to_bits(),
+            player.old_position.y.to_bits(),
+            player.old_position.z.to_bits()
+        ));
+        assert!(player.movement_this_tick.is_empty());
+        assert_eq!(player.teleport.awaiting_teleport, 1);
+        assert_eq!(player.teleport.awaiting_teleport_time, 42);
+        assert_eq!(player.teleport.awaiting_position, Some(player.position));
+        level.take_player_section_changes();
+        let packets = level.take_effects();
+        let [LevelEffect::PlayerPacket { recipients, packet }] = packets.as_slice() else {
+            panic!("teleport must enqueue its real packet at the call site")
+        };
+        assert_eq!(recipients, &[id]);
+        let cb::Packet::PlayerPosition(packet) = packet.as_ref() else {
+            panic!("wrong teleport packet")
+        };
+        assert_eq!(packet.id.0, 1);
+        assert_eq!(packet.change, change);
+        assert_eq!(packet.relatives, flags & teleport::Relative::ALL);
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-transform\t") || row.starts_with("teleport-set\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn player_teleport_counter_confirmation_and_mounted_known_movement_are_canonical() {
+    use super::teleport::{
+        accept_teleport, position_move_rotation, teleport_player, teleport_relative,
+    };
+    let mut level = level(true);
+    let id = EntityRef(1);
+    let vehicle = EntityRef(2);
+    let mut player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "teleport".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    player.teleport.awaiting_teleport = i32::MAX - 1;
+    player.connection_ticks = 100;
+    player.known_movement = Vec3::new(9.0, 9.0, 9.0);
+    player.velocity = Vec3::new(1.0, 1.0, 1.0);
+    let mut tnt = item::PrimedTnt::new(2, 123);
+    tnt.parent.velocity = Vec3::new(0.25, -0.125, 0.5);
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    level
+        .add_entity(vehicle, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    start_riding(id, vehicle, true, &mut level).unwrap();
+    teleport_relative(id, Vec3::new(0.0, 0.0625, 0.0), &mut level).unwrap();
+    let player = level.entity::<player::ServerPlayer>(id).unwrap();
+    assert_eq!(player.teleport.awaiting_teleport, 0);
+    assert_eq!(player.position, Vec3::new(8.5, 64.0625, 8.5));
+    assert_vector(
+        player.velocity,
+        Vec3::new(0.25, -0.125, 0.5),
+        "mounted teleport uses vehicle known movement",
+    );
+    assert!(!player.teleport.resend_due(120));
+    assert!(player.teleport.resend_due(121));
+    assert!(!accept_teleport(id, 99, &mut level).unwrap());
+    assert!(accept_teleport(id, 0, &mut level).unwrap());
+    assert!(
+        level
+            .entity::<player::ServerPlayer>(id)
+            .unwrap()
+            .teleport
+            .awaiting_position
+            .is_none()
+    );
+    teleport_player(
+        id,
+        position_move_rotation(Vec3::new(9.0, 65.0, 9.0), Vec3::ZERO, 37.25, -28.125),
+        0,
+        &mut level,
+    )
+    .unwrap();
+    assert_eq!(
+        level
+            .entity::<player::ServerPlayer>(id)
+            .unwrap()
+            .teleport
+            .awaiting_teleport,
+        1
+    );
+}
+
+#[test]
+fn push_entities_up_matches_native_shape_difference_query_order_and_spectators() {
+    struct PushRecorder;
+    impl Entity for PushRecorder {
+        fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+            trace_base_entity_refs(state.as_entity(), references);
+        }
+        fn teleport_relative(
+            &self,
+            entity: EntityRef,
+            delta: Vec3,
+            level: &mut Level,
+        ) -> Result<(), LevelError> {
+            level.game_event(
+                ferraloom_data::registries::game_event::Id::STEP,
+                delta,
+                Some(entity),
+                None,
+            );
+            teleport::base_teleport_relative(entity, delta, level)
+        }
+    }
+    static PUSH: PushRecorder = PushRecorder;
+    static DISPATCH: Behaviors =
+        Behaviors::EMPTY.with_entity(ferraloom_data::EntityType::TNT, &PUSH);
+    let pairs = [
+        (Block::DIRT_PATH, Block::DIRT),
+        (Block::FARMLAND, Block::DIRT),
+        (Block::AIR, Block::STONE),
+        (Block::STONE, Block::AIR),
+        (Block::STONE_SLAB, Block::STONE),
+        (Block::STONE, Block::STONE),
+    ];
+    let mut actual = Vec::new();
+    for (index, (old, new)) in pairs.into_iter().enumerate() {
+        let mut level = level_with_behaviors(false, &DISPATCH);
+        for (id, position) in [
+            (2, Vec3::new(8.75, 63.5, 8.5)),
+            (1, Vec3::new(8.5, 63.9375, 8.5)),
+        ] {
+            let mut tnt = item::PrimedTnt::new(id as i32, 123);
+            tnt.parent.uuid = Uuid::new(0, id as i64);
+            tnt.parent.set_pos(position);
+            level
+                .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
+                .unwrap();
+        }
+        let spectator = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "spectator".into(),
+            3,
+            Vec3::new(8.5, 63.9375, 8.5),
+            player::GameType::Spectator,
+        );
+        level
+            .add_entity(EntityRef(3), EntityState::Player(Box::new(spectator)))
+            .unwrap();
+        let state = level
+            .push_entities_up(
+                old.default_state(),
+                new.default_state(),
+                BlockPos::new(8, 63, 8),
+            )
+            .unwrap();
+        let calls: Vec<_> = level
+            .take_effects()
+            .into_iter()
+            .map(|effect| {
+                let crate::level::effects::LevelEffect::GameEvent {
+                    position,
+                    source: Some(entity),
+                    ..
+                } = effect
+                else {
+                    panic!("spectator must not receive a teleport")
+                };
+                format!(
+                    "{}:{:x},{:x},{:x}",
+                    entity.0,
+                    position.x.to_bits(),
+                    position.y.to_bits(),
+                    position.z.to_bits()
+                )
+            })
+            .collect();
+        let vec = |id| {
+            let p = level.entity::<EntityData>(EntityRef(id)).unwrap().position;
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "push-entities\t{index}\t{}\t{}\t{}\t{}\t{}",
+            state.id(),
+            if calls.is_empty() {
+                "-".into()
+            } else {
+                calls.join(";")
+            },
+            vec(1),
+            vec(2),
+            vec(3)
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("push-entities\t"))
+        .map(|row| {
+            row.split('\t')
+                .enumerate()
+                .filter_map(|(index, value)| (index != 3).then_some(value))
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rotation() {
+    let mut level = level(false);
+    for index in 0..3 {
+        let mut entity = item::PrimedTnt::new(index + 1, 123);
+        entity.parent.uuid = Uuid::new(0, i64::from(index) + 1);
+        entity
+            .parent
+            .set_pos(Vec3::new(8.5, 64.0 + f64::from(index) * 5.0, 8.5));
+        entity.parent.set_y_rot(index as f32 * 37.25);
+        entity.parent.set_x_rot(index as f32 * -14.5);
+        entity.parent.velocity = Vec3::new(0.25, -0.125, 0.5);
+        level
+            .add_entity(
+                EntityRef(index as u64 + 1),
+                EntityState::PrimedTnt(Box::new(entity)),
+            )
+            .unwrap();
+    }
+    start_riding(EntityRef(2), EntityRef(1), true, &mut level).unwrap();
+    start_riding(EntityRef(3), EntityRef(2), true, &mut level).unwrap();
+    EntityRef(1)
+        .teleport_relative(Vec3::new(2.0, 2.0, 4.0), &mut level)
+        .unwrap();
+    let mut actual = Vec::new();
+    for id in 1..=3 {
+        let entity = level.entity::<EntityData>(EntityRef(id)).unwrap();
+        let text = |p: Vec3| {
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "teleport-passengers\t{id}\t{}\t{}\t{}\t{:x},{:x}",
+            text(entity.position),
+            text(entity.old_position),
+            text(entity.velocity),
+            entity.yaw.to_bits(),
+            entity.pitch.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-passengers\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn accepted_player_section_changes_capture_a_to_b_to_a_before_any_drain() {
+    use ferraloom_util::SectionPos;
+    let mut level = level(false);
+    let id = EntityRef(1);
+    let player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "sections".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    for position in [Vec3::new(24.5, 64.0, 8.5), Vec3::new(8.5, 64.0, 8.5)] {
+        level.set_entity_pos(id, position).unwrap();
+    }
+    assert_eq!(
+        level.take_player_section_changes(),
+        vec![
+            (id, SectionPos::new(1, 4, 0)),
+            (id, SectionPos::new(0, 4, 0))
+        ]
+    );
+}
+
+#[test]
 fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     let mut level = level(false);
     let id = EntityRef(1);
@@ -1329,10 +2040,7 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
         to: Vec3::new(21.5, 64.0, 8.5),
         axis_dependent_original_movement: None,
     };
-    entity
-        .parent
-        .movement_this_tick
-        .push_back(recording.clone());
+    entity.parent.movement_this_tick.push_back(recording);
     level
         .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
         .unwrap();
@@ -1361,6 +2069,94 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     assert!(entity.movement_this_tick.is_empty());
     entity.remove_latest_movement_recording();
     assert!(entity.movement_this_tick.is_empty());
+}
+
+#[test]
+fn pending_teleport_rotation_matches_native_absolute_snap_without_moving_history() {
+    let mut actual = Vec::new();
+    for (yaw, pitch) in [(721.25_f32, 270_f32), (-721.25, -360.0), (37.25, -28.125)] {
+        let mut entity = EntityData::new(ferraloom_data::EntityType::PLAYER, 1, 123);
+        entity.set_pos(Vec3::new(8.5, 64.25, -12.75));
+        entity.set_old_pos_and_rot();
+        entity.abs_snap_rotation_to(
+            ferraloom_util::mth::wrap_degrees_f32(yaw),
+            ferraloom_util::mth::wrap_degrees_f32(pitch),
+        );
+        actual.push(format!(
+            "teleport-pending-rotation\t{:x},{:x}\t{:x},{:x},{:x},{:x}\t{:x},{:x},{:x}",
+            yaw.to_bits(),
+            pitch.to_bits(),
+            entity.yaw.to_bits(),
+            entity.pitch.to_bits(),
+            entity.old_yaw.to_bits(),
+            entity.old_pitch.to_bits(),
+            entity.old_position.x.to_bits(),
+            entity.old_position.y.to_bits(),
+            entity.old_position.z.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-pending-rotation\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn teleport_confirmation_uses_native_clamp_and_preserves_interpolation_history() {
+    let mut actual = Vec::new();
+    for destination in [
+        Vec3::new(8.5, 64.0, 8.5),
+        Vec3::new(3.0e7 + 1.0, 65.0, -3.0e7 - 1.0),
+    ] {
+        let mut level = level(false);
+        let id = EntityRef(1);
+        level
+            .add_entity(
+                id,
+                EntityState::Player(Box::new(player::ServerPlayer::new(
+                    Uuid::new(1, 2),
+                    "confirm".into(),
+                    1,
+                    Vec3::ZERO,
+                    player::GameType::Survival,
+                ))),
+            )
+            .unwrap();
+        teleport::teleport_player(
+            id,
+            teleport::position_move_rotation(destination, Vec3::ZERO, 721.25, -28.125),
+            0,
+            &mut level,
+        )
+        .unwrap();
+        assert!(teleport::accept_teleport(id, 1, &mut level).unwrap());
+        let player = level.entity::<player::ServerPlayer>(id).unwrap();
+        let text = |p: Vec3| {
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "teleport-confirm-snap\t{}\t{}\t{}\t{}\t{:x},{:x},{:x}",
+            text(destination),
+            text(player.position),
+            text(player.old_position),
+            text(player.interpolation_old_position),
+            player.yaw.to_bits(),
+            player.y_head_rot.to_bits(),
+            player.old_yaw.to_bits()
+        ));
+        assert_eq!(player.last_good, destination);
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-confirm-snap\t"))
+        .collect();
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -1406,4 +2202,41 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
         .filter(|row| row.starts_with("player-may-build\t"))
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input() {
+    let mut level = level(false);
+    let pos = BlockPos::new(8, 64, 8);
+    level
+        .set_block_state(pos, Block::LAVA.default_state())
+        .unwrap();
+    level
+        .set_block_state(
+            pos.east(1),
+            crate::block::fluid::legacy_block(FlowingFluid::Lava.flowing(4, false)),
+        )
+        .unwrap();
+    let mut entity = item::PrimedTnt::new(1, 123);
+    entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    let id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
+        .unwrap();
+    for fast in [false, true, false] {
+        install_test_environment(&mut level, fast);
+        level.rules_mut().fast_lava = !fast;
+        level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.1, 0.0, 0.0);
+        fluid::update_fluid_interaction(&item::PrimedTntBehavior, id, &mut level).unwrap();
+        let scale = if fast {
+            0.007
+        } else {
+            0.002_333_333_333_333_333_5
+        };
+        assert_vector(
+            level.entity::<EntityData>(id).unwrap().velocity,
+            Vec3::new(0.1 + scale, 0.0, 0.0),
+            "live FAST_LAVA",
+        );
+    }
 }

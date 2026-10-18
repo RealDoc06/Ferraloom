@@ -247,7 +247,7 @@ impl IntRange {
     }
     fn decode(v: &Value, lower: i32, upper: i32) -> Result<Self> {
         let result = if v.is_number() {
-            let n = integer(v)?;
+            let n = i32::from_json(v)?;
             Self {
                 min: Some(n),
                 max: Some(n),
@@ -257,8 +257,8 @@ impl IntRange {
                 return Err(Error::Invalid("expected integer bounds".into()));
             }
             Self {
-                min: v.get("min").map(integer).transpose()?,
-                max: v.get("max").map(integer).transpose()?,
+                min: v.get("min").map(i32::from_json).transpose()?,
+                max: v.get("max").map(i32::from_json).transpose()?,
             }
         };
         if result.min.is_none()
@@ -298,7 +298,7 @@ impl TransmuteResult {
         if item == Some(Item::AIR) {
             return Err(Error::Invalid("transmute result cannot be air".into()));
         }
-        let count = v.get("count").map(integer).transpose()?.unwrap_or(1);
+        let count = v.get("count").map(i32::from_json).transpose()?.unwrap_or(1);
         if !(1..=99).contains(&count) {
             return Err(Error::Invalid("result count outside 1..99".into()));
         }
@@ -444,60 +444,8 @@ pub(super) fn required<'a>(v: &'a Value, key: &str) -> Result<&'a Value> {
     v.get(key)
         .ok_or_else(|| Error::Invalid(format!("missing recipe field {key}")))
 }
-fn integer(v: &Value) -> Result<i32> {
-    if !v.is_number() {
-        return Err(Error::Invalid("expected integer".into()));
-    }
-    // StrictJsonParser leaves Gson numbers lazy. Number.intValue falls through
-    // to BigDecimal for decimals/large integers, truncating and keeping low bits.
-    let text = v.to_string();
-    let (mantissa, exponent) = text
-        .split_once(['e', 'E'])
-        .map_or((text.as_str(), 0), |(m, e)| {
-            (
-                m,
-                e.parse::<i64>().unwrap_or(if e.starts_with('-') {
-                    i64::MIN
-                } else {
-                    i64::MAX
-                }),
-            )
-        });
-    let negative = mantissa.starts_with('-');
-    let mantissa = mantissa.trim_start_matches('-');
-    let decimals = mantissa.split_once('.').map_or(0, |(_, tail)| tail.len()) as i64;
-    let mut digits: Vec<u8> = mantissa.bytes().filter(|byte| *byte != b'.').collect();
-    let scale = exponent.saturating_sub(decimals);
-    if scale < 0 {
-        digits.truncate(
-            digits
-                .len()
-                .saturating_sub(scale.unsigned_abs().min(usize::MAX as u64) as usize),
-        );
-    }
-    let mut number = digits.into_iter().fold(0u32, |number, byte| {
-        number.wrapping_mul(10).wrapping_add(u32::from(byte - b'0'))
-    });
-    if scale >= 32 {
-        number = 0;
-    } else {
-        for _ in 0..scale.max(0) {
-            number = number.wrapping_mul(10);
-        }
-    }
-    Ok(if negative {
-        number.wrapping_neg() as i32
-    } else {
-        number as i32
-    })
-}
-
 fn decode_template(v: &Value) -> Result<ItemStackTemplate> {
-    let mut value = v.clone();
-    if let Some(count) = v.get("count") {
-        value["count"] = Value::from(integer(count)?);
-    }
-    Ok(ItemStackTemplate::from_json(&value)?)
+    Ok(ItemStackTemplate::from_json(v)?)
 }
 
 fn boolean(v: &Value, key: &str, default: bool) -> Result<bool> {
@@ -652,12 +600,12 @@ impl Recipe {
                 },
                 ingredient: ingredient("ingredient")?,
                 result: result()?,
-                cooking_time: integer(required(v, "cookingtime")?)?,
-                experience: v.get("experience").map_or(Ok(0.), |v| {
-                    v.as_f64()
-                        .map(|n| n as f32)
-                        .ok_or_else(|| Error::Invalid("expected experience float".into()))
-                })?,
+                cooking_time: i32::from_json(required(v, "cookingtime")?)?,
+                experience: v
+                    .get("experience")
+                    .map(f32::from_json)
+                    .transpose()?
+                    .unwrap_or(0.),
             },
             "stonecutting" => RecipeKind::Stonecutting {
                 ingredient: ingredient("ingredient")?,

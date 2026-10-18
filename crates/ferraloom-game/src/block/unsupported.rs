@@ -2,7 +2,7 @@
 //! remain strict; Warn records a skipped call, never a fabricated return value.
 use super::BlockBehavior;
 use crate::level::{Level, LevelError};
-use ferraloom_data::Block;
+use ferraloom_data::{Block, EntityType};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum UnportedBehavior {
@@ -13,6 +13,7 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    EntityMethod(EntityType, crate::entity::EntityMethod),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
     PackReload,
@@ -22,8 +23,6 @@ pub enum UnportedOperation {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
     OnPlace,
-    UseWithoutItem,
-    UseItemOn,
     HandlePrecipitation,
     AffectNeighborsAfterRemoval,
     NeighborChanged,
@@ -68,8 +67,6 @@ impl BlockMethod {
         use ferraloom_data::BlockMethod as Vanilla;
         Some(match self {
             Self::OnPlace => Vanilla::OnPlace,
-            Self::UseWithoutItem => Vanilla::UseWithoutItem,
-            Self::UseItemOn => Vanilla::UseItemOn,
             Self::HandlePrecipitation => Vanilla::HandlePrecipitation,
             Self::AffectNeighborsAfterRemoval => Vanilla::AffectNeighborsAfterRemoval,
             Self::NeighborChanged => Vanilla::NeighborChanged,
@@ -110,9 +107,7 @@ impl BlockMethod {
     const fn can_skip(self) -> bool {
         !matches!(
             self,
-            Self::UseWithoutItem
-                | Self::PlayerWillDestroy
-                | Self::UseItemOn
+            Self::PlayerWillDestroy
                 | Self::CanSurvive
                 | Self::CanPlaceLiquid
                 | Self::PlaceLiquid
@@ -139,8 +134,6 @@ impl BlockMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::OnPlace => "onPlace",
-            Self::UseWithoutItem => "useWithoutItem",
-            Self::UseItemOn => "useItemOn",
             Self::HandlePrecipitation => "handlePrecipitation",
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
@@ -206,6 +199,14 @@ impl UnportedCalls {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
         if !self.seen.contains(&call) {
             match &call {
+                UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
+                    eprintln!(
+                        "Unported entity effect skipped: {}#{} (skipped calls: {})",
+                        kind.name(),
+                        method.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
@@ -304,6 +305,9 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::EntityMethod(kind, method) => {
+                    LevelError::UnsupportedEntityMethod(kind, method)
+                }
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)
                 }

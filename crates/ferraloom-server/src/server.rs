@@ -1,4 +1,8 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "command_level.rs"]
+mod command_level;
+#[path = "command_runtime.rs"]
+mod command_runtime;
 use crate::{
     access::AccessLists,
     assets,
@@ -27,6 +31,7 @@ use ferraloom_game::{
             GameType, MovementChecks, MovementResult, PlayerBehavior, PlayerMovement, ServerPlayer,
             move_player_with_checks,
         },
+        teleport::{self as entity_teleport, position_move_rotation},
     },
     inventory::{
         MenuContext, MenuHooks, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
@@ -45,7 +50,7 @@ use ferraloom_game::{
 use ferraloom_protocol::{
     self as protocol, Uuid,
     chat::Component,
-    codec::{BitSet, GlobalPos, Holder, VarInt, VarLong},
+    codec::{BitSet, Holder, VarInt},
     common::{self, clientbound as common_cb},
     configuration as cfg,
     login::GameProfile,
@@ -131,8 +136,6 @@ struct Connection {
     chunks: PlayerChunkSender,
     view: HashSet<ChunkPos>,
     center: Option<ChunkPos>,
-    teleport_id: i32,
-    awaiting_teleport: Option<(i32, Vec3, u64)>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -141,7 +144,8 @@ struct Connection {
     session: Option<ChatSession>,
     last_seen: LastSeenMessagesValidator,
     signature_cache: MessageSignatureCache,
-    command_message: Option<ValidatedMessage>,
+    command_message: Option<(String, ValidatedMessage)>,
+    command_suggestion: Option<sb::CommandSuggestion>,
     next_chat_index: i32,
     network_ticks: u64,
     rate_packets: u64,
@@ -154,7 +158,9 @@ impl Connection {
         self.pending.push(packet.into());
     }
     fn disconnect(&mut self, reason: impl Into<String>) {
-        let reason = Component::literal(reason);
+        self.disconnect_component(Component::literal(reason));
+    }
+    fn disconnect_component(&mut self, reason: Component) {
         match self.phase {
             Phase::Configuration(_) => {
                 self.push(cfg::ClientboundPacket::Disconnect(common_cb::Disconnect {
@@ -179,6 +185,13 @@ pub struct MinecraftServer {
     level: ServerLevel,
     world: World,
     commands: Commands,
+    game_rules: ferraloom_game::gamerules::GameRules,
+    clocks: ferraloom_game::commands::clocks::ServerClockManager,
+    saving_enabled: bool,
+    idle_timeout: i32,
+    default_game_mode: GameType,
+    command_entity_tags: BTreeMap<String, Vec<EntityType>>,
+    selector_random: Option<ferraloom_util::random::LegacyRandomSource>,
     connections: BTreeMap<ConnectionId, Connection>,
     players: Vec<ConnectionId>,
     ingress: mpsc::Receiver<Ingress>,
@@ -236,8 +249,27 @@ impl MinecraftServer {
         let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
         let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
         let world = World::open(&options.root, &properties, &resources, &registries)?;
+        let game_rules = command_runtime::load_game_rules(&world)?;
+        let clocks = command_runtime::load_clocks(&world, &resources)?;
+        let command_context = command_runtime::command_build_context(
+            &registries,
+            &resources,
+            command_runtime::rule_features(&world),
+        );
+        let command_entity_tags =
+            ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
+                EntityType::from_name(&id.to_string())
+            })
+            .values
+            .into_iter()
+            .map(|(id, types)| (id.to_string(), types))
+            .collect();
         let game_time = world.level_data.data.get_long_or("Time", 0);
-        let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
+        let mut level = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources)?,
+        );
         level.game_time = game_time;
         initialize_live_level(
             &mut level,
@@ -245,6 +277,11 @@ impl MinecraftServer {
             &resources,
             &properties,
             options.unported_behavior,
+        )?;
+        game_rules.update_level_rules(level.level.rules_mut());
+        world.install_live_environment(
+            &mut level.level,
+            command_runtime::environment_clock_snapshot(&clocks),
         )?;
         level
             .distance_manager
@@ -331,7 +368,7 @@ impl MinecraftServer {
                 })?;
         }
         let server = Self {
-            properties,
+            properties: properties.clone(),
             root: options.root,
             registries,
             recipe_manager,
@@ -340,7 +377,14 @@ impl MinecraftServer {
             access,
             level,
             world,
-            commands: Commands::default(),
+            game_rules,
+            clocks,
+            command_entity_tags,
+            selector_random: None,
+            saving_enabled: true,
+            idle_timeout: properties.int("player-idle-timeout"),
+            default_game_mode: game_type(properties.get("gamemode")),
+            commands: Commands::new(command_context),
             connections: BTreeMap::new(),
             players: Vec::new(),
             ingress,
@@ -370,6 +414,7 @@ impl MinecraftServer {
     }
     /// Port of MinecraftServer#runServer's tick-rate deadline and sprint slots.
     async fn run(mut self) -> Result<()> {
+        self.prepare_command_tickets().await?;
         println!("Ferraloom 26.3 running; single-region mode.");
         let origin = tokio::time::Instant::now();
         let mut next = 0_i64;
@@ -519,8 +564,6 @@ impl MinecraftServer {
                         chunks: PlayerChunkSender::default(),
                         view: HashSet::new(),
                         center: None,
-                        teleport_id: 0,
-                        awaiting_teleport: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
                         last_action: Instant::now(),
@@ -530,6 +573,7 @@ impl MinecraftServer {
                         last_seen: LastSeenMessagesValidator::default(),
                         signature_cache: MessageSignatureCache::default(),
                         command_message: None,
+                        command_suggestion: None,
                         next_chat_index: 0,
                         network_ticks: 0,
                         rate_packets: 0,
@@ -614,14 +658,19 @@ impl MinecraftServer {
         let threshold = self.properties.int("pause-when-empty-seconds");
         let paused = threshold > 0 && self.empty_ticks >= threshold.saturating_mul(20);
         if paused && !self.was_paused {
-            self.save_all(false).await?;
+            self.save_all(false, false).await?;
         }
         self.was_paused = paused;
         if !paused {
             self.tick = self.tick.wrapping_add(1);
             self.tick_rate_manager.tick();
-            self.level.level.set_handling_tick(true);
-            // Functions and server clocks occupy this serial slot as their ports arrive.
+            // Functions precede the canonical server clocks in this serial slot.
+            if self.tick_rate_manager.runs_normally() {
+                self.clocks.tick(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
+                );
+            }
             if self.tick.is_multiple_of(20) {
                 let packet = self.time_packet();
                 for c in self.connections.values_mut() {
@@ -630,10 +679,24 @@ impl MinecraftServer {
                     }
                 }
             }
+            self.level.level.set_handling_tick(true);
+            self.level
+                .level
+                .refresh_environment_attributes(command_runtime::environment_clock_snapshot(
+                    &self.clocks,
+                ))
+                .map_err(game_error)?;
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.tick_world_border();
                 self.level.level.advance_weather_cycle(true);
                 self.apply_level_effects()?;
+            }
+            // Native sky brightness updates even on frozen ticks, after weather.
+            self.level
+                .level
+                .update_sky_brightness()
+                .map_err(game_error)?;
+            if self.tick_rate_manager.runs_normally() {
                 self.level.game_time = self.level.game_time.wrapping_add(1);
                 self.level.level.set_game_time(self.level.game_time);
                 if !self.level.level.rules().debug {
@@ -681,6 +744,7 @@ impl MinecraftServer {
             self.apply_level_effects()?;
             self.world
                 .tick_entity_management(&mut self.level.level, &self.properties)?;
+            self.level.level.collect_detached_block_entities();
             if self.tick.is_multiple_of(1200) {
                 eprintln!(
                     "Live level: unported={:?}, pending={:?}, precipitation={}",
@@ -699,7 +763,7 @@ impl MinecraftServer {
         if !paused {
             self.autosave -= 1;
             if self.autosave <= 0 {
-                self.save_all(false).await?;
+                self.save_all(false, false).await?;
                 self.autosave = self.next_autosave_interval();
             }
         }
@@ -841,7 +905,10 @@ impl MinecraftServer {
         let access = self.world.access.clone();
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
-        let mode = game_type(self.properties.get("gamemode"));
+        let respawn = self.default_spawn_data();
+        let (yaw, pitch) = ServerPlayer::saved_spawn_rotation(saved.as_ref())
+            .unwrap_or((respawn.rotation.yaw, respawn.rotation.pitch));
+        let mode = self.default_game_mode;
         let mut player = ServerPlayer::new(
             profile.id,
             profile.name,
@@ -858,7 +925,10 @@ impl MinecraftServer {
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
+            player.update_game_mode_abilities();
         }
+        let spawn_position = player.position;
+        player.snap_to(spawn_position, yaw, pitch);
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         let center = player.chunk_position();
         self.request_area(center, 3)?;
@@ -1012,32 +1082,6 @@ impl MinecraftServer {
                 LevelEffect::WeatherEvent { event, param } => {
                     self.broadcast(cb::Packet::GameEvent(cb::GameEvent { event, param }))
                 }
-                LevelEffect::BlockEvent(event) => {
-                    let packet = cb::Packet::BlockEvent(cb::BlockEvent {
-                        pos: event.pos,
-                        b0: event.param_a as u8,
-                        b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.protocol_id())),
-                    });
-                    for &connection in &self.players {
-                        let c = &self.connections[&connection];
-                        let Phase::Play(entity) = c.phase else {
-                            continue;
-                        };
-                        let position = self.player(entity)?.position;
-                        if position.distance_to_sqr(Vec3::new(
-                            f64::from(event.pos.x),
-                            f64::from(event.pos.y),
-                            f64::from(event.pos.z),
-                        )) < 4096.0
-                        {
-                            self.connections
-                                .get_mut(&connection)
-                                .unwrap()
-                                .push(packet.clone());
-                        }
-                    }
-                }
                 LevelEffect::LevelEvent { pos, id, data } => {
                     self.broadcast(cb::Packet::LevelEvent(cb::LevelEvent {
                         event_type: id,
@@ -1064,6 +1108,13 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
+                LevelEffect::PlayerSectionChange { player, section } => {
+                    self.level.distance_manager.update_player(
+                        player,
+                        Some(section),
+                        &mut self.level.tickets,
+                    );
+                }
             }
         }
         self.world
@@ -1074,6 +1125,13 @@ impl MinecraftServer {
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+        for (player, section) in self.level.level.take_player_section_changes() {
+            self.level.distance_manager.update_player(
+                player,
+                Some(section),
+                &mut self.level.tickets,
+            );
+        }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
         self.level
             .distance_manager
@@ -1148,57 +1206,10 @@ impl MinecraftServer {
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         for (request, terrain) in self.world.poll_terrain()? {
-            let pos = terrain.pos;
-            if pos == ChunkPos::containing(self.world.spawn)
-                && !self.world.level_data.data.contains_key("spawn")
-            {
-                self.world.spawn.y = terrain.surface
-                    [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-            }
-            let chunk = self.world.integrate(request, terrain)?;
-            self.level
-                .level
-                .add_chunk(chunk)
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            self.level
-                .level
-                .prime_chunk_heightmaps(pos)
-                .map_err(game_error)?;
-            self.level
-                .chunks
-                .holders
-                .get_mut(&pos.pack())
-                .unwrap()
-                .status = ChunkStatus::InitializeLight;
+            self.integrate_command_terrain(request, terrain)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
-            if let Some((request, pos)) = light.initialized {
-                let holder = self
-                    .level
-                    .chunks
-                    .holders
-                    .get_mut(&pos.pack())
-                    .context("unknown light job")?;
-                ensure!(holder.request_id == request, "stale light completion");
-                holder.status = ChunkStatus::Full;
-                self.world.ready.insert(pos);
-            }
-            for (key, data) in light.updates {
-                self.level
-                    .level
-                    .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
-                self.world.lights.insert(key, data);
-            }
-            for (key, mask) in light.dirty {
-                self.world.light_chunks_to_broadcast.insert(key);
-                let dirty = self
-                    .world
-                    .pending_light_updates
-                    .entry(ChunkPos::unpack(key))
-                    .or_default();
-                dirty.sky |= mask.sky;
-                dirty.block |= mask.block;
-            }
+            self.integrate_command_light(light)?;
         }
         Ok(())
     }
@@ -1209,7 +1220,12 @@ impl MinecraftServer {
             .context("missing joining connection")?;
         let mut player = c.player.take().context("spawn not prepared")?;
         if player.saved.is_empty() {
-            player.position.y = f64::from(self.world.spawn.y);
+            let position = Vec3::new(
+                player.position.x,
+                f64::from(self.world.spawn.y),
+                player.position.z,
+            );
+            player.set_pos(position);
             player.first_good = player.position;
             player.last_good = player.position;
         }
@@ -1230,9 +1246,15 @@ impl MinecraftServer {
             max_players: VarInt(self.properties.int("max-players")),
             chunk_radius: VarInt(self.properties.int("view-distance").clamp(2, 32)),
             simulation_distance: VarInt(self.properties.int("simulation-distance").clamp(2, 32)),
-            reduced_debug_info: false,
-            show_death_screen: true,
-            do_limited_crafting: false,
+            reduced_debug_info: self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::ReducedDebugInfo),
+            show_death_screen: !self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::ImmediateRespawn),
+            do_limited_crafting: self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
             common_player_spawn_info: CommonPlayerSpawnInfo {
                 dimension_type: DimensionTypeId(
                     self.registries.numeric("dimension_type", "overworld"),
@@ -1250,15 +1272,7 @@ impl MinecraftServer {
             online_mode: self.properties.boolean("online-mode"),
             enforces_secure_chat: self.enforces_secure_chat,
         }));
-        c.push(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
-            difficulty: match self.properties.get("difficulty") {
-                "peaceful" => Difficulty::Peaceful,
-                "normal" => Difficulty::Normal,
-                "hard" => Difficulty::Hard,
-                _ => Difficulty::Easy,
-            },
-            locked: false,
-        }));
+        c.push(self.difficulty_packet());
         c.push(abilities(&player));
         c.push(cb::Packet::SetHeldSlot(cb::SetHeldSlot {
             slot: VarInt(player.inventory.selected_slot() as i32),
@@ -1285,7 +1299,12 @@ impl MinecraftServer {
             ),
             overlay: false,
         })));
-        teleport(&mut c, pos, yaw, pitch, self.tick);
+        c.push(
+            player.teleport_before_registration(
+                position_move_rotation(pos, Vec3::ZERO, yaw, pitch),
+                0,
+            ),
+        );
         c.push(cb::Packet::ServerData(Box::new(cb::ServerData {
             motd: Component::literal(self.properties.get("motd")),
             icon_bytes: self.favicon.clone().map(common::ByteArray),
@@ -1323,14 +1342,7 @@ impl MinecraftServer {
         c.push(self.time_packet());
         c.push(cb::Packet::SetDefaultSpawnPosition(
             cb::SetDefaultSpawnPosition {
-                respawn_data: RespawnData {
-                    global_pos: GlobalPos {
-                        dimension: id("overworld"),
-                        pos: self.world.spawn,
-                    },
-                    yaw: 0.,
-                    pitch: 0.,
-                },
+                respawn_data: self.default_spawn_data().packet_data(),
             },
         ));
         c.push(cb::Packet::GameEvent(cb::GameEvent {
@@ -1462,13 +1474,17 @@ impl MinecraftServer {
                 self.handle_pick_item_from_entity(connection, entity, packet)?
             }
             sb::Packet::AcceptTeleportation(p) => {
-                if let Some((pending, _, _)) = self.connections[&connection].awaiting_teleport
-                    && p.id.0 == pending
-                {
-                    self.connections
-                        .get_mut(&connection)
-                        .unwrap()
-                        .awaiting_teleport = None;
+                if p.id.0 == self.player(entity)?.teleport.awaiting_teleport {
+                    if self.player(entity)?.teleport.awaiting_position.is_none()
+                        || [p.x, p.y, p.z].iter().any(|v| v.is_nan())
+                        || !p.y_rot.is_finite()
+                        || !p.x_rot.is_finite()
+                    {
+                        bail!("multiplayer.disconnect.invalid_player_movement");
+                    }
+                    entity_teleport::accept_teleport(entity, p.id.0, &mut self.level.level)
+                        .map_err(game_error)?;
+                    self.update_player_tickets(entity)?;
                     self.movement(
                         connection,
                         entity,
@@ -1538,11 +1554,13 @@ impl MinecraftServer {
                     .loaded = true
             }
             sb::Packet::ClientInformation(p) => {
-                self.level
+                let player = self
+                    .level
                     .level
                     .entity_mut::<ServerPlayer>(entity)
-                    .map_err(game_error)?
-                    .view_distance = i32::from(p.view_distance);
+                    .map_err(game_error)?;
+                player.view_distance = i32::from(p.view_distance);
+                player.text_filtering_enabled = p.text_filtering_enabled;
                 self.connections.get_mut(&connection).unwrap().information = p;
             }
             sb::Packet::Chat(p) => {
@@ -1585,10 +1603,22 @@ impl MinecraftServer {
                 };
                 match message {
                     Ok(message) => self.broadcast_chat(message, id("chat"))?,
-                    Err(e) => self.feedback(Some(connection), &e.to_string()),
+                    Err(e) => {
+                        self.send_component(Some(connection), Component::literal(e.to_string()))
+                    }
                 }
             }
+            sb::Packet::CommandSuggestion(request) => {
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .command_suggestion = Some(request);
+            }
             sb::Packet::ChatCommand(p) => {
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .command_message = None;
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
@@ -1598,27 +1628,45 @@ impl MinecraftServer {
                     .apply(&p.last_seen_messages)
                     .context("multiplayer.disconnect.chat_validation_failed")?;
                 let permission = self.access.permission(c.profile.id);
-                let source = CommandSourceStack {
+                let source = CommandSourceStack::server(
                     permission,
-                    position: self
-                        .level
+                    self.level
                         .level
                         .entity::<ServerPlayer>(entity)
                         .map_err(game_error)?
                         .position,
+                );
+                let prepared = match self.commands.prepare(&p.command, source.clone()) {
+                    Ok(prepared) => prepared,
+                    Err(error) => {
+                        self.command_syntax_failure(Some(connection), &source, &error, &p.command);
+                        return Ok(());
+                    }
                 };
-                let action = self
-                    .commands
-                    .parse(&p.command, source)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let CommandAction::Say(content) = action {
+                if let Some((argument_name, message)) = prepared.message_argument() {
+                    let content = message.text.clone();
                     let signature = p
                         .argument_signatures
                         .0
                         .iter()
-                        .find(|argument| argument.name.0 == "message")
+                        .find(|argument| argument.name.0 == argument_name)
                         .map(|argument| argument.signature.clone());
-                    c.command_message = Some(if let Some(session) = &mut c.session {
+                    if !p.argument_signatures.0.is_empty()
+                        && (p.argument_signatures.0.len() != 1 || signature.is_none())
+                    {
+                        let mut message = Component::translatable(
+                            "chat.disabled.invalid_command_signature",
+                            vec![],
+                        );
+                        message.style.color =
+                            Some(protocol::chat::TextColor::parse("red").unwrap());
+                        c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                            content: message,
+                            overlay: false,
+                        })));
+                        return Ok(());
+                    }
+                    let validated = if let Some(session) = &mut c.session {
                         session.unpack(
                             c.profile.id,
                             content,
@@ -1626,14 +1674,26 @@ impl MinecraftServer {
                             p.salt,
                             signature,
                             last_seen,
-                        )?
+                        )
+                    } else if self.enforces_secure_chat {
+                        Err(anyhow::anyhow!("chat.disabled.missingProfileKey"))
                     } else {
-                        ensure!(
-                            !self.enforces_secure_chat,
-                            "chat.disabled.missingProfileKey"
-                        );
-                        ValidatedMessage::unsigned(c.profile.id, content)
-                    });
+                        Ok(ValidatedMessage::unsigned(c.profile.id, content))
+                    };
+                    let validated = match validated {
+                        Ok(message) => message,
+                        Err(error) => {
+                            let mut message = Component::translatable(error.to_string(), vec![]);
+                            message.style.color =
+                                Some(protocol::chat::TextColor::parse("red").unwrap());
+                            c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                                content: message,
+                                overlay: false,
+                            })));
+                            return Ok(());
+                        }
+                    };
+                    c.command_message = Some((argument_name.to_owned(), validated));
                 } else {
                     ensure!(
                         p.argument_signatures.0.is_empty(),
@@ -1711,8 +1771,19 @@ impl MinecraftServer {
                 c.received_position_this_tick = false;
                 c.received_movement_this_tick = false;
             }
-            sb::Packet::PlayerInput(_)
-            | sb::Packet::CustomPayload(_)
+            sb::Packet::PlayerInput(p) => {
+                let player = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?;
+                player.last_client_input = p.input;
+                if player.has_client_loaded() {
+                    self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
+                    player.set_shared_flag(1, p.input.shift);
+                }
+            }
+            sb::Packet::CustomPayload(_)
             | sb::Packet::Pong(_)
             | sb::Packet::PlayerCommand(_)
             | sb::Packet::SeenAdvancements(_) => {}
@@ -1764,8 +1835,10 @@ impl MinecraftServer {
                 context: &self.crafting_context,
                 synchronization: &self.recipe_synchronization,
                 book: &mut player.recipe_book,
-                // The canonical GameRules owner supplies this hook on integration.
-                limited_crafting: None,
+                limited_crafting: Some(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                ),
                 callbacks: &mut callbacks,
             };
             let menu = player.menus.current_mut();
@@ -1939,7 +2012,10 @@ impl MinecraftServer {
                 context: &self.crafting_context,
                 synchronization: &self.recipe_synchronization,
                 book: &mut player.recipe_book,
-                limited_crafting: None,
+                limited_crafting: Some(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                ),
                 callbacks: &mut callbacks,
             };
             hooks.prepare_recipe_click(menu.kind)?;
@@ -2026,7 +2102,10 @@ impl MinecraftServer {
                     context: &self.crafting_context,
                     synchronization: &self.recipe_synchronization,
                     book: &mut player.recipe_book,
-                    limited_crafting: None,
+                    limited_crafting: Some(
+                        self.game_rules
+                            .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                    ),
                     callbacks: &mut callbacks,
                 };
                 let mut context =
@@ -2307,6 +2386,20 @@ impl MinecraftServer {
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)
     }
+    /// Port of ServerGamePacketListenerImpl#teleport. Gameplay owns the single
+    /// pending teleport; the runtime immediately updates tickets and appends the
+    /// already-built packet to the connection's ordinary ordered output.
+    pub(super) fn teleport_player(
+        &mut self,
+        entity: EntityRef,
+        destination: PositionMoveRotation,
+        relatives: i32,
+    ) -> Result<()> {
+        entity_teleport::teleport_player(entity, destination, relatives, &mut self.level.level)
+            .map_err(game_error)?;
+        self.update_player_tickets(entity)?;
+        self.apply_level_effects()
+    }
     async fn movement(
         &mut self,
         connection: ConnectionId,
@@ -2317,26 +2410,44 @@ impl MinecraftServer {
         horizontal_collision: bool,
     ) -> Result<()> {
         let (yaw, pitch) = rotation;
-        if self.connections[&connection].awaiting_teleport.is_some() {
-            return Ok(());
-        }
         if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
             || !yaw.is_finite()
             || !pitch.is_finite()
         {
             bail!("multiplayer.disconnect.invalid_player_movement");
         }
+        let player = self.player(entity)?;
+        if let Some(position) = player.teleport.awaiting_position {
+            if player.teleport.resend_due(player.connection_ticks) {
+                let destination =
+                    position_move_rotation(position, Vec3::ZERO, player.yaw, player.pitch);
+                self.teleport_player(entity, destination, 0)?;
+            }
+            self.level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .abs_snap_rotation_to(
+                    ferraloom_util::mth::wrap_degrees_f32(yaw),
+                    ferraloom_util::mth::wrap_degrees_f32(pitch),
+                );
+            return Ok(());
+        }
+        let player = self
+            .level
+            .level
+            .entity_mut::<ServerPlayer>(entity)
+            .map_err(game_error)?;
+        player.teleport.awaiting_teleport_time = player.connection_ticks as i32;
         let origin = self.player(entity)?.position;
         if target.distance_to_sqr(origin) > 10000. {
             let player = self.player(entity)?;
             let (yaw, pitch) = (player.yaw, player.pitch);
-            teleport(
-                self.connections.get_mut(&connection).unwrap(),
-                origin,
-                yaw,
-                pitch,
-                self.tick,
-            );
+            self.teleport_player(
+                entity,
+                position_move_rotation(origin, Vec3::ZERO, yaw, pitch),
+                0,
+            )?;
             return Ok(());
         }
         let center = ChunkPos::containing(BlockPos::new(
@@ -2376,13 +2487,11 @@ impl MinecraftServer {
             MovementResult::TooQuickly | MovementResult::Wrongly => {
                 let player = self.player(entity)?;
                 let (position, yaw, pitch) = (player.position, player.yaw, player.pitch);
-                teleport(
-                    self.connections.get_mut(&connection).unwrap(),
-                    position,
-                    yaw,
-                    pitch,
-                    self.tick,
-                );
+                self.teleport_player(
+                    entity,
+                    position_move_rotation(position, Vec3::ZERO, yaw, pitch),
+                    0,
+                )?;
             }
             MovementResult::Accepted => {
                 let player = self
@@ -2447,6 +2556,7 @@ impl MinecraftServer {
         Ok(())
     }
     async fn tick_connections(&mut self) -> Result<()> {
+        self.process_command_suggestions()?;
         let now = Instant::now();
         let mut joining = Vec::new();
         for (&id, c) in &mut self.connections {
@@ -2508,12 +2618,7 @@ impl MinecraftServer {
                         .entity_mut::<ServerPlayer>(entity)
                         .map_err(game_error)?;
                     player.do_tick();
-                    if let Some((_, position, tick)) = c.awaiting_teleport
-                        && self.tick.saturating_sub(tick) > 20
-                    {
-                        teleport(c, position, player.yaw, player.pitch, self.tick);
-                    }
-                    let idle = self.properties.int("player-idle-timeout");
+                    let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
                     {
@@ -2691,27 +2796,7 @@ impl MinecraftServer {
         }
     }
     fn time_packet(&self) -> cb::Packet {
-        cb::Packet::SetTime(cb::SetTime {
-            game_time: self.level.game_time,
-            clock_updates: vec![
-                ClockUpdate {
-                    clock: WorldClockId(self.registries.numeric("world_clock", "overworld")),
-                    state: ClockNetworkState {
-                        total_ticks: VarLong(self.level.game_time),
-                        partial_tick: 0.,
-                        rate: 1.,
-                    },
-                },
-                ClockUpdate {
-                    clock: WorldClockId(self.registries.numeric("world_clock", "the_end")),
-                    state: ClockNetworkState {
-                        total_ticks: VarLong(self.level.game_time),
-                        partial_tick: 0.,
-                        rate: 1.,
-                    },
-                },
-            ],
-        })
+        self.clock_packet(None)
     }
     fn refresh_status(&mut self) {
         use rand::{Rng, seq::SliceRandom};
@@ -2779,7 +2864,11 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    async fn execute_command(&mut self, source: Option<ConnectionId>, text: &str) -> Result<()> {
+    async fn execute_command_inner(
+        &mut self,
+        source: Option<ConnectionId>,
+        text: &str,
+    ) -> Result<()> {
         let (permission, position) = if let Some(id) = source {
             let c = self
                 .connections
@@ -2804,157 +2893,172 @@ impl MinecraftServer {
                 self.player(entity)?.position,
             )
         } else {
-            (4, Vec3::ZERO)
-        };
-        let action = self
-            .commands
-            .parse(
-                text.trim_start_matches('/'),
-                CommandSourceStack {
-                    permission,
-                    position,
-                },
+            let spawn = self.world.spawn;
+            (
+                4,
+                Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
             )
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        match action {
-            CommandAction::Stop => {
-                self.feedback(source, "Stopping the server");
-                self.stop = true;
+        };
+        let mut stack = CommandSourceStack::server(permission, position);
+        if let Some(connection) = source {
+            let (phase, signed_argument) = {
+                let c = self.connections.get_mut(&connection).unwrap();
+                (c.phase, c.command_message.take())
+            };
+            if let Phase::Play(entity) = phase {
+                let player = self.player(entity)?;
+                stack = stack
+                    .with_entity(entity)
+                    .with_source(ferraloom_game::commands::source::CommandSource::Player(
+                        entity,
+                    ))
+                    .with_rotation(ferraloom_game::commands::source::Rotation {
+                        pitch: player.pitch,
+                        yaw: player.yaw,
+                    });
             }
-            CommandAction::Save { flush } => {
-                self.feedback(source, "Saving the game (this may take a moment!)");
-                self.save_all(flush).await?;
-                self.feedback(source, "Saved the game");
+            if let Some((argument_name, message)) = signed_argument {
+                stack.signing_context.arguments = Arc::from([(
+                    argument_name,
+                    ferraloom_game::commands::source::SignedArgument {
+                        sender: message.sender,
+                        index: message.index,
+                        signature: message.signature,
+                        content: message.content,
+                        timestamp: message.timestamp,
+                        salt: message.salt,
+                        last_seen: Arc::from(message.last_seen),
+                    },
+                )]);
             }
-            CommandAction::Say(content) => {
-                if let Some(source) = source {
-                    let c = self.connections.get_mut(&source).unwrap();
-                    let message = c
-                        .command_message
-                        .take()
-                        .unwrap_or_else(|| ValidatedMessage::unsigned(c.profile.id, content));
-                    self.broadcast_chat(message, id("say_command"))?;
-                } else {
-                    self.broadcast(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
-                        message: Component::literal(content),
-                        chat_type: ChatTypeBound {
-                            chat_type: ChatTypeHolder(Holder::Reference(id("say_command"))),
-                            name: Component::literal("Server"),
-                            target_name: None,
-                        },
-                    })));
-                }
+        }
+        let prepared = match self.commands.prepare(text, stack.clone()) {
+            Ok(command) => command,
+            Err(error) => {
+                self.command_syntax_failure(source, &stack, &error, text);
+                return Ok(());
             }
-            CommandAction::Teleport { targets, position } => {
-                self.request_area(
-                    ChunkPos::containing(BlockPos::new(
-                        position.x.floor() as i32,
-                        position.y.floor() as i32,
-                        position.z.floor() as i32,
-                    )),
-                    1,
-                )?;
-                for id in self.targets(source, targets.as_deref())? {
-                    let Phase::Play(entity) = self.connections[&id].phase else {
-                        continue;
-                    };
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
-                        .map_err(game_error)?;
-                    player.position = position;
-                    player.first_good = position;
-                    player.last_good = position;
-                    let (yaw, pitch) = (player.yaw, player.pitch);
-                    teleport(
-                        self.connections.get_mut(&id).unwrap(),
-                        position,
-                        yaw,
-                        pitch,
-                        self.tick,
+        };
+        use ferraloom_game::{
+            commands::{
+                execution::{self, ExecutionContext, QueueResult},
+                source::CommandResultCallback,
+            },
+            gamerules::GameRule,
+        };
+        let mut queue = ExecutionContext::new(
+            self.game_rules
+                .integer(GameRule::MaxCommandSequenceLength)
+                .max(1),
+            self.game_rules.integer(GameRule::MaxCommandForks),
+        );
+        let frame = queue.top_frame(CommandResultCallback::default());
+        execution::queue_command(&mut queue, frame, prepared, false);
+        let mut pending = None;
+        loop {
+            match queue.run_next(&mut pending) {
+                Ok(false) => break,
+                Err(QueueResult::CommandLimit) => {
+                    println!(
+                        "Command execution stopped due to limit (executed {} commands)",
+                        queue.command_limit()
                     );
+                    break;
                 }
-                self.feedback(source, "Teleported player");
+                Err(QueueResult::QueueOverflow) => {
+                    eprintln!("Command execution stopped due to command queue overflow (max {})", ExecutionContext::<Option<ferraloom_game::commands::PreparedCommand>>::MAX_QUEUE_DEPTH);
+                    break;
+                }
+                Err(QueueResult::Complete) => unreachable!(),
+                Ok(true) => {}
             }
-            CommandAction::GameMode { targets, mode } => {
-                for id in self.targets(source, targets.as_deref())? {
-                    let Phase::Play(entity) = self.connections[&id].phase else {
-                        continue;
-                    };
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
-                        .map_err(game_error)?;
-                    player.game_mode = mode;
-                    player.flying = mode == GameType::Spectator;
-                    let packet = abilities(player);
-                    let profile_id = player.uuid;
-                    let c = self.connections.get_mut(&id).unwrap();
-                    c.push(cb::Packet::GameEvent(cb::GameEvent {
-                        event: 3,
-                        param: mode.id() as f32,
-                    }));
-                    c.push(packet);
-                    self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
-                        actions: 4,
-                        entries: vec![PlayerInfoEntry {
-                            profile_id,
-                            actions: vec![PlayerInfoAction::UpdateGameMode {
-                                game_mode: protocol_game_type(mode),
-                            }],
-                        }],
-                    }));
+            let Some(prepared) = pending.take() else {
+                continue;
+            };
+            let stack = prepared.source.clone();
+            let action = Commands::action(prepared);
+            match action {
+                CommandAction::Run(command) => {
+                    match self.run_level_command(source, &command).await {
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(error) => {
+                            if let Some(syntax) =
+                                error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
+                            {
+                                self.command_failure(
+                                    source,
+                                    &stack,
+                                    ferraloom_game::commands::exceptions::error_component(syntax),
+                                );
+                                stack.callback.on_failure();
+                                continue;
+                            }
+                            return Err(error);
+                        }
+                    }
+                    if let Err(error) = self.run_builtin(source, *command) {
+                        self.command_failure(
+                            source,
+                            &stack,
+                            ferraloom_game::commands::exceptions::error_component(&error),
+                        );
+                        stack.callback.on_failure();
+                    }
                 }
-                self.feedback(source, "Set game mode");
+                CommandAction::Stop => {
+                    self.command_success(
+                        source,
+                        &stack,
+                        Component::translatable("commands.stop.stopping", vec![]),
+                        true,
+                    );
+                    self.stop = true;
+                    stack.callback.on_success(1);
+                }
+                CommandAction::Save { flush } => {
+                    self.command_success(
+                        source,
+                        &stack,
+                        Component::translatable("commands.save.saving", vec![]),
+                        false,
+                    );
+                    if self.save_all(flush, true).await.is_ok() {
+                        self.command_success(
+                            source,
+                            &stack,
+                            Component::translatable("commands.save.success", vec![]),
+                            true,
+                        );
+                        stack.callback.on_success(1);
+                    } else {
+                        self.command_failure(
+                            source,
+                            &stack,
+                            Component::translatable("commands.save.failed", vec![]),
+                        );
+                        stack.callback.on_failure();
+                    }
+                }
             }
         }
         Ok(())
     }
-    fn targets(
-        &self,
-        source: Option<ConnectionId>,
-        selector: Option<&str>,
-    ) -> Result<Vec<ConnectionId>> {
-        match selector {
-            None | Some("@s") => Ok(vec![source.context("This command requires a player")?]),
-            Some("@a") => Ok(self.players.clone()),
-            Some(name) => {
-                let target = self
-                    .players
-                    .iter()
-                    .find(|id| self.connections[id].profile.name == name)
-                    .copied()
-                    .context("No player was found")?;
-                Ok(vec![target])
-            }
-        }
-    }
-    fn feedback(&mut self, source: Option<ConnectionId>, message: &str) {
-        if let Some(source) = source {
-            if let Some(c) = self.connections.get_mut(&source) {
-                c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                    content: Component::literal(message),
-                    overlay: false,
-                })));
-            }
-        } else {
-            println!("{message}");
-        }
-    }
-    async fn save_all(&mut self, flush: bool) -> Result<()> {
+    async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
         self.world
             .save_live_level_context(&self.level.level)
             .await?;
         self.world
             .save_entities(&mut self.level.level, &self.properties, flush)
             .await?;
+        self.save_game_rules().await?;
+        self.save_command_tickets().await?;
         let snapshots = self
             .level
             .chunks
             .holders
             .values()
+            .filter(|_| self.saving_enabled || force)
             .filter_map(|holder| self.level.level.chunk(holder.position))
             .map(|chunk| {
                 self.world
@@ -2991,7 +3095,7 @@ impl MinecraftServer {
         for c in self.connections.values_mut() {
             c.disconnect("multiplayer.disconnect.server_shutdown");
         }
-        self.save_all(true).await?;
+        self.save_all(true, true).await?;
         self.flush_outbound();
         // Writers consume their ordered shutdown batch before channels are released.
         self.connections.clear();
@@ -3050,6 +3154,7 @@ fn initialize_live_level(
         .load::<WeatherData>("minecraft:weather")?
         .map_or_else(WeatherData::default, |data| *data.value());
     level.level.load_weather(weather);
+    command_level::load_command_tickets(level, world)?;
     Ok(())
 }
 fn update_holder_full_status(
@@ -3112,7 +3217,7 @@ fn abilities(player: &ServerPlayer) -> cb::Packet {
         invulnerable: privileged,
         is_flying: player.flying,
         can_fly: privileged,
-        instabuild: player.game_mode == GameType::Creative,
+        instabuild: player.instabuild(),
         flying_speed: 0.05,
         walking_speed: 0.1,
     })
@@ -3149,32 +3254,7 @@ fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry 
         ],
     }
 }
-fn teleport(c: &mut Connection, position: Vec3, yaw: f32, pitch: f32, tick: u64) {
-    c.teleport_id = if c.teleport_id == i32::MAX {
-        0
-    } else {
-        c.teleport_id + 1
-    };
-    c.awaiting_teleport = Some((c.teleport_id, position, tick));
-    c.push(cb::Packet::PlayerPosition(cb::PlayerPosition {
-        id: VarInt(c.teleport_id),
-        change: PositionMoveRotation {
-            position: play::Vec3 {
-                x: position.x,
-                y: position.y,
-                z: position.z,
-            },
-            delta_movement: play::Vec3 {
-                x: 0.,
-                y: 0.,
-                z: 0.,
-            },
-            y_rot: yaw,
-            x_rot: pitch,
-        },
-        relatives: 0,
-    }));
-}
+
 fn light_packet(light: Option<&ChunkLight>) -> LightUpdatePacketData {
     light_packet_with_masks(light, (1_u64 << 26) - 1, (1_u64 << 26) - 1)
 }
@@ -3299,11 +3379,34 @@ mod live_level_tests {
     use ferraloom_game::level::{Level, chunk_holder::ChunkHolder};
 
     #[test]
+    fn abilities_packet_reads_mutable_instabuild_instead_of_mode() {
+        for mode in [
+            GameType::Survival,
+            GameType::Creative,
+            GameType::Adventure,
+            GameType::Spectator,
+        ] {
+            let mut player =
+                ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
+            for value in [false, true] {
+                player.instabuild = value;
+                let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
+                    unreachable!()
+                };
+                assert_eq!(packet.instabuild, value);
+            }
+        }
+    }
+
+    #[test]
     fn entity_visibility_follows_confirmed_holder_ranges_and_immediate_demotions() {
         let pos = ChunkPos::new(0, 0);
         let mut holder = ChunkHolder::new(pos, 0);
         let mut ready = HashSet::new();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         holder.ticket_level = 33;
         assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);

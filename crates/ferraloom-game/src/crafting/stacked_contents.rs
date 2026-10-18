@@ -42,8 +42,8 @@ impl StackedItemContents {
         self.amounts.clear();
     }
     pub fn account_stack(&mut self, input: &ItemStack, max_count: i32) {
-        if let Some(input) = &input.0
-            && input.count > 0
+        if !input.is_empty()
+            && let Some(input) = &input.0
         {
             let count = max_count.min(input.count);
             if let Some((_, amount)) = self

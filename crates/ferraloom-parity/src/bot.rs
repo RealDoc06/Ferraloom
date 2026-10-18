@@ -65,6 +65,7 @@ pub struct BotState {
     pub teleports: u64,
     pub game_time: Option<i64>,
     pub game_mode: Option<play::GameType>,
+    pub difficulty: Option<cb::ChangeDifficulty>,
     pub chunks: BTreeSet<(i32, i32)>,
     pub unloads: usize,
     pub sections: BTreeMap<(i32, i32), Vec<play::LevelChunkSectionData>>,
@@ -993,6 +994,7 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
         cb::Packet::ContainerClose(p) => {
             s.containers.remove(&p.container_id.0);
         }
+        cb::Packet::ChangeDifficulty(p) => s.difficulty = Some(p.clone()),
         cb::Packet::SetScore(p) => {
             s.scores
                 .insert((p.objective_name.clone(), p.owner.clone()), p.score.0);

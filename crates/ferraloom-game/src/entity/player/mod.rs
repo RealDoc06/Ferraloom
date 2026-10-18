@@ -1,7 +1,12 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::drop_item;
+mod contact;
+pub mod cooldowns;
 pub mod equipment;
+mod interaction;
+mod spawn;
+pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{
     entity::{Avatar, EntityData, EntityDataView, EntityState},
@@ -39,6 +44,8 @@ impl GameType {
 #[derive(Debug)]
 pub struct ServerPlayer {
     pub parent: Avatar,
+    // GameProfile identity is immutable; entity NBT cannot replace it.
+    profile_id: Uuid,
     pub inventory: inventory::Inventory,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
@@ -47,21 +54,39 @@ pub struct ServerPlayer {
     pub game_mode: GameType,
     pub flying: bool,
     pub may_build: bool,
+    pub instabuild: bool,
+    pub last_client_input: ferraloom_protocol::play::Input,
+    pub text_filtering_enabled: bool,
+    pub cooldowns: cooldowns::ServerItemCooldowns,
+    interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
+    pub teleport: super::teleport::TeleportState,
     pub first_good: Vec3,
     pub last_good: Vec3,
     pub received_moves: u32,
 }
 impl ServerPlayer {
-    /// Port of Player#getDisplayName and #decorateDisplayNameComponent (without a team).
+    /// Port of Player#getGameProfile's identity, also used by Player#nameAndId.
+    pub fn profile_id(&self) -> Uuid {
+        self.profile_id
+    }
+    /// Port of Player#getDisplayName (without a team).
     pub fn display_name(&self) -> ferraloom_protocol::chat::Component {
+        self.decorate_display_name_component(ferraloom_protocol::chat::Component::literal(
+            &self.name,
+        ))
+    }
+    /// Port of Player#decorateDisplayNameComponent, preserving the formatted name's other styles.
+    pub fn decorate_display_name_component(
+        &self,
+        mut name: ferraloom_protocol::chat::Component,
+    ) -> ferraloom_protocol::chat::Component {
         use ferraloom_protocol::{
             Identifier,
             chat::{ClickEvent, Component, HoverEvent},
         };
-        let mut name = Component::literal(&self.name);
         name.style.click_event = Some(ClickEvent::SuggestCommand(format!("/tell {} ", self.name)));
         name.style.hover_event = Some(HoverEvent::ShowEntity {
             entity_type: Identifier::parse("minecraft:player").expect("built-in player identifier"),
@@ -84,10 +109,21 @@ impl ServerPlayer {
         self.may_build
     }
 
+    /// Port of Abilities.instabuild.
+    pub fn instabuild(&self) -> bool {
+        self.instabuild
+    }
+
+    /// Port of Player#preventsBlockDrops, independent of the game mode.
+    pub fn prevents_block_drops(&self) -> bool {
+        self.instabuild
+    }
+
     /// Port of GameType#updatePlayerAbilities for the currently ported fields.
     /// Runtime game-mode transitions also handle their packets and other effects.
     pub fn update_game_mode_abilities(&mut self) {
         self.may_build = matches!(self.game_mode, GameType::Survival | GameType::Creative);
+        self.instabuild = self.game_mode == GameType::Creative;
         match self.game_mode {
             GameType::Creative => {}
             GameType::Spectator => self.flying = true,
@@ -124,6 +160,7 @@ impl ServerPlayer {
                     .define(data::SHOULDER_PARROT_RIGHT, OptionalUnsignedInt(None));
                 avatar
             },
+            profile_id: uuid,
             name,
             inventory: Default::default(),
             menus: Default::default(),
@@ -132,9 +169,23 @@ impl ServerPlayer {
             game_mode,
             flying: game_mode == GameType::Spectator,
             may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
+            instabuild: game_mode == GameType::Creative,
+            last_client_input: ferraloom_protocol::play::Input {
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+                jump: false,
+                shift: false,
+                sprint: false,
+            },
+            text_filtering_enabled: false,
+            cooldowns: Default::default(),
+            interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
+            teleport: Default::default(),
             first_good: position,
             last_good: position,
             received_moves: 0,
@@ -193,6 +244,11 @@ impl ServerPlayer {
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt(tag)?;
+        // Player#readAdditionalSaveData restores the profile UUID after super.
+        self.uuid = self.profile_id;
+        if let Some(abilities) = self.saved.get_compound("abilities") {
+            self.instabuild = abilities.get_boolean_or("instabuild", false);
+        }
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
@@ -254,10 +310,7 @@ impl ServerPlayer {
         abilities.insert("invulnerable", Tag::Byte(i8::from(creative)));
         abilities.insert("mayfly", Tag::Byte(i8::from(creative)));
         abilities.insert("flying", Tag::Byte(i8::from(self.flying)));
-        abilities.insert(
-            "instabuild",
-            Tag::Byte(i8::from(self.game_mode == GameType::Creative)),
-        );
+        abilities.insert("instabuild", Tag::Byte(i8::from(self.instabuild)));
         abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
         abilities.insert("flySpeed", Tag::Float(0.05));
         abilities.insert("walkSpeed", Tag::Float(0.1));
@@ -534,14 +587,6 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
-    /// Port of Player#isSpectator through canonical ServerPlayer state.
-    fn is_spectator(
-        &self,
-        entity: crate::entity::EntityRef,
-        level: &Level,
-    ) -> Result<bool, LevelError> {
-        Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
-    }
     fn y_head_rot(
         &self,
         entity: crate::entity::EntityRef,
@@ -631,6 +676,82 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
     }
 
+    fn known_movement(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<Vec3, LevelError> {
+        super::teleport::player_known_movement(entity, level)
+    }
+    fn teleport_relative(
+        &self,
+        entity: crate::entity::EntityRef,
+        delta: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::teleport::teleport_player(
+            entity,
+            super::teleport::position_move_rotation(delta, Vec3::ZERO, 0.0, 0.0),
+            super::teleport::Relative::ALL,
+            level,
+        )
+    }
+    fn is_alive(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(!level.entity::<ServerPlayer>(entity)?.removed
+            && level.entity::<ServerPlayer>(entity)?.health() > 0.0)
+    }
+    fn is_spectator(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Players
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH_HIGH_SPEED
+    }
+    fn play_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::play_sound(self, entity, sound, volume, pitch, true, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::player_step_sound(self, entity, pos, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !self.is_spectator(entity, level)? {
+            crate::entity::sounds::water_splash_effect(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn fire_immune_ticks(&self) -> i32 {
         20
     }
@@ -704,7 +825,16 @@ impl crate::entity::Entity for PlayerBehavior {
         if spectator || passenger {
             crate::entity::movement::set_on_ground(entity, false, None, level)?;
         }
-        crate::entity::base_tick(self, entity, level)
+        crate::entity::base_tick(self, entity, level)?;
+        // Known slice-1 gap before Player#aiStep's touch point: LivingEntity
+        // server travel, block effects, freezing/damage and pushing are unported.
+        // Slice 2 ports these predecessors; live pickup parity remains pending.
+        contact::touch_entities(entity, level)?;
+        cooldowns::tick(entity, level)?;
+        level
+            .entity_mut::<ServerPlayer>(entity)?
+            .update_interaction_range_attributes();
+        Ok(())
     }
 
     fn maybe_back_off_from_edge(
@@ -728,6 +858,47 @@ impl crate::entity::Entity for PlayerBehavior {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn player_load_restores_immutable_profile_identity_after_entity_nbt() {
+        use super::*;
+        let mut actual = Vec::new();
+        for scenario in 0..3 {
+            let mut player = ServerPlayer::new(
+                Uuid::new(1, 2),
+                "profile".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            );
+            player.uuid = Uuid::new(5, 6);
+            let mut tag = CompoundTag::new();
+            if scenario != 0 {
+                let saved = if scenario == 1 {
+                    Uuid::new(3, 4)
+                } else {
+                    Uuid::new(1, 2)
+                };
+                tag.insert("UUID", Tag::IntArray(saved.to_int_array().to_vec()));
+            }
+            player.try_load(tag).unwrap();
+            let saved = player.save();
+            let Some(Tag::IntArray(words)) = saved.get("UUID") else {
+                panic!("saved UUID")
+            };
+            let saved = Uuid::from_int_array(words.as_slice().try_into().unwrap());
+            actual.push(format!(
+                "player-profile-uuid\t{scenario}\t{},{},{}",
+                player.uuid,
+                player.profile_id(),
+                saved
+            ));
+        }
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("player-profile-uuid\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
     use super::*;
     use crate::{
         Behaviors,
@@ -879,11 +1050,33 @@ mod tests {
         assert_eq!(player.display_name(), expected);
     }
     #[test]
+    fn display_name_decoration_preserves_formatted_input_like_java() {
+        use ferraloom_protocol::chat::{ClickEvent, Component, TextColor};
+        let player = ServerPlayer::new(
+            Uuid::new(0x0123456789abcdef, 0x0123456789abcdef),
+            "Doc".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        let mut name = Component::literal("Styled");
+        name.extra.push(Component::literal(" tail"));
+        name.style.color = Some(TextColor::parse("red").unwrap());
+        name.style.bold = Some(true);
+        name.style.click_event = Some(ClickEvent::RunCommand("/old".into()));
+        name.style.insertion = Some("old".into());
+        let expected = Component::from_json(include_str!("decorated-name.json")).unwrap();
+        assert_eq!(player.decorate_display_name_component(name), expected);
+    }
+    #[test]
     fn movement_sweep_cannot_tunnel_through_terrain() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
         let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         crate::entity::tests::tags(&mut level);
         level
             .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))

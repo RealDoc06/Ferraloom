@@ -21,7 +21,10 @@ fn level() -> Level {
     level_in_radius(1)
 }
 fn level_in_radius(radius: i32) -> Level {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for x in -radius..=radius {
         for z in -radius..=radius {
             let pos = ChunkPos::new(x, z);

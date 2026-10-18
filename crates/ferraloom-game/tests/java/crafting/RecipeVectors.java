@@ -208,6 +208,13 @@ public final class RecipeVectors {
         for(String raw:List.of(
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:4294967296}",
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:true}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:1e10000}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:1e-10000}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:1e2147483648}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:2,experience:1.0000000596046447753906250000000000000001}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:{id:'minecraft:diamond',components:{'minecraft:damage':4294967297.9}},cookingtime:2}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:{id:'minecraft:diamond',components:{'minecraft:enchantment_glint_override':1}},cookingtime:2}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:{id:'minecraft:diamond',components:{'minecraft:custom_data':'{x:1b}'}},cookingtime:2}",
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:3.9}",
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:{id:'minecraft:diamond',count:2.9},cookingtime:2}",
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:2,show_notification:1}",

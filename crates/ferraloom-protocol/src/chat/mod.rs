@@ -5,6 +5,7 @@ pub(crate) mod json;
 mod serialization;
 use crate::{Identifier, Reader, Result, Uuid, Wire, Writer};
 use ferraloom_nbt::{CompoundTag, Tag};
+use ferraloom_util::java::{JavaF32, JavaF64};
 
 /// Port of MutableComponent: contents, local style, and appended siblings.
 #[derive(Clone, Debug, PartialEq)]
@@ -111,14 +112,14 @@ pub enum Argument {
     Component(Box<Component>),
 }
 /// Primitive number kinds retained by ExtraCodecs.JAVA and JavaOps.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Numeric {
     Byte(i8),
     Short(i16),
     Int(i32),
     Long(i64),
-    Float(f32),
-    Double(f64),
+    Float(JavaF32),
+    Double(JavaF64),
 }
 impl Numeric {
     pub fn to_nbt(self) -> Tag {
@@ -127,8 +128,8 @@ impl Numeric {
             Self::Short(v) => Tag::Short(v),
             Self::Int(v) => Tag::Int(v),
             Self::Long(v) => Tag::Long(v),
-            Self::Float(v) => Tag::Float(v),
-            Self::Double(v) => Tag::Double(v),
+            Self::Float(v) => Tag::Float(v.0),
+            Self::Double(v) => Tag::Double(v.0),
         }
     }
     pub fn from_nbt(tag: &Tag) -> Option<Self> {
@@ -137,8 +138,8 @@ impl Numeric {
             Tag::Short(v) => Self::Short(*v),
             Tag::Int(v) => Self::Int(*v),
             Tag::Long(v) => Self::Long(*v),
-            Tag::Float(v) => Self::Float(*v),
-            Tag::Double(v) => Self::Double(*v),
+            Tag::Float(v) => Self::Float((*v).into()),
+            Tag::Double(v) => Self::Double((*v).into()),
             _ => return None,
         })
     }

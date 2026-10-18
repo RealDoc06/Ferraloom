@@ -1,4 +1,30 @@
 use super::*;
+
+#[test]
+fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
+    let mut menus = MenuSession::default();
+    let first = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    menus.retain_menu(first).unwrap();
+    let replacement = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    assert_ne!(first, replacement);
+    menus.menu_mut(first).unwrap().carried = ItemStack::new(Item::STONE, 3, Default::default());
+    assert!(menus.menu(replacement).unwrap().carried.is_empty());
+    assert_eq!(
+        menus.menu(first).unwrap().carried,
+        ItemStack::new(Item::STONE, 3, Default::default())
+    );
+    menus.detach_menu(first);
+    assert_eq!(menus.current_ref(), replacement);
+    menus.release_menu(first);
+    assert!(
+        matches!(menus.menu(first), Err(MenuError::MissingMenu(reference)) if reference == first)
+    );
+    assert_eq!(menus.current_ref(), replacement);
+}
 use crate::entity::player::{
     equipment::EntityEquipment,
     inventory::{Inventory, component},
@@ -681,7 +707,10 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         level::{Level, Region},
     };
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let handle = EntityRef(1);
     let player = ServerPlayer::new(
         ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),

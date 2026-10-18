@@ -68,7 +68,7 @@ struct DeltaFeature {
 }
 impl DeltaFeature {
     fn is_clear(&self, ctx: &FeatureContext<'_, '_>, p: [i32; 3]) -> Result<bool, Error> {
-        let block = ctx.region.block(p)?.block();
+        let block = ctx.level.block(p)?.block();
         if block == self.contents.block()
             || [
                 Block::BEDROCK,
@@ -91,7 +91,7 @@ impl DeltaFeature {
             Direction::West,
             Direction::East,
         ] {
-            let air = is_air(ctx.region.block(move_direction(p, d))?);
+            let air = is_air(ctx.level.block(move_direction(p, d))?);
             if air != (d == Direction::Up) {
                 return Ok(false);
             }
@@ -101,29 +101,29 @@ impl DeltaFeature {
 }
 impl Feature for DeltaFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let spawn_rim = ctx.random.next_double() < 0.9;
+        let spawn_rim = ctx.random()?.next_double() < 0.9;
         let rx = if spawn_rim {
-            self.rim_size.sample(ctx.random)
+            self.rim_size.sample(&mut ctx.random()?)
         } else {
             0
         };
         let rz = if spawn_rim {
-            self.rim_size.sample(ctx.random)
+            self.rim_size.sample(&mut ctx.random()?)
         } else {
             0
         };
-        let sx = self.size.sample(ctx.random);
-        let sz = self.size.sample(ctx.random);
+        let sx = self.size.sample(&mut ctx.random()?);
+        let sz = self.size.sample(&mut ctx.random()?);
         let mut placed = false;
         for p in manhattan(ctx.origin, [sx, 0, sz], sx.max(sz)) {
             if self.is_clear(ctx, p)? {
                 if spawn_rim && rx != 0 && rz != 0 {
-                    ctx.region.set_block(p, self.rim, 2)?;
+                    ctx.level.set_block(p, self.rim, 2)?;
                     placed = true;
                 }
                 let p = offset(p, [rx, 0, rz]);
                 if self.is_clear(ctx, p)? {
-                    ctx.region.set_block(p, self.contents, 2)?;
+                    ctx.level.set_block(p, self.contents, 2)?;
                     placed = true;
                 }
             }
@@ -142,20 +142,21 @@ impl Feature for ReplaceBlobsFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
         p[1] = p[1].clamp(
-            ctx.region.min_y() + 1,
-            ctx.region.min_y() + ctx.region.height() - 1,
+            ctx.level.min_y() + 1,
+            ctx.level.min_y() + ctx.level.height() - 1,
         );
-        while p[1] > ctx.region.min_y() + 1 && ctx.region.block(p)?.block() != self.target {
+        while p[1] > ctx.level.min_y() + 1 && ctx.level.block(p)?.block() != self.target {
             p[1] -= 1;
         }
-        if p[1] <= ctx.region.min_y() + 1 {
+        if p[1] <= ctx.level.min_y() + 1 {
             return Ok(false);
         }
-        let radii = std::array::from_fn(|_| self.radius.sample(ctx.random));
+        let radii =
+            ctx.with_random(|random| std::array::from_fn(|_| self.radius.sample(random)))?;
         let mut placed = false;
         for p in manhattan(p, radii, *radii.iter().max().unwrap()) {
-            if ctx.region.block(p)?.block() == self.target {
-                ctx.region.set_block(p, self.state, 2)?;
+            if ctx.level.block(p)?.block() == self.target {
+                ctx.level.set_block(p, self.state, 2)?;
                 placed = true;
             }
         }
@@ -176,10 +177,10 @@ struct SteppedColumnClusterFeature {
 }
 impl SteppedColumnClusterFeature {
     fn can_place_at(&self, ctx: &mut FeatureContext<'_, '_>, p: [i32; 3]) -> Result<bool, Error> {
-        if !self.can_replace.test(ctx.region, p, ctx.generator)? {
+        if !self.can_replace.test(&ctx.level, p, ctx.generator)? {
             return Ok(false);
         }
-        let below = ctx.region.block(offset(p, [0, -1, 0]))?;
+        let below = ctx.level.block(offset(p, [0, -1, 0]))?;
         Ok(!is_air(below) && !self.cannot_place_on.contains(&below.block()))
     }
     fn find_surface(
@@ -188,7 +189,7 @@ impl SteppedColumnClusterFeature {
         mut p: [i32; 3],
         mut limit: i32,
     ) -> Result<Option<[i32; 3]>, Error> {
-        while p[1] > ctx.region.min_y() + 1 && limit > 0 {
+        while p[1] > ctx.level.min_y() + 1 && limit > 0 {
             limit -= 1;
             if self.can_place_at(ctx, p)? {
                 return Ok(Some(p));
@@ -203,9 +204,9 @@ impl SteppedColumnClusterFeature {
         mut p: [i32; 3],
         mut limit: i32,
     ) -> Result<Option<[i32; 3]>, Error> {
-        while p[1] < ctx.region.min_y() + ctx.region.height() && limit > 0 {
+        while p[1] < ctx.level.min_y() + ctx.level.height() && limit > 0 {
             limit -= 1;
-            let state = ctx.region.block(p)?;
+            let state = ctx.level.block(p)?;
             if self.cannot_place_on.contains(&state.block()) {
                 return Ok(None);
             }
@@ -228,20 +229,20 @@ impl SteppedColumnClusterFeature {
             for x in -reach..=reach {
                 let p = offset(origin, [x, 0, z]);
                 let steps = x.abs() + z.abs();
-                let start = if self.can_replace.test(ctx.region, p, ctx.generator)? {
+                let start = if self.can_replace.test(&ctx.level, p, ctx.generator)? {
                     self.find_surface(ctx, p, steps)?
                 } else {
                     self.find_air(ctx, p, steps)?
                 };
                 if let Some(mut cursor) = start {
                     for _ in 0..=height - steps / 2 {
-                        if self.can_replace.test(ctx.region, cursor, ctx.generator)? {
+                        if self.can_replace.test(&ctx.level, cursor, ctx.generator)? {
                             let state = self.block.get_state(ctx, cursor)?;
-                            ctx.region.set_block(cursor, state, 2)?;
+                            ctx.level.set_block(cursor, state, 2)?;
                             placed = true;
                         } else if !self
                             .continue_through
-                            .test(ctx.region, cursor, ctx.generator)?
+                            .test(&ctx.level, cursor, ctx.generator)?
                         {
                             break;
                         }
@@ -258,23 +259,23 @@ impl Feature for SteppedColumnClusterFeature {
         if !self.can_place_at(ctx, ctx.origin)? {
             return Ok(false);
         }
-        let height = self.height.sample(ctx.random);
-        let reach = height.min(self.cluster_reach.sample(ctx.random));
-        let count = self.column_count.sample(ctx.random);
+        let height = self.height.sample(&mut ctx.random()?);
+        let reach = height.min(self.cluster_reach.sample(&mut ctx.random()?));
+        let count = self.column_count.sample(&mut ctx.random()?);
         let mut placed = false;
         for _ in 0..count {
             let x = ctx.origin[0]
                 .wrapping_sub(reach)
-                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
-            let y = ctx.origin[1] + ctx.random.next_int_bound(1);
+                .wrapping_add(ctx.random()?.next_int_bound(2 * reach + 1));
+            let y = ctx.origin[1] + ctx.random()?.next_int_bound(1);
             let z = ctx.origin[2]
                 .wrapping_sub(reach)
-                .wrapping_add(ctx.random.next_int_bound(2 * reach + 1));
+                .wrapping_add(ctx.random()?.next_int_bound(2 * reach + 1));
             let h = height
                 - x.wrapping_sub(ctx.origin[0]).wrapping_abs()
                 - z.wrapping_sub(ctx.origin[2]).wrapping_abs();
             if h >= 0 {
-                let r = self.column_reach.sample(ctx.random);
+                let r = self.column_reach.sample(&mut ctx.random()?);
                 placed |= self.place_column(ctx, [x, y, z], h, r)?;
             }
         }

@@ -34,6 +34,7 @@ base64 = "0.22"
 time = { version = "0.3", features = ["parsing", "formatting", "macros"] }
 
 [dev-dependencies]
+ferraloom-game = { path = "../ferraloom-game", features = ["test-fixtures"] }
 tempfile = "3"
 
 [lints]

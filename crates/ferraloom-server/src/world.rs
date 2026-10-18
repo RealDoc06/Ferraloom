@@ -696,7 +696,9 @@ impl World {
         })
     }
     pub fn configure_live_rules(&self, level: &mut Level) {
+        level.set_has_skylight(self.dimension.has_skylight);
         let data = self.generator.data();
+        level.set_item_tags(data.item_tags.clone());
         level.set_weather_environment(ferraloom_game::level::weather::WeatherEnvironment {
             temperatures: data.temperatures.clone(),
             biome_names: Arc::new(data.biome_names.clone()),
@@ -708,32 +710,76 @@ impl World {
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }
-    pub async fn save_live_level_context(&mut self, level: &Level) -> Result<()> {
-        // Startup's generated spawn-search chunks may not have entered Level.
-        // Prime their actual predicates without creating another simulation RNG.
-        let tags = level
-            .block_tags()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        for terrain in self.initial_chunks.values_mut() {
-            let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
-            chunk.prime_heightmaps(tags);
-            write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
+    /// Capture the dimension's actual generator, configured feature registry and
+    /// WorldOptions seed before constructing the concrete live level.
+    pub fn level_context(
+        &self,
+        resources: &ResourceManager,
+    ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
+        let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
+        Ok(Arc::new(ferraloom_game::level::LevelContext::new(
+            self.seed,
+            self.generator.sea_level(),
+            self.generator.clone(),
+            Arc::new(features),
+        )))
+    }
+    /// Attach immutable dimension layers after the sole server clock manager
+    /// loads. Callers publish its actual snapshot; no local day counter exists.
+    pub fn install_live_environment(
+        &self,
+        level: &mut Level,
+        clocks: ferraloom_worldgen::environment::ClockSnapshot,
+    ) -> Result<()> {
+        let stem = self.dimensions.overworld();
+        level
+            .set_environment_attributes(
+                self.dimensions.environment.clone(),
+                &stem.environment,
+                stem.name.clone(),
+                &self.generator.data().biome_names,
+                clocks,
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+    /// Capture level-owned inputs before constructing the IO future. Canonical
+    /// simulation state is Send, and its single-owner lazy caches need not be Sync.
+    pub fn save_live_level_context<'a>(
+        &'a mut self,
+        level: &Level,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'a + use<'a> {
+        let captured = (|| -> Result<_> {
+            // Startup's generated spawn-search chunks may not have entered Level.
+            // Prime their actual predicates without creating another simulation RNG.
+            let tags = level
+                .block_tags()
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            for terrain in self.initial_chunks.values_mut() {
+                let mut chunk =
+                    LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
+                chunk.prime_heightmaps(tags);
+                write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
+            }
+            let weather = *level.weather();
+            let border = level.entity_world_border().clone();
+            let path = self.access.path().join("data");
+            Ok((weather, border, path))
+        })();
+        async move {
+            let (weather, border, path) = captured?;
+            self.saving
+                .run(move || -> Result<()> {
+                    let saved = SavedDataStorage::new(path);
+                    saved.save("minecraft:weather", &mut SavedData::new(weather))?;
+                    saved.save(
+                        ferraloom_game::level::border::SAVED_DATA_ID,
+                        &mut SavedData::new(border),
+                    )?;
+                    Ok(())
+                })
+                .await??;
+            Ok(())
         }
-        let weather = *level.weather();
-        let border = level.entity_world_border().clone();
-        let path = self.access.path().join("data");
-        self.saving
-            .run(move || -> Result<()> {
-                let saved = SavedDataStorage::new(path);
-                saved.save("minecraft:weather", &mut SavedData::new(weather))?;
-                saved.save(
-                    ferraloom_game::level::border::SAVED_DATA_ID,
-                    &mut SavedData::new(border),
-                )?;
-                Ok(())
-            })
-            .await??;
-        Ok(())
     }
     fn entity_io(&mut self, properties: &ServerProperties) -> Result<&mut EntityIo> {
         if self.entity_io.is_none() {
@@ -989,14 +1035,25 @@ impl World {
                     .div_euclid(1_000_000) as i64,
             ),
         );
-        let mut spawn = CompoundTag::new();
-        spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        let mut spawn = self
+            .level_data
+            .data
+            .get_compound("spawn")
+            .cloned()
+            .unwrap_or_default();
+        if !spawn.contains_key("dimension") {
+            spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        }
         spawn.insert(
             "pos",
             Tag::IntArray(vec![self.spawn.x, self.spawn.y, self.spawn.z]),
         );
-        spawn.insert("yaw", Tag::Float(0.));
-        spawn.insert("pitch", Tag::Float(0.));
+        if !spawn.contains_key("yaw") {
+            spawn.insert("yaw", Tag::Float(0.));
+        }
+        if !spawn.contains_key("pitch") {
+            spawn.insert("pitch", Tag::Float(0.));
+        }
         self.level_data.data.insert("spawn", Tag::Compound(spawn));
         let access = self.access.clone();
         let level = self.level_data.clone();
@@ -1399,7 +1456,10 @@ mod entity_io_tests {
         }])
         .unwrap();
         io.worker.synchronize(false).await.unwrap();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(pos, Visibility::Tracked)
             .unwrap();

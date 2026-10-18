@@ -6,8 +6,6 @@ mod clone_item;
 pub mod containers;
 pub mod dispatch;
 pub mod entity;
-pub mod interaction;
-pub use interaction::{InteractionResult, UseContext};
 mod families;
 pub mod flags;
 pub mod fluid;
@@ -159,7 +157,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
     }
     pub fn fast_lava(&self) -> Result<bool, LevelError> {
         match self {
-            Self::Server(level) => Ok(level.rules().fast_lava),
+            Self::Server(level) => level.fast_lava(),
             Self::Worldgen(region) => region
                 .fast_lava()
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
@@ -314,26 +312,6 @@ pub trait BlockBehavior: Sync {
         _level: &mut Level,
     ) -> Result<i32, LevelError> {
         Ok(0)
-    }
-    /// Port of BlockBehaviour#useWithoutItem's base pass-through.
-    fn use_without_item(
-        &self,
-        _state: BlockState,
-        _pos: BlockPos,
-        _context: &UseContext,
-        _level: &mut Level,
-    ) -> Result<InteractionResult, LevelError> {
-        Ok(InteractionResult::Pass)
-    }
-    /// Port of BlockBehaviour#useItemOn's base empty-hand fallback.
-    fn use_item_on(
-        &self,
-        _state: BlockState,
-        _pos: BlockPos,
-        _context: &UseContext,
-        _level: &mut Level,
-    ) -> Result<InteractionResult, LevelError> {
-        Ok(InteractionResult::TryWithEmptyHand)
     }
     /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
     fn can_be_replaced(

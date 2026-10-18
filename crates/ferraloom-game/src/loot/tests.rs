@@ -31,8 +31,7 @@ fn provider_failure_boundary_preserves_nested_arithmetic() {
     let mut random = LegacyRandomSource::new(1);
     let mut c = EvalContext {
         params: &params,
-        random: &mut random,
-        facts: &VanillaFeatures,
+        runtime: &mut super::runtime::BorrowedRuntime::new(&mut random, &VanillaFeatures),
         visited: Default::default(),
     };
     let p = ContextIntProvider::decode(
@@ -194,8 +193,10 @@ fn synthetic_tables_and_providers_match_real_java() {
                 &data,
                 &mut EvalContext {
                     params: &params,
-                    random: &mut random,
-                    facts: &VanillaFeatures,
+                    runtime: &mut super::runtime::BorrowedRuntime::new(
+                        &mut random,
+                        &VanillaFeatures,
+                    ),
                     visited: Default::default(),
                 },
             )

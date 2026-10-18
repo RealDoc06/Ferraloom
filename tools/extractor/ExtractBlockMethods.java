@@ -26,6 +26,7 @@ public final class ExtractBlockMethods {
         "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack", "canBeReplaced",
         "handlePrecipitation",
         "getSignal", "getDirectSignal", "isSignalSource", "ownSignal", "shouldRedstoneWireConnectTo",
+        "getDrops", "spawnAfterBreak",
         "setPlacedBy", "playerWillDestroy", "spawnDestroyByEntityParticles"
     );
 

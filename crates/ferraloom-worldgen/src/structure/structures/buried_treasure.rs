@@ -1,8 +1,8 @@
 use crate::structure::{BoundingBox, piece::StructurePieceData};
 use crate::{
     Error,
-    feature::FeatureContext,
     region::{Heightmap, WorldGenRegion},
+    structure::StructurePlacementContext,
 };
 use ferraloom_data::{Block, BlockState};
 use ferraloom_nbt::CompoundTag;
@@ -30,7 +30,7 @@ impl BuriedTreasurePiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let x = self.data.bounds.min[0];
@@ -230,7 +230,7 @@ mod tests {
             let mut piece = BuriedTreasurePiece::new([9, 90, 9]);
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0, 0, 0],

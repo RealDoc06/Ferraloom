@@ -19,6 +19,14 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn teleport_relative(
+        self,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::teleport_relative(self, delta, level)
+    }
+
     pub fn count_player_passengers(self, level: &Level) -> Result<i32, LevelError> {
         count_player_passengers(self, level)
     }
@@ -59,6 +67,8 @@ pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
 pub mod movement;
+pub mod sounds;
+pub mod teleport;
 mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
@@ -199,6 +209,21 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
+/// Typed virtual effects whose complete implementation belongs to a later slice.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EntityMethod {
+    PlayerTouch,
+    SwingAndResetAttackStrength,
+}
+impl EntityMethod {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::PlayerTouch => "playerTouch",
+            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+        }
+    }
+}
+
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -216,9 +241,14 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
-    /// Port of Entity#isSpectator; the player dispatcher supplies its game mode.
-    fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
-        Ok(false)
+    /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
     }
     /// Host lifetime tracing is required for every dispatcher. Declare all held
     /// EntityRef fields here; UUID lookup references do not retain old states.
@@ -238,6 +268,81 @@ pub trait Entity: Sync {
         level: &Level,
     ) -> Result<ferraloom_util::BlockPos, LevelError> {
         movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
+    /// Port of Entity#getKnownMovement; ServerPlayer supplies its client movement.
+    fn known_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        teleport::base_known_movement(self, entity, level)
+    }
+    /// Port of Entity#teleportRelative. The player override uses listener state.
+    fn teleport_relative(
+        &self,
+        entity: EntityRef,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::base_teleport_relative(entity, delta, level)
+    }
+    fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity::<EntityData>(entity)?.removed)
+    }
+    fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn controlling_passenger(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        Ok(None)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Neutral
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn play_sound(
+        &self,
+        entity: EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_sound(self, entity, sound, volume, pitch, false, level)
+    }
+    fn play_fire_extinguished_sound(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_fire_extinguished_sound(self, entity, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_step_sound(self, entity, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::water_splash_effect(self, entity, level)
     }
     fn fire_immune_ticks(&self) -> i32 {
         0

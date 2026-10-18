@@ -14,56 +14,6 @@ use ferraloom_protocol::{
 };
 use std::collections::BTreeMap;
 
-/// Port of AbstractFurnaceBlockEntity#setItem, including input-change reset.
-pub fn set_item(
-    handle: BlockEntityRef,
-    slot: usize,
-    mut stack: ferraloom_protocol::component::ItemStack,
-    level: &mut Level,
-) -> Result<(), LevelError> {
-    use crate::{
-        entity::player::inventory::{
-            count, is_same_item_same_components, max_stack_size, set_count,
-        },
-        inventory::Container,
-    };
-    let reset = {
-        let furnace = level.block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?;
-        let same =
-            !stack.is_empty() && is_same_item_same_components(&furnace.parent.items[slot], &stack);
-        let size = count(&stack).min(furnace.parent.max_stack_size().min(max_stack_size(&stack)));
-        set_count(&mut stack, size);
-        furnace.parent.items[slot] = stack;
-        slot == 0 && !same && furnace.parent.parent.has_level
-    };
-    if reset {
-        let resources = level.container_resources()?;
-        let furnace = level.block_entity::<AbstractFurnaceBlockEntity>(handle)?;
-        let recipe = resources
-            .recipes
-            .get_recipe_for(
-                furnace.recipe_type(),
-                crate::crafting::RecipeInput::Single(&furnace.parent.items[0]),
-                &(),
-                furnace.last_recipe.as_ref(),
-            )
-            .map_err(|_| LevelError::Inventory("furnace recipe lookup"))?;
-        let total = recipe.map_or(200, |recipe| {
-            furnace.total_cook_time(recipe.value.cooking_time().expect("cooking recipe"))
-        });
-        let hint = recipe.map(|recipe| recipe.id.clone());
-        let furnace = level.block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?;
-        if hint.is_some() {
-            furnace.last_recipe = hint;
-        }
-        furnace.cooking_total_time = total;
-        furnace.cooking_timer = 0;
-        furnace.parent.set_changed();
-        handle.set_changed(level)?;
-    }
-    Ok(())
-}
-
 #[derive(Clone, Debug)]
 pub struct AbstractFurnaceBlockEntity {
     pub parent: BaseContainerBlockEntity,

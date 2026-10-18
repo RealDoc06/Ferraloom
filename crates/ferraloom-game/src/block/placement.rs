@@ -357,29 +357,6 @@ impl LevelReaderRef<'_, '_> {
     }
 }
 impl Level {
-    /// Port of Block#setPlacedBy dispatch. BlockItem's production caller is
-    /// supplied by the item-placement port.
-    pub fn set_placed_by(
-        &mut self,
-        state: BlockState,
-        pos: BlockPos,
-        by: Option<crate::entity::EntityRef>,
-        stack: &ferraloom_protocol::component::ItemStack,
-    ) -> Result<(), LevelError> {
-        self.required_block_behavior(state.block(), BlockMethod::SetPlacedBy)?
-            .set_placed_by(state, pos, by, stack, self)
-    }
-    /// Port of Block#playerWillDestroy dispatch. The return value is required
-    /// even when the unported whole-effect policy is Warn.
-    pub fn player_will_destroy(
-        &mut self,
-        state: BlockState,
-        pos: BlockPos,
-        player: crate::entity::EntityRef,
-    ) -> Result<BlockState, LevelError> {
-        self.required_block_behavior(state.block(), BlockMethod::PlayerWillDestroy)?
-            .player_will_destroy(state, pos, player, self)
-    }
     pub fn get_state_for_placement(
         &mut self,
         block: Block,
@@ -419,7 +396,10 @@ mod tests {
     use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         level
             .add_chunk(LevelChunk::new(
                 ChunkPos::new(0, 0),

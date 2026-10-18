@@ -1,4 +1,5 @@
 use super::*;
+
 use crate::{Behaviors, block::BlockBehavior};
 use effects::LevelEffect;
 use ferraloom_util::Direction;
@@ -29,11 +30,121 @@ impl BlockBehavior for Trace {
     }
 }
 static EMPTY: Behaviors = Behaviors::EMPTY;
+
+/// Explicit missing virtuals for required-query and policy tests. Real family
+/// ports must never change which operation this fixture leaves unavailable.
+struct PendingBlockQueries;
+impl BlockBehavior for PendingBlockQueries {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        _: BlockPos,
+        _: Direction,
+        _: BlockPos,
+        _: BlockState,
+        _: &mut crate::block::LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::UpdateShape,
+        ))
+    }
+    fn random_tick(&self, state: BlockState, _: BlockPos, _: &mut Level) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::RandomTick,
+        ))
+    }
+    fn can_survive(
+        &self,
+        state: BlockState,
+        _: BlockPos,
+        _: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::CanSurvive,
+        ))
+    }
+    fn collision_shape(
+        &self,
+        state: BlockState,
+        _: BlockPos,
+        _: &crate::block::BlockCollisionContext<'_>,
+        _: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::CollisionShape,
+        ))
+    }
+    fn entity_inside_collision_shape(
+        &self,
+        state: BlockState,
+        _: BlockPos,
+        _: crate::entity::EntityRef,
+        _: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::EntityInsideCollisionShape,
+        ))
+    }
+    fn can_be_replaced(
+        &self,
+        state: BlockState,
+        _: &crate::block::BlockPlaceContext<'_>,
+        _: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::CanBeReplaced,
+        ))
+    }
+    fn get_clone_item_stack(
+        &self,
+        state: BlockState,
+        _: BlockPos,
+        _: bool,
+        _: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_protocol::component::ItemStack, LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            crate::block::BlockMethod::CloneItemStack,
+        ))
+    }
+}
+
+#[test]
+fn block_drops_requires_the_published_rule_and_observes_each_change() {
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    for policy in [
+        crate::block::UnportedBehavior::Strict,
+        crate::block::UnportedBehavior::Warn,
+    ] {
+        level.set_unported_behavior(policy);
+        assert_eq!(
+            level.block_drops_enabled(),
+            Err(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+        );
+    }
+    for enabled in [true, false, true] {
+        level.rules_mut().block_drops = Some(enabled);
+        assert_eq!(level.block_drops_enabled(), Ok(enabled));
+    }
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
 fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze() {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for _ in 1..300 {
         assert!(level.update_empty_time(false, true));
     }
@@ -59,7 +170,23 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
     )
 }
 fn empty_level(behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(Region::new(behaviors));
+    let mut level = Level::new(
+        Region::new(behaviors),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    // Controlled test dimension: no timelines and native constant attributes.
+    let resources = ferraloom_data::datapack::ResourceManager::new(vec![]);
+    let environment = Arc::new(environment::EnvironmentDefinitions::load(&resources).unwrap());
+    let dimension = environment.dimension(&serde_json::json!({})).unwrap();
+    level
+        .set_environment_attributes(
+            environment,
+            &dimension,
+            "test".parse().unwrap(),
+            &[],
+            environment::ClockSnapshot::default(),
+        )
+        .unwrap();
     for x in -1..=1 {
         for z in -1..=1 {
             let pos = ChunkPos::new(x, z);
@@ -401,6 +528,75 @@ impl BlockBehavior for EventChain {
 }
 static EVENT_BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &EventChain);
 #[test]
+fn block_event_audiences_capture_before_later_event_movement() {
+    use crate::entity::{
+        EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_protocol::play::clientbound::Packet;
+    use ferraloom_util::{Uuid, Vec3};
+    struct MovingEvent;
+    impl BlockBehavior for MovingEvent {
+        fn trigger_event(
+            &self,
+            _: BlockState,
+            _: BlockPos,
+            a: i32,
+            _: i32,
+            level: &mut Level,
+        ) -> Result<bool, LevelError> {
+            if a == 1 {
+                level.set_entity_pos(EntityRef(1000), Vec3::new(100.0, 0.0, 4.0))?;
+            }
+            Ok(true)
+        }
+    }
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &MovingEvent);
+    let mut level = empty_level(&BEHAVIORS);
+    let p = BlockPos::new(4, 0, 4);
+    level
+        .set_block_state(p, Block::STONE.default_state())
+        .unwrap();
+    level.set_chunk_block_ticking(ChunkPos::ZERO, true).unwrap();
+    let player = EntityRef(1000);
+    let network_id = level.next_entity_id();
+    level
+        .add_entity(
+            player,
+            EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::offline_player("EventAudience"),
+                "EventAudience".into(),
+                network_id,
+                Vec3::new(8.0, 0.0, 4.0),
+                GameType::Survival,
+            ))),
+        )
+        .unwrap();
+    level.take_effects();
+    for a in [0, 1] {
+        level.block_event(events::BlockEvent {
+            pos: p,
+            block: Block::STONE,
+            param_a: a,
+            param_b: 0,
+        });
+    }
+    level.run_block_events().unwrap();
+    let effects = level.take_effects();
+    assert!(
+        matches!(&effects[0], LevelEffect::PlayerPacket { recipients,packet }
+        if recipients == &[player] && matches!(packet.as_ref(), Packet::BlockEvent(event) if event.b0 == 0))
+    );
+    assert!(
+        matches!(&effects[1], LevelEffect::PlayerSectionChange { player:id,.. } if *id == player)
+    );
+    assert!(
+        matches!(&effects[2], LevelEffect::PlayerPacket { recipients,packet }
+        if recipients.is_empty() && matches!(packet.as_ref(), Packet::BlockEvent(event) if event.b0 == 1))
+    );
+    assert_eq!(effects.len(), 3);
+}
+#[test]
 fn block_events_drain_reentrant_additions_deduplicate_and_retry_non_ticking_chunks() {
     let mut level = empty_level(&EVENT_BEHAVIORS);
     let pos = BlockPos::new(4, 0, 4);
@@ -425,7 +621,10 @@ fn block_events_drain_reentrant_additions_deduplicate_and_retry_non_ticking_chun
         .take_effects()
         .into_iter()
         .filter_map(|e| match e {
-            LevelEffect::BlockEvent(e) => Some(e.param_a),
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                ferraloom_protocol::play::clientbound::Packet::BlockEvent(event) => Some(event.b0),
+                _ => None,
+            },
             _ => None,
         })
         .collect();
@@ -489,7 +688,10 @@ fn flat_pool() -> Level {
 #[test]
 fn scheduled_phases_wait_for_entity_load_integration_simulation_and_ticking_future() {
     use ferraloom_data::registries::fluid::Id as Fluid;
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let chunk = ChunkPos::ZERO;
     let pos = BlockPos::new(8, 0, 8);
     level.add_chunk(empty_chunk(chunk)).unwrap();
@@ -731,7 +933,9 @@ fn block_and_fluid_ticks_survive_unload_nbt_and_reload_with_their_remaining_dela
 #[test]
 fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
     use crate::block::{UPDATE_LIMIT, UpdateFlags};
-    let mut level = empty_level(&EMPTY);
+    static PENDING: Behaviors =
+        Behaviors::EMPTY.with_block(Block::REDSTONE_WIRE, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     install_tags(&mut level);
     let pos = BlockPos::new(8, 0, 8);
     let neighbor = pos.below(1);
@@ -757,7 +961,10 @@ fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
             UpdateFlags::default(),
             UPDATE_LIMIT
         ),
-        Err(LevelError::UnsupportedBlock(Block::REDSTONE_WIRE))
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::REDSTONE_WIRE,
+            crate::block::BlockMethod::UpdateShape
+        ))
     ));
     level
         .set_block_state(pos, Block::DANDELION.default_state())
@@ -998,15 +1205,20 @@ fn falling_sand_stays_on_a_waterlogged_solid_block() {
 }
 
 #[test]
-fn random_phase_is_strict_and_warn_counts_both_vanilla_lava_callbacks() {
-    use crate::block::UnportedBehavior;
-    let mut level = empty_level(&EMPTY);
+fn random_phase_uses_registered_callbacks_and_warn_counts_block_and_fluid_skips() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    // Leaves supply native per-state random eligibility; their behavior here is
+    // deliberately synthetic, so newly ported decay cannot alter this test.
+    static PENDING: Behaviors =
+        Behaviors::EMPTY.with_block(Block::OAK_LEAVES, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     let chunk = ChunkPos::new(0, 0);
+    let state = Block::OAK_LEAVES.default_state();
     for x in 0..16 {
         for y in 0..16 {
             for z in 0..16 {
                 level
-                    .set_block_state(BlockPos::new(x, y, z), Block::LAVA.default_state())
+                    .set_block_state(BlockPos::new(x, y, z), state)
                     .unwrap();
             }
         }
@@ -1014,10 +1226,23 @@ fn random_phase_is_strict_and_warn_counts_both_vanilla_lava_callbacks() {
     install_weather_environment(&mut level, "plains");
     assert_eq!(
         level.tick_random_chunk(chunk),
-        Err(LevelError::UnsupportedFluidRandomTick)
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            BlockMethod::RandomTick
+        ))
     );
     level.set_unported_behavior(UnportedBehavior::Warn);
     level.tick_random_chunk(chunk).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 3);
+    // Exercise the distinct fluid callback policy without requiring a native
+    // fluid method to remain unported.
+    for _ in 0..3 {
+        level
+            .optional_call(state.block(), BlockMethod::FluidRandomTick, |_| {
+                Err::<(), _>(LevelError::UnsupportedFluidRandomTick)
+            })
+            .unwrap();
+    }
     assert_eq!(
         level.unported_behavior_stats(),
         crate::block::UnportedBehaviorStats {
@@ -1106,8 +1331,9 @@ impl BlockBehavior for DynamicFluidWall {
         }
     }
 }
-static DYNAMIC_FLUID_WALL: Behaviors =
-    Behaviors::EMPTY.with_block(Block::SCAFFOLDING, &DynamicFluidWall);
+static DYNAMIC_FLUID_WALL: Behaviors = Behaviors::EMPTY
+    .with_block(Block::SCAFFOLDING, &DynamicFluidWall)
+    .with_block(Block::MOVING_PISTON, &PendingBlockQueries);
 
 #[test]
 fn fluid_wall_queries_share_dynamic_dispatch_and_match_vanilla_target_first_shortcuts() {
@@ -1214,7 +1440,7 @@ fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
 #[test]
 fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fallbacks() {
     use crate::block::{BlockCollisionContext, LevelReaderRef, UnportedBehavior};
-    let mut level = flat_pool();
+    let level = flat_pool();
     let pos = BlockPos::new(8, 0, 8);
     let reader = LevelReaderRef::Server(&level);
     let slab = Block::STONE_SLAB.default_state();
@@ -1244,6 +1470,9 @@ fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fal
             .unwrap()
             .ptr_eq(&ferraloom_util::shapes::block())
     );
+    static PENDING: Behaviors =
+        Behaviors::EMPTY.with_block(Block::SCAFFOLDING, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     level.set_unported_behavior(UnportedBehavior::Warn);
     let dynamic = Block::SCAFFOLDING.default_state();
     assert!(matches!(
@@ -1265,7 +1494,7 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
     use crate::block::{
         BlockBehavior, BlockCollisionContext, BlockMethod, LevelReaderRef, UnportedBehavior,
     };
-    let mut level = flat_pool();
+    let level = flat_pool();
     let pos = BlockPos::new(8, 0, 8);
     let reader = LevelReaderRef::Server(&level);
     assert!(
@@ -1310,18 +1539,15 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
             .unwrap()
             .ptr_eq(&ferraloom_util::shapes::block())
     );
-    assert!(matches!(
-        level.behavior_for_method(leaves.block(), BlockMethod::RandomTick),
-        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
-    ));
-    assert!(matches!(
-        level.behavior_for_method(leaves.block(), BlockMethod::UpdateShape),
-        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
-    ));
+    for method in [BlockMethod::RandomTick, BlockMethod::UpdateShape] {
+        assert!(level.behavior_for_method(leaves.block(), method).is_ok());
+    }
+    static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     level.set_unported_behavior(UnportedBehavior::Warn);
     assert!(matches!(
         LevelReaderRef::Server(&level).entity_inside_collision_shape(
-            Block::POWDER_SNOW.default_state(),
+            Block::STONE.default_state(),
             pos,
             crate::entity::EntityRef(0)
         ),
@@ -1350,6 +1576,7 @@ fn weather_test_temperatures() -> Arc<ferraloom_worldgen::biome_manager::BiomeTe
 fn install_weather_environment(level: &mut Level, biome: &str) {
     use weather::{ChunkLightSnapshot, WeatherEnvironment};
     let temperatures = weather_test_temperatures();
+    level.set_has_skylight(true);
     level.set_weather_environment(WeatherEnvironment {
         temperatures: temperatures.clone(),
         biome_names: Arc::new(vec![biome.parse().unwrap()]),
@@ -1497,8 +1724,8 @@ fn whole_effect_skips_share_the_block_policy_and_counters() {
         .unported_operation(UnportedOperation::WeatherStrike)
         .unwrap();
     level
-        .optional_call(Block::OAK_LEAVES, BlockMethod::RandomTick, |_| {
-            Err::<(), _>(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
+        .optional_call(Block::STONE, BlockMethod::RandomTick, |_| {
+            Err::<(), _>(LevelError::UnsupportedBlock(Block::STONE))
         })
         .unwrap();
     assert_eq!(
@@ -1592,7 +1819,10 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
 #[test]
 fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let mut level = Level::new(Region::new(&EMPTY));
+    let level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for line in include_str!("../../tests/java/level/clone-items.tsv").lines() {
         let (case, expected) = line.split_once('\t').unwrap();
         let (block, include_data) = case
@@ -1612,11 +1842,13 @@ fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
             });
         assert_eq!(format!("{}:{count}", item.name()), expected, "{case}");
     }
+    static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     level.set_unported_behavior(UnportedBehavior::Warn);
     assert_eq!(
-        level.get_clone_item_stack(Block::BEEHIVE.default_state(), BlockPos::ZERO, true),
+        level.get_clone_item_stack(Block::STONE.default_state(), BlockPos::ZERO, true),
         Err(LevelError::UnsupportedBlockMethod(
-            Block::BEEHIVE,
+            Block::STONE,
             BlockMethod::CloneItemStack
         ))
     );
@@ -1661,11 +1893,12 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
         );
         assert!(level.can_survive(Block::SAND.default_state(), pos).unwrap());
     }
-    let mut level = empty_level(&EMPTY);
+    static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING);
     level.set_unported_behavior(UnportedBehavior::Warn);
     let pos = BlockPos::new(8, 0, 8);
     level
-        .set_block_state(pos, Block::CANDLE.default_state())
+        .set_block_state(pos, Block::STONE.default_state())
         .unwrap();
     let stack = ItemStack::default();
     assert!(matches!(
@@ -1677,7 +1910,7 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
             Direction::Up
         ),
         Err(LevelError::UnsupportedBlockMethod(
-            Block::CANDLE,
+            Block::STONE,
             BlockMethod::CanBeReplaced
         ))
     ));
@@ -1814,7 +2047,8 @@ fn live_freeze_and_snow_predicates_match_real_biome_calls() {
 #[test]
 fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let mut level = empty_level(&EMPTY);
+    static PENDING_SNOW: Behaviors = Behaviors::EMPTY.with_block(Block::SNOW, &PendingBlockQueries);
+    let mut level = empty_level(&PENDING_SNOW);
     let p = BlockPos::new(8, 0, 8);
     level
         .set_block_state(p.below(1), Block::STONE.default_state())
@@ -1849,6 +2083,11 @@ fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
         raining: true,
         ..Default::default()
     });
+    assert_eq!(
+        level.is_raining_at(p),
+        Err(LevelError::UnsupportedLightQuery)
+    );
+    level.set_has_skylight(true);
     assert_eq!(
         level.is_raining_at(p),
         Err(LevelError::UnsupportedWeatherQuery)
@@ -1943,12 +2182,17 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     let chunk = ChunkPos::new(0, 0);
     let pos = BlockPos::new(8, 0, 8);
     let mut tag = CompoundTag::new();
-    tag.insert("id", Tag::String("minecraft:spawner".into()));
+    tag.insert(
+        "id",
+        Tag::String(Block::SPAWNER.block_entity_type().unwrap().name().into()),
+    );
     for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
         tag.insert(key, Tag::Int(value));
     }
     tag.insert("future_bytes", Tag::ByteArray(vec![-128, 0, 127]));
-    tag.insert("future_double", Tag::Double(-0.0));
+    // DoubleTag.valueOf and its native binary loader canonicalize signed zero.
+    // Use the canonical constructor before checking untouched pending NBT bytes.
+    tag.insert("future_double", Tag::from(-0.0_f64));
     tag.insert(
         "future_utf16",
         Tag::String(NbtString::from_utf16(vec![0xd800, 0, 0xdc00])),
@@ -1972,16 +2216,32 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         block_chunk.pending_block_entity_nbt(),
         std::slice::from_ref(&tag)
     );
-    let mut level = Level::new(Region::new(&EMPTY));
-    level.add_chunk(block_chunk).unwrap();
-    assert_eq!(
-        level.post_process_generation(chunk),
-        Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
     );
+    level.add_chunk(block_chunk).unwrap();
+    // Pending-state access is a required query even if its real factory has
+    // since been ported. Do not activate the receiver in this storage test.
+    for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
+        level.set_unported_behavior(policy);
+        assert_eq!(
+            level.block_entity_ref(pos),
+            Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
+        );
+    }
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    level.set_unported_behavior(UnportedBehavior::Strict);
+    assert_eq!(
+        level.skip_block_entity_activation(Block::STONE, "test:pending_factory".into()),
+        Err(LevelError::UnsupportedBlockEntity(Block::STONE))
+    );
     level.set_unported_behavior(UnportedBehavior::Warn);
-    level.post_process_generation(chunk).unwrap();
-    level.post_process_generation(chunk).unwrap();
+    for _ in 0..2 {
+        level
+            .skip_block_entity_activation(Block::STONE, "test:pending_factory".into())
+            .unwrap();
+    }
     assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
     assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
     let block_chunk = level.chunk(chunk).unwrap();
@@ -2014,7 +2274,10 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
 #[test]
 fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs() {
     use crate::block::{UnportedBehavior, UnportedOperation};
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let pair = ("minecraft:oak".to_owned(), "canSurvive".to_owned());
     level.record_worldgen_skips(Vec::new()).unwrap();
     assert_eq!(

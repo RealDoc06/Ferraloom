@@ -243,6 +243,29 @@ pub(crate) fn follow_nearby_player(entity: EntityRef, level: &mut Level) -> Resu
 }
 pub struct ExperienceOrbBehavior;
 impl Entity for ExperienceOrbBehavior {
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.unported_operation(crate::block::UnportedOperation::EntityMethod(
+            EntityType::EXPERIENCE_ORB,
+            super::EntityMethod::PlayerTouch,
+        ))
+    }
+    fn do_water_splash_effect(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Ambient
+    }
+
     fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
         super::trace_base_entity_refs(state.as_entity(), references);
         if let Some(target) = ExperienceOrb::view(state)

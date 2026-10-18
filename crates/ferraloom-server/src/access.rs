@@ -1,6 +1,7 @@
 //! Port of StoredUserList, ServerOpList, UserWhiteList and ban-list admission.
 use anyhow::{Context, Result};
 use ferraloom_protocol::{Uuid, login::GameProfile};
+use ferraloom_util::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -33,7 +34,7 @@ pub struct Ban {
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default)]
-    pub ip: Option<IpAddr>,
+    pub ip: Option<String>,
     #[serde(default)]
     pub created: Option<String>,
     #[serde(default)]
@@ -44,6 +45,35 @@ pub struct Ban {
     pub reason: Option<String>,
 }
 impl Ban {
+    pub fn permanent(
+        uuid: Option<String>,
+        name: Option<String>,
+        ip: Option<String>,
+        source: String,
+        reason: Option<String>,
+    ) -> Self {
+        let created = OffsetDateTime::now_utc().format(format_description!("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]")).expect("date formatter");
+        Self {
+            uuid,
+            name,
+            ip,
+            created: Some(created),
+            source: Some(source),
+            expires: Some("forever".into()),
+            reason,
+        }
+    }
+    pub fn reason_message(&self) -> ferraloom_protocol::chat::Component {
+        self.reason.as_ref().map_or_else(
+            || {
+                ferraloom_protocol::chat::Component::translatable(
+                    "multiplayer.disconnect.banned.reason.default",
+                    vec![],
+                )
+            },
+            ferraloom_protocol::chat::Component::literal,
+        )
+    }
     fn active(&self) -> bool {
         self.expires.as_deref().filter(|s| *s != "forever").and_then(|s| OffsetDateTime::parse(s, format_description!("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]" )).ok()).is_none_or(|expires| expires > OffsetDateTime::now_utc())
     }
@@ -58,28 +88,90 @@ struct CachedUser {
 
 pub struct AccessLists {
     root: PathBuf,
-    pub ops: Vec<Operator>,
-    pub whitelist: Vec<WhiteListEntry>,
-    pub banned_players: Vec<Ban>,
-    pub banned_ips: Vec<Ban>,
+    pub ops: HashMap<String, Operator>,
+    pub whitelist: HashMap<String, WhiteListEntry>,
+    pub banned_players: HashMap<String, Ban>,
+    pub banned_ips: HashMap<String, Ban>,
     user_cache: Vec<CachedUser>,
 }
 impl AccessLists {
     pub fn load(root: &Path) -> Result<Self> {
         Ok(Self {
             root: root.into(),
-            ops: read(root, "ops.json")?,
-            whitelist: read(root, "whitelist.json")?,
-            banned_players: read(root, "banned-players.json")?,
-            banned_ips: read(root, "banned-ips.json")?,
+            ops: read_map(root, "ops.json", |entry: &Operator| {
+                canonical_uuid(&entry.uuid)
+            })?,
+            whitelist: read_map(root, "whitelist.json", |entry: &WhiteListEntry| {
+                canonical_uuid(&entry.uuid)
+            })?,
+            banned_players: read_map(root, "banned-players.json", |entry: &Ban| {
+                entry.uuid.as_deref().and_then(canonical_uuid)
+            })?,
+            banned_ips: read_map(root, "banned-ips.json", |entry: &Ban| entry.ip.clone())?,
             user_cache: read(root, "usercache.json")?,
         })
     }
-    pub fn permission(&self, id: Uuid) -> i32 {
-        self.ops
+    pub fn reload_whitelist(&mut self) -> Result<()> {
+        self.whitelist = read_map(&self.root, "whitelist.json", |entry: &WhiteListEntry| {
+            canonical_uuid(&entry.uuid)
+        })?;
+        Ok(())
+    }
+    pub fn save_whitelist(&self) -> Result<()> {
+        self.write_entries("whitelist.json", self.whitelist.values())
+    }
+    pub fn save_bans(&self, ips: bool) -> Result<()> {
+        if ips {
+            self.write_entries("banned-ips.json", self.banned_ips.values())
+        } else {
+            self.write_entries("banned-players.json", self.banned_players.values())
+        }
+    }
+    fn write_entries<'a, T: Serialize + 'a>(
+        &self,
+        name: &str,
+        entries: impl IntoIterator<Item = &'a T>,
+    ) -> Result<()> {
+        fs::write(
+            self.root.join(name),
+            serde_json::to_vec_pretty(&entries.into_iter().collect::<Vec<_>>())?,
+        )?;
+        Ok(())
+    }
+    pub fn cached_profile(&self, name: &str) -> Option<GameProfile> {
+        let cached = self
+            .user_cache
             .iter()
-            .find(|o| o.uuid.eq_ignore_ascii_case(&id.to_string()))
-            .map_or(0, |o| o.level)
+            .find(|user| user.name.eq_ignore_ascii_case(name))?;
+        Some(GameProfile {
+            id: ferraloom_game::commands::arguments::selectors::parse_uuid(&cached.uuid)?,
+            name: cached.name.clone(),
+            properties: Vec::new(),
+        })
+    }
+    /// Port of PlayerList#op/#deop; persistence failures are logged by the caller.
+    pub fn set_operator(&mut self, profile: &GameProfile, level: Option<i32>) -> Result<()> {
+        if let Some(level) = level {
+            self.ops.insert(
+                profile.id.to_string(),
+                Operator {
+                    uuid: profile.id.to_string(),
+                    name: profile.name.clone(),
+                    level,
+                    bypasses_player_limit: false,
+                },
+            );
+        } else {
+            self.ops.remove(&profile.id.to_string());
+        }
+        fs::write(
+            self.root.join("ops.json"),
+            serde_json::to_vec_pretty(&self.ops.values().collect::<Vec<_>>())?,
+        )?;
+        Ok(())
+    }
+    pub fn permission(&self, id: Uuid) -> i32 {
+        self.ops.peek(&id.to_string()).map_or(0, |op| op.level)
     }
     pub fn can_join(
         &self,
@@ -91,7 +183,7 @@ impl AccessLists {
         let id = profile.id.to_string();
         if let Some(ban) = self
             .banned_players
-            .iter()
+            .values()
             .find(|b| b.active() && b.uuid.as_deref() == Some(&id))
         {
             return Some(format!(
@@ -99,20 +191,20 @@ impl AccessLists {
                 ban.reason.as_deref().unwrap_or("Banned by an operator.")
             ));
         }
-        let op = self.ops.iter().find(|o| o.uuid.eq_ignore_ascii_case(&id));
+        let op = self.ops.peek(&id);
         if whitelist
             && op.is_none()
             && !self
                 .whitelist
-                .iter()
+                .values()
                 .any(|e| e.uuid.eq_ignore_ascii_case(&id))
         {
             return Some("You are not white-listed on this server!".into());
         }
         if let Some(ban) = self
             .banned_ips
-            .iter()
-            .find(|b| b.active() && b.ip == Some(ip))
+            .values()
+            .find(|b| b.active() && b.ip.as_deref() == Some(ip.to_string().as_str()))
         {
             return Some(format!(
                 "Your IP address is banned from this server!\nReason: {}",
@@ -150,4 +242,45 @@ fn read<T: for<'de> Deserialize<'de>>(root: &Path, name: &str) -> Result<Vec<T>>
         fs::write(&path, "[]\n")?;
     }
     serde_json::from_slice(&fs::read(&path)?).with_context(|| format!("reading {}", path.display()))
+}
+
+/// StoredUserList#load skips entries whose user identity cannot be decoded.
+fn read_map<T: for<'de> Deserialize<'de>>(
+    root: &Path,
+    name: &str,
+    key: impl Fn(&T) -> Option<String>,
+) -> Result<HashMap<String, T>> {
+    let mut map = HashMap::new();
+    for entry in read(root, name)? {
+        if let Some(key) = key(&entry) {
+            map.insert(key, entry);
+        }
+    }
+    Ok(map)
+}
+fn canonical_uuid(value: &str) -> Option<String> {
+    ferraloom_game::commands::arguments::selectors::parse_uuid(value).map(|id| id.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_user_lists_replace_duplicate_identities_and_skip_invalid_users() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(
+            root.path().join("ops.json"),
+            r#"[
+            {"uuid":"00000000-0000-0000-0000-000000000001","name":"Old","level":2},
+            {"uuid":"invalid","name":"Invalid","level":4},
+            {"uuid":"00000000-0000-0000-0000-000000000001","name":"New","level":3}
+        ]"#,
+        )
+        .unwrap();
+        let lists = AccessLists::load(root.path()).unwrap();
+        assert_eq!(lists.ops.len(), 1);
+        let op = lists.ops.values().next().unwrap();
+        assert_eq!((&*op.name, op.level), ("New", 3));
+    }
 }

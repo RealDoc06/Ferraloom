@@ -157,7 +157,7 @@ fn projectile_dispense(source: DispenseSource, level: &mut Level) -> Result<Item
         .block_entity::<BaseContainerBlockEntity>(source.entity)?
         .items[source.slot]
         .clone();
-    let item = stack.0.as_ref().expect("selected dispenser item").item;
+    let item = stack.item();
     let config = item
         .dispenser_properties()
         .projectile
@@ -198,11 +198,8 @@ fn projectile_dispense(source: DispenseSource, level: &mut Level) -> Result<Item
     Ok(remaining)
 }
 fn method(level: &Level, stack: &ItemStack) -> Result<Option<DispenseHook>, LevelError> {
-    let item = stack.0.as_ref().expect("selected item").item;
-    let resources = level.container_resources()?;
-    if !resources
-        .facts
-        .item_enabled(stack)
+    let item = stack.item();
+    if !crate::loot::LootFacts::item_enabled(level, stack)
         .map_err(|_| LevelError::Inventory("dispenser enabled item features"))?
     {
         return Ok(Some(default_dispense));
@@ -221,10 +218,7 @@ fn method(level: &Level, stack: &ItemStack) -> Result<Option<DispenseHook>, Leve
     if component(stack, ComponentTypeId::EQUIPPABLE).is_some() {
         return Err(LevelError::Inventory("EquipmentDispenseItemBehavior"));
     }
-    let tags = resources
-        .facts
-        .item_tags()
-        .map_err(|_| LevelError::Inventory("dispenser live item tags"))?;
+    let tags = level.item_tags()?;
     if tags.contains_key(ItemTags::SULFUR_CUBE_SWALLOWABLE, item) {
         return Err(LevelError::Inventory("SulfurCubeBlockDispenseItemBehavior"));
     }

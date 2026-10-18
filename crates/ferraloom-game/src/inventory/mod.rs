@@ -29,6 +29,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    MissingMenu(MenuRef),
     InvalidSlot(i32),
     ContainerTooSmall { actual: usize, expected: usize },
     Unsupported(&'static str),
@@ -39,6 +40,7 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::MissingMenu(reference) => write!(f, "missing menu receiver {reference:?}"),
             Self::InvalidSlot(slot) => write!(f, "invalid menu slot {slot}"),
             Self::ContainerTooSmall { actual, expected } => {
                 write!(f, "container has {actual} slots, needs {expected}")

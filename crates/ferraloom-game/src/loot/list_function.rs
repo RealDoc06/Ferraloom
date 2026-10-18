@@ -148,7 +148,7 @@ impl ListFunction {
                 for line in lore {
                     lines.push(
                         if let Some(entity) = entity.and_then(|target| c.params.entity(target)) {
-                            c.facts.resolve_component(line, entity)?
+                            c.facts().resolve_component(line, entity)?
                         } else {
                             line.clone()
                         },
@@ -266,7 +266,7 @@ impl ListFunction {
                     let values = edit
                         .values
                         .iter()
-                        .map(|v| v.get(data, c))
+                        .map(|v| v.get(data, c).map(Into::into))
                         .collect::<Result<Vec<_>>>()?;
                     original.floats =
                         edit.operation

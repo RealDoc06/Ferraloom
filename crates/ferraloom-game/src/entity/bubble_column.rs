@@ -1,12 +1,8 @@
 //! Port of Entity's bubble-column hooks. Block contact queries live in block/.
-use super::{Entity, EntityData, EntityRef, effects::EntityEffect};
+use super::{Entity, EntityData, EntityRef};
 use crate::level::{Level, LevelError};
-use ferraloom_protocol::{
-    codec::VarInt,
-    entity_data::Particle,
-    play::{ParticleRandomization, clientbound::LevelParticles},
-};
-use ferraloom_util::{BlockPos, random::RandomSource};
+use ferraloom_protocol::entity_data::Particle;
+use ferraloom_util::{BlockPos, Vec3, random::RandomSource};
 
 /// Port of Entity#handleOnAboveBubbleColumn. Above-column movement does not
 /// reset fall distance, and particles are emitted even without local authority.
@@ -26,8 +22,8 @@ pub fn on_above_bubble_column<E: Entity + ?Sized>(
         };
     }
     for _ in 0..2 {
-        send_particles(level, pos, Particle::Splash, 0.0, 1.0);
-        send_particles(level, pos, Particle::Bubble, 0.01, 0.2);
+        send_particles(level, pos, Particle::Splash, 0.0, 1.0)?;
+        send_particles(level, pos, Particle::Bubble, 0.01, 0.2)?;
     }
     Ok(())
 }
@@ -52,26 +48,24 @@ pub fn on_inside_bubble_column<E: Entity + ?Sized>(
     Ok(())
 }
 
-fn send_particles(level: &mut Level, pos: BlockPos, particle: Particle, y_dist: f32, speed: f32) {
+fn send_particles(
+    level: &mut Level,
+    pos: BlockPos,
+    particle: Particle,
+    y_dist: f64,
+    speed: f64,
+) -> Result<(), LevelError> {
     let x = f64::from(pos.x) + level.random().next_double();
     let y = f64::from(pos.y.wrapping_add(1));
     let z = f64::from(pos.z) + level.random().next_double();
-    level.emit_entity_effect(EntityEffect::Particles(Box::new(LevelParticles {
+    level.send_particles(
         particle,
-        override_limiter: false,
-        always_show: false,
-        x,
-        y,
-        z,
-        x_dist: 0.0,
-        y_dist,
-        z_dist: 0.0,
-        x_max_speed: speed,
-        y_max_speed: speed,
-        z_max_speed: speed,
-        count: VarInt(1),
-        randomization_type: ParticleRandomization::Default,
-    })));
+        Vec3::new(x, y, z),
+        1,
+        Vec3::new(0.0, y_dist, 0.0),
+        speed,
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -97,7 +91,10 @@ mod tests {
             .filter(|row| row.starts_with("bubble\t"))
         {
             let fields: Vec<_> = row.split('\t').collect();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             let id = level.next_entity_ref();
             let network = level.next_entity_id();
             let state = if fields[1] != "tnt" {
@@ -155,7 +152,10 @@ mod tests {
     #[test]
     fn above_column_particles_consume_level_random_in_native_packet_order() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let entity = level.next_entity_ref();
         let tnt = PrimedTnt::new(level.next_entity_id(), 123);
         level
@@ -169,11 +169,16 @@ mod tests {
             .unwrap()
             .on_above_bubble_column(entity, false, pos, &mut level)
             .unwrap();
-        let effects = level.take_entity_effects();
+        let effects = level.take_effects();
         assert_eq!(effects.len(), 4);
         for (index, effect) in effects.iter().enumerate() {
-            let EntityEffect::Particles(packet) = effect else {
-                panic!("expected particle output")
+            let crate::level::effects::LevelEffect::PlayerPacket { packet, .. } = effect else {
+                panic!("expected particle output");
+            };
+            let ferraloom_protocol::play::clientbound::Packet::LevelParticles(packet) =
+                packet.as_ref()
+            else {
+                panic!("expected particle packet");
             };
             let (particle, spread, speed) = if index % 2 == 0 {
                 (Particle::Splash, 0.0, 1.0)

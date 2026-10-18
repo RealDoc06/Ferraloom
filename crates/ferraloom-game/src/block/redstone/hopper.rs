@@ -257,11 +257,7 @@ fn can_take(
     let (handle, local) = source.slot(slot, level)?;
     let state = level.block_entity_state(handle)?;
     if matches!(state, BlockEntityState::Furnace(_)) && face == Direction::Down && local == 1 {
-        let resources = level.container_resources()?;
-        let tags = resources
-            .facts
-            .item_tags()
-            .map_err(|_| LevelError::Inventory("hopper live item tags"))?;
+        let tags = level.item_tags()?;
         return Ok(access::can_take_item_through_face(
             state, local, item, face, tags,
         ));

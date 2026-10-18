@@ -127,6 +127,12 @@ pub enum RootFormat {
     Network,
 }
 
+#[derive(Clone, Copy)]
+enum FloatOutput {
+    Canonical,
+    Raw,
+}
+
 /// Port of `NbtIo`. File writes use vanilla's oversized-string fallback; network writes are strict.
 pub struct NbtIo;
 impl NbtIo {
@@ -150,18 +156,34 @@ impl NbtIo {
         tag: &Tag,
     ) -> Result<()> {
         match compression {
-            Compression::None => {
-                write_root(writer, root, tag, matches!(root, RootFormat::Named(_)))
-            }
+            Compression::None => write_root(
+                writer,
+                root,
+                tag,
+                matches!(root, RootFormat::Named(_)),
+                FloatOutput::Canonical,
+            ),
             Compression::Gzip => {
                 let mut w = GzEncoder::new(writer, flate2::Compression::default());
-                write_root(&mut w, root, tag, matches!(root, RootFormat::Named(_)))?;
+                write_root(
+                    &mut w,
+                    root,
+                    tag,
+                    matches!(root, RootFormat::Named(_)),
+                    FloatOutput::Canonical,
+                )?;
                 w.finish()?;
                 Ok(())
             }
             Compression::Zlib => {
                 let mut w = ZlibEncoder::new(writer, flate2::Compression::default());
-                write_root(&mut w, root, tag, matches!(root, RootFormat::Named(_)))?;
+                write_root(
+                    &mut w,
+                    root,
+                    tag,
+                    matches!(root, RootFormat::Named(_)),
+                    FloatOutput::Canonical,
+                )?;
                 w.finish()?;
                 Ok(())
             }
@@ -197,13 +219,29 @@ impl NbtIo {
     pub fn write_any_tag(writer: impl Write, tag: &Tag) -> Result<()> {
         Self::write(writer, Compression::None, &RootFormat::Network, tag)
     }
+    /// Port of FriendlyByteBuf#writeNbt through ByteBufOutputStream, preserving raw NaN bits.
+    pub fn write_network(writer: impl Write, tag: &Tag) -> Result<()> {
+        write_root(writer, &RootFormat::Network, tag, false, FloatOutput::Raw)
+    }
     /// Port of NbtIo#writeUnnamedTag, with strict DataOutput.writeUTF failure behavior.
     pub fn write_unnamed_tag(writer: impl Write, tag: &Tag) -> Result<()> {
-        write_root(writer, &RootFormat::Named(NbtString::default()), tag, false)
+        write_root(
+            writer,
+            &RootFormat::Named(NbtString::default()),
+            tag,
+            false,
+            FloatOutput::Canonical,
+        )
     }
     /// Port of NbtIo#writeUnnamedTagWithFallback, used by file writes.
     pub fn write_unnamed_tag_with_fallback(writer: impl Write, tag: &Tag) -> Result<()> {
-        write_root(writer, &RootFormat::Named(NbtString::default()), tag, true)
+        write_root(
+            writer,
+            &RootFormat::Named(NbtString::default()),
+            tag,
+            true,
+            FloatOutput::Canonical,
+        )
     }
     pub fn read_utf(reader: &mut impl Read) -> Result<NbtString> {
         read_utf(reader)
@@ -230,7 +268,13 @@ fn read_root(mut r: impl Read, named: bool, a: &mut NbtAccounter) -> Result<(Nbt
     };
     Ok((name, tag))
 }
-fn write_root(mut w: impl Write, root: &RootFormat, tag: &Tag, fallback: bool) -> Result<()> {
+fn write_root(
+    mut w: impl Write,
+    root: &RootFormat,
+    tag: &Tag,
+    fallback: bool,
+    floats: FloatOutput,
+) -> Result<()> {
     w.write_all(&[tag.id()])?;
     if tag.id() == 0 {
         return Ok(());
@@ -238,7 +282,7 @@ fn write_root(mut w: impl Write, root: &RootFormat, tag: &Tag, fallback: bool) -
     if let RootFormat::Named(name) = root {
         write_utf(&mut w, name, fallback)?;
     }
-    write_payload(&mut w, tag, fallback)
+    write_payload(&mut w, tag, fallback, floats)
 }
 fn read_num<const N: usize>(r: &mut impl Read) -> Result<[u8; N]> {
     let mut bytes = [0; N];
@@ -461,23 +505,27 @@ fn write_len(w: &mut impl Write, len: usize) -> Result<()> {
     w.write_all(&len.to_be_bytes())?;
     Ok(())
 }
-fn write_payload(w: &mut impl Write, tag: &Tag, fallback: bool) -> Result<()> {
+fn write_payload(w: &mut impl Write, tag: &Tag, fallback: bool, floats: FloatOutput) -> Result<()> {
     match tag {
         Tag::End => {}
         Tag::Byte(n) => w.write_all(&n.to_be_bytes())?,
         Tag::Short(n) => w.write_all(&n.to_be_bytes())?,
         Tag::Int(n) => w.write_all(&n.to_be_bytes())?,
         Tag::Long(n) => w.write_all(&n.to_be_bytes())?,
-        Tag::Float(n) => w.write_all(&if n.is_nan() {
-            f32::NAN.to_be_bytes()
-        } else {
-            n.to_be_bytes()
-        })?,
-        Tag::Double(n) => w.write_all(&if n.is_nan() {
-            f64::NAN.to_be_bytes()
-        } else {
-            n.to_be_bytes()
-        })?,
+        Tag::Float(n) => {
+            w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
+                f32::NAN.to_be_bytes()
+            } else {
+                n.to_be_bytes()
+            })?
+        }
+        Tag::Double(n) => {
+            w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
+                f64::NAN.to_be_bytes()
+            } else {
+                n.to_be_bytes()
+            })?
+        }
         Tag::String(s) => write_utf(w, s, fallback)?,
         Tag::ByteArray(v) => {
             write_len(w, v.len())?;
@@ -503,7 +551,7 @@ fn write_payload(w: &mut impl Write, tag: &Tag, fallback: bool) -> Result<()> {
                 w.write_all(&[value.id()])?;
                 if value.id() != 0 {
                     write_utf(w, key, fallback)?;
-                    write_payload(w, value, fallback)?;
+                    write_payload(w, value, fallback, floats)?;
                 }
             }
             w.write_all(&[0])?;
@@ -525,10 +573,10 @@ fn write_payload(w: &mut impl Write, tag: &Tag, fallback: bool) -> Result<()> {
                     && !matches!(value,Tag::Compound(c) if !(c.len()==1&&c.contains_key("")));
                 if wrap {
                     w.write_all(&[value.id(), 0, 0])?;
-                    write_payload(w, value, fallback)?;
+                    write_payload(w, value, fallback, floats)?;
                     w.write_all(&[0])?;
                 } else {
-                    write_payload(w, value, fallback)?;
+                    write_payload(w, value, fallback, floats)?;
                 }
             }
         }

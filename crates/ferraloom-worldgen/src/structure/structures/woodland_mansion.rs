@@ -4,7 +4,7 @@ mod placement;
 use super::igloo::{read_rotation, rotation_name};
 use crate::{
     Error,
-    feature::FeatureContext,
+    structure::StructurePlacementContext,
     structure::{
         BoundingBox,
         nbt::string,
@@ -89,7 +89,7 @@ impl WoodlandMansionPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,
@@ -177,7 +177,7 @@ fn settings(rotation: Rotation, mirror: Mirror) -> StructurePlaceSettings {
 /// Port of WoodlandMansionStructure#afterPlace. The footprint uses the raw piece
 /// bounds; support columns include liquids and stop strictly above the build floor.
 pub fn after_place(
-    context: &mut FeatureContext<'_, '_>,
+    context: &mut StructurePlacementContext<'_, '_>,
     pieces: &[crate::structure::start::StructurePiece],
     bounds: BoundingBox,
 ) -> Result<(), Error> {
@@ -352,7 +352,7 @@ mod foundation_tests {
             );
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             after_place(
-                &mut FeatureContext {
+                &mut StructurePlacementContext {
                     region: &mut region,
                     random: &mut random,
                     origin: [0; 3],

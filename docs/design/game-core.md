@@ -265,6 +265,18 @@ own handles/rebindable wrappers, not copies or raw references. Validate current
 state/type and removal on every tick. This preserves `LevelChunk` replacement
 and `Level#tickBlockEntities` pending-list semantics without borrow aliasing.
 
+### Block entity identity
+
+`BlockEntityRef { pos, generation }` carries a per-creation identity, following the
+same principle as `EntityRef`. `level.block_entity_at(pos)` returns the current
+ref. Tickers and callbacks keep the ref they were given. When a block entity is
+removed or replaced, its state is detached from the chunk: it is no longer
+ticked, saved or synced. It stays reachable through refs that are still held,
+until the phase or callback stack holding them unwinds. A running callback that
+writes through its old ref changes the detached state, exactly like Java's
+retained receiver object, and never the replacement. Ticker wrappers re-bind by
+generation.
+
 ### Worldgen shares block behavior
 
 Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
@@ -287,6 +299,14 @@ keeps one implementation of each behavior in `ferraloom-game`:
   pending.
 - Pure state transforms (rotate, mirror) are generated data tables in
   `ferraloom-data`, extracted from vanilla's own methods.
+
+Live configured features use `LiveWorldGenLevel` implemented by the concrete
+`Level` at the cold feature boundary. `Level` construction requires an immutable
+`Arc<LevelContext>` containing the actual WorldOptions seed, generator sea level,
+generator and configured-feature registry. Tests supply explicit fixture context;
+production has no missing-context state or default services. A canonical
+`FeatureRandomSelector` resolves short borrows of `Level#random` between world
+callbacks, so placement never takes, replaces or copies that stream.
 
 ## Global state, commands and messages
 

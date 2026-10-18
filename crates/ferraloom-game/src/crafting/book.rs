@@ -1,6 +1,7 @@
 use super::{Error, RecipeHolder, RecipeManager, RecipeSynchronization, Result};
 use ferraloom_data::datapack::Identifier;
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+use ferraloom_protocol::component::Persistent;
 use ferraloom_protocol::play::{
     RecipeBookEntry, RecipeBookSettings, RecipeBookType, RecipeBookTypeSettings, RecipeDisplayId,
     clientbound::{RecipeBookAdd, RecipeBookRemove, RecipeBookSettingsPacket},
@@ -192,16 +193,12 @@ impl ServerRecipeBook {
         let mut settings = self.settings.clone();
         for (index, (open, filter)) in SETTING_KEYS.into_iter().enumerate() {
             let boolean = |key| -> Result<bool> {
-                Ok(match value.get(key) {
-                    None => false,
-                    Some(Tag::Byte(value)) => *value != 0,
-                    Some(Tag::Short(value)) => *value as i8 != 0,
-                    Some(Tag::Int(value)) => *value as i8 != 0,
-                    Some(Tag::Long(value)) => *value as i8 != 0,
-                    Some(Tag::Float(value)) => *value as i32 as i8 != 0,
-                    Some(Tag::Double(value)) => *value as i32 as i8 != 0,
-                    _ => return Err(Error::Invalid("recipe book setting must be numeric".into())),
-                })
+                value
+                    .get(key)
+                    .map(bool::from_nbt)
+                    .transpose()
+                    .map(|value| value.unwrap_or(false))
+                    .map_err(Into::into)
             };
             settings.0[index] = RecipeBookTypeSettings {
                 open: boolean(open)?,
@@ -210,10 +207,16 @@ impl ServerRecipeBook {
         }
         let mut lists = [Vec::new(), Vec::new()];
         for (index, field) in ["recipes", "toBeDisplayed"].into_iter().enumerate() {
-            let Some(Tag::List(recipes)) = value.get(field) else {
-                return Err(Error::Invalid(format!("missing recipeBook list {field}")));
-            };
-            for recipe in recipes.iter() {
+            let recipes = value
+                .get(field)
+                .ok_or_else(|| Error::Invalid(format!("missing recipeBook list {field}")))?;
+            let len = recipes
+                .collection_len()
+                .ok_or_else(|| Error::Invalid(format!("recipeBook {field} must be a list")))?;
+            for index_in_list in 0..len {
+                let recipe = recipes
+                    .collection_get(index_in_list)
+                    .expect("collection element");
                 let Tag::String(id) = recipe else {
                     return Err(Error::Invalid("recipe book id must be a string".into()));
                 };
