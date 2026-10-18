@@ -195,7 +195,7 @@ async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
         .saved_world()?
         .entities("minecraft:overworld", ChunkPos::new(0, 0))?
     {
-        for entity in entities.entities {
+        for entity in entities.entities.into_iter().flatten() {
             if entity
                 .get_string("id")
                 .is_some_and(|id| id.to_string() == "minecraft:item")
@@ -336,7 +336,7 @@ async fn edit_sign(session: &mut Session) -> Result<ObservationLog> {
         text.messages
             .iter()
             .map(|line| line.to_json())
-            .collect::<Result<Vec<_>>>()?,
+            .collect::<std::result::Result<Vec<_>, _>>()?,
     )?;
     Ok(log)
 }
@@ -373,7 +373,7 @@ async fn structure_loot_chest(session: &mut Session) -> Result<ObservationLog> {
         slots
             .iter()
             .map(Persistent::to_json)
-            .collect::<Result<Vec<_>>>()?,
+            .collect::<std::result::Result<Vec<_>, _>>()?,
     )?;
     bot.send(sb::Packet::ContainerClose(sb::ContainerClose {
         container_id: VarInt(menu),
