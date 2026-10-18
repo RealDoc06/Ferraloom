@@ -275,6 +275,11 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        game_rules.update_level_rules(level.level.rules_mut());
+        world.install_live_environment(
+            &mut level.level,
+            command_runtime::environment_clock_snapshot(&clocks),
+        )?;
         level
             .distance_manager
             .set_view_distance(properties.int("view-distance"));
@@ -282,7 +287,6 @@ impl MinecraftServer {
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
         );
-        game_rules.update_level_rules(level.level.rules_mut());
         let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {
@@ -675,10 +679,23 @@ impl MinecraftServer {
                 }
             }
             self.level.level.set_handling_tick(true);
+            self.level
+                .level
+                .refresh_environment_attributes(command_runtime::environment_clock_snapshot(
+                    &self.clocks,
+                ))
+                .map_err(game_error)?;
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.tick_world_border();
                 self.level.level.advance_weather_cycle(true);
                 self.apply_level_effects()?;
+            }
+            // Native sky brightness updates even on frozen ticks, after weather.
+            self.level
+                .level
+                .update_sky_brightness()
+                .map_err(game_error)?;
+            if self.tick_rate_manager.runs_normally() {
                 self.level.game_time = self.level.game_time.wrapping_add(1);
                 self.level.level.set_game_time(self.level.game_time);
                 if !self.level.level.rules().debug {
