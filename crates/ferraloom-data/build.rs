@@ -579,15 +579,15 @@ fn tag_keys(root: &Path, registries: &Value) {
         let registry_path = registry.strip_prefix("minecraft:").unwrap();
         let entry = if registries.get(registry).is_some() {
             let entry = format!("crate::registries::{}::Id", ident(registry));
-            writeln!(out, "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
-            writeln!(out, "impl StaticTagEntry for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
+            writeln!(out, "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
+            writeln!(out, "impl StaticTagElement for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
             entry
         } else {
             let entry = format!("{}Entry", class.trim_end_matches("Tags"));
             writeln!(out, "/// Runtime id in the loaded {registry} registry.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] pub struct {entry}(pub u32);").unwrap();
             writeln!(
                 out,
-                "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
+                "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
             )
             .unwrap();
             entry
