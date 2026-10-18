@@ -223,8 +223,8 @@ impl ServerStatsCounter {
     /// Port of ServerStatsCounter#sendStats. REQUEST_STATS sends only dirty
     /// entries and consumes that set; it does not implicitly mark all stats dirty.
     pub fn send_stats(&mut self) -> AwardStats {
-        let mut copied =
-            JavaHashSet::with_capacity(((self.dirty.len() as f32 / 0.75) as usize + 1).max(16));
+        // JDK 25 HashSet(Collection) uses HashMap.newHashMap(max(size, 12)).
+        let mut copied = JavaHashSet::with_capacity((self.dirty.len().max(12) * 4).div_ceil(3));
         for stat in self.dirty.iter() {
             copied.insert(*stat);
         }

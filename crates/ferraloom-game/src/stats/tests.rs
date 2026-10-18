@@ -81,3 +81,17 @@ fn vanilla_counter_arithmetic_same_value_writes_and_requests() {
         Err(LootError::Unsupported(_))
     ));
 }
+
+#[test]
+fn vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries() {
+    for row in oracle()["bulk"].as_array().unwrap() {
+        let mut counter = ServerStatsCounter::default();
+        for entry in row["entries"].as_array().unwrap() {
+            let key = StatType::Custom
+                .decode_stat(&Identifier::parse(entry["name"].as_str().unwrap()).unwrap())
+                .unwrap();
+            counter.set_value(key, entry["count"].as_i64().unwrap() as i32);
+        }
+        assert_eq!(wire(counter.send_stats()), row["packet"].as_str().unwrap());
+    }
+}
