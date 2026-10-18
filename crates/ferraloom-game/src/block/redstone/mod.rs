@@ -5,6 +5,7 @@ use ferraloom_data::{Block, BlockClass};
 
 pub mod comparator;
 pub mod diode;
+pub mod hopper;
 pub mod lamp;
 pub mod moving_piston;
 pub mod observer;
@@ -135,6 +136,18 @@ pub(crate) fn ported_behavior(
             ) =>
         {
             Some(&sources::SOURCES)
+        }
+        BlockClass::HopperBlock
+            if matches!(
+                method,
+                M::OnPlace
+                    | M::NeighborChanged
+                    | M::AnalogOutputSignal
+                    | M::AffectNeighborsAfterRemoval
+                    | M::EntityInside
+            ) =>
+        {
+            Some(&hopper::HOPPER)
         }
         BlockClass::ComparatorBlock
             if matches!(

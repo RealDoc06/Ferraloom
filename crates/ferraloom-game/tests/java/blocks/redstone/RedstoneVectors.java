@@ -157,10 +157,38 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("placement:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(block)+":"+direction.get3DDataValue()+":"+face.get3DDataValue()+":"+layout+"\t"+(state==null?-1:Block.getId(state)));
         }
     }
+    static void hoppers(RegistryAccess r) throws Exception {
+        var cooldown=net.minecraft.world.level.block.entity.HopperBlockEntity.class.getDeclaredField("cooldownTime");cooldown.setAccessible(true);
+        for(boolean reverse:new boolean[]{false,true})for(boolean locked:new boolean[]{false,true})for(int amount:new int[]{8,64}) {
+            var level=new RedstoneVectors(r);var hoppers=new ArrayList<net.minecraft.world.level.block.entity.HopperBlockEntity>();
+            for(int y=0;y<3;y++) {
+                var pos=ORIGIN.below(y);var state=Blocks.HOPPER.defaultBlockState();level.raw(pos,state);
+                var hopper=new net.minecraft.world.level.block.entity.HopperBlockEntity(pos,state);level.getChunkAt(pos).setBlockEntity(hopper);hoppers.add(hopper);
+            }
+            var bottom=ORIGIN.below(3);var barrelState=Blocks.BARREL.defaultBlockState();level.raw(bottom,barrelState);
+            var barrel=new net.minecraft.world.level.block.entity.BarrelBlockEntity(bottom,barrelState);level.getChunkAt(bottom).setBlockEntity(barrel);
+            hoppers.get(0).setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,amount));
+            var steps=new ArrayList<String>();
+            for(int tick=1;tick<=20;tick++) {
+                level.time=tick;
+                if(locked && (tick==4 || tick==11))level.setBlock(ORIGIN.below().east(),(tick==4?Blocks.REDSTONE_BLOCK:Blocks.AIR).defaultBlockState(),3);
+                for(int index=0;index<3;index++) {
+                    int i=reverse?2-index:index;var hopper=hoppers.get(i);var pos=ORIGIN.below(i);net.minecraft.world.level.block.entity.HopperBlockEntity.pushItemsTick(level,pos,level.getBlockState(pos),hopper);
+                    var values=new ArrayList<String>();
+                    for(int j=0;j<3;j++){var h=hoppers.get(j);var items=new ArrayList<String>();for(int slot=0;slot<5;slot++)items.add(""+h.getItem(slot).getCount());values.add(String.join(",",items)+"/"+cooldown.getInt(h)+"/"+level.getBlockState(ORIGIN.below(j)).getValue(HopperBlock.ENABLED));}
+                    steps.add(String.join(";",values)+";"+barrel.getItem(0).getCount());
+                }
+            }
+            System.out.println("hopper:"+reverse+":"+locked+":"+amount+"\t"+String.join("|",steps));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);}catch(Exception error){throw new RuntimeException(error);}
+        var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
+        var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
+        net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

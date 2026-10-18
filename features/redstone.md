@@ -35,7 +35,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | redstone.rail.detector | Detect minecarts, update powered state and expose comparator output | `DetectorRailBlock#checkPressed; DetectorRailBlock#getAnalogOutputSignal` | | - | todo |
 | redstone.rail.switch | Choose rail connections and junction branch from neighbor layout and signal | `RailState#place` | | - | todo |
 | redstone.rail.activator | Activate riding and explosive minecart behavior on powered activator rails | `AbstractMinecart; MinecartTNT` | | - | todo |
-| redstone.hopper.cooldown | Apply transfer cooldown, powered disable state and push/pull slot order | `HopperBlockEntity#pushItemsTick; HopperBlockEntity#tryMoveItems` | | - | todo |
+| redstone.hopper.cooldown | Apply transfer cooldown, powered disable state and push/pull slot order | `HopperBlockEntity#pushItemsTick; HopperBlockEntity#tryMoveItems` | `ferraloom-game: block::redstone::tests::hopper_chains_cooldowns_locks_and_each_transfer_match_vanilla` | pass | partial |
 | redstone.dispenser.quasi-connectivity | Trigger dispenser or dropper from direct or above-position power and schedule its action | `DispenserBlock#neighborChanged` | | - | todo |
 | redstone.dispenser.behaviors | Dispatch item-specific dispense behavior and fallback ejection | `DispenseItemBehavior#bootStrap; DefaultDispenseItemBehavior` | | - | todo |
 | redstone.crafter.trigger | Schedule crafting from rising power, honor disabled slots and distribute inserted items | `CrafterBlock; CrafterBlockEntity` | | - | todo |
@@ -49,3 +49,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | redstone.copper-bulb.latch | Toggle light on rising power, preserve latched light on falling power and read live analog output | `CopperBulbBlock#checkAndFlip; CopperBulbBlock#getAnalogOutputSignal` | | - | partial |
 | redstone.switches.entity-detection | Use native button arrows, pressure-plate sensitivity, weighted counts and release ticks | `ButtonBlock#checkPressed; BasePressurePlateBlock#checkPressed; WeightedPressurePlateBlock#getSignalStrength` | | - | partial |
 | redstone.placement.context | Resolve wire, diode, observer, mounted switches, piston, dispenser, hopper, door hinge, trapdoor waterlogging and gate placement from canonical context | `getStateForPlacement` on redstone block family | `ferraloom-game: block::redstone::tests::redstone_placements_match_real_vanilla_contexts` | pass | partial |
+| redstone.hopper.items | Pull item entities through native intake bounds and full-block occlusion, retaining partial pickup behavior | `HopperBlockEntity#suckInItems; HopperBlockEntity#entityInside; HopperBlockEntity#addItem` | | - | partial |

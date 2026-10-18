@@ -137,10 +137,8 @@ impl BlockEntity for HopperEntityBehavior {
     fn has_server_ticker(&self) -> bool {
         true
     }
-    fn tick(&self, _entity: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            ferraloom_data::Block::HOPPER,
-        ))
+    fn tick(&self, entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        super::hopper::push_items_tick(level, entity)
     }
     fn pre_remove_side_effects(
         &self,

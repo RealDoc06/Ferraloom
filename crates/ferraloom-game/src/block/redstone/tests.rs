@@ -531,3 +531,102 @@ fn redstone_placements_match_real_vanilla_contexts() {
         );
     }
 }
+
+#[test]
+fn hopper_chains_cooldowns_locks_and_each_transfer_match_vanilla() {
+    use crate::{
+        block::{
+            containers::storage::BaseContainerBlockEntity,
+            entity::{self, BlockEntityState},
+        },
+        inventory::Container,
+    };
+    use ferraloom_data::{Item, properties as p};
+    use ferraloom_protocol::component::ItemStack;
+    for (name, expected) in cases("hopper:") {
+        let mut args = name.split(':').skip(1);
+        let reverse = args.next().unwrap().parse::<bool>().unwrap();
+        let locked = args.next().unwrap().parse::<bool>().unwrap();
+        let amount = args.next().unwrap().parse::<i32>().unwrap();
+        let mut level = level();
+        let mut handles = Vec::new();
+        for y in 0..3 {
+            let pos = ORIGIN.below(y);
+            let state = Block::HOPPER.default_state();
+            level.set_block_state(pos, state).unwrap();
+            level
+                .set_block_entity(entity::create(pos, state).unwrap())
+                .unwrap();
+            handles.push(level.block_entity_ref(pos).unwrap().unwrap());
+        }
+        let bottom = ORIGIN.below(3);
+        let barrel = Block::BARREL.default_state();
+        level.set_block_state(bottom, barrel).unwrap();
+        level
+            .set_block_entity(entity::create(bottom, barrel).unwrap())
+            .unwrap();
+        let sink = level.block_entity_ref(bottom).unwrap().unwrap();
+        level
+            .block_entity_mut::<BaseContainerBlockEntity>(handles[0])
+            .unwrap()
+            .set_item(0, ItemStack::new(Item::STONE, amount, Default::default()));
+        let mut steps = Vec::new();
+        for tick in 1..=20 {
+            level.set_game_time(tick);
+            if locked && matches!(tick, 4 | 11) {
+                level
+                    .set_block(
+                        ORIGIN.below(1).relative(Direction::East, 1),
+                        if tick == 4 {
+                            Block::REDSTONE_BLOCK
+                        } else {
+                            Block::AIR
+                        }
+                        .default_state(),
+                        UpdateFlags::ALL,
+                        UPDATE_LIMIT,
+                    )
+                    .unwrap();
+            }
+            for index in 0..3 {
+                let i = if reverse { 2 - index } else { index };
+                hopper::push_items_tick(&mut level, handles[i]).unwrap();
+                let mut values = Vec::new();
+                for &handle in &handles {
+                    let BlockEntityState::Hopper(h) = level.block_entity_state(handle).unwrap()
+                    else {
+                        unreachable!()
+                    };
+                    let items = h
+                        .parent
+                        .parent
+                        .items
+                        .iter()
+                        .map(|item| crate::entity::player::inventory::count(item).to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    values.push(format!(
+                        "{items}/{}/{}",
+                        h.cooldown_time,
+                        level
+                            .get_block_state(handle.pos)
+                            .unwrap()
+                            .get(p::ENABLED)
+                            .unwrap()
+                    ));
+                }
+                values.push(
+                    crate::entity::player::inventory::count(
+                        &level
+                            .block_entity::<BaseContainerBlockEntity>(sink)
+                            .unwrap()
+                            .get_item(0),
+                    )
+                    .to_string(),
+                );
+                steps.push(values.join(";"));
+            }
+        }
+        assert_eq!(steps.join("|"), expected, "{name}");
+    }
+}
