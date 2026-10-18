@@ -479,7 +479,7 @@ impl EntityQuery for MinecraftServer {
             .player(entity)
             .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
         Ok(match predicate {
-            SelectorPredicate::Alive => player.parent.health > 0.,
+            SelectorPredicate::Alive => player.parent.health() > 0.,
             SelectorPredicate::Name { value, inverted } => (player.name == *value) != *inverted,
             SelectorPredicate::GameMode { value, inverted } => {
                 (player.game_mode == *value) != *inverted
