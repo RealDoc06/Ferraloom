@@ -30,7 +30,11 @@ pub(super) fn remove(stack: &mut ItemStack, id: ComponentTypeId) {
     }
 }
 pub(super) fn item(stack: &ItemStack) -> Item {
-    stack.0.as_ref().map_or(Item::AIR, |stack| stack.item)
+    if stack.is_empty() {
+        Item::AIR
+    } else {
+        stack.0.as_ref().expect("nonempty").item
+    }
 }
 /// Port of ItemStackTemplate#apply: the template patch overrides the source patch.
 pub(super) fn transmute(template: &ItemStackTemplate, source: &ItemStack, extra: i32) -> ItemStack {

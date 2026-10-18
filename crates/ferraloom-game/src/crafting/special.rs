@@ -360,7 +360,7 @@ impl Recipe {
             }
             DecoratedPot { result, .. } => {
                 let mut result = stack::create(result);
-                let template = |index| {
+                let template = |index: usize| {
                     let stack = &input.items()[index];
                     stack
                         .0

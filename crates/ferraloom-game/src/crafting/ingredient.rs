@@ -63,11 +63,9 @@ impl Ingredient {
         self.items.contains(&item)
     }
     pub fn test(&self, stack: &ItemStack) -> bool {
-        stack
-            .0
-            .as_ref()
-            .is_some_and(|stack| self.accepts_item(stack.item))
+        self.accepts_item(super::stack::item(stack))
     }
+
     pub fn item_set(&self) -> ItemSet {
         ItemSet(match &self.tag {
             Some(tag) => HolderSet::Named(

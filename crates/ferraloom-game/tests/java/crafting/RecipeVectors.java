@@ -110,6 +110,44 @@ public final class RecipeVectors {
         }
         return tests;
     }
+    static void specialEdges() throws Exception {
+        for(var holder:manager.getRecipes()) {
+            var recipe=holder.value();String id=holder.id().identifier().toString();
+            if(recipe instanceof CraftingRecipe && (recipe.isSpecial() || recipe instanceof DyeRecipe || recipe instanceof ImbueRecipe)) {
+                var seed=seed(recipe,0);if(seed.isEmpty())continue;var grid=new ArrayList<ItemStack>();for(var stack:seed)grid.add(stack.copy());while(grid.size()<9)grid.add(ItemStack.EMPTY);
+                for(int variant=0;variant<4;variant++) {
+                    var changed=new ArrayList<ItemStack>();for(var stack:grid)changed.add(stack.copy());
+                    if(recipe instanceof RepairItemRecipe) {
+                        var first=changed.get(0);var second=changed.get(1);first.setDamageValue(1000);second.setDamageValue(1000);second.set(DataComponents.MAX_DAMAGE,2000);
+                        if(variant==1)first.setCount(2);
+                        if(variant==2)first.remove(DataComponents.DAMAGE);
+                        if(variant==3){var enchant=registries.lookupOrThrow(Registries.ENCHANTMENT).listElements().filter(h->h.is(net.minecraft.tags.EnchantmentTags.CURSE)).findFirst().orElseThrow();first.enchant(enchant,1);}
+                    } else if(recipe instanceof BannerDuplicateRecipe) {
+                        var source=changed.get(0);var layer=source.get(DataComponents.BANNER_PATTERNS).layers().getFirst();source.set(DataComponents.BANNER_PATTERNS,new net.minecraft.world.level.block.entity.BannerPatternLayers(Collections.nCopies(variant==0?6:variant==1?7:0,layer)));
+                        if(variant==3){changed.set(1,new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("white_banner"))));}
+                    } else if(recipe instanceof ShieldDecorationRecipe && variant>0) {
+                        var pattern=registries.lookupOrThrow(Registries.BANNER_PATTERN).listElements().findFirst().orElseThrow();changed.get(1).set(DataComponents.BANNER_PATTERNS,new net.minecraft.world.level.block.entity.BannerPatternLayers(List.of(new net.minecraft.world.level.block.entity.BannerPatternLayers.Layer(pattern,DyeColor.RED))));
+                    } else if(recipe instanceof DyeRecipe) {
+                        changed.get(0).set(DataComponents.DYED_COLOR,new net.minecraft.world.item.component.DyedItemColor(0x133755));
+                        if(variant==0){changed.set(2,new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("red_dye"))));changed.set(3,new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("blue_dye"))));}
+                        if(variant==1)changed.get(1).remove(DataComponents.DYE);
+                        if(variant==2)changed.set(2,changed.get(0).copy());
+                        if(variant==3)changed.get(0).set(DataComponents.CUSTOM_NAME,Component.literal("retained"));
+                    } else if(recipe instanceof ImbueRecipe){
+                        var potion=registries.lookupOrThrow(Registries.POTION).listElements().filter(h->h.key().identifier().getPath().equals("swiftness")).findFirst().orElseThrow();changed.get(4).set(DataComponents.POTION_CONTENTS,new net.minecraft.world.item.alchemy.PotionContents(potion));if(variant==1)changed.get(4).remove(DataComponents.POTION_CONTENTS);if(variant==2)changed.set(0,ItemStack.EMPTY);
+                    } else if(recipe instanceof FireworkRocketRecipe){
+                        var fuel=choose(ingredient(recipe,"fuel"),0);if(variant>0){changed.set(3,fuel.copy());changed.set(4,fuel.copy());}if(variant==2)changed.set(5,fuel.copy());if(variant==3){changed.get(2).set(DataComponents.FIREWORK_EXPLOSION,new net.minecraft.world.item.component.FireworkExplosion(net.minecraft.world.item.component.FireworkExplosion.Shape.STAR,new it.unimi.dsi.fastutil.ints.IntArrayList(new int[]{1,2}),new it.unimi.dsi.fastutil.ints.IntArrayList(),true,true));}
+                    } else if(recipe instanceof FireworkStarRecipe || recipe instanceof FireworkStarFadeRecipe) {
+                        if(variant==1)changed.get(1).remove(DataComponents.DYE);if(variant==2)changed.set(2,new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("red_dye"))));if(variant==3)changed.set(3,changed.get(0).copy());
+                    } else {continue;}
+                    crafting(id+"/edge"+variant,3,3,changed);
+                }
+            }
+            if(recipe instanceof SmithingTrimRecipe) {
+                var items=seed(recipe,0);var input=new SmithingRecipeInput(items.get(0),items.get(1),items.get(2));var result=((SmithingRecipe)recipe).assemble(input);if(!result.isEmpty())record(id+"/already_trimmed",RecipeType.SMITHING,new SmithingRecipeInput(items.get(0),result,items.get(2)),3,1);
+            }
+        }
+    }
     static void generate() throws Exception {
         var ids=new JsonArray();var displays=new JsonArray();
         for(var holder:manager.getRecipes()) {
@@ -137,6 +175,7 @@ public final class RecipeVectors {
             }
         }
         for(int trial=0;trial<2000;trial++) {int width=1+RNG.nextInt(3),height=1+RNG.nextInt(3);var grid=new ArrayList<ItemStack>();for(int i=0;i<width*height;i++){int id=RNG.nextInt(BuiltInRegistries.ITEM.size());grid.add(RNG.nextInt(3)==0?ItemStack.EMPTY:new ItemStack(BuiltInRegistries.ITEM.byId(id)));}crafting("random/"+trial,width,height,grid);}
+        specialEdges();
         var codecCases=new JsonArray();
         for(String raw:List.of(
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:4294967296}",
@@ -156,7 +195,7 @@ public final class RecipeVectors {
             catch(RuntimeException failure){test.addProperty("accepted",false);}
             codecCases.add(test);
         }
-        var output=new JsonObject();output.add("placement_cases",placementVectors());output.add("codec_cases",codecCases);output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
+        var output=new JsonObject();output.add("placement_cases",placementVectors());var curses=new JsonArray();registries.lookupOrThrow(Registries.ENCHANTMENT).listElements().filter(h->h.is(net.minecraft.tags.EnchantmentTags.CURSE)).forEach(h->curses.add(h.key().identifier().toString()));output.add("curses",curses);output.add("codec_cases",codecCases);output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
         var packet=new ClientboundUpdateRecipesPacket(manager.getSynchronizedItemProperties(),manager.getSynchronizedStonecutterRecipes());
         var buffer=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);ClientboundUpdateRecipesPacket.STREAM_CODEC.encode(buffer,packet);var bytes=new byte[buffer.readableBytes()];buffer.readBytes(bytes);buffer.release();output.addProperty("update_packet",HexFormat.of().formatHex(bytes));
         // Numeric dynamic ids/tag membership are independently supplied for wire decoding.

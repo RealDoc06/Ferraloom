@@ -184,7 +184,17 @@ fn oracle_stack(value: &serde_json::Value) -> ItemStack {
         ItemStack::from_json(value).unwrap()
     }
 }
-fn check_case(manager: &RecipeManager, test: &serde_json::Value) {
+struct GameplayOracle<'a>(&'a serde_json::Value);
+impl CraftingContext for GameplayOracle<'_> {
+    fn is_curse(&self, enchantment: &ferraloom_protocol::Identifier) -> Result<bool> {
+        Ok(self.0["curses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value.as_str() == Some(enchantment.as_str())))
+    }
+}
+fn check_case(manager: &RecipeManager, test: &serde_json::Value, context: &impl CraftingContext) {
     let items: Vec<_> = test["items"]
         .as_array()
         .unwrap()
@@ -240,7 +250,7 @@ fn check_case(manager: &RecipeManager, test: &serde_json::Value) {
         ),
     };
     let recipe = manager
-        .get_recipe_for(kind, input, &(), None)
+        .get_recipe_for(kind, input, context, None)
         .unwrap_or_else(|error| panic!("{}: {error}", test["label"]));
     assert_eq!(
         recipe.map(|recipe| recipe.id.to_string()).as_deref(),
@@ -251,7 +261,7 @@ fn check_case(manager: &RecipeManager, test: &serde_json::Value) {
     if let Some(recipe) = recipe {
         let assembled = recipe
             .value
-            .assemble(input, &())
+            .assemble(input, context)
             .unwrap_or_else(|error| panic!("{}: {error}", test["label"]));
         let expected = oracle_stack(&test["result"]);
         assert!(
@@ -302,8 +312,9 @@ fn vanilla_all_recipes_and_random_grids() {
             .map(|id| id.as_str().unwrap())
             .collect::<Vec<_>>()
     );
+    let context = GameplayOracle(&oracle);
     for test in oracle["cases"].as_array().unwrap() {
-        check_case(&manager, test);
+        check_case(&manager, test, &context);
     }
 }
 fn unhex(text: &str) -> Vec<u8> {
@@ -531,6 +542,10 @@ fn vanilla_recipe_codec_edges() {
                 recipe.experience(),
                 Some(case["experience"].as_f64().unwrap() as f32)
             );
+            let actual = recipe
+                .assemble(RecipeInput::Single(&stack(Item::STONE, 1)), &())
+                .unwrap();
+            assert_eq!(actual, oracle_stack(&case["assembled"]));
         }
     }
 }
