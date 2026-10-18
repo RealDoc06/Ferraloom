@@ -230,6 +230,89 @@ travel-fluid-drag	5	bfb47ae147ae147b	true	false	8000000000000000,bf747ae147ae147
 travel-fluid-drag	6	3fb47ae147ae147b	false	false	8000000000000000,bf947ae147ae147b,3fc0000000000000	8000000000000000,bf9999999999999a,3fc0000000000000
 travel-fluid-drag	7	3fb47ae147ae147b	true	true	8000000000000000,3fe0000000000000,3fc0000000000000	8000000000000000,3fe0000000000000,3fc0000000000000
 travel-fluid-drag	8	3f847ae147ae147b	true	false	8000000000000000,bf6374bc6a7ef9dc,3fc0000000000000	8000000000000000,bf689374bc6a7efb,3fc0000000000000
+mob-effect-instance	0	-7	0	0:0:false:false:false/-	true	false
+mob-effect-update	0	-7	0	100	0	3	true	100:0:true:true:false/-
+mob-effect-instance	0	0	1	0:0:true:false:false/-	true	false
+mob-effect-update	0	0	1	-1	2	4	true	-1:2:false:false:true/-
+mob-effect-instance	0	2	2	0:2:false:true:false/-	true	false
+mob-effect-update	0	2	2	-2	255	5	true	-2:255:true:false:true/0:2:false:true:false/-
+mob-effect-instance	0	300	3	0:255:true:true:false/-	true	false
+mob-effect-update	0	300	3	-2147483648	0	6	true	0:255:false:true:true/-
+mob-effect-instance	1	-7	4	1:0:false:false:true/-	false	true
+mob-effect-update	1	-7	4	2147483647	0	7	true	2147483647:0:true:true:true/-
+mob-effect-instance	1	0	5	1:0:true:false:true/-	false	true
+mob-effect-update	1	0	5	0	2	0	true	0:2:false:false:false/1:0:true:false:true/-
+mob-effect-instance	1	2	6	1:2:false:true:true/-	false	true
+mob-effect-update	1	2	6	1	255	1	true	1:255:true:false:false/-
+mob-effect-instance	1	300	7	1:255:true:true:true/-	false	true
+mob-effect-update	1	300	7	2	0	2	true	1:255:false:true:false/2:0:false:true:false/-
+mob-effect-instance	2	-7	0	2:0:false:false:false/-	false	true
+mob-effect-update	2	-7	0	100	0	3	true	100:0:true:true:false/-
+mob-effect-instance	2	0	1	2:0:true:false:false/-	false	true
+mob-effect-update	2	0	1	-1	2	4	true	-1:2:false:false:true/-
+mob-effect-instance	2	2	2	2:2:false:true:false/-	false	true
+mob-effect-update	2	2	2	-2	255	5	true	-2:255:true:false:true/2:2:false:true:false/-
+mob-effect-instance	2	300	3	2:255:true:true:false/-	false	true
+mob-effect-update	2	300	3	-2147483648	0	6	true	2:255:false:true:true/-
+mob-effect-instance	100	-7	4	100:0:false:false:true/-	false	true
+mob-effect-update	100	-7	4	2147483647	0	7	true	2147483647:0:true:true:true/-
+mob-effect-instance	100	0	5	100:0:true:false:true/-	false	true
+mob-effect-update	100	0	5	0	2	0	true	0:2:false:false:false/100:0:true:false:true/-
+mob-effect-instance	100	2	6	100:2:false:true:true/-	false	true
+mob-effect-update	100	2	6	1	255	1	true	1:255:true:false:false/100:2:false:true:true/-
+mob-effect-instance	100	300	7	100:255:true:true:true/-	false	true
+mob-effect-update	100	300	7	2	0	2	true	100:255:false:true:false/-
+mob-effect-instance	-1	-7	0	-1:0:false:false:false/-	false	true
+mob-effect-update	-1	-7	0	100	0	3	true	-1:0:false:true:false/-
+mob-effect-instance	-1	0	1	-1:0:true:false:false/-	false	true
+mob-effect-update	-1	0	1	-1	2	4	true	-1:2:false:false:true/-
+mob-effect-instance	-1	2	2	-1:2:false:true:false/-	false	true
+mob-effect-update	-1	2	2	-2	255	5	true	-2:255:true:false:true/-1:2:false:true:false/-
+mob-effect-instance	-1	300	3	-1:255:true:true:false/-	false	true
+mob-effect-update	-1	300	3	-2147483648	0	6	true	-1:255:false:true:true/-
+mob-effect-instance	-2	-7	4	-2:0:false:false:true/-	true	false
+mob-effect-update	-2	-7	4	2147483647	0	7	true	2147483647:0:true:true:true/-
+mob-effect-instance	-2	0	5	-2:0:true:false:true/-	true	false
+mob-effect-update	-2	0	5	0	2	0	true	0:2:false:false:false/-
+mob-effect-instance	-2	2	6	-2:2:false:true:true/-	true	false
+mob-effect-update	-2	2	6	1	255	1	true	1:255:true:false:false/-
+mob-effect-instance	-2	300	7	-2:255:true:true:true/-	true	false
+mob-effect-update	-2	300	7	2	0	2	true	-2:255:false:true:false/2:0:false:true:false/-
+mob-effect-instance	-2147483648	-7	0	-2147483648:0:false:false:false/-	true	false
+mob-effect-update	-2147483648	-7	0	100	0	3	true	100:0:true:true:false/-
+mob-effect-instance	-2147483648	0	1	-2147483648:0:true:false:false/-	true	false
+mob-effect-update	-2147483648	0	1	-1	2	4	true	-1:2:false:false:true/-
+mob-effect-instance	-2147483648	2	2	-2147483648:2:false:true:false/-	true	false
+mob-effect-update	-2147483648	2	2	-2	255	5	true	-2:255:true:false:true/-
+mob-effect-instance	-2147483648	300	3	-2147483648:255:true:true:false/-	true	false
+mob-effect-update	-2147483648	300	3	-2147483648	0	6	true	-2147483648:255:false:true:true/-
+mob-effect-instance	2147483647	-7	4	2147483647:0:false:false:true/-	false	true
+mob-effect-update	2147483647	-7	4	2147483647	0	7	true	2147483647:0:false:true:true/-
+mob-effect-instance	2147483647	0	5	2147483647:0:true:false:true/-	false	true
+mob-effect-update	2147483647	0	5	0	2	0	true	0:2:false:false:false/2147483647:0:true:false:true/-
+mob-effect-instance	2147483647	2	6	2147483647:2:false:true:true/-	false	true
+mob-effect-update	2147483647	2	6	1	255	1	true	1:255:true:false:false/2147483647:2:false:true:true/-
+mob-effect-instance	2147483647	300	7	2147483647:255:true:true:true/-	false	true
+mob-effect-update	2147483647	300	7	2	0	2	true	2147483647:255:false:true:false/-
+mob-effect-chain	0	20	2	0	true	20:2:false:false:false/100:0:false:true:true/-
+mob-effect-chain	1	200	1	3	true	20:2:false:true:false/200:1:true:true:false/-
+mob-effect-chain	2	30	2	7	true	30:2:true:true:true/200:1:true:true:false/-
+mob-effect-chain	3	40	3	6	true	40:3:false:true:true/200:1:true:true:false/-
+mob-effect-chain	4	400	0	5	true	40:3:false:false:true/200:1:true:false:true/400:0:true:false:true/-
+mob-effect-copy	40:3:false:false:true/-	true
+mob-effect-scale	0	1:3:false:false:true/-
+mob-effect-scale	3e000000	5:3:false:false:true/-
+mob-effect-scale	bf800000	1:3:false:false:true/-
+mob-effect-scale	7fc00000	1:3:false:false:true/-
+mob-effect-scale	7f800000	2147483647:3:false:false:true/-
+mob-effect-scale	ff800000	1:3:false:false:true/-
+mob-effect-duration	1	false	39:3:false:false:true/199:1:true:false:true/399:0:true:false:true/-
+mob-effect-duration	40	true	160:1:true:false:true/360:0:true:false:true/-
+mob-effect-duration	42	false	158:1:true:false:true/358:0:true:false:true/-
+mob-effect-negative	-1	-1:0:false:true:true/-	-1:0:false:true:true/-
+mob-effect-negative	0	0:0:false:true:true/-	0:0:false:true:true/-
+mob-effect-negative	-2	-3:0:false:true:true/-	1:0:false:true:true/-
+mob-effect-negative	-2147483648	2147483647:0:false:true:true/-	1073741824:0:false:true:true/-
 damage-type	minecraft:arrow	arrow	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
 damage-type	minecraft:bad_respawn_point	badRespawnPoint	always	3dcccccd	hurt	intentional_game_design	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
 damage-type	minecraft:cactus	cactus	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt

@@ -8,6 +8,7 @@ pub mod avatar;
 pub use avatar::Avatar;
 pub mod living;
 pub use living::LivingEntity;
+pub mod effect;
 pub mod effects;
 pub mod experience_orb;
 pub mod item;
