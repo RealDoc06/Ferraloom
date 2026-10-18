@@ -439,6 +439,33 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
+    /// Port of Entity#broadcastToPlayer's base predicate.
+    fn broadcast_to_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    /// Port of Entity#startSeenByPlayer's base hook.
+    fn start_seen_by_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#stopSeenByPlayer's base hook.
+    fn stop_seen_by_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         base_tick(self, entity, level)
