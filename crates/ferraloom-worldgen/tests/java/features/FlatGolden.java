@@ -19,8 +19,39 @@ import net.minecraft.world.level.levelgen.feature.FillLayerFeature;
 import net.minecraft.world.level.levelgen.flat.*;
 
 public final class FlatGolden {
+    static void codecs(RegistryAccess.Frozen registries,Path out) throws Exception {
+        var cases=new JsonArray();var ops=FeaturesGolden.ops(registries);
+        for(String text:List.of(
+            "{}", "{layers:[]}", "{layers:3}", "{layers:[{height:1,block:'stone'}]}",
+            "{layers:[{height:1,block:'stone'},{height:1,block:'missing'}]}",
+            "{layers:[{height:-1,block:'stone'},{height:2,block:'dirt'}]}",
+            "{layers:[{height:1,block:'stone'},{block:'dirt'}]}",
+            "{layers:[{height:1,block:'stone'},{height:2}]}",
+            "{layers:[{height:5000,block:'stone'}]}",
+            "{layers:[{height:4064,block:'stone'},{height:1,block:'dirt'}]}",
+            "{layers:[{height:1.9,block:'stone'}],biome:'missing'}",
+            "{layers:[],features:'true'}", "{layers:[],features:1}",
+            "{layers:[],features:0}", "{layers:[],features:256}",
+            "{layers:[],features:257}", "{layers:[],features:0.5}",
+            "{layers:[],lakes:1}", "{layers:[],biome:7}",
+            "{layers:[],structure_overrides:7}", "{layers:[],structure_overrides:'villages'}"
+        )) {
+            var value=JsonParser.parseString(text);var result=FlatLevelGeneratorSettings.CODEC.parse(ops,value);
+            var item=new JsonObject();item.add("config",value);item.addProperty("success",result.isSuccess());
+            var partial=result.resultOrPartial(error->{});item.addProperty("partial",partial.isPresent());
+            if(partial.isPresent()) {
+                var settings=partial.get();var encoded=FlatLevelGeneratorSettings.CODEC.encodeStart(ops,settings).getOrThrow().getAsJsonObject();
+                var decoded=new JsonObject();decoded.add("layers",encoded.get("layers"));decoded.add("biome",encoded.get("biome"));decoded.add("lakes",encoded.get("lakes"));decoded.add("features",encoded.get("features"));
+                if(settings.structureOverrides().isPresent()) {var overrides=new JsonArray();settings.structureOverrides().get().stream().forEach(holder->overrides.add(holder.unwrapKey().orElseThrow().identifier().toString()));decoded.add("structure_overrides",overrides);} else decoded.add("structure_overrides",JsonNull.INSTANCE);
+                item.add("decoded",decoded);
+            }
+            cases.add(item);
+        }
+        WorldgenGolden.write(out.resolve("flat_codecs.json.gz"),cases);
+    }
     @SuppressWarnings("unchecked")
     static void generate(RegistryAccess.Frozen registries,Path out) throws Exception {
+        codecs(registries,out);
         var ops=FeaturesGolden.ops(registries);var cases=new JsonArray();var configs=new LinkedHashMap<String,JsonElement>();
         var defaults=FlatLevelGeneratorSettings.getDefault(registries.lookupOrThrow(Registries.BIOME),registries.lookupOrThrow(Registries.STRUCTURE_SET),registries.lookupOrThrow(Registries.PLACED_FEATURE));
         configs.put("default",FlatLevelGeneratorSettings.CODEC.encodeStart(ops,defaults).getOrThrow());

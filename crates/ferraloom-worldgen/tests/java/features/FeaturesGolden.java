@@ -136,6 +136,7 @@ public final class FeaturesGolden {
                 case "codec" -> CodecGolden.generate(registries,out);
                 case "predicates" -> PredicateGolden.generate(registries,out);
                 case "flat" -> FlatGolden.generate(registries,out);
+                case "flat-codec" -> FlatGolden.codecs(registries,out);
                 case "spawn" -> SpawnGolden.generate(registries,out);
                 default -> throw new IllegalArgumentException("unknown fixture family "+args[1]);
             }

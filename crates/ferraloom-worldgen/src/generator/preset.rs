@@ -345,6 +345,7 @@ impl WorldPreset {
             None
         };
         if let Some(settings) = flat_settings {
+            let encoded = settings.encode();
             let generator = Arc::new(ChunkGenerator::Flat(Box::new(FlatLevelSource::new(
                 data, settings,
             )?)));
@@ -356,7 +357,7 @@ impl WorldPreset {
                 .unwrap();
             overworld.generator = generator;
             preset.definition["dimensions"]["minecraft:overworld"]["generator"]["settings"] =
-                generator_settings.clone();
+                encoded;
         }
         Ok(preset)
     }
