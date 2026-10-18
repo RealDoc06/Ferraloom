@@ -2038,7 +2038,7 @@ impl MinecraftServer {
                 callbacks: &mut callbacks,
             };
             hooks.prepare_recipe_click(menu.kind)?;
-            let allow_dropping = context.creative;
+            let allow_dropping = context.is_creative;
             let action = menu.handle_crafting_placement(
                 &mut context,
                 recipe,
@@ -2198,8 +2198,7 @@ impl MinecraftServer {
             }
             let infinite_materials = player.instabuild();
             let inventory = &mut player.inventory;
-            let mut drop = None;
-            if action == PlayerAction::SwapItemWithOffhand {
+            let drop = if action == PlayerAction::SwapItemWithOffhand {
                 ferraloom_game::inventory::swap_player_hands(entity, &mut self.level.level)?;
                 return ferraloom_game::entity::living::stop_using_item(
                     entity,
@@ -2220,8 +2219,8 @@ impl MinecraftServer {
                 }) {
                     menu.set_remote_slot(slot, inventory.selected_item());
                 }
-                drop = Some(stack);
-            }
+                Some(stack)
+            };
             let context = MenuContext::player_with_abilities(
                 inventory,
                 &mut player.parent.equipment,
