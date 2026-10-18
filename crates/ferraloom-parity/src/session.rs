@@ -153,8 +153,22 @@ where
         let result = scenario(&mut session).await;
         let stopped = session.stop().await;
         let diagnostics = session.diagnostics();
-        let log = result.with_context(|| format!("{label} scenario failed\n{diagnostics}"))?;
-        stopped.with_context(|| format!("{label} stop/save failed\n{diagnostics}"))?;
+        let log = match result {
+            Ok(log) => {
+                stopped.with_context(|| format!("{label} stop/save failed\n{diagnostics}"))?;
+                log
+            }
+            Err(error) => {
+                let error = match stopped {
+                    Ok(()) => error,
+                    Err(stopped) => {
+                        error.context(format!("{label} stop/save also failed:\n{stopped:?}"))
+                    }
+                };
+                return Err(error)
+                    .with_context(|| format!("{label} scenario failed\n{diagnostics}"));
+            }
+        };
         let log = log.normalized(&session.rules)?;
         eprintln!("{label}: {} observations", log.0.len());
         if let Some((expected, rules)) = &expected {
