@@ -73,6 +73,7 @@ pub mod inside_block;
 mod lifecycle;
 pub(crate) use lifecycle::start_riding_loaded_shared;
 pub mod movement;
+mod names;
 pub mod sounds;
 pub mod teleport;
 mod trace;
@@ -241,6 +242,29 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#getName, with Player and ItemEntity virtual overrides.
+    fn name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::base_name(self, entity, level)
+    }
+    fn type_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::type_name(entity, level)
+    }
+    fn display_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+        scoreboard: &crate::scoreboard::Scoreboard,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::display_name(self, entity, level, scoreboard)
+    }
     /// Port of Entity#couldAcceptPassenger. Marker and OminousItemSpawner
     /// override this independently of removal state.
     fn could_accept_passenger(

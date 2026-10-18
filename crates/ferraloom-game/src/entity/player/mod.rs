@@ -592,6 +592,23 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        Ok(ferraloom_protocol::chat::Component::literal(
+            &level.entity::<ServerPlayer>(entity)?.name,
+        ))
+    }
+    fn display_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+        scoreboard: &crate::scoreboard::Scoreboard,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        super::names::player_display_name(self, entity, level, scoreboard)
+    }
     fn y_head_rot(
         &self,
         entity: crate::entity::EntityRef,

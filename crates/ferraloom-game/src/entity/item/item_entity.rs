@@ -266,6 +266,13 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        crate::entity::names::item_name(entity, level)
+    }
     fn player_touch(
         &self,
         entity: EntityRef,

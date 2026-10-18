@@ -75,7 +75,8 @@ public final class EntityVectors {
       @Override public java.util.List<net.minecraft.world.phys.shapes.VoxelShape> getEntityCollisions(Entity e,AABB bb){return List.of();}
       @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos){return null;}
       @Override public java.util.List<? extends net.minecraft.world.entity.player.Player> players(){return List.of();}
-      @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return new net.minecraft.world.scores.Scoreboard();}
+      final net.minecraft.world.scores.Scoreboard scoreboard=new net.minecraft.world.scores.Scoreboard();
+      @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return scoreboard;}
       @Override public long getGameTime(){return 0;}
       @Override public net.minecraft.world.attribute.EnvironmentAttributeSystem environmentAttributes(){return net.minecraft.world.attribute.EnvironmentAttributeSystem.builder().build();}
       @Override public void scheduleTick(BlockPos pos,Block block,int delay){}
@@ -105,6 +106,7 @@ public final class EntityVectors {
         TravelVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
         NbtVectors.run(new EntityFixture(r));
+        NameVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
