@@ -15,6 +15,7 @@ fn holder(command: &commands::PreparedCommand, argument: &str) -> Vec<Holder> {
     command
         .string(argument)
         .map(|name| Holder {
+            entity: None,
             name: name.to_owned(),
             display: if name == "Doc" {
                 Some(ferraloom_protocol::chat::Component::literal(name))
@@ -99,6 +100,7 @@ fn vanilla_registered_commands_feedback_and_packet_bytes() {
                 &mut board,
                 &command,
                 &Holder {
+                    entity: None,
                     name: "Doc".into(),
                     display: Some(Component::literal("Doc")),
                 },
@@ -169,6 +171,7 @@ fn vanilla_team_entity_count_feedback_and_packet_bytes() {
             .members
             .into_iter()
             .map(|name| Holder {
+                entity: None,
                 display: (!name.starts_with('#'))
                     .then(|| Component::literal("pre-mutation entity display")),
                 name,
@@ -388,4 +391,142 @@ fn readonly_swap_keeps_target_write_and_native_failure_feedback() {
     let expected: Value =
         serde_json::from_str(include_str!("../../tests/java/scoreboard/readonly.json")).unwrap();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn vanilla_single_entity_team_feedback_reads_completed_membership() {
+    use crate::{
+        Behaviors,
+        entity::{
+            EntityRef, EntityState,
+            player::{GameType, ServerPlayer},
+            synched_data,
+        },
+        level::{Level, LevelContext, Region},
+    };
+    use ferraloom_util::{Uuid, Vec3};
+    #[derive(Deserialize)]
+    struct SingleCase {
+        kind: String,
+        command: String,
+        members: Vec<String>,
+        value: i32,
+        feedback: Vec<Value>,
+        packets: Vec<Value>,
+        display_changed: Option<bool>,
+    }
+    let cases: Vec<SingleCase> = serde_json::from_str(include_str!(
+        "../../tests/java/scoreboard/team-single-feedback.json"
+    ))
+    .unwrap();
+    assert_eq!(cases.len(), 16);
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let commands = commands::Commands::default();
+    for kind in ["player", "cow"] {
+        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let entity = EntityRef(1);
+        let uuid = Uuid::new(0, 1);
+        let mut state = if kind == "player" {
+            EntityState::Player(Box::new(ServerPlayer::new(
+                uuid,
+                "Doc".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            )))
+        } else {
+            let mut state = EntityState::Cow(Box::default());
+            let mut name = Component::literal("Named Cow");
+            name.style.bold = Some(true);
+            state
+                .as_entity_mut()
+                .entity_data
+                .set(synched_data::CUSTOM_NAME, Some(Box::new(name)));
+            state
+        };
+        state.as_entity_mut().uuid = uuid;
+        level.add_entity(entity, state).unwrap();
+        level.install_shared(Box::default());
+        for (name, color) in [("red", TeamColor::Red), ("blue", TeamColor::Blue)] {
+            let board = &mut level.shared_mut().unwrap().scoreboard;
+            board.add_player_team(name);
+            board
+                .update_team(name, |team| {
+                    team.color = Some(color);
+                    team.prefix = Component::literal(format!("<{name}>"));
+                    team.suffix = Component::literal(format!("</{name}>"));
+                })
+                .unwrap();
+        }
+        level.shared_mut().unwrap().scoreboard.drain_packets();
+        for (index, case) in cases.iter().filter(|case| case.kind == kind).enumerate() {
+            let command = commands
+                .prepare(&case.command, CommandSourceStack::server(4, Vec3::ZERO))
+                .unwrap();
+            let before = level.entity_display_name(entity).unwrap();
+            let members: Vec<_> = case
+                .members
+                .iter()
+                .map(|name| {
+                    if name.starts_with('#') {
+                        Holder::for_name(name)
+                    } else {
+                        assert_eq!(name, level.entity_scoreboard_name(entity).unwrap().as_ref());
+                        Holder {
+                            entity: Some(entity),
+                            name: name.clone(),
+                            display: Some(before.clone()),
+                        }
+                    }
+                })
+                .collect();
+            let pending = commands::team::execute_with_feedback(
+                &mut level.shared_mut().unwrap().scoreboard,
+                &command,
+                &members,
+            )
+            .unwrap();
+            // Native add/remove packets are already queued before sendSuccess's Supplier runs.
+            let packets: Vec<_> = level
+                .shared_mut()
+                .unwrap()
+                .scoreboard
+                .drain_packets()
+                .iter()
+                .map(packet_json)
+                .collect();
+            assert_eq!(packets, case.packets, "{kind} case {index} packets");
+            let mut reads = 0;
+            let result = pending
+                .resolve_feedback(|holder| {
+                    assert_eq!(holder.entity, Some(entity));
+                    reads += 1;
+                    let display = level
+                        .entity_display_name_with_scoreboard(
+                            entity,
+                            level.shared().unwrap().scoreboard.scoreboard(),
+                        )
+                        .unwrap();
+                    assert_eq!(Some(before != display), case.display_changed);
+                    Ok(holder.feedback_with_display(display))
+                })
+                .unwrap();
+            assert_eq!(reads, usize::from(case.value == 1));
+            assert!(
+                level
+                    .shared_mut()
+                    .unwrap()
+                    .scoreboard
+                    .drain_packets()
+                    .is_empty(),
+                "feedback only reads"
+            );
+            assert_eq!(result.value, case.value);
+            let feedback: Vec<_> = result.feedback.iter().map(|entry| json!({
+                "message": serde_json::from_str::<Value>(&entry.message.to_json().unwrap()).unwrap(),
+                "broadcast": entry.broadcast,
+            })).collect();
+            assert_eq!(feedback, case.feedback, "{kind} case {index} feedback");
+        }
+    }
 }

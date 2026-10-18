@@ -98,6 +98,7 @@ impl MinecraftServer {
             .info(entity)
             .ok_or_else(|| exceptions::error("argument.entity.notfound.entity", &[]))?;
         Ok(Holder {
+            entity: Some(entity),
             name: if info.player {
                 info.name.to_string()
             } else {

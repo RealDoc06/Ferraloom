@@ -32,3 +32,9 @@ same-team rejoining, duplicate holders, transfers, and mixed fake/entity holders
 Entity feedback-name access throws in the harness, proving that count-only
 feedback does not read it. Leave feedback counts successful removals rather than
 inputs, including a single fake-holder removal among unchanged entities.
+
+`TeamSingleFeedbackVectors` adds 16 real TeamCommand cases with the real Player
+and Entity display/feedback implementations. Player and named-cow joins, same-team
+rejoins, transfers, and duplicate/unchanged leaves compare exact feedback and
+packet bytes. The harness asserts the single feedback sees the new team's
+prefix, suffix and color; Rust reads the canonical Level only after mutation.
