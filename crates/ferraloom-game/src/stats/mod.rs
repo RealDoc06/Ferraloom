@@ -161,7 +161,19 @@ impl Stat {
 }
 impl JavaHash for Stat {
     fn java_hash_code(&self) -> i32 {
-        self.objective_name().java_hash_code()
+        self.stat_type()
+            .name()
+            .bytes()
+            .map(|c| if c == b':' { b'.' } else { c })
+            .chain(std::iter::once(b':'))
+            .chain(
+                self.value_name()
+                    .bytes()
+                    .map(|c| if c == b':' { b'.' } else { c }),
+            )
+            .fold(0i32, |hash, c| {
+                hash.wrapping_mul(31).wrapping_add(i32::from(c))
+            })
     }
 }
 /// Port of StatsCounter; increment clamps the upper bound only. Negative
@@ -272,7 +284,7 @@ impl ServerStatsCounter {
                 let mut problems = Vec::new();
                 for (value, count) in codec::object(values)? {
                     match (|| {
-                        Ok((
+                        Ok::<_, LootError>((
                             kind.decode_stat(&Identifier::parse(value)?)?,
                             codec::int(count)?,
                         ))
