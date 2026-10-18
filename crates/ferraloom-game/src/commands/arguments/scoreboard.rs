@@ -111,19 +111,21 @@ pub fn criteria(reader: &mut StringReader) -> Result<ObjectiveCriteria, CommandS
             name.strip_prefix(prefix)
                 .is_some_and(|color| COLORS.contains(&color))
         });
-    let stat = name.split_once(':').is_some_and(|(kind, value)| {
+    let stat = name.split_once(':').and_then(|(kind, value)| {
         let kind = by_separator(kind);
         let Some((_, registry)) = STAT_TYPES.iter().find(|(id, _)| *id == kind) else {
-            return false;
+            return None;
         };
         let value = by_separator(value);
         ferraloom_data::registry_entries(registry)
             .is_some_and(|entries| entries.contains(&value.as_str()))
+            .then(|| format!("{}:{}", kind.replace(':', "."), value.replace(':', ".")))
     });
-    if !custom && !stat {
+    if !custom && stat.is_none() {
         reader.set_cursor(start);
         return Err(error_at(reader, "argument.criteria.invalid", &[name]));
     }
+    let name = stat.unwrap_or(name);
     Ok(ObjectiveCriteria {
         hearts: name == "health",
         read_only: matches!(
@@ -148,6 +150,7 @@ mod tests {
     fn native_criteria_metadata_includes_writable_stats() {
         #[derive(serde::Deserialize)]
         struct Vector {
+            input: String,
             name: String,
             read_only: bool,
             hearts: bool,
@@ -155,9 +158,9 @@ mod tests {
         let vectors: Vec<Vector> =
             serde_json::from_str(include_str!("../vanilla/criteria-vectors.json")).unwrap();
         for vector in vectors {
-            let mut reader = StringReader::new(&vector.name);
+            let mut reader = StringReader::new(&vector.input);
             let actual = criteria(&mut reader).unwrap();
-            assert_eq!(reader.cursor(), vector.name.len(), "{}", vector.name);
+            assert_eq!(reader.cursor(), vector.input.len(), "{}", vector.name);
             assert_eq!(actual.read_only, vector.read_only, "{}", vector.name);
             assert_eq!(actual.hearts, vector.hearts, "{}", vector.name);
             assert_eq!(actual.name, vector.name);
