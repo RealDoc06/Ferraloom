@@ -63,7 +63,7 @@ public final class PrimitiveCodecs {
         numeric.put("fraction",DoubleTag.valueOf(0.5)); numeric.put("string",StringTag.valueOf("1"));
         numeric.put("compound",new CompoundTag()); numeric.put("list",new ListTag());
         numeric.forEach((name,input) -> { var row=new JsonObject(); row.addProperty("name",name);row.addProperty("input",input.toString());row.add("values",values(NbtOps.INSTANCE,input));nbt.add(row); });
-        for (String input : List.of("{\"x\":1.0,\"y\":1e3}","\"{x:1b,y:[I;2,3]}\"","\"{id:'minecraft:pig',x:1b}\"","\"[]\"","\"{x:}\"","[]","{\"id\":\"minecraft:pig\"}")) {
+        for (String input : List.of("{\"x\":1.0,\"y\":1e3}","\"{x:1b,y:[I;2,3],z:1L}\"","\"{id:'minecraft:pig',x:1b}\"","\"[]\"","\"{x:}\"","[]","{\"id\":\"minecraft:pig\"}")) {
             var parsed=JsonParser.parseString(input); var row=new JsonObject(); row.addProperty("input",input);
             row.addProperty("compound",compound(JsonOps.INSTANCE,parsed)); row.addProperty("typed",typed(JsonOps.INSTANCE,parsed));
             // The alternative must work with StringTag as well as JSON strings.
