@@ -41,7 +41,11 @@ pub(super) fn type_name(entity: EntityRef, level: &Level) -> Result<Component, L
 }
 pub(super) fn item_name(entity: EntityRef, level: &Level) -> Result<Component, LevelError> {
     let item = level.entity::<ItemEntity>(entity)?;
-    if let Some(name) = item.entity_data.get(super::synched_data::CUSTOM_NAME) {
+    if let Some(name) = item
+        .parent
+        .entity_data
+        .get(super::synched_data::CUSTOM_NAME)
+    {
         // ItemEntity#getName deliberately keeps the custom component's actions.
         return Ok((**name).clone());
     }

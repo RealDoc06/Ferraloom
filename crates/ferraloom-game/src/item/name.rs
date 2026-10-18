@@ -1,7 +1,7 @@
 //! Port of Item#getName, its component-dependent overrides and PotionContents#getName.
 use ferraloom_data::{
     Item,
-    registries::{data_component_type as component_type, potion},
+    registries::{data_component_type::Id as ComponentType, potion},
 };
 use ferraloom_protocol::{
     Error, Result,
@@ -16,22 +16,17 @@ pub fn get_item_name(stack: &ItemStack) -> Result<Component> {
     let item = stack.item();
     if item == Item::AIR {
         return Ok(base_name(
-            DataComponentMap::item_defaults(Item::AIR)?.get(component_type::ITEM_NAME),
+            DataComponentMap::item_defaults(Item::AIR)?.get(ComponentType::ITEM_NAME),
         ));
     }
-    if item == Item::COMPASS
-        && stack
-            .component(component_type::LODESTONE_TRACKER)?
-            .is_some()
-    {
+    if item == Item::COMPASS && stack.component(ComponentType::LODESTONE_TRACKER)?.is_some() {
         return Ok(Component::translatable(
             "item.minecraft.lodestone_compass",
             Vec::new(),
         ));
     }
     if item == Item::SHIELD
-        && let Some(DataComponent::BaseColor(color)) =
-            stack.component(component_type::BASE_COLOR)?
+        && let Some(DataComponent::BaseColor(color)) = stack.component(ComponentType::BASE_COLOR)?
     {
         let color = color.to_json()?;
         return Ok(Component::translatable(
@@ -47,7 +42,7 @@ pub fn get_item_name(stack: &ItemStack) -> Result<Component> {
         item,
         Item::POTION | Item::SPLASH_POTION | Item::LINGERING_POTION | Item::TIPPED_ARROW
     ) && let Some(DataComponent::PotionContents(contents)) =
-        stack.component(component_type::POTION_CONTENTS)?
+        stack.component(ComponentType::POTION_CONTENTS)?
     {
         let potion = contents
             .potion
@@ -70,7 +65,7 @@ pub fn get_item_name(stack: &ItemStack) -> Result<Component> {
         ));
     }
     if item == Item::PLAYER_HEAD
-        && let Some(DataComponent::Profile(profile)) = stack.component(component_type::PROFILE)?
+        && let Some(DataComponent::Profile(profile)) = stack.component(ComponentType::PROFILE)?
     {
         let name = match &profile.profile {
             Either::Left(profile) => Some(profile.name.0.as_str()),
@@ -83,7 +78,7 @@ pub fn get_item_name(stack: &ItemStack) -> Result<Component> {
             ));
         }
     }
-    Ok(base_name(stack.component(component_type::ITEM_NAME)?))
+    Ok(base_name(stack.component(ComponentType::ITEM_NAME)?))
 }
 fn base_name(component: Option<&DataComponent>) -> Component {
     match component {

@@ -557,7 +557,7 @@ fn item_names(out: &mut String, facts: &Value, items: &Value, registries: &Value
         .collect();
     writeln!(
         out,
-        "const ITEM_DESCRIPTION_IDS: [&str; {}] = {:?};",
+        "static ITEM_DESCRIPTION_IDS: [&str; {}] = {:?};",
         descriptions.len(),
         descriptions
     )

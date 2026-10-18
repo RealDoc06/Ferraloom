@@ -40,11 +40,11 @@ named_enum! {
 impl DamageEffects {
     pub fn sound(self) -> sound_event::Id {
         match self {
-            Self::Hurt | Self::Thorns => sound_event::ENTITY_PLAYER_HURT,
-            Self::Drowning => sound_event::ENTITY_PLAYER_HURT_DROWN,
-            Self::Burning => sound_event::ENTITY_PLAYER_HURT_ON_FIRE,
-            Self::Poking => sound_event::ENTITY_PLAYER_HURT_SWEET_BERRY_BUSH,
-            Self::Freezing => sound_event::ENTITY_PLAYER_HURT_FREEZE,
+            Self::Hurt | Self::Thorns => sound_event::Id::ENTITY_PLAYER_HURT,
+            Self::Drowning => sound_event::Id::ENTITY_PLAYER_HURT_DROWN,
+            Self::Burning => sound_event::Id::ENTITY_PLAYER_HURT_ON_FIRE,
+            Self::Poking => sound_event::Id::ENTITY_PLAYER_HURT_SWEET_BERRY_BUSH,
+            Self::Freezing => sound_event::Id::ENTITY_PLAYER_HURT_FREEZE,
         }
     }
 }

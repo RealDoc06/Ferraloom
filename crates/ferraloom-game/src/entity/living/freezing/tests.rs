@@ -105,12 +105,12 @@ fn powder_snow_modifiers_match_native_float_promotion_and_support_conditions() {
         let living = level.entity_mut::<LivingEntity>(entity).unwrap();
         let speed = living
             .attributes
-            .get_instance(attribute::MOVEMENT_SPEED)
+            .get_instance(Attribute::MOVEMENT_SPEED)
             .unwrap();
         assert_eq!(
             speed
                 .modifier(&modifier_id())
-                .map_or_else(|| "none".into(), |m| format!("{:x}", m.amount.to_bits())),
+                .map_or_else(|| "none".into(), |m| format!("{:x}", m.amount.0.to_bits())),
             fields[4]
         );
         assert_eq!(format!("{:x}", speed.value().to_bits()), fields[5]);
@@ -120,7 +120,7 @@ fn powder_snow_modifiers_match_native_float_promotion_and_support_conditions() {
                 .entity_mut::<LivingEntity>(entity)
                 .unwrap()
                 .attributes
-                .get_instance(attribute::MOVEMENT_SPEED)
+                .get_instance(Attribute::MOVEMENT_SPEED)
                 .unwrap()
                 .modifier(&modifier_id())
                 .is_none()

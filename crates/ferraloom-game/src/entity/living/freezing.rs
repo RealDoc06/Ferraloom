@@ -6,12 +6,12 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{
-    registries::attribute,
+    registries::attribute::Id as Attribute,
     tags::{EntityTypeTags, ItemTags},
 };
 use ferraloom_protocol::{
     Identifier,
-    component::{AttributeOperation, EquipmentSlot},
+    component::{AttributeOperation, EquipmentSlot, JavaF64},
 };
 use std::sync::Arc;
 
@@ -62,7 +62,7 @@ pub fn remove_frost(entity: EntityRef, level: &mut Level) -> Result<(), LevelErr
     if let Some(mut speed) = level
         .entity_mut::<LivingEntity>(entity)?
         .attributes
-        .get_instance(attribute::MOVEMENT_SPEED)
+        .get_instance(Attribute::MOVEMENT_SPEED)
     {
         speed.remove_modifier(&modifier_id());
     }
@@ -83,12 +83,12 @@ pub fn try_add_frost(entity: EntityRef, level: &mut Level) -> Result<(), LevelEr
     if let Some(mut speed) = level
         .entity_mut::<LivingEntity>(entity)?
         .attributes
-        .get_instance(attribute::MOVEMENT_SPEED)
+        .get_instance(Attribute::MOVEMENT_SPEED)
     {
         speed
             .add_transient_modifier(Arc::new(AttributeModifier {
                 id: modifier_id(),
-                amount,
+                amount: JavaF64(amount),
                 operation: AttributeOperation::AddValue,
             }))
             .expect("native duplicate powder-snow modifier: removeFrost must precede tryAddFrost");
