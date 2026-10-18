@@ -132,6 +132,7 @@ pub enum BlockEntityState {
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
     Hopper(Box<super::redstone::storage::HopperBlockEntity>),
+    MovingPiston(Box<super::redstone::moving_piston::PistonMovingBlockEntity>),
     EndPortal(BlockEntityData),
     Comparator(Box<super::redstone::comparator::ComparatorBlockEntity>),
     Chest(Box<ChestBlockEntity>),
@@ -146,6 +147,7 @@ impl BlockEntityState {
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
             Self::Hopper(entity) => &entity.parent.parent.parent,
+            Self::MovingPiston(entity) => &entity.parent,
             Self::EndPortal(data) => data,
             Self::Comparator(entity) => &entity.parent,
             Self::Chest(entity) => &entity.parent.parent.parent,
@@ -160,6 +162,7 @@ impl BlockEntityState {
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
             Self::Hopper(entity) => &mut entity.parent.parent.parent,
+            Self::MovingPiston(entity) => &mut entity.parent,
             Self::EndPortal(data) => data,
             Self::Comparator(entity) => &mut entity.parent,
             Self::Chest(entity) => &mut entity.parent.parent.parent,
@@ -174,6 +177,7 @@ impl BlockEntityState {
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
             Self::Hopper(_) => &super::redstone::storage::HOPPER_ENTITY,
+            Self::MovingPiston(_) => &super::redstone::moving_piston::MOVING_PISTON_ENTITY,
             Self::EndPortal(_) => &THE_END_PORTAL,
             Self::Comparator(_) => &super::redstone::comparator::COMPARATOR_ENTITY,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
@@ -324,6 +328,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
+        BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
+            super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
+        ))),
         BlockEntityType::DISPENSER | BlockEntityType::DROPPER => Ok(BlockEntityState::Dispenser(
             Box::new(super::redstone::storage::DispenserBlockEntity::new(data)),
         )),
@@ -393,6 +400,7 @@ pub fn supports(block: Block) -> bool {
         registry::for_block(block),
         Some(
             BlockEntityType::END_PORTAL
+                | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
                 | BlockEntityType::DROPPER
                 | BlockEntityType::HOPPER
@@ -482,3 +490,8 @@ pub fn supports_creation(block: Block) -> bool {
 
 projection!(super::redstone::storage::DispenserBlockEntity, Dispenser);
 projection!(super::redstone::storage::HopperBlockEntity, Hopper);
+
+projection!(
+    super::redstone::moving_piston::PistonMovingBlockEntity,
+    MovingPiston
+);
