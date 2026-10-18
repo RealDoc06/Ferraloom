@@ -153,11 +153,6 @@ currently advertises precisely that set. The generated const queries are named
 `is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
 them for checks against an arbitrary live feature set.
 
-`ExtractBlockDropTables <output-json>` records the optional actual block loot
-keys, including shared keys and absent drops. `ExtractBlockMethods` also records
-exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
-cannot silently inherit the base drop behavior.
-
 `ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
 and whether each registered receiver implements `Nameable`. The last fact is
 checked against the actual factory receiver for every valid block, including
