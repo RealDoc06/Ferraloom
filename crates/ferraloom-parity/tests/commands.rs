@@ -191,24 +191,22 @@ async fn clocks_and_admin(session: &mut Session) -> Result<ObservationLog> {
     );
     log.record("gametime.translation", &gametime["translate"])?;
     let newcomer = session.join("DifficultyGuest").await?;
-    let difficulty = session
+    let announced = session
         .bot(newcomer)?
         .sequence()
         .join
-        .iter()
-        .find_map(|packet| {
-            if let cb::Packet::ChangeDifficulty(packet) = packet {
-                Some(packet.clone())
-            } else {
-                None
-            }
-        })
-        .expect("joining player's difficulty packet");
+        .into_iter()
+        .any(|packet| {
+            packet == ferraloom_data::packets::play::clientbound::Packet::ChangeDifficulty
+        });
+    ensure!(announced, "joining player received no difficulty packet");
+    log.record("difficulty.newcomer_packet", announced)?;
+    let difficulty = command(session.bot(id)?, "difficulty", "commands.difficulty.query").await?;
     ensure!(
-        difficulty.difficulty == ferraloom_parity::protocol::play::Difficulty::Hard,
-        "joining player lost changed world difficulty"
+        has_translation(&difficulty, "options.difficulty.hard"),
+        "joining a player reset the changed world difficulty"
     );
-    log.record("difficulty.newcomer", format!("{difficulty:?}"))?;
+    log.record("difficulty.after_join", difficulty)?;
     Ok(log)
 }
 
