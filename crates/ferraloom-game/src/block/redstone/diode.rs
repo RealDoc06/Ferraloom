@@ -95,7 +95,7 @@ pub(super) fn update_front(
         orientation,
     )
 }
-fn locked(
+pub(super) fn locked(
     reader: &LevelReaderRef<'_, '_>,
     pos: BlockPos,
     state: BlockState,
@@ -123,6 +123,26 @@ fn check_tick(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(),
     Ok(())
 }
 impl BlockBehavior for RepeaterBlock {
+    fn use_without_item(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &crate::block::UseContext,
+        level: &mut Level,
+    ) -> Result<crate::block::InteractionResult, LevelError> {
+        use crate::{block::InteractionResult, entity::player::ServerPlayer};
+        if !level.entity::<ServerPlayer>(context.player)?.may_build() {
+            return Ok(InteractionResult::Pass);
+        }
+        level.set_block_and_update(
+            pos,
+            state
+                .with(p::DELAY, state.get(p::DELAY).unwrap() % 4 + 1)
+                .unwrap(),
+        )?;
+        Ok(InteractionResult::SUCCESS)
+    }
+
     fn is_signal_source(&self, _state: BlockState) -> bool {
         true
     }

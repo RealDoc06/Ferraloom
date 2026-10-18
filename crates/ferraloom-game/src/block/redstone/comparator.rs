@@ -92,7 +92,7 @@ fn input_signal(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<i
 fn alternate_signal(level: &Level, pos: BlockPos, state: BlockState) -> Result<i32, LevelError> {
     diode::alternate_signal(&LevelReaderRef::Server(level), pos, state, false)
 }
-fn calculate_output(
+pub(super) fn calculate_output(
     level: &mut Level,
     pos: BlockPos,
     state: BlockState,
@@ -110,7 +110,11 @@ fn calculate_output(
         Ok(input)
     }
 }
-fn should_turn_on(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<bool, LevelError> {
+pub(super) fn should_turn_on(
+    level: &mut Level,
+    pos: BlockPos,
+    state: BlockState,
+) -> Result<bool, LevelError> {
     let input = input_signal(level, pos, state)?;
     if input == 0 {
         return Ok(false);
@@ -146,6 +150,45 @@ fn refresh_output(level: &mut Level, pos: BlockPos, state: BlockState) -> Result
     Ok(())
 }
 impl BlockBehavior for ComparatorBlock {
+    fn use_without_item(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &crate::block::UseContext,
+        level: &mut Level,
+    ) -> Result<crate::block::InteractionResult, LevelError> {
+        use crate::{block::InteractionResult, entity::player::ServerPlayer};
+        use ferraloom_data::registries::sound_event::Id as SoundEvent;
+        use ferraloom_protocol::play::SoundSource;
+        use ferraloom_util::Vec3;
+        if !level.entity::<ServerPlayer>(context.player)?.may_build() {
+            return Ok(InteractionResult::Pass);
+        }
+        let mode = if state.get(p::MODE).unwrap() == p::Mode::Compare {
+            p::Mode::Subtract
+        } else {
+            p::Mode::Compare
+        };
+        let changed = state.with(p::MODE, mode).unwrap();
+        level.play_sound(
+            Some(context.player),
+            Vec3::new(
+                f64::from(pos.x) + 0.5,
+                f64::from(pos.y) + 0.5,
+                f64::from(pos.z) + 0.5,
+            ),
+            SoundEvent::BLOCK_COMPARATOR_CLICK,
+            SoundSource::Blocks,
+            0.3,
+            if mode == p::Mode::Subtract { 0.55 } else { 0.5 },
+        )?;
+        level.set_block(pos, changed, UpdateFlags::CLIENTS, UPDATE_LIMIT)?;
+        if level.get_block_state(pos)?.block() == state.block() {
+            refresh_output(level, pos, changed)?;
+        }
+        Ok(InteractionResult::SUCCESS)
+    }
+
     fn is_signal_source(&self, _state: BlockState) -> bool {
         true
     }

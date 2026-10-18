@@ -133,10 +133,34 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("push:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(moved)+":"+stuck+"\t"+String.join(";",samples));
         }
     }
+    static void comparators(RegistryAccess r) throws Exception {
+        var calculate=ComparatorBlock.class.getDeclaredMethod("calculateOutputSignal",net.minecraft.world.level.Level.class,BlockPos.class,BlockState.class);calculate.setAccessible(true);
+        var should=ComparatorBlock.class.getDeclaredMethod("shouldTurnOn",net.minecraft.world.level.Level.class,BlockPos.class,BlockState.class);should.setAccessible(true);
+        for(var direction:Direction.Plane.HORIZONTAL) {
+            var level=new RedstoneVectors(r);
+            for(var mode:ComparatorMode.values())for(int main=0;main<=15;main++)for(int side=0;side<=15;side++) {
+                var state=Blocks.COMPARATOR.defaultBlockState().setValue(ComparatorBlock.FACING,direction).setValue(ComparatorBlock.MODE,mode);
+                level.raw(ORIGIN,state);
+                level.raw(ORIGIN.relative(direction),Blocks.REDSTONE_WIRE.defaultBlockState().setValue(RedstoneWireBlock.POWER,main));
+                level.raw(ORIGIN.relative(direction.getClockWise()),Blocks.REDSTONE_WIRE.defaultBlockState().setValue(RedstoneWireBlock.POWER,side));
+                System.out.println("comparator:"+Block.getId(state)+":"+main+":"+side+"\t"+calculate.invoke(Blocks.COMPARATOR,level,ORIGIN,state)+":"+should.invoke(Blocks.COMPARATOR,level,ORIGIN,state));
+            }
+        }
+    }
+    static void placements(RegistryAccess r) {
+        for(var block:List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE))for(var direction:Direction.values())for(var face:Direction.values())for(int layout=0;layout<3;layout++) {
+            var level=new RedstoneVectors(r);level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());
+            if(layout==1)level.raw(ORIGIN.relative(direction),Blocks.STONE.defaultBlockState());
+            if(layout==2)level.raw(ORIGIN.relative(direction),Blocks.REDSTONE_BLOCK.defaultBlockState());
+            var context=new net.minecraft.world.item.context.DirectionalPlaceContext(level,ORIGIN,direction,net.minecraft.world.item.ItemStack.EMPTY,face);
+            var state=block.getStateForPlacement(context);
+            System.out.println("placement:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(block)+":"+direction.get3DDataValue()+":"+face.get3DDataValue()+":"+layout+"\t"+(state==null?-1:Block.getId(state)));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

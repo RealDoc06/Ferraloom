@@ -444,3 +444,90 @@ fn piston_entity_push_slime_velocity_and_honey_drag_match_real_vanilla_moves() {
         assert_eq!(samples.join(";"), expected, "{name}");
     }
 }
+
+#[test]
+fn comparator_compare_and_subtract_match_vanilla_for_all_inputs() {
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("comparator:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let main = args.next().unwrap().parse::<u8>().unwrap();
+        let side = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        let direction = state::facing(state);
+        level.set_block_state(ORIGIN, state).unwrap();
+        level
+            .set_block_state(
+                ORIGIN.relative(direction, 1),
+                Block::REDSTONE_WIRE
+                    .default_state()
+                    .with(p::POWER, main)
+                    .unwrap(),
+            )
+            .unwrap();
+        level
+            .set_block_state(
+                ORIGIN.relative(direction.clockwise(), 1),
+                Block::REDSTONE_WIRE
+                    .default_state()
+                    .with(p::POWER, side)
+                    .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            format!(
+                "{}:{}",
+                comparator::calculate_output(&mut level, ORIGIN, state).unwrap(),
+                comparator::should_turn_on(&mut level, ORIGIN, state).unwrap()
+            ),
+            expected,
+            "{name}"
+        );
+    }
+}
+#[test]
+fn redstone_placements_match_real_vanilla_contexts() {
+    use crate::block::{DirectionalPlaceContext, LevelAccessRef};
+    use ferraloom_protocol::component::ItemStack;
+    for (name, expected) in cases("placement:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let face = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let layout = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        level
+            .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
+            .unwrap();
+        if layout != 0 {
+            level
+                .set_block_state(
+                    ORIGIN.relative(direction, 1),
+                    if layout == 1 {
+                        Block::STONE
+                    } else {
+                        Block::REDSTONE_BLOCK
+                    }
+                    .default_state(),
+                )
+                .unwrap();
+        }
+        let item = ItemStack::default();
+        let context = DirectionalPlaceContext::new(
+            &LevelReaderRef::Server(&level),
+            ORIGIN,
+            direction,
+            &item,
+            face,
+        )
+        .unwrap();
+        let placed = LevelAccessRef::Server(&mut level)
+            .get_state_for_placement(block, &context)
+            .unwrap();
+        assert_eq!(
+            placed.map_or(-1, |s| i32::from(s.id())).to_string(),
+            expected,
+            "{name}"
+        );
+    }
+}

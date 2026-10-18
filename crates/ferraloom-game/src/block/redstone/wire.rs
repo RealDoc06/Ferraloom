@@ -218,6 +218,48 @@ fn update_neighboring_wires(level: &mut Level, pos: BlockPos) -> Result<(), Leve
     Ok(())
 }
 impl BlockBehavior for RedstoneWireBlock {
+    fn use_without_item(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &crate::block::UseContext,
+        level: &mut Level,
+    ) -> Result<crate::block::InteractionResult, LevelError> {
+        use crate::{block::InteractionResult, entity::player::ServerPlayer};
+        if !level.entity::<ServerPlayer>(context.player)?.may_build() {
+            return Ok(InteractionResult::Pass);
+        }
+        if is_cross(state) || is_dot(state) {
+            let candidate = if is_cross(state) {
+                Block::REDSTONE_WIRE.default_state()
+            } else {
+                cross_state()
+            }
+            .with(p::POWER, state.get(p::POWER).unwrap())
+            .unwrap();
+            let new = connection_state(&LevelReaderRef::Server(level), candidate, pos)?;
+            if new != state {
+                level.set_block_and_update(pos, new)?;
+                let orientation = super::initial_orientation(level, None, Some(Direction::Up));
+                for direction in HORIZONTAL {
+                    let target = pos.relative(direction, 1);
+                    if side(state, direction).connected() != side(new, direction).connected()
+                        && level.is_redstone_conductor(level.get_block_state(target)?, target)?
+                    {
+                        level.update_neighbors_at_except_from_facing(
+                            target,
+                            new.block(),
+                            Some(direction.opposite()),
+                            orientation.map(|o| o.with_front(direction)),
+                        )?;
+                    }
+                }
+                return Ok(InteractionResult::SUCCESS);
+            }
+        }
+        Ok(InteractionResult::Pass)
+    }
+
     fn is_signal_source(&self, _state: BlockState) -> bool {
         true
     }

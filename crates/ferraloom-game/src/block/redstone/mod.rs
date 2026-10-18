@@ -10,6 +10,7 @@ pub mod moving_piston;
 pub mod observer;
 pub mod opening;
 pub mod piston;
+mod placement;
 pub mod signal;
 mod sources;
 mod state;
@@ -32,6 +33,9 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::GetStateForPlacement && placement::supports(block) {
+        return Some(&placement::PLACEMENT);
+    }
     match block.class() {
         BlockClass::PoweredBlock if matches!(method, M::IsSignalSource | M::OwnSignal) => {
             Some(&signal::PoweredBlock)
@@ -39,7 +43,8 @@ pub(crate) fn ported_behavior(
         BlockClass::RedstoneWireBlock
             if matches!(
                 method,
-                M::IsSignalSource
+                M::UseWithoutItem
+                    | M::IsSignalSource
                     | M::OwnSignal
                     | M::Signal
                     | M::DirectSignal
@@ -96,7 +101,8 @@ pub(crate) fn ported_behavior(
         BlockClass::RepeaterBlock
             if matches!(
                 method,
-                M::IsSignalSource
+                M::UseWithoutItem
+                    | M::IsSignalSource
                     | M::OwnSignal
                     | M::Signal
                     | M::DirectSignal
@@ -133,7 +139,8 @@ pub(crate) fn ported_behavior(
         BlockClass::ComparatorBlock
             if matches!(
                 method,
-                M::IsSignalSource
+                M::UseWithoutItem
+                    | M::IsSignalSource
                     | M::OwnSignal
                     | M::Signal
                     | M::DirectSignal

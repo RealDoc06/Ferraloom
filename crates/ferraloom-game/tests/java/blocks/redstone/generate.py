@@ -19,11 +19,13 @@ with tempfile.TemporaryDirectory() as temporary:
     fixture = classes / 'NeighborFixture.java'
     subprocess.run([str(JAVA / 'java'), '-Xmx512M', '-cp', cp, 'NeighborVectors', 'generate', str(fixture)], cwd=classes, check=True)
     fixture.write_text(fixture.read_text().replace('final class MutationFixture', 'class MutationFixture'))
-    subprocess.run([str(JAVA / 'javac'), '-cp', cp, '-d', temporary, str(fixture), str(HERE / 'RedstoneVectors.java')], check=True)
+    compiled = subprocess.run([str(JAVA / 'javac'), '-cp', cp, '-d', temporary, str(fixture), str(HERE / 'RedstoneVectors.java')], capture_output=True, text=True)
+    if compiled.returncode:
+        raise RuntimeError(compiled.stderr[-8000:])
     result = subprocess.run([str(JAVA / 'java'), '-Xmx512M', '-cp', cp, 'RedstoneBootstrap'], cwd=classes, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(result.stderr[-8000:])
-    lines = [line for line in result.stdout.splitlines() if line.startswith(('signal:', 'relay:', 'piston-', 'wire:', 'moving:', 'push:'))]
+    lines = [line for line in result.stdout.splitlines() if line.startswith(('signal:', 'relay:', 'piston-', 'wire:', 'moving:', 'push:', 'comparator:', 'placement:'))]
     if not lines:
         raise RuntimeError('Vanilla emitted no redstone cases')
     (HERE / 'vectors.tsv').write_text('\n'.join(lines) + '\n')
