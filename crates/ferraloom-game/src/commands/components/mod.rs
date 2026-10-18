@@ -1,4 +1,6 @@
 //! Port of ComponentUtils#resolve and ResolutionContext (26.3's updateForEntity).
+mod block_data;
+pub use block_data::block_data;
 mod nbt_text;
 use super::{
     CommandSourceStack,
@@ -25,6 +27,8 @@ pub enum ResolutionError {
     Unsupported(UnsupportedContent),
     Storage(super::storage::StorageReadError),
     EntityData(crate::level::LevelError),
+    BlockData(crate::level::LevelError),
+    Serialization(ferraloom_protocol::Error),
     InvalidContent(String),
 }
 impl fmt::Display for ResolutionError {
@@ -36,6 +40,8 @@ impl fmt::Display for ResolutionError {
             }
             Self::Storage(error) => write!(f, "{error}"),
             Self::EntityData(error) => write!(f, "Required entity read failed: {error:?}"),
+            Self::BlockData(error) => write!(f, "Required block entity read failed: {error:?}"),
+            Self::Serialization(error) => write!(f, "Required NBT serialization failed: {error}"),
             Self::InvalidContent(message) => f.write_str(message),
         }
     }
@@ -45,6 +51,7 @@ impl std::error::Error for ResolutionError {
         match self {
             Self::Syntax(error) => Some(error),
             Self::Storage(error) => Some(error),
+            Self::Serialization(error) => Some(error),
             _ => None,
         }
     }
@@ -283,7 +290,9 @@ fn resolve_contents<R: ComponentResolver>(
                                     Err(
                                         error @ (ResolutionError::Unsupported(_)
                                         | ResolutionError::Storage(_)
-                                        | ResolutionError::EntityData(_)),
+                                        | ResolutionError::EntityData(_)
+                                        | ResolutionError::BlockData(_)
+                                        | ResolutionError::Serialization(_)),
                                     ) => {
                                         return Err(error);
                                     }

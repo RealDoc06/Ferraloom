@@ -183,6 +183,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
     }
     let shared = crate::ServerShared {
         scoreboard: crate::scoreboard::ServerScoreboard::new(scoreboard),
+        ..Default::default()
     };
     level.install_shared(Box::new(shared));
     let mut query = Query {
