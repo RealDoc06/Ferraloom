@@ -148,8 +148,10 @@ fn vanilla_team_entity_count_feedback_and_packet_bytes() {
         feedback: Vec<Value>,
         packets: Vec<Value>,
     }
-    let cases: Vec<TeamCase> =
-        serde_json::from_str(include_str!("../../tests/java/scoreboard/team-feedback.json")).unwrap();
+    let cases: Vec<TeamCase> = serde_json::from_str(include_str!(
+        "../../tests/java/scoreboard/team-feedback.json"
+    ))
+    .unwrap();
     assert_eq!(cases.len(), 9);
     let commands = commands::Commands::default();
     let mut board = ServerScoreboard::default();
