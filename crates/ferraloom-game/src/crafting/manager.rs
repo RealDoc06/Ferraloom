@@ -1,5 +1,6 @@
 use super::{
-    CraftingContext, CraftingInput, Error, Recipe, RecipeInput, RecipeType, Result, stack,
+    CraftingContext, CraftingInput, CraftingInputAccess, Error, Recipe, RecipeInput, RecipeType,
+    Result, stack,
 };
 use ferraloom_data::{
     Item,
@@ -93,7 +94,7 @@ impl RecipeManager {
     }
     pub fn get_crafting_recipe(
         &self,
-        input: &CraftingInput,
+        input: &dyn CraftingInputAccess,
         context: &impl CraftingContext,
     ) -> Result<Option<&RecipeHolder>> {
         self.get_recipe_for(
@@ -171,7 +172,7 @@ impl RecipeCache {
     pub fn get<'a>(
         &mut self,
         manager: &'a RecipeManager,
-        input: &CraftingInput,
+        input: &dyn CraftingInputAccess,
         context: &impl CraftingContext,
     ) -> Result<Option<&'a RecipeHolder>> {
         if input.is_empty() {
@@ -187,7 +188,7 @@ impl RecipeCache {
                 continue;
             }
             let mut matches = true;
-            for (a, b) in key.items().iter().zip(input.items()) {
+            for (a, b) in key.items().iter().zip(input.iter()) {
                 if !stack::same_item_components(a, b)? {
                     matches = false;
                     break;
@@ -201,11 +202,12 @@ impl RecipeCache {
             }
         }
         let recipe = manager.get_crafting_recipe(input, context)?;
+        // RecipeCache explicitly copies count-one keys in vanilla; the matcher
+        // above reads the original input view, including canonical live cells.
         let key = CraftingInput::of(
             input.width(),
             input.height(),
             input
-                .items()
                 .iter()
                 .map(|stack| stack::copy_with_count(stack, 1))
                 .collect(),

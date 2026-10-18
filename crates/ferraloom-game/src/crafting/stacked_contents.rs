@@ -71,9 +71,9 @@ impl StackedItemContents {
     pub fn can_craft(&self, placement: &PlacementInfo, amount: i32) -> bool {
         !placement.is_impossible_to_place() && self.pick(&placement.ingredients, amount).is_some()
     }
-    pub fn from_grid(input: &super::CraftingInput) -> Self {
+    pub fn from_grid(input: &dyn super::CraftingInputAccess) -> Self {
         let mut contents = Self::default();
-        for stack in input.items() {
+        for stack in input.iter() {
             contents.account_stack(stack, 1);
         }
         contents
@@ -185,9 +185,10 @@ fn assign(
 }
 
 /// Port of CraftingRecipe#defaultCraftingReminder.
-pub fn default_crafting_remainders(input: &super::CraftingInput) -> Result<Vec<ItemStack>> {
+pub fn default_crafting_remainders(
+    input: &dyn super::CraftingInputAccess,
+) -> Result<Vec<ItemStack>> {
     input
-        .items()
         .iter()
         .map(|input| crafting_remainder(stack::item(input)))
         .collect()
