@@ -11,7 +11,7 @@ impl BlockBehavior for Trace {
         &self,
         _state: BlockState,
         pos: BlockPos,
-        _source: Block,
+        source: Block,
         _orientation: Option<redstone::Orientation>,
         _moved: bool,
         level: &mut Level,
@@ -19,7 +19,7 @@ impl BlockBehavior for Trace {
         level.emit(LevelEffect::LevelEvent {
             pos,
             id: 99,
-            data: 0,
+            data: i32::from(source.protocol_id()),
         });
         if self.nested && pos == BlockPos::new(-1, 0, 0) {
             level.neighbor_changed(BlockPos::new(10, 0, 0), Block::STONE, None)?;
@@ -915,6 +915,31 @@ fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
         .unwrap();
     let expected = vector("analog-neighbors").replace("analog:", "");
     assert_eq!(trace(&mut level), expected);
+    level
+        .set_block(
+            center,
+            Block::CAKE.default_state(),
+            crate::block::UpdateFlags::NEIGHBORS | crate::block::UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    let source_ids = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::LevelEvent { pos, id: 99, data } if pos == center.north(1) => Some(data),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    // Ordinary neighborChanged receives the removed block; the following
+    // comparator notification receives the newly placed analog-output block.
+    assert_eq!(
+        source_ids,
+        [
+            i32::from(Block::AIR.protocol_id()),
+            i32::from(Block::CAKE.protocol_id())
+        ]
+    );
 }
 
 #[test]

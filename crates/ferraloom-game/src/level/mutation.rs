@@ -199,7 +199,7 @@ impl Level {
             if flags.contains(UpdateFlags::NEIGHBORS) {
                 self.update_neighbors_at(pos, old.block())?;
                 if state.has_analog_output_signal() {
-                    self.update_neighbour_for_output_signal(pos, old.block())?;
+                    self.update_neighbour_for_output_signal(pos, state.block())?;
                 }
             }
             if !flags.contains(UpdateFlags::KNOWN_SHAPE) && limit > 0 {
