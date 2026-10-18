@@ -14,7 +14,7 @@ use ferraloom_game::level::generation::{
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_storage::{self as storage, IoWorker, SerializableChunkData};
 use ferraloom_util::{ChunkPos, SectionPos};
-use ferraloom_worldgen::structure::check::StructureCheck;
+use ferraloom_worldgen::structure::{check::StructureCheck, pipeline::ChunkStructures};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -34,6 +34,7 @@ pub(crate) struct StructureSnapshot {
     pub pos: ChunkPos,
     pub revision: GenerationRevision,
     pub data: storage::StructureData,
+    pub structures: ChunkStructures,
     /// An unattached FULL imposter still needs a save when its shared starts
     /// change. Attached chunks instead save their canonical live payload.
     pub unattached_disk: Option<SerializableChunkData>,
@@ -42,8 +43,36 @@ pub(crate) struct StructureSnapshot {
 pub(crate) struct GenerationRequest {
     pub id: u64,
     pub pos: ChunkPos,
+    pub status: ChunkStatus,
     pub reply: tokio::sync::oneshot::Sender<Result<GenerationOutput>>,
     pub cancelled: Arc<AtomicBool>,
+}
+/// Mailbox completion retained until its ordered main-thread integration starts.
+/// A parked callback must leave subsequent results reachable by a nested pump.
+pub(crate) struct ReadyGeneration {
+    pub request: u64,
+    pub pos: ChunkPos,
+    pub result: Result<GenerationOutput>,
+}
+/// Identity captured by a main-executor continuation. Request IDs identify
+/// submissions; the epoch also rejects a holder removed and recreated in place.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct GenerationIdentity {
+    pub pos: ChunkPos,
+    pub request: u64,
+    pub holder_epoch: u64,
+}
+impl GenerationIdentity {
+    pub fn of(holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> Self {
+        Self {
+            pos: holder.position,
+            request: holder.request_id,
+            holder_epoch: holder.epoch,
+        }
+    }
+    pub fn matches(&self, holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> bool {
+        *self == Self::of(holder)
+    }
 }
 pub(crate) struct GenerationCompletion {
     pub state: GenerationState,
@@ -364,6 +393,7 @@ impl GenerationState {
                     pos: ChunkPos::unpack(key),
                     revision: self.revision,
                     data: storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
+                    structures: proto.region.structures.clone(),
                     unattached_disk: Some(
                         proto
                             .capture(&self.context, registry)
@@ -413,6 +443,7 @@ impl GenerationState {
             surface: surface_heights_in_dimension(&sections, self.context.dimension.min_y),
             sections,
             disk,
+            structures: proto.region.structures.clone(),
         };
         Ok(GenerationOutput {
             terrain,
