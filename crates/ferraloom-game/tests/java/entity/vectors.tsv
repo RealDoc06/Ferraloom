@@ -325,6 +325,86 @@ push-entities	2	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	40210000000000
 push-entities	3	0	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	4	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	4021000000000000,4050000000000000,4021000000000000	4021800000000000,4050000000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	5	1	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
+player-interaction	false	false,5,3,true
+player-interaction	true	true,5,3,true
+player-range	0	0.0	5,65,0	false
+player-range	0	0.0	0,70,0	true
+player-range	0	0.0	0,65,0	true
+player-range	0	1.0	5,65,0	true
+player-range	0	1.0	0,70,0	true
+player-range	0	1.0	0,65,0	true
+player-range	0	4.0	5,65,0	true
+player-range	0	4.0	0,70,0	true
+player-range	0	4.0	0,65,0	true
+player-range	0	-1.0	5,65,0	false
+player-range	0	-1.0	0,70,0	false
+player-range	0	-1.0	0,65,0	true
+player-range	1	0.0	5,65,0	false
+player-range	1	0.0	0,70,0	true
+player-range	1	0.0	0,65,0	true
+player-range	1	1.0	5,65,0	true
+player-range	1	1.0	0,70,0	true
+player-range	1	1.0	0,65,0	true
+player-range	1	4.0	5,65,0	true
+player-range	1	4.0	0,70,0	true
+player-range	1	4.0	0,65,0	true
+player-range	1	-1.0	5,65,0	false
+player-range	1	-1.0	0,70,0	false
+player-range	1	-1.0	0,65,0	true
+player-range	2	0.0	5,65,0	true
+player-range	2	0.0	0,70,0	true
+player-range	2	0.0	0,65,0	true
+player-range	2	1.0	5,65,0	true
+player-range	2	1.0	0,70,0	true
+player-range	2	1.0	0,65,0	true
+player-range	2	4.0	5,65,0	true
+player-range	2	4.0	0,70,0	true
+player-range	2	4.0	0,65,0	true
+player-range	2	-1.0	5,65,0	false
+player-range	2	-1.0	0,70,0	false
+player-range	2	-1.0	0,65,0	true
+player-range	3	0.0	5,65,0	false
+player-range	3	0.0	0,70,0	false
+player-range	3	0.0	0,65,0	false
+player-range	3	1.0	5,65,0	false
+player-range	3	1.0	0,70,0	false
+player-range	3	1.0	0,65,0	true
+player-range	3	4.0	5,65,0	false
+player-range	3	4.0	0,70,0	false
+player-range	3	4.0	0,65,0	true
+player-range	3	-1.0	5,65,0	false
+player-range	3	-1.0	0,70,0	false
+player-range	3	-1.0	0,65,0	true
+player-range	4	0.0	5,65,0	false
+player-range	4	0.0	0,70,0	false
+player-range	4	0.0	0,65,0	false
+player-range	4	1.0	5,65,0	false
+player-range	4	1.0	0,70,0	false
+player-range	4	1.0	0,65,0	true
+player-range	4	4.0	5,65,0	false
+player-range	4	4.0	0,70,0	false
+player-range	4	4.0	0,65,0	true
+player-range	4	-1.0	5,65,0	false
+player-range	4	-1.0	0,70,0	false
+player-range	4	-1.0	0,65,0	true
+cooldown-group	0	minecraft:stone
+cooldown-group	1	minecraft:shared
+cooldown-group	2	minecraft:shared
+cooldown-group	3	minecraft:air
+cooldown	fresh	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	-
+cooldown	added	3f800000,3f555555,3f800000,nan,0,3f800000,3f400000,3f800000,nan,0,3f800000,3f400000,3f800000,nan,0,0,0,0,0,0	minecraft:stone:3|minecraft:shared:2
+cooldown	tick1	3f2aaaab,3f000000,3f2aaaab,nan,0,3f000000,3e800000,3f000000,nan,0,3f000000,3e800000,3f000000,nan,0,0,0,0,0,0	-
+cooldown	replace	3f2aaaab,3f000000,3f2aaaab,nan,0,3f800000,3f600000,3f800000,nan,0,3f800000,3f600000,3f800000,nan,0,0,0,0,0,0	minecraft:shared:4
+cooldown	tick2	3eaaaaab,3e2aaaab,3eaaaaab,nan,0,3f400000,3f200000,3f400000,nan,0,3f400000,3f200000,3f400000,nan,0,0,0,0,0,0	-
+cooldown	tick3	0,0,0,0,0,3f000000,3ec00000,3f000000,nan,0,3f000000,3ec00000,3f000000,nan,0,0,0,0,0,0	minecraft:stone:0
+cooldown	remove-absent	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:shared:0|minecraft:shared:0
+cooldown	nonpositive	nan,0,nan,nan,0,3f800000,3f800000,3f800000,nan,3f800000,3f800000,3f800000,3f800000,nan,3f800000,0,0,0,0,0	minecraft:stone:0|minecraft:shared:-1
+cooldown	nonpositive-expire	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:0|minecraft:shared:0
+cooldown	rehash	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:group_0:1|minecraft:group_1:1|minecraft:group_2:1|minecraft:group_3:1|minecraft:group_4:1|minecraft:group_5:1|minecraft:group_6:1|minecraft:group_7:1|minecraft:group_8:1|minecraft:group_9:1|minecraft:group_10:1|minecraft:group_11:1|minecraft:group_12:1|minecraft:group_13:1|minecraft:group_14:1|minecraft:group_15:1|minecraft:group_16:1|minecraft:group_17:1|minecraft:group_18:1|minecraft:group_19:1|minecraft:group_20:1|minecraft:group_21:1|minecraft:group_22:1|minecraft:group_23:1
+cooldown	iterator-expire	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:group_9:0|minecraft:group_7:0|minecraft:group_19:0|minecraft:group_8:0|minecraft:group_18:0|minecraft:group_5:0|minecraft:group_17:0|minecraft:group_6:0|minecraft:group_16:0|minecraft:group_3:0|minecraft:group_15:0|minecraft:group_4:0|minecraft:group_14:0|minecraft:group_1:0|minecraft:group_13:0|minecraft:group_2:0|minecraft:group_12:0|minecraft:group_23:0|minecraft:group_11:0|minecraft:group_22:0|minecraft:group_0:0|minecraft:group_10:0|minecraft:group_21:0|minecraft:group_20:0
+cooldown	overflow-add	0,0,0,nan,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:2
+cooldown	overflow-end	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:0
+cooldown	wrap-tick	0,0,0,0,0,0,0,0,nan,0,0,0,0,nan,0,0,0,0,0,0	minecraft:shared:2
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0

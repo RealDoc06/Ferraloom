@@ -1,7 +1,9 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::drop_item;
+pub mod cooldowns;
 pub mod equipment;
+mod interaction;
 pub mod inventory;
 use crate::{
     entity::{Avatar, EntityData, EntityDataView, EntityState},
@@ -47,6 +49,10 @@ pub struct ServerPlayer {
     pub game_mode: GameType,
     pub flying: bool,
     pub may_build: bool,
+    pub last_client_input: ferraloom_protocol::play::Input,
+    pub text_filtering_enabled: bool,
+    pub cooldowns: cooldowns::ServerItemCooldowns,
+    interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
@@ -133,6 +139,18 @@ impl ServerPlayer {
             game_mode,
             flying: game_mode == GameType::Spectator,
             may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
+            last_client_input: ferraloom_protocol::play::Input {
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+                jump: false,
+                shift: false,
+                sprint: false,
+            },
+            text_filtering_enabled: false,
+            cooldowns: Default::default(),
+            interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
@@ -774,7 +792,12 @@ impl crate::entity::Entity for PlayerBehavior {
         if spectator || passenger {
             crate::entity::movement::set_on_ground(entity, false, None, level)?;
         }
-        crate::entity::base_tick(self, entity, level)
+        crate::entity::base_tick(self, entity, level)?;
+        cooldowns::tick(entity, level)?;
+        level
+            .entity_mut::<ServerPlayer>(entity)?
+            .update_interaction_range_attributes();
+        Ok(())
     }
 
     fn maybe_back_off_from_edge(

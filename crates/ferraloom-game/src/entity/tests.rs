@@ -775,7 +775,7 @@ pub(super) fn tags(level: &mut Level) {
         .unwrap(),
     ));
 }
-fn level(floor: bool) -> Level {
+pub(super) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
 fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
