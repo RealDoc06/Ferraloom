@@ -158,6 +158,7 @@ pub fn close_container(
     send_close: bool,
     disconnected: bool,
 ) -> Result<Vec<cb::Packet>> {
+    super::block_containers::ensure_unrooted_menu_values(player, level)?;
     let bound = level
         .entity::<ServerPlayer>(player)?
         .menus

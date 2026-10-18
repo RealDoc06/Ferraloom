@@ -100,6 +100,7 @@ pub fn with_block_menu_context<R>(
         &mut MenuContext<'_>,
     ) -> Result<R>,
 ) -> Result<R> {
+    ensure_unrooted_menu_values(player, level)?;
     let refs = level
         .entity::<ServerPlayer>(player)?
         .menus
@@ -176,6 +177,36 @@ pub fn with_block_menu_context<R>(
         handle.set_changed(level)?;
     }
     result
+}
+
+/// Legacy value adapters cannot represent a held mutable Java receiver. Live
+/// handle operations bypass this adapter rather than clone or write back stacks.
+pub(crate) fn ensure_unrooted_menu_values(player: EntityRef, level: &Level) -> Result<()> {
+    let player = level.entity::<ServerPlayer>(player)?;
+    let held = |parts: Option<(&StackGenerations, &ItemStack, usize)>| {
+        parts.is_some_and(|(generations, item, index)| {
+            !item.is_empty() && generations.is_retained(generations.current(index).unwrap())
+        })
+    };
+    let menu = player.menus.current();
+    let mut rooted = (0..43)
+        .any(|slot| held(player.inventory.stack_parts(slot, &player.parent.equipment)))
+        || held(Some((&menu.carried_generations, &menu.carried, 0)));
+    for container in &menu.local {
+        rooted |= (0..container.size()).any(|slot| held(container.stack_parts(slot)));
+    }
+    for &handle in &menu.block_entities {
+        let receiver = level.block_entity_state(handle)?;
+        if let Some(container) = receiver.container() {
+            rooted |= (0..container.size()).any(|slot| held(container.stack_parts(slot)));
+        }
+    }
+    if rooted {
+        return Err(MenuError::Unsupported(
+            "retained stacks require live menu operations",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

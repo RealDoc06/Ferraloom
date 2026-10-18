@@ -59,30 +59,37 @@ pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), Le
     let size = level
         .block_entity::<BaseContainerBlockEntity>(entity)?
         .size();
+    let mut operation = crate::inventory::StackOperation::new(level);
     for slot in 0..size {
-        // Containers reads each stack through getItem before its scatter draws.
-        super::access::get_item(entity, slot, level)?;
+        let stack = operation
+            .pin(crate::inventory::ContainerSlot {
+                container: crate::inventory::ContainerHandle::BlockEntity(entity),
+                slot,
+            })
+            .map_err(|_| LevelError::Inventory("container drop stack receiver"))?;
         let origin = scatter_origin(
-            level,
+            operation.level,
             Vec3::new(
                 f64::from(entity.pos.x),
                 f64::from(entity.pos.y),
                 f64::from(entity.pos.z),
             ),
         );
-        while !level
-            .block_entity::<BaseContainerBlockEntity>(entity)?
-            .items[slot]
+        while !operation
+            .level
+            .stack(stack)
+            .map_err(|_| LevelError::Inventory("container drop stack receiver"))?
             .is_empty()
         {
-            let amount = level.random().next_int_bound(21) + 10;
+            let amount = operation.level.random().next_int_bound(21) + 10;
             let piece = split(
-                &mut level
-                    .block_entity_mut::<BaseContainerBlockEntity>(entity)?
-                    .items[slot],
+                operation
+                    .level
+                    .stack_mut(stack)
+                    .map_err(|_| LevelError::Inventory("container drop stack receiver"))?,
                 amount,
             );
-            spawn_piece(level, origin, piece)?;
+            spawn_piece(operation.level, origin, piece)?;
         }
     }
     Ok(())

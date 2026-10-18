@@ -898,7 +898,7 @@ impl AbstractContainerMenu {
     ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
         use crate::entity::player::inventory::InventoryEffect;
         let mut effects = Vec::new();
-        let mut carried = std::mem::take(&mut self.carried);
+        let mut carried = self.take_carried_unrooted();
         if !carried.is_empty() {
             if disconnected {
                 effects.push(InventoryEffect::Drop(carried));

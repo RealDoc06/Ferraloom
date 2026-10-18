@@ -19,6 +19,10 @@ pub enum ContainerHandle {
         menu: MenuRef,
         container: usize,
     },
+    MenuCarried {
+        player: EntityRef,
+        menu: MenuRef,
+    },
     Entity(EntityRef),
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,6 +99,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.set_item_count(slot.slot, amount)
             })?,
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -113,6 +120,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.get_item(slot.slot)
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -131,6 +141,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.set_item(slot.slot, stack)
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -149,10 +162,18 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.remove_item(slot.slot, amount)
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
     fn remove_item_no_update(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
+        if self.level.stack_is_retained(slot)? {
+            return Err(MenuError::Unsupported(
+                "retained removal requires an Existing stack value",
+            ));
+        }
         match slot.container {
             ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
                 container.remove_item_no_update(slot.slot)
@@ -167,6 +188,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.remove_item_no_update(slot.slot)
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -186,6 +210,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
                 menu,
                 container,
             } => self.with_local(player, menu, container, |container| container.set_changed()),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -203,6 +230,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
                 menu,
                 container,
             } => self.with_local(player, menu, container, |container| container.size()),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -222,6 +252,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.max_stack_size()
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -242,6 +275,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| {
                 container.can_place_item(slot.slot, stack)
             }),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -261,6 +297,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
                 menu,
                 container,
             } => self.with_local(player, menu, container, |container| container.still_valid()),
+            ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
+                "cursor is a stack receiver, not a slot container",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }

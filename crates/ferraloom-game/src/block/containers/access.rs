@@ -160,6 +160,15 @@ pub fn remove_item_no_update(
     level: &mut Level,
 ) -> Result<ItemStack, LevelError> {
     super::loot::unpack_loot_table(handle, None, level)?;
+    let container = level.block_entity::<BaseContainerBlockEntity>(handle)?;
+    if let Some((generations, item, index)) = container.stack_parts(slot)
+        && !item.is_empty()
+        && generations.is_retained(generations.current(index).unwrap())
+    {
+        return Err(LevelError::Inventory(
+            "retained removal requires an Existing stack value",
+        ));
+    }
     Ok(level
         .block_entity_mut::<BaseContainerBlockEntity>(handle)?
         .remove_item_no_update(slot))

@@ -55,6 +55,7 @@ pub struct AbstractContainerMenu {
     pub block_entities: Vec<crate::block::entity::BlockEntityRef>,
     pub data: Vec<i32>,
     pub carried: ItemStack,
+    pub(crate) carried_generations: StackGenerations,
     state_id: i32,
     quickcraft_type: i32,
     quickcraft_status: i32,
@@ -83,6 +84,7 @@ impl AbstractContainerMenu {
             block_entities: Vec::new(),
             data: Vec::new(),
             carried: ItemStack::default(),
+            carried_generations: StackGenerations::new(1),
             state_id: 0,
             quickcraft_type: -1,
             quickcraft_status: 0,
@@ -100,6 +102,18 @@ impl AbstractContainerMenu {
             crafting_remove_count: 0,
             placing_recipe: false,
         }
+    }
+    /// Port of AbstractContainerMenu#setCarried. Count edits use the existing
+    /// receiver; replacing it detaches any operation-rooted cursor stack.
+    pub fn set_carried(&mut self, stack: ItemStack) {
+        self.carried_generations
+            .replace(0, &mut self.carried, stack);
+    }
+    pub(crate) fn take_carried_unrooted(&mut self) -> ItemStack {
+        self.carried_generations
+            .replace(0, &mut self.carried, ItemStack::default())
+            .into_owned()
+            .expect("live cursor removal uses StackRef")
     }
     pub(crate) fn add_slot(&mut self, mut slot: Slot) {
         slot.index = self.slots.len();
@@ -127,7 +141,7 @@ impl AbstractContainerMenu {
         for (i, stack) in items.iter().enumerate() {
             self.set_item(ctx, i, stack.clone());
         }
-        self.carried = carried;
+        self.set_carried(carried);
         self.state_id = state_id;
     }
     pub fn set_item_with_state(
@@ -462,7 +476,7 @@ impl AbstractContainerMenu {
                 if slot_index == -999 {
                     if !self.carried.is_empty() {
                         let dropped = if button == 0 {
-                            std::mem::take(&mut self.carried)
+                            self.take_carried_unrooted()
                         } else {
                             split(&mut self.carried, 1)
                         };
@@ -497,7 +511,7 @@ impl AbstractContainerMenu {
                     {
                         crafting.item_crafted(self, ctx, &cloned, None)?;
                     }
-                    self.carried = cloned;
+                    self.set_carried(cloned);
                 }
             }
             ContainerInput::Throw if self.carried.is_empty() && slot_index >= 0 => {
@@ -555,7 +569,8 @@ impl AbstractContainerMenu {
             if !self.carried.is_empty() {
                 let amount = if button == 0 { count(&self.carried) } else { 1 };
                 let carried = self.carried.clone();
-                self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                self.set_carried(remaining);
             }
         } else if slot.may_pickup(&clicked, ctx.creative, hooks)? {
             if self.carried.is_empty() {
@@ -565,18 +580,23 @@ impl AbstractContainerMenu {
                     (count(&clicked) + 1) / 2
                 };
                 if let Some(taken) = self.try_remove_live(ctx, &slot, amount, i32::MAX, hooks)? {
-                    self.carried = taken.clone();
+                    self.set_carried(taken.clone());
                     self.on_take(ctx, slot.index, &taken, 0, hooks)?;
                 }
             } else if slot.may_place(&self.carried, hooks)? {
                 if is_same_item_same_components(&clicked, &self.carried) {
                     let amount = if button == 0 { count(&self.carried) } else { 1 };
                     let carried = self.carried.clone();
-                    self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                    let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                    self.set_carried(remaining);
                 } else if count(&self.carried)
                     <= slot.max_stack_size(self.container(ctx, slot.container), &self.carried)
                 {
-                    let carried = std::mem::replace(&mut self.carried, clicked);
+                    let carried = self
+                        .carried_generations
+                        .replace(0, &mut self.carried, clicked)
+                        .into_owned()
+                        .expect("live cursor replacement uses StackRef");
                     self.set_item_live(ctx, slot.index, carried, hooks)?;
                 }
             } else if is_same_item_same_components(&clicked, &self.carried) {
@@ -757,7 +777,7 @@ impl AbstractContainerMenu {
                         self.set_item_live(ctx, *index, with_count(&source, new), hooks)?;
                     }
                 }
-                self.carried = with_count(&source, remaining);
+                self.set_carried(with_count(&source, remaining));
                 self.reset_quick_craft();
             }
             _ => self.reset_quick_craft(),
