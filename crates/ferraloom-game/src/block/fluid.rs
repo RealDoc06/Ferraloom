@@ -702,6 +702,15 @@ impl LiquidBlock {
     }
 }
 impl BlockBehavior for LiquidBlock {
+    /// Port of LiquidBlock#getDrops's empty override, without a loot lookup.
+    fn get_drops(
+        &self,
+        _state: BlockState,
+        _context: super::drops::BlockLootContext,
+        _level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(Vec::new())
+    }
     fn collision_shape(
         &self,
         state: BlockState,

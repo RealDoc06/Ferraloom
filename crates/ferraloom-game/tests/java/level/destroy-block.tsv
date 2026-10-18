@@ -25,7 +25,9 @@ chest:true:true:9123456	true|0|-372354513|event:2001:none:5544;item:minecraft:ch
 air:true:true:0	false|0|-1155484576|
 stone:true:true:0	true|0|-1930858313|event:2001:none:1;item:minecraft:cobblestone:1:40213b20b4753654,40500fb2796cd9cc,4021232dc9d3c77c:private-rng;set:0:3:7;game:minecraft:block_destroy:none:1
 water:true:true:0	false|89|-1155484576|event:2001:none:89;set:89:3:7
+lava:true:true:0	false|105|-1155484576|event:2001:none:105;set:105:3:7
 fire:true:true:0	true|0|-1155484576|set:0:3:7;game:minecraft:block_destroy:none:4962
+chain:true:true:0	true|89|-1930858313|event:2001:none:9982;item:minecraft:iron_chain:1:40213b20b4753654,40500fb2796cd9cc,4021232dc9d3c77c:private-rng;set:89:3:7;game:minecraft:block_destroy:none:9982
 audience:destroy	0:2001,1:2001
 audience:player-particles	1:2001
 audience:straw-particles	0:2014,1:2014

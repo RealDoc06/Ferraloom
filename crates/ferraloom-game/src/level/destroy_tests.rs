@@ -58,6 +58,9 @@ fn level(behaviors: &'static Behaviors) -> Level {
     level.set_block_tags(Arc::new(
         ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
     ));
+    level.set_fluid_tags(Arc::new(
+        ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
+    ));
     drop_fixtures::install(&mut level);
     level.take_effects();
     level
@@ -98,12 +101,21 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
             "chest" => Block::CHEST,
             "air" => Block::AIR,
             "water" => Block::WATER,
+            "lava" => Block::LAVA,
+            "chain" => Block::IRON_CHAIN,
             "fire" => Block::FIRE,
             "stone" => Block::STONE,
             _ => unreachable!(),
         };
         let mut level = level(&EMPTY);
-        let state = block.default_state();
+        let state = if block == Block::IRON_CHAIN {
+            block
+                .default_state()
+                .with(ferraloom_data::properties::WATERLOGGED, true)
+                .unwrap()
+        } else {
+            block.default_state()
+        };
         level.set_block_state(POS, state).unwrap();
         if block == Block::FIRE {
             level
@@ -131,7 +143,7 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
         level.take_effects();
         let actual = level
             .destroy_block(POS, fields[1].parse().unwrap(), 7)
-            .unwrap();
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
         let expected: Vec<_> = expected.split('|').collect();
         assert_eq!(actual.to_string(), expected[0], "{name}");
         assert_eq!(
@@ -198,7 +210,7 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
         );
         count += 1;
     }
-    assert_eq!(count, 28);
+    assert_eq!(count, 30);
 }
 
 #[test]
@@ -378,7 +390,10 @@ fn destroy_block_forwards_update_limit_and_required_drop_errors_in_both_policies
         level
             .set_block_state(POS, Block::OAK_PLANKS.default_state())
             .unwrap();
-        assert!(level.destroy_block(POS, true, 7).is_err());
+        assert_eq!(
+            level.destroy_block(POS, true, 7),
+            Err(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+        );
         assert_eq!(
             level.get_block_state(POS).unwrap().block(),
             Block::OAK_PLANKS

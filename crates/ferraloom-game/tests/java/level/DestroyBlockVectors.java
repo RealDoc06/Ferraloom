@@ -123,8 +123,10 @@ public final class DestroyBlockVectors extends ServerLevel {
             level.scenario("planks",Blocks.OAK_PLANKS.defaultBlockState(),drops,enabled,seed,false);
             level.scenario("chest",Blocks.CHEST.defaultBlockState(),drops,enabled,seed,true);
         }
-        for(var block:List.of(Blocks.AIR,Blocks.STONE,Blocks.WATER,Blocks.FIRE))
+        for(var block:List.of(Blocks.AIR,Blocks.STONE,Blocks.WATER,Blocks.LAVA,Blocks.FIRE))
             level.scenario(BuiltInRegistries.BLOCK.getKey(block).getPath(),block.defaultBlockState(),true,true,0,false);
+        level.scenario("chain",Blocks.IRON_CHAIN.defaultBlockState().setValue(
+            net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true),true,true,0,false);
         level.audiences(server);
         System.out.flush(); System.exit(0);
     }
