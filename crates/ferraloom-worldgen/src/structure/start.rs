@@ -8,29 +8,92 @@ use super::{
     template::{LiquidSettings, StructureTemplateManager},
 };
 use crate::{Error, Identifier, feature::PlacedFeature};
-use ferraloom_data::datapack::ResourceManager;
+use ferraloom_data::{datapack::ResourceManager, registries::worldgen_structure_type};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_util::{Direction, Rotation};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 /// The ported piece variants. Handwritten variants are added with their actual
 /// generators and postProcess implementations; unknown pieces never become air.
 #[derive(Clone, Debug)]
 pub enum StructurePiece {
     Jigsaw(PoolElementStructurePiece),
+    BuriedTreasure(super::structures::buried_treasure::BuriedTreasurePiece),
+    Igloo(Box<super::structures::igloo::IglooPiece>),
+    Shipwreck(Box<super::structures::shipwreck::ShipwreckPiece>),
+    NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
+    EndCity(Box<super::structures::end_city::EndCityPiece>),
+    WoodlandMansion(Box<super::structures::woodland_mansion::WoodlandMansionPiece>),
+    OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
+    Stronghold(super::structures::stronghold::StrongholdPiece),
+    OceanMonument(Box<super::structures::ocean_monument::MonumentBuilding>),
+    OceanMonumentRoom(super::structures::ocean_monument::MonumentRoom),
+    NetherFortress(super::structures::nether_fortress::FortressPiece),
+    Mineshaft(super::structures::mineshaft::MineshaftPiece),
+    RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
+    JungleTemple(super::structures::jungle_temple::JungleTemplePiece),
+    SwampHut(super::structures::swamp_hut::SwampHutPiece),
+    DesertPyramid(Box<super::structures::desert_pyramid::DesertPyramidPiece>),
 }
 impl StructurePiece {
+    pub fn terrain_piece(&self, adjustment: TerrainAdjustment) -> super::TerrainPiece<'_> {
+        match self {
+            Self::Jigsaw(piece) => super::TerrainPiece {
+                bounds: piece.bounds,
+                adjustment,
+                ground_level_delta: piece.ground_level_delta,
+                projection: Some(piece.element.projection()),
+                junctions: &piece.junctions,
+            },
+            _ => super::TerrainPiece {
+                bounds: self.bounds(),
+                adjustment,
+                ground_level_delta: 0,
+                projection: None,
+                junctions: &[],
+            },
+        }
+    }
     pub fn bounds(&self) -> BoundingBox {
         match self {
             Self::Jigsaw(p) => p.bounds,
+            Self::BuriedTreasure(p) => p.data.bounds,
+            Self::Igloo(p) => p.template.data.bounds,
+            Self::Shipwreck(p) => p.template.data.bounds,
+            Self::NetherFossil(p) => p.template.data.bounds,
+            Self::EndCity(p) => p.template.data.bounds,
+            Self::WoodlandMansion(p) => p.template.data.bounds,
+            Self::OceanRuin(p) => p.template.data.bounds,
+            Self::Stronghold(p) => p.data.bounds,
+            Self::OceanMonument(p) => p.data.bounds,
+            Self::OceanMonumentRoom(p) => p.data.bounds,
+            Self::NetherFortress(p) => p.data.bounds,
+            Self::Mineshaft(p) => p.data.bounds,
+            Self::RuinedPortal(p) => p.template.data.bounds,
+            Self::JungleTemple(p) => p.scattered.data.bounds,
+            Self::SwampHut(p) => p.scattered.data.bounds,
+            Self::DesertPyramid(p) => p.scattered.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
         match self {
             Self::Jigsaw(p) => p.to_nbt(),
+            Self::BuriedTreasure(p) => Ok(p.to_nbt()),
+            Self::Igloo(p) => Ok(p.to_nbt()),
+            Self::Shipwreck(p) => Ok(p.to_nbt()),
+            Self::NetherFossil(p) => Ok(p.to_nbt()),
+            Self::EndCity(p) => Ok(p.to_nbt()),
+            Self::WoodlandMansion(p) => Ok(p.to_nbt()),
+            Self::OceanRuin(p) => Ok(p.to_nbt()),
+            Self::Stronghold(p) => Ok(p.to_nbt()),
+            Self::OceanMonument(p) => Ok(p.to_nbt()),
+            Self::OceanMonumentRoom(p) => Ok(p.to_nbt()),
+            Self::NetherFortress(p) => Ok(p.to_nbt()),
+            Self::Mineshaft(p) => Ok(p.to_nbt()),
+            Self::RuinedPortal(p) => Ok(p.to_nbt()),
+            Self::JungleTemple(p) => Ok(p.to_nbt()),
+            Self::SwampHut(p) => Ok(p.to_nbt()),
+            Self::DesertPyramid(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -39,6 +102,7 @@ impl StructurePiece {
 #[derive(Clone, Debug)]
 pub struct StructureStart {
     pub structure: Option<Identifier>,
+    pub kind: Option<worldgen_structure_type::Id>,
     pub chunk: [i32; 2],
     pub references: i32,
     pub pieces: Vec<StructurePiece>,
@@ -49,6 +113,7 @@ impl StructureStart {
     pub fn invalid() -> Self {
         Self {
             structure: None,
+            kind: None,
             chunk: [0; 2],
             references: 0,
             pieces: Vec::new(),
@@ -58,6 +123,7 @@ impl StructureStart {
     }
     pub fn new(
         structure: Identifier,
+        kind: worldgen_structure_type::Id,
         chunk: [i32; 2],
         references: i32,
         terrain: TerrainAdjustment,
@@ -65,6 +131,7 @@ impl StructureStart {
     ) -> Self {
         Self {
             structure: Some(structure),
+            kind: Some(kind),
             chunk,
             references,
             terrain,
@@ -81,6 +148,8 @@ impl StructureStart {
     ) -> Self {
         Self::new(
             structure,
+            worldgen_structure_type::Id::from_name("minecraft:jigsaw")
+                .expect("builtin structure type"),
             chunk,
             references,
             terrain,
@@ -149,9 +218,44 @@ impl StructureStart {
     }
     /// Current-version start codec. Old chunks pass through storage's data
     /// fixer before this call. Unknown structure ids are discarded like vanilla.
+    /// Port of StructureStart#loadStaticStart, including seed-dependent monument
+    /// reconstruction. Use this when restoring starts for generation/decoration.
+    pub fn load_from_nbt(
+        tag: &CompoundTag,
+        seed: i64,
+        settings: &super::pipeline::StructureRegistry,
+        templates: &StructureTemplateManager,
+        resources: &ResourceManager,
+        decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
+    ) -> Result<Option<Self>, Error> {
+        let Some(mut start) = Self::from_nbt(tag, settings, templates, resources, decode_feature)?
+        else {
+            return Ok(None);
+        };
+        start.rebuild_after_load(seed)?;
+        Ok(Some(start))
+    }
+    pub(super) fn rebuild_after_load(&mut self, seed: i64) -> Result<(), Error> {
+        if self
+            .kind
+            .is_some_and(|kind| kind.name() == "minecraft:ocean_monument")
+            && let Some(first) = self.pieces.first()
+        {
+            let saved = super::piece::StructurePieceData::from_nbt(&first.to_nbt()?)?;
+            let building = super::structures::ocean_monument::MonumentBuilding::regenerate(
+                seed, self.chunk, &saved,
+            );
+            self.pieces = vec![StructurePiece::OceanMonument(Box::new(building))];
+            self.cached_bounds = OnceLock::new();
+        }
+        Ok(())
+    }
+    /// Decode the structure compound without seed-dependent reconstruction.
+    /// This codec preserves the persisted representation for storage round trips;
+    /// live restored starts must use load_from_nbt instead.
     pub fn from_nbt(
         tag: &CompoundTag,
-        settings: &BTreeMap<Identifier, TerrainAdjustment>,
+        settings: &super::pipeline::StructureRegistry,
         templates: &StructureTemplateManager,
         resources: &ResourceManager,
         decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
@@ -162,10 +266,8 @@ impl StructureStart {
         if id.to_string_lossy() == "INVALID" {
             return Ok(Some(Self::invalid()));
         }
-        let Ok(id) = id.to_string_lossy().parse::<Identifier>() else {
-            return Ok(None);
-        };
-        let Some(&terrain) = settings.get(&id) else {
+        let id = id.to_string_lossy().parse::<Identifier>()?;
+        let Some(definition) = settings.structures.get(&id) else {
             return Ok(None);
         };
         let mut pieces = Vec::new();
@@ -179,6 +281,150 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:shstart" | "minecraft:shsd" | "minecraft:shs" | "minecraft:shph"
+                    | "minecraft:shlt" | "minecraft:shrt" | "minecraft:shrc"
+                    | "minecraft:shssd" | "minecraft:sh5c" | "minecraft:shcc"
+                    | "minecraft:shli" | "minecraft:shpr" | "minecraft:shfc" => {
+                        if let Ok(piece) = super::structures::stronghold::StrongholdPiece::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::Stronghold(piece));
+                        }
+                    }
+                    "minecraft:nestart" | "minecraft:nebcr" | "minecraft:nebs"
+                    | "minecraft:nebef" | "minecraft:nerc" | "minecraft:nesr"
+                    | "minecraft:nemt" | "minecraft:nece" | "minecraft:nesc"
+                    | "minecraft:nescsc" | "minecraft:nescrt" | "minecraft:nesclt"
+                    | "minecraft:neccs" | "minecraft:nectb" | "minecraft:necsr" => {
+                        if let Ok(piece) =
+                            super::structures::nether_fortress::FortressPiece::from_nbt(
+                                &piece_id.to_string(),
+                                tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::NetherFortress(piece));
+                        }
+                    }
+                    "minecraft:msroom"
+                    | "minecraft:mscorridor"
+                    | "minecraft:msstairs"
+                    | "minecraft:mscrossing" => {
+                        if let Ok(piece) = super::structures::mineshaft::MineshaftPiece::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::Mineshaft(piece));
+                        }
+                    }
+                    "minecraft:rupo" => {
+                        if let Ok(piece) =
+                            super::structures::ruined_portal::RuinedPortalPiece::from_nbt(
+                                templates, tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::RuinedPortal(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:tejp" => {
+                        if let Ok(piece) =
+                            super::structures::jungle_temple::JungleTemplePiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::JungleTemple(piece));
+                        }
+                    }
+                    "minecraft:tedp" => {
+                        if let Ok(piece) =
+                            super::structures::desert_pyramid::DesertPyramidPiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::DesertPyramid(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:tesh" => {
+                        if let Ok(piece) =
+                            super::structures::swamp_hut::SwampHutPiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::SwampHut(piece));
+                        }
+                    }
+                    "minecraft:orp" => {
+                        if let Ok(piece) =
+                            super::structures::ocean_ruin::OceanRuinPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::OceanRuin(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:omentry"
+                    | "minecraft:omcr"
+                    | "minecraft:omdxr"
+                    | "minecraft:omdyr"
+                    | "minecraft:omdzr"
+                    | "minecraft:omdxyr"
+                    | "minecraft:omdyzr"
+                    | "minecraft:omsimple"
+                    | "minecraft:omsimplet"
+                    | "minecraft:omwr"
+                    | "minecraft:ompenthouse" => {
+                        if let Ok(piece) = super::structures::ocean_monument::MonumentRoom::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::OceanMonumentRoom(piece));
+                        }
+                    }
+                    "minecraft:omb" => {
+                        if let Ok(piece) =
+                            super::structures::ocean_monument::MonumentBuilding::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::OceanMonument(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:wmp" => {
+                        if let Ok(piece) =
+                            super::structures::woodland_mansion::WoodlandMansionPiece::from_nbt(
+                                templates, tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::WoodlandMansion(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:ecp" => {
+                        if let Ok(piece) =
+                            super::structures::end_city::EndCityPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::EndCity(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:nefos" => {
+                        if let Ok(piece) =
+                            super::structures::nether_fossil::NetherFossilPiece::from_nbt(
+                                templates, tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::NetherFossil(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:shipwreck" => {
+                        if let Ok(piece) =
+                            super::structures::shipwreck::ShipwreckPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::Shipwreck(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:iglu" => {
+                        if let Ok(piece) =
+                            super::structures::igloo::IglooPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::Igloo(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:btp" => {
+                        if let Ok(piece) =
+                            super::structures::buried_treasure::BuriedTreasurePiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::BuriedTreasure(piece));
+                        }
+                    }
                     "minecraft:jigsaw"
                     | "minecraft:nvi"
                     | "minecraft:pcp"
@@ -208,12 +454,13 @@ impl StructureStart {
         }
         Ok(Some(Self::new(
             id,
+            definition.kind,
             [
                 tag.get_int("ChunkX").unwrap_or(0),
                 tag.get_int("ChunkZ").unwrap_or(0),
             ],
             tag.get_int("references").unwrap_or(0),
-            terrain,
+            definition.terrain,
             pieces,
         )))
     }
@@ -279,13 +526,7 @@ impl PoolElementStructurePiece {
         resources: &ResourceManager,
         decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
     ) -> Result<Self, Error> {
-        if tag
-            .get("BB")
-            .and_then(Tag::as_int_array)
-            .is_none_or(|v| v.len() != 6)
-        {
-            return Err(Error("invalid piece bounding box".into()));
-        }
+        let data = super::piece::StructurePieceData::from_nbt(tag)?;
         let rotation = match tag
             .get_string("rotation")
             .map(|s| s.to_string_lossy())
@@ -343,12 +584,45 @@ impl PoolElementStructurePiece {
                 .and_then(|v| super::nbt::to_json(v).ok())
                 .and_then(|v| LiquidSettings::decode(&v).ok())
                 .unwrap_or_default(),
-            gen_depth: tag.get_int("GD").unwrap_or(0),
-            orientation: match tag.get_int("O").unwrap_or(0) {
-                -1 => None,
-                value => Some(Direction::from_2d_data_value(value)),
-            },
+            gen_depth: data.gen_depth,
+            orientation: data.orientation,
             junctions,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structure::{pipeline::StructureRegistry, processor::tests::generator};
+    use serde_json::Value;
+    use std::io::Read;
+    #[test]
+    fn start_codec_numeric_bounds_aliases_invalid_children_and_ids_match_vanilla() {
+        let (resources, generator) = generator();
+        let registry = StructureRegistry::load(&resources, &generator.data).unwrap();
+        let templates = StructureTemplateManager::load_all(&resources).unwrap();
+        let mut text = String::new();
+        flate2::read::GzDecoder::new(&include_bytes!("testdata/structure_start_codec.json.gz")[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        let cases: Value = serde_json::from_str(&text).unwrap();
+        for case in cases.as_array().unwrap() {
+            let input = ferraloom_nbt::parse_compound(case["input"].as_str().unwrap()).unwrap();
+            let result =
+                StructureStart::from_nbt(&input, &registry, &templates, &resources, &mut |_| {
+                    Err(Error("no inline features".into()))
+                });
+            match case["outcome"].as_str().unwrap() {
+                "throws" => assert!(result.is_err(), "{input:?}"),
+                "null" => assert!(result.unwrap().is_none(), "{input:?}"),
+                "start" => assert_eq!(
+                    result.unwrap().unwrap().to_nbt([-7, 11]).unwrap(),
+                    ferraloom_nbt::parse_compound(case["output"].as_str().unwrap()).unwrap(),
+                    "{input:?}"
+                ),
+                _ => unreachable!(),
+            }
+        }
     }
 }

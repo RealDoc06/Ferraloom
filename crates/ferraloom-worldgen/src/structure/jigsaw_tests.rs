@@ -61,6 +61,7 @@ fn every_jigsaw_structure_piece_and_junction_matches_vanilla_flat_and_noise() {
         .unwrap();
     let cases: Value = serde_json::from_str(&text).unwrap();
     let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let registry = crate::structure::pipeline::StructureRegistry::load(&resources, &data).unwrap();
     let settings = resources
         .require(&"worldgen/noise_settings/overworld.json".parse().unwrap())
         .unwrap()
@@ -220,7 +221,7 @@ fn every_jigsaw_structure_piece_and_junction_matches_vanilla_flat_and_noise() {
                 );
                 let loaded = StructureStart::from_nbt(
                     &saved,
-                    &BTreeMap::from([(name.clone(), terrain)]),
+                    &registry,
                     &templates,
                     &resources,
                     &mut |_| Err(Error("builtin starts have no inline feature".into())),

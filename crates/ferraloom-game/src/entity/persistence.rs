@@ -13,7 +13,14 @@ pub(crate) use tree::load_entity_tree;
 pub enum EntityLoadError {
     InvalidPosition,
     InvalidRotation,
+    RecipeManagerRequired,
 }
+impl std::fmt::Display for EntityLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for EntityLoadError {}
 
 impl EntityData {
     /// Port of Entity#load. Passengers are instantiated by the section manager.

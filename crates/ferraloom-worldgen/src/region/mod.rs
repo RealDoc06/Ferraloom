@@ -135,6 +135,53 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    /// Create an elder guardian with STRUCTURE reason; heal it to max health,
+    /// snap to the supplied position with zero yaw/pitch, finalizeSpawn, and add
+    /// with passengers. False means EntityType#create returned null.
+    fn spawn_monument_elder(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [f64; 3],
+    ) -> Result<bool, Error> {
+        Err(Error(
+            "Unsupported: monument elder guardian creation".into(),
+        ))
+    }
+
+    /// Mansion allay markers create every mob before finalizing any of them.
+    /// For each non-null mob: persistence, bottom-center snap with zero rotation,
+    /// STRUCTURE finalizeSpawn, addFreshEntityWithPassengers, then clear the marker
+    /// to air with flags 2. Null creations consume no later operations.
+    fn spawn_mansion_allays(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _count: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: mansion allay group creation".into()))
+    }
+
+    /// Block#canSupportCenter includes the unstable-bottom-center tag and the
+    /// live SupportType.CENTER face query.
+    fn can_support_center(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: Block#canSupportCenter".into()))
+    }
+    /// Minecart creation uses CHUNK_GENERATION rather than STRUCTURE. A null
+    /// entity returns false; only a created minecart consumes the loot seed.
+    fn spawn_structure_chest_minecart(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [f64; 3],
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: structure chest minecart".into()))
+    }
     /// Port of Block#isFaceFull on the live collision shape, used by portal vines.
     fn is_collision_face_full(
         &self,
@@ -602,6 +649,30 @@ impl<'a> WorldGenRegion<'a> {
             .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
+    pub fn spawn_monument_elder(&mut self, position: [f64; 3]) -> Result<bool, Error> {
+        self.behavior.spawn_monument_elder(self, position)
+    }
+
+    pub fn spawn_mansion_allays(&mut self, position: [i32; 3], count: i32) -> Result<(), Error> {
+        self.behavior.spawn_mansion_allays(self, position, count)
+    }
+
+    pub fn can_support_center(
+        &self,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.can_support_center(self, position, face)
+    }
+    pub fn spawn_structure_chest_minecart(
+        &mut self,
+        position: [f64; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .spawn_structure_chest_minecart(self, position, table, random)
+    }
     pub fn is_collision_face_full(
         &self,
         state: BlockState,
