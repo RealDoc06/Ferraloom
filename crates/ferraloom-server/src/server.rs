@@ -609,15 +609,14 @@ impl MinecraftServer {
                     milliseconds_per_tick,
                 } => {
                     let report = ferraloom_game::commands::tick::sprint_report(
-                        completed_ticks,
                         ticks_per_second,
                         milliseconds_per_tick,
                     );
                     self.command_success(
                         None,
                         &CommandSourceStack::server(4, Vec3::ZERO),
-                        report,
-                        true,
+                        report.message,
+                        report.broadcast,
                     );
                 }
             }
