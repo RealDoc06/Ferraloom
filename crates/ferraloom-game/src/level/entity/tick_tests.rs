@@ -153,8 +153,16 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
         level
             .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Ticking)
             .unwrap();
-        let old = add_cow(&mut level);
-        let next = add_cow(&mut level);
+        let mut add_mount = |seed| {
+            let id = level.next_entity_ref();
+            let tnt = crate::entity::item::PrimedTnt::new(level.next_entity_id(), seed);
+            level
+                .add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))
+                .unwrap();
+            id
+        };
+        let old = add_mount(1);
+        let next = add_mount(2);
         let rider = add_cow(&mut level);
         level
             .set_entity_pos(old, Vec3::new(1.0, 64.0, 1.0))
