@@ -171,7 +171,12 @@ async fn clocks_and_admin(session: &mut Session) -> Result<ObservationLog> {
         "permission.context",
         feedback(bot, "command.context.here").await?,
     )?;
-    for name in ["day", "daytime"] {
+    // `day` is a timeline resource in 26.3, so its short identifier remains valid.
+    log.record(
+        "day.timeline",
+        command(bot, "time query day", "commands.time.query.timeline").await?,
+    )?;
+    for name in ["daytime"] {
         log.record(
             format!("legacy.{name}"),
             command(
