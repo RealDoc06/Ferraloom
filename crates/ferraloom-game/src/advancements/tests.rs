@@ -4,7 +4,7 @@ use crate::{entity::EntityRef, loot::*, predicates::PredicateContext};
 use ferraloom_data::{Block, EntityType, Item};
 use ferraloom_protocol::{
     Wire, Writer,
-    component::{DataComponent, ItemStack, Persistent, PotionContents},
+    component::{ItemStack, Persistent, PotionContents},
     play::clientbound,
 };
 use ferraloom_util::{
@@ -554,5 +554,55 @@ fn vanilla_inline_reward_tables_select_their_own_random_sequence() {
             sequences.get(&key, 123).next_long(),
             row["sequence_next"].as_i64().unwrap()
         );
+    }
+}
+
+#[test]
+fn vanilla_advancement_validation_and_empty_requirement_edges() {
+    for row in oracle()["advancement_decode"].as_array().unwrap() {
+        assert_eq!(
+            Advancement::decode(&row["input"]).is_ok(),
+            row["accepted"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+    }
+}
+
+#[test]
+fn vanilla_validation_reports_context_paths_and_retains_advancements() {
+    let data = LootData::default();
+    let recipes = crate::crafting::RecipeManager::new(Vec::new()).unwrap();
+    let tags = std::collections::BTreeMap::new();
+    let context = AdvancementRegistryContext {
+        loot: &data,
+        recipes: &recipes,
+        recipe_tags: &tags,
+        lookup: None,
+    };
+    for row in oracle()["validation"].as_array().unwrap() {
+        let mut pack = ferraloom_data::datapack::Pack::new("validation");
+        pack.insert(
+            "test:advancement/warning.json".parse().unwrap(),
+            row["input"].to_string().into_bytes(),
+        );
+        let resources = ferraloom_data::datapack::ResourceManager::new(vec![pack]);
+        let manager = ServerAdvancementManager::load(&resources, &context).unwrap();
+        assert_eq!(
+            manager.get(&id("test:warning")).is_some(),
+            row["retained"].as_bool().unwrap()
+        );
+        let actual: Vec<_> = manager
+            .validation_problems
+            .iter()
+            .map(|p| json!({"path":p.problem.path,"fatal":p.problem.fatal}))
+            .collect();
+        let expected: Vec<_> = row["problems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| json!({"path":p["path"],"fatal":p["fatal"]}))
+            .collect();
+        assert_eq!(actual, expected, "{}", row["input"]);
     }
 }

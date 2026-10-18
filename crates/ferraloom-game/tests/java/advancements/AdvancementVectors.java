@@ -205,6 +205,34 @@ public final class AdvancementVectors {
         }
         OUT.add("progress",rows);
     }
+    static void validation() {
+        var rows=new JsonArray();
+        for(String trigger:List.of("tick","default_block_use","any_block_use")) {
+            String field=trigger.equals("tick")?"player":"location";
+            var input=new JsonObject();var criteria=new JsonObject();var criterion=new JsonObject();criterion.addProperty("trigger",trigger);var conditions=new JsonObject();conditions.add(field,json("{\"type\":\"match_tool\"}"));criterion.add("conditions",conditions);criteria.add("a",criterion);input.add("criteria",criteria);
+            var advancement=Advancement.CODEC.parse(ops,input).getOrThrow();var reporter=new net.minecraft.util.ProblemReporter.Collector();advancement.validate(reporter,lookup);var problems=new JsonArray();reporter.forEach((path,problem)->{var entry=new JsonObject();entry.addProperty("path",path);entry.addProperty("fatal",problem.isFatal());entry.addProperty("message",problem.description());problems.add(entry);});
+            var registry=new MappedRegistry<Advancement>(Registries.ADVANCEMENT,Lifecycle.stable());Registry.register(registry,id("test:warning"),advancement);registry.freeze();
+            var replacement=HolderLookup.Provider.create(java.util.stream.Stream.concat(lookup.listRegistries().filter(r->r.key()!=Registries.ADVANCEMENT),java.util.stream.Stream.of(registry)));
+            var manager=new ServerAdvancementManager(replacement);var row=new JsonObject();row.add("input",input);row.add("problems",problems);row.addProperty("retained",manager.get(id("test:warning"))!=null);rows.add(row);
+        }
+        OUT.add("validation",rows);
+    }
+    static void invalidAdvancements() {
+        var cases=new JsonArray();
+        for(String raw:List.of(
+            "{}", "{\"criteria\":{}}", "{\"criteria\":{\"a\":{\"trigger\":\"missing\"}}}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"requirements\":[]}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"requirements\":[[],[\"a\"]]}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"requirements\":[[\"a\"],[\"missing\"]]}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"requirements\":[[\"a\",\"a\"]]}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"T\",\"description\":\"D\"}}",
+            "{\"parent\":\"test:parent\",\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"T\",\"description\":\"D\",\"background\":\"test:bg\"}}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\",\"conditions\":null}},\"rewards\":null}",
+            "{\"criteria\":{\"a\":{\"trigger\":\"tick\"}},\"display\":null,\"requirements\":null,\"sends_telemetry_event\":null}"
+        )) {var input=json(raw);var row=new JsonObject();row.add("input",input);row.addProperty("accepted",Advancement.CODEC.parse(ops,input).isSuccess());cases.add(row);}
+        OUT.add("advancement_decode",cases);
+    }
     static void playerProgress() throws Exception {
         var definitions=new LinkedHashMap<String,String>();
         definitions.put("test:root","{\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"Root\",\"description\":\"Description\",\"background\":\"test:background\"},\"criteria\":{\"a\":{\"trigger\":\"tick\"},\"b\":{\"trigger\":\"tick\"}},\"requirements\":[[\"a\",\"b\"]],\"rewards\":{\"experience\":3}}");
@@ -246,7 +274,7 @@ public final class AdvancementVectors {
         OUT.add("inline_loot",rows);
     }
     public static void main(String[] args) throws Exception {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();
         try(var output=new GZIPOutputStream(Files.newOutputStream(Path.of(args[0])))){output.write(JSON.toJson(OUT).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
         for(var entry:OUT.entrySet())System.out.println(entry.getKey()+": "+(entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray().size():1));
     }

@@ -532,6 +532,27 @@ impl AdvancementRewards {
     ) -> Result<Vec<ferraloom_protocol::component::ItemStack>> {
         data.get_random_items_from_holder(table, params, sources, facts)
     }
+    /// Recipe key lookup preserves reward order and skips removed recipes, like
+    /// ServerPlayer#awardRecipesByKey. Live callers unlock each holder, then run
+    /// recipe_unlocked before advancing this iterator to preserve reentrancy.
+    pub fn recipe_holders<'a>(
+        &'a self,
+        manager: &'a crate::crafting::RecipeManager,
+    ) -> impl Iterator<Item = &'a crate::crafting::RecipeHolder> {
+        self.recipes
+            .iter()
+            .filter_map(|id| manager.by_key(&id.as_str().parse().expect("validated recipe key")))
+    }
+    /// State-only recipe reward helper. Live callers use recipe_holders and
+    /// ServerRecipeBook#unlock_recipe for synchronous advancement callbacks.
+    pub fn grant_recipes(
+        &self,
+        book: &mut crate::crafting::ServerRecipeBook,
+        manager: &crate::crafting::RecipeManager,
+        sync: &crate::crafting::RecipeSynchronization,
+    ) -> crate::crafting::RecipeBookAddition {
+        book.add_recipes(self.recipe_holders(manager), sync)
+    }
     /// Functions remain a policy-routed unsupported effect until functions exist.
     pub fn function_effect(&self) -> Result<()> {
         if let Some(id) = &self.function {

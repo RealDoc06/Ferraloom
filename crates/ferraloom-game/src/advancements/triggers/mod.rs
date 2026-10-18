@@ -50,7 +50,10 @@ impl Criterion {
     pub fn decode_with_tags(v: &Value, tags: &TagSet<Item>) -> Result<Self> {
         let trigger = TriggerType::from_id(&codec::id(codec::field(v, "trigger")?)?)?;
         let empty = serde_json::json!({});
-        let conditions = codec::object(v)?.get("conditions").unwrap_or(&empty);
+        let conditions = codec::object(v)?
+            .get("conditions")
+            .filter(|value| !value.is_null())
+            .unwrap_or(&empty);
         Ok(Self {
             trigger,
             instance: TriggerInstance::decode(trigger, conditions, tags)?,

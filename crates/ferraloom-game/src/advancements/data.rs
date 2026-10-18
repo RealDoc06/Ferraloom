@@ -88,9 +88,20 @@ pub struct Advancement {
 }
 impl Advancement {
     pub fn decode(v: &Value) -> Result<Self> {
+        Self::decode_with_tags(
+            v,
+            &ferraloom_data::datapack::TagSet::<ferraloom_data::Item>::load(
+                &ResourceManager::new(Vec::new()),
+            )?,
+        )
+    }
+    pub fn decode_with_tags(
+        v: &Value,
+        tags: &ferraloom_data::datapack::TagSet<ferraloom_data::Item>,
+    ) -> Result<Self> {
         let criteria = codec::object(codec::field(v, "criteria")?)?
             .iter()
-            .map(|(name, v)| Ok((name.clone(), Criterion::decode(v)?)))
+            .map(|(name, v)| Ok((name.clone(), Criterion::decode_with_tags(v, tags)?)))
             .collect::<Result<Vec<_>>>()?;
         if criteria.is_empty() {
             return Err(codec::error("Advancement criteria cannot be empty"));
@@ -132,11 +143,17 @@ impl Advancement {
     }
 }
 /// Port of AdvancementHolder. Identity is its resource identifier.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct AdvancementHolder {
     pub id: Identifier,
     pub value: Advancement,
 }
+impl PartialEq for AdvancementHolder {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for AdvancementHolder {}
 impl AdvancementHolder {
     pub fn network(&self) -> play::AdvancementHolder {
         play::AdvancementHolder {
@@ -151,26 +168,45 @@ impl AdvancementHolder {
 pub struct ServerAdvancementManager {
     pub advancements: Vec<AdvancementHolder>,
     pub tree: AdvancementTree,
+    pub validation_problems: Vec<super::AdvancementValidationProblem>,
+    pub registry_bindings: Vec<crate::loot::RegistryHolder>,
 }
 impl ServerAdvancementManager {
-    pub fn load(resources: &ResourceManager) -> Result<Self> {
+    pub fn load(
+        resources: &ResourceManager,
+        context: &super::AdvancementRegistryContext<'_>,
+    ) -> Result<Self> {
+        let tags = ferraloom_data::datapack::TagSet::<ferraloom_data::Item>::load(resources)?;
         let advancements = resources
             .registry("advancement")
             .into_iter()
             .map(|(id, resource)| {
                 Ok(AdvancementHolder {
                     id: Identifier::parse(&id.to_string())?,
-                    value: Advancement::decode(&resource.json()?)?,
+                    value: Advancement::decode_with_tags(&resource.json()?, &tags)?,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self::new(advancements))
+        let mut manager = Self::new(advancements);
+        for holder in &manager.advancements {
+            let (bindings, problems) = holder.value.bind_and_validate(&holder.id, context)?;
+            manager.registry_bindings.extend(bindings);
+            manager.validation_problems.extend(problems);
+        }
+        manager.registry_bindings.sort();
+        manager.registry_bindings.dedup();
+        Ok(manager)
     }
     pub fn new(advancements: Vec<AdvancementHolder>) -> Self {
         let mut tree = AdvancementTree::default();
         tree.add_all(&advancements);
         tree.reposition_nodes();
-        Self { advancements, tree }
+        Self {
+            advancements,
+            tree,
+            validation_problems: Vec::new(),
+            registry_bindings: Vec::new(),
+        }
     }
     pub fn get(&self, id: &Identifier) -> Option<&AdvancementHolder> {
         self.advancements.iter().find(|a| &a.id == id)

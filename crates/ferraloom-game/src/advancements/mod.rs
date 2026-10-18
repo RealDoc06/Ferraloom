@@ -5,10 +5,12 @@ mod player;
 mod progress;
 mod tree;
 pub mod triggers;
+mod validation;
 pub use data::*;
 pub use player::*;
 pub use progress::*;
 pub use tree::*;
+pub use validation::*;
 
 pub use crate::loot::{Identifier, LootError as AdvancementError, Result};
 
