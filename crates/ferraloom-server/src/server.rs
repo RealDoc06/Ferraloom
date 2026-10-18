@@ -1197,6 +1197,17 @@ impl MinecraftServer {
                 };
         }
         for (request, mut terrain) in completed {
+            // A released holder can be recreated at the same position. Neither
+            // entity post-load nor FULL attachment may target its newer request.
+            if self
+                .level
+                .chunks
+                .holders
+                .get(&terrain.pos.pack())
+                .is_none_or(|holder| holder.request_id != request || !holder.generation_requested)
+            {
+                continue;
+            }
             let entities = terrain.disk.entities.take().unwrap_or_default();
             if let Err(error) = self
                 .level

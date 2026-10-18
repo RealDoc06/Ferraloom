@@ -571,6 +571,7 @@ pub struct World {
     retained_generation: BTreeSet<ChunkPos>,
     pub failed_generation: Vec<(ChunkPos, u64)>,
     proto_saves: VecDeque<storage::IoTask<()>>,
+    cancelled_outputs: Vec<GenerationOutput>,
     unloading: VecDeque<ChunkUnload>,
     evictions: Vec<ChunkPos>,
     saving: JobPool,
@@ -812,6 +813,7 @@ impl World {
             retained_generation: BTreeSet::new(),
             failed_generation: Vec::new(),
             proto_saves: VecDeque::new(),
+            cancelled_outputs: Vec::new(),
             unloading: VecDeque::new(),
             evictions: Vec::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
@@ -958,7 +960,11 @@ impl World {
         if let Some((request, cancelled)) = self.active_generation.get(&pos) {
             let request = *request;
             if !cancelled.swap(true, Ordering::Relaxed) {
-                self.pending.remove(&request);
+                if let Some((_, mut answer)) = self.pending.remove(&request)
+                    && let Ok(Ok(output)) = answer.try_recv()
+                {
+                    self.cancelled_outputs.push(output);
+                }
                 self.failed_generation.push((pos, request));
                 self.generation_dispatcher.release(pos, true, None);
             }
@@ -1077,17 +1083,20 @@ impl World {
         }
         self.generation_state = Some(state);
         self.running_generation = None;
-        if self
-            .active_generation
-            .get(&pos)
-            .is_some_and(|(id, _)| *id == request.id)
-        {
-            self.active_generation.remove(&pos);
-        }
         self.generation_dispatcher.release(pos, false, None);
         self.generation_dispatcher.complete_batch();
         cleanup?;
         if request.cancelled.load(Ordering::Relaxed) {
+            if let Ok(output) = result {
+                self.cancelled_outputs.push(output);
+            }
+            if self
+                .active_generation
+                .get(&pos)
+                .is_some_and(|(id, _)| *id == request.id)
+            {
+                self.active_generation.remove(&pos);
+            }
             return Ok(());
         }
         let _ = request.reply.send(result);
@@ -1102,7 +1111,7 @@ impl World {
         Ok(())
     }
     pub fn proto_saves_complete(&self) -> bool {
-        self.proto_saves.is_empty()
+        self.proto_saves.is_empty() && self.cancelled_outputs.is_empty()
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
         self.generation_statuses.remove(&pos);
@@ -1206,6 +1215,19 @@ impl World {
                 Err(error) => return Err(error.into()),
             }
         }
+        // A cancellation can arrive after the worker finished but before its
+        // ordered response was consumed. Persist that owned result before the
+        // holder/cache may be released, just as for an in-flight cancellation.
+        for output in self.cancelled_outputs.drain(..) {
+            for (pos, disk) in output
+                .neighbors
+                .into_iter()
+                .chain(std::iter::once((output.terrain.pos, output.terrain.disk)))
+            {
+                self.proto_saves
+                    .push_back(self.io.store(pos, Some(disk.write()?)));
+            }
+        }
         let mut context = TaskContext::from_waker(Waker::noop());
         while let Some(task) = self.proto_saves.front_mut() {
             let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
@@ -1221,6 +1243,13 @@ impl World {
             match answer.try_recv() {
                 Ok(result) => {
                     self.pending.remove(&request);
+                    if self
+                        .active_generation
+                        .get(&position)
+                        .is_some_and(|(id, _)| *id == request)
+                    {
+                        self.active_generation.remove(&position);
+                    }
                     if result.is_err() {
                         self.failed_generation.push((position, request));
                     }
@@ -1875,7 +1904,13 @@ mod generation_order_tests {
                 pos,
                 sections: Vec::new(),
                 surface: [0; 256],
-                disk: SerializableChunkData::default(),
+                disk: SerializableChunkData {
+                    x_pos: Some(pos.x),
+                    z_pos: Some(pos.z),
+                    y_pos: Some(-4),
+                    status: Some("minecraft:full".into()),
+                    ..Default::default()
+                },
                 light_neighbors: Vec::new(),
             },
             neighbors: Vec::new(),
@@ -1902,6 +1937,34 @@ mod generation_order_tests {
         assert_eq!(world.generation_skips[1].0, "second");
         assert_eq!(world.generation_statuses[&second], ChunkStatus::Full);
         assert!(world.pending_initial_spawns.contains(&second));
+        // Cancel a completed later result while it is still held behind an
+        // earlier request. It must save its payload without promoting a holder.
+        let cancelled = ChunkPos::new(2, 0);
+        let (blocker_reply, blocker_result) = oneshot::channel();
+        let (cancelled_reply, cancelled_result) = oneshot::channel();
+        world.pending.insert(2, (first, blocker_result));
+        world.pending.insert(3, (cancelled, cancelled_result));
+        world
+            .active_generation
+            .insert(cancelled, (3, Arc::new(AtomicBool::new(false))));
+        assert!(
+            cancelled_reply
+                .send(Ok(output(cancelled, "cancelled")))
+                .is_ok()
+        );
+        assert!(world.generation_pins(cancelled));
+        assert_eq!(world.cancel_generation(cancelled), Some(3));
+        assert!(world.poll_terrain().unwrap().is_empty());
+        assert!(!world.generation_statuses.contains_key(&cancelled));
+        assert!(
+            !world
+                .generation_skips
+                .iter()
+                .any(|(unit, _)| unit == "cancelled")
+        );
+        assert!(world.io.load(cancelled).await.unwrap().is_some());
+        assert!(blocker_reply.send(Ok(output(first, "blocker"))).is_ok());
+        assert_eq!(world.poll_terrain().unwrap()[0].0, 2);
         world.close_chunk_storage().await.unwrap();
     }
 }
