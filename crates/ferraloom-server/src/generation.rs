@@ -64,6 +64,7 @@ pub struct GenerationOutput {
 pub struct GenerationState {
     pub context: Arc<WorldGenContext>,
     holders: BTreeMap<i64, GenerationChunkHolder<ProtoChunk>>,
+    failed_loads: BTreeMap<i64, ferraloom_game::level::generation::GenerationError>,
     light: LevelLightEngine,
     light_pool: Arc<JobPool>,
     snapshots: SectionSnapshots<'static>,
@@ -86,6 +87,7 @@ impl GenerationState {
             ),
             context,
             holders: BTreeMap::new(),
+            failed_loads: BTreeMap::new(),
             structure_check: StructureCheck::default(),
             revision: GenerationRevision::default(),
         }
@@ -167,6 +169,7 @@ impl GenerationState {
     }
     pub fn forget(&mut self, pos: ChunkPos) {
         self.holders.remove(&pos.pack());
+        self.failed_loads.remove(&pos.pack());
         self.snapshots.remove_chunk(pos);
         self.light.forget_chunk_sources(pos);
     }
@@ -203,19 +206,38 @@ impl GenerationState {
             for position in layer.positions {
                 let key = position.pack();
                 if layer.status == ChunkStatus::Empty {
+                    if let Some(error) = self.failed_loads.get(&key) {
+                        anyhow::bail!("generation dependency failed: {error:?}");
+                    }
                     if let std::collections::btree_map::Entry::Vacant(entry) =
                         self.holders.entry(key)
                     {
-                        let proto = if let Some(tag) = io.load(position).wait()? {
-                            ProtoChunk::load(
-                                &self.context,
-                                registry,
-                                position,
-                                SerializableChunkData::parse(tag)?,
-                            )
-                            .map_err(anyhow::Error::msg)?
-                        } else {
-                            ProtoChunk::empty(&self.context, position)?
+                        let loaded = (|| -> Result<ProtoChunk> {
+                            if let Some(tag) = io.load(position).wait()? {
+                                ProtoChunk::load(
+                                    &self.context,
+                                    registry,
+                                    position,
+                                    SerializableChunkData::parse(tag)?,
+                                )
+                                .map_err(anyhow::Error::msg)
+                            } else {
+                                Ok(ProtoChunk::empty(&self.context, position)?)
+                            }
+                        })();
+                        let proto = match loaded {
+                            Ok(proto) => proto,
+                            Err(error) => {
+                                self.failed_loads.insert(
+                                    key,
+                                    ferraloom_game::level::generation::GenerationError::Failed {
+                                        position,
+                                        status: ChunkStatus::Empty,
+                                        message: error.to_string(),
+                                    },
+                                );
+                                return Err(error);
+                            }
                         };
                         let persisted = proto.region.status;
                         entry.insert(GenerationChunkHolder::new(proto, persisted));

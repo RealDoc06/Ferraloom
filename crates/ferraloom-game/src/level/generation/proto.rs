@@ -50,6 +50,19 @@ impl ProtoChunk {
         if disk.below_zero_retrogen.is_some() || disk.blending_data.is_some() {
             return Err("Unsupported: old-world retrogen/blending generation neighborhood".into());
         }
+        // SerializableChunkData.parse constructs DataLayers before queueing
+        // any neighbor's light. Reject malformed arrays before propagation can
+        // replace them with valid output from a neighboring initialization.
+        for section in disk.sections.as_deref().unwrap_or_default() {
+            for light in [&section.block_light, &section.sky_light]
+                .into_iter()
+                .flatten()
+            {
+                if light.0.len() != ferraloom_light::DataLayer::SIZE {
+                    return Err("invalid saved light length".into());
+                }
+            }
+        }
         let mut chunk = Self::empty(context, pos).map_err(|e| e.to_string())?;
         for section in disk.sections.as_deref().unwrap_or_default() {
             if let Some(y) = section.y {
