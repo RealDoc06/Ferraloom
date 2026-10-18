@@ -2,6 +2,8 @@
 
 Every literal and argument node from `reports/commands.json` has a row, including executable branches and redirects. Paths are kept intact for testing. The report uses ALL command selection; publish and unpublish are labeled integrated-server only. Debug/IDE-only commands are outside default dedicated-server command selection.
 
+The dedicated dispatcher registers 92 native roots. Commands with pending runtime execution are `/advancement`, `/attribute`, `/execute`, `/bossbar`, `/clear`, `/clone`, `/compute`, `/damage`, `/data`, `/datapack`, `/debug`, `/dialog`, `/effect`, `/enchant`, `/experience`, `/xp`, `/fillbiome`, `/function`, `/give`, `/item`, `/kill`, `/locate`, `/loot`, `/swing`, `/particle`, `/place`, `/playsound`, `/posteffect`, `/random`, `/recipe`, `/fetchprofile`, `/ride`, `/rotate`, `/schedule`, `/scoreboard`, `/version`, `/spectate`, `/spreadplayers`, `/stopsound`, `/stopwatch`, `/summon`, `/tag`, `/team`, `/tellraw`, `/test`, `/tick`, `/title`, `/trigger`, `/waypoint`, `/worldborder`, `/jfr`, `/perf`, `/transfer`. Their exact literal/argument paths remain listed below, with native requirements and redirects in the client tree. `/tick` has Java-checked command behavior and awaits the released tick-manager runtime. `/teammsg` currently reports the native no-team error; actual reload and block-entity placement remain explicitly partial. `/publish` and `/unpublish` are absent on dedicated servers.
+
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
 | commands.brigadier.parse-errors | Parse literal and argument nodes, detect incomplete commands and return cursor-aware syntax errors | `CommandDispatcher; Commands#performCommand` | | - | todo |
