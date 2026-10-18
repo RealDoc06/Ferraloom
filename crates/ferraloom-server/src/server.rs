@@ -1391,7 +1391,9 @@ impl MinecraftServer {
     fn integrate_jobs(&mut self) -> Result<()> {
         self.progress_chunk_jobs()?;
         generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
-        self.evict_unloaded_chunks()
+        self.evict_unloaded_chunks()?;
+        self.level.level.collect_chunk_structure_versions();
+        Ok(())
     }
     /// Progress without eviction. The shared-publication driver uses this split
     /// after its Level-facing publication seam has landed.

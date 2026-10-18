@@ -22,6 +22,7 @@ pub(crate) fn integrate_metadata(level: &mut ServerLevel, world: &mut World) -> 
         .level
         .record_worldgen_skips(std::mem::take(&mut world.generation_skips))
         .map_err(game_error)?;
+    publish_structure_updates(&level.level, world)?;
     for (&key, &status) in &world.generation_statuses {
         let pos = ChunkPos::unpack(key);
         let attached = level.level.chunk(pos).is_some();
@@ -30,6 +31,18 @@ pub(crate) fn integrate_metadata(level: &mut ServerLevel, world: &mut World) -> 
         } else {
             status
         };
+    }
+    Ok(())
+}
+pub(crate) fn publish_structure_updates(
+    level: &ferraloom_game::level::Level,
+    world: &mut World,
+) -> Result<()> {
+    while let Some((pos, revision, structures)) = world.next_structure_publication(level) {
+        level
+            .publish_chunk_structures(pos, revision.0, structures)
+            .map_err(game_error)?;
+        world.finish_structure_publication(pos, revision);
     }
     Ok(())
 }
@@ -137,13 +150,19 @@ pub(crate) fn resume_terrain(
             world.saved.get_mut(&pos.pack()).unwrap().entities = None;
         }
         if !world.full_promotions[&request].attached {
-            let chunk = world
+            world.refresh_terrain_structures(&mut terrain);
+            let mut chunk = world
                 .full_promotions
                 .get_mut(&request)
                 .unwrap()
                 .prepared_chunk
                 .take()
                 .unwrap();
+            if chunk.structures_revision() < terrain.revision.0 {
+                chunk
+                    .set_structures(terrain.structures.clone(), terrain.revision.0)
+                    .map_err(game_error)?;
+            }
             level.level.add_chunk(chunk).map_err(game_error)?;
             world.full_promotions.get_mut(&request).unwrap().attached = true;
         }

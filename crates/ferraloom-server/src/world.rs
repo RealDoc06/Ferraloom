@@ -625,6 +625,7 @@ pub struct World {
     dimension: DimensionType,
     initial_chunks: BTreeMap<i64, Terrain>,
     structure_snapshots: BTreeMap<i64, StructureSnapshot>,
+    pending_structure_publications: VecDeque<ChunkPos>,
     generation_save_revisions: BTreeMap<i64, GenerationRevision>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
@@ -897,6 +898,7 @@ impl World {
                 })
                 .collect(),
             initial_chunks,
+            pending_structure_publications: VecDeque::new(),
             generation_save_revisions: BTreeMap::new(),
             generation,
             generation_state: Some(generation_state),
@@ -1284,6 +1286,8 @@ impl World {
         self.proto_saves.is_empty() && self.cancelled_outputs.is_empty()
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
+        self.pending_structure_publications
+            .retain(|&queued| queued != pos);
         self.full_promotions
             .retain(|_, continuation| continuation.identity.pos != pos);
         self.generation_statuses.remove(&pos.pack());
@@ -1353,6 +1357,8 @@ impl World {
         Ok(done)
     }
     pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
+        self.pending_structure_publications
+            .retain(|&queued| queued != pos);
         self.full_promotions
             .retain(|_, continuation| continuation.identity.pos != pos);
         self.ready.remove(&pos);
@@ -1609,7 +1615,47 @@ impl World {
             }
         }
         self.structure_snapshots.insert(key, snapshot);
+        let pos = ChunkPos::unpack(key);
+        if !self.pending_structure_publications.contains(&pos) {
+            self.pending_structure_publications.push_back(pos);
+        }
         Ok(())
+    }
+    /// Plan one owned publication without holding World or holder borrows over
+    /// Level's shared insertion point. Unattached chunks retain their payload.
+    pub(crate) fn next_structure_publication(
+        &self,
+        level: &Level,
+    ) -> Option<(ChunkPos, GenerationRevision, ChunkStructures)> {
+        self.pending_structure_publications.iter().find_map(|&pos| {
+            level.chunk(pos)?;
+            let snapshot = self.structure_snapshots.get(&pos.pack())?;
+            Some((pos, snapshot.revision, snapshot.structures.clone()))
+        })
+    }
+    pub(crate) fn finish_structure_publication(
+        &mut self,
+        pos: ChunkPos,
+        revision: GenerationRevision,
+    ) {
+        // A nested publication may have delivered a newer version meanwhile.
+        if self
+            .structure_snapshots
+            .get(&pos.pack())
+            .is_some_and(|snapshot| snapshot.revision == revision)
+        {
+            self.pending_structure_publications
+                .retain(|&queued| queued != pos);
+        }
+    }
+    pub(crate) fn refresh_terrain_structures(&self, terrain: &mut Terrain) {
+        if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
+            && snapshot.revision > terrain.revision
+        {
+            terrain.disk.structures = Some(snapshot.data.clone());
+            terrain.structures = snapshot.structures.clone();
+            terrain.revision = snapshot.revision;
+        }
     }
     fn store_generation_chunk(
         &mut self,
@@ -1685,6 +1731,8 @@ impl World {
             terrain.pos,
             terrain.sections.clone(),
             &terrain.disk,
+            terrain.structures.clone(),
+            terrain.revision.0,
         )
         .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         let light = LightJob::Initialize {
@@ -1737,6 +1785,9 @@ impl World {
             .save_chunk_ticks(pos, &mut disk)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         chunk.save_pending_generation_data(&mut disk);
+        disk.structures = Some(storage::StructureData::from_nbt(
+            chunk.structures().to_nbt()?,
+        )?);
         disk.inhabited_time = Some(chunk.inhabited_time());
         disk.block_entities = Some(
             level
@@ -2698,6 +2749,67 @@ mod generation_order_tests {
         );
         let captured = world.capture_chunk(&level.level, second, 0).unwrap();
         assert_eq!(captured.disk.structures, Some(structure_data(second, true)));
+        assert_eq!(level.level.chunk(second).unwrap().structures_revision(), 2);
+        let structure = "minecraft:jungle_pyramid".parse().unwrap();
+        assert!(
+            level
+                .level
+                .structure_manager()
+                .get_start_for_structure(second, &structure)
+                .unwrap()
+                .unwrap()
+                .is_valid()
+        );
+        assert_eq!(
+            level
+                .level
+                .structure_manager()
+                .get_references_for_structure(second, &structure)
+                .unwrap()
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            structures(second, true).references[&structure]
+                .iter()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            level
+                .level
+                .chunk(second)
+                .unwrap()
+                .structures()
+                .to_nbt()
+                .unwrap(),
+            structures(second, true).to_nbt().unwrap()
+        );
+        level.level.try_mark_chunk_saved(second).unwrap();
+        let old_structures = level.level.chunk(second).unwrap().structures();
+        world
+            .integrate_structure_snapshot(StructureSnapshot {
+                pos: second,
+                revision: GenerationRevision(3),
+                data: structure_data(second, false),
+                structures: structures(second, false),
+                unattached_disk: None,
+            })
+            .unwrap();
+        crate::server::generation_completion::publish_structure_updates(&level.level, &mut world)
+            .unwrap();
+        assert_eq!(
+            old_structures.to_nbt().unwrap(),
+            structures(second, true).to_nbt().unwrap()
+        );
+        assert_eq!(level.level.chunk(second).unwrap().structures_revision(), 3);
+        assert!(level.level.chunk(second).unwrap().is_unsaved());
+        // A stale saved-data sidecar is never the live structures save source.
+        world.saved.get_mut(&second.pack()).unwrap().structures =
+            Some(structure_data(second, true));
+        let captured = world.capture_chunk(&level.level, second, 0).unwrap();
+        assert_eq!(
+            captured.disk.structures,
+            Some(structure_data(second, false))
+        );
         for x in second.x - 1..=second.x + 1 {
             for z in second.z - 1..=second.z + 1 {
                 world.light_ready.insert(ChunkPos::new(x, z));
