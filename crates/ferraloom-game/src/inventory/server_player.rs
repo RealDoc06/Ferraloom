@@ -404,12 +404,8 @@ pub fn check_container_menu_still_valid(
 fn check_container_menu_still_valid_inner(player: EntityRef, level: &mut Level) -> Result<()> {
     // Java reads containerMenu again after broadcasting: a synchronous slot
     // callback may have closed or replaced the menu just broadcast.
-    let bound = &level
-        .entity::<ServerPlayer>(player)?
-        .menus
-        .current()
-        .block_entities;
-    let valid = block_menu_still_valid(player, bound, level)?;
+    let menu = level.entity::<ServerPlayer>(player)?.menus.current_ref();
+    let valid = live_menu_still_valid(player, menu, level)?;
     if !valid {
         close_container_live(player, level, true, false)?;
     }

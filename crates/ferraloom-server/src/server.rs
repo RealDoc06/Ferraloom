@@ -2111,86 +2111,99 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::ContainerClick,
     ) -> Result<()> {
+        use ferraloom_game::inventory::{self, LiveRecipeMenuHooks, MenuSynchronization};
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-        let spectator = {
+        let (menu, spectator, valid_slot) = {
             let player = self
                 .level
                 .level
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            player.game_mode == GameType::Spectator || player.parent.health() <= 0.0
+            let menu = player.menus.current();
+            (
+                player.menus.current_ref(),
+                player.game_mode == GameType::Spectator || player.parent.health() <= 0.0,
+                menu.is_valid_slot_index(i32::from(packet.slot_num)),
+            )
         };
-        let (synchronization, packets, drops) = ferraloom_game::inventory::with_block_menu_context(
-            entity,
-            &mut self.level.level,
-            |menus, book, context| {
-                let mut callbacks = PendingCraftingCallbacks;
-                let mut hooks = RecipeMenuHooks {
-                    manager: &self.recipe_manager,
-                    context: self.crafting_context.as_ref(),
-                    synchronization: &self.recipe_synchronization,
-                    book,
-                    limited_crafting: Some(
-                        self.game_rules
-                            .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
-                    ),
-                    callbacks: &mut callbacks,
-                };
-                let menu = menus.current_mut();
-                if menu.container_id != packet.container_id.0 {
-                    return Ok((None, Vec::new(), Vec::new()));
-                }
-                let synchronization = if spectator {
-                    Some(ferraloom_game::inventory::MenuSynchronization::Contents)
-                } else if menu.still_valid(context)
-                    && menu.is_valid_slot_index(i32::from(packet.slot_num))
-                {
-                    let mismatch = menu.state_id() != packet.state_id.0;
-                    menu.suppress_remote_updates();
-                    let result = menu.clicked(
-                        context,
-                        i32::from(packet.slot_num),
-                        i32::from(packet.button_num),
-                        packet.container_input,
-                        &mut hooks,
-                    );
-                    result?;
-                    for changed in packet.changed_slots.0 {
-                        menu.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
-                    }
-                    menu.set_remote_carried(packet.carried_item);
-                    menu.resume_remote_updates();
-                    Some(if mismatch {
-                        ferraloom_game::inventory::MenuSynchronization::FullState
-                    } else {
-                        ferraloom_game::inventory::MenuSynchronization::Changes
-                    })
-                } else {
-                    None
-                };
-                Ok((
-                    synchronization,
-                    menu.drain_packets(),
-                    std::mem::take(&mut context.drops),
-                ))
-            },
-        )?;
-        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
-        for drop in drops {
-            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
+        if menu.container_id != packet.container_id.0 {
+            return Ok(());
         }
-        if let Some(synchronization) = synchronization {
-            let menu = self
+        if spectator {
+            inventory::synchronize_menu(
+                entity,
+                menu,
+                MenuSynchronization::Contents,
+                &mut self.level.level,
+            )?;
+        } else {
+            if !inventory::live_menu_still_valid(entity, menu, &self.level.level)? || !valid_slot {
+                return Ok(());
+            }
+            let mismatch = {
+                let receiver = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .menus
+                    .menu_mut(menu)?;
+                let mismatch = receiver.state_id() != packet.state_id.0;
+                receiver.suppress_remote_updates();
+                mismatch
+            };
+            let resources = self.level.level.container_resources().map_err(game_error)?;
+            let kind = self
                 .level
                 .level
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .menus
-                .current_ref();
-            ferraloom_game::inventory::synchronize_menu(
+                .menu(menu)?
+                .kind;
+            let mut hooks = LiveRecipeMenuHooks {
+                resources,
+                kind,
+                limited_crafting: self
+                    .game_rules
+                    .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+            };
+            inventory::clicked_live_menu(
                 entity,
                 menu,
-                synchronization,
+                i32::from(packet.slot_num),
+                i32::from(packet.button_num),
+                packet.container_input,
+                &mut hooks,
+                &mut self.level.level,
+            )?;
+            // Java re-reads player.containerMenu after clicked: a callback may
+            // have replaced it. The captured old receiver was rooted only for
+            // clicked itself, and must never receive the new remote state.
+            let current = {
+                let menus = &mut self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .menus;
+                let current = menus.current_ref();
+                let receiver = menus.menu_mut(current)?;
+                for changed in packet.changed_slots.0 {
+                    receiver.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
+                }
+                receiver.set_remote_carried(packet.carried_item);
+                receiver.resume_remote_updates();
+                current
+            };
+            inventory::synchronize_menu(
+                entity,
+                current,
+                if mismatch {
+                    MenuSynchronization::FullState
+                } else {
+                    MenuSynchronization::Changes
+                },
                 &mut self.level.level,
             )?;
         }

@@ -103,17 +103,16 @@ pub fn refresh_live_crafting_result(
             (ItemStack::default(), None)
         }
     };
-    level.replace_stack_object(
-        ContainerSlot {
-            container: ContainerHandle::MenuLocal {
-                player,
-                menu,
-                container: 1,
-            },
-            slot: 0,
+    let address = ContainerSlot {
+        container: ContainerHandle::MenuLocal {
+            player,
+            menu,
+            container: 1,
         },
-        StackValue::New(stack.clone()),
-    )?;
+        slot: 0,
+    };
+    level.replace_stack_object(address, StackValue::New(stack))?;
+    let stack = level.stack(level.stack_ref(address)?)?.clone();
     let receiver = level
         .entity_mut::<ServerPlayer>(player)?
         .menus
