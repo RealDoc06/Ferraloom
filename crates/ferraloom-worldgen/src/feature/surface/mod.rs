@@ -13,10 +13,10 @@ mod iceberg;
 
 pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     loader.register("fill_layer".parse()?, |v, _| {
-        Ok(Arc::new(FillLayerFeature {
-            height: int_range(field(v, "height")?, 0, 4064)?,
-            state: decode_block_state(field(v, "state")?)?,
-        }))
+        Ok(fill_layer(
+            int_range(field(v, "height")?, 0, 4064)?,
+            decode_block_state(field(v, "state")?)?,
+        ))
     })?;
     loader.register("block_blob".parse()?, |v, l| {
         Ok(Arc::new(BlockBlobFeature {
@@ -41,6 +41,11 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     })?;
     Ok(())
 }
+/// Construct the inline feature used for FlatLevelSource's non-motion-blocking layers.
+pub(crate) fn fill_layer(height: i32, state: BlockState) -> Arc<dyn Feature> {
+    Arc::new(FillLayerFeature { height, state })
+}
+
 /// Port of FillLayerFeature.
 #[derive(Debug)]
 struct FillLayerFeature {
