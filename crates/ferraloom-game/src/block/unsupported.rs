@@ -15,10 +15,13 @@ pub enum UnportedBehavior {
 pub enum UnportedOperation {
     WeatherStrike,
     PackReload,
+    SnowAccumulation,
+    PushEntitiesUp,
 }
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
     OnPlace,
+    HandlePrecipitation,
     AffectNeighborsAfterRemoval,
     NeighborChanged,
     EntityInside,
@@ -51,6 +54,7 @@ impl BlockMethod {
         use ferraloom_data::BlockMethod as Vanilla;
         Some(match self {
             Self::OnPlace => Vanilla::OnPlace,
+            Self::HandlePrecipitation => Vanilla::HandlePrecipitation,
             Self::AffectNeighborsAfterRemoval => Vanilla::AffectNeighborsAfterRemoval,
             Self::NeighborChanged => Vanilla::NeighborChanged,
             Self::EntityInside => Vanilla::EntityInside,
@@ -97,6 +101,7 @@ impl BlockMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::OnPlace => "onPlace",
+            Self::HandlePrecipitation => "handlePrecipitation",
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
             Self::EntityInside => "entityInside",
@@ -137,17 +142,19 @@ pub(crate) struct UnportedCalls {
     seen: HashSet<UnportedCall>,
     stats: UnportedBehaviorStats,
 }
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq)]
 enum UnportedCall {
     Block(Block, BlockMethod),
     Operation(UnportedOperation),
+    Worldgen(String, String),
+    BlockEntity(Block, ferraloom_nbt::NbtString),
+    PostProcessing(Block, &'static str),
 }
 impl UnportedCalls {
     fn record(&mut self, call: UnportedCall) {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
-        if self.seen.insert(call) {
-            self.stats.distinct_calls = self.seen.len();
-            match call {
+        if !self.seen.contains(&call) {
+            match &call {
                 UnportedCall::Block(block, method) => eprintln!(
                     "Unported behavior skipped: {}#{} (skipped calls: {})",
                     block.name(),
@@ -158,15 +165,81 @@ impl UnportedCalls {
                     "Unported behavior skipped: ServerLevel#tickThunder strike (skipped calls: {}; RNG parity pending)",
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Operation(UnportedOperation::SnowAccumulation) => eprintln!(
+                    "Unported behavior skipped: ServerLevel#tickPrecipitation snow accumulation (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::Operation(UnportedOperation::PushEntitiesUp) => eprintln!(
+                    "Unported behavior skipped: Block#pushEntitiesUp (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
                 UnportedCall::Operation(UnportedOperation::PackReload) => eprintln!(
                     "Pack reload not yet supported (skipped calls: {})",
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Worldgen(unit, behavior) => eprintln!(
+                    "Unported worldgen unit skipped: {unit}#{behavior} (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::BlockEntity(block, factory) => eprintln!(
+                    "Pending block entity activation skipped: {}#{factory} (skipped calls: {}; raw NBT retained)",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::PostProcessing(block, behavior) => eprintln!(
+                    "Post-processing unit skipped: {}#{behavior} (skipped calls: {})",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
             }
+            self.seen.insert(call);
+            self.stats.distinct_calls = self.seen.len();
         }
     }
 }
 impl Level {
+    pub(crate) fn skip_post_processing(&mut self, error: LevelError) -> Result<(), LevelError> {
+        let (block, behavior) = match error {
+            LevelError::UnsupportedBlockMethod(block, method) => (block, method.name()),
+            LevelError::UnsupportedShape(state) => (state.block(), "getCollisionShape"),
+            LevelError::UnsupportedBlock(block) => (block, "Block.updateFromNeighbourShapes"),
+            LevelError::UnsupportedBlockEntity(block) => (block, "setBlockState block entity"),
+            _ => return Err(error),
+        };
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(error);
+        }
+        calls.record(UnportedCall::PostProcessing(block, behavior));
+        Ok(())
+    }
+    /// Integrate owned generation-unit skips on the game thread. Strict rejects
+    /// any skipped unit; Warn shares the live counters and logs each pair once.
+    pub fn record_worldgen_skips(
+        &mut self,
+        skips: Vec<(String, String)>,
+    ) -> Result<(), LevelError> {
+        let calls = &mut self.region_mut().unported;
+        if !skips.is_empty() && calls.policy == UnportedBehavior::Strict {
+            return Err(LevelError::UnsupportedWorldgenBehavior);
+        }
+        for (unit, behavior) in skips {
+            calls.record(UnportedCall::Worldgen(unit, behavior));
+        }
+        Ok(())
+    }
+    pub(crate) fn skip_block_entity_activation(
+        &mut self,
+        block: Block,
+        factory: ferraloom_nbt::NbtString,
+    ) -> Result<(), LevelError> {
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(LevelError::UnsupportedBlockEntity(block));
+        }
+        calls.record(UnportedCall::BlockEntity(block, factory));
+        Ok(())
+    }
     /// Record one approved unit-effect skip. This shares the block-method
     /// policy, deduplication and visible counters; it never supplies query values.
     pub fn unported_operation(&mut self, operation: UnportedOperation) -> Result<(), LevelError> {
@@ -175,6 +248,10 @@ impl Level {
             return Err(match operation {
                 UnportedOperation::WeatherStrike => LevelError::UnsupportedWeatherQuery,
                 UnportedOperation::PackReload => LevelError::UnsupportedPackReload,
+                UnportedOperation::SnowAccumulation => {
+                    LevelError::UnsupportedBlockMethod(Block::SNOW, BlockMethod::CanSurvive)
+                }
+                UnportedOperation::PushEntitiesUp => LevelError::UnsupportedPushEntitiesUp,
             });
         }
         calls.record(UnportedCall::Operation(operation));

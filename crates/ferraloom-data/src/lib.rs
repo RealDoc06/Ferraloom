@@ -9,6 +9,7 @@
 //! ```
 
 mod block_methods;
+mod sound_events;
 pub use block_methods::BlockMethod;
 
 pub mod datapack;

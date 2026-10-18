@@ -51,3 +51,234 @@ mod tests {
         assert_eq!(full_status(34), FullChunkStatus::Inaccessible);
     }
 }
+
+/// Single-region DistanceManager state. Lookup maps never determine graph or
+/// chunk traversal order; every player section transition is applied at its call.
+pub struct DistanceManager {
+    pub simulation: super::simulation::SimulationChunkTracker,
+    pub natural_spawn: super::simulation::FixedPlayerDistanceChunkTracker,
+    pub loading: super::simulation::LoadingChunkTracker,
+    player_tickets: super::simulation::PlayerTicketTracker,
+    dispatcher: super::chunk_task_dispatcher::ThrottlingChunkTaskDispatcher<
+        super::simulation::PlayerLoadingTask,
+    >,
+    players_per_chunk:
+        std::collections::HashMap<ChunkPos, std::collections::HashSet<crate::entity::EntityRef>>,
+    player_sections:
+        std::collections::HashMap<crate::entity::EntityRef, ferraloom_util::SectionPos>,
+    tickets_to_release: ferraloom_util::collections::LongOpenHashSet,
+    simulation_distance: i32,
+}
+impl Default for DistanceManager {
+    fn default() -> Self {
+        Self {
+            simulation: Default::default(),
+            natural_spawn: Default::default(),
+            loading: super::simulation::LoadingChunkTracker::new(MAX_LOADED_LEVEL),
+            player_tickets: Default::default(),
+            dispatcher: super::chunk_task_dispatcher::ThrottlingChunkTaskDispatcher::new(4),
+            players_per_chunk: Default::default(),
+            player_sections: Default::default(),
+            tickets_to_release: Default::default(),
+            simulation_distance: 10,
+        }
+    }
+}
+impl DistanceManager {
+    pub fn set_view_distance(&mut self, distance: i32) {
+        self.player_tickets
+            .update_view_distance(distance.clamp(2, 32), &mut self.dispatcher);
+    }
+    pub fn set_simulation_distance(
+        &mut self,
+        distance: i32,
+        tickets: &mut super::tickets::TicketStorage,
+    ) {
+        if self.simulation_distance == distance {
+            return;
+        }
+        self.simulation_distance = distance;
+        tickets.replace_ticket_level_of_type(
+            (31 - distance).max(0),
+            super::tickets::TicketType::PlayerSimulation,
+        );
+    }
+    pub fn update_player(
+        &mut self,
+        entity: crate::entity::EntityRef,
+        section: Option<ferraloom_util::SectionPos>,
+        tickets: &mut super::tickets::TicketStorage,
+    ) {
+        let old = self.player_sections.get(&entity).copied();
+        if old == section {
+            return;
+        }
+        let level = (31 - self.simulation_distance).max(0);
+        if let Some(old) = old {
+            let pos = ChunkPos::new(old.x, old.z);
+            let players = self
+                .players_per_chunk
+                .get_mut(&pos)
+                .expect("registered player chunk");
+            players.remove(&entity);
+            if players.is_empty() {
+                self.players_per_chunk.remove(&pos);
+                self.natural_spawn.update_player_chunk(pos, false);
+                self.player_tickets.update_player_chunk(pos, false);
+                tickets.remove(pos, super::tickets::TicketType::PlayerSimulation, level);
+            }
+            self.player_sections.remove(&entity);
+        }
+        if let Some(section) = section {
+            let pos = ChunkPos::new(section.x, section.z);
+            self.players_per_chunk
+                .entry(pos)
+                .or_default()
+                .insert(entity);
+            self.player_sections.insert(entity, section);
+            self.natural_spawn.update_source_level(pos, 0, true);
+            self.player_tickets.update_player_chunk(pos, true);
+            tickets.add(
+                pos,
+                super::tickets::Ticket {
+                    kind: super::tickets::TicketType::PlayerSimulation,
+                    level,
+                    expires: None,
+                },
+            );
+        }
+    }
+    /// Port of runAllUpdates' graph slots. The runtime applies returned holder
+    /// changes, then polls owned dispatcher work at its main-executor slot.
+    pub fn run_all_updates(
+        &mut self,
+        tickets: &mut super::tickets::TicketStorage,
+    ) -> Vec<super::simulation::ChunkLevelChange> {
+        for update in tickets.take_source_updates() {
+            match update.tracker {
+                super::tickets::TicketTracker::Loading => self.loading.update_source_level(
+                    update.pos,
+                    update.level,
+                    update.only_decreased,
+                ),
+                super::tickets::TicketTracker::Simulation => self.simulation.update_source_level(
+                    update.pos,
+                    update.level,
+                    update.only_decreased,
+                ),
+            }
+        }
+        self.natural_spawn.run_all_updates();
+        self.simulation.run_all_updates();
+        self.player_tickets.run_all_updates(&mut self.dispatcher);
+        self.loading.run_all_updates();
+        self.loading.take_level_changes()
+    }
+    pub fn poll_player_loading_tasks(&mut self, tickets: &mut super::tickets::TicketStorage) {
+        use super::{
+            chunk_task_dispatcher::ChunkTaskDispatch,
+            simulation::PlayerLoadingTask,
+            tickets::{Ticket, TicketType},
+        };
+        while let Some(dispatch) = self.dispatcher.next_dispatch() {
+            let (tasks, batch) = match dispatch {
+                ChunkTaskDispatch::Released(task) => (vec![task], false),
+                ChunkTaskDispatch::Batch { tasks, .. } => (tasks, true),
+            };
+            for task in tasks {
+                match task {
+                    PlayerLoadingTask::Add(pos) if self.player_tickets.has_ticket(pos) => {
+                        tickets.add(
+                            pos,
+                            Ticket {
+                                kind: TicketType::PlayerLoading,
+                                level: 31,
+                                expires: None,
+                            },
+                        );
+                        self.tickets_to_release.insert(pos.pack());
+                    }
+                    PlayerLoadingTask::Add(pos) => self.dispatcher.release(pos, false, None),
+                    PlayerLoadingTask::Remove(pos) => {
+                        tickets.remove(pos, TicketType::PlayerLoading, 31)
+                    }
+                }
+            }
+            if batch {
+                self.dispatcher.complete_batch();
+            }
+        }
+    }
+    /// DistanceManager#runAllUpdates registers these future callbacks only
+    /// after the holder update pass has settled. Preserve primitive-set order.
+    pub fn take_player_loading_waiters(
+        &mut self,
+        tickets: &super::tickets::TicketStorage,
+    ) -> Vec<ChunkPos> {
+        let waiters = self
+            .tickets_to_release
+            .iter()
+            .filter_map(|&key| {
+                let pos = ChunkPos::unpack(key);
+                tickets
+                    .contains_type(pos, super::tickets::TicketType::PlayerLoading)
+                    .then_some(pos)
+            })
+            .collect();
+        self.tickets_to_release.clear();
+        waiters
+    }
+    pub fn has_pending_player_loading(&self, pos: ChunkPos) -> bool {
+        self.tickets_to_release.contains(&pos.pack())
+    }
+    /// Call only after the registered entity-ticking range future completes
+    /// (success or failure). A merely loaded chunk never releases this slot.
+    pub fn complete_player_loading(&mut self, pos: ChunkPos) {
+        self.tickets_to_release.remove(&pos.pack());
+        self.dispatcher.release(pos, false, None);
+    }
+}
+
+#[cfg(test)]
+mod player_tests {
+    use super::*;
+    use crate::{
+        entity::EntityRef,
+        level::tickets::{TicketStorage, TicketTracker},
+    };
+    use ferraloom_util::SectionPos;
+
+    #[test]
+    fn player_membership_retains_each_section_transition_and_shared_ticket() {
+        let mut manager = DistanceManager::default();
+        let mut tickets = TicketStorage::default();
+        let a = EntityRef(1);
+        let b = EntityRef(2);
+        let origin = SectionPos::new(0, 4, 0);
+        manager.update_player(a, Some(origin), &mut tickets);
+        manager.update_player(b, Some(origin), &mut tickets);
+        assert_eq!(tickets.take_source_updates().len(), 1);
+        manager.update_player(a, None, &mut tickets);
+        assert!(tickets.take_source_updates().is_empty());
+        manager.update_player(b, Some(SectionPos::new(0, 5, 0)), &mut tickets);
+        let changes = tickets.take_source_updates();
+        assert_eq!(
+            changes
+                .iter()
+                .map(|update| (update.tracker, update.level, update.only_decreased))
+                .collect::<Vec<_>>(),
+            vec![
+                (TicketTracker::Simulation, 45, false),
+                (TicketTracker::Simulation, 21, true)
+            ]
+        );
+        // A->B->A during one packet phase must disturb the queued graph, even
+        // though a snapshot of only the final player chunk would be unchanged.
+        manager.update_player(b, Some(SectionPos::new(1, 5, 0)), &mut tickets);
+        manager.update_player(b, Some(origin), &mut tickets);
+        assert_eq!(tickets.take_source_updates().len(), 4);
+        manager.run_all_updates(&mut tickets);
+        assert_eq!(manager.simulation.level(ChunkPos::new(0, 0)), 21);
+        assert_eq!(manager.simulation.level(ChunkPos::new(1, 0)), 22);
+    }
+}

@@ -106,7 +106,22 @@ fn region() -> Level {
             .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
             .unwrap();
         region.set_chunk_entity_ticking(pos, true).unwrap();
+        region.set_chunk_block_ticking(pos, true).unwrap();
+        region
+            .set_chunk_loading_status(
+                pos,
+                crate::level::distance_manager::FullChunkStatus::EntityTicking,
+                true,
+            )
+            .unwrap();
     }
+    for request in region.take_entity_storage_requests() {
+        let crate::level::entity::EntityStorageRequest::Load { id, .. } = request else {
+            panic!("new fixture only requests empty entity loads")
+        };
+        region.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    }
+    region.process_pending_entity_loads().unwrap();
     region
 }
 

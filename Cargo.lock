@@ -308,6 +308,7 @@ dependencies = [
  "ferraloom-brigadier",
  "ferraloom-chunk",
  "ferraloom-data",
+ "ferraloom-light",
  "ferraloom-nbt",
  "ferraloom-protocol",
  "ferraloom-storage",

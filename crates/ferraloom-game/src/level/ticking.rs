@@ -11,6 +11,9 @@ use ferraloom_util::{
     random::{Random, RandomSource},
 };
 impl Level {
+    pub fn tick_world_border(&mut self) {
+        self.region_mut().entities.border.tick();
+    }
     /// Port of ServerLevel#tick's inactivity gate, after block events. Active
     /// tickets reset it even during freeze; only running simulation advances it.
     /// The returned flag gates dragon/entity/block-entity phases, never entity
@@ -185,7 +188,7 @@ impl Level {
             if self.random().next_int_bound(48) == 0 {
                 let pos = self
                     .get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
-                self.tick_precipitation(pos);
+                self.tick_precipitation(pos)?;
             }
         }
         if speed == 0 {

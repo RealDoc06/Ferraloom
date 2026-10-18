@@ -1,8 +1,54 @@
 //! Ports of WeatherData, ServerLevel#advanceWeatherCycle and prepareWeather.
 use super::{Level, LevelError, effects::LevelEffect};
+use ferraloom_light::{DataLayer, LightLayer};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_storage::{Error, Result, SavedDataCodec};
-use ferraloom_util::BlockPos;
+use ferraloom_util::{BlockPos, ChunkPos};
+use ferraloom_worldgen::{
+    Identifier,
+    biome_manager::{BiomeTemperatures, Precipitation, zoom_quart},
+};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
+/// Dimension-owned biome inputs; climate math is shared with worldgen.
+pub struct WeatherEnvironment {
+    pub temperatures: Arc<BiomeTemperatures>,
+    pub biome_names: Arc<Vec<Identifier>>,
+    pub biome_zoom_seed: i64,
+    pub sea_level: i32,
+}
+/// Visible light data copied at the native light-result integration point.
+/// Missing sky sections inherit the bottom plane of the next stored section,
+/// exactly as SkyLightSectionStorage#getLightValue(false) does.
+#[derive(Clone, Default)]
+pub struct ChunkLightSnapshot {
+    pub sky: BTreeMap<i32, DataLayer>,
+    pub block: BTreeMap<i32, DataLayer>,
+}
+impl ChunkLightSnapshot {
+    fn brightness(&self, layer: LightLayer, pos: BlockPos) -> u8 {
+        let section = pos.y >> 4;
+        let layers = match layer {
+            LightLayer::Sky => &self.sky,
+            LightLayer::Block => &self.block,
+        };
+        if let Some(data) = layers.get(&section) {
+            return data.get((pos.x & 15) as u8, (pos.y & 15) as u8, (pos.z & 15) as u8);
+        }
+        if layer == LightLayer::Block {
+            return 0;
+        }
+        layers
+            .range((section + 1)..)
+            .next()
+            .map_or(15, |(_, data)| {
+                data.get((pos.x & 15) as u8, 0, (pos.z & 15) as u8)
+            })
+    }
+}
 use ferraloom_util::random::{Random, RandomSource};
 
 /// Shared server weather save, stored in data/minecraft/weather.dat in 26.3.
@@ -55,6 +101,8 @@ pub(super) struct Weather {
     old_thunder: f32,
     thunder: f32,
     pending_precipitation_calls: u64,
+    environment: Option<WeatherEnvironment>,
+    lights: HashMap<ChunkPos, ChunkLightSnapshot>,
 }
 impl Weather {
     fn from_saved(data: WeatherData) -> Self {
@@ -156,7 +204,12 @@ impl Weather {
 }
 impl Level {
     pub fn load_weather(&mut self, data: WeatherData) {
-        self.region_mut().weather = Weather::from_saved(data);
+        let weather = &mut self.region_mut().weather;
+        let environment = weather.environment.take();
+        let lights = std::mem::take(&mut weather.lights);
+        *weather = Weather::from_saved(data);
+        weather.environment = environment;
+        weather.lights = lights;
     }
     pub fn weather(&self) -> &WeatherData {
         &self.region().weather.data
@@ -203,20 +256,239 @@ impl Level {
             .weather
             .is_raining(self.rules().can_have_weather)
     }
-    /// Port of Level#isRainingAt. The dry short circuit is complete. Rain still
-    /// requires the pending live skylight and biome-precipitation queries.
-    pub fn is_raining_at(&self, _pos: BlockPos) -> std::result::Result<bool, LevelError> {
+    pub fn set_weather_environment(&mut self, environment: WeatherEnvironment) {
+        self.region_mut().weather.environment = Some(environment);
+    }
+    pub fn set_light_snapshot(&mut self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
+        self.region_mut().weather.lights.insert(pos, snapshot);
+    }
+    fn weather_environment(&self) -> std::result::Result<&WeatherEnvironment, LevelError> {
+        self.region()
+            .weather
+            .environment
+            .as_ref()
+            .ok_or(LevelError::UnsupportedWeatherQuery)
+    }
+    pub fn brightness(
+        &self,
+        layer: LightLayer,
+        pos: BlockPos,
+    ) -> std::result::Result<u8, LevelError> {
+        let chunk = ChunkPos::containing(pos);
+        self.chunk(chunk).ok_or(LevelError::MissingChunk(chunk))?;
+        self.region()
+            .weather
+            .lights
+            .get(&chunk)
+            .map(|data| data.brightness(layer, pos))
+            .ok_or(LevelError::UnsupportedWeatherQuery)
+    }
+    pub fn biome_at(&self, pos: BlockPos) -> std::result::Result<&Identifier, LevelError> {
+        let environment = self.weather_environment()?;
+        let quart = zoom_quart(environment.biome_zoom_seed, [pos.x, pos.y, pos.z]);
+        let p = ChunkPos::new(quart[0] >> 2, quart[2] >> 2);
+        let chunk = self.chunk(p).ok_or(LevelError::MissingChunk(p))?;
+        let y = quart[1].clamp(chunk.min_y() >> 2, (chunk.max_y() - 1) >> 2);
+        let section = chunk
+            .section(y >> 2)
+            .expect("biome Y clamped to owned chunk");
+        let biome = section
+            .biomes()
+            .get((quart[0] & 3) as u8, (y & 3) as u8, (quart[2] & 3) as u8);
+        environment
+            .biome_names
+            .get(biome.0 as usize)
+            .ok_or(LevelError::UnsupportedWeatherQuery)
+    }
+    pub fn heightmap_pos(
+        &self,
+        map: super::heightmap::Heightmap,
+        pos: BlockPos,
+    ) -> std::result::Result<BlockPos, LevelError> {
+        let p = ChunkPos::containing(pos);
+        let chunk = self.chunk(p).ok_or(LevelError::MissingChunk(p))?;
+        let height = chunk
+            .height_at(map, (pos.x & 15) as u8, (pos.z & 15) as u8)
+            .ok_or(LevelError::UnsupportedWeatherQuery)?;
+        Ok(BlockPos::new(pos.x, height, pos.z))
+    }
+    /// Port of Level#precipitationAt and isRainingAt, including sky and the
+    /// motion-blocking heightmap before the zoomed biome climate query.
+    pub fn precipitation_at(
+        &self,
+        pos: BlockPos,
+    ) -> std::result::Result<Precipitation, LevelError> {
         if !self.is_raining() {
+            return Ok(Precipitation::None);
+        }
+        if self.brightness(LightLayer::Sky, pos)? < 15 {
+            return Ok(Precipitation::None);
+        }
+        if self
+            .heightmap_pos(super::heightmap::Heightmap::MotionBlocking, pos)?
+            .y
+            > pos.y
+        {
+            return Ok(Precipitation::None);
+        }
+        let environment = self.weather_environment()?;
+        Ok(environment.temperatures.precipitation_at(
+            self.biome_at(pos)?,
+            [pos.x, pos.y, pos.z],
+            environment.sea_level,
+        ))
+    }
+    pub fn is_raining_at(&self, pos: BlockPos) -> std::result::Result<bool, LevelError> {
+        Ok(self.precipitation_at(pos)? == Precipitation::Rain)
+    }
+    /// Concrete live port of Biome#shouldFreeze; climate math is shared.
+    pub fn should_freeze(
+        &self,
+        biome: &Identifier,
+        pos: BlockPos,
+        check_neighbors: bool,
+    ) -> std::result::Result<bool, LevelError> {
+        use ferraloom_data::{BlockClass, registries::fluid::Id as Fluid, tags::FluidTags};
+        let environment = self.weather_environment()?;
+        if environment.temperatures.warm_enough_to_rain(
+            biome,
+            [pos.x, pos.y, pos.z],
+            environment.sea_level,
+        ) {
             return Ok(false);
         }
-        Err(LevelError::UnsupportedWeatherQuery)
+        if pos.y < self.region().min_y
+            || pos.y >= self.region().max_y
+            || self.brightness(LightLayer::Block, pos)? >= 10
+        {
+            return Ok(false);
+        }
+        let state = self.get_block_state(pos)?;
+        if state.data().fluid.fluid_type != Fluid::WATER
+            || !state.block().is_instance_of(BlockClass::LiquidBlock)
+        {
+            return Ok(false);
+        }
+        if !check_neighbors {
+            return Ok(true);
+        }
+        for direction in [
+            ferraloom_util::Direction::West,
+            ferraloom_util::Direction::East,
+            ferraloom_util::Direction::North,
+            ferraloom_util::Direction::South,
+        ] {
+            if !self.fluid_tags()?.contains_key(
+                FluidTags::WATER,
+                self.get_block_state(pos.relative(direction, 1))?
+                    .data()
+                    .fluid
+                    .fluid_type,
+            ) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
-    /// ServerLevel#tickPrecipitation integration point. Selection and randValue
-    /// advancement run now; snow, ice and cauldron effects await biome helpers.
-    pub fn tick_precipitation(&mut self, pos: BlockPos) {
+    /// Required survival queries remain Unsupported in both runtime modes.
+    pub fn should_snow(
+        &self,
+        biome: &Identifier,
+        pos: BlockPos,
+    ) -> std::result::Result<bool, LevelError> {
+        use ferraloom_data::Block;
+        let environment = self.weather_environment()?;
+        if environment.temperatures.precipitation_at(
+            biome,
+            [pos.x, pos.y, pos.z],
+            environment.sea_level,
+        ) != Precipitation::Snow
+        {
+            return Ok(false);
+        }
+        if pos.y < self.region().min_y
+            || pos.y >= self.region().max_y
+            || self.brightness(LightLayer::Block, pos)? >= 10
+        {
+            return Ok(false);
+        }
+        let state = self.get_block_state(pos)?;
+        if !state.is_air() && state.block() != Block::SNOW {
+            return Ok(false);
+        }
+        self.can_survive(Block::SNOW.default_state(), pos)
+    }
+    /// Port of ServerLevel#tickPrecipitation. Selection remains observable in
+    /// the pending-family hook while survival, entity pushing and cauldrons land.
+    pub fn tick_precipitation(&mut self, pos: BlockPos) -> std::result::Result<(), LevelError> {
+        use crate::block::{BlockMethod, UnportedOperation};
+        use ferraloom_data::Block;
         let weather = &mut self.region_mut().weather;
         weather.pending_precipitation_calls = weather.pending_precipitation_calls.wrapping_add(1);
         self.emit(LevelEffect::PendingPrecipitation(pos));
+        let top = self.heightmap_pos(super::heightmap::Heightmap::MotionBlocking, pos)?;
+        let below = top.below(1);
+        let biome = self.biome_at(top)?.clone();
+        if self.should_freeze(&biome, below, true)? {
+            self.set_block_and_update(below, Block::ICE.default_state())?;
+        }
+        if self.is_raining() {
+            if self.rules().max_snow_accumulation_height > 0 {
+                let snow = self.accumulate_snow(&biome, top);
+                match snow {
+                    Err(
+                        error @ (LevelError::UnsupportedBlockMethod(_, _)
+                        | LevelError::UnsupportedBlock(_)
+                        | LevelError::UnsupportedShape(_)),
+                    ) => {
+                        if self.unported_behavior() == crate::block::UnportedBehavior::Strict {
+                            return Err(error);
+                        }
+                        self.unported_operation(UnportedOperation::SnowAccumulation)?;
+                    }
+                    other => other?,
+                }
+            }
+            let environment = self.weather_environment()?;
+            let precipitation = environment.temperatures.precipitation_at(
+                &biome,
+                [below.x, below.y, below.z],
+                environment.sea_level,
+            );
+            if precipitation != Precipitation::None {
+                let state = self.get_block_state(below)?;
+                self.optional_block_call(
+                    state.block(),
+                    BlockMethod::HandlePrecipitation,
+                    |behavior, level| {
+                        behavior.handle_precipitation(state, below, precipitation, level)
+                    },
+                )?;
+            }
+        }
+        Ok(())
+    }
+    fn accumulate_snow(
+        &mut self,
+        biome: &Identifier,
+        top: BlockPos,
+    ) -> std::result::Result<(), LevelError> {
+        use ferraloom_data::{Block, properties};
+        if !self.should_snow(biome, top)? {
+            return Ok(());
+        }
+        let state = self.get_block_state(top)?;
+        if state.block() == Block::SNOW {
+            let layers = state.get(properties::LAYERS).unwrap();
+            if i32::from(layers) < self.rules().max_snow_accumulation_height.min(8) {
+                let next = state.with(properties::LAYERS, layers + 1).unwrap();
+                self.unported_operation(crate::block::UnportedOperation::PushEntitiesUp)?;
+                self.set_block_and_update(top, next)?;
+            }
+        } else {
+            self.set_block_and_update(top, Block::SNOW.default_state())?;
+        }
+        Ok(())
     }
     pub fn pending_precipitation_calls(&self) -> u64 {
         self.region().weather.pending_precipitation_calls
@@ -255,7 +527,7 @@ mod tests {
         });
         assert_eq!(
             level.is_raining_at(pos),
-            Err(LevelError::UnsupportedWeatherQuery)
+            Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
         );
         level.rules_mut().can_have_weather = false;
         assert_eq!(level.is_raining_at(pos), Ok(false));
