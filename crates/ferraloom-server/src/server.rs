@@ -191,7 +191,7 @@ pub struct MinecraftServer {
     root: PathBuf,
     registries: RegistrySet,
     recipe_manager: Arc<RecipeManager>,
-    recipe_synchronization: RecipeSynchronization,
+    recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: RuntimeCraftingContext,
     access: AccessLists,
     level: ServerLevel,
@@ -260,7 +260,8 @@ impl MinecraftServer {
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
-        let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
+        let recipe_synchronization =
+            Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
         let loot = Arc::new(LootData::load(
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
@@ -316,10 +317,54 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        let loaded_recipe_tags =
+            ferraloom_data::datapack::load_tags(&resources, "recipe", |id, _| {
+                recipe_manager.by_key(id).map(|recipe| {
+                    protocol::Identifier::parse(&recipe.id.to_string())
+                        .expect("validated recipe identifier")
+                })
+            });
+        for diagnostic in loaded_recipe_tags.diagnostics {
+            eprintln!("Recipe tag: {diagnostic:?}");
+        }
+        let recipe_tags = loaded_recipe_tags
+            .values
+            .into_iter()
+            .map(|(id, values)| {
+                (
+                    protocol::Identifier::parse(&id.to_string())
+                        .expect("validated recipe tag identifier"),
+                    values,
+                )
+            })
+            .collect();
+        let advancements = Arc::new(
+            ferraloom_game::advancements::ServerAdvancementManager::load(
+                &resources,
+                &ferraloom_game::advancements::AdvancementRegistryContext {
+                    loot: &loot,
+                    recipes: &recipe_manager,
+                    recipe_tags: &recipe_tags,
+                    lookup: Some(&LootRegistryLookup::new(&registries, &resources)),
+                },
+            )?,
+        );
+        for warning in &advancements.validation_problems {
+            eprintln!(
+                "Advancement {} criterion {} {}: {}",
+                warning.advancement,
+                warning.criterion,
+                warning.problem.path,
+                warning.problem.message
+            );
+        }
         level.level.set_container_resources(
             Arc::new(ContainerResources {
                 recipes: Arc::clone(&recipe_manager),
                 loot,
+                advancements,
+                recipe_tags,
+                recipe_synchronization: Arc::clone(&recipe_synchronization),
             }),
             world.seed,
         );
