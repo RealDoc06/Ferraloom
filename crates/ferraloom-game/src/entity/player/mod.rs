@@ -328,7 +328,25 @@ fn terrain_shapes(level: &Level, from: Vec3, to: Vec3) -> Result<Vec<CollisionBo
     Ok(shapes)
 }
 pub struct PlayerBehavior;
-impl crate::entity::Entity for PlayerBehavior {}
+impl crate::entity::Entity for PlayerBehavior {
+    fn maybe_back_off_from_edge(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+        delta: Vec3,
+        mover: crate::entity::movement::MoverType,
+    ) -> Result<Vec3, LevelError> {
+        let max_step = self.max_up_step(entity, level)?;
+        crate::entity::movement::player_back_off_from_edge(
+            entity,
+            level,
+            delta,
+            mover,
+            max_step,
+            level.entity::<ServerPlayer>(entity)?.flying,
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {

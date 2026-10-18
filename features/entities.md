@@ -4,14 +4,14 @@ Includes every entity type, concrete goal implementation (including nested goals
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | | - | todo |
-| entities.lifecycle.metadata | Track synchronized entity data and send dirty metadata to watchers | `SynchedEntityData; ServerEntity#sendChanges` | | - | todo |
-| entities.lifecycle.passengers | Maintain riding chains, controlling passengers, dismount positions and recursive saving | `Entity#startRiding; Entity#stopRiding` | | - | todo |
-| entities.lifecycle.pose-dimensions | Update entity dimensions and collision bounds when pose or size changes | `Entity#refreshDimensions; LivingEntity` | | - | todo |
-| entities.movement.collision | Resolve swept block and entity collisions, step-up movement and stuck-in-block multipliers | `Entity#move; Entity#collide` | | - | todo |
+| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | `entity::persistence::tests; level::entity::EntityIdAllocator` | - | partial |
+| entities.lifecycle.metadata | Track synchronized entity data and send dirty metadata to watchers | `SynchedEntityData; ServerEntity#sendChanges` | `entity::synched_data::tests::dirty_metadata_preserves_accessor_order_and_forced_updates` | - | partial |
+| entities.lifecycle.passengers | Maintain riding chains, controlling passengers, dismount positions and recursive saving | `Entity#startRiding; Entity#stopRiding` | `entity::lifecycle` | - | partial |
+| entities.lifecycle.pose-dimensions | Update entity dimensions and collision bounds when pose or size changes | `Entity#refreshDimensions; LivingEntity` | `entity::EntityDimensions` | - | partial |
+| entities.movement.collision | Resolve swept block and entity collisions, step-up movement and stuck-in-block multipliers | `Entity#move; Entity#collide` | `entity::tests::vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits` | - | partial |
 | entities.movement.gravity-drag | Apply gravity, fluid drag, ground friction and terminal movement updates | `LivingEntity#travel; Entity` | | - | todo |
 | entities.movement.portal-cooldown | Tick portal processing and portal cooldown without repeated transfers | `Entity; PortalProcessor` | | - | todo |
-| entities.movement.fall-damage | Track fall distance and reset it on qualifying landing, fluid and movement conditions | `Entity#checkFallDamage; LivingEntity#causeFallDamage` | | - | todo |
+| entities.movement.fall-damage | Track fall distance and reset it on qualifying landing, fluid and movement conditions | `Entity#checkFallDamage; LivingEntity#causeFallDamage` | `entity::tests::vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits` | - | partial |
 | entities.movement.push-cramming | Push overlapping entities and apply entity-cramming damage rules | `LivingEntity#pushEntities` | | - | todo |
 | entities.movement.leash | Tick leash slack, pulling, snapping and cross-entity leash state | `Leashable` | | - | todo |
 | entities.ai.goal-priority | Stop invalid goals and arbitrate conflicting flags by priority and interruptibility | `GoalSelector#tick` | | - | todo |
@@ -687,3 +687,8 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.sulfur-cube-archetype.slow-flat | `minecraft:slow_flat` (sulfur cube archetype) | `data/minecraft/sulfur_cube_archetype/slow_flat.json`; `SulfurCubeArchetype#DIRECT_CODEC` | | - | todo |
 | entities.sulfur-cube-archetype.slow-sliding | `minecraft:slow_sliding` (sulfur cube archetype) | `data/minecraft/sulfur_cube_archetype/slow_sliding.json`; `SulfurCubeArchetype#DIRECT_CODEC` | | - | todo |
 | entities.sulfur-cube-archetype.sticky | `minecraft:sticky` (sulfur cube archetype) | `data/minecraft/sulfur_cube_archetype/sticky.json`; `SulfurCubeArchetype#DIRECT_CODEC` | | - | todo |
+
+| entities.lifecycle.base-nbt | Round-trip 26.3 Entity base NBT, clear optional fields and retain unrecognized data | `Entity#saveWithoutId; Entity#load` | `entity::persistence::tests` | - | partial |
+| entities.storage.query-order | Traverse accessible sections by signed packed section key and insertion order within sections | `EntitySectionStorage; EntityLookup; EntityTickList` |  | - | partial |
+| entities.movement.large-shape-cursor | Preserve BlockCollisions cursor boundary exclusions and cached large-shape facts | `BlockCollisions; BlockStateBase.Cache` | `data::tests::cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing; entity::tests` | - | partial |
+| entities.movement.world-border | Clamp movement with border bounds and tick-based lerping; retain border saved data | `WorldBorder` | `level::border::tests` | - | partial |

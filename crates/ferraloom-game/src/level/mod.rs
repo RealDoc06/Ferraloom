@@ -12,6 +12,7 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+pub mod border;
 mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
@@ -253,6 +254,7 @@ impl Level {
         self.region()
             .behaviors
             .entity(kind)
+            .or_else(|| crate::entity::vanilla_behavior(kind))
             .ok_or(LevelError::UnsupportedEntity(kind))
     }
     #[inline]

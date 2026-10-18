@@ -11,6 +11,16 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn move_by(
+        &mut self,
+        level: &mut Level,
+        mover: movement::MoverType,
+        delta: ferraloom_util::Vec3,
+    ) -> Result<(), LevelError> {
+        let behavior = level.entity_behavior(*self)?;
+        behavior.move_by(*self, level, mover, delta)
+    }
+
     /// The mutable receiver is a call handle; canonical state stays in `level`.
     pub fn tick(&mut self, level: &mut Level) -> Result<(), LevelError> {
         let behavior = level.entity_behavior(*self)?;
@@ -32,6 +42,8 @@ mod base;
 pub mod collision;
 pub mod collision_context;
 mod lifecycle;
+pub mod movement;
+mod trace;
 pub use lifecycle::{common_tick, eject_passengers, position_rider, start_riding, stop_riding};
 pub mod persistence;
 pub mod synched_data;
@@ -184,6 +196,81 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    fn move_by(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        mover: movement::MoverType,
+        delta: ferraloom_util::Vec3,
+    ) -> Result<(), LevelError> {
+        movement::move_entity(self, entity, mover, delta, level)
+    }
+    fn max_up_step(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        let state = level.entity_state(entity)?;
+        if state.as_living().is_none() {
+            return Ok(0.0);
+        }
+        Ok(state
+            .entity_type()
+            .data()
+            .attributes
+            .iter()
+            .find(|(id, _)| *id == ferraloom_data::registries::attribute::Id::STEP_HEIGHT)
+            .map_or(0.6, |(_, value)| *value as f32))
+    }
+    fn maybe_back_off_from_edge(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+        delta: ferraloom_util::Vec3,
+        _mover: movement::MoverType,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        Ok(delta)
+    }
+    fn is_local_instance_authoritative(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(!matches!(
+            level.entity_state(entity)?,
+            EntityState::Player(_)
+        ))
+    }
+    fn is_horizontal_collision_minor(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+        _movement: ferraloom_util::Vec3,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn movement_emission(&self) -> movement::MovementEmission {
+        movement::MovementEmission::All
+    }
+    fn bounciness(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
+        Ok(0.0)
+    }
+    fn default_gravity(&self) -> f64 {
+        0.0
+    }
+    fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
+        Ok(
+            if *level
+                .entity::<EntityData>(entity)?
+                .entity_data
+                .get(synched_data::NO_GRAVITY)
+            {
+                0.0
+            } else {
+                self.default_gravity()
+            },
+        )
+    }
+    fn air_drag(&self) -> f32 {
+        0.98
+    }
+
     /// Port of LivingEntity#getLiquidCollisionShape's inherited empty result.
     fn liquid_collision_shape(
         &self,
@@ -298,3 +385,6 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;
