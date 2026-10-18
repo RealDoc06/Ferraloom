@@ -259,7 +259,7 @@ impl StructureStart {
                             pieces.push(StructurePiece::Mineshaft(piece));
                         }
                     }
-                    "minecraft:ruined_portal" => {
+                    "minecraft:rupo" => {
                         if let Ok(piece) =
                             super::structures::ruined_portal::RuinedPortalPiece::from_nbt(
                                 templates, tag,

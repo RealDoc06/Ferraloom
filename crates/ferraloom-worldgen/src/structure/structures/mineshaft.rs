@@ -108,7 +108,7 @@ impl MineshaftPiece {
                 direction,
                 two_floored,
             } => {
-                tag.insert("D", Tag::Int(direction.data_2d()));
+                tag.insert("D", Tag::Byte(direction.data_2d() as i8));
                 tag.insert("tf", Tag::Byte(i8::from(*two_floored)));
             }
             MineshaftPieceKind::Stairs => {}

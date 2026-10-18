@@ -315,7 +315,7 @@ impl RuinedPortalPiece {
     pub fn to_nbt(&self) -> CompoundTag {
         let mut tag = self
             .template
-            .to_nbt(&"minecraft:ruined_portal".parse().expect("builtin piece"));
+            .to_nbt(&"minecraft:rupo".parse().expect("builtin piece"));
         tag.insert(
             "Rotation",
             Tag::String(rotation_name(self.template.settings.rotation).into()),
