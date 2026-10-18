@@ -179,3 +179,40 @@ fn contextual_selectors_are_rejected_before_parsing_but_messages_remain_literal(
     assert!(message.parts.is_empty());
     assert_eq!(message.text, "hello @e[bad]");
 }
+
+#[test]
+fn static_and_coordinate_suggestions_match_java() {
+    #[derive(Deserialize)]
+    struct Vector {
+        parser: String,
+        input: String,
+        suggestions: Vec<String>,
+    }
+    let vectors: Vec<Vector> =
+        serde_json::from_str(include_str!("../vanilla/suggestion-vectors.json")).unwrap();
+    let dispatcher = crate::commands::Commands::default();
+    for vector in vectors {
+        let argument =
+            MinecraftArgument::new(wire::from_report(&vector.parser, &serde_json::json!({})));
+        let context = CommandContext::new(
+            Arc::new(CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO)),
+            &vector.input,
+            dispatcher.dispatcher().root(),
+            0,
+        );
+        let actual = argument
+            .list_suggestions(&context, SuggestionsBuilder::new(&vector.input, 0))
+            .unwrap();
+        assert_eq!(
+            actual
+                .list
+                .into_iter()
+                .map(|suggestion| suggestion.text)
+                .collect::<Vec<_>>(),
+            vector.suggestions,
+            "{} {:?}",
+            vector.parser,
+            vector.input
+        );
+    }
+}

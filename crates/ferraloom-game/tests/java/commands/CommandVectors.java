@@ -134,6 +134,21 @@ public final class CommandVectors {
         argumentTypes.put("brigadier:long", LongArgumentType.longArg());
         argumentTypes.put("minecraft:angle", net.minecraft.commands.arguments.AngleArgument.angle());
         argumentTypes.put("minecraft:item_slots", net.minecraft.commands.arguments.SlotsArgument.slots());
+        var suggestionVectors = new JsonArray();
+        var staticSuggestions = Set.of("brigadier:bool", "minecraft:gamemode", "minecraft:entity_anchor", "minecraft:operation", "minecraft:hex_color", "minecraft:team_color", "minecraft:scoreboard_slot", "minecraft:template_mirror", "minecraft:template_rotation", "minecraft:heightmap", "minecraft:swing_animation", "minecraft:block_pos", "minecraft:column_pos", "minecraft:vec3", "minecraft:vec2");
+        for (var entry : argumentTypes.entrySet()) if (staticSuggestions.contains(entry.getKey())) {
+            for (var input : List.of("", "a", "r", "dark_", "~", "~ ", "1", "1 ", "1 2", "^", "^ ", "1 2 ")) {
+                var builder = new com.mojang.brigadier.suggestion.SuggestionsBuilder(input, 0);
+                var commandContext = new com.mojang.brigadier.context.CommandContextBuilder<>(dispatcher, source(4), dispatcher.getRoot(), 0).build(input);
+                var suggestions = entry.getValue().listSuggestions(commandContext, builder).join();
+                var vector = new JsonObject();
+                vector.addProperty("parser", entry.getKey()); vector.addProperty("input", input);
+                var values = new JsonArray();
+                suggestions.getList().forEach(suggestion -> values.add(suggestion.getText()));
+                vector.add("suggestions", values); suggestionVectors.add(vector);
+            }
+        }
+        write(out, "suggestion-vectors.json", suggestionVectors);
         var wireVectors = new JsonArray();
         for (var entry : argumentTypes.entrySet()) {
             var template = ArgumentTypeInfos.unpack(entry.getValue());

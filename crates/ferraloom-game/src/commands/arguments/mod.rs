@@ -7,6 +7,7 @@ pub mod range;
 pub mod scoreboard;
 pub mod selectors;
 pub mod slots;
+pub mod suggestions;
 pub mod wire;
 use crate::{
     commands::{
@@ -560,11 +561,88 @@ impl ArgumentType for MinecraftArgument {
             _ => &[],
         };
         for value in values {
-            if value
-                .to_lowercase()
-                .starts_with(&builder.remaining().to_lowercase())
-            {
+            if suggestions::matches_substring(
+                &builder.remaining_lower_case(),
+                &value.to_lowercase(),
+            ) {
                 builder.suggest(*value);
+            }
+        }
+        let registry = match &self.wire {
+            CommandArgument::Resource { registry }
+            | CommandArgument::ResourceKey { registry }
+            | CommandArgument::ResourceOrTag { registry }
+            | CommandArgument::ResourceOrTagKey { registry }
+            | CommandArgument::ResourceSelector { registry } => Some(registry.as_str()),
+            CommandArgument::ItemStack {} => Some("minecraft:item"),
+            CommandArgument::BlockState {} | CommandArgument::BlockPredicate {} => {
+                Some("minecraft:block")
+            }
+            CommandArgument::Particle {} => Some("minecraft:particle_type"),
+            CommandArgument::LootTable {} => Some("minecraft:loot_table"),
+            CommandArgument::LootPredicate {} => Some("minecraft:predicate"),
+            CommandArgument::LootModifier {} => Some("minecraft:item_modifier"),
+            CommandArgument::ContextFloatProvider {} => Some("minecraft:context_float_provider"),
+            CommandArgument::ContextIntProvider {} => Some("minecraft:context_int_provider"),
+            CommandArgument::SlotSource {} => Some("minecraft:slot_source"),
+            CommandArgument::Dialog {} => Some("minecraft:dialog"),
+            CommandArgument::Feature {} => Some("minecraft:feature"),
+            _ => None,
+        };
+        if let Some(registry) = registry {
+            suggestions::resources(&mut builder, self.context.entries(registry), "");
+            if matches!(
+                self.wire,
+                CommandArgument::ResourceOrTag { .. }
+                    | CommandArgument::ResourceOrTagKey { .. }
+                    | CommandArgument::BlockPredicate {}
+            ) {
+                if let Some(tags) = self.context.tags.get(registry) {
+                    suggestions::resources(&mut builder, tags.keys().map(String::as_str), "#");
+                }
+            }
+        }
+        if matches!(
+            self.wire,
+            CommandArgument::BlockPos {}
+                | CommandArgument::ColumnPos {}
+                | CommandArgument::Vec3 {}
+                | CommandArgument::Vec2 {}
+        ) {
+            let remaining = builder.remaining();
+            let two = matches!(
+                self.wire,
+                CommandArgument::ColumnPos {} | CommandArgument::Vec2 {}
+            );
+            let coordinate = if !two && remaining.starts_with('^') {
+                "^"
+            } else {
+                "~"
+            };
+            let count = if two { 2 } else { 3 };
+            let fields = if remaining.is_empty() {
+                Vec::new()
+            } else {
+                remaining
+                    .trim_end_matches(' ')
+                    .split(' ')
+                    .collect::<Vec<_>>()
+            };
+            if fields.len() < count {
+                let full = (0..count)
+                    .map(|index| fields.get(index).copied().unwrap_or(coordinate))
+                    .collect::<Vec<_>>();
+                if self.parse(&mut StringReader::new(full.join(" "))).is_ok() {
+                    for end in (fields.len() + 1).max(1)..=count {
+                        let suggestion = full[..end].join(" ");
+                        if suggestions::matches_substring(
+                            &remaining.to_lowercase(),
+                            &suggestion.to_lowercase(),
+                        ) {
+                            builder.suggest(suggestion);
+                        }
+                    }
+                }
             }
         }
         Ok(builder.build())

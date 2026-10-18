@@ -2578,3 +2578,4 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | Resource-or-tag argument validates both branches against the live registry lookup | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
 | Block predicates preserve explicit properties, NBT matching and bound block tags | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
 | All 62 ArgumentTypeInfos wire templates, including bounds, flags and registry keys | `commands::arguments::wire::tests::every_argument_network_template_matches_java` | pass | todo |
+| Static argument and coordinate suggestions use vanilla substring boundaries and partial coordinates | `commands::arguments::tests::static_and_coordinate_suggestions_match_java` | pass | todo |
