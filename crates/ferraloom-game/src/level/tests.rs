@@ -1068,7 +1068,8 @@ impl BlockBehavior for DynamicFluidWall {
         }
     }
 }
-static DYNAMIC_FLUID_WALL: Behaviors = Behaviors::EMPTY.with_block(Block::WATER, &DynamicFluidWall);
+static DYNAMIC_FLUID_WALL: Behaviors =
+    Behaviors::EMPTY.with_block(Block::SCAFFOLDING, &DynamicFluidWall);
 
 #[test]
 fn fluid_wall_queries_share_dynamic_dispatch_and_match_vanilla_target_first_shortcuts() {
@@ -1107,16 +1108,17 @@ fn fluid_wall_queries_share_dynamic_dispatch_and_match_vanilla_target_first_shor
             assert_eq!(result.unwrap().to_string(), expected, "{input}");
         }
     }
-    // A live override of LiquidBlock's empty-context shape must also be called;
-    // fluid queries cannot hard-code LiquidBlock as an empty shape.
+    // A state without a native collision cache reaches the registered dynamic
+    // method, including successful contextual results.
+    let dynamic = Block::SCAFFOLDING.default_state();
     assert!(
         !crate::block::fluid::can_pass_through_wall(
             Direction::East,
             &level,
             BlockPos::ZERO,
-            states[1],
+            dynamic,
             BlockPos::new(1, 0, 0),
-            states[1],
+            dynamic,
         )
         .unwrap()
     );
