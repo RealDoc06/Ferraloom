@@ -2099,6 +2099,42 @@ impl MinecraftServer {
     }
 }
 
+impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer {
+    fn formatted_score(
+        &mut self,
+        holder: &str,
+        objective: &str,
+    ) -> std::result::Result<Component, ferraloom_game::commands::components::ResolutionError> {
+        Ok(self
+            .shared()
+            .scoreboard
+            .scoreboard()
+            .formatted_score(holder, objective))
+    }
+
+    fn nbt_data(
+        &mut self,
+        _source: &CommandSourceStack,
+        data: &protocol::chat::DataSource,
+    ) -> std::result::Result<
+        Vec<ferraloom_nbt::CompoundTag>,
+        ferraloom_game::commands::components::ResolutionError,
+    > {
+        use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
+        match data {
+            protocol::chat::DataSource::Storage(id) => {
+                let storage = self
+                    .level
+                    .level
+                    .command_storage()
+                    .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
+                Ok(vec![storage.get(id)?])
+            }
+            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod command_context_tests {
     use super::*;
@@ -2157,41 +2193,5 @@ mod command_context_tests {
             context.tag("minecraft:worldgen/biome", "minecraft:empty"),
             Some([].as_slice())
         );
-    }
-}
-
-impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer {
-    fn formatted_score(
-        &mut self,
-        holder: &str,
-        objective: &str,
-    ) -> std::result::Result<Component, ferraloom_game::commands::components::ResolutionError> {
-        Ok(self
-            .shared()
-            .scoreboard
-            .scoreboard()
-            .formatted_score(holder, objective))
-    }
-
-    fn nbt_data(
-        &mut self,
-        _source: &CommandSourceStack,
-        data: &protocol::chat::DataSource,
-    ) -> std::result::Result<
-        Vec<ferraloom_nbt::CompoundTag>,
-        ferraloom_game::commands::components::ResolutionError,
-    > {
-        use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
-        match data {
-            protocol::chat::DataSource::Storage(id) => {
-                let storage = self
-                    .level
-                    .level
-                    .command_storage()
-                    .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
-                Ok(vec![storage.get(id)?])
-            }
-            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
-        }
     }
 }
