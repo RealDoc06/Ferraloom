@@ -14,6 +14,16 @@ pub struct BitSetDiscreteVoxelShape {
 }
 
 impl BitSetDiscreteVoxelShape {
+    /// Restores vanilla's packed occupancy and cached bounds without optimizing
+    /// them. Empty join results and sub-shapes can have nonstandard bounds.
+    pub fn from_snapshot(size: [i32; 3], words: &[u64], bounds: [[i32; 3]; 2]) -> Self {
+        let mut result = Self::new(size[0], size[1], size[2]);
+        assert!(words.len() <= result.storage.len(), "excess shape storage");
+        result.storage[..words.len()].copy_from_slice(words);
+        result.set_bounds(bounds[0], bounds[1]);
+        result
+    }
+
     pub fn new(x: i32, y: i32, z: i32) -> Self {
         assert!(x >= 0 && y >= 0 && z >= 0, "negative discrete shape size");
         let len = (x as usize)

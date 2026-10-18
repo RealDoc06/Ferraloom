@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import shutil
+import sys
 
 HERE = Path(__file__).resolve().parent
 VANILLA = Path(os.environ.get("FERRALOOM_VANILLA_DIR", "/home/doc/code/Ferraloom/.cache/vanilla/26.3"))
@@ -17,5 +18,11 @@ CLASSPATH = ":".join(map(str, [VANILLA / "versions/26.3/server-26.3.jar", *sorte
 with tempfile.TemporaryDirectory(prefix="ferraloom-shapes-java-") as directory:
     subprocess.run([str(JDK / "bin/javac"), "-cp", CLASSPATH, "-d", directory, str(HERE / "ShapeVectors.java")], check=True, cwd=directory)
     output = Path(directory) / "vanilla.bin"
-    subprocess.run([str(JDK / "bin/java"), "-Xmx768m", "-cp", directory + ":" + CLASSPATH, "ShapeVectors", str(output)], check=True, cwd=directory)
-    shutil.copyfile(output, HERE / "../../../src/shapes/vanilla.bin")
+    registry = "--registry-caches" in sys.argv[1:]
+    command = [str(JDK / "bin/java"), "-Xmx768m", "-cp", directory + ":" + CLASSPATH, "ShapeVectors", str(output)]
+    if registry:
+        command.append("--registry-caches")
+    subprocess.run(command, check=True, cwd=directory)
+    target = HERE / ("../../../../ferraloom-data/tests/vanilla_voxel_shapes.bin" if registry else "../../../src/shapes/vanilla.bin")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(output, target)
