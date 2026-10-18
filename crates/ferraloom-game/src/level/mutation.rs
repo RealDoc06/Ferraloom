@@ -217,6 +217,34 @@ impl Level {
         }
         Ok(true)
     }
+    /// Port of ServerLevel#updateNeighboursOnBlockSet, used by commands after
+    /// their deferred-update placement pass. The source is the new block.
+    pub fn update_neighbors_on_block_set(
+        &mut self,
+        pos: BlockPos,
+        old: BlockState,
+    ) -> Result<(), LevelError> {
+        let state = self.get_block_state(pos)?;
+        if old.block() != state.block() {
+            self.optional_block_call(
+                old.block(),
+                BlockMethod::AffectNeighborsAfterRemoval,
+                |behavior, level| behavior.affect_neighbors_after_removal(old, pos, false, level),
+            )?;
+        }
+        self.update_neighbors_at(pos, state.block())?;
+        if state.has_analog_output_signal() {
+            self.update_neighbour_for_output_signal(pos, state.block())?;
+        }
+        Ok(())
+    }
+    pub fn update_from_neighbor_shapes(
+        &mut self,
+        state: BlockState,
+        pos: BlockPos,
+    ) -> Result<BlockState, LevelError> {
+        crate::block::LevelAccessRef::Server(self).update_from_neighbor_shapes(state, pos)
+    }
     pub fn destroy_block(
         &mut self,
         pos: BlockPos,

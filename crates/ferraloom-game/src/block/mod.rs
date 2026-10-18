@@ -44,6 +44,26 @@ impl LevelReaderRef<'_> {
     }
 }
 impl LevelAccessRef<'_> {
+    /// Port of Block#updateFromNeighbourShapes. This query returns a required
+    /// placement state, so unsupported calls fail even under Warn policy.
+    pub fn update_from_neighbor_shapes(
+        &mut self,
+        mut state: BlockState,
+        pos: BlockPos,
+    ) -> Result<BlockState, LevelError> {
+        for direction in crate::level::redstone::UPDATE_SHAPE_ORDER {
+            let neighbor_pos = pos.relative(direction, 1);
+            let neighbor = self.get_block_state(neighbor_pos)?;
+            let behavior = match self {
+                Self::Server(level) => level.required_block_behavior(
+                    state.block(),
+                    BlockMethod::UpdateFromNeighbourShapes,
+                )?,
+            };
+            state = behavior.update_shape(state, pos, direction, neighbor_pos, neighbor, self)?;
+        }
+        Ok(state)
+    }
     pub fn as_reader(&self) -> LevelReaderRef<'_> {
         match self {
             Self::Server(level) => LevelReaderRef::Server(level),

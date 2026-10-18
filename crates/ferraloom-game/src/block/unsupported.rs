@@ -33,6 +33,7 @@ pub enum BlockMethod {
     CollisionShape,
     OutlineShape,
     IsFaceSturdy,
+    UpdateFromNeighbourShapes,
 }
 impl BlockMethod {
     const fn can_skip(self) -> bool {
@@ -45,6 +46,7 @@ impl BlockMethod {
                 | Self::CollisionShape
                 | Self::OutlineShape
                 | Self::IsFaceSturdy
+                | Self::UpdateFromNeighbourShapes
         )
     }
     pub const fn name(self) -> &'static str {
@@ -70,6 +72,7 @@ impl BlockMethod {
             Self::CollisionShape => "getCollisionShape",
             Self::OutlineShape => "getShape",
             Self::IsFaceSturdy => "isFaceSturdy",
+            Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",
         }
     }
 }
