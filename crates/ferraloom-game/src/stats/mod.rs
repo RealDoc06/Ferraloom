@@ -9,7 +9,9 @@ use ferraloom_protocol::{
         clientbound::{AwardStats, StatValue},
     },
 };
-use ferraloom_util::collections::{HashSet as JavaHashSet, JavaHash, Object2IntOpenHashMap};
+use ferraloom_util::collections::{
+    HashMap as JavaHashMap, HashSet as JavaHashSet, JavaHash, Object2IntOpenHashMap,
+};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -275,6 +277,7 @@ impl ServerStatsCounter {
             diagnostics.push("stats must be a map".into());
             return Ok(diagnostics);
         };
+        let mut flattened = JavaHashMap::new();
         for (kind, values) in groups {
             let decoded = (|| {
                 let id = Identifier::parse(kind)?;
@@ -297,13 +300,17 @@ impl ServerStatsCounter {
             })();
             match decoded {
                 Ok((entries, problems)) => {
-                    for (stat, count) in entries {
-                        self.counter.set_value(stat, count);
-                    }
+                    flattened.put_all(entries.into_iter());
                     diagnostics.extend(problems);
                 }
                 Err(e) => diagnostics.push(e.to_string()),
             }
+        }
+        self.counter
+            .stats
+            .ensure_capacity(self.counter.stats.len() + flattened.len());
+        for (stat, count) in flattened.iter() {
+            self.counter.set_value(*stat, *count);
         }
         Ok(diagnostics)
     }

@@ -93,5 +93,12 @@ fn vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries() {
             counter.set_value(key, entry["count"].as_i64().unwrap() as i32);
         }
         assert_eq!(wire(counter.send_stats()), row["packet"].as_str().unwrap());
+        let mut restored = ServerStatsCounter::default();
+        assert!(restored.parse(&row["saved"]).unwrap().is_empty());
+        restored.mark_all_dirty();
+        assert_eq!(
+            wire(restored.send_stats()),
+            row["restored_packet"].as_str().unwrap()
+        );
     }
 }
