@@ -173,7 +173,9 @@ fn native_live_load_runs_callbacks_on_the_original_generation() {
         let tag = ferraloom_nbt::parse_compound(f[3]).unwrap();
         if f[0] == "custom-live-load" {
             let mut patch = DataComponentPatch::default();
-            patch.set(DataComponent::MaxStackSize(7.into()));
+            patch.set(DataComponent::MaxStackSize(
+                ferraloom_protocol::codec::VarInt(7),
+            ));
             level
                 .block_entity_state_mut(handle)
                 .unwrap()
