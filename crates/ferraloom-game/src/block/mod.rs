@@ -194,7 +194,8 @@ pub trait BlockBehavior: Sync {
         _direction: Direction,
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<i32, LevelError> {
-        level.required_behavior(state.block(), BlockMethod::OwnSignal)?
+        level
+            .required_behavior(state.block(), BlockMethod::OwnSignal)?
             .own_signal(state, pos, level)
     }
     /// Port of BlockBehaviour#getDirectSignal.
@@ -215,7 +216,8 @@ pub trait BlockBehavior: Sync {
         direction: Option<Direction>,
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
-        let source = level.required_behavior(state.block(), BlockMethod::IsSignalSource)?
+        let source = level
+            .required_behavior(state.block(), BlockMethod::IsSignalSource)?
             .is_signal_source(state);
         Ok(source && direction.is_some())
     }
