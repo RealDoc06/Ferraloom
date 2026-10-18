@@ -5020,6 +5020,7 @@
     "properties": {},
     "input": "\"hello world\"",
     "ok": true,
+    "value": "hello world",
     "cursor": 13
   },
   {
@@ -5027,6 +5028,7 @@
     "properties": {},
     "input": "'hello world'",
     "ok": true,
+    "value": "hello world",
     "cursor": 13
   },
   {
@@ -5034,6 +5036,7 @@
     "properties": {},
     "input": "\"\"",
     "ok": true,
+    "value": "",
     "cursor": 2
   },
   {
@@ -5041,6 +5044,7 @@
     "properties": {},
     "input": "{text:\"hello world\"}",
     "ok": true,
+    "value": "hello world",
     "cursor": 20
   },
   {
@@ -5048,6 +5052,7 @@
     "properties": {},
     "input": "[\"\"]",
     "ok": true,
+    "value": "",
     "cursor": 4
   },
   {
@@ -5157,6 +5162,133 @@
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
     "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: {}; Second: No matching codec found",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "[]",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: List must have contents; Second: Not a map: []",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "[1]",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: 1; Second: Not a map: 1; List must have contents; Second: Not a map: [1]",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{text:1}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: {text:1}; Second: No matching codec found",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{text:'x',extra:[]}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: List must have contents",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{text:'x',bold:'yes'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Not a number",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{type:'unknown',text:'x'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: {text:\"x\",type:\"unknown\"}; Second: Unknown element id: unknown",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{type:'text'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid chat component: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: {type:\"text\"}; Second: No key text in MapLike[{type:\"text\"}]",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{translate:'chat.type.text',with:['A','B']}",
+    "ok": true,
+    "value": {
+      "translate": "chat.type.text",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "cursor": 43
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{selector:'@a',separator:', '}",
+    "ok": true,
+    "value": {
+      "selector": "@a",
+      "separator": ", "
+    },
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{text:'x',color:'red',bold:false,extra:[' y']}",
+    "ok": true,
+    "value": {
+      "text": "x",
+      "extra": [
+        " y"
+      ],
+      "color": "red",
+      "bold": false
+    },
+    "cursor": 46
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "input": "{text:'x',click_event:{action:'suggest_command',command:'/help'},insertion:'x'}",
+    "ok": true,
+    "value": {
+      "text": "x",
+      "click_event": {
+        "command": "/help",
+        "action": "suggest_command"
+      },
+      "insertion": "x"
+    },
+    "cursor": 79
   },
   {
     "parser": "minecraft:resource_selector",
@@ -8484,6 +8616,9 @@
     "properties": {},
     "input": "{bold: true}",
     "ok": true,
+    "value": {
+      "bold": true
+    },
     "cursor": 12
   },
   {
@@ -8491,6 +8626,9 @@
     "properties": {},
     "input": "{color: 'red'}",
     "ok": true,
+    "value": {
+      "color": "red"
+    },
     "cursor": 14
   },
   {
@@ -8498,6 +8636,7 @@
     "properties": {},
     "input": "{}",
     "ok": true,
+    "value": {},
     "cursor": 2
   },
   {
@@ -8607,6 +8746,114 @@
     "error_cursor": 0,
     "message": "Expected a valid unquoted string",
     "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "[]",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Not a map: []",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "'x'",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Not a map: \"x\"",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{bold:'yes'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Not a number",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{bold:2,italic:false}",
+    "ok": true,
+    "value": {
+      "bold": true,
+      "italic": false
+    },
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{color:'invalid'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Invalid color name: invalid",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{color:'#12abEF'}",
+    "ok": true,
+    "value": {
+      "color": "#12ABEF"
+    },
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{insertion:1}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Not a string",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{bold:'yes',italic:'no'}",
+    "ok": false,
+    "error_cursor": 0,
+    "message": "Invalid style: Not a number; Not a number",
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{font:'minecraft:default'}",
+    "ok": true,
+    "value": {
+      "font": "minecraft:default"
+    },
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{shadow_color:[1f,0f,0.5f,1f]}",
+    "ok": true,
+    "value": {
+      "shadow_color": -65409
+    },
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "input": "{click_event:{action:'suggest_command',command:'/help'}}",
+    "ok": true,
+    "value": {
+      "click_event": {
+        "command": "/help",
+        "action": "suggest_command"
+      }
+    },
+    "cursor": 56
   },
   {
     "parser": "minecraft:nbt_tag",

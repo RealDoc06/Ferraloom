@@ -38,6 +38,8 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         "minecraft:team_color",
         "minecraft:hex_color",
         "minecraft:message",
+        "minecraft:component",
+        "minecraft:style",
         "minecraft:nbt_compound_tag",
         "minecraft:nbt_tag",
         "minecraft:nbt_path",
@@ -134,6 +136,8 @@ fn check_vector(vector: &Vector) {
                 ArgumentValue::Double(v) => serde_json::json!(v),
                 ArgumentValue::String(v) | ArgumentValue::Identifier(v) => serde_json::json!(v),
                 ArgumentValue::HexColor(v) => serde_json::json!(*v as i32),
+                ArgumentValue::Component(v) => serde_json::from_str(&v.to_json().unwrap()).unwrap(),
+                ArgumentValue::Style(v) => serde_json::from_str(&v.to_json().unwrap()).unwrap(),
                 _ => expected.clone(),
             };
             assert_eq!(actual, *expected, "{label}");

@@ -1,5 +1,6 @@
 //! Minecraft argument values retain their parsed type and their network descriptor.
 pub mod blocks;
+mod chat;
 pub mod coordinates;
 pub mod items;
 pub mod operation;
@@ -292,20 +293,8 @@ impl MinecraftArgument {
             A::NbtTag {} => V::Tag(nbt(reader, false)?),
             A::NbtCompoundTag {} => V::Tag(nbt(reader, true)?),
             A::NbtPath {} => V::Path(nbt_path(reader)?),
-            A::Component {} => {
-                let tag = nbt(reader, false)?;
-                V::Component(
-                    Component::from_nbt(tag)
-                        .map_err(|e| error("argument.component.invalid", &[e.to_string()]))?,
-                )
-            }
-            A::Style {} => {
-                let tag = nbt(reader, false)?;
-                V::Style(
-                    Style::from_nbt(tag)
-                        .map_err(|e| error("argument.style.invalid", &[e.to_string()]))?,
-                )
-            }
+            A::Component {} => V::Component(chat::component(reader)?),
+            A::Style {} => V::Style(chat::style(reader)?),
             A::IntRange {} => V::Range(NumberRange::parse(reader, true, false)?),
             A::FloatRange {} => V::Range(NumberRange::parse(reader, false, false)?),
             A::Angle {} => {

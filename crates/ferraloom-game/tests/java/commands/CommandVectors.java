@@ -183,6 +183,8 @@ public final class CommandVectors {
             inputs.addAll(List.of("", " ", "?", "-1", "1.5", "~ ~ ~", "0 1", "0 1 2", "^ ^ ^", "~ ^ ~", "@a", "@e[type=minecraft:player,limit=1]"));
             if (entry.getKey().equals("minecraft:entity")) inputs.addAll(List.of("@", "@z", "@a[", "@a[limit=0]", "@a[x=1,x=2]", "@a[name=!A,name=B]", "@e[type=#minecraft:undead,type=minecraft:player]", "@a[distance=3..1]", "@a[scores={foo=1..2}]", "@a[advancements={minecraft:story/root={foo=true}}]"));
             if (entry.getKey().equals("minecraft:item_stack")) inputs.addAll(List.of("stone[]", "stone[damage=1]", "stone[!damage]", "stone[damage=1,damage=2]", "stone[creative_slot_lock={}]", "stone[unknown=1]", "stone[damage=]", "stone[damage=1,", "stone[ damage=1 ]", "stone[custom_name='hello']"));
+            if (entry.getKey().equals("minecraft:component")) inputs.addAll(List.of("{}", "[]", "[1]", "{text:1}", "{text:'x',extra:[]}", "{text:'x',bold:'yes'}", "{type:'unknown',text:'x'}", "{type:'text'}", "{translate:'chat.type.text',with:['A','B']}", "{selector:'@a',separator:', '}", "{text:'x',color:'red',bold:false,extra:[' y']}", "{text:'x',click_event:{action:'suggest_command',command:'/help'},insertion:'x'}"));
+            if (entry.getKey().equals("minecraft:style")) inputs.addAll(List.of("[]", "'x'", "{bold:'yes'}", "{bold:2,italic:false}", "{color:'invalid'}", "{color:'#12abEF'}", "{insertion:1}", "{bold:'yes',italic:'no'}", "{font:'minecraft:default'}", "{shadow_color:[1f,0f,0.5f,1f]}", "{click_event:{action:'suggest_command',command:'/help'}}"));
             if (entry.getKey().equals("minecraft:objective_criteria")) inputs.addAll(List.of("dummy", "trigger", "health", "teamkill.red", "minecraft.mined:minecraft.stone", "minecraft.custom:minecraft.jump"));
             for (var input : inputs) {
                 var reader = new com.mojang.brigadier.StringReader(input);
@@ -194,6 +196,8 @@ public final class CommandVectors {
                     Object value = entry.getValue().parse(reader);
                     vector.addProperty("ok", true);
                     if (value instanceof Number || value instanceof Boolean || value instanceof String) vector.add("value", JSON.toJsonTree(value));
+                    if (value instanceof net.minecraft.network.chat.Component component) vector.add("value", net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(runtimeRegistries.createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE), component).getOrThrow());
+                    if (value instanceof net.minecraft.network.chat.Style style) vector.add("value", net.minecraft.network.chat.Style.Serializer.CODEC.encodeStart(runtimeRegistries.createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE), style).getOrThrow());
                     if (value instanceof net.minecraft.commands.arguments.coordinates.WorldCoordinates coordinates) {
                         var coordinatesJson = new JsonArray();
                         for (var coordinate : List.of(coordinates.x(), coordinates.y(), coordinates.z())) {
