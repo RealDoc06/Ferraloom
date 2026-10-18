@@ -399,7 +399,7 @@ impl<R: RandomSource> Assembler<'_, R> {
                 ) {
                     return false;
                 }
-                last = self.add(
+                self.add(
                     pieces,
                     &last,
                     [4, next_y, 0],
@@ -407,7 +407,6 @@ impl<R: RandomSource> Assembler<'_, R> {
                     rotation.rotated(Rotation::Clockwise180),
                     true,
                 );
-                last.template.data.gen_depth = -1;
                 pieces.last_mut().unwrap().template.data.gen_depth = -1;
                 true
             }
