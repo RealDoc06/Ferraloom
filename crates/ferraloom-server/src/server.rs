@@ -141,7 +141,9 @@ impl Connection {
         self.pending.push(packet.into());
     }
     fn disconnect(&mut self, reason: impl Into<String>) {
-        let reason = Component::literal(reason);
+        self.disconnect_component(Component::literal(reason));
+    }
+    fn disconnect_component(&mut self, reason: Component) {
         match self.phase {
             Phase::Configuration(_) => {
                 self.push(cfg::ClientboundPacket::Disconnect(common_cb::Disconnect {

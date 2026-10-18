@@ -82,6 +82,38 @@ impl AccessLists {
             user_cache: read(root, "usercache.json")?,
         })
     }
+    pub fn cached_profile(&self, name: &str) -> Option<GameProfile> {
+        let cached = self
+            .user_cache
+            .iter()
+            .find(|user| user.name.eq_ignore_ascii_case(name))?;
+        Some(GameProfile {
+            id: ferraloom_game::commands::arguments::selectors::parse_uuid(&cached.uuid)?,
+            name: cached.name.clone(),
+            properties: Vec::new(),
+        })
+    }
+    /// Port of PlayerList#op/#deop; persistence failures are logged by the caller.
+    pub fn set_operator(&mut self, profile: &GameProfile, level: Option<i32>) -> Result<()> {
+        if let Some(level) = level {
+            self.ops.insert(
+                profile.id.to_string(),
+                Operator {
+                    uuid: profile.id.to_string(),
+                    name: profile.name.clone(),
+                    level,
+                    bypasses_player_limit: false,
+                },
+            );
+        } else {
+            self.ops.remove(&profile.id.to_string());
+        }
+        fs::write(
+            self.root.join("ops.json"),
+            serde_json::to_vec_pretty(&self.ops.values().collect::<Vec<_>>())?,
+        )?;
+        Ok(())
+    }
     pub fn permission(&self, id: Uuid) -> i32 {
         self.ops.peek(&id.to_string()).map_or(0, |op| op.level)
     }

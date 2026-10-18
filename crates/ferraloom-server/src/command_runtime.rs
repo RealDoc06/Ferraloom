@@ -3,6 +3,7 @@ use super::*;
 use ferraloom_game::{
     commands::{
         PreparedCommand,
+        arguments::ArgumentValue,
         builtins::{self, CommandResult},
         exceptions, feedback,
     },
@@ -163,6 +164,8 @@ impl MinecraftServer {
         let stack = &command.source;
         let result = match command.command.as_str() {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
+            "op" | "deop" => self.operator_command(source, &command)?,
+            "kick" => self.kick_command(source, &command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
@@ -814,5 +817,190 @@ impl MinecraftServer {
                 }));
         }
         Ok(())
+    }
+}
+
+impl MinecraftServer {
+    fn selected_connections(
+        &mut self,
+        command: &PreparedCommand,
+        argument: &str,
+    ) -> Result<Vec<ConnectionId>, ferraloom_brigadier::CommandSyntaxException> {
+        let Some(ArgumentValue::Entity(selector)) = command.argument(argument) else {
+            return Err(exceptions::error("argument.entity.notfound.player", &[]));
+        };
+        let handles = selector.find(&command.source, self, true)?;
+        let connections = handles.into_iter().filter_map(|entity| {
+            self.players.iter().copied().find(|id| matches!(self.connections[id].phase, Phase::Play(handle) if handle == entity))
+        }).collect::<Vec<_>>();
+        if connections.is_empty() {
+            return Err(exceptions::error("argument.entity.notfound.player", &[]));
+        }
+        Ok(connections)
+    }
+    /// GameProfileArgument resolves names or selectors at the command's execution step.
+    fn command_profiles(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<Vec<GameProfile>, ferraloom_brigadier::CommandSyntaxException> {
+        if matches!(command.argument("targets"), Some(ArgumentValue::Entity(_))) {
+            return self.selected_connections(command, "targets").map(|ids| {
+                ids.into_iter()
+                    .map(|id| self.connections[&id].profile.clone())
+                    .collect()
+            });
+        }
+        let name = command.string("targets").expect("game profile argument");
+        if let Some(profile) = self
+            .players
+            .iter()
+            .map(|id| &self.connections[id].profile)
+            .find(|profile| profile.name.eq_ignore_ascii_case(name))
+        {
+            return Ok(vec![profile.clone()]);
+        }
+        if let Some(profile) = self.access.cached_profile(name) {
+            return Ok(vec![profile]);
+        }
+        if !self.properties.boolean("online-mode") {
+            return Ok(vec![GameProfile {
+                id: Uuid::offline_player(name),
+                name: name.into(),
+                properties: Vec::new(),
+            }]);
+        }
+        Err(exceptions::error("argument.player.unknown", &[]))
+    }
+    fn update_command_permissions(&mut self, profile: Uuid) {
+        let level = self.access.permission(profile);
+        let targets = self
+            .players
+            .iter()
+            .copied()
+            .filter(|id| self.connections[id].profile.id == profile)
+            .collect::<Vec<_>>();
+        for id in targets {
+            let Phase::Play(entity) = self.connections[&id].phase else {
+                continue;
+            };
+            let Ok(player) = self.player(entity) else {
+                continue;
+            };
+            let network_id = player.network_id;
+            let tree = self.commands.packet(level);
+            let connection = self.connections.get_mut(&id).unwrap();
+            connection.push(cb::Packet::EntityEvent(cb::EntityEvent {
+                entity_id: network_id,
+                event_id: (24 + level.clamp(0, 4)) as i8,
+            }));
+            connection.push(tree);
+        }
+    }
+    fn kick_unlisted_players(&mut self) {
+        if !self.properties.boolean("enforce-whitelist") || !self.properties.boolean("white-list") {
+            return;
+        }
+        let targets = self
+            .players
+            .iter()
+            .copied()
+            .filter(|id| {
+                let uuid = self.connections[id].profile.id.to_string();
+                !self.access.ops.contains_key(&uuid) && !self.access.whitelist.contains_key(&uuid)
+            })
+            .collect::<Vec<_>>();
+        for id in targets {
+            self.connections
+                .get_mut(&id)
+                .unwrap()
+                .disconnect_component(Component::translatable(
+                    "multiplayer.disconnect.not_whitelisted",
+                    vec![],
+                ));
+        }
+    }
+    fn operator_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let profiles = self.command_profiles(command)?;
+        let grant = command.command == "op";
+        let mut count = 0;
+        for profile in profiles {
+            if self.access.ops.contains_key(&profile.id.to_string()) == grant {
+                continue;
+            }
+            let level = grant.then(|| self.properties.int("op-permission-level"));
+            if let Err(error) = self.access.set_operator(&profile, level) {
+                eprintln!("Could not save operator list: {error:#}");
+            }
+            self.update_command_permissions(profile.id);
+            count += 1;
+            self.command_success(
+                source,
+                &command.source,
+                Component::translatable(
+                    format!("commands.{}.success", command.command),
+                    vec![builtins::string(&profile.name)],
+                ),
+                true,
+            );
+        }
+        if count == 0 {
+            return Err(exceptions::error(
+                &format!("commands.{}.failed", command.command),
+                &[],
+            ));
+        }
+        if !grant {
+            self.kick_unlisted_players();
+        }
+        Ok(CommandResult {
+            value: count,
+            feedback: Vec::new(),
+            rule_change: None,
+        })
+    }
+    fn kick_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let targets = self.selected_connections(command, "targets")?;
+        let reason = if let Some(ArgumentValue::Message(message)) = command.argument("reason") {
+            message.to_component(&command.source, self)?
+        } else {
+            Component::translatable("multiplayer.disconnect.kicked", vec![])
+        };
+        for id in &targets {
+            let name = if let Phase::Play(entity) = self.connections[id].phase {
+                self.player(entity)
+                    .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
+            } else {
+                continue;
+            };
+            self.connections
+                .get_mut(id)
+                .unwrap()
+                .disconnect_component(reason.clone());
+            self.command_success(
+                source,
+                &command.source,
+                Component::translatable(
+                    "commands.kick.success",
+                    vec![
+                        builtins::component(name),
+                        builtins::component(reason.clone()),
+                    ],
+                ),
+                true,
+            );
+        }
+        Ok(CommandResult {
+            value: targets.len() as i32,
+            feedback: Vec::new(),
+            rule_change: None,
+        })
     }
 }
