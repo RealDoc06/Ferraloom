@@ -852,6 +852,97 @@ async fn tick_control(session: &mut Session) -> Result<ObservationLog> {
         "sprint.stop.error",
         command(bot, "tick sprint stop", "commands.tick.sprint.stop.fail").await?,
     )?;
+    bot.command("tick sprint 1000000000t").await?;
+    let packet=bot.wait_for("sprint state before feedback",Ticks::DEFAULT,|_,packet| {
+        matches!(packet,cb::Packet::TickingState(_)) || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.status.sprinting")))
+    }).await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        anyhow::bail!("sprint feedback preceded state")
+    };
+    ensure!(
+        !packet.is_frozen && packet.tick_rate == 20.,
+        "sprint must unfreeze the game"
+    );
+    log.record("sprint.state", format!("{packet:?}"))?;
+    log.record(
+        "sprint.feedback",
+        feedback(bot, "commands.tick.status.sprinting").await?,
+    )?;
+    bot.command("tick sprint stop").await?;
+    let packet=bot.wait_for("sprint report before restored state",Ticks::DEFAULT,|_,packet| {
+        matches!(packet,cb::Packet::TickingState(_)) || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.sprint.report")||has_translation(&v,"commands.tick.sprint.stop.success")))
+    }).await?;
+    let cb::Packet::SystemChat(packet) = packet.as_ref() else {
+        anyhow::bail!("restored state preceded sprint report")
+    };
+    let mut report = json(&packet.content)?;
+    // Performance values depend on the host; the native fixed-time Java vector
+    // checks their calculation and formatting. Compare every other field here.
+    fn normalize_timing(value: &mut Value) -> Result<bool> {
+        match value {
+            Value::Object(fields) => {
+                if fields.get("translate").and_then(Value::as_str)
+                    == Some("commands.tick.sprint.report")
+                {
+                    let args = fields
+                        .get_mut("with")
+                        .and_then(Value::as_array_mut)
+                        .expect("sprint report arguments");
+                    ensure!(
+                        args.len() == 2 && args[0].as_i64().is_some_and(|v| v >= 0),
+                        "sprint rate must be a numeric integer"
+                    );
+                    let milliseconds = args[1].as_str().expect("formatted milliseconds");
+                    ensure!(
+                        milliseconds.parse::<f64>().is_ok()
+                            && milliseconds
+                                .split_once('.')
+                                .is_some_and(|(_, fraction)| fraction.len() == 2),
+                        "sprint milliseconds must retain two decimals"
+                    );
+                    args[0] = serde_json::json!(0);
+                    args[1] = serde_json::json!("<timing>");
+                    return Ok(true);
+                }
+                for value in fields.values_mut() {
+                    if normalize_timing(value)? {
+                        return Ok(true);
+                    }
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    if normalize_timing(value)? {
+                        return Ok(true);
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(false)
+    }
+    ensure!(
+        normalize_timing(&mut report)?,
+        "missing sprint report before stop feedback"
+    );
+    log.record("sprint.report", report)?;
+    let packet = bot
+        .wait_for("restored frozen state", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+        })
+        .await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        unreachable!()
+    };
+    ensure!(
+        packet.is_frozen && packet.tick_rate == 20.,
+        "sprint stop did not restore frozen state"
+    );
+    log.record("sprint.restored_state", format!("{packet:?}"))?;
+    log.record(
+        "sprint.stop.feedback",
+        feedback(bot, "commands.tick.sprint.stop.success").await?,
+    )?;
     bot.command("tick unfreeze").await?;
     let packet = bot
         .wait_for("unfreeze packet", Ticks::DEFAULT, |_, packet| {
