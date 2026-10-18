@@ -2097,7 +2097,13 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
                     .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
                 Ok(vec![storage.get(id)?])
             }
-            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+            protocol::chat::DataSource::Block(coordinates) => {
+                ferraloom_game::commands::components::block_data(
+                    &self.level.level,
+                    source,
+                    coordinates,
+                )
+            }
         }
     }
 }

@@ -1,0 +1,242 @@
+[
+  {
+    "coordinates": "17 -4 -1",
+    "eyes": false,
+    "state": "present",
+    "position": [
+      17,
+      -4,
+      -1
+    ],
+    "data": [
+      "{components:{\"minecraft:custom_name\":\"Stored portal\",\"minecraft:max_stack_size\":7},id:\"minecraft:end_portal\",x:17,y:-4,z:-1}"
+    ],
+    "component": {
+      "nbt": "id",
+      "block": "17 -4 -1"
+    },
+    "resolved": {
+      "text": "",
+      "extra": [
+        "\"",
+        {
+          "text": "minecraft:end_portal",
+          "color": "green"
+        },
+        "\""
+      ]
+    }
+  },
+  {
+    "coordinates": "17 -4 -1",
+    "eyes": false,
+    "state": "absent",
+    "position": [
+      17,
+      -4,
+      -1
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "17 -4 -1"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "17 -4 -1",
+    "eyes": false,
+    "state": "unloaded",
+    "position": [
+      17,
+      -4,
+      -1
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "17 -4 -1"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "~1.5 ~-2.25 ~3.5",
+    "eyes": false,
+    "state": "present",
+    "position": [
+      17,
+      5,
+      -5
+    ],
+    "data": [
+      "{components:{\"minecraft:custom_name\":\"Stored portal\",\"minecraft:max_stack_size\":7},id:\"minecraft:end_portal\",x:17,y:5,z:-5}"
+    ],
+    "component": {
+      "nbt": "id",
+      "block": "~1.5 ~-2.25 ~3.5"
+    },
+    "resolved": {
+      "text": "",
+      "extra": [
+        "\"",
+        {
+          "text": "minecraft:end_portal",
+          "color": "green"
+        },
+        "\""
+      ]
+    }
+  },
+  {
+    "coordinates": "~1.5 ~-2.25 ~3.5",
+    "eyes": false,
+    "state": "absent",
+    "position": [
+      17,
+      5,
+      -5
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "~1.5 ~-2.25 ~3.5"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "~1.5 ~-2.25 ~3.5",
+    "eyes": false,
+    "state": "unloaded",
+    "position": [
+      17,
+      5,
+      -5
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "~1.5 ~-2.25 ~3.5"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": false,
+    "state": "present",
+    "position": [
+      15,
+      10,
+      -7
+    ],
+    "data": [
+      "{components:{\"minecraft:custom_name\":\"Stored portal\",\"minecraft:max_stack_size\":7},id:\"minecraft:end_portal\",x:15,y:10,z:-7}"
+    ],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": {
+      "text": "",
+      "extra": [
+        "\"",
+        {
+          "text": "minecraft:end_portal",
+          "color": "green"
+        },
+        "\""
+      ]
+    }
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": false,
+    "state": "absent",
+    "position": [
+      15,
+      10,
+      -7
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": false,
+    "state": "unloaded",
+    "position": [
+      15,
+      10,
+      -7
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": true,
+    "state": "present",
+    "position": [
+      15,
+      11,
+      -7
+    ],
+    "data": [
+      "{components:{\"minecraft:custom_name\":\"Stored portal\",\"minecraft:max_stack_size\":7},id:\"minecraft:end_portal\",x:15,y:11,z:-7}"
+    ],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": {
+      "text": "",
+      "extra": [
+        "\"",
+        {
+          "text": "minecraft:end_portal",
+          "color": "green"
+        },
+        "\""
+      ]
+    }
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": true,
+    "state": "absent",
+    "position": [
+      15,
+      11,
+      -7
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": ""
+  },
+  {
+    "coordinates": "^1 ^2 ^3",
+    "eyes": true,
+    "state": "unloaded",
+    "position": [
+      15,
+      11,
+      -7
+    ],
+    "data": [],
+    "component": {
+      "nbt": "id",
+      "block": "^1 ^2 ^3"
+    },
+    "resolved": ""
+  }
+]
