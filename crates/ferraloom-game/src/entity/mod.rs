@@ -1,4 +1,5 @@
 use ferraloom_data::EntityType;
+use ferraloom_util::Vec3;
 
 use crate::level::{Level, LevelError};
 

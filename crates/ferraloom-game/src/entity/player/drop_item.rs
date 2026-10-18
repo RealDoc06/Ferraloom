@@ -92,7 +92,7 @@ pub fn drop_item_stack(
         super::award_stat(player, crate::stats::Stat::Dropped(kind), count, level)?;
         super::award_stat(
             player,
-            crate::stats::Stat::Custom(crate::stats::custom::DROP),
+            crate::stats::Stat::Custom(crate::stats::custom::Id::DROP),
             1,
             level,
         )?;
@@ -188,7 +188,8 @@ mod tests {
                     .unwrap()
                     .stats;
                 let item_dropped = stats.get_value(crate::stats::Stat::Dropped(Item::STONE));
-                let drops = stats.get_value(crate::stats::Stat::Custom(crate::stats::custom::DROP));
+                let drops =
+                    stats.get_value(crate::stats::Stat::Custom(crate::stats::custom::Id::DROP));
                 assert_eq!(item_dropped, if thrown { 7 } else { 0 });
                 assert_eq!(drops, i32::from(thrown));
                 assert_eq!(inventory::count(operation.level.stack(carried).unwrap()), 7);

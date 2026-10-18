@@ -148,6 +148,14 @@ fn record(entity: EntityRef, event: String, level: &mut Level) -> Result<(), Lev
     Ok(())
 }
 impl Entity for HitReceiver {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<EntityRef>,
+    ) {
+        crate::entity::animal::CowBehavior.trace_entity_refs(state, references);
+    }
+
     fn fall_sounds(&self) -> crate::entity::living::FallSounds {
         if self.0 {
             crate::entity::player::PlayerBehavior.fall_sounds()

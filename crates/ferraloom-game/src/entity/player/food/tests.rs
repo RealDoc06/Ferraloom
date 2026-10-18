@@ -60,6 +60,14 @@ fn fixture(
 }
 struct StarveProbe;
 impl Entity for StarveProbe {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn hurt_server(
         &self,
         entity: EntityRef,

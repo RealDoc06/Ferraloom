@@ -332,7 +332,7 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
-        self.food_data.load(&self.saved);
+        self.food_data.load(&self.parent.parent.parent.saved);
         self.set_shoulder_entity_left(
             self.saved
                 .get_compound("ShoulderEntityLeft")
@@ -357,10 +357,11 @@ impl ServerPlayer {
                 }
             }
         }
+        let walking_speed = self.abilities.walking_speed();
         self.attributes
             .get_instance(ferraloom_data::registries::attribute::Id::MOVEMENT_SPEED)
             .expect("player supplier defines MOVEMENT_SPEED")
-            .set_base_value(f64::from(self.abilities.walking_speed()));
+            .set_base_value(f64::from(walking_speed));
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
@@ -1044,7 +1045,7 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::living::jump::jump_from_ground(self, entity, level)?;
         award_stat(
             entity,
-            crate::stats::Stat::Custom(crate::stats::custom::JUMP),
+            crate::stats::Stat::Custom(crate::stats::custom::Id::JUMP),
             1,
             level,
         )?;

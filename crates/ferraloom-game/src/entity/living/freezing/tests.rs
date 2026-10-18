@@ -74,6 +74,14 @@ fn frozen_counters_and_armor_eligibility_match_native_float_bits_and_slot_scope(
 
 struct FreezeReceiver(bool);
 impl Entity for FreezeReceiver {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(self.0)
     }

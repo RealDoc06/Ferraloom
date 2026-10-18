@@ -41,6 +41,14 @@ fn event(entity: EntityRef, text: String, level: &mut Level) -> Result<(), Level
 }
 struct Probe;
 impl Entity for Probe {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn can_simulate_movement(&self, _: EntityRef, _: &Level) -> Result<bool, LevelError> {
         Ok(true)
     }

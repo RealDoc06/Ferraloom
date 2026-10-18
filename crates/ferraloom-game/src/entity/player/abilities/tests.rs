@@ -139,7 +139,9 @@ fn native_server_jump_awards_stats_after_motion_and_gates_exhaustion_on_invulner
             row[5]
         );
         assert_eq!(
-            p.stats.get_value(Stat::Custom(custom::JUMP)).to_string(),
+            p.stats
+                .get_value(Stat::Custom(custom::Id::JUMP))
+                .to_string(),
             row[6]
         );
         assert_eq!(

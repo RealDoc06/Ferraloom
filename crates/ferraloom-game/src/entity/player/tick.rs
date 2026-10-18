@@ -69,13 +69,13 @@ pub fn player_do_tick_with_tick_rate(
         crate::inventory::check_container_menu_still_valid(player, level)?;
         super::food::tick(behavior, player, level)?;
         use crate::stats::{Stat, custom};
-        award_stat(player, Stat::Custom(custom::PLAY_TIME), 1, level)?;
-        award_stat(player, Stat::Custom(custom::TOTAL_WORLD_TIME), 1, level)?;
+        award_stat(player, Stat::Custom(custom::Id::PLAY_TIME), 1, level)?;
+        award_stat(player, Stat::Custom(custom::Id::TOTAL_WORLD_TIME), 1, level)?;
         if behavior.is_alive(player, level)? {
-            award_stat(player, Stat::Custom(custom::TIME_SINCE_DEATH), 1, level)?;
+            award_stat(player, Stat::Custom(custom::Id::TIME_SINCE_DEATH), 1, level)?;
         }
         if level.entity::<EntityData>(player)?.shared_flag(1) {
-            award_stat(player, Stat::Custom(custom::CROUCH_TIME), 1, level)?;
+            award_stat(player, Stat::Custom(custom::Id::CROUCH_TIME), 1, level)?;
         }
         if level
             .entity::<crate::entity::LivingEntity>(player)?
@@ -83,7 +83,7 @@ pub fn player_do_tick_with_tick_rate(
             .get(crate::entity::synched_data::SLEEPING_POS)
             .is_none()
         {
-            award_stat(player, Stat::Custom(custom::TIME_SINCE_REST), 1, level)?;
+            award_stat(player, Stat::Custom(custom::Id::TIME_SINCE_REST), 1, level)?;
         }
     }
     // Pending special inventory/map item synchronization.
