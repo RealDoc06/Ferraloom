@@ -55,6 +55,23 @@ pub struct ServerPlayer {
     pub received_moves: u32,
 }
 impl ServerPlayer {
+    /// Port of Player#getDisplayName and #decorateDisplayNameComponent (without a team).
+    pub fn display_name(&self) -> ferraloom_protocol::chat::Component {
+        use ferraloom_protocol::{
+            Identifier,
+            chat::{ClickEvent, Component, HoverEvent},
+        };
+        let mut name = Component::literal(&self.name);
+        name.style.click_event = Some(ClickEvent::SuggestCommand(format!("/tell {} ", self.name)));
+        name.style.hover_event = Some(HoverEvent::ShowEntity {
+            entity_type: Identifier::parse("minecraft:player").expect("built-in player identifier"),
+            uuid: self.uuid,
+            name: Some(Box::new(Component::literal(&self.name))),
+        });
+        name.style.insertion = Some(self.name.clone());
+        name
+    }
+
     pub fn new(
         uuid: Uuid,
         name: String,
@@ -339,6 +356,20 @@ mod tests {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_data::Block;
     use std::sync::Arc;
+    #[test]
+    fn display_name_matches_java_player_component() {
+        let player = ServerPlayer::new(
+            Uuid::new(0x0123456789abcdef, 0x0123456789abcdef),
+            "Doc".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        let expected =
+            ferraloom_protocol::chat::Component::from_json(include_str!("display-name.json"))
+                .unwrap();
+        assert_eq!(player.display_name(), expected);
+    }
     #[test]
     fn movement_sweep_cannot_tunnel_through_terrain() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
