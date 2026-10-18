@@ -46,14 +46,6 @@ impl<'a> MenuContext<'a> {
             drops: Vec::new(),
         }
     }
-    fn drop_item(&mut self, stack: ItemStack) {
-        if !stack.is_empty() {
-            self.drops.push(DroppedStack {
-                stack,
-                thrown_from_hand: true,
-            });
-        }
-    }
 }
 
 /// Port of AbstractContainerMenu. Slots address live containers; only remote and
@@ -309,7 +301,7 @@ impl AbstractContainerMenu {
         self.quickcraft_status = 0;
         self.quickcraft_slots.clear();
     }
-    fn can_take_for_pick_all(&self, slot: &Slot) -> bool {
+    pub(super) fn can_take_for_pick_all(&self, slot: &Slot) -> bool {
         match self.kind {
             MenuKind::Merchant => false,
             MenuKind::Inventory
@@ -319,56 +311,6 @@ impl AbstractContainerMenu {
             | MenuKind::Smithing => !matches!(slot.kind, SlotKind::Result(_)),
             _ => true,
         }
-    }
-    fn try_remove_live(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        slot: &Slot,
-        amount: i32,
-        max_amount: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<Option<ItemStack>> {
-        let stack = self.get_item(ctx, slot.index);
-        if !slot.may_pickup(&stack, ctx.is_creative, hooks)?
-            || (!slot.allow_modification(
-                self.container(ctx, slot.container),
-                ctx.is_creative,
-                hooks,
-            )? && max_amount < count(&stack))
-        {
-            return Ok(None);
-        }
-        if !stack.is_empty()
-            && slot.kind == SlotKind::Result(ResultKind::Crafting)
-            && let Some(crafting) = hooks.crafting_ref()
-        {
-            crafting.validate_take_result()?;
-        }
-        let result = self.remove_item_live(ctx, slot.index, amount.min(max_amount), hooks)?;
-        if result.is_empty() {
-            return Ok(None);
-        }
-        if self.get_item(ctx, slot.index).is_empty() {
-            self.set_item_live(ctx, slot.index, ItemStack::default(), hooks)?;
-        }
-        Ok(Some(result))
-    }
-    fn safe_take(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        index: usize,
-        amount: i32,
-        max_amount: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<ItemStack> {
-        let slot = self.slots[index].clone();
-        let result = self
-            .try_remove_live(ctx, &slot, amount, max_amount, hooks)?
-            .unwrap_or_default();
-        if !result.is_empty() {
-            self.on_take(ctx, index, &result, 0, hooks)?;
-        }
-        Ok(result)
     }
     pub(crate) fn on_take(
         &mut self,
@@ -455,14 +397,10 @@ impl AbstractContainerMenu {
         match input {
             ContainerInput::Pickup | ContainerInput::QuickMove if button == 0 || button == 1 => {
                 if slot_index == -999 {
-                    if !self.carried.is_empty() {
-                        let dropped = if button == 0 {
-                            self.take_carried_unrooted()
-                        } else {
-                            split(&mut self.carried, 1)
-                        };
-                        ctx.drop_item(dropped);
-                    }
+                    drop_carried_menu_item(
+                        &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+                        button,
+                    )?;
                 } else if slot_index >= 0 {
                     let slot = self.slot(slot_index)?;
                     let clicked = self.get_item(ctx, slot.index);
@@ -488,38 +426,19 @@ impl AbstractContainerMenu {
             {
                 let slot = self.slot(slot_index)?;
                 if !self.get_item(ctx, slot.index).is_empty() {
-                    let cloned = slot.safe_clone(self.container(ctx, slot.container));
-                    if slot.kind == SlotKind::Result(ResultKind::Crafting)
-                        && let Some(crafting) = hooks.crafting()
-                    {
-                        crafting.item_crafted(self, ctx, &cloned, None)?;
-                    }
-                    self.set_carried(cloned);
+                    let mut context = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+                    let cloned = context.clone_slot_stack(slot.index, hooks)?;
+                    context.set_carried_stack(cloned)?;
                 }
             }
             ContainerInput::Throw if self.carried.is_empty() && slot_index >= 0 => {
                 let slot = self.slot(slot_index)?;
-                let amount = if button == 0 {
-                    1
-                } else {
-                    count(&self.get_item(ctx, slot.index))
-                };
-                if !ctx.can_drop {
-                    return Ok(());
-                }
-                let mut dropped = self.safe_take(ctx, slot.index, amount, i32::MAX, hooks)?;
-                ctx.drop_item(dropped.clone());
-                if button == 1 {
-                    while !dropped.is_empty()
-                        && same_item(&self.get_item(ctx, slot.index), &dropped)
-                    {
-                        if !ctx.can_drop {
-                            return Ok(());
-                        }
-                        dropped = self.safe_take(ctx, slot.index, amount, i32::MAX, hooks)?;
-                        ctx.drop_item(dropped.clone());
-                    }
-                }
+                throw_menu_item(
+                    &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+                    slot.index,
+                    button,
+                    hooks,
+                )?;
             }
             ContainerInput::PickupAll if slot_index >= 0 => {
                 self.pickup_all(ctx, slot_index, button, hooks)?
@@ -657,37 +576,11 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         let slot = self.slot(index)?;
-        let clicked = self.get_item(ctx, slot.index);
-        if self.carried.is_empty()
-            || !clicked.is_empty() && slot.may_pickup(&clicked, ctx.is_creative, hooks)?
-        {
-            return Ok(());
-        }
-        let indices: Vec<_> = if button == 0 {
-            (0..self.slots.len()).collect()
-        } else {
-            (0..self.slots.len()).rev().collect()
-        };
-        for pass in 0..2 {
-            for &index in &indices {
-                if count(&self.carried) >= max_stack_size(&self.carried) {
-                    break;
-                }
-                let slot = &self.slots[index];
-                let stack = self.get_item(ctx, index);
-                if !stack.is_empty()
-                    && Self::can_item_quick_replace(&stack, &self.carried, true)
-                    && slot.may_pickup(&stack, ctx.is_creative, hooks)?
-                    && self.can_take_for_pick_all(slot)
-                    && (pass != 0 || count(&stack) != max_stack_size(&stack))
-                {
-                    let max = max_stack_size(&self.carried) - count(&self.carried);
-                    let removed = self.safe_take(ctx, index, count(&stack), max, hooks)?;
-                    let total = count(&self.carried) + count(&removed);
-                    set_count(&mut self.carried, total);
-                }
-            }
-        }
-        Ok(())
+        pickup_all_menu_items(
+            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+            slot.index,
+            button,
+            hooks,
+        )
     }
 }

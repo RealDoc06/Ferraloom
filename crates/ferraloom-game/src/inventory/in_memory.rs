@@ -391,6 +391,32 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         }
         Ok(())
     }
+    fn slot_count(&self) -> Result<usize> {
+        Ok(self.menu.slots.len())
+    }
+    fn can_take_for_pick_all(&self, index: usize) -> Result<bool> {
+        Ok(self.menu.can_take_for_pick_all(&self.menu.slots[index]))
+    }
+    fn can_drop_items(&self) -> Result<bool> {
+        Ok(self.context.can_drop)
+    }
+    fn clone_slot_stack(
+        &mut self,
+        index: usize,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<MemoryStackRef> {
+        let slot = self.menu.slots[index].clone();
+        let source = self.slot_stack(index)?;
+        let copy = with_count(self.read(source)?, max_stack_size(self.read(source)?));
+        let copy = self.own(copy);
+        if slot.kind == SlotKind::Result(ResultKind::Crafting)
+            && let Some(crafting) = hooks.crafting()
+        {
+            let observed = self.read(copy)?.clone();
+            crafting.item_crafted(self.menu, self.context, &observed, None)?;
+        }
+        Ok(copy)
+    }
     fn set_slot_stack(
         &mut self,
         index: usize,
