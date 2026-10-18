@@ -118,18 +118,18 @@ impl Advancement {
             }
         }
         for (criterion_name, criterion) in &self.criteria {
-            let mut conditions: Vec<(&str, &ContextAwarePredicate, &str)> = Vec::new();
+            let mut conditions: Vec<(String, &ContextAwarePredicate, &str)> = Vec::new();
             let mut bindable: Vec<&dyn RegistryBindable> = Vec::new();
             if let Some(player) = &criterion.instance.player {
-                conditions.push(("player", player, "advancement_entity"));
+                conditions.push(("player".into(), player, "advancement_entity"));
             }
             fn add<'a>(
-                conditions: &mut Vec<(&'a str, &'a ContextAwarePredicate, &'a str)>,
+                conditions: &mut Vec<(String, &'a ContextAwarePredicate, &'a str)>,
                 name: &'a str,
                 predicate: &'a Option<ContextAwarePredicate>,
             ) {
                 if let Some(predicate) = predicate {
-                    conditions.push((name, predicate, "advancement_entity"));
+                    conditions.push((name.into(), predicate, "advancement_entity"));
                 }
             }
             fn item<'a>(
@@ -155,7 +155,7 @@ impl Advancement {
                 C::Location(value) => {
                     if let Some(value) = value {
                         conditions.push((
-                            "location",
+                            "location".into(),
                             value,
                             if criterion.trigger == TriggerType::DefaultBlockUse {
                                 "block_use"
@@ -266,8 +266,8 @@ impl Advancement {
                     add(&mut conditions, "entity", entity);
                 }
                 C::ChanneledLightning(victims) | C::KilledByArrow { victims, .. } => {
-                    for value in victims {
-                        conditions.push(("victims", value, "advancement_entity"));
+                    for (index, value) in victims.iter().enumerate() {
+                        conditions.push((format!("victims[{index}]"), value, "advancement_entity"));
                     }
                     if let C::KilledByArrow {
                         fired_from_weapon, ..
