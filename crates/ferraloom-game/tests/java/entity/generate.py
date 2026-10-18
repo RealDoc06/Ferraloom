@@ -2,6 +2,7 @@
 """Regenerate fixtures by executing 26.3's real Entity.move on controlled Levels."""
 from pathlib import Path
 import subprocess
+import sys
 
 root = Path(__file__).resolve().parents[5]
 cache = Path('/home/doc/code/Ferraloom/.cache')
@@ -25,5 +26,12 @@ run([str(java / 'java'), '-Xmx512m', '-cp', f'{classes}:{cp}', 'EntityVectors', 
 run([str(java / 'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes / 'EntityFixture.java')])
 output = run([str(java / 'java'), '-Xmx768m', '-XX:+EnableDynamicAgentLoading', '-Dnet.bytebuddy.experimental=true', '-cp', f'{classes}:{cp}', 'EntityVectors'])
 rows = [line for line in output.splitlines() if line.split('\t', 1)[0] in {'placement-context', 'server-jump', 'abilities-packed', 'abilities-game-type', 'player-sync-order', 'player-loaded-neighbors', 'player-connection-frame', 'player-ai-step', 'shoulder-metadata', 'shoulder-rng', 'food-load', 'food-eat', 'food-tick', 'food-peaceful', 'glider-eligibility', 'glider-cadence', 'freeze-phase', 'item-inventory-tick-override', 'living-jump', 'entity-leather-boots-location', 'drop-receiver', 'travel-dispatch', 'fall-flying-update', 'travel-fall-flying', 'fall-flying-hit', 'travel-fluid', 'fluid-jump-threshold', 'travel-air', 'player-flying-speed', 'player-ability-speeds', 'mob-effect-load', 'travel-climb', 'mob-effect-instance', 'mob-effect-update', 'mob-effect-chain', 'mob-effect-copy', 'mob-effect-scale', 'mob-effect-duration', 'mob-effect-negative', 'entity-equipment-fact', 'entity-equipment-order', 'entity-position-fact', 'entity-flags-fact', 'xp-curve', 'xp-award', 'xp-nbt', 'living-push-rate', 'living-cramming', 'difficulty-read', 'difficulty-initial', 'freeze-counter', 'freeze-armor', 'freeze-frost', 'entity-legacy', 'item-name', 'entity-name', 'entity-nbt', 'entity-visibility', 'damage-source', 'damage-type', 'damage-codec', 'entity-push', 'entity-impulse', 'push-team-capture', 'living-climb', 'living-climb-cache', 'travel-input', 'travel-friction', 'travel-fluid-drag', 'worldgen-shared', 'passenger-lists', 'entity-creation-order', 'player-spawn-rotation', 'stop-use', 'tool-drops', 'tool-tag', 'tool-missing-tag', 'player-instabuild', 'player-profile-uuid', 'player-contact', 'cooldown', 'cooldown-group', 'player-range', 'player-interaction', 'player-may-build', 'teleport-confirm-snap', 'teleport-pending-rotation', 'teleport-passengers', 'push-entities', 'teleport-transform', 'teleport-set', 'entity-tag', 'entity-sound', 'lava-base-tick', 'living-load-rotation', 'no-collision-order', 'worldgen-entities', 'living-movement', 'player-pairing', 'player-tracking', 'size-refresh', 'dimensions', 'attachment', 'living-data', 'living-health', 'attribute', 'attribute-map', 'attribute-nbt', 'synched-prototype', 'synched-float', 'synched-stack', 'riding', 'hurt-sync', 'border-lerp', 'border-geometry', 'bubble', 'entity-reference', 'tnt-launch', 'nbt-rotation', 'nbt-motion', 'server-entity', 'server-teleport', 'delta-codec', 'delta-steps', 'tracked-steps', 'orb-tick', 'orb-removed-follow', 'falling-tick', 'drop', 'pick', 'item-tick', 'tnt', 'inventory', 'trace', 'move', 'edge', 'flow', 'interaction', 'block-tag', 'fluid-tag'}]
-(source / 'vectors.tsv').write_text('\n'.join(rows) + '\n')
+vectors = '\n'.join(rows) + '\n'
+if sys.argv[1:] == ['--check']:
+    if (source / 'vectors.tsv').read_text() != vectors:
+        raise SystemExit('Native entity observations differ from vectors.tsv; regenerate and inspect the difference.')
+elif sys.argv[1:]:
+    raise SystemExit('usage: generate.py [--check]')
+else:
+    (source / 'vectors.tsv').write_text(vectors)
 print(f'{len(rows)} vanilla entity vectors')
