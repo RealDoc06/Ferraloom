@@ -36,3 +36,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     bamboo='\n'.join(line for line in lines if line.startswith('bamboo-grow\t')) + '\n'
     (HERE/'bamboo.tsv.gz').write_bytes(gzip.compress(bamboo.encode(),mtime=0))
     print(f'{len(bamboo.splitlines())} vanilla bamboo crown vectors')
+
+    clones='\n'.join(line for line in lines if line.startswith('clone\t')) + '\n'
+    (HERE/'clone-items.tsv.gz').write_bytes(gzip.compress(clones.encode(),mtime=0))
+    print(f'{len(clones.splitlines())} vanilla plant clone-item vectors')

@@ -132,3 +132,31 @@ impl BlockBehavior for NetherWart {
         Ok(())
     }
 }
+
+pub struct SweetBerry;
+pub static SWEET_BERRY: SweetBerry = SweetBerry;
+impl BlockBehavior for SweetBerry {
+    /// Port of SweetBerryBushBlock#randomTick, including its captured new state.
+    fn random_tick(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let age = state.get(p::AGE).unwrap();
+        if age < 3
+            && level.random().next_int_bound(5) == 0
+            && LevelReaderRef::Server(level).get_raw_brightness(pos.above(1), 0)? >= 9
+        {
+            let next = state.with(p::AGE, age + 1).unwrap();
+            LevelAccessRef::Server(level).set_block(pos, next, UpdateFlags::CLIENTS)?;
+            level.game_event(
+                ferraloom_data::registries::game_event::Id::BLOCK_CHANGE,
+                ferraloom_util::Vec3::at_center_of(pos.into()),
+                None,
+                Some(next),
+            );
+        }
+        Ok(())
+    }
+}

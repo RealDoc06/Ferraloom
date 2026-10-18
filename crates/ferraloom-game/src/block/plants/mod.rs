@@ -2,6 +2,7 @@
 mod access;
 mod bamboo;
 pub mod bonemeal;
+mod clone_item;
 mod column;
 mod coral;
 mod crops;
@@ -33,6 +34,9 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if method == M::CloneItemStack && clone_item::item(block).is_some() {
+        return Some(&clone_item::PLANT_CLONE);
+    }
     if matches!(
         block,
         Block::KELP
@@ -138,6 +142,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &crops::CROP
         }
         C::NetherWartBlock if method == M::RandomTick => &crops::NETHER_WART,
+        C::SweetBerryBushBlock if method == M::RandomTick => &crops::SWEET_BERRY,
         C::PitcherCropBlock if method == M::RandomTick => &pitcher::PITCHER,
         C::LeavesBlock
         | C::TintedParticleLeavesBlock

@@ -519,3 +519,33 @@ fn ground_scheduled_tick_retains_farmland_but_always_converts_path() {
         );
     }
 }
+
+#[test]
+fn plant_clone_items_match_vanilla_for_all_registered_states() {
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/clone-items.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let level = level();
+    let reader = LevelReaderRef::Server(&level);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let stack = reader
+            .get_clone_item_stack(state, BlockPos::ZERO, f[4] == "true")
+            .unwrap();
+        let stack = stack.0.unwrap();
+        assert_eq!(
+            stack.item.protocol_id(),
+            f[2].parse::<u32>().unwrap(),
+            "{line}"
+        );
+        assert_eq!(stack.count, f[3].parse::<i32>().unwrap(), "{line}");
+        count += 1;
+    }
+    assert_eq!(count, 260);
+}

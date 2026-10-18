@@ -24,6 +24,8 @@ public final class PlantsVectors {
         var world=NeighborVectors.load();
         var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         var registries=new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(builtins.registries(),world.registries())).freeze();
+        var components=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtins.listRegistries(),world.listRegistries()));
+        BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(components).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
         List<Block> plants=List.of(Blocks.DANDELION,Blocks.WITHER_ROSE,Blocks.SHORT_GRASS,Blocks.FERN,Blocks.BUSH,
             Blocks.DEAD_BUSH,Blocks.SHORT_DRY_GRASS,Blocks.TALL_DRY_GRASS,Blocks.OAK_SAPLING,Blocks.AZALEA,
             Blocks.MANGROVE_PROPAGULE,Blocks.WHEAT,Blocks.CARROTS,Blocks.POTATOES,Blocks.BEETROOTS,Blocks.TORCHFLOWER_CROP,
@@ -44,6 +46,15 @@ public final class PlantsVectors {
             Blocks.HONEY_BLOCK,Blocks.BARRIER,Blocks.PALE_MOSS_CARPET);
         var pos=new BlockPos(8,5,8);
         var level=new PlantLevel(registries);
+        for(var block:List.of(Blocks.WHEAT,Blocks.CARROTS,Blocks.POTATOES,Blocks.BEETROOTS,Blocks.TORCHFLOWER_CROP,
+            Blocks.MELON_STEM,Blocks.ATTACHED_MELON_STEM,Blocks.PUMPKIN_STEM,Blocks.ATTACHED_PUMPKIN_STEM,
+            Blocks.SWEET_BERRY_BUSH,Blocks.NETHER_WART,Blocks.BAMBOO_SAPLING,Blocks.CAVE_VINES,Blocks.CAVE_VINES_PLANT,
+            Blocks.BIG_DRIPLEAF_STEM,Blocks.TALL_SEAGRASS,Blocks.KELP_PLANT,Blocks.TWISTING_VINES_PLANT,Blocks.WEEPING_VINES_PLANT)) {
+            for(var state:block.getStateDefinition().getPossibleStates())for(boolean includeData:new boolean[]{false,true}) {
+                var stack=state.getCloneItemStack(level,pos,includeData);
+                System.out.println("clone\t"+Block.getId(state)+"\t"+BuiltInRegistries.ITEM.getId(stack.getItem())+"\t"+stack.getCount()+"\t"+includeData);
+            }
+        }
         for(var block:plants) {
             var states=new ArrayList<BlockState>();states.add(block.defaultBlockState());
             if(block.defaultBlockState().hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) states.add(block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
