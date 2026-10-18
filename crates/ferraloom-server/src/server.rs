@@ -1918,6 +1918,9 @@ fn initialize_live_level(
     ));
     level.level.set_game_time(level.game_time);
     level.level.set_unported_behavior(unported_behavior);
+    level
+        .level
+        .set_max_chained_neighbor_updates(properties.int("max-chained-neighbor-updates"));
     let saved = SavedDataStorage::new(world.access.path().join("data"));
     let mut border = saved
         .load::<WorldBorder>(border::SAVED_DATA_ID)?
