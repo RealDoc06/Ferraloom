@@ -84,7 +84,7 @@ public final class CraftingMenuVectors {
       var world=RegistryDataLoader.load(resources,builtins.listRegistries().toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
       var context=HolderLookup.Provider.create(Stream.concat(builtins.listRegistries(),world.listRegistries()));BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(p->p.apply());
       var recipes=RegistryDataLoader.load(resources,context.listRegistries().toList(),List.of(RegistryDataLoader.RELOADABLE_REGISTRIES.stream().filter(r->r.key()==Registries.RECIPE).findFirst().orElseThrow()),Runnable::run).join();
-      registries=new RegistryAccess.ImmutableRegistryAccess(Stream.of(builtins,world,recipes).flatMap(RegistryAccess::registries)).freeze();manager=new RecipeManager(registries);manager.finalizeRecipeLoading(FeatureFlags.DEFAULT_FLAGS);
+      registries=new RegistryAccess.ImmutableRegistryAccess(Stream.of(builtins,world,recipes).flatMap(RegistryAccess::registries)).freeze();for(var item:BuiltInRegistries.ITEM)if(!item.isEnabled(FeatureFlags.DEFAULT_FLAGS))throw new AssertionError("disabled baseline item: "+item);manager=new RecipeManager(registries);manager.finalizeRecipeLoading(FeatureFlags.DEFAULT_FLAGS);
       for(boolean table:new boolean[]{false,true}) {
         int hotbar=table?37:36;
         var clicks=new ArrayList<int[]>();

@@ -366,6 +366,12 @@ impl AbstractContainerMenu {
         {
             return Ok(None);
         }
+        if !stack.is_empty()
+            && slot.kind == SlotKind::Result(ResultKind::Crafting)
+            && let Some(crafting) = hooks.crafting_ref()
+        {
+            crafting.validate_take_result()?;
+        }
         let result = self.remove_item_live(ctx, slot.index, amount.min(max_amount), hooks)?;
         if result.is_empty() {
             return Ok(None);
@@ -708,6 +714,11 @@ impl AbstractContainerMenu {
         }
         if source.is_empty() {
             if !target.is_empty() && slot.may_pickup(&target, ctx.creative, hooks)? {
+                if slot.kind == SlotKind::Result(ResultKind::Crafting)
+                    && let Some(crafting) = hooks.crafting_ref()
+                {
+                    crafting.validate_take_result()?;
+                }
                 ctx.player.set_item(button, target.clone());
                 self.set_item_live(ctx, slot.index, ItemStack::default(), hooks)?;
                 self.on_take(ctx, slot.index, &target, count(&target), hooks)?;

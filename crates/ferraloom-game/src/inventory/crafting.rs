@@ -9,6 +9,7 @@ use ferraloom_data::datapack::Identifier;
 /// Region-owned gameplay callbacks. Called synchronously with the live menu and
 /// inventory; implementations may reenter those values before crafting resumes.
 pub trait CraftingCallbacks {
+    fn validate_take_result(&self) -> Result<()>;
     fn item_enabled(&self, stack: &ItemStack) -> Result<bool>;
     /// Some(count) is ItemStack#onCraftedBy (stat followed by item callback);
     /// None is Item#onCraftedBy alone (quick move and creative clone).
@@ -44,6 +45,7 @@ pub struct CraftingResult {
 /// Menu-facing object-safe bridge. The concrete adapter below retains the
 /// recipe module's typed runtime CraftingContext rather than substituting ().
 pub trait CraftingMenuHooks {
+    fn validate_take_result(&self) -> Result<()>;
     fn result(&self, input: &CraftingInput, hint: Option<&Identifier>) -> Result<CraftingResult>;
     /// None is vanilla's copyAllInputItems fallback, retaining live slot aliases.
     fn remaining(&self, input: &CraftingInput) -> Result<Option<Vec<ItemStack>>>;
@@ -72,7 +74,7 @@ pub struct RecipeMenuHooks<'a, C> {
     pub context: &'a C,
     pub synchronization: &'a RecipeSynchronization,
     pub book: &'a mut ServerRecipeBook,
-    pub limited_crafting: bool,
+    pub limited_crafting: Option<bool>,
     pub callbacks: &'a mut dyn CraftingCallbacks,
 }
 impl<C: CraftingContext> MenuHooks for RecipeMenuHooks<'_, C> {
@@ -87,6 +89,9 @@ impl<C: CraftingContext> MenuHooks for RecipeMenuHooks<'_, C> {
     }
     fn prepare_recipe_click(&mut self, kind: MenuKind) -> Result<()> {
         if matches!(kind, MenuKind::Inventory | MenuKind::Crafting) {
+            self.limited_crafting.ok_or(MenuError::Unsupported(
+                "canonical LIMITED_CRAFTING game rule",
+            ))?;
             Ok(())
         } else {
             Err(MenuError::Unsupported("non-crafting result calculation"))
@@ -101,6 +106,9 @@ impl<C: CraftingContext> MenuHooks for RecipeMenuHooks<'_, C> {
     }
 }
 impl<C: CraftingContext> CraftingMenuHooks for RecipeMenuHooks<'_, C> {
+    fn validate_take_result(&self) -> Result<()> {
+        self.callbacks.validate_take_result()
+    }
     fn result(&self, input: &CraftingInput, hint: Option<&Identifier>) -> Result<CraftingResult> {
         let recipe = self.manager.get_recipe_for(
             RecipeType::Crafting,
@@ -110,7 +118,11 @@ impl<C: CraftingContext> CraftingMenuHooks for RecipeMenuHooks<'_, C> {
         )?;
         if let Some(recipe) = recipe
             && (recipe.value.is_special()
-                || !self.limited_crafting
+                || !self
+                    .limited_crafting
+                    .ok_or(crate::crafting::Error::ContextRequired(
+                        "canonical LIMITED_CRAFTING game rule",
+                    ))?
                 || self.book.contains(&recipe.id))
         {
             let mut stack = recipe
@@ -214,6 +226,12 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         let slot = self.slots[index].clone();
+        if self.crafting_grid_size().is_some()
+            && slot.container == ContainerId::Local(0)
+            && hooks.has_crafting()
+        {
+            hooks.prepare_recipe_click(self.kind)?;
+        }
         self.set_item(ctx, index, stack);
         if self.crafting_grid_size().is_some() && slot.container == ContainerId::Local(0) {
             self.crafting_slots_changed(hooks, None)?;

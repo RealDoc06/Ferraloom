@@ -385,6 +385,12 @@ impl AbstractContainerMenu {
         {
             return Ok(ItemStack::default());
         }
+        if index == 0
+            && self.crafting_grid_size().is_some()
+            && let Some(crafting) = hooks.crafting_ref()
+        {
+            crafting.validate_take_result()?;
+        }
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {

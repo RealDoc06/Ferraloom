@@ -1,6 +1,7 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod container;
 mod crafting;
+mod crafting_runtime;
 mod menu;
 mod menus;
 mod server_player;
@@ -9,6 +10,7 @@ mod sync;
 
 pub use container::*;
 pub use crafting::*;
+pub use crafting_runtime::*;
 pub use menu::*;
 pub use menus::*;
 pub use server_player::*;

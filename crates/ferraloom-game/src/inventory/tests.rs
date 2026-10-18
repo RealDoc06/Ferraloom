@@ -431,6 +431,9 @@ struct CraftingObservations {
     awards: Vec<String>,
 }
 impl CraftingCallbacks for CraftingObservations {
+    fn validate_take_result(&self) -> Result<()> {
+        Ok(())
+    }
     fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
         Ok(true)
     }
@@ -516,7 +519,7 @@ fn real_server_crafting_clicks_remainders_stats_and_packet_order() {
                 context: &CraftingTestContext,
                 synchronization: &sync,
                 book: &mut book,
-                limited_crafting: false,
+                limited_crafting: Some(false),
                 callbacks: &mut callbacks,
             };
             let mut expected_result = ItemStack::default();
@@ -544,7 +547,7 @@ fn real_server_crafting_clicks_remainders_stats_and_packet_order() {
                 context: &CraftingTestContext,
                 synchronization: &sync,
                 book: &mut book,
-                limited_crafting: false,
+                limited_crafting: Some(false),
                 callbacks: &mut callbacks,
             };
             if f[0] == "click" {
@@ -607,4 +610,115 @@ fn real_server_crafting_clicks_remainders_stats_and_packet_order() {
     }
     assert_eq!(clicks, 239);
     assert_eq!(placements, 40);
+}
+
+#[test]
+fn pending_crafting_services_reject_before_mutating_live_stacks() {
+    use crate::crafting::{RecipeSynchronization, ServerRecipeBook};
+    let manager = crafting_manager();
+    let sync = RecipeSynchronization::new(&manager, |_| true);
+    let mut inventory = Inventory::default();
+    let mut equipment = EntityEquipment::default();
+    let mut ctx = MenuContext::player(&mut inventory, &mut equipment, true);
+    let mut menu = AbstractContainerMenu::new(MenuKind::Inventory, 0).unwrap();
+    let mut book = ServerRecipeBook::default();
+    let mut callbacks = PendingCraftingCallbacks;
+    let mut hooks = RecipeMenuHooks {
+        manager: &manager,
+        context: &CraftingTestContext,
+        synchronization: &sync,
+        book: &mut book,
+        limited_crafting: Some(false),
+        callbacks: &mut callbacks,
+    };
+    menu.set_synchronizer(&ctx);
+    menu.set_item_live(
+        &mut ctx,
+        1,
+        ItemStack::new(Item::OAK_LOG, 1, Default::default()),
+        &mut hooks,
+    )
+    .unwrap();
+    menu.updates.clear();
+    let before = menu.items(&ctx);
+    let state = menu.state_id();
+    for (input, button) in [
+        (ContainerInput::Pickup, 0),
+        (ContainerInput::QuickMove, 0),
+        (ContainerInput::Swap, 40),
+        (ContainerInput::Throw, 0),
+        (ContainerInput::Clone, 0),
+    ] {
+        assert!(matches!(
+            menu.clicked(&mut ctx, 0, button, input, &mut hooks),
+            Err(MenuError::Unsupported(_))
+        ));
+        assert_eq!(menu.items(&ctx), before, "{input:?}");
+        assert!(menu.carried.is_empty());
+        assert_eq!(menu.state_id(), state);
+        assert!(menu.updates.is_empty());
+    }
+    hooks.limited_crafting = None;
+    assert!(matches!(
+        menu.set_item_live(
+            &mut ctx,
+            2,
+            ItemStack::new(Item::OAK_LOG, 1, Default::default()),
+            &mut hooks
+        ),
+        Err(MenuError::Unsupported(_))
+    ));
+    assert_eq!(menu.items(&ctx), before);
+}
+
+#[test]
+fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
+    use crate::{
+        entity::{
+            EntityRef, EntityState,
+            player::{GameType, ServerPlayer},
+        },
+        level::{Level, Region},
+    };
+    static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let handle = EntityRef(1);
+    let player = ServerPlayer::new(
+        ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),
+        "menus".into(),
+        1,
+        ferraloom_util::Vec3::ZERO,
+        GameType::Survival,
+    );
+    level
+        .add_entity(handle, EntityState::Player(Box::new(player)))
+        .unwrap();
+    {
+        let player = level.entity_mut::<ServerPlayer>(handle).unwrap();
+        let context =
+            MenuContext::player(&mut player.inventory, &mut player.parent.equipment, false);
+        player.menus.inventory_menu.set_synchronizer(&context);
+        player.menus.inventory_menu.updates.clear();
+        player.inventory.set_item(
+            0,
+            ItemStack::new(Item::STONE, 2, Default::default()),
+            &mut player.parent.equipment,
+        );
+        assert!(player.menus.pending_packets.is_empty());
+    }
+    tick_container_menu(handle, &mut level).unwrap();
+    let player = level.entity_mut::<ServerPlayer>(handle).unwrap();
+    assert!(
+        matches!(player.menus.pending_packets.as_slice(), [ferraloom_protocol::play::clientbound::Packet::ContainerSetSlot(packet)] if packet.slot == 36 && packet.state_id.0 == 2 && count(&packet.item_stack)==2)
+    );
+    player.menus.pending_packets.clear();
+    tick_container_menu(handle, &mut level).unwrap();
+    assert!(
+        level
+            .entity::<ServerPlayer>(handle)
+            .unwrap()
+            .menus
+            .pending_packets
+            .is_empty()
+    );
 }
