@@ -75,3 +75,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     spreader='\n'.join(line for line in lines if line.startswith(('spreader-config\t','spreader-source\t'))) + '\n'
     (HERE/'spreader-config.tsv.gz').write_bytes(gzip.compress(spreader.encode(),mtime=0))
     print(f'{len(spreader.splitlines())} native multiface/sculk-vein configuration vectors')
+
+    candidates='\n'.join(line for line in lines if line.startswith('spreader-candidate\t')) + '\n'
+    (HERE/'spreader-candidates.tsv.gz').write_bytes(gzip.compress(candidates.encode(),mtime=0))
+    print(f'{len(candidates.splitlines())} native ordered multiface spread candidate vectors')

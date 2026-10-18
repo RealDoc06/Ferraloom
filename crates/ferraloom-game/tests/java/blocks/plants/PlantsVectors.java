@@ -217,6 +217,24 @@ public final class PlantsVectors {
                 var encoded=new ArrayList<String>();for(var cell:cells.entrySet())encoded.add((cell.getKey().getX()-pos.getX())+":"+(cell.getKey().getY()-pos.getY())+":"+(cell.getKey().getZ()-pos.getZ())+":"+Block.getId(cell.getValue()));
                 System.out.println("spreader-config\t"+kind+"\t"+(target.getX()-pos.getX())+"\t"+(target.getY()-pos.getY())+"\t"+face.ordinal()+"\t"+Block.getId(existing)+"\t"+replaceable+"\t"+canSpread+"\t"+String.join(",",encoded));
             }
+            var sourceStates=List.of(Blocks.STONE.defaultBlockState(),Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),
+                Blocks.GLOW_LICHEN.defaultBlockState(),Blocks.GLOW_LICHEN.defaultBlockState().setValue(BlockStateProperties.NORTH,true),
+                Blocks.SCULK_VEIN.defaultBlockState(),Blocks.SCULK_VEIN.defaultBlockState().setValue(BlockStateProperties.NORTH,true),
+                Blocks.SCULK_VEIN.defaultBlockState().setValue(BlockStateProperties.NORTH,true).setValue(BlockStateProperties.SOUTH,true));
+            for(var input:sourceStates)for(int mode=0;mode<5;mode++)for(var from:Direction.values())for(var toward:Direction.values()) {
+                level.chunks.clear();level.trace.clear();
+                var cells=new LinkedHashMap<BlockPos,BlockState>();
+                if(mode<3)for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++)cells.put(pos.offset(x,-1,z),(mode==1?Blocks.SCULK:Blocks.STONE).defaultBlockState());
+                if(mode==2)cells.put(pos.east().below(),Blocks.SCULK_CATALYST.defaultBlockState());
+                if(mode==3)for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++)cells.put(pos.offset(x,1,z),Blocks.STONE.defaultBlockState());
+                if(mode==4)for(var direction:Direction.Plane.HORIZONTAL)cells.put(pos.relative(direction,2),Blocks.STONE.defaultBlockState());
+                cells.put(pos,input);
+                for(var cell:cells.entrySet())level.getChunkAt(cell.getKey()).setBlockState(cell.getKey(),cell.getValue(),816);
+                var result=spreader.getSpreadFromFaceTowardDirection(input,level,pos,from,toward,config::canSpreadInto);
+                String next=result.map(spread->(spread.pos().getX()-pos.getX())+":"+(spread.pos().getY()-pos.getY())+":"+(spread.pos().getZ()-pos.getZ())+":"+spread.face().ordinal()).orElse("-");
+                var encoded=new ArrayList<String>();for(var cell:cells.entrySet())encoded.add((cell.getKey().getX()-pos.getX())+":"+(cell.getKey().getY()-pos.getY())+":"+(cell.getKey().getZ()-pos.getZ())+":"+Block.getId(cell.getValue()));
+                System.out.println("spreader-candidate\t"+kind+"\t"+Block.getId(input)+"\t"+mode+"\t"+from.ordinal()+"\t"+toward.ordinal()+"\t"+next+"\t"+String.join(",",encoded));
+            }
             for(var input:List.of(Blocks.STONE.defaultBlockState(),Blocks.AIR.defaultBlockState(),Blocks.GLOW_LICHEN.defaultBlockState().setValue(BlockStateProperties.NORTH,true),Blocks.SCULK_VEIN.defaultBlockState(),Blocks.SCULK_VEIN.defaultBlockState().setValue(BlockStateProperties.NORTH,true)))for(var face:Direction.values()) {
                 System.out.println("spreader-source\t"+kind+"\t"+Block.getId(input)+"\t"+face.ordinal()+"\t"+config.isOtherBlockValidAsSource(input)+"\t"+config.canSpreadFrom(input,face));
             }

@@ -1517,3 +1517,63 @@ fn multiface_and_sculk_vein_configs_match_native_replacement_and_sources() {
     }
     assert_eq!(count, 8730);
 }
+
+#[test]
+fn multiface_spread_candidate_order_matches_vanilla() {
+    use super::multiface_spreader::{SpreadPos, SpreaderConfig};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/spreader-candidates.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let config = match f[1] {
+            "0" => SpreaderConfig::Default(Block::GLOW_LICHEN),
+            "1" => SpreaderConfig::SculkVein,
+            "2" => SpreaderConfig::SculkVeinSameSpace,
+            _ => unreachable!(),
+        };
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        for cell in f[7].split(',') {
+            let c: Vec<i32> = cell.split(':').map(|s| s.parse().unwrap()).collect();
+            level
+                .set_block_state(
+                    pos.offset(c[0], c[1], c[2]),
+                    BlockState::from_id(c[3] as u16).unwrap(),
+                )
+                .unwrap();
+        }
+        let expected = if f[6] == "-" {
+            None
+        } else {
+            let c: Vec<i32> = f[6].split(':').map(|s| s.parse().unwrap()).collect();
+            Some(SpreadPos {
+                pos: pos.offset(c[0], c[1], c[2]),
+                face: Direction::VALUES[c[3] as usize],
+            })
+        };
+        assert_eq!(
+            config
+                .get_spread(
+                    &LevelReaderRef::Server(&level),
+                    BlockState::from_id(f[2].parse().unwrap()).unwrap(),
+                    pos,
+                    Direction::VALUES[f[4].parse::<usize>().unwrap()],
+                    Direction::VALUES[f[5].parse::<usize>().unwrap()],
+                )
+                .unwrap(),
+            expected,
+            "{line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 4320);
+}
