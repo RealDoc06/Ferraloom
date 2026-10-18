@@ -11,6 +11,7 @@ pub mod jigsaw_structure;
 mod nbt;
 pub mod piece;
 pub mod pipeline;
+pub mod locate;
 pub mod placement;
 pub mod pool;
 pub mod processor;
