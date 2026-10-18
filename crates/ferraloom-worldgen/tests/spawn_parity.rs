@@ -63,6 +63,7 @@ impl SpawnWorld for CollisionWorld {
             logical_height: 384,
             has_ceiling: false,
             has_skylight: true,
+            fast_lava: false,
             coordinate_scale: 1.0,
         }
     }

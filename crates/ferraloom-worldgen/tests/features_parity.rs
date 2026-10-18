@@ -666,6 +666,11 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     )
     .unwrap();
     assert!(region.block([32, 0, 0]).is_err());
+    assert!(region.fast_lava().is_err());
+    region.set_fast_lava(false);
+    assert!(!region.fast_lava().unwrap());
+    region.set_fast_lava(true);
+    assert!(region.fast_lava().unwrap());
     assert!(
         region
             .random_mut()

@@ -20,13 +20,21 @@ Thunder strike targeting, lightning rods, difficulty and lightning/skeleton-trap
 spawns remain pending. Strict fails at the required target query after vanilla's
 strike gate and position draw. Warn counts and logs the remaining strike as one
 skipped effect and continues; its RNG stream is consequently not vanilla parity.
-Precipitation selections consume their vanilla RNG slots and increment the
-pending precipitation statistic; snow, ice and cauldron effects await live biome
-queries. Rain-at-position queries fail explicitly while those queries are absent.
+Precipitation selections consume their vanilla RNG slots. Live biome zoom,
+climate, sky light and heightmaps drive rain, freeze and snow predicates. Snow
+survival remains a required query: Strict propagates Unsupported; Warn skips the
+whole accumulation unit and logs and counts it without inventing survival.
+Entity pushing and cauldron precipitation callbacks remain explicit unit hooks.
+Rain queries require integrated light and biome context and fail explicitly if
+that context is absent.
 
 Level's canonical random source follows vanilla's nondeterministic unique-seed
 construction, independently of the world seed. Controlled tests install a fixed
 stream and block-position seed.
+
+Live block and fluid reads currently require an owned chunk. A query that reaches
+an absent chunk returns `MissingChunk`; it never substitutes air or silently
+skips work. Synchronous loading at those exact read points is a separate follow-up.
 
 On devbox, build a committed checkout on the dedicated builder:
 

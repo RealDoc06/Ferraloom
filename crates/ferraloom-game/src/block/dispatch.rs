@@ -121,3 +121,25 @@ pub(crate) fn ported_behavior(
     };
     supported.then(|| vanilla_behavior(block)).flatten()
 }
+
+/// Select the reflected base owner or the registered override. Shared live and
+/// worldgen calls use this exact registration; live test fixtures may override it.
+pub(crate) fn registered_behavior(
+    block: ferraloom_data::Block,
+    method: super::BlockMethod,
+) -> Option<&'static dyn super::BlockBehavior> {
+    use super::BlockMethod;
+    if method
+        .vanilla_method()
+        .is_some_and(|method| !block.overrides(method))
+    {
+        if matches!(
+            method,
+            BlockMethod::CanPlaceLiquid | BlockMethod::PlaceLiquid | BlockMethod::PickupBlock
+        ) {
+            return Some(&super::fluid::SIMPLE_WATERLOGGED_BLOCK);
+        }
+        return Some(&super::BASE_BLOCK);
+    }
+    ported_behavior(block, method)
+}

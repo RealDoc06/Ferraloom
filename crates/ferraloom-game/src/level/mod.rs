@@ -17,6 +17,7 @@ mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
+pub mod chunk_task_dispatcher;
 pub mod distance_manager;
 pub mod effects;
 pub mod entity;
@@ -37,6 +38,8 @@ pub mod weather;
 pub enum LevelError {
     Inventory(&'static str),
     MissingChunk(ChunkPos),
+    WorldgenMutationFailed(BlockPos),
+    UnsupportedWorldgenEnvironment,
     OutsideBuildHeight,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
@@ -51,6 +54,7 @@ pub enum LevelError {
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
+    UnsupportedPushEntitiesUp,
     UnsupportedPackReload,
     InvalidSavedTick,
     WrongChunkHeight(ChunkPos),
@@ -65,6 +69,7 @@ pub struct LevelRules {
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
+    pub max_snow_accumulation_height: i32,
     pub water_source_conversion: bool,
     pub lava_source_conversion: bool,
     pub fast_lava: bool,
@@ -79,6 +84,7 @@ impl Default for LevelRules {
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
+            max_snow_accumulation_height: 1,
             water_source_conversion: true,
             lava_source_conversion: false,
             fast_lava: false,
