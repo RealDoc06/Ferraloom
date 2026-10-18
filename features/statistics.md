@@ -105,3 +105,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.request-stats.live | REQUEST_STATS sends and clears the canonical player dirty set through ordered player output | `ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests` | pass | partial |
 
 | statistics.live-counter-scoreboard-order | Player award/reset updates the counter before synchronous scoreboard effect; matching objectives use policy until ServerShared bridge lands | `ServerPlayer#awardStat; ServerPlayer#resetStat` | `stats::tests::live_stat_counter_precedes_interim_scoreboard_policy` | pass | partial |
+
+| statistics.parity.consumed-chest-open | Bedrock flat Strict chest interaction awards OPEN_CHEST and REQUEST_STATS clears its dirty entry | `ChestBlock#useWithoutItem; ServerPlayer#awardStat` | `ferraloom-parity::opening_chest_awards_and_flushes_statistics` | pending | pending |
