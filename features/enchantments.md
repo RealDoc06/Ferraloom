@@ -6,7 +6,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 |---|---|---|---|---|---|
 | enchantments.selection.cost-weight | Select enchantments using item enchantability, modified levels, weights and cost ranges | `EnchantmentHelper; Enchantment` | | - | todo |
 | enchantments.selection.compatibility | Filter mutually exclusive enchantments and unsupported item slots | `Enchantment#areCompatible; Enchantment#canEnchant` | | - | todo |
-| enchantments.effects.context-conditions | Evaluate enchantment effects against damage, item, entity, location and hit-block contexts | `Enchantment#applyEffects; EnchantmentHelper` | | - | todo |
+| enchantments.effects.context-conditions | Evaluate enchantment effects against damage, item, entity, location and hit-block contexts | `Enchantment#applyEffects; EnchantmentHelper` | `tests/java/items/enchantments/conditional.py --check`; `item::enchantment::conditional::tests::native_conditional_codecs_validate_contexts_and_keep_predicate_rng_order` (264 native codec, key-set and condition/RNG cases) | pass | partial |
 | enchantments.effects.level-values | Evaluate constant, linear, clamped, fractional and lookup level-based values | `LevelBasedValue` | | - | todo |
 | enchantments.effects.locations | Start and stop persistent location effects as equipment or location changes | `Enchantment#runLocationChangedEffects; Enchantment#stopLocationBasedEffects` | | - | todo |
 | enchantments.effects.attack-projectiles | Apply pre-damage modifiers, post-attack effects and projectile spawn and impact effects | `Enchantment#modifyDamage; Enchantment#doPostAttack; Enchantment#onProjectileSpawned; Enchantment#onHitBlock` | | - | todo |
