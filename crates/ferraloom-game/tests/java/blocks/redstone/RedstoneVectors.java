@@ -31,7 +31,8 @@ public final class RedstoneVectors extends MutationFixture {
     final LinkedHashSet<net.minecraft.world.level.BlockEventData> events=new LinkedHashSet<>();
     @Override public net.minecraft.world.TickRateManager tickRateManager(){return clock;}
     final List<String> sounds=new ArrayList<>();
-    @Override public void playSeededSound(net.minecraft.world.entity.Entity except,double x,double y,double z,Holder sound,net.minecraft.sounds.SoundSource source,float volume,float pitch,long seed){sounds.add(BuiltInRegistries.SOUND_EVENT.getId((net.minecraft.sounds.SoundEvent)sound.value())+":"+source.ordinal()+":"+Float.floatToRawIntBits(volume)+":"+Float.floatToRawIntBits(pitch)+":"+seed);}
+    final List<Integer> soundSources=new ArrayList<>();
+    @Override public void playSeededSound(net.minecraft.world.entity.Entity except,double x,double y,double z,Holder sound,net.minecraft.sounds.SoundSource source,float volume,float pitch,long seed){sounds.add(BuiltInRegistries.SOUND_EVENT.getId((net.minecraft.sounds.SoundEvent)sound.value())+":"+source.ordinal()+":"+Float.floatToRawIntBits(volume)+":"+Float.floatToRawIntBits(pitch)+":"+seed);soundSources.add(except==null?0:except.getId());}
     @Override public void playSeededSound(net.minecraft.world.entity.Entity except,net.minecraft.world.entity.Entity entity,Holder sound,net.minecraft.sounds.SoundSource source,float volume,float pitch,long seed){}
     final List<String> gameplay=new ArrayList<>();
     @Override public void gameEvent(Holder event,net.minecraft.world.phys.Vec3 pos,net.minecraft.world.level.gameevent.GameEvent.Context context){gameplay.add("G:"+BuiltInRegistries.GAME_EVENT.getId((net.minecraft.world.level.gameevent.GameEvent)event.value())+":"+(context.sourceEntity()==null?0:context.sourceEntity().getId())+":"+(context.affectedState()==null?-1:Block.getId(context.affectedState())));}
@@ -377,6 +378,37 @@ public final class RedstoneVectors extends MutationFixture {
         RedstonePlayer(net.minecraft.world.level.Level level){super(level,new com.mojang.authlib.GameProfile(new java.util.UUID(1,2),"redstone"));}
         @Override public net.minecraft.world.level.GameType gameMode(){return net.minecraft.world.level.GameType.SURVIVAL;}
     }
+    static void interactions(RegistryAccess r){
+        for(var block:BuiltInRegistries.BLOCK){
+            boolean gate=block instanceof FenceGateBlock;
+            if(!(gate||block instanceof DoorBlock||block instanceof TrapDoorBlock||block instanceof LeverBlock||block instanceof ButtonBlock))continue;
+            for(var state:block.getStateDefinition().getPossibleStates()){
+                if(block instanceof DoorBlock&&(state.getValue(DoorBlock.HALF)!=DoubleBlockHalf.LOWER||state.getValue(DoorBlock.FACING)!=Direction.NORTH||state.getValue(DoorBlock.HINGE)!=DoorHingeSide.LEFT))continue;
+                if(block instanceof TrapDoorBlock&&(state.getValue(TrapDoorBlock.HALF)!=Half.BOTTOM||state.getValue(TrapDoorBlock.FACING)!=Direction.NORTH))continue;
+                if(gate&&state.getValue(FenceGateBlock.IN_WALL))continue;
+                for(int yaw:gate?new int[]{0,180}:new int[]{0}){
+                    var level=new RedstoneVectors(r);level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());
+                    if(block instanceof DoorBlock)level.raw(ORIGIN.above(),state.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
+                    if(block instanceof LeverBlock||block instanceof ButtonBlock){
+                        var support=switch(state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE)){
+                            case FLOOR->Direction.DOWN;case CEILING->Direction.UP;case WALL->state.getValue(HorizontalDirectionalBlock.FACING).getOpposite();
+                        };
+                        level.raw(ORIGIN.relative(support),Blocks.STONE.defaultBlockState());
+                    }
+                    level.raw(ORIGIN,state);var player=new RedstonePlayer(level);player.setYRot(yaw);level.addFreshEntity(player);level.random.setSeed(123);
+                    var samples=new ArrayList<String>();
+                    for(int click=0;click<2;click++){
+                        level.begin();level.sounds.clear();level.soundSources.clear();level.gameplay.clear();
+                        var result=level.getBlockState(ORIGIN).useWithoutItem(level,player,new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(ORIGIN),Direction.UP,ORIGIN,false));
+                        String outcome=result==net.minecraft.world.InteractionResult.SUCCESS?"success":result==net.minecraft.world.InteractionResult.CONSUME?"consume":result==net.minecraft.world.InteractionResult.PASS?"pass":result.toString();
+                        var soundValues=new ArrayList<String>();for(int i=0;i<level.sounds.size();i++){String sound=level.sounds.get(i);soundValues.add(sound.substring(0,sound.lastIndexOf(':'))+":"+level.soundSources.get(i));}
+                        samples.add(outcome+"|"+Block.getId(level.getBlockState(ORIGIN))+","+Block.getId(level.getBlockState(ORIGIN.above()))+"|"+String.join(";",level.changes)+"|"+String.join(";",level.gameplay)+"|"+String.join(";",soundValues)+"|"+level.blockTicks.hasScheduledTick(ORIGIN,block)+"|"+level.random.nextLong());
+                    }
+                    System.out.println("use:"+Block.getId(state)+":"+yaw+"\t"+String.join("#",samples));
+                }
+            }
+        }
+    }
     static void placedBy(RegistryAccess r){
         for(var block:List.of(Blocks.STONE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.OAK_DOOR,Blocks.TRIPWIRE_HOOK))for(var state:block.getStateDefinition().getPossibleStates())for(int layout=0;layout<4;layout++){
             if(state.hasProperty(DoorBlock.HALF)&&state.getValue(DoorBlock.HALF)==DoubleBlockHalf.UPPER)continue;
@@ -406,7 +438,7 @@ public final class RedstoneVectors extends MutationFixture {
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

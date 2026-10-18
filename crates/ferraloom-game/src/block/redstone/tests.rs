@@ -116,6 +116,154 @@ fn native_mutations(value: &str) -> String {
         .join(";")
 }
 
+#[test]
+fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
+    use crate::{
+        block::{InteractionResult, UseContext},
+        entity::{
+            EntityData, EntityRef, EntityState,
+            player::{GameType, ServerPlayer},
+        },
+    };
+    use ferraloom_data::{properties as p, registries::sound_event::Id as SoundEvent};
+    use ferraloom_protocol::{
+        codec::Holder,
+        play::{BlockHitResult, InteractionHand, clientbound::Packet},
+    };
+    use ferraloom_util::{Uuid, Vec3};
+    for (name, expected) in cases("use:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let yaw = args.next().unwrap().parse().unwrap();
+        let mut level = level();
+        level
+            .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
+            .unwrap();
+        let block = state.block();
+        if block.is_instance_of(BlockClass::DoorBlock) {
+            level
+                .set_block_state(
+                    ORIGIN.above(1),
+                    state.with(p::HALF, p::Half::Upper).unwrap(),
+                )
+                .unwrap();
+        }
+        if matches!(
+            block.class(),
+            BlockClass::LeverBlock | BlockClass::ButtonBlock
+        ) {
+            level
+                .set_block_state(
+                    ORIGIN.relative(sources::connected_direction(state).opposite(), 1),
+                    Block::STONE.default_state(),
+                )
+                .unwrap();
+        }
+        level.set_block_state(ORIGIN, state).unwrap();
+        let actor = EntityRef(1);
+        let player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "redstone".into(),
+            1,
+            Vec3::new(
+                ORIGIN.x as f64 + 0.5,
+                ORIGIN.y as f64 + 0.5,
+                ORIGIN.z as f64 + 0.5,
+            ),
+            GameType::Survival,
+        );
+        level
+            .add_entity(actor, EntityState::Player(Box::new(player)))
+            .unwrap();
+        level.entity_mut::<EntityData>(actor).unwrap().yaw = yaw;
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(123)), 0);
+        let context = UseContext {
+            player: actor,
+            hand: InteractionHand::MainHand,
+            hit: BlockHitResult {
+                block_pos: ORIGIN,
+                direction: Direction::Up,
+                offset_x: 0.5,
+                offset_y: 0.5,
+                offset_z: 0.5,
+                inside: false,
+                world_border_hit: false,
+            },
+        };
+        for (click, expected) in expected.split('#').enumerate() {
+            level.take_effects();
+            let current = level.get_block_state(ORIGIN).unwrap();
+            let result = level
+                .required_block_behavior(block, BlockMethod::UseWithoutItem)
+                .unwrap()
+                .use_without_item(current, ORIGIN, &context, &mut level)
+                .unwrap();
+            let result = if result == InteractionResult::SUCCESS {
+                "success"
+            } else if result == InteractionResult::CONSUME {
+                "consume"
+            } else if result == InteractionResult::Pass {
+                "pass"
+            } else {
+                panic!("unexpected result {result:?}");
+            };
+            let mut mutations = Vec::new();
+            let mut gameplay = Vec::new();
+            let mut sounds = Vec::new();
+            for effect in level.take_effects() {
+                match effect {
+                    LevelEffect::BlockUpdated { pos, new, .. } => {
+                        mutations.push(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()));
+                    }
+                    LevelEffect::GameEvent {
+                        event,
+                        source,
+                        affected_state,
+                        ..
+                    } => {
+                        gameplay.push(format!(
+                            "G:{}:{}:{}",
+                            event.protocol_id(),
+                            source
+                                .map_or(0, |id| level.entity::<EntityData>(id).unwrap().network_id),
+                            affected_state.map_or(-1, |state| i32::from(state.id()))
+                        ));
+                    }
+                    LevelEffect::PlayerPacket { packet, recipients } => {
+                        if let Packet::Sound(sound) = *packet {
+                            let Holder::Reference(id) = sound.sound.0 else {
+                                panic!("registered block sound");
+                            };
+                            sounds.push(format!(
+                                "{}:{}:{}:{}:{}",
+                                SoundEvent::from_name(id.as_str()).unwrap().protocol_id(),
+                                sound.source as i32,
+                                sound.volume.to_bits(),
+                                sound.pitch.to_bits(),
+                                i32::from(!recipients.contains(&actor))
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let actual = format!(
+                "{result}|{},{}|{}|{}|{}|{}|{}",
+                level.get_block_state(ORIGIN).unwrap().id(),
+                level.get_block_state(ORIGIN.above(1)).unwrap().id(),
+                mutations.join(";"),
+                gameplay.join(";"),
+                sounds.join(";"),
+                level.has_scheduled_block_tick(ORIGIN, block),
+                level.random().next_long()
+            );
+            let mut expected = expected.split('|').map(str::to_owned).collect::<Vec<_>>();
+            expected[2] = native_mutations(&expected[2]);
+            assert_eq!(actual, expected.join("|"), "{name} click {click}");
+        }
+    }
+}
+
 fn note_sounds(level: &mut Level) -> String {
     use ferraloom_data::registries::sound_event::Id as SoundEvent;
     use ferraloom_protocol::{codec::Holder, play::clientbound::Packet};
