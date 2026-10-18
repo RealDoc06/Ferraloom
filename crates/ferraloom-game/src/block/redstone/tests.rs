@@ -739,8 +739,8 @@ fn piston_block_events_short_pulses_and_quasi_timelines_match_vanilla() {
             .take_effects()
             .into_iter()
             .filter_map(|effect| match effect {
-                LevelEffect::BlockUpdated { pos, state, .. } => {
-                    Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, state.id()))
+                LevelEffect::BlockUpdated { pos, new, .. } => {
+                    Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
                 }
                 _ => None,
             })
