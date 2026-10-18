@@ -80,6 +80,17 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("sign-editor-tick\t"+present+"\t"+x+"\t"+(sign.getPlayerWhoMayEdit()!=null));
     }
   }
+  static void menuBroadcastReads(RegistryAccess r){
+    class CountingContainer extends net.minecraft.world.SimpleContainer {
+      int reads;
+      CountingContainer(){super(27);}
+      @Override public net.minecraft.world.item.ItemStack getItem(int slot){reads++;return super.getItem(slot);}
+    }
+    var level=new BlockEntityFixture(r);var player=new SignPlayer(level,false);var container=new CountingContainer();
+    var menu=net.minecraft.world.inventory.ChestMenu.threeRows(1,player.getInventory(),container);
+    container.reads=0;menu.broadcastChanges();System.out.println("menu-broadcast-reads\tnormal\t"+container.reads);
+    container.reads=0;menu.suppressRemoteUpdates();menu.broadcastChanges();System.out.println("menu-broadcast-reads\tsuppressed\t"+container.reads);
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {

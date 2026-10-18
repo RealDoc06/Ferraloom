@@ -25,6 +25,62 @@ fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
     );
     assert_eq!(menus.current_ref(), replacement);
 }
+#[test]
+fn broadcast_reads_each_native_slot_once_including_when_suppressed() {
+    struct CountingContainer {
+        reads: std::cell::Cell<usize>,
+    }
+    impl Container for CountingContainer {
+        fn size(&self) -> usize {
+            27
+        }
+        fn get_item(&self, _: usize) -> ItemStack {
+            self.reads.set(self.reads.get() + 1);
+            ItemStack::default()
+        }
+        fn set_item(&mut self, _: usize, _: ItemStack) {
+            unreachable!()
+        }
+        fn remove_item_no_update(&mut self, _: usize) -> ItemStack {
+            unreachable!()
+        }
+    }
+    let mut inventory = Inventory::default();
+    let mut equipment = EntityEquipment::default();
+    let mut container = CountingContainer {
+        reads: std::cell::Cell::new(0),
+    };
+    let mut menu = AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 1).unwrap();
+    for slot in &mut menu.slots {
+        if slot.container == ContainerId::Local(0) {
+            slot.container = ContainerId::External(0);
+        }
+    }
+    let mut checked = 0;
+    for line in include_str!("../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("menu-broadcast-reads\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        container.reads.set(0);
+        if fields[1] == "suppressed" {
+            menu.suppress_remote_updates();
+        }
+        {
+            let mut external: [&mut dyn Container; 1] = [&mut container];
+            let mut context = MenuContext::player(&mut inventory, &mut equipment, false);
+            context.external = &mut external;
+            menu.broadcast_changes(&context).unwrap();
+        }
+        assert_eq!(
+            container.reads.get(),
+            fields[2].parse::<usize>().unwrap(),
+            "{line}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 2);
+}
 use crate::entity::player::{
     equipment::EntityEquipment,
     inventory::{Inventory, component},

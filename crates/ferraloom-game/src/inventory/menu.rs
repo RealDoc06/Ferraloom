@@ -59,13 +59,13 @@ pub struct AbstractContainerMenu {
     quickcraft_type: i32,
     quickcraft_status: i32,
     quickcraft_slots: Vec<usize>,
-    last_slots: Vec<ItemStack>,
-    last_data: Vec<i32>,
-    remote_slots: Vec<RemoteSlot>,
-    remote_carried: RemoteSlot,
-    remote_data: Vec<i32>,
-    synchronized: bool,
-    suppressed: bool,
+    pub(super) last_slots: Vec<ItemStack>,
+    pub(super) last_data: Vec<i32>,
+    pub(super) remote_slots: Vec<RemoteSlot>,
+    pub(super) remote_carried: RemoteSlot,
+    pub(super) remote_data: Vec<i32>,
+    pub(super) synchronized: bool,
+    pub(super) suppressed: bool,
     pub changes: Vec<ContainerChange>,
     pub updates: Vec<ContainerUpdate>,
     pub(crate) crafting_recipe_used: Option<ferraloom_data::datapack::Identifier>,
@@ -212,82 +212,26 @@ impl AbstractContainerMenu {
         self.send_all_data_to_remote(ctx);
     }
     pub fn send_all_data_to_remote(&mut self, ctx: &MenuContext<'_>) {
-        let items = self.items(ctx);
-        for (slot, stack) in self.remote_slots.iter_mut().zip(&items) {
-            slot.force(stack);
-        }
-        self.remote_carried.force(&self.carried);
-        self.remote_data.clone_from(&self.data);
-        if self.synchronized {
-            let state_id = self.increment_state_id();
-            self.updates.push(ContainerUpdate::Initial {
-                container_id: self.container_id,
-                state_id,
-                items,
-                carried: self.carried.clone(),
-                data: self.data.clone(),
-            });
-        }
+        super::operation::send_all_menu_data(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
+        .expect("in-memory menu synchronization");
     }
     pub fn broadcast_changes(&mut self, ctx: &MenuContext<'_>) -> Result<()> {
-        self.trigger_listeners(ctx);
-        if self.suppressed {
-            return Ok(());
-        }
-        for i in 0..self.slots.len() {
-            let current = self.get_item(ctx, i);
-            if !self.remote_slots[i].matches(&current)? {
-                self.remote_slots[i].force(&current);
-                if self.synchronized {
-                    let state_id = self.increment_state_id();
-                    self.updates.push(ContainerUpdate::Slot {
-                        container_id: self.container_id,
-                        state_id,
-                        slot: i,
-                        stack: current,
-                    });
-                }
-            }
-        }
-        if !self.remote_carried.matches(&self.carried)? {
-            self.remote_carried.force(&self.carried);
-            if self.synchronized {
-                self.updates
-                    .push(ContainerUpdate::Carried(self.carried.clone()));
-            }
-        }
-        for i in 0..self.data.len() {
-            if self.remote_data[i] != self.data[i] {
-                self.remote_data[i] = self.data[i];
-                if self.synchronized {
-                    self.updates.push(ContainerUpdate::Data {
-                        container_id: self.container_id,
-                        id: i,
-                        value: self.data[i],
-                    });
-                }
-            }
-        }
-        Ok(())
-    }
-    fn trigger_listeners(&mut self, ctx: &MenuContext<'_>) {
-        for i in 0..self.slots.len() {
-            let current = self.get_item(ctx, i);
-            if !matches(&self.last_slots[i], &current) {
-                self.last_slots[i] = current.clone();
-                self.changes.push(ContainerChange::Slot(i, current));
-            }
-        }
-        for i in 0..self.data.len() {
-            if self.last_data[i] != self.data[i] {
-                self.last_data[i] = self.data[i];
-                self.changes.push(ContainerChange::Data(i, self.data[i]));
-            }
-        }
+        super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
     }
     pub fn broadcast_full_state(&mut self, ctx: &MenuContext<'_>) {
-        self.trigger_listeners(ctx);
-        self.send_all_data_to_remote(ctx);
+        super::operation::broadcast_menu_full_state(
+            &mut super::operation::PureMenuSynchronization {
+                menu: self,
+                context: ctx,
+            },
+        )
+        .expect("in-memory menu synchronization");
     }
     pub fn suppress_remote_updates(&mut self) {
         self.suppressed = true;

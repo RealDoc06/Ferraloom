@@ -680,6 +680,8 @@ sign-editor-tick	true	0.5	true
 sign-editor-tick	true	8.4	true
 sign-editor-tick	true	9.4	true
 sign-editor-tick	true	10.0	false
+menu-broadcast-reads	normal	27
+menu-broadcast-reads	suppressed	27
 default-save	minecraft:chest	{Items:[],components:{}}
 filled-save	minecraft:chest	{Items:[{Slot:0b,count:31,id:"minecraft:stone"},{Slot:26b,count:3,id:"minecraft:diamond"}],components:{},id:"minecraft:chest",x:1,y:64,z:2}
 roundtrip	minecraft:chest	true
