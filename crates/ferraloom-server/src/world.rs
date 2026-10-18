@@ -661,6 +661,12 @@ impl World {
         let bonus_chest = settings
             .as_ref()
             .is_some_and(|settings| settings.value().get_boolean_or("bonus_chest", false));
+        // WorldOptions.CODEC defaults a missing saved field to true. Server
+        // properties supply the value only when creating a world.
+        let generate_structures = settings.as_ref().map_or_else(
+            || properties.boolean("generate-structures"),
+            |settings| settings.value().get_boolean_or("generate_structures", true),
+        );
         let data = Arc::new(GenerationData::load(resources)?);
         ensure!(
             data.biome_names
@@ -698,8 +704,8 @@ impl World {
                 .context("world preset compound")?;
             settings.insert("seed", Tag::Long(seed));
             settings.insert(
-                "generate_features",
-                Tag::Byte(i8::from(properties.boolean("generate-structures"))),
+                "generate_structures",
+                Tag::Byte(i8::from(generate_structures)),
             );
             settings.insert("bonus_chest", Tag::Byte(0));
             saved_data.save(
@@ -740,7 +746,7 @@ impl World {
             generator.clone(),
             dimension,
             seed,
-            properties.boolean("generate-structures"),
+            generate_structures,
         )?;
         context.unported_behavior = unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
@@ -1919,6 +1925,98 @@ mod light_worker_tests {
 #[cfg(test)]
 mod generation_order_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn saved_world_structure_option_overrides_properties_and_defaults_to_true() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = RegistrySet::load(&resources).unwrap();
+        for generate_structures in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut properties = ServerProperties::from_values(Default::default());
+            properties.set("level-type", "minecraft:debug_all_block_states");
+            properties.set("level-seed", 8675309);
+            properties.set("generate-structures", generate_structures);
+            let mut world = World::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            let saved_data = SavedDataStorage::new(world.access.path().join("data"));
+            let saved = saved_data
+                .load::<CompoundTag>("minecraft:world_gen_settings")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                saved.value().get_boolean("generate_structures"),
+                Some(generate_structures)
+            );
+            assert!(!saved.value().contains_key("generate_features"));
+            world.close_chunk_storage().await.unwrap();
+            drop(world);
+
+            properties.set("generate-structures", !generate_structures);
+            properties.set("level-seed", 0);
+            properties.set("level-type", "minecraft:flat");
+            let mut world = World::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            assert_eq!(
+                world
+                    .generation_state
+                    .as_ref()
+                    .unwrap()
+                    .context
+                    .generate_structures,
+                generate_structures
+            );
+            assert_eq!(world.seed, 8675309);
+            assert!(matches!(world.generator.as_ref(), ChunkGenerator::Debug(_)));
+            world.close_chunk_storage().await.unwrap();
+            drop(world);
+
+            if !generate_structures {
+                // The old, unrelated key does not override the codec default.
+                let mut settings = saved.value().clone();
+                settings.remove("generate_structures");
+                settings.insert("generate_features", Tag::Byte(0));
+                saved_data
+                    .save(
+                        "minecraft:world_gen_settings",
+                        &mut SavedData::new(settings),
+                    )
+                    .unwrap();
+                properties.set("generate-structures", false);
+                let mut world = World::open(
+                    directory.path(),
+                    &properties,
+                    &resources,
+                    &registries,
+                    ferraloom_game::block::UnportedBehavior::Strict,
+                )
+                .unwrap();
+                assert!(
+                    world
+                        .generation_state
+                        .as_ref()
+                        .unwrap()
+                        .context
+                        .generate_structures
+                );
+                world.close_chunk_storage().await.unwrap();
+            }
+        }
+    }
 
     #[test]
     fn saving_uses_dimension_sections_and_retains_generation_light_until_live_attachment() {
