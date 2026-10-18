@@ -51,7 +51,10 @@ public final class PrimitiveCodecs {
         inputs.add("0."+"0".repeat(9997)+"1"); inputs.add("0."+"0".repeat(9998)+"1");
         for (String input : inputs) {
             var row = new JsonObject(); row.addProperty("input",input);
-            var parsed=JsonParser.parseString(input); row.add("values",values(JsonOps.INSTANCE,parsed)); json.add(row);
+            // Exercise the Codec's lazy Number contract independently of JsonReader's token buffer.
+            var parsed=Character.isDigit(input.charAt(0)) || input.charAt(0)=='-'
+                ? new JsonPrimitive(new com.google.gson.internal.LazilyParsedNumber(input)) : JsonParser.parseString(input);
+            row.add("values",values(JsonOps.INSTANCE,parsed)); json.add(row);
         }
         var numeric = new LinkedHashMap<String,Tag>();
         numeric.put("byte",ByteTag.valueOf((byte)-1)); numeric.put("short",ShortTag.valueOf((short)257));
