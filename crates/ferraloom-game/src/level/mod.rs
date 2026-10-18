@@ -20,6 +20,8 @@ pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
 mod container_runtime;
+mod context;
+pub use context::LevelContext;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
@@ -210,13 +212,24 @@ impl Region {
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
     region: Option<Region>,
+    context: Arc<LevelContext>,
 }
 
 impl Level {
-    pub fn new(region: Region) -> Self {
+    pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             region: Some(region),
+            context,
         }
+    }
+    pub fn context(&self) -> &Arc<LevelContext> {
+        &self.context
+    }
+    pub fn seed(&self) -> i64 {
+        self.context.seed
+    }
+    pub fn sea_level(&self) -> i32 {
+        self.context.sea_level
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")

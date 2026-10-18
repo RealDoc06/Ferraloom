@@ -266,7 +266,11 @@ impl MinecraftServer {
             .map(|(id, types)| (id.to_string(), types))
             .collect();
         let game_time = world.level_data.data.get_long_or("Time", 0);
-        let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
+        let mut level = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources)?,
+        );
         level.game_time = game_time;
         initialize_live_level(
             &mut level,
