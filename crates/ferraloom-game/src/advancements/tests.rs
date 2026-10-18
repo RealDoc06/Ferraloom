@@ -792,3 +792,15 @@ fn vanilla_tree_parent_resolution_removal_and_clear() {
         assert_eq!(Value::Object(roots), row["roots"]);
     }
 }
+
+#[test]
+fn vanilla_obtained_time_offsets_years_and_smart_midnight() {
+    for row in oracle()["obtained_times"].as_array().unwrap() {
+        let time = ObtainedTime::from_millis(row["millis"].as_i64().unwrap());
+        assert_eq!(
+            time.format(row["offset_seconds"].as_i64().unwrap() as i32)
+                .unwrap(),
+            row["expected"].as_str().unwrap()
+        );
+    }
+}

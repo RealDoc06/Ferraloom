@@ -194,7 +194,7 @@ public final class AdvancementVectors {
     }
     static void progress() {
         var rows=new JsonArray();
-        for(String raw:List.of("{}","{\"criteria\":{},\"done\":false}","{\"criteria\":{\"a\":\"2024-02-29 12:34:56 +0230\"},\"done\":true}","{\"criteria\":{\"a\":\"2023-02-29 12:34:56 +0000\",\"b\":\"1970-01-01 00:00:00 +0000\"}}","{\"criteria\":{\"a\":\"bad\"}}","{\"done\":null}","{\"done\":0}","{\"criteria\":null}")) {
+        for(String raw:List.of("{}","{\"criteria\":{},\"done\":false}","{\"criteria\":{\"a\":\"2024-02-29 12:34:56 +0230\"},\"done\":true}","{\"criteria\":{\"a\":\"2023-02-29 12:34:56 +0000\",\"b\":\"1970-01-01 00:00:00 +0000\"}}","{\"criteria\":{\"a\":\"bad\"}}","{\"done\":null}","{\"done\":0}","{\"criteria\":null}","{\"criteria\":{\"a\":\"1970-01-01 24:00:00 +0000\"}}","{\"criteria\":{\"a\":\"1970-01-01 24:01:00 +0000\"}}","{\"criteria\":{\"a\":\"+10000-01-01 00:00:00 +0000\"}}","{\"criteria\":{\"a\":\"1970-01-01 -1:00:00 +0000\"}}")) {
             var row=new JsonObject();row.add("input",json(raw));var parsed=AdvancementProgress.CODEC.parse(JsonOps.INSTANCE,json(raw));row.addProperty("accepted",parsed.isSuccess());
             if(parsed.isSuccess()) {var p=parsed.getOrThrow();p.update(new AdvancementRequirements(List.of(List.of("a","b"),List.of("c"))));var steps=new JsonArray();for(String action:List.of("initial","grant:a","grant:a","grant:c","revoke:a","revoke:a","grant:b","revoke:c")) {
                 boolean changed=false;if(action.startsWith("grant"))changed=p.grantProgress(action.substring(6));else if(action.startsWith("revoke"))changed=p.revokeProgress(action.substring(7));
@@ -206,6 +206,15 @@ public final class AdvancementVectors {
             rows.add(row);
         }
         OUT.add("progress",rows);
+    }
+    static void obtainedTimes() throws Exception {
+        var rows=new JsonArray();
+        for(long[] sample:List.of(new long[]{0,123456789L},new long[]{7200,123456789L},new long[]{-18000,123456789L},new long[]{2996,123456789L},new long[]{-56,123456789L},new long[]{0,-62167219200000L},new long[]{0,253402300800000L})) {
+            int offset=(int)sample[0];long millis=sample[1];
+            String zone=java.time.ZoneOffset.ofTotalSeconds(offset).getId();TimeZone.setDefault(new SimpleTimeZone(offset*1000,"GMT"+(zone.equals("Z")?"":zone)));var progress=new AdvancementProgress();progress.update(AdvancementRequirements.allOf(List.of("a")));var f=AdvancementProgress.class.getDeclaredField("criteria");f.setAccessible(true);@SuppressWarnings("unchecked") var criteria=(Map<String,CriterionProgress>)f.get(progress);criteria.put("a",new CriterionProgress(Instant.ofEpochMilli(millis)));
+            var row=new JsonObject();row.addProperty("offset_seconds",offset);row.addProperty("millis",millis);row.addProperty("expected",AdvancementProgress.CODEC.encodeStart(JsonOps.INSTANCE,progress).getOrThrow().getAsJsonObject().getAsJsonObject("criteria").get("a").getAsString());rows.add(row);
+        }
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));OUT.add("obtained_times",rows);
     }
     static void loadedProgress() {
         var rows=new JsonArray();
@@ -308,7 +317,7 @@ public final class AdvancementVectors {
         OUT.add("inline_loot",rows);
     }
     public static void main(String[] args) throws Exception {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();loadedProgress();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();loadedProgress();obtainedTimes();
         try(var output=new GZIPOutputStream(Files.newOutputStream(Path.of(args[0])))){output.write(JSON.toJson(OUT).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
         for(var entry:OUT.entrySet())System.out.println(entry.getKey()+": "+(entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray().size():1));
     }

@@ -78,7 +78,7 @@ impl ObtainedTime {
     /// Port of AdvancementProgress.OBTAINED_TIME_CODEC. Offset is supplied by the
     /// save adapter, matching ZoneId.systemDefault at that instant (including DST).
     pub fn format(self, offset_seconds: i32) -> Result<String> {
-        if offset_seconds.abs() > 18 * 3600 || offset_seconds % 60 != 0 {
+        if !(-18 * 3600..=18 * 3600).contains(&offset_seconds) {
             return Err(codec::error("invalid time zone offset"));
         }
         let local = self.seconds + i64::from(offset_seconds);
@@ -94,43 +94,77 @@ impl ObtainedTime {
         let day = doy - (153 * mp + 2) / 5 + 1;
         let month = mp + if mp < 10 { 3 } else { -9 };
         year += i64::from(month <= 2);
+        let year_of_era = if year <= 0 { 1 - year } else { year };
+        let year = if year_of_era > 9999 {
+            format!("+{year_of_era}")
+        } else {
+            format!("{year_of_era:04}")
+        };
+        // DateTimeFormatter Z drops offset seconds and renders a truncated zero as +0000.
         let minutes = offset_seconds.abs() / 60;
         Ok(format!(
-            "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} {}{:02}{:02}",
+            "{year}-{month:02}-{day:02} {:02}:{:02}:{:02} {}{:02}{:02}",
             seconds / 3600,
             seconds / 60 % 60,
             seconds % 60,
-            if offset_seconds < 0 { '-' } else { '+' },
+            if offset_seconds < 0 && minutes != 0 {
+                '-'
+            } else {
+                '+'
+            },
             minutes / 60,
             minutes % 60
         ))
     }
     pub fn parse(value: &str) -> Result<Self> {
         let invalid = || codec::error("invalid obtained time");
-        if !value.is_ascii()
-            || value.len() != 25
-            || &value[4..5] != "-"
-            || &value[7..8] != "-"
-            || &value[10..11] != " "
-            || &value[13..14] != ":"
-            || &value[16..17] != ":"
-            || &value[19..20] != " "
+        if !value.is_ascii() {
+            return Err(invalid());
+        }
+        let year_end = value.find('-').ok_or_else(invalid)?;
+        let extended = value.starts_with('+');
+        if !(year_end == 4 && !extended || extended && year_end > 5) {
+            return Err(invalid());
+        }
+        let year_text = if extended {
+            &value[1..year_end]
+        } else {
+            &value[..year_end]
+        };
+        if !year_text.bytes().all(|c| c.is_ascii_digit()) {
+            return Err(invalid());
+        }
+        let mut year = year_text.parse::<i64>().map_err(|_| invalid())?;
+        let tail = &value[year_end..];
+        if tail.len() != 21
+            || &tail[0..1] != "-"
+            || &tail[3..4] != "-"
+            || &tail[6..7] != " "
+            || &tail[9..10] != ":"
+            || &tail[12..13] != ":"
+            || &tail[15..16] != " "
         {
             return Err(invalid());
         }
-        let n = |a, b| value[a..b].parse::<i64>().map_err(|_| invalid());
-        let mut year = n(0, 4)?;
-        let month = n(5, 7)?;
-        let mut day = n(8, 10)?;
-        let hour = n(11, 13)?;
-        let minute = n(14, 16)?;
-        let second = n(17, 19)?;
-        let oh = n(21, 23)?;
-        let om = n(23, 25)?;
-        if year == 0
+        let n = |start, end| -> Result<i64> {
+            let part = &tail[start..end];
+            if !part.bytes().all(|c| c.is_ascii_digit()) {
+                return Err(invalid());
+            }
+            part.parse().map_err(|_| invalid())
+        };
+        let month = n(1, 3)?;
+        let mut day = n(4, 6)?;
+        let hour = n(7, 9)?;
+        let minute = n(10, 12)?;
+        let second = n(13, 15)?;
+        let oh = n(17, 19)?;
+        let om = n(19, 21)?;
+        if !(1..=999999999).contains(&year)
             || !(1..=12).contains(&month)
             || !(1..=31).contains(&day)
-            || hour > 23
+            || hour > 24
+            || hour == 24 && (minute != 0 || second != 0)
             || minute > 59
             || second > 59
             || oh > 18
@@ -151,7 +185,7 @@ impl ObtainedTime {
             4 | 6 | 9 | 11 => 30,
             _ => 31,
         };
-        // DateTimeFormatter's SMART resolver clamps a valid day-of-month to its month.
+        // DateTimeFormatter's SMART resolver clamps the day and carries 24:00.
         day = day.min(max_day);
         year -= i64::from(month <= 2);
         let era = year.div_euclid(400);
@@ -160,7 +194,7 @@ impl ObtainedTime {
         let doy = (153 * mp + 2) / 5 + day - 1;
         let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
         let days = era * 146097 + doe - 719468;
-        let sign = match &value[20..21] {
+        let sign = match &tail[16..17] {
             "+" => 1,
             "-" => -1,
             _ => return Err(invalid()),
