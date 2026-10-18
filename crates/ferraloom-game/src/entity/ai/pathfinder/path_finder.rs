@@ -195,10 +195,17 @@ impl PathFinder {
             && let Some(path) = &mut best
         {
             let closed_nodes = closed.values().copied().collect();
+            let mut target_states: Vec<_> = targets
+                .into_iter()
+                .map(|(target, _)| Some(target))
+                .collect();
             path.set_debug(DebugData {
                 open_set: self.open_set.get_heap().to_vec(),
                 closed_set: closed_nodes,
-                targets: order.iter().map(|&index| targets[index].0.node).collect(),
+                targets: order
+                    .iter()
+                    .map(|&index| target_states[index].take().unwrap())
+                    .collect(),
             });
         }
         evaluator.done(data).map_err(SearchError::Evaluator)?;

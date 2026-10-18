@@ -1,12 +1,12 @@
-use super::{NodeId, PathData, PathNodesId};
+use super::{NodeId, PathData, PathNodesId, Target};
 use ferraloom_util::{BlockPos, Vec3, collections::JavaHash};
 use std::sync::Arc;
 /// Port of Path.DebugData. These are node identities in the same search owner.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct DebugData {
     pub open_set: Vec<NodeId>,
     pub closed_set: Vec<NodeId>,
-    pub targets: Vec<NodeId>,
+    pub targets: Vec<Target>,
 }
 /// Port of Path. Cursor copies share the mutable list identified by nodes.
 #[derive(Debug)]

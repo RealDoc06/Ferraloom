@@ -1,6 +1,6 @@
 //! Ports of Node/Target/Path DEBUG_STREAM_CODEC. Debug records decode to fresh
 //! identities, as vanilla's codecs do; search-only links are not transmitted.
-use super::{DebugData, Node, NodeId, Path, PathData, PathType};
+use super::{DebugData, Node, NodeId, Path, PathData, PathType, Target};
 use ferraloom_protocol::{Error, Reader, Result, Writer};
 use ferraloom_util::{BlockPos, collections::HashMap};
 impl Node {
@@ -53,7 +53,15 @@ impl Path {
         write_nodes(self.nodes(data), data, output);
         write_nodes(&debug.open_set, data, output);
         write_nodes(&debug.closed_set, data, output);
-        write_nodes(&debug.targets, data, output);
+        write_nodes(
+            &debug
+                .targets
+                .iter()
+                .map(|target| target.node)
+                .collect::<Vec<_>>(),
+            data,
+            output,
+        );
         Ok(())
     }
     pub fn read_debug(input: &mut Reader<'_>, data: &mut PathData) -> Result<Self> {
@@ -73,7 +81,7 @@ impl Path {
                 unique.insert(key, id);
             }
         }
-        let targets = unique.values().copied().collect();
+        let targets = unique.values().map(|&id| Target::at(id)).collect();
         path.set_next_node_index(cursor);
         path.set_debug(DebugData {
             open_set,

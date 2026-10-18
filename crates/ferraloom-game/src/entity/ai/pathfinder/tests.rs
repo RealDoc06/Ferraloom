@@ -348,6 +348,7 @@ fn native_synthetic_search_paths_state_lifecycle_and_debug_bytes() {
             let target = p.target();
             actual["target"] = json!([target.x, target.y, target.z]);
             actual["reached"] = json!(p.can_reach());
+            actual["target_states"]=json!(p.debug_data().unwrap().targets.iter().map(|target|{let best=data[target.best_node().unwrap()].pos;json!({"node":node(&data[target.node],&data),"best":[best.x,best.y,best.z],"reached":target.is_reached()})}).collect::<Vec<_>>());
             let mut output = ferraloom_protocol::Writer::new();
             if p.write_debug(&data, &mut output).is_ok() {
                 actual["bytes"] = json!(hex(output.as_slice()));
