@@ -708,32 +708,44 @@ impl World {
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }
-    pub async fn save_live_level_context(&mut self, level: &Level) -> Result<()> {
-        // Startup's generated spawn-search chunks may not have entered Level.
-        // Prime their actual predicates without creating another simulation RNG.
-        let tags = level
-            .block_tags()
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        for terrain in self.initial_chunks.values_mut() {
-            let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
-            chunk.prime_heightmaps(tags);
-            write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
+    /// Capture level-owned inputs before constructing the IO future. Canonical
+    /// simulation state is Send, and its single-owner lazy caches need not be Sync.
+    pub fn save_live_level_context<'a>(
+        &'a mut self,
+        level: &Level,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'a + use<'a> {
+        let captured = (|| -> Result<_> {
+            // Startup's generated spawn-search chunks may not have entered Level.
+            // Prime their actual predicates without creating another simulation RNG.
+            let tags = level
+                .block_tags()
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            for terrain in self.initial_chunks.values_mut() {
+                let mut chunk =
+                    LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
+                chunk.prime_heightmaps(tags);
+                write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
+            }
+            let weather = *level.weather();
+            let border = level.entity_world_border().clone();
+            let path = self.access.path().join("data");
+            Ok((weather, border, path))
+        })();
+        async move {
+            let (weather, border, path) = captured?;
+            self.saving
+                .run(move || -> Result<()> {
+                    let saved = SavedDataStorage::new(path);
+                    saved.save("minecraft:weather", &mut SavedData::new(weather))?;
+                    saved.save(
+                        ferraloom_game::level::border::SAVED_DATA_ID,
+                        &mut SavedData::new(border),
+                    )?;
+                    Ok(())
+                })
+                .await??;
+            Ok(())
         }
-        let weather = *level.weather();
-        let border = level.entity_world_border().clone();
-        let path = self.access.path().join("data");
-        self.saving
-            .run(move || -> Result<()> {
-                let saved = SavedDataStorage::new(path);
-                saved.save("minecraft:weather", &mut SavedData::new(weather))?;
-                saved.save(
-                    ferraloom_game::level::border::SAVED_DATA_ID,
-                    &mut SavedData::new(border),
-                )?;
-                Ok(())
-            })
-            .await??;
-        Ok(())
     }
     fn entity_io(&mut self, properties: &ServerProperties) -> Result<&mut EntityIo> {
         if self.entity_io.is_none() {
