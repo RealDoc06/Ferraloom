@@ -4,6 +4,7 @@ use super::{BlockBehavior, LevelAccessRef, UPDATE_LIMIT, UpdateFlags};
 use crate::level::{Level, LevelError, effects::LevelEffect};
 use ferraloom_data::{
     Block, BlockClass, BlockState, FluidState, Item, properties, registries::fluid::Id,
+    tags::FluidTags,
 };
 use ferraloom_util::{BlockPos, Direction, core::Plane, random::RandomSource};
 
@@ -114,11 +115,10 @@ impl FlowingFluid {
             return Ok(true);
         }
         match Self::from_id(current.fluid_type) {
-            Some(Self::Water) => {
-                Ok(direction == Direction::Down && Self::from_id(new) != Some(Self::Water))
-            }
+            Some(Self::Water) => Ok(direction == Direction::Down
+                && !level.fluid_tags()?.contains_key(FluidTags::WATER, new)),
             Some(Self::Lava) => Ok(Self::Lava.height(current, level, pos)? >= 0.44444445
-                && Self::from_id(new) == Some(Self::Water)),
+                && level.fluid_tags()?.contains_key(FluidTags::WATER, new)),
             None => Ok(false),
         }
     }
@@ -327,10 +327,16 @@ impl FlowingFluid {
         state: BlockState,
         direction: Direction,
         target: FluidState,
+        ticking_fluid: Id,
     ) -> Result<(), LevelError> {
         if self == Self::Lava
             && direction == Direction::Down
-            && Self::from_id(state.data().fluid.fluid_type) == Some(Self::Water)
+            && level
+                .fluid_tags()?
+                .contains_key(FluidTags::LAVA, ticking_fluid)
+            && level
+                .fluid_tags()?
+                .contains_key(FluidTags::WATER, state.data().fluid.fluid_type)
         {
             if state.block().class() == BlockClass::LiquidBlock {
                 level.set_block(
@@ -378,6 +384,7 @@ impl FlowingFluid {
         pos: BlockPos,
         fluid: FluidState,
         state: BlockState,
+        ticking_fluid: Id,
     ) -> Result<(), LevelError> {
         let amount = if fluid.falling {
             7
@@ -393,6 +400,7 @@ impl FlowingFluid {
                     level.get_block_state(target)?,
                     direction,
                     new_fluid,
+                    ticking_fluid,
                 )?;
             }
         }
@@ -404,6 +412,7 @@ impl FlowingFluid {
         pos: BlockPos,
         state: BlockState,
         fluid: FluidState,
+        ticking_fluid: Id,
     ) -> Result<(), LevelError> {
         if fluid.empty {
             return Ok(());
@@ -420,7 +429,14 @@ impl FlowingFluid {
                 below,
             )? && Self::can_hold_specific(below_state, new.fluid_type, level)?
             {
-                self.spread_to(level, below, below_state, Direction::Down, new)?;
+                self.spread_to(
+                    level,
+                    below,
+                    below_state,
+                    Direction::Down,
+                    new,
+                    ticking_fluid,
+                )?;
                 let mut sources = 0;
                 for direction in Plane::Horizontal {
                     sources += u8::from(
@@ -433,13 +449,13 @@ impl FlowingFluid {
                     );
                 }
                 if sources >= 3 {
-                    self.spread_to_sides(level, pos, fluid, state)?;
+                    self.spread_to_sides(level, pos, fluid, state, ticking_fluid)?;
                 }
                 return Ok(());
             }
         }
         if fluid.source || !self.is_water_hole(level, pos, state, below, below_state)? {
-            self.spread_to_sides(level, pos, fluid, state)?;
+            self.spread_to_sides(level, pos, fluid, state, ticking_fluid)?;
         }
         Ok(())
     }
@@ -450,6 +466,7 @@ impl FlowingFluid {
         mut state: BlockState,
         mut fluid: FluidState,
     ) -> Result<(), LevelError> {
+        let ticking_fluid = fluid.fluid_type;
         if !fluid.source {
             let new = self.get_new_liquid(level, pos, level.get_block_state(pos)?)?;
             let mut delay = self.tick_delay(level.rules().fast_lava);
@@ -474,7 +491,7 @@ impl FlowingFluid {
                 level.schedule_fluid_tick_after(pos, fluid.fluid_type, delay)?;
             }
         }
-        self.spread(level, pos, state, fluid)
+        self.spread(level, pos, state, fluid, ticking_fluid)
     }
     pub fn random_tick(
         self,
@@ -565,7 +582,12 @@ impl LiquidBlock {
         pos: BlockPos,
         level: &mut Level,
     ) -> Result<bool, LevelError> {
-        if FlowingFluid::from_id(state.data().fluid.fluid_type) == Some(FlowingFluid::Lava) {
+        if level.fluid_tags()?.contains_key(
+            FluidTags::LAVA,
+            FlowingFluid::from_id(state.data().fluid.fluid_type)
+                .unwrap()
+                .source_id(),
+        ) {
             let soul_soil = level.get_block_state(pos.below(1))?.block() == Block::SOUL_SOIL;
             for direction in [
                 Direction::Down,
@@ -576,8 +598,9 @@ impl LiquidBlock {
             ] {
                 let target = pos.relative(direction.opposite(), 1);
                 let neighbor = level.get_block_state(target)?;
-                let convert = if FlowingFluid::from_id(neighbor.data().fluid.fluid_type)
-                    == Some(FlowingFluid::Water)
+                let convert = if level
+                    .fluid_tags()?
+                    .contains_key(FluidTags::WATER, neighbor.data().fluid.fluid_type)
                 {
                     Some(if level.get_block_state(pos)?.data().fluid.source {
                         Block::OBSIDIAN
@@ -604,8 +627,11 @@ impl LiquidBlock {
         below: BlockState,
         level: &mut LevelAccessRef<'_>,
     ) -> Result<(), LevelError> {
-        if FlowingFluid::from_id(state.data().fluid.fluid_type) == Some(FlowingFluid::Water)
-            && state.data().fluid.source
+        if level.as_reader().fluid_tags()?.contains_key(
+            FluidTags::BUBBLE_COLUMN_CAN_OCCUPY,
+            state.data().fluid.fluid_type,
+        ) && state.data().fluid.source
+            && state.data().fluid.amount == 8
         {
             use ferraloom_data::tags::BlockTags;
             let reader = level.as_reader();
@@ -637,7 +663,12 @@ impl BlockBehavior for LiquidBlock {
                 flow.tick_delay(level.rules().fast_lava),
             )?;
         }
-        if flow == FlowingFluid::Water && state.data().fluid.source {
+        if level.fluid_tags()?.contains_key(
+            FluidTags::BUBBLE_COLUMN_CAN_OCCUPY,
+            state.data().fluid.fluid_type,
+        ) && state.data().fluid.source
+            && state.data().fluid.amount == 8
+        {
             let below = level.get_block_state(pos.below(1))?;
             Self::schedule_bubble(state, pos, below, &mut LevelAccessRef::Server(level))?;
         }
@@ -703,8 +734,11 @@ impl BlockBehavior for LiquidBlock {
         ))
     }
     fn tick(&self, state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
-        if FlowingFluid::from_id(state.data().fluid.fluid_type) == Some(FlowingFluid::Water)
-            && state.data().fluid.source
+        if level.fluid_tags()?.contains_key(
+            FluidTags::BUBBLE_COLUMN_CAN_OCCUPY,
+            state.data().fluid.fluid_type,
+        ) && state.data().fluid.source
+            && state.data().fluid.amount == 8
         {
             use ferraloom_data::tags::BlockTags;
             let below = level.get_block_state(pos.below(1))?;

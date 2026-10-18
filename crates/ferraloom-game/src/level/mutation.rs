@@ -23,6 +23,15 @@ impl Level {
     pub fn set_block_tags(&mut self, tags: Arc<TagSet<Block>>) {
         self.region_mut().tags = Some(tags);
     }
+    pub fn set_fluid_tags(&mut self, tags: Arc<TagSet<ferraloom_data::registries::fluid::Id>>) {
+        self.region_mut().fluid_tags = Some(tags);
+    }
+    pub fn fluid_tags(&self) -> Result<&TagSet<ferraloom_data::registries::fluid::Id>, LevelError> {
+        self.region()
+            .fluid_tags
+            .as_deref()
+            .ok_or(LevelError::MissingFluidTags)
+    }
     pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, LevelError> {
         self.region()
             .tags

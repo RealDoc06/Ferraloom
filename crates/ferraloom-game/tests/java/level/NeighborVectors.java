@@ -82,6 +82,10 @@ public final class NeighborVectors {
                 var state=block.defaultBlockState().setValue(net.minecraft.world.level.block.LiquidBlock.LEVEL,liquidLevel);var fluid=state.getFluidState();
                 System.out.println("fluid-legacy:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+liquidLevel+"\\t"+Block.getId(fluid.createLegacyBlock()));
               }
+              for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA,net.minecraft.tags.FluidTags.BUBBLE_COLUMN_CAN_OCCUPY)){
+                var names=new ArrayList<String>();for(var fluid:net.minecraft.core.registries.BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(fluid).toString());
+                System.out.println("fluid-tag:"+tag.location()+"\\t"+String.join(",",names));
+              }
               var sample=List.of(Blocks.AIR,Blocks.CAVE_AIR,Blocks.VOID_AIR,Blocks.STONE,Blocks.DIRT,Blocks.SAND,Blocks.GRAVEL,Blocks.WATER,Blocks.LAVA,Blocks.OBSIDIAN,Blocks.COBBLESTONE,Blocks.BASALT,Blocks.SOUL_SOIL,Blocks.BLUE_ICE,Blocks.SHORT_GRASS,Blocks.DANDELION,Blocks.BUSH,Blocks.FIRE,Blocks.SOUL_FIRE,Blocks.MAGMA_BLOCK);
               for(var tag:List.of(net.minecraft.tags.BlockTags.SUPPORTS_VEGETATION,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.WASHED_AWAY_BY_FLUIDS,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP_NO_LEAVES,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_DRAG_DOWN,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_PUSH_UP)){
                 var names=new ArrayList<String>();for(var block:sample)if(block.defaultBlockState().is(tag))names.add(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString());

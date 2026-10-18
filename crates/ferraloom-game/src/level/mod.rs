@@ -42,6 +42,7 @@ pub enum LevelError {
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
     MissingBlockTags,
+    MissingFluidTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     InvalidSavedTick,
@@ -94,6 +95,8 @@ pub struct Region {
     effects: Vec<effects::LevelEffect>,
     block_changes: broadcast::BlockChanges,
     tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
+    fluid_tags:
+        Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -119,6 +122,7 @@ impl Region {
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
+            fluid_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }

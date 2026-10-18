@@ -21,3 +21,5 @@ rg '^(direction-order|skip-west|nested-layer|chain-limit|zero-limit|random-posit
 rg '^tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/tags.tsv"
 
 rg '^fluid-legacy:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/fluids.tsv"
+
+rg '^fluid-tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/fluid-tags.tsv"

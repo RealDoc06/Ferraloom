@@ -27,6 +27,14 @@ impl LevelReaderRef<'_> {
             Self::Server(level) => level.get_block_state(pos),
         }
     }
+    pub fn fluid_tags(
+        &self,
+    ) -> Result<&ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>, LevelError>
+    {
+        match self {
+            Self::Server(level) => level.fluid_tags(),
+        }
+    }
     pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, LevelError> {
         match self {
             Self::Server(level) => level.block_tags(),

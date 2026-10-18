@@ -177,6 +177,29 @@ fn install_tags(level: &mut Level) {
     )
     .unwrap();
     level.set_block_tags(Arc::new(tags));
+    let values = include_str!("../../tests/java/level/fluid-tags.tsv")
+        .lines()
+        .map(|line| {
+            let (name, fluids) = line.split_once('\t').unwrap();
+            (
+                name.strip_prefix("fluid-tag:").unwrap().parse().unwrap(),
+                fluids
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|name| ferraloom_data::registries::fluid::Id::from_name(name).unwrap())
+                    .collect(),
+            )
+        })
+        .collect();
+    let tags = ferraloom_data::datapack::TagSet::from_tags(
+        ferraloom_data::datapack::Tags {
+            values,
+            diagnostics: Vec::new(),
+        },
+        ferraloom_data::registries::fluid::ALL.len(),
+    )
+    .unwrap();
+    level.set_fluid_tags(Arc::new(tags));
 }
 #[test]
 fn vanilla_set_block_flags_schedule_sand_notify_and_update_all_heightmaps() {
