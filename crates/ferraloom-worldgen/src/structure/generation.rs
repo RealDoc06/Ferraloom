@@ -24,6 +24,7 @@ enum StructureGenerator {
     Igloo,
     EndCity,
     SwampHut,
+    JungleTemple,
     DesertPyramid,
     OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
     Shipwreck { beached: bool },
@@ -70,6 +71,7 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:jungle_temple" => StructureGenerator::JungleTemple,
                     "minecraft:swamp_hut" => StructureGenerator::SwampHut,
                     "minecraft:desert_pyramid" => StructureGenerator::DesertPyramid,
                     "minecraft:ocean_ruin" => StructureGenerator::OceanRuin(
@@ -162,6 +164,7 @@ impl StructureGenerators {
             }
             kind @ (StructureGenerator::BuriedTreasure
             | StructureGenerator::Igloo
+            | StructureGenerator::JungleTemple
             | StructureGenerator::SwampHut
             | StructureGenerator::DesertPyramid
             | StructureGenerator::Shipwreck { .. }
@@ -170,13 +173,21 @@ impl StructureGenerators {
                 if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
                     return Ok(StructureStart::invalid());
                 }
-                if matches!(kind, StructureGenerator::DesertPyramid) {
+                if matches!(
+                    kind,
+                    StructureGenerator::DesertPyramid | StructureGenerator::JungleTemple
+                ) {
+                    let [width, depth] = if matches!(kind, StructureGenerator::JungleTemple) {
+                        [12, 15]
+                    } else {
+                        [21, 21]
+                    };
                     let mut lowest = i32::MAX;
                     for [sx, sz] in [
                         [x - 8, z - 8],
-                        [x - 8, z + 13],
-                        [x + 13, z - 8],
-                        [x + 13, z + 13],
+                        [x - 8, z - 8 + depth],
+                        [x - 8 + width, z - 8],
+                        [x - 8 + width, z - 8 + depth],
                     ] {
                         lowest = lowest.min(
                             generator.get_base_height(
@@ -222,6 +233,21 @@ impl StructureGenerators {
                     };
                     let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
                     random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                    if matches!(kind, StructureGenerator::JungleTemple) {
+                        let piece = super::structures::jungle_temple::JungleTemplePiece::new(
+                            &mut random,
+                            context.chunk[0] * 16,
+                            context.chunk[1] * 16,
+                        );
+                        return Ok(StructureStart::new(
+                            id.clone(),
+                            settings.kind,
+                            context.chunk,
+                            references,
+                            settings.terrain,
+                            vec![StructurePiece::JungleTemple(piece)],
+                        ));
+                    }
                     if matches!(kind, StructureGenerator::DesertPyramid) {
                         let piece = super::structures::desert_pyramid::DesertPyramidPiece::new(
                             &mut random,

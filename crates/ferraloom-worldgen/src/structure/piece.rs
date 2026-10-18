@@ -217,3 +217,33 @@ impl StructurePieceData {
         Ok(true)
     }
 }
+
+impl StructurePieceData {
+    /// Port of StructurePiece#createDispenser. The adapter consumes a loot seed
+    /// only when the placed block entity is a dispenser.
+    pub fn create_dispenser(
+        &self,
+        context: &mut crate::feature::FeatureContext<'_, '_>,
+        local: [i32; 3],
+        facing: ferraloom_data::properties::Facing,
+        bounds: BoundingBox,
+        loot: &Identifier,
+    ) -> Result<bool, Error> {
+        use ferraloom_data::{Block, properties};
+        let p = self.world_position(local);
+        if !bounds.contains(p) || context.region.block(p)?.block() == Block::DISPENSER {
+            return Ok(false);
+        }
+        self.place_block(
+            context.region,
+            Block::DISPENSER
+                .default_state()
+                .with(properties::FACING, facing)
+                .expect("dispenser facing"),
+            local,
+            bounds,
+        )?;
+        context.region.set_loot_table(p, loot, context.random)?;
+        Ok(true)
+    }
+}
