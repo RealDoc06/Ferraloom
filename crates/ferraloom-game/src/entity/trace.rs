@@ -128,7 +128,7 @@ pub fn for_each_intersected_block(
     mut visit: impl FnMut(BlockPos, i32) -> Result<bool, LevelError>,
 ) -> Result<(), LevelError> {
     let travel = to - from;
-    if travel.length_sqr() < f64::from(1e-5_f32) * f64::from(1e-5_f32) {
+    if travel.length_sqr() < f64::from(1e-5_f32 * 1e-5_f32) {
         let min = BlockPos::containing(bb.min_x, bb.min_y, bb.min_z);
         let max = BlockPos::containing(bb.max_x, bb.max_y, bb.max_z);
         for pos in BlockPos::between_closed(min, max) {

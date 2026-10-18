@@ -139,6 +139,9 @@ pub struct EntityData {
     pub in_block_state: Option<BlockState>,
     pub movement_this_tick: VecDeque<Movement>,
     pub final_movements_this_tick: Vec<Movement>,
+    pub inside_effect_collector: super::inside_block::StepBasedCollector,
+    pub visited_blocks: ferraloom_util::collections::LongOpenHashSet,
+    pub inside_block_is_precise: bool,
     pub custom_data: CompoundTag,
     /// Unknown and subclass NBT is retained; known fields are regenerated on save.
     pub saved: CompoundTag,
@@ -223,6 +226,9 @@ impl EntityData {
             in_block_state: None,
             movement_this_tick: VecDeque::with_capacity(100),
             final_movements_this_tick: Vec::new(),
+            inside_effect_collector: super::inside_block::StepBasedCollector::default(),
+            visited_blocks: ferraloom_util::collections::LongOpenHashSet::new(),
+            inside_block_is_precise: false,
             custom_data: CompoundTag::new(),
             saved: CompoundTag::new(),
         }

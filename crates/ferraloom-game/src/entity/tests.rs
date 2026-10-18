@@ -393,3 +393,27 @@ fn vanilla_fluid_interaction_heights_eyes_and_current_bits() {
     }
     assert_eq!(count, 10);
 }
+
+#[test]
+fn vanilla_movement_path_block_contact_order_and_step_indices() {
+    let mut count = 0;
+    let dimensions = EntityDimensions::for_type(ferraloom_data::EntityType::COW);
+    for row in VECTORS.lines().filter(|s| s.starts_with("trace\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        let from = vector(f[2]);
+        let to = vector(f[3]);
+        let epsilon = f64::from(1e-5_f32);
+        let bb = dimensions
+            .make_bounding_box(to)
+            .deflate(epsilon, epsilon, epsilon);
+        let mut contacts = Vec::new();
+        trace::for_each_intersected_block(from, to, bb, |pos, step| {
+            contacts.push(format!("{},{},{},{}", pos.x, pos.y, pos.z, step));
+            Ok(true)
+        })
+        .unwrap();
+        assert_eq!(contacts.join(";"), f[4], "trace {}", f[1]);
+        count += 1;
+    }
+    assert_eq!(count, 14);
+}

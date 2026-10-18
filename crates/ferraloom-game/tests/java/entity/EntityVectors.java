@@ -78,6 +78,12 @@ public final class EntityVectors {
         System.out.println("move\\t"+name+"\\t"+(player?"player":"cow")+"\\t"+(obstacle==null?-1:Block.getId(obstacle))+"\\t"+vec(from)+"\\t"+vec(delta)+"\\t"+ground+"\\t"+sneak+"\\t"+bits(fall)+"\\t"+vec(e.position())+"\\t"+flags(e)+"\\t"+bits(e.fallDistance)+"\\t"+vec(e.getDeltaMovement()));
       }
       public static void run(RegistryAccess r)throws Exception {
+        int traceIndex=0;
+        for(var start:List.of(new Vec3(0.5,64,0.5),new Vec3(-0.3,64.00001,15.8)))for(var delta:List.of(Vec3.ZERO,new Vec3(0.000001,0,0),new Vec3(3.2,-0.7,1.1),new Vec3(-4.5,2.3,-2.3),new Vec3(1,1,1),new Vec3(0,-8,0),new Vec3(0,0,20))){
+          var end=start.add(delta);var radius=(double)(EntityTypes.COW.getDimensions().width()/2f);var box=new AABB(end.x-radius,end.y,end.z-radius,end.x+radius,end.y+EntityTypes.COW.getDimensions().height(),end.z+radius).deflate(9.999999747378752E-6);
+          var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
+          System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
+        }
         for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));

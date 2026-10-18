@@ -34,6 +34,14 @@ impl MovementEmission {
 }
 #[derive(Clone, Debug)]
 pub enum MovementEffect {
+    LavaHurtSound {
+        entity: EntityRef,
+        pitch: f32,
+    },
+    ExtinguishSound {
+        entity: EntityRef,
+        pitch: f32,
+    },
     HitGround {
         entity: EntityRef,
         pos: Vec3,

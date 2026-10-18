@@ -46,6 +46,7 @@ mod base;
 pub mod collision;
 pub mod collision_context;
 pub mod fluid;
+pub mod inside_block;
 mod lifecycle;
 pub mod movement;
 mod trace;
@@ -204,6 +205,24 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    fn should_play_lava_hurt_sound(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    fn on_inside_block(
+        &self,
+        _entity: EntityRef,
+        _state: ferraloom_data::BlockState,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     fn move_by(
         &self,
         entity: EntityRef,
