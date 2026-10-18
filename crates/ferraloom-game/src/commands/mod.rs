@@ -12,6 +12,7 @@ pub mod message;
 pub mod permissions;
 pub mod source;
 pub mod spawn;
+pub mod suggestions;
 pub mod teleport;
 pub mod tick;
 mod tree;
@@ -237,6 +238,14 @@ impl Commands {
         text: &str,
         source: CommandSourceStack,
     ) -> ferraloom_brigadier::Suggestions {
+        self.suggestions_with(text, source, &suggestions::SuggestionData::default())
+    }
+    pub fn suggestions_with(
+        &self,
+        text: &str,
+        source: CommandSourceStack,
+        data: &suggestions::SuggestionData,
+    ) -> ferraloom_brigadier::Suggestions {
         let mut reader = ferraloom_brigadier::StringReader::with_provider(
             text,
             std::sync::Arc::new(exceptions::BrigadierExceptions),
@@ -247,7 +256,26 @@ impl Commands {
         let parsed = self
             .dispatcher
             .parse_reader(reader, std::sync::Arc::new(source));
-        let mut suggestions = self.dispatcher.get_completion_suggestions(&parsed);
+        let cursor = parsed.reader.total_length();
+        let point = parsed.context.find_suggestion_context(cursor);
+        let mut context = point.context.clone();
+        context.input = text.into();
+        let mut results = Vec::new();
+        for &node in self.dispatcher.node(point.parent).children() {
+            let builder =
+                ferraloom_brigadier::SuggestionsBuilder::new(text, point.start.min(cursor));
+            let result = if let Some(argument) = self
+                .dispatcher
+                .node(node)
+                .argument_type::<arguments::MinecraftArgument>()
+            {
+                suggestions::argument(argument, &context, data, builder)
+            } else {
+                self.dispatcher.list_suggestions(node, &context, builder)
+            };
+            results.push(result.unwrap_or_default());
+        }
+        let mut suggestions = ferraloom_brigadier::Suggestions::merge(text, results);
         suggestions.list.truncate(1000);
         suggestions
     }

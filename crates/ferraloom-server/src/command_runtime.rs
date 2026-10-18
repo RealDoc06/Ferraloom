@@ -785,6 +785,62 @@ impl MinecraftServer {
 }
 
 impl MinecraftServer {
+    fn command_suggestion_data(&self) -> ferraloom_game::commands::suggestions::SuggestionData {
+        let mut data = ferraloom_game::commands::suggestions::SuggestionData {
+            operators: self
+                .access
+                .ops
+                .values()
+                .map(|entry| entry.name.clone())
+                .collect(),
+            whitelist: self
+                .access
+                .whitelist
+                .values()
+                .map(|entry| entry.name.clone())
+                .collect(),
+            banned_players: self
+                .access
+                .banned_players
+                .values()
+                .filter_map(|entry| entry.name.clone())
+                .collect(),
+            banned_ips: self
+                .access
+                .banned_ips
+                .values()
+                .filter_map(|entry| entry.ip.clone())
+                .collect(),
+            ..Default::default()
+        };
+        for connection in &self.players {
+            let Phase::Play(entity) = self.connections[connection].phase else {
+                continue;
+            };
+            let Ok(player) = self.player(entity) else {
+                continue;
+            };
+            data.players.push(player.name.clone());
+            let uuid = player.uuid.to_string();
+            if !self
+                .access
+                .ops
+                .values()
+                .any(|op| op.uuid.eq_ignore_ascii_case(&uuid))
+            {
+                data.op_candidates.push(player.name.clone());
+            }
+            if !self
+                .access
+                .whitelist
+                .values()
+                .any(|entry| entry.uuid.eq_ignore_ascii_case(&uuid))
+            {
+                data.whitelist_candidates.push(player.name.clone());
+            }
+        }
+        data
+    }
     pub(super) fn process_command_suggestions(&mut self) -> Result<()> {
         let players = self.players.clone();
         for connection in players {
@@ -802,7 +858,11 @@ impl MinecraftServer {
             let source =
                 CommandSourceStack::server(self.access.permission(player.uuid), player.position)
                     .with_entity(entity);
-            let suggestions = self.commands.suggestions(&request.command.0, source);
+            let suggestions = self.commands.suggestions_with(
+                &request.command.0,
+                source,
+                &self.command_suggestion_data(),
+            );
             let entries = suggestions
                 .list
                 .into_iter()

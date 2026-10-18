@@ -127,12 +127,14 @@ pub struct MinecraftArgument {
     pub context: Arc<crate::commands::context::CommandBuildContext>,
     pub wire: CommandArgument,
     pub examples: Arc<[String]>,
+    pub suggestion_provider: Option<String>,
 }
 impl MinecraftArgument {
     pub fn new(wire: CommandArgument) -> Self {
         Self {
             context: Arc::default(),
             wire,
+            suggestion_provider: None,
             examples: Arc::from([]),
         }
     }

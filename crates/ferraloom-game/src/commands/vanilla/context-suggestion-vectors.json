@@ -1,0 +1,767 @@
+[
+  {
+    "kind": "entity",
+    "input": "",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      },
+      {
+        "text": "Doc"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      },
+      {
+        "text": "Doc"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "A",
+    "level": 0,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "A",
+    "level": 0,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "Alex",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "Alex",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@z",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@z",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@p",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@p",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@p ",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@p ",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@pfoo",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@pfoo",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@a",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@n",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "@n",
+    "level": 0,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      },
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      },
+      {
+        "text": "Doc"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      },
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      },
+      {
+        "text": "Doc"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "A",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "A",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "Alex"
+      },
+      {
+        "text": "Alice"
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "Alex",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "game_profile",
+    "input": "Alex",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "entity",
+    "input": "@",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@z",
+    "level": 4,
+    "start": 0,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@z",
+    "level": 4,
+    "start": 0,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "@a",
+        "tooltip": {
+          "translate": "argument.entity.selector.allPlayers"
+        }
+      },
+      {
+        "text": "@e",
+        "tooltip": {
+          "translate": "argument.entity.selector.allEntities"
+        }
+      },
+      {
+        "text": "@n",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestEntity"
+        }
+      },
+      {
+        "text": "@p",
+        "tooltip": {
+          "translate": "argument.entity.selector.nearestPlayer"
+        }
+      },
+      {
+        "text": "@r",
+        "tooltip": {
+          "translate": "argument.entity.selector.randomPlayer"
+        }
+      },
+      {
+        "text": "@s",
+        "tooltip": {
+          "translate": "argument.entity.selector.self"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@p",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@p",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@p ",
+    "level": 4,
+    "start": 2,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@p ",
+    "level": 4,
+    "start": 2,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@pfoo",
+    "level": 4,
+    "start": 2,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@pfoo",
+    "level": 4,
+    "start": 2,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@a",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@a",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "entity",
+    "input": "@n",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "game_profile",
+    "input": "@n",
+    "level": 4,
+    "start": 2,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick ",
+    "level": 4,
+    "start": 5,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "freeze"
+      },
+      {
+        "text": "query"
+      },
+      {
+        "text": "rate"
+      },
+      {
+        "text": "sprint"
+      },
+      {
+        "text": "step"
+      },
+      {
+        "text": "unfreeze"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick rate ",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "20"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick rate 2",
+    "level": 4,
+    "start": 10,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "20"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick step ",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "1s"
+      },
+      {
+        "text": "1t"
+      },
+      {
+        "text": "stop"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick step 1",
+    "level": 4,
+    "start": 10,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "1s"
+      },
+      {
+        "text": "1t"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick sprint ",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "1d"
+      },
+      {
+        "text": "3d"
+      },
+      {
+        "text": "60s"
+      },
+      {
+        "text": "stop"
+      }
+    ]
+  },
+  {
+    "kind": "command",
+    "input": "tick sprint 1",
+    "level": 4,
+    "start": 12,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "1d"
+      }
+    ]
+  }
+]

@@ -129,18 +129,14 @@ pub fn dispatcher(
             return id;
         }
         let definition = &definitions[index];
-        let mut builder = if definition.kind == "argument" {
-            ArgumentBuilder::argument(
-                &definition.name,
-                MinecraftArgument {
-                    context: context.clone(),
-                    wire: wire::from_report(
-                        definition.parser.as_ref().unwrap(),
-                        &definition.properties,
-                    ),
-                    examples: Arc::from(definition.examples.clone()),
-                },
-            )
+        let argument = definition.parser.as_ref().map(|parser| MinecraftArgument {
+            context: context.clone(),
+            wire: wire::from_report(parser, &definition.properties),
+            examples: Arc::from(definition.examples.clone()),
+            suggestion_provider: definition.suggestions.clone(),
+        });
+        let mut builder = if let Some(argument) = &argument {
+            ArgumentBuilder::argument(&definition.name, argument.clone())
         } else {
             ArgumentBuilder::literal(&definition.name)
         };
@@ -159,7 +155,15 @@ pub fn dispatcher(
             builder = builder.executes(move |_| Ok(index as i32));
         }
         if definition.suggestions.is_some() {
-            builder = builder.suggests(|_, builder| Ok(builder.build()));
+            let argument = argument.expect("custom suggestions belong to argument nodes");
+            builder = builder.suggests(move |context, builder| {
+                super::suggestions::argument(
+                    &argument,
+                    context,
+                    &super::suggestions::SuggestionData::default(),
+                    builder,
+                )
+            });
         }
         if let Some(redirect) = definition.redirect {
             let target = build(redirect, definitions, handles, dispatcher, context);
