@@ -142,7 +142,8 @@ impl Suggestion {
         if self.integer.is_some() {
             return self.compare(other);
         }
-        // Java compares individual UTF-16 chars, applying upper then lower casing.
+        // Partial: Rust case expansion differs from Java simple mappings for
+        // sharp S and supplementary case pairs; tracked in features/commands.md.
         fn fold(c: u16) -> u16 {
             char::from_u32(u32::from(c))
                 .map(|c| {
@@ -182,6 +183,8 @@ impl Suggestions {
             unique.insert(suggestion.expand(command, range));
         }
         let mut list = unique.into_iter().collect::<Vec<_>>();
+        // Partial for large mixed lists: this is the small-list TimSort path;
+        // exact run merging/galloping remains tracked in features/commands.md.
         // Mixed integer/text suggestions do not define a transitive comparator.
         // Use the binary insertion ordering of JDK TimSort's small-list path;
         // Rust's general sort requires a total order and can produce different results.
