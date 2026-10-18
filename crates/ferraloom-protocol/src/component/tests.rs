@@ -435,6 +435,11 @@ fn vanilla_persistent_compound_or_snbt_alternatives() {
         if let Some(expected) = row["compound"].as_str() {
             let expected = ferraloom_nbt::parse(expected).unwrap();
             assert_eq!(actual.unwrap().0, expected, "{input}");
+            assert_eq!(
+                NbtPredicate::from_nbt(&expected).unwrap().0.0,
+                expected,
+                "native predicate numeric tag kinds"
+            );
             let nbt_input = if let Some(text) = input.as_str() {
                 Tag::String(text.into())
             } else {

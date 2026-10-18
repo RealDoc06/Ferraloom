@@ -3295,6 +3295,9 @@ fn validate_component(value: &DataComponent) -> Result<()> {
     }
 }
 impl Persistent for NbtPredicate {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        CustomData::from_nbt(v).map(Self)
+    }
     fn from_json(v: &Json) -> Result<Self> {
         if let Some(s) = v.as_str() {
             let tag = ferraloom_nbt::parse_compound(s)
