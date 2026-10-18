@@ -10,6 +10,7 @@ pub mod feedback;
 pub mod message;
 pub mod permissions;
 pub mod source;
+pub mod teleport;
 mod tree;
 use arguments::{ArgumentValue, coordinates::Coordinates};
 use ferraloom_brigadier::{CommandDispatcher, CommandSyntaxException, NodeKind};
@@ -21,13 +22,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug)]
 pub enum CommandAction {
     Stop,
-    Save {
-        flush: bool,
-    },
-    Teleport {
-        targets: Option<String>,
-        position: Vec3,
-    },
+    Save { flush: bool },
     Run(Box<PreparedCommand>),
 }
 /// Parsing stores syntax, never captures entity matches ahead of command execution.
@@ -136,37 +131,10 @@ impl Commands {
         source: CommandSourceStack,
     ) -> Result<CommandAction, CommandSyntaxException> {
         let prepared = self.prepare(text, source)?;
-        let selector_text = |name: &str| -> Option<String> {
-            // Preserve the original selector syntax for the legacy server adapter.
-            let parse = self
-                .dispatcher
-                .parse(&prepared.input, prepared.source.clone());
-            let mut context = &parse.context;
-            loop {
-                if let Some(argument) = context.arguments.get(name) {
-                    return Some(String::from_utf16_lossy(
-                        &prepared.input.encode_utf16().collect::<Vec<_>>()
-                            [argument.range.start..argument.range.end],
-                    ));
-                }
-                if let Some(child) = context.child.as_deref() {
-                    context = child;
-                } else {
-                    return None;
-                }
-            }
-        };
         Ok(match prepared.command.as_str() {
             "stop" => CommandAction::Stop,
             "save-all" => CommandAction::Save {
                 flush: prepared.literals.iter().any(|s| s == "flush"),
-            },
-            "teleport" if prepared.coordinates("location").is_some() => CommandAction::Teleport {
-                targets: selector_text("targets"),
-                position: prepared
-                    .coordinates("location")
-                    .unwrap()
-                    .position(&prepared.source, None),
             },
             _ => CommandAction::Run(Box::new(prepared)),
         })

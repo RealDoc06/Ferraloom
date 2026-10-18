@@ -171,6 +171,7 @@ impl MinecraftServer {
             "ban-ip" | "pardon-ip" => self.ban_ip_command(source, &command)?,
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
+            "teleport" => self.teleport_command(&command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
@@ -381,7 +382,7 @@ fn game_mode_name(mode: GameType) -> &'static str {
 }
 
 use ferraloom_game::commands::arguments::selectors::{
-    EntityQuery, EntitySelector, SelectorEntity, SelectorPredicate, rotation_matches,
+    EntityQuery, SelectorEntity, SelectorPredicate, rotation_matches,
 };
 impl EntityQuery for MinecraftServer {
     fn candidates(&self, _players_only: bool) -> Vec<EntityRef> {
@@ -470,45 +471,6 @@ impl EntityQuery for MinecraftServer {
     fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]) {
         use rand::seq::SliceRandom;
         entities.shuffle(&mut rand::thread_rng());
-    }
-}
-impl MinecraftServer {
-    pub(super) fn command_targets(
-        &mut self,
-        source: Option<ConnectionId>,
-        selector: Option<&str>,
-    ) -> Result<Vec<ConnectionId>> {
-        let mut stack = CommandSourceStack::server(4, Vec3::ZERO);
-        if let Some(connection) = source {
-            let Phase::Play(entity) = self.connections[&connection].phase else {
-                bail!("command source not playing");
-            };
-            stack = CommandSourceStack::server(
-                self.access
-                    .permission(self.connections[&connection].profile.id),
-                self.player(entity)?.position,
-            )
-            .with_entity(entity);
-        }
-        let Some(text) = selector else {
-            return source
-                .map(|id| vec![id])
-                .context("permissions.requires.player");
-        };
-        let selector =
-            EntitySelector::parse(&mut ferraloom_brigadier::StringReader::new(text), true)?;
-        let entities = selector.find(&stack, self, true)?;
-        if entities.is_empty() {
-            return Err(exceptions::error("argument.entity.notfound.player", &[]).into());
-        }
-        Ok(entities
-            .into_iter()
-            .filter_map(|entity| {
-                self.players.iter().copied().find(
-                    |id| matches!(self.connections[id].phase,Phase::Play(handle) if handle==entity),
-                )
-            })
-            .collect())
     }
 }
 
@@ -1470,5 +1432,226 @@ impl MinecraftServer {
             feedback,
             rule_change: None,
         }
+    }
+}
+
+impl MinecraftServer {
+    fn command_entities(
+        &mut self,
+        command: &PreparedCommand,
+        argument: &str,
+    ) -> Result<Vec<EntityRef>, ferraloom_brigadier::CommandSyntaxException> {
+        let Some(ArgumentValue::Entity(selector)) = command.argument(argument) else {
+            unreachable!()
+        };
+        let entities = selector.find(&command.source, self, false)?;
+        if entities.is_empty() {
+            return Err(exceptions::error("argument.entity.notfound.entity", &[]));
+        }
+        Ok(entities)
+    }
+    fn teleport_command(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        use ferraloom_game::commands::{
+            source::{EntityAnchor, Rotation},
+            teleport::TeleportPlan,
+        };
+        let targets = if command.argument("targets").is_some() {
+            self.command_entities(command, "targets")?
+        } else {
+            vec![
+                command
+                    .source
+                    .entity
+                    .ok_or_else(|| exceptions::error("permissions.requires.entity", &[]))?,
+            ]
+        };
+        let destination = if command.argument("destination").is_some() {
+            self.command_entities(command, "destination")?
+                .first()
+                .copied()
+        } else {
+            None
+        };
+        let facing_entity = if command.argument("facingEntity").is_some() {
+            self.command_entities(command, "facingEntity")?
+                .first()
+                .copied()
+        } else {
+            None
+        };
+        let facing_location = command
+            .coordinates("facingLocation")
+            .map(|coordinates| coordinates.position(&command.source, None));
+        let mut names = Vec::new();
+        let mut last_position = Vec3::ZERO;
+        for target in &targets {
+            let player = self
+                .player(*target)
+                .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+            let current_position = player.position;
+            let current_rotation = Rotation {
+                pitch: player.pitch,
+                yaw: player.yaw,
+            };
+            names.push(player.display_name());
+            let plan = if let Some(destination) = destination {
+                let destination = self
+                    .player(destination)
+                    .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+                TeleportPlan::to_entity(
+                    destination.position,
+                    Rotation {
+                        pitch: destination.pitch,
+                        yaw: destination.yaw,
+                    },
+                    current_position,
+                    current_rotation,
+                )?
+            } else {
+                TeleportPlan::to_position(
+                    &command.source,
+                    command
+                        .coordinates("location")
+                        .expect("teleport coordinates"),
+                    command.coordinates("rotation"),
+                    current_position,
+                    current_rotation,
+                )?
+            };
+            last_position = plan.position;
+            self.request_area(
+                ChunkPos::containing(BlockPos::new(
+                    plan.position.x.floor() as i32,
+                    plan.position.y.floor() as i32,
+                    plan.position.z.floor() as i32,
+                )),
+                1,
+            )
+            .map_err(|_| exceptions::error("command.failed", &[]))?;
+            let player = self
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(*target)
+                .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+            player.position = plan.position;
+            player.first_good = plan.position;
+            player.last_good = plan.position;
+            player.yaw = plan.rotation.yaw;
+            player.pitch = plan.rotation.pitch;
+            player.velocity = Vec3::new(
+                if plan.relatives & 32 != 0 {
+                    player.known_movement.x
+                } else {
+                    0.
+                },
+                0.,
+                if plan.relatives & 128 != 0 {
+                    player.known_movement.z
+                } else {
+                    0.
+                },
+            );
+            player.on_ground = true;
+            let connection = self.players.iter().copied().find(|id| matches!(self.connections[id].phase, Phase::Play(entity) if entity == *target)).unwrap();
+            let c = self.connections.get_mut(&connection).unwrap();
+            c.teleport_id = if c.teleport_id == i32::MAX - 1 {
+                0
+            } else {
+                c.teleport_id + 1
+            };
+            c.awaiting_teleport = Some((c.teleport_id, plan.position, self.tick));
+            c.push(cb::Packet::PlayerPosition(cb::PlayerPosition {
+                id: VarInt(c.teleport_id),
+                change: plan.change,
+                relatives: plan.relatives,
+            }));
+            let facing = if let Some(entity) = facing_entity {
+                let player = self
+                    .player(entity)
+                    .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+                let eyes = command.string("facingAnchor") == Some("eyes");
+                let position = Vec3::new(
+                    player.position.x,
+                    player.position.y + if eyes { 1.62 } else { 0. },
+                    player.position.z,
+                );
+                Some((
+                    position,
+                    Some(cb::LookAtEntity {
+                        id: VarInt(player.network_id),
+                        anchor: if eyes {
+                            play::EntityAnchor::Eyes
+                        } else {
+                            play::EntityAnchor::Feet
+                        },
+                    }),
+                ))
+            } else {
+                facing_location.map(|position| (position, None))
+            };
+            if let Some((position, entity)) = facing {
+                let facing_source = command
+                    .source
+                    .clone()
+                    .with_entity(*target)
+                    .with_position(plan.position);
+                let rotation = facing_source.facing(position, Some(1.62)).rotation;
+                let player = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(*target)
+                    .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+                player.yaw = rotation.yaw;
+                player.pitch = rotation.pitch;
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .push(cb::Packet::PlayerLookAt(cb::PlayerLookAt {
+                        from_anchor: if command.source.anchor == EntityAnchor::Eyes {
+                            play::EntityAnchor::Eyes
+                        } else {
+                            play::EntityAnchor::Feet
+                        },
+                        x: position.x,
+                        y: position.y,
+                        z: position.z,
+                        entity,
+                    }));
+            }
+        }
+        let single = names.len() == 1;
+        let mut args = vec![if single {
+            builtins::component(names.remove(0))
+        } else {
+            builtins::integer(targets.len() as i32)
+        }];
+        let kind = if let Some(destination) = destination {
+            args.push(builtins::component(
+                self.player(destination)
+                    .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?
+                    .display_name(),
+            ));
+            "entity"
+        } else {
+            args.extend(
+                [last_position.x, last_position.y, last_position.z]
+                    .map(|value| builtins::string(format!("{value:.6}"))),
+            );
+            "location"
+        };
+        Ok(CommandResult::success(
+            targets.len() as i32,
+            Component::translatable(
+                format!(
+                    "commands.teleport.success.{kind}.{}",
+                    if single { "single" } else { "multiple" }
+                ),
+                args,
+            ),
+            true,
+        ))
     }
 }

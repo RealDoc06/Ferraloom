@@ -1858,60 +1858,8 @@ impl MinecraftServer {
                     stack.callback.on_failure();
                 }
             }
-            CommandAction::Teleport { targets, position } => {
-                let targets = self.targets(source, targets.as_deref())?;
-                self.request_area(
-                    ChunkPos::containing(BlockPos::new(
-                        position.x.floor() as i32,
-                        position.y.floor() as i32,
-                        position.z.floor() as i32,
-                    )),
-                    1,
-                )?;
-                for id in targets {
-                    let Phase::Play(entity) = self.connections[&id].phase else {
-                        continue;
-                    };
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
-                        .map_err(game_error)?;
-                    player.position = position;
-                    player.first_good = position;
-                    player.last_good = position;
-                    let (yaw, pitch) = (player.yaw, player.pitch);
-                    teleport(
-                        self.connections.get_mut(&id).unwrap(),
-                        position,
-                        yaw,
-                        pitch,
-                        self.tick,
-                    );
-                }
-                self.feedback(source, "Teleported player");
-            }
         }
         Ok(())
-    }
-    fn targets(
-        &mut self,
-        source: Option<ConnectionId>,
-        selector: Option<&str>,
-    ) -> Result<Vec<ConnectionId>> {
-        self.command_targets(source, selector)
-    }
-    fn feedback(&mut self, source: Option<ConnectionId>, message: &str) {
-        if let Some(source) = source {
-            if let Some(c) = self.connections.get_mut(&source) {
-                c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                    content: Component::literal(message),
-                    overlay: false,
-                })));
-            }
-        } else {
-            println!("{message}");
-        }
     }
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
         self.save_game_rules().await?;
