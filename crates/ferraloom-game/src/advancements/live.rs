@@ -96,10 +96,10 @@ pub(super) fn trigger(
     let player_context = create_context(origin, player);
     let matched = {
         let mut runtime = LiveLootRuntime::new(level, LootRandomSelection::Level);
-        if let Some(handle) = block_entity {
-            if let Err(error) = runtime.bind_block_entity_source(handle) {
-                return criterion_error(runtime.level_mut(), trigger, error);
-            }
+        if let Some(handle) = block_entity
+            && let Err(error) = runtime.bind_block_entity_source(handle)
+        {
+            return criterion_error(runtime.level_mut(), trigger, error);
         }
         let mut context = MatchContext::live(&resources.loot, &mut runtime, origin);
         PlayerAdvancements::match_captured_listeners(
