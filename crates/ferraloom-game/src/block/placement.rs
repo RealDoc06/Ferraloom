@@ -115,6 +115,22 @@ impl<'stack> UseOnContext<'stack> {
             LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
         }
     }
+    /// Entity#getViewXRot(1) reads pitch. Entity#getViewYRot(1) reads yaw,
+    /// while LivingEntity's override reads its canonical head yaw.
+    fn view_rotation(&self, reader: &LevelReaderRef<'_, '_>) -> Result<(f32, f32), LevelError> {
+        let player = self.player.ok_or(LevelError::MissingPlacementPlayer)?;
+        match reader {
+            LevelReaderRef::Server(level) => {
+                let state = level.entity_state(player)?;
+                let entity = state.as_entity();
+                let yaw = state
+                    .as_living()
+                    .map_or(entity.yaw, |living| living.y_head_rot);
+                Ok((entity.pitch, yaw))
+            }
+            LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+        }
+    }
     pub fn horizontal_direction(
         &self,
         reader: &LevelReaderRef<'_, '_>,
@@ -261,8 +277,8 @@ impl<'stack> BlockPlaceContext<'stack> {
         match self.kind {
             PlacementKind::Directional(_) => Ok(Direction::Down),
             PlacementKind::Player => {
-                let player = self.use_on.player_data(reader)?;
-                Ok(Direction::ordered_by_nearest(player.pitch, player.yaw)[0])
+                let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+                Ok(Direction::ordered_by_nearest(pitch, yaw)[0])
             }
         }
     }
@@ -293,8 +309,8 @@ impl<'stack> BlockPlaceContext<'stack> {
                 },
             );
         }
-        let player = self.use_on.player_data(reader)?;
-        let mut directions = Direction::ordered_by_nearest(player.pitch, player.yaw);
+        let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+        let mut directions = Direction::ordered_by_nearest(pitch, yaw);
         if !self.replace_clicked {
             let face = self.clicked_face().opposite();
             let index = directions
