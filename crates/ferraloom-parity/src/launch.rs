@@ -368,7 +368,9 @@ mod tests {
             "random_tick_speed",
             value(),
         ));
-        let check = |message| game_rule_is_installed(message, "minecraft:random_tick_speed", "0");
+        let check = |message: &Component| {
+            game_rule_is_installed(message, "minecraft:random_tick_speed", "0")
+        };
         assert!(check(&native_error));
         assert!(check(&response(
             "commands.gamerule.set",
