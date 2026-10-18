@@ -137,12 +137,12 @@ pub fn use_item_on(
     if stack.is_empty() || player.cooldowns.is_on_cooldown(stack) {
         return Ok(Some(InteractionResult::Pass));
     }
-    let creative = player.game_mode == GameType::Creative;
+    let infinite_materials = player.instabuild();
     let original_count = count(stack);
     let item = stack.0.as_ref().expect("nonempty hand").item;
     let result = item_use_on(item, level)?;
     if let Some(result) = &result {
-        if creative {
+        if infinite_materials {
             let player = level.entity_mut::<ServerPlayer>(context.player)?;
             let mut stack = player.get_item_in_hand(context.hand).clone();
             set_count(&mut stack, original_count);
