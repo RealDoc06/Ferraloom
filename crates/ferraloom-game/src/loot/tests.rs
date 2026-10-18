@@ -696,6 +696,27 @@ fn movement_distance_fluid_and_environment_codecs_match_java() {
             "{record}"
         );
     }
+    for record in vectors["double_matches"].as_array().unwrap() {
+        let bounds = crate::predicates::DoubleBounds {
+            min: record
+                .get("min")
+                .map(|v| v.as_str().unwrap().parse().unwrap()),
+            max: record
+                .get("max")
+                .map(|v| v.as_str().unwrap().parse().unwrap()),
+        };
+        let value = record["value"].as_str().unwrap().parse().unwrap();
+        assert_eq!(
+            bounds.matches(value),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+        assert_eq!(
+            bounds.matches_sqr(value),
+            record["matches_sqr"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
     struct FluidFacts(FluidState);
     impl PredicateContext for FluidFacts {
         fn loaded(&self, _pos: ferraloom_util::BlockPos) -> Result<bool> {

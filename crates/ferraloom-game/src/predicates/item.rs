@@ -291,8 +291,11 @@ fn match_partial(
                         }
                     }
                     Ok(p.id.as_ref().is_none_or(|id| *id == v.modifier.id)
-                        && p.amount.min.is_none_or(|min| v.modifier.amount >= min)
-                        && p.amount.max.is_none_or(|max| v.modifier.amount <= max)
+                        && super::DoubleBounds {
+                            min: p.amount.min,
+                            max: p.amount.max,
+                        }
+                        .matches(v.modifier.amount)
                         && p.operation.is_none_or(|op| op == v.modifier.operation)
                         && p.slot.is_none_or(|slot| slot == v.slot))
                 })?,
