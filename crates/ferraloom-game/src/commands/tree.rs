@@ -53,7 +53,9 @@ pub fn definitions() -> &'static [NodeDefinition] {
         nodes
     })
 }
-pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
+pub fn dispatcher(
+    context: Arc<super::context::CommandBuildContext>,
+) -> CommandDispatcher<CommandSourceStack> {
     let definitions = definitions();
     let mut dispatcher = CommandDispatcher::new();
     dispatcher.set_exception_provider(Arc::new(super::exceptions::BrigadierExceptions));
@@ -64,6 +66,7 @@ pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
         definitions: &[NodeDefinition],
         handles: &mut [Option<NodeId>],
         dispatcher: &mut CommandDispatcher<CommandSourceStack>,
+        context: &Arc<super::context::CommandBuildContext>,
     ) -> NodeId {
         if let Some(id) = handles[index] {
             return id;
@@ -73,6 +76,7 @@ pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
             ArgumentBuilder::argument(
                 &definition.name,
                 MinecraftArgument {
+                    context: context.clone(),
                     wire: wire::from_report(
                         definition.parser.as_ref().unwrap(),
                         &definition.properties,
@@ -101,7 +105,7 @@ pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
             builder = builder.suggests(|_, builder| Ok(builder.build()));
         }
         if let Some(redirect) = definition.redirect {
-            let target = build(redirect, definitions, handles, dispatcher);
+            let target = build(redirect, definitions, handles, dispatcher, context);
             builder = if definition.fork {
                 builder.fork(target, |context| Ok(vec![context.source.clone()]))
             } else {
@@ -113,7 +117,7 @@ pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
         id
     }
     for index in 1..definitions.len() {
-        build(index, definitions, &mut handles, &mut dispatcher);
+        build(index, definitions, &mut handles, &mut dispatcher, &context);
     }
     for (index, definition) in definitions.iter().enumerate() {
         for &child in &definition.children {

@@ -109,12 +109,14 @@ impl Message {
 }
 #[derive(Clone, Debug)]
 pub struct MinecraftArgument {
+    pub context: Arc<crate::commands::context::CommandBuildContext>,
     pub wire: CommandArgument,
     pub examples: Arc<[String]>,
 }
 impl MinecraftArgument {
     pub fn new(wire: CommandArgument) -> Self {
         Self {
+            context: Arc::default(),
             wire,
             examples: Arc::from([]),
         }
@@ -224,9 +226,7 @@ impl MinecraftArgument {
             }
             A::Resource { registry } => {
                 let value = identifier(reader)?;
-                if !ferraloom_data::registry_entries(registry.as_str())
-                    .is_some_and(|entries| entries.contains(&value.as_str()))
-                {
+                if !self.context.contains(registry.as_str(), &value) {
                     return Err(error_at(
                         reader,
                         "argument.resource.not_found",

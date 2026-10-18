@@ -2559,3 +2559,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.framework.message-signing-context | Distinguish missing message arguments from present unsigned player arguments when selecting DisguisedChat or PlayerChat | `MessageArgument#resolveChatMessage; OutgoingChatMessage#create` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |
 
 | commands.execution.queue-order | Execute newly queued commands before siblings; discard returning frames inline and enforce sequence/fork limits | `ExecutionContext; BuildContexts; Frame` | `commands::execution::tests` | - | todo |
+
+| commands.execution.clock-state | Keep world-clock ticks, fractional rate and pause state separate from game time; persist the native world_clocks saved data | `ServerClockManager; ClockState; TimeCommand` | `commands::clocks::tests::fractional_rate_pause_and_saved_state_preserve_clock_values` | - | todo |

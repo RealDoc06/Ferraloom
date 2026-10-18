@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "command_runtime.rs"]
+mod command_runtime;
 use crate::{
     access::AccessLists,
     assets,
@@ -160,6 +162,12 @@ pub struct MinecraftServer {
     level: ServerLevel,
     world: World,
     commands: Commands,
+    game_rules: ferraloom_game::gamerules::GameRules,
+    clocks: ferraloom_game::commands::clocks::ServerClockManager,
+    saving_enabled: bool,
+    idle_timeout: i32,
+    default_game_mode: GameType,
+    command_entity_tags: BTreeMap<String, Vec<EntityType>>,
     connections: BTreeMap<ConnectionId, Connection>,
     players: Vec<ConnectionId>,
     next_entity: u64,
@@ -198,6 +206,17 @@ impl MinecraftServer {
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
         let world = World::open(&options.root, &properties, &resources, &registries)?;
+        let game_rules = command_runtime::load_game_rules(&world)?;
+        let clocks = command_runtime::load_clocks(&world, &resources)?;
+        let command_context = command_runtime::command_build_context(&registries, &resources);
+        let command_entity_tags =
+            ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
+                EntityType::from_name(&id.to_string())
+            })
+            .values
+            .into_iter()
+            .map(|(id, types)| (id.to_string(), types))
+            .collect();
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
         level.game_time = game_time;
@@ -279,13 +298,19 @@ impl MinecraftServer {
                 })?;
         }
         let server = Self {
-            properties,
+            properties: properties.clone(),
             root: options.root,
             registries,
             access,
             level,
             world,
-            commands: Commands::default(),
+            game_rules,
+            clocks,
+            command_entity_tags,
+            saving_enabled: true,
+            idle_timeout: properties.int("player-idle-timeout"),
+            default_game_mode: game_type(properties.get("gamemode")),
+            commands: Commands::new(command_context),
             connections: BTreeMap::new(),
             players: Vec::new(),
             next_entity: 0,
@@ -492,7 +517,11 @@ impl MinecraftServer {
         self.was_paused = paused;
         if !paused {
             self.tick += 1;
-            // Functions and server clocks occupy this serial slot as their ports arrive.
+            // Functions execute before server clocks in this serial slot.
+            self.clocks.tick(
+                self.game_rules
+                    .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
+            );
             if self.tick.is_multiple_of(20) {
                 let packet = self.time_packet();
                 for c in self.connections.values_mut() {
@@ -659,7 +688,7 @@ impl MinecraftServer {
         let access = self.world.access.clone();
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
-        let mode = game_type(self.properties.get("gamemode"));
+        let mode = self.default_game_mode;
         let mut player = ServerPlayer::new(
             profile.id,
             profile.name,
@@ -771,9 +800,15 @@ impl MinecraftServer {
             max_players: VarInt(self.properties.int("max-players")),
             chunk_radius: VarInt(self.properties.int("view-distance").clamp(2, 32)),
             simulation_distance: VarInt(self.properties.int("simulation-distance").clamp(2, 32)),
-            reduced_debug_info: false,
-            show_death_screen: true,
-            do_limited_crafting: false,
+            reduced_debug_info: self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::ReducedDebugInfo),
+            show_death_screen: !self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::ImmediateRespawn),
+            do_limited_crafting: self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
             common_player_spawn_info: CommonPlayerSpawnInfo {
                 dimension_type: DimensionTypeId(
                     self.registries.numeric("dimension_type", "overworld"),
@@ -1115,10 +1150,13 @@ impl MinecraftServer {
                         .map_err(game_error)?
                         .position,
                 );
-                let prepared = self
-                    .commands
-                    .prepare(&p.command, source)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                let prepared = match self.commands.prepare(&p.command, source.clone()) {
+                    Ok(prepared) => prepared,
+                    Err(error) => {
+                        self.command_syntax_failure(Some(connection), &source, &error, &p.command);
+                        return Ok(());
+                    }
+                };
                 if let Some(ferraloom_game::commands::arguments::ArgumentValue::Message(message)) =
                     prepared.argument("message")
                 {
@@ -1430,7 +1468,7 @@ impl MinecraftServer {
                     {
                         teleport(c, position, player.yaw, player.pitch, self.tick);
                     }
-                    let idle = self.properties.int("player-idle-timeout");
+                    let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
                     {
@@ -1630,27 +1668,7 @@ impl MinecraftServer {
         }
     }
     fn time_packet(&self) -> cb::Packet {
-        cb::Packet::SetTime(cb::SetTime {
-            game_time: self.level.game_time,
-            clock_updates: vec![
-                ClockUpdate {
-                    clock: WorldClockId(self.registries.numeric("world_clock", "overworld")),
-                    state: ClockNetworkState {
-                        total_ticks: VarLong(self.level.game_time),
-                        partial_tick: 0.,
-                        rate: 1.,
-                    },
-                },
-                ClockUpdate {
-                    clock: WorldClockId(self.registries.numeric("world_clock", "the_end")),
-                    state: ClockNetworkState {
-                        total_ticks: VarLong(self.level.game_time),
-                        partial_tick: 0.,
-                        rate: 1.,
-                    },
-                },
-            ],
-        })
+        self.clock_packet(None)
     }
     fn refresh_status(&mut self) {
         use rand::{Rng, seq::SliceRandom};
@@ -1715,7 +1733,11 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    async fn execute_command(&mut self, source: Option<ConnectionId>, text: &str) -> Result<()> {
+    async fn execute_command_inner(
+        &mut self,
+        source: Option<ConnectionId>,
+        text: &str,
+    ) -> Result<()> {
         let (permission, position) = if let Some(id) = source {
             let c = self
                 .connections
@@ -1746,9 +1768,16 @@ impl MinecraftServer {
         if let Some(connection) = source {
             let c = &self.connections[&connection];
             if let Phase::Play(entity) = c.phase {
-                stack = stack.with_entity(entity).with_source(
-                    ferraloom_game::commands::source::CommandSource::Player(entity),
-                );
+                let player = self.player(entity)?;
+                stack = stack
+                    .with_entity(entity)
+                    .with_source(ferraloom_game::commands::source::CommandSource::Player(
+                        entity,
+                    ))
+                    .with_rotation(ferraloom_game::commands::source::Rotation {
+                        pitch: player.pitch,
+                        yaw: player.yaw,
+                    });
             }
             if let Some(message) = &c.command_message {
                 stack.signing_context.arguments = Arc::from([(
@@ -1764,28 +1793,63 @@ impl MinecraftServer {
                 )]);
             }
         }
-        let action = self
-            .commands
-            .parse(text, stack)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let action = match self.commands.parse(text, stack.clone()) {
+            Ok(action) => action,
+            Err(error) => {
+                self.command_syntax_failure(source, &stack, &error, text);
+                return Ok(());
+            }
+        };
         match action {
-            CommandAction::Run(command) => bail!(
-                "Command '{}' is registered but pending implementation",
-                command.command
-            ),
+            CommandAction::Run(command) => {
+                if let Err(error) = self.run_builtin(source, *command) {
+                    self.command_failure(
+                        source,
+                        &stack,
+                        ferraloom_game::commands::exceptions::error_component(&error),
+                    );
+                    stack.callback.on_failure();
+                }
+            }
             CommandAction::Stop => {
-                self.feedback(source, "Stopping the server");
+                self.command_success(
+                    source,
+                    &stack,
+                    Component::translatable("commands.stop.stopping", vec![]),
+                    true,
+                );
                 self.stop = true;
+                stack.callback.on_success(1);
             }
             CommandAction::Save { flush } => {
-                self.feedback(source, "Saving the game (this may take a moment!)");
-                self.save_all(flush).await?;
-                self.feedback(source, "Saved the game");
+                self.command_success(
+                    source,
+                    &stack,
+                    Component::translatable("commands.save.saving", vec![]),
+                    false,
+                );
+                if self.save_all(flush).await.is_ok() {
+                    self.command_success(
+                        source,
+                        &stack,
+                        Component::translatable("commands.save.success", vec![]),
+                        true,
+                    );
+                    stack.callback.on_success(1);
+                } else {
+                    self.command_failure(
+                        source,
+                        &stack,
+                        Component::translatable("commands.save.failed", vec![]),
+                    );
+                    stack.callback.on_failure();
+                }
             }
             CommandAction::Say(content) => {
                 self.broadcast_command_chat(source, content, id("say_command"))?;
             }
             CommandAction::Teleport { targets, position } => {
+                let targets = self.targets(source, targets.as_deref())?;
                 self.request_area(
                     ChunkPos::containing(BlockPos::new(
                         position.x.floor() as i32,
@@ -1794,7 +1858,7 @@ impl MinecraftServer {
                     )),
                     1,
                 )?;
-                for id in self.targets(source, targets.as_deref())? {
+                for id in targets {
                     let Phase::Play(entity) = self.connections[&id].phase else {
                         continue;
                     };
@@ -1853,23 +1917,11 @@ impl MinecraftServer {
         Ok(())
     }
     fn targets(
-        &self,
+        &mut self,
         source: Option<ConnectionId>,
         selector: Option<&str>,
     ) -> Result<Vec<ConnectionId>> {
-        match selector {
-            None | Some("@s") => Ok(vec![source.context("This command requires a player")?]),
-            Some("@a") => Ok(self.players.clone()),
-            Some(name) => {
-                let target = self
-                    .players
-                    .iter()
-                    .find(|id| self.connections[id].profile.name == name)
-                    .copied()
-                    .context("No player was found")?;
-                Ok(vec![target])
-            }
-        }
+        self.command_targets(source, selector)
     }
     fn feedback(&mut self, source: Option<ConnectionId>, message: &str) {
         if let Some(source) = source {
@@ -1884,6 +1936,7 @@ impl MinecraftServer {
         }
     }
     async fn save_all(&mut self, flush: bool) -> Result<()> {
+        self.save_game_rules().await?;
         let snapshots = self
             .level
             .chunks

@@ -1,8 +1,12 @@
 //! Vanilla command parsing and synchronous execution support.
 //! Callers enter the server-exclusive lane before selector evaluation or mutation.
 pub mod arguments;
+pub mod builtins;
+pub mod clocks;
+pub mod context;
 pub mod exceptions;
 pub mod execution;
+pub mod feedback;
 pub mod message;
 pub mod permissions;
 pub mod source;
@@ -70,11 +74,16 @@ pub struct Commands {
 impl Default for Commands {
     fn default() -> Self {
         Self {
-            dispatcher: tree::dispatcher(),
+            dispatcher: tree::dispatcher(std::sync::Arc::default()),
         }
     }
 }
 impl Commands {
+    pub fn new(context: context::CommandBuildContext) -> Self {
+        Self {
+            dispatcher: tree::dispatcher(std::sync::Arc::new(context)),
+        }
+    }
     pub fn dispatcher(&self) -> &CommandDispatcher<CommandSourceStack> {
         &self.dispatcher
     }

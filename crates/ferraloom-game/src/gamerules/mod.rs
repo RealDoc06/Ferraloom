@@ -144,10 +144,21 @@ impl SavedDataCodec for GameRuleMap {
             let id = id.to_string_lossy();
             let rule = GameRule::by_id(&id)
                 .ok_or_else(|| Error::Invalid(format!("Unknown game rule: {id}")))?;
-            let value = match (rule.definition().kind, tag) {
-                (RuleType::Boolean { .. }, Tag::Byte(value)) => GameRuleValue::Boolean(*value != 0),
-                (RuleType::Integer { .. }, Tag::Int(value)) => GameRuleValue::Integer(*value),
-                _ => return Err(Error::Invalid(format!("Invalid value for game rule {id}"))),
+            let value = match rule.definition().kind {
+                RuleType::Boolean { .. } => GameRuleValue::Boolean(
+                    tag.as_double().ok_or_else(|| {
+                        Error::Invalid(format!("Invalid value for game rule {id}"))
+                    })? != 0.,
+                ),
+                RuleType::Integer { .. } => GameRuleValue::Integer(match tag {
+                    Tag::Byte(value) => i32::from(*value),
+                    Tag::Short(value) => i32::from(*value),
+                    Tag::Int(value) => *value,
+                    Tag::Long(value) => *value as i32,
+                    Tag::Float(value) => *value as i32,
+                    Tag::Double(value) => *value as i32,
+                    _ => return Err(Error::Invalid(format!("Invalid value for game rule {id}"))),
+                }),
             };
             if !rule.definition().kind.accepts(value) {
                 return Err(Error::Invalid(format!(

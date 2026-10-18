@@ -132,7 +132,7 @@ impl Coordinates {
         let local = !two && reader.can_read() && reader.peek() == 94;
         let mut result = [WorldCoordinate::RELATIVE_ZERO; 3];
         let count = if two { 2 } else { 3 };
-        for i in 0..count {
+        for (i, coordinate) in result.iter_mut().take(count).enumerate() {
             if i > 0 {
                 if !reader.can_read() || reader.peek() != 32 {
                     reader.set_cursor(start);
@@ -140,7 +140,7 @@ impl Coordinates {
                 }
                 reader.skip();
             }
-            result[i] = if local {
+            *coordinate = if local {
                 if !reader.can_read() {
                     return Err(error_at(reader, "argument.pos.missing.double", &[]));
                 }
