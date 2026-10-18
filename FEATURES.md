@@ -37,7 +37,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 61 | 12 | 48 | 1 | 0 |
-| [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 75 | 49 | 26 | 0 | 0 |
+| [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 77 | 46 | 27 | 4 | 0 |
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19382** | **12092** | **4366** | **2924** | **0** |
+| **Total** | **19384** | **12089** | **4367** | **2928** | **0** |
