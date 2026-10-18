@@ -134,7 +134,8 @@ fn player_xp_nbt_preserves_native_unclamped_values_and_metadata_score() {
                 tag.insert("Score", Tag::Int(123));
             }
             "negative" => {
-                tag.insert("XpP", Tag::Float(-0.0));
+                // Vanilla FloatTag.valueOf canonicalizes the fixture's -0F to +0F.
+                tag.insert("XpP", Tag::Float(0.0));
                 tag.insert("XpLevel", Tag::Int(-5));
                 tag.insert("XpTotal", Tag::Int(-9));
                 tag.insert("Score", Tag::Int(-20));
