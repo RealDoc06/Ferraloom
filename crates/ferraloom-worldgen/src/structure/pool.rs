@@ -5,12 +5,8 @@ use super::{
     processor::{StructureProcessor, shuffle},
     template::{LiquidSettings, StructurePlaceSettings, StructureTemplateManager, transform_block},
 };
-use crate::{
-    Error, Identifier,
-    codec::*,
-    feature::{FeatureContext, PlacedFeature},
-    structure::rule::BlockTags,
-};
+use crate::structure::StructurePlacementContext;
+use crate::{Error, Identifier, codec::*, feature::PlacedFeature, structure::rule::BlockTags};
 use ferraloom_data::{Block, datapack::ResourceManager, properties};
 use ferraloom_nbt::CompoundTag;
 use ferraloom_util::{Direction, Mirror, Rotation, random::RandomSource};
@@ -334,7 +330,7 @@ impl StructurePoolElement {
     pub fn place(
         &self,
         templates: &StructureTemplateManager,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         position: [i32; 3],
         reference: [i32; 3],
         rotation: Rotation,
@@ -375,7 +371,7 @@ impl StructurePoolElement {
                 };
                 let origin = context.origin;
                 context.origin = position;
-                let result = feature.place(context, false);
+                let result = feature.place(&mut context.reborrow_feature(), false);
                 context.origin = origin;
                 result
             }

@@ -1,5 +1,7 @@
 use super::{SmallDoorType, StrongholdPiece, StrongholdPieceKind};
-use crate::{Error, feature::FeatureContext, region::WorldGenRegion, structure::BoundingBox};
+use crate::{
+    Error, region::WorldGenRegion, structure::BoundingBox, structure::StructurePlacementContext,
+};
 use ferraloom_data::{
     Block, BlockState,
     properties::{self, East, Facing, Half, North, South, Type, West},
@@ -11,7 +13,7 @@ impl StrongholdPiece {
     /// selection observes live air and consumes RNG before write clipping.
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let brick = Block::STONE_BRICKS.default_state();
@@ -229,7 +231,7 @@ impl StrongholdPiece {
     }
     fn smooth(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         r: [i32; 6],
         skip_air: bool,
@@ -269,7 +271,7 @@ impl StrongholdPiece {
     }
     fn rect(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         r: [i32; 6],
         state: BlockState,
@@ -286,7 +288,7 @@ impl StrongholdPiece {
     }
     fn small_door(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         kind: SmallDoorType,
         [x, y, z]: [i32; 3],
@@ -376,7 +378,7 @@ impl StrongholdPiece {
     }
     fn prison(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         self.smooth(context, bounds, [0, 0, 0, 8, 4, 10], true)?;
@@ -424,7 +426,7 @@ impl StrongholdPiece {
     }
     fn room_crossing(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         style: i32,
     ) -> Result<(), Error> {
@@ -564,7 +566,7 @@ impl StrongholdPiece {
     }
     fn library(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         tall: bool,
     ) -> Result<(), Error> {
@@ -734,7 +736,7 @@ impl StrongholdPiece {
     }
     fn portal_room(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         placed_spawner: bool,
     ) -> Result<(), Error> {
@@ -803,7 +805,7 @@ impl StrongholdPiece {
     }
     fn portal_frames(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         eyes: [bool; 12],
     ) -> Result<(), Error> {
@@ -969,7 +971,7 @@ mod tests {
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],
@@ -1072,7 +1074,7 @@ mod tests {
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             piece
                 .portal_frames(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],

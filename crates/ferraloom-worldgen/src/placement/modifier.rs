@@ -164,12 +164,12 @@ impl PlacementModifier {
         top_feature: Option<&PlacedFeature>,
         p: [i32; 3],
     ) -> Result<Vec<[i32; 3]>, Error> {
-        let region = &*context.region;
-        let random = &mut *context.random;
         let generator = context.generator;
         let mut result = Vec::new();
         match self {
-            Self::Count(count) => result.resize(count.sample(random).max(0) as usize, p),
+            Self::Count(count) => {
+                result.resize(count.sample(&mut context.random()?).max(0) as usize, p)
+            }
             Self::NoiseBasedCount {
                 ratio,
                 factor,
@@ -199,61 +199,71 @@ impl PlacementModifier {
                 result.resize((*count).max(0) as usize, p);
             }
             Self::BlockPredicateFilter(predicate) => {
-                if predicate.test(region, p, generator)? {
+                if predicate.test(&context.level, p, generator)? {
                     result.push(p);
                 }
             }
             Self::RarityFilter(chance) => {
-                if random.next_float() < 1.0 / *chance as f32 {
+                if context.random()?.next_float() < 1.0 / *chance as f32 {
                     result.push(p);
                 }
             }
             Self::RandomChance(chance) => {
-                if random.next_float() < *chance {
+                if context.random()?.next_float() < *chance {
                     result.push(p);
                 }
             }
             Self::SurfaceRelativeThreshold { map, min, max } => {
-                let y = i64::from(region.height_at(*map, p[0], p[2])?);
+                let y = i64::from(context.level.height_at(*map, p[0], p[2])?);
                 if y + i64::from(*min) <= i64::from(p[1]) && i64::from(p[1]) <= y + i64::from(*max)
                 {
                     result.push(p);
                 }
             }
             Self::SurfaceWaterDepth(depth) => {
-                if region.height_at(Heightmap::WorldSurface, p[0], p[2])?
-                    - region.height_at(Heightmap::OceanFloor, p[0], p[2])?
+                if context
+                    .level
+                    .height_at(Heightmap::WorldSurface, p[0], p[2])?
+                    - context.level.height_at(Heightmap::OceanFloor, p[0], p[2])?
                     <= *depth
                 {
                     result.push(p);
                 }
             }
             Self::Heightmap(map) => {
-                let y = region.height_at(*map, p[0], p[2])?;
-                if y > region.min_y() {
+                let y = context.level.height_at(*map, p[0], p[2])?;
+                if y > context.level.min_y() {
                     result.push([p[0], y, p[2]]);
                 }
             }
             Self::HeightRange(height) => {
-                let context = WorldGenerationContext::new(
+                let height_context = WorldGenerationContext::new(
                     generator.min_y(),
                     generator.gen_depth(),
-                    region.min_y(),
-                    region.height(),
+                    context.level.min_y(),
+                    context.level.height(),
                     generator.sea_level(),
                 );
-                result.push([p[0], height.sample(random, context), p[2]]);
+                result.push([
+                    p[0],
+                    height.sample(&mut context.random()?, height_context),
+                    p[2],
+                ]);
             }
             Self::InSquare => result.push(offset(
                 p,
-                [random.next_int_bound(16), 0, random.next_int_bound(16)],
+                [
+                    context.random()?.next_int_bound(16),
+                    0,
+                    context.random()?.next_int_bound(16),
+                ],
             )),
             Self::Offset(delta) => result.push(offset(
                 p,
                 [
-                    delta[0].sample(random),
-                    delta[1].sample(random),
-                    delta[2].sample(random),
+                    delta[0].sample(&mut context.random()?),
+                    delta[1].sample(&mut context.random()?),
+                    delta[2].sample(&mut context.random()?),
                 ],
             )),
             Self::Fixed(positions) => result.extend(
@@ -263,7 +273,7 @@ impl PlacementModifier {
                     .filter(|pos| pos[0] >> 4 == p[0] >> 4 && pos[2] >> 4 == p[2] >> 4),
             ),
             Self::RandomlySelected(placements) => {
-                let index = random.next_int_bound(placements.len() as i32) as usize;
+                let index = context.random()?.next_int_bound(placements.len() as i32) as usize;
                 return placements[index].modify(context, registry, top_feature, p);
             }
             Self::Biome => {
@@ -274,10 +284,11 @@ impl PlacementModifier {
                     .as_ref()
                     .ok_or_else(|| Error("biome check on an unregistered feature".into()))?;
                 let quart = crate::biome_manager::zoom_quart(
-                    crate::biome_manager::obfuscate_seed(region.seed),
+                    crate::biome_manager::obfuscate_seed(context.level.seed()),
                     p,
                 );
-                let biome = &generator.data().biome_names[region.noise_biome(quart)?.0 as usize];
+                let biome =
+                    &generator.data().biome_names[context.level.noise_biome(quart)?.0 as usize];
                 let steps = registry
                     .biome_features
                     .get(biome)
@@ -293,23 +304,25 @@ impl PlacementModifier {
                 steps,
             } => {
                 let mut p = p;
-                if !allowed.test(region, p, generator)? {
+                if !allowed.test(&context.level, p, generator)? {
                     return Ok(result);
                 }
                 for _ in 0..*steps {
-                    if target.test(region, p, generator)? {
+                    if target.test(&context.level, p, generator)? {
                         result.push(p);
                         return Ok(result);
                     }
                     p = move_direction(p, *direction);
-                    if p[1] < region.min_y() || p[1] >= region.min_y() + region.height() {
+                    if p[1] < context.level.min_y()
+                        || p[1] >= context.level.min_y() + context.level.height()
+                    {
                         return Ok(result);
                     }
-                    if !allowed.test(region, p, generator)? {
+                    if !allowed.test(&context.level, p, generator)? {
                         break;
                     }
                 }
-                if target.test(region, p, generator)? {
+                if target.test(&context.level, p, generator)? {
                     result.push(p);
                 }
             }
@@ -319,9 +332,9 @@ impl PlacementModifier {
                 edges,
                 interior,
             } => {
-                let height = y.sample(random);
-                let width = xz.sample(random);
-                let length = xz.sample(random);
+                let height = y.sample(&mut context.random()?);
+                let width = xz.sample(&mut context.random()?);
+                let length = xz.sample(&mut context.random()?);
                 for x in 0..=width {
                     for y in 0..=height {
                         for z in 0..=length {
@@ -345,14 +358,14 @@ impl PlacementModifier {
                     let mut found = false;
                     let mut i = 0;
                     // Vanilla re-samples the provider for every loop condition.
-                    while i < count.sample(random) {
-                        let x = p[0].wrapping_add(random.next_int_bound(16));
-                        let z = p[2].wrapping_add(random.next_int_bound(16));
-                        let start = region.height_at(Heightmap::MotionBlocking, x, z)?;
-                        let mut current = region.block([x, start, z])?;
+                    while i < count.sample(&mut context.random()?) {
+                        let x = p[0].wrapping_add(context.random()?.next_int_bound(16));
+                        let z = p[2].wrapping_add(context.random()?.next_int_bound(16));
+                        let start = context.level.height_at(Heightmap::MotionBlocking, x, z)?;
+                        let mut current = context.level.block([x, start, z])?;
                         let mut current_layer = 0;
-                        for y in (region.min_y() + 1..=start).rev() {
-                            let below = region.block([x, y - 1, z])?;
+                        for y in (context.level.min_y() + 1..=start).rev() {
+                            let below = context.level.block([x, y - 1, z])?;
                             let empty =
                                 |s| is_air(s) || matches!(s.block(), Block::WATER | Block::LAVA);
                             if !empty(below) && empty(current) && below.block() != Block::BEDROCK {
