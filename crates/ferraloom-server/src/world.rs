@@ -686,14 +686,25 @@ impl World {
                     .div_euclid(1_000_000) as i64,
             ),
         );
-        let mut spawn = CompoundTag::new();
-        spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        let mut spawn = self
+            .level_data
+            .data
+            .get_compound("spawn")
+            .cloned()
+            .unwrap_or_default();
+        if !spawn.contains_key("dimension") {
+            spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        }
         spawn.insert(
             "pos",
             Tag::IntArray(vec![self.spawn.x, self.spawn.y, self.spawn.z]),
         );
-        spawn.insert("yaw", Tag::Float(0.));
-        spawn.insert("pitch", Tag::Float(0.));
+        if !spawn.contains_key("yaw") {
+            spawn.insert("yaw", Tag::Float(0.));
+        }
+        if !spawn.contains_key("pitch") {
+            spawn.insert("pitch", Tag::Float(0.));
+        }
         self.level_data.data.insert("spawn", Tag::Compound(spawn));
         let access = self.access.clone();
         let level = self.level_data.clone();

@@ -277,7 +277,11 @@ impl<S: 'static> CommandDispatcher<S> {
                 }
             }
             NodeKind::Argument => {
-                let value = node.argument.as_ref().unwrap().parse(reader)?;
+                let value = node
+                    .argument
+                    .as_ref()
+                    .unwrap()
+                    .parse_with_source(reader, &*context.source)?;
                 context.arguments.insert(
                     node.name.clone(),
                     ParsedArgument {

@@ -8,6 +8,14 @@ use std::{any::Any, sync::Arc};
 pub trait ArgumentType: Send + Sync + 'static {
     type Value: Any + Send + Sync;
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Value, CommandSyntaxException>;
+    /// Port of ArgumentType#parse(StringReader, S); source-independent types keep their parser.
+    fn parse_with_source<S: 'static>(
+        &self,
+        reader: &mut StringReader,
+        _source: &S,
+    ) -> Result<Self::Value, CommandSyntaxException> {
+        self.parse(reader)
+    }
     fn examples(&self) -> Vec<String> {
         Vec::new()
     }
@@ -25,6 +33,11 @@ pub(crate) trait ErasedArgumentType<S>: Send + Sync {
         &self,
         reader: &mut StringReader,
     ) -> Result<Arc<dyn Any + Send + Sync>, CommandSyntaxException>;
+    fn parse_with_source(
+        &self,
+        reader: &mut StringReader,
+        source: &S,
+    ) -> Result<Arc<dyn Any + Send + Sync>, CommandSyntaxException>;
     fn examples(&self) -> Vec<String>;
     fn list_suggestions(
         &self,
@@ -33,12 +46,21 @@ pub(crate) trait ErasedArgumentType<S>: Send + Sync {
     ) -> Result<Suggestions, CommandSyntaxException>;
     fn as_any(&self) -> &dyn Any;
 }
-impl<S, A: ArgumentType> ErasedArgumentType<S> for A {
+impl<S: 'static, A: ArgumentType> ErasedArgumentType<S> for A {
     fn parse(
         &self,
         reader: &mut StringReader,
     ) -> Result<Arc<dyn Any + Send + Sync>, CommandSyntaxException> {
         Ok(Arc::new(ArgumentType::parse(self, reader)?))
+    }
+    fn parse_with_source(
+        &self,
+        reader: &mut StringReader,
+        source: &S,
+    ) -> Result<Arc<dyn Any + Send + Sync>, CommandSyntaxException> {
+        Ok(Arc::new(ArgumentType::parse_with_source(
+            self, reader, source,
+        )?))
     }
     fn examples(&self) -> Vec<String> {
         ArgumentType::examples(self)
