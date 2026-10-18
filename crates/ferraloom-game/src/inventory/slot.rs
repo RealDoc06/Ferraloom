@@ -3,7 +3,7 @@ use ferraloom_data::Item;
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent, EquipmentSlot};
 
 /// Stable references into canonical storage. External containers are borrowed per operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ContainerId {
     Player,
     Local(usize),

@@ -37,4 +37,22 @@ pub fn generate(out: &mut String, report: &Value, blocks: usize, items: usize) {
         writeln!(out, "static {table}: [bool; {items}] = {values:?};").unwrap();
         writeln!(out, "impl Item {{ /// Native item-class predicate used by SignBlock#useItemOn.\npub const fn {method}(self) -> bool {{ {table}[self.protocol_id() as usize] }} }}").unwrap();
     }
+    for (key, method) in [
+        (
+            "stacked_on_other_override_items",
+            "overrides_stacked_on_other",
+        ),
+        (
+            "other_stacked_on_me_override_items",
+            "overrides_other_stacked_on_me",
+        ),
+    ] {
+        let mut values = vec![false; items];
+        for id in report[key].as_array().expect("inventory click method ids") {
+            values[id.as_u64().expect("registry id") as usize] = true;
+        }
+        let table = key.to_uppercase();
+        writeln!(out, "static {table}: [bool; {items}] = {values:?};").unwrap();
+        writeln!(out, "impl Item {{ /// Native virtual ownership used by AbstractContainerMenu#tryItemClickBehaviourOverride.\npub const fn {method}(self) -> bool {{ {table}[self.protocol_id() as usize] }} }}").unwrap();
+    }
 }

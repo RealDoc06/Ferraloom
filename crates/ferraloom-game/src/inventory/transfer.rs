@@ -336,20 +336,20 @@ impl MenuTransferContext for PureMenuTransfer<'_, '_, '_> {
     }
 }
 
-struct LiveMenuTransfer<'a> {
-    operation: StackOperation<'a>,
-    player: crate::entity::EntityRef,
-    menu: MenuRef,
+pub(super) struct LiveMenuTransfer<'a> {
+    pub operation: StackOperation<'a>,
+    pub player: crate::entity::EntityRef,
+    pub menu: MenuRef,
 }
 impl LiveMenuTransfer<'_> {
-    fn context(&mut self) -> LiveMenuContext<'_> {
+    pub(super) fn context(&mut self) -> LiveMenuContext<'_> {
         LiveMenuContext {
             level: self.operation.level,
             player: self.player,
             menu: self.menu,
         }
     }
-    fn slot(&self, index: usize) -> Result<Slot> {
+    pub(super) fn slot(&self, index: usize) -> Result<Slot> {
         self.operation
             .level
             .entity::<crate::entity::player::ServerPlayer>(self.player)?
@@ -360,7 +360,10 @@ impl LiveMenuTransfer<'_> {
             .cloned()
             .ok_or(MenuError::InvalidSlot(index as i32))
     }
-    fn set_by_player_value(&mut self, index: usize, value: StackValue) -> Result<()> {
+    pub(super) fn validate_storage_mutation(
+        &mut self,
+        index: usize,
+    ) -> Result<(Slot, ContainerSlot)> {
         let slot = self.slot(index)?;
         let address = self.context().slot_address(index)?;
         if matches!(slot.kind, SlotKind::Armor(_) | SlotKind::MountEquipment(_))
@@ -393,7 +396,20 @@ impl LiveMenuTransfer<'_> {
                 return Err(MenuError::Unsupported("live recipe menu slotsChanged"));
             }
         }
-        self.operation.pin(address)?;
+        Ok((slot, address))
+    }
+    pub(super) fn set_by_player_value(
+        &mut self,
+        index: usize,
+        value: StackValue,
+        previous: Option<StackRef>,
+    ) -> Result<()> {
+        let (_, address) = self.validate_storage_mutation(index)?;
+        if let Some(previous) = previous {
+            self.operation.pin_existing(previous)?;
+        } else {
+            self.operation.pin(address)?;
+        }
         match address.container {
             ContainerHandle::BlockEntity(handle) => {
                 crate::block::containers::access::set_item_value(
@@ -482,7 +498,7 @@ impl MenuTransferContext for LiveMenuTransfer<'_> {
         stack: ItemStack,
         _: &mut dyn MenuHooks,
     ) -> Result<()> {
-        self.set_by_player_value(index, StackValue::New(stack))
+        self.set_by_player_value(index, StackValue::New(stack), None)
     }
     fn reassign_by_player(
         &mut self,
@@ -490,7 +506,7 @@ impl MenuTransferContext for LiveMenuTransfer<'_> {
         stack: StackRef,
         _: &mut dyn MenuHooks,
     ) -> Result<()> {
-        self.set_by_player_value(index, StackValue::Existing(stack))
+        self.set_by_player_value(index, StackValue::Existing(stack), None)
     }
     fn slot_changed(&mut self, index: usize) -> Result<()> {
         let mut context = self.context();

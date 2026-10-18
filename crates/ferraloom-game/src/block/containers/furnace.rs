@@ -12,7 +12,55 @@ use ferraloom_protocol::{
     Identifier,
     component::{ComponentTypeId, DataComponentMap},
 };
-use std::collections::BTreeMap;
+
+/// Recipe keys are interned identities in vanilla's Reference2IntOpenHashMap;
+/// deterministic insertion order is the accepted identity-hash variation.
+#[derive(Clone, Debug, Default)]
+pub struct RecipesUsed(Vec<(Identifier, i32)>);
+impl RecipesUsed {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn get(&self, key: &Identifier) -> Option<&i32> {
+        self.0.iter().find(|(id, _)| id == key).map(|(_, n)| n)
+    }
+    pub fn insert(&mut self, key: Identifier, count: i32) -> Option<i32> {
+        if let Some((_, current)) = self.0.iter_mut().find(|(id, _)| id == &key) {
+            return Some(std::mem::replace(current, count));
+        }
+        self.0.push((key, count));
+        None
+    }
+    /// Port of Reference2IntMap#addTo; changing a count keeps its key's place.
+    pub fn record(&mut self, key: Identifier) {
+        if let Some((_, current)) = self.0.iter_mut().find(|(id, _)| id == &key) {
+            *current = current.wrapping_add(1);
+        } else {
+            self.0.push((key, 1));
+        }
+    }
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&Identifier, &i32)> + ExactSizeIterator {
+        self.0.iter().map(|(id, count)| (id, count))
+    }
+    pub fn values(&self) -> impl Iterator<Item = &i32> {
+        self.0.iter().map(|(_, count)| count)
+    }
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+impl FromIterator<(Identifier, i32)> for RecipesUsed {
+    fn from_iter<T: IntoIterator<Item = (Identifier, i32)>>(iter: T) -> Self {
+        let mut result = Self::default();
+        for (id, count) in iter {
+            result.insert(id, count);
+        }
+        result
+    }
+}
 
 /// Port of AbstractFurnaceBlockEntity#setItem, including input-change reset.
 pub fn set_item(
@@ -76,7 +124,7 @@ pub struct AbstractFurnaceBlockEntity {
     pub cooking_timer: i32,
     pub cooking_total_time: i32,
     pub speed_multiplier: f32,
-    pub recipes_used: BTreeMap<Identifier, i32>,
+    pub recipes_used: RecipesUsed,
     pub last_recipe: Option<ferraloom_data::datapack::Identifier>,
 }
 impl AbstractFurnaceBlockEntity {
@@ -88,7 +136,7 @@ impl AbstractFurnaceBlockEntity {
             cooking_timer: 0,
             cooking_total_time: 0,
             speed_multiplier: 1.0,
-            recipes_used: BTreeMap::new(),
+            recipes_used: RecipesUsed::default(),
             last_recipe: None,
         }
     }
@@ -168,7 +216,7 @@ impl BlockEntity for FurnaceBehavior {
         }
         tag.insert("speed_multiplier", Tag::Float(entity.speed_multiplier));
         let mut used = CompoundTag::new();
-        for (key, value) in &entity.recipes_used {
+        for (key, value) in entity.recipes_used.iter() {
             used.insert(key.as_str(), Tag::Int(*value));
         }
         tag.insert("RecipesUsed", Tag::Compound(used));

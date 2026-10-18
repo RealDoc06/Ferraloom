@@ -376,6 +376,16 @@ impl AbstractContainerMenu {
         index: usize,
         hooks: &mut dyn MenuHooks,
     ) -> Result<ItemStack> {
+        if matches!(
+            self.kind,
+            MenuKind::Chest { .. } | MenuKind::Hopper | MenuKind::ShulkerBox | MenuKind::Dispenser
+        ) {
+            return quick_move_container_menu_item(
+                &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+                index,
+                hooks,
+            );
+        }
         let mut stack = self.get_item(ctx, index);
         if stack.is_empty() {
             return Ok(ItemStack::default());
@@ -394,14 +404,13 @@ impl AbstractContainerMenu {
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
-            MenuKind::Chest { rows } => {
-                self.move_between(ctx, &mut stack, index, usize::from(rows) * 9, slots, hooks)?
+            MenuKind::Crafter => self.move_between(ctx, &mut stack, index, 9, 45, hooks)?,
+            MenuKind::Chest { .. }
+            | MenuKind::Hopper
+            | MenuKind::ShulkerBox
+            | MenuKind::Dispenser => {
+                unreachable!("simple containers use the shared retained quick-move kernel")
             }
-            MenuKind::Dispenser | MenuKind::Crafter => {
-                self.move_between(ctx, &mut stack, index, 9, 45, hooks)?
-            }
-            MenuKind::ShulkerBox => self.move_between(ctx, &mut stack, index, 27, slots, hooks)?,
-            MenuKind::Hopper => self.move_between(ctx, &mut stack, index, 5, slots, hooks)?,
             MenuKind::Inventory => {
                 if index == 0 {
                     self.move_item_stack_to(ctx, &mut stack, 9, 45, true, hooks)?
