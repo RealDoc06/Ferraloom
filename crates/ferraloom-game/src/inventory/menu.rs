@@ -72,6 +72,7 @@ pub struct AbstractContainerMenu {
     quickcraft_slots: Vec<usize>,
     pub(super) last_slots: Vec<Option<ListenerCopyRef>>,
     pub(super) standalone_listener_copies: Option<ListenerCopyArena>,
+    pub(super) player_listener: bool,
     pub(super) last_data: Vec<i32>,
     pub(super) remote_slots: Vec<RemoteSlot>,
     pub(super) remote_carried: RemoteSlot,
@@ -102,6 +103,7 @@ impl AbstractContainerMenu {
             quickcraft_slots: Vec::new(),
             last_slots: Vec::new(),
             standalone_listener_copies: Some(ListenerCopyArena::default()),
+            player_listener: false,
             last_data: Vec::new(),
             remote_slots: Vec::new(),
             remote_carried: RemoteSlot::Placeholder,
@@ -428,7 +430,6 @@ impl AbstractContainerMenu {
             &mut super::transfer::PureMenuTransfer {
                 menu: self,
                 context: ctx,
-                copies: None,
                 source: stack,
             },
             super::transfer::PureStackRef::Source,
