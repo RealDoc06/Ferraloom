@@ -62,11 +62,11 @@ fn matches(a: &ItemStack, b: &ItemStack) -> bool {
     (a.is_empty() && b.is_empty()) || (count(a) == count(b) && is_same_item_same_components(a, b))
 }
 
-#[cfg(test)]
-mod tests;
-
 impl From<crate::level::LevelError> for MenuError {
     fn from(error: crate::level::LevelError) -> Self {
         Self::Level(error)
     }
 }
+
+#[cfg(test)]
+mod tests;
