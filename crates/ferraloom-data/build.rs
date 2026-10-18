@@ -1,6 +1,8 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
 #[path = "build/block_methods.rs"]
 mod block_methods;
+#[path = "build/environment_attributes.rs"]
+mod environment_attributes;
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -949,6 +951,11 @@ fn main() {
             .as_object()
             .unwrap()
             .len(),
+    );
+    environment_attributes::generate(
+        &mut out,
+        &load(root, "environment_attributes"),
+        &registries_report["minecraft:environment_attribute"],
     );
     entities(&mut out, &entity_report, &registries_report);
     attribute_properties(&mut out, &attribute_report, &registries_report);

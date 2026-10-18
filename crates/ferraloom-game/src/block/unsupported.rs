@@ -51,6 +51,7 @@ pub enum BlockMethod {
     IsCollisionShapeFullBlock,
     CloneItemStack,
     CanBeReplaced,
+    GetStateForPlacement,
     Signal,
     DirectSignal,
     IsSignalSource,
@@ -86,6 +87,7 @@ impl BlockMethod {
             Self::TriggerEvent => Vanilla::TriggerEvent,
             Self::CloneItemStack => Vanilla::GetCloneItemStack,
             Self::CanBeReplaced => Vanilla::CanBeReplaced,
+            Self::GetStateForPlacement => Vanilla::GetStateForPlacement,
             Self::Signal => Vanilla::GetSignal,
             Self::DirectSignal => Vanilla::GetDirectSignal,
             Self::IsSignalSource => Vanilla::IsSignalSource,
@@ -116,6 +118,7 @@ impl BlockMethod {
                 | Self::TriggerEvent
                 | Self::IsCollisionShapeFullBlock
                 | Self::CloneItemStack
+                | Self::GetStateForPlacement
                 | Self::CanBeReplaced
                 | Self::Signal
                 | Self::DirectSignal
@@ -158,6 +161,7 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
             Self::CloneItemStack => "getCloneItemStack",
             Self::CanBeReplaced => "canBeReplaced(BlockPlaceContext)",
+            Self::GetStateForPlacement => "getStateForPlacement",
             Self::Signal => "getSignal",
             Self::DirectSignal => "getDirectSignal",
             Self::IsSignalSource => "isSignalSource",

@@ -679,6 +679,7 @@ impl MinecraftServer {
             self.apply_level_effects()?;
             self.world
                 .tick_entity_management(&mut self.level.level, &self.properties)?;
+            self.level.level.collect_detached_block_entities();
             if self.tick.is_multiple_of(1200) {
                 eprintln!(
                     "Live level: unported={:?}, pending={:?}, precipitation={}",
