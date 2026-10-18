@@ -740,3 +740,59 @@ fn vanilla_recipe_book_placement_inventory_and_grid() {
         assert_eq!(state.grid, parse("after_grid"), "{id} grid");
     }
 }
+
+#[test]
+fn manager_preserves_resource_filename_order_and_hint_precedence() {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    let oracle = oracle();
+    let mut pack = Pack::new("recipe order");
+    for file in oracle["resource_order"].as_array().unwrap().iter().rev() {
+        let file = file.as_str().unwrap();
+        pack.insert(
+            file.parse().unwrap(),
+            serde_json::to_vec(
+                &json!({"type":"crafting_shapeless","ingredients":["stone"],"result":"diamond"}),
+            )
+            .unwrap(),
+        );
+    }
+    let manager = RecipeManager::load(&ResourceManager::new(vec![pack]), &tags()).unwrap();
+    assert_eq!(
+        manager
+            .recipes()
+            .iter()
+            .map(|recipe| format!("recipe/{}.json", recipe.id.path()))
+            .collect::<Vec<_>>(),
+        oracle["resource_order"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|file| file.as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+    let input = CraftingInput::of(1, 1, vec![stack(Item::STONE, 1)]).unwrap();
+    assert_eq!(
+        manager
+            .get_crafting_recipe(&input, &())
+            .unwrap()
+            .unwrap()
+            .id
+            .path(),
+        "a-b"
+    );
+    let hint = "a".parse().unwrap();
+    assert_eq!(
+        manager
+            .get_recipe_for(
+                RecipeType::Crafting,
+                RecipeInput::Crafting(&input),
+                &(),
+                Some(&hint)
+            )
+            .unwrap()
+            .unwrap()
+            .id
+            .path(),
+        "a"
+    );
+}

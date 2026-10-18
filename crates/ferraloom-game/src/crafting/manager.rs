@@ -37,9 +37,15 @@ impl RecipeManager {
     /// Port of ResourceManagerRegistryLoadTask: sorted resource registration, not
     /// hash traversal. Invalid recipe registry entries fail reload atomically.
     pub fn load(resources: &ResourceManager, tags: &TagSet<Item>) -> Result<Self> {
+        let mut entries: Vec<_> = resources.registry("recipe").into_iter().collect();
+        // Vanilla sorts resource filenames before stripping the directory and
+        // extension. For example a-b.json precedes a.json, although id a < a-b.
+        entries.sort_by_cached_key(|(id, _)| {
+            id.with_path(format!("recipe/{}.json", id.path()))
+                .expect("validated recipe resource path")
+        });
         Self::new(
-            resources
-                .registry("recipe")
+            entries
                 .into_iter()
                 .map(|(id, resource)| {
                     let json = resource.json()?;
