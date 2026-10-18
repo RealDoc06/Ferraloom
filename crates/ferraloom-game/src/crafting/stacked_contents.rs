@@ -92,8 +92,8 @@ impl StackedItemContents {
             .collect();
         let mut counts: Vec<_> = items.iter().map(|(_, n)| *n / amount).collect();
         let mut assignment = vec![None; ingredients.len()];
-        for start in 0..items.len() {
-            while counts[start] > 0 {
+        for (start, count) in counts.iter_mut().enumerate() {
+            while *count > 0 {
                 let mut visited_items = vec![false; items.len()];
                 let mut visited_ingredients = vec![false; ingredients.len()];
                 if !assign(
@@ -106,7 +106,7 @@ impl StackedItemContents {
                 ) {
                     break;
                 }
-                counts[start] -= 1;
+                *count -= 1;
             }
         }
         assignment
