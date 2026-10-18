@@ -212,8 +212,8 @@ impl<'call> PathNavigationReader<'call> {
         }
         self.block_state_for_collisions(pos)
     }
-    /// BlockCollisions reads its captured ChunkAccess directly, where outside-Y
-    /// and EmptyLevelChunk reads return VOID_AIR rather than the region's AIR.
+    /// BlockCollisions reads captured ChunkAccess directly: an EmptyLevelChunk
+    /// returns VOID_AIR even outside Y, while a real chunk returns AIR there.
     pub(crate) fn block_state_for_collisions(
         &self,
         pos: BlockPos,
