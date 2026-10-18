@@ -53,4 +53,4 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
         print('PLANTS_RANDOM_FIXTURE='+base64.b64encode(compressed).decode())
     else:
         (HERE/'random-ticks.tsv.gz').write_bytes(compressed)
-    print(f'{len(output.read_text().splitlines())} real ServerLevel crop random-tick vectors')
+    print(f'{len(output.read_text().splitlines())} real ServerLevel plant vectors')
