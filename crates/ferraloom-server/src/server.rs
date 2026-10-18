@@ -147,8 +147,15 @@ struct Connection {
     average_packets: f32,
     received_position_this_tick: bool,
     received_movement_this_tick: bool,
+    ack_block_changes_up_to: i32,
 }
 impl Connection {
+    /// Port of ServerGamePacketListenerImpl#ackBlockChangesUpTo.
+    fn ack_block_changes_up_to(&mut self, sequence: i32) -> Result<()> {
+        ensure!(sequence >= 0, "Expected packet sequence nr >= 0");
+        self.ack_block_changes_up_to = self.ack_block_changes_up_to.max(sequence);
+        Ok(())
+    }
     fn push(&mut self, packet: impl Into<Outgoing>) {
         self.pending.push(packet.into());
     }
@@ -534,6 +541,7 @@ impl MinecraftServer {
                         average_packets: 0.,
                         received_position_this_tick: false,
                         received_movement_this_tick: false,
+                        ack_block_changes_up_to: -1,
                     };
                     c.push(cfg::ClientboundPacket::CustomPayload(
                         common_cb::CustomPayload {
@@ -2517,6 +2525,12 @@ impl MinecraftServer {
         for (&id, c) in &mut self.connections {
             if c.close {
                 continue;
+            }
+            if c.ack_block_changes_up_to > -1 {
+                c.push(cb::Packet::BlockChangedAck(cb::BlockChangedAck {
+                    sequence: VarInt(c.ack_block_changes_up_to),
+                }));
+                c.ack_block_changes_up_to = -1;
             }
             c.network_ticks += 1;
             if c.network_ticks.is_multiple_of(20) {
