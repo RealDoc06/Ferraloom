@@ -732,3 +732,5 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.items.explicit-launch | Construct positional item drops with explicit velocity without consuming the random-launch RNG draws | `ItemEntity(Level,x,y,z,stack,dx,dy,dz)` | `entity::item::item_entity::ItemEntity::new_at_with_velocity` | - | partial |
 
 | entities.fluid.live-lava-force | Read the live dimension FAST_LAVA attribute for each lava push, preserving required environment failures and ignoring stale compatibility rule inputs | `Entity#updateFluidInteraction; EnvironmentAttributes.FAST_LAVA` | `entity::tests::lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input`; controlled no-timeline entity fixtures | - | partial |
+
+| entities.living.stop-using-item | Keep idle use stack/counter and living-data flag mask 1; clear the flag, conditionally emit item-finish vibration, then reset stack and ticks; start/tick use remain with items | `LivingEntity#stopUsingItem; ItemStack#causeUseVibration` | `entity::living::tests::native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions` (9 real Java cases) | pass | partial |
