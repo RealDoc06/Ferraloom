@@ -6,7 +6,7 @@ use crate::{
 use serde_json::Value;
 use std::io::Read;
 #[test]
-fn registered_jigsaw_and_buried_treasure_generation_matches_vanilla_with_biome_rejection() {
+fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
     let (resources, noise) = generator();
     let flat = FlatLevelSource::new(
         noise.data.clone(),
@@ -65,6 +65,19 @@ fn registered_jigsaw_and_buried_treasure_generation_matches_vanilla_with_biome_r
             start.to_nbt(chunk).unwrap(),
             ferraloom_nbt::parse_compound(case["nbt"].as_str().unwrap()).unwrap(),
             "{case}"
+        );
+        let loaded = StructureStart::from_nbt(
+            &start.to_nbt(chunk).unwrap(),
+            &structures.registry.terrain_settings(),
+            &templates,
+            &resources,
+            &mut |_| Err(Error("no inline feature".into())),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            loaded.to_nbt(chunk).unwrap(),
+            ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap()
         );
         if let Some(bounds) = case.get("bounds") {
             assert_eq!(

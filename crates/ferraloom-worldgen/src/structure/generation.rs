@@ -18,6 +18,7 @@ use std::{collections::BTreeMap, sync::Arc};
 enum StructureGenerator {
     Jigsaw(JigsawStructure),
     BuriedTreasure,
+    Igloo,
     Unsupported(worldgen_structure_type::Id),
 }
 /// Immutable decoded generation definitions, shared by independent chunk jobs.
@@ -60,6 +61,7 @@ impl StructureGenerators {
                         decode_feature,
                     )?),
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
+                    "minecraft:igloo" => StructureGenerator::Igloo,
                     _ => StructureGenerator::Unsupported(definition.kind),
                 };
                 Ok((id, generator))
@@ -131,23 +133,54 @@ impl StructureGenerators {
                         .collect(),
                 )
             }
-            StructureGenerator::BuriedTreasure => {
+            kind @ (StructureGenerator::BuriedTreasure | StructureGenerator::Igloo) => {
                 let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(8));
                 if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
                     return Ok(StructureStart::invalid());
                 }
+                let map = if matches!(kind, StructureGenerator::BuriedTreasure) {
+                    Heightmap::OceanFloorWg
+                } else {
+                    Heightmap::WorldSurfaceWg
+                };
                 let y = generator
-                    .get_base_height(x, z, Heightmap::OceanFloorWg, context.min_y, context.height)?
+                    .get_base_height(x, z, map, context.min_y, context.height)?
                     .wrapping_sub(1);
                 let position = [x, y, z];
-                (
-                    position,
+                if !valid(&(context.biome)(position.map(|v| v >> 2))?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let pieces = if matches!(kind, StructureGenerator::BuriedTreasure) {
                     vec![StructurePiece::BuriedTreasure(BuriedTreasurePiece::new([
-                        context.chunk[0].wrapping_mul(16).wrapping_add(9),
+                        x + 1,
                         90,
-                        context.chunk[1].wrapping_mul(16).wrapping_add(9),
-                    ]))],
-                )
+                        z + 1,
+                    ]))]
+                } else {
+                    use ferraloom_util::{
+                        Rotation,
+                        random::{Algorithm, RandomSource, WorldgenRandom},
+                    };
+                    let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                    random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                    let rotation = Rotation::VALUES[random.next_int_bound(4) as usize];
+                    super::structures::igloo::add_pieces(
+                        context.templates,
+                        [x - 8, 90, z - 8],
+                        rotation,
+                        &mut random,
+                    )?
+                    .into_iter()
+                    .map(StructurePiece::Igloo)
+                    .collect()
+                };
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    pieces,
+                ));
             }
             StructureGenerator::Unsupported(kind) => {
                 return Err(Error(format!(

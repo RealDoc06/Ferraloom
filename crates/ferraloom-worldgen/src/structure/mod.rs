@@ -19,6 +19,7 @@ pub mod rule;
 pub mod start;
 pub mod structures;
 pub mod template;
+pub mod template_piece;
 
 pub use beardifier::{
     Beardifier, JigsawJunction, Projection, Rigid, TerrainAdjustment, TerrainPiece,

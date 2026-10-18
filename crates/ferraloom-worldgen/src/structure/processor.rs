@@ -418,7 +418,7 @@ pub(crate) fn shuffle<T>(values: &mut [T], random: &mut impl RandomSource) {
     }
 }
 /// BlockStateParser#parseForBlock accepts a prefix; trailing command text is ignored.
-fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
+pub(super) fn parse_jigsaw_replacement(text: &str) -> Option<BlockState> {
     let mut reader = ferraloom_brigadier::StringReader::new(text);
     while reader.can_read() && matches!(reader.peek(), 97..=122 | 48..=57 | 95 | 45 | 46 | 58 | 47)
     {

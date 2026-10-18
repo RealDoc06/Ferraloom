@@ -110,6 +110,9 @@ impl StructureStart {
                 continue;
             }
             match piece {
+                StructurePiece::Igloo(piece) => {
+                    piece.post_process(context, templates, tags, bounds, reference)?
+                }
                 StructurePiece::BuriedTreasure(piece) => piece.post_process(context, bounds)?,
                 StructurePiece::Jigsaw(piece) => {
                     piece.element.place(

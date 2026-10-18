@@ -22,18 +22,21 @@ use std::{
 pub enum StructurePiece {
     Jigsaw(PoolElementStructurePiece),
     BuriedTreasure(super::structures::buried_treasure::BuriedTreasurePiece),
+    Igloo(super::structures::igloo::IglooPiece),
 }
 impl StructurePiece {
     pub fn bounds(&self) -> BoundingBox {
         match self {
             Self::Jigsaw(p) => p.bounds,
             Self::BuriedTreasure(p) => p.data.bounds,
+            Self::Igloo(p) => p.template.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
         match self {
             Self::Jigsaw(p) => p.to_nbt(),
             Self::BuriedTreasure(p) => Ok(p.to_nbt()),
+            Self::Igloo(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -182,6 +185,13 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:iglu" => {
+                        if let Ok(piece) =
+                            super::structures::igloo::IglooPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::Igloo(piece));
+                        }
+                    }
                     "minecraft:btp" => {
                         if let Ok(piece) =
                             super::structures::buried_treasure::BuriedTreasurePiece::from_nbt(tag)
