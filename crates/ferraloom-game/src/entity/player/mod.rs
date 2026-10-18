@@ -610,6 +610,14 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<crate::entity::EntityDimensions, LevelError> {
         Ok(Avatar::default_dimensions(pose))
     }
+    fn push(
+        &self,
+        entity: crate::entity::EntityRef,
+        other: crate::entity::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::pushing::living_push(self, entity, other, level)
+    }
     fn is_pushable(
         &self,
         entity: crate::entity::EntityRef,

@@ -77,6 +77,14 @@ impl Entity for CowBehavior {
         let cow = level.entity::<Cow>(entity)?;
         Ok(!cow.as_living().removed && cow.as_living().health() > 0.0)
     }
+    fn push(
+        &self,
+        entity: crate::entity::EntityRef,
+        other: crate::entity::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::pushing::living_push(self, entity, other, level)
+    }
     fn is_pushable(
         &self,
         entity: crate::entity::EntityRef,

@@ -12,6 +12,7 @@ pub mod effects;
 pub mod experience_orb;
 pub mod item;
 pub mod player;
+pub mod pushing;
 mod relationships;
 pub use relationships::PassengerList;
 
@@ -307,6 +308,26 @@ pub trait Entity: Sync {
     }
     fn is_pushable(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
+    }
+    /// Port of Entity#push(Entity); LivingEntity adds its sleeping guard.
+    fn push(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        pushing::push(self, entity, other, level)
+    }
+    fn push_impulse(
+        &self,
+        entity: EntityRef,
+        impulse: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<EntityData>(entity)?
+            .push_impulse(impulse);
+        Ok(())
     }
     fn controlling_passenger(
         &self,

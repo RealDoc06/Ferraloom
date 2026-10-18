@@ -268,6 +268,14 @@ impl EntityData {
     pub fn move_relative(&mut self, speed: f32, input: Vec3) {
         self.velocity = self.velocity + super::movement::input_vector(input, speed, self.yaw);
     }
+    /// Port of Entity#push(double,double,double), including finite checks and
+    /// needsSync even when the accepted impulse is zero.
+    pub fn push_impulse(&mut self, impulse: Vec3) {
+        if impulse.is_finite() {
+            self.velocity = self.velocity + impulse;
+            self.needs_sync = true;
+        }
+    }
     /// Port of Entity#getLookAngle using its current, uninterpolated rotation.
     pub fn look_angle(&self) -> Vec3 {
         super::movement::calculate_view_vector(self.pitch, self.yaw)

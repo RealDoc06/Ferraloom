@@ -133,7 +133,7 @@ pub fn entity_collisions(
     }
     Ok(colliders)
 }
-fn same_vehicle(a: EntityRef, b: EntityRef, level: &Level) -> Result<bool, LevelError> {
+pub(crate) fn same_vehicle(a: EntityRef, b: EntityRef, level: &Level) -> Result<bool, LevelError> {
     fn root(mut id: EntityRef, level: &Level) -> Result<EntityRef, LevelError> {
         while let Some(vehicle) = level.entity::<EntityData>(id)?.vehicle.get() {
             id = vehicle;
