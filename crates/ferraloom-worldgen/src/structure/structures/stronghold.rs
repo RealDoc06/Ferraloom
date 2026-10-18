@@ -386,10 +386,10 @@ impl Builder {
             return None;
         }
         let total = self.weights.iter().map(|w| w.weight).sum();
-        if let Some(kind) = self.imposed.take() {
-            if let Some(piece) = self.factory(kind, random, foot, direction, depth) {
-                return Some(piece);
-            }
+        if let Some(kind) = self.imposed.take()
+            && let Some(piece) = self.factory(kind, random, foot, direction, depth)
+        {
+            return Some(piece);
         }
         for _ in 0..5 {
             let mut choice = random.next_int_bound(total);
