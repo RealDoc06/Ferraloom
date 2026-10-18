@@ -422,9 +422,11 @@ dependencies = [
 name = "ferraloom-worldgen"
 version = "0.1.0"
 dependencies = [
+ "ferraloom-brigadier",
  "ferraloom-chunk",
  "ferraloom-data",
  "ferraloom-nbt",
+ "ferraloom-storage",
  "ferraloom-util",
  "flate2",
  "serde_json",
