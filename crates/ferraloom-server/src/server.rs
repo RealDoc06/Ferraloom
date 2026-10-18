@@ -198,7 +198,7 @@ pub struct MinecraftServer {
     world: World,
     commands: Commands,
     game_rules: ferraloom_game::gamerules::GameRules,
-    scoreboard: ferraloom_game::scoreboard::ServerScoreboard,
+    shared: Option<Box<ferraloom_game::ServerShared>>,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
     saving_enabled: bool,
     idle_timeout: i32,
@@ -307,6 +307,9 @@ impl MinecraftServer {
             "minecraft:overworld",
             world.level_context(&resources)?,
         );
+        level
+            .level
+            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard }));
         level.game_time = game_time;
         initialize_live_level(
             &mut level,
@@ -323,7 +326,6 @@ impl MinecraftServer {
             world.seed,
         );
         game_rules.update_level_rules(level.level.rules_mut());
-        level.level.set_scoreboard(scoreboard.snapshot());
         world.install_live_environment(
             &mut level.level,
             command_runtime::environment_clock_snapshot(&clocks),
@@ -412,6 +414,7 @@ impl MinecraftServer {
                     }
                 })?;
         }
+        let shared = Some(level.level.take_shared().map_err(game_error)?);
         let mut server = Self {
             properties: properties.clone(),
             root: options.root,
@@ -423,7 +426,7 @@ impl MinecraftServer {
             level,
             world,
             game_rules,
-            scoreboard,
+            shared,
             clocks,
             command_entity_tags,
             selector_random: None,
@@ -462,7 +465,10 @@ impl MinecraftServer {
     }
     /// Port of MinecraftServer#runServer's tick-rate deadline and sprint slots.
     async fn run(mut self) -> Result<()> {
-        self.prepare_command_tickets().await?;
+        let lent = self.lend_server_shared();
+        let result = self.prepare_command_tickets().await;
+        self.return_server_shared(lent);
+        result?;
         println!("Ferraloom 26.3 running; single-region mode.");
         let origin = tokio::time::Instant::now();
         let mut next = 0_i64;
@@ -503,6 +509,56 @@ impl MinecraftServer {
             }
         }
         self.stop_server().await
+    }
+    fn shared(&self) -> &ferraloom_game::ServerShared {
+        self.shared.as_deref().unwrap_or_else(|| {
+            self.level
+                .level
+                .shared()
+                .expect("server shared owner is installed for the phase")
+        })
+    }
+    fn shared_mut(&mut self) -> &mut ferraloom_game::ServerShared {
+        match self.shared.as_deref_mut() {
+            Some(shared) => shared,
+            None => self
+                .level
+                .level
+                .shared_mut()
+                .expect("server shared owner is installed for the phase"),
+        }
+    }
+    /// Only outer phase boundaries move ownership. Nested commands keep the installed owner.
+    fn lend_server_shared(&mut self) -> bool {
+        match self.shared.take() {
+            Some(shared) => {
+                self.level.level.install_shared(shared);
+                true
+            }
+            None => {
+                self.level
+                    .level
+                    .shared()
+                    .expect("nested phase requires the installed owner");
+                false
+            }
+        }
+    }
+    fn drain_scoreboard_packets(&mut self) {
+        for packet in self.shared_mut().scoreboard.drain_packets() {
+            self.broadcast(packet);
+        }
+    }
+    fn return_server_shared(&mut self, lent: bool) {
+        self.drain_scoreboard_packets();
+        if lent {
+            self.shared = Some(
+                self.level
+                    .level
+                    .take_shared()
+                    .expect("phase must return its shared owner"),
+            );
+        }
     }
     pub fn average_tick_time_nanos(&self) -> i64 {
         self.aggregated_tick_times_nanos / self.tick.clamp(1, 100) as i64
@@ -556,6 +612,12 @@ impl MinecraftServer {
     }
     /// Port of MinecraftServer#processPacketsAndTick. No IO task applies play state.
     async fn process_packets(&mut self) -> Result<()> {
+        let lent = self.lend_server_shared();
+        let result = self.process_packets_inner().await;
+        self.return_server_shared(lent);
+        result
+    }
+    async fn process_packets_inner(&mut self) -> Result<()> {
         let count = self.ingress.len();
         for _ in 0..count {
             let Ok(event) = self.ingress.try_recv() else {
@@ -710,111 +772,123 @@ impl MinecraftServer {
             self.save_all(false, false).await?;
         }
         self.was_paused = paused;
-        if !paused {
-            self.tick = self.tick.wrapping_add(1);
-            self.tick_rate_manager.tick();
-            // Functions precede the canonical server clocks in this serial slot.
-            if self.tick_rate_manager.runs_normally() {
-                self.clocks.tick(
-                    self.game_rules
-                        .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
-                );
-            }
-            if self.tick.is_multiple_of(20) {
-                let packet = self.time_packet();
-                for c in self.connections.values_mut() {
-                    if matches!(c.phase, Phase::Play(_)) {
-                        c.push(packet.clone());
+        let lent = self.lend_server_shared();
+        let level_result = (|| -> Result<()> {
+            if !paused {
+                self.tick = self.tick.wrapping_add(1);
+                self.tick_rate_manager.tick();
+                // Functions precede the canonical server clocks in this serial slot.
+                if self.tick_rate_manager.runs_normally() {
+                    self.clocks.tick(
+                        self.game_rules
+                            .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
+                    );
+                }
+                if self.tick.is_multiple_of(20) {
+                    let packet = self.time_packet();
+                    for c in self.connections.values_mut() {
+                        if matches!(c.phase, Phase::Play(_)) {
+                            c.push(packet.clone());
+                        }
                     }
                 }
-            }
-            self.level.level.set_handling_tick(true);
-            self.level
-                .level
-                .refresh_environment_attributes(command_runtime::environment_clock_snapshot(
-                    &self.clocks,
-                ))
-                .map_err(game_error)?;
-            if self.tick_rate_manager.runs_normally() {
-                self.level.level.tick_world_border();
-                self.level.level.advance_weather_cycle(true);
-                self.apply_level_effects()?;
-            }
-            // Native sky brightness updates even on frozen ticks, after weather.
-            self.level
-                .level
-                .update_sky_brightness()
-                .map_err(game_error)?;
-            if self.tick_rate_manager.runs_normally() {
-                self.level.game_time = self.level.game_time.wrapping_add(1);
-                self.level.level.set_game_time(self.level.game_time);
-                if !self.level.level.rules().debug {
-                    self.level
-                        .level
-                        .tick_block_phase(self.level.game_time, 65536)
-                        .map_err(game_error)?;
-                    self.level
-                        .level
-                        .tick_fluid_phase(self.level.game_time, 65536)
-                        .map_err(game_error)?;
-                }
-                let holders = &self.level.chunks.holders;
-                let world = &self.world;
+                self.level.level.set_handling_tick(true);
                 self.level
-                    .tickets
-                    .purge_stale_with_readiness(self.tick, |pos| {
-                        holders
-                            .get(&pos.pack())
-                            .is_none_or(|holder| world.chunk_ready_for_saving(holder))
-                    });
-            }
-            self.integrate_jobs()?;
-            self.update_chunk_tickets()?;
-            if !self.level.level.rules().debug {
+                    .level
+                    .refresh_environment_attributes(command_runtime::environment_clock_snapshot(
+                        &self.clocks,
+                    ))
+                    .map_err(game_error)?;
                 if self.tick_rate_manager.runs_normally() {
-                    self.tick_live_chunks()?;
+                    self.level.level.tick_world_border();
+                    self.level.level.advance_weather_cycle(true);
+                    self.apply_level_effects()?;
                 }
-                self.broadcast_block_changes()?;
-            }
-            // ChunkMap tracking precedes block events and entities.
-            self.track_players()?;
-            if self.tick_rate_manager.runs_normally() {
-                self.level.level.run_block_events().map_err(game_error)?;
-            }
-            self.level.level.set_handling_tick(false);
-            let active = self.level.tickets.should_keep_dimension_active();
-            if self
-                .level
-                .level
-                .update_empty_time(active, self.tick_rate_manager.runs_normally())
-            {
+                // Native sky brightness updates even on frozen ticks, after weather.
                 self.level
                     .level
-                    .tick_entities_with_tick_rate(&self.tick_rate_manager)
+                    .update_sky_brightness()
                     .map_err(game_error)?;
-                self.broadcast_container_changes()?;
-                self.level
+                if self.tick_rate_manager.runs_normally() {
+                    self.level.game_time = self.level.game_time.wrapping_add(1);
+                    self.level.level.set_game_time(self.level.game_time);
+                    if !self.level.level.rules().debug {
+                        self.level
+                            .level
+                            .tick_block_phase(self.level.game_time, 65536)
+                            .map_err(game_error)?;
+                        self.level
+                            .level
+                            .tick_fluid_phase(self.level.game_time, 65536)
+                            .map_err(game_error)?;
+                    }
+                    let holders = &self.level.chunks.holders;
+                    let world = &self.world;
+                    self.level
+                        .tickets
+                        .purge_stale_with_readiness(self.tick, |pos| {
+                            holders
+                                .get(&pos.pack())
+                                .is_none_or(|holder| world.chunk_ready_for_saving(holder))
+                        });
+                }
+                self.integrate_jobs()?;
+                self.update_chunk_tickets()?;
+                if !self.level.level.rules().debug {
+                    if self.tick_rate_manager.runs_normally() {
+                        self.tick_live_chunks()?;
+                    }
+                    self.broadcast_block_changes()?;
+                }
+                // ChunkMap tracking precedes block events and entities.
+                self.track_players()?;
+                if self.tick_rate_manager.runs_normally() {
+                    self.level.level.run_block_events().map_err(game_error)?;
+                }
+                self.level.level.set_handling_tick(false);
+                let active = self.level.tickets.should_keep_dimension_active();
+                if self
                     .level
-                    .tick_block_entities(self.tick_rate_manager.runs_normally())
-                    .map_err(game_error)?;
+                    .level
+                    .update_empty_time(active, self.tick_rate_manager.runs_normally())
+                {
+                    self.level
+                        .level
+                        .tick_entities_with_tick_rate(&self.tick_rate_manager)
+                        .map_err(game_error)?;
+                    self.broadcast_container_changes()?;
+                    self.level
+                        .level
+                        .tick_block_entities(self.tick_rate_manager.runs_normally())
+                        .map_err(game_error)?;
+                }
+                self.apply_level_effects()?;
+                self.world
+                    .tick_entity_management(&mut self.level.level, &self.properties)?;
+                self.level.level.collect_detached_block_entities();
+                if self.tick.is_multiple_of(1200) {
+                    eprintln!(
+                        "Live level: unported={:?}, pending={:?}, precipitation={}",
+                        self.level.level.unported_behavior_stats(),
+                        self.pending_level_hooks,
+                        self.level.level.pending_precipitation_calls()
+                    );
+                }
+            } else {
+                self.integrate_jobs()?;
             }
-            self.apply_level_effects()?;
-            self.world
-                .tick_entity_management(&mut self.level.level, &self.properties)?;
-            self.level.level.collect_detached_block_entities();
-            if self.tick.is_multiple_of(1200) {
-                eprintln!(
-                    "Live level: unported={:?}, pending={:?}, precipitation={}",
-                    self.level.level.unported_behavior_stats(),
-                    self.pending_level_hooks,
-                    self.level.level.pending_precipitation_calls()
-                );
-            }
-        } else {
-            self.integrate_jobs()?;
+            Ok(())
+        })();
+        self.return_server_shared(lent);
+        level_result?;
+        let lent = self.lend_server_shared();
+        let connection_result = async {
+            self.tick_connections().await?;
+            self.send_chunks()
         }
-        self.tick_connections().await?;
-        self.send_chunks()?;
+        .await;
+        self.return_server_shared(lent);
+        connection_result?;
         self.flush_outbound();
         self.refresh_status();
         if !paused {
@@ -1477,6 +1551,9 @@ impl MinecraftServer {
             .initial_packets(&self.recipe_synchronization);
         c.push(cb::Packet::RecipeBookSettings(settings));
         c.push(cb::Packet::RecipeBookAdd(recipes));
+        for packet in self.shared().scoreboard.join_packets() {
+            c.push(packet);
+        }
         self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
             content: Component::translatable(
                 "multiplayer.player.joined",
@@ -3255,6 +3332,12 @@ impl MinecraftServer {
     }
 
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
+        let lent = self.lend_server_shared();
+        let result = self.save_all_inner(flush, force).await;
+        self.return_server_shared(lent);
+        result
+    }
+    async fn save_all_inner(&mut self, flush: bool, force: bool) -> Result<()> {
         self.world.finish_generation().await?;
         self.integrate_jobs()?;
 

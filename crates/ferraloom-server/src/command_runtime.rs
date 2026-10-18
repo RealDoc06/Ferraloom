@@ -1,5 +1,7 @@
 //! Exclusive call-site adapters. Game code owns parsing, feedback policy and command behavior.
 use super::*;
+#[path = "scoreboard_commands.rs"]
+mod scoreboard_commands;
 use ferraloom_game::{
     commands::{
         PreparedCommand,
@@ -99,7 +101,7 @@ impl MinecraftServer {
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
         let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
-            self.scoreboard.scoreboard().clone(),
+            self.shared().scoreboard.scoreboard().clone(),
         ));
         async move {
             tokio::task::spawn_blocking(move || {
@@ -251,6 +253,7 @@ impl MinecraftServer {
         let stack = &command.source;
         let result = match command.command.as_str() {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
+            "scoreboard" | "team" | "trigger" => self.scoreboard_command(&command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
             "whitelist" => self.whitelist_command(source, &command)?,
@@ -587,7 +590,9 @@ impl MinecraftServer {
                 );
             }
         }
+        let lent = self.lend_server_shared();
         let result = self.execute_command_inner(source, text).await;
+        self.return_server_shared(lent);
         if let Some(connection) = source
             && let Some(c) = self.connections.get_mut(&connection)
         {

@@ -12,12 +12,15 @@ pub mod message;
 pub mod permissions;
 pub mod placement;
 pub mod reload;
+pub mod scoreboard;
 pub mod source;
 pub mod spawn;
 pub mod suggestions;
+pub mod team;
 pub mod teleport;
 pub mod tick;
 mod tree;
+pub mod trigger;
 pub mod weather;
 use arguments::{ArgumentValue, coordinates::Coordinates};
 use ferraloom_brigadier::{

@@ -15,6 +15,7 @@ pub mod stats;
 pub mod ticks;
 
 pub use block::dispatch::Behaviors;
+pub use scoreboard::ServerShared;
 
 #[cfg(test)]
 mod tests;
