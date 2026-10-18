@@ -19,7 +19,7 @@ use ferraloom_util::{
 use std::{io::Read, sync::LazyLock};
 const POS: BlockPos = BlockPos::new(8, 64, 8);
 const PLAYER: EntityRef = EntityRef(1);
-fn cases(prefix: &str) -> impl Iterator<Item = (&'static str, &'static str)> + use<'_> {
+pub(super) fn cases(prefix: &str) -> impl Iterator<Item = (&'static str, &'static str)> + use<'_> {
     static DATA: LazyLock<String> = LazyLock::new(|| {
         let mut output = String::new();
         flate2::read::GzDecoder::new(
@@ -33,7 +33,7 @@ fn cases(prefix: &str) -> impl Iterator<Item = (&'static str, &'static str)> + u
         .filter_map(|line| line.split_once('\t'))
         .filter(move |(name, _)| name.starts_with(prefix))
 }
-fn level(state: BlockState) -> Level {
+pub(super) fn level(state: BlockState) -> Level {
     static EMPTY: crate::Behaviors = crate::Behaviors::EMPTY;
     let mut level = tests::level_with_behaviors(1, &EMPTY);
     level
@@ -411,5 +411,196 @@ fn redstone_ore_careful_steps_use_results_decay_and_rng_match_native() {
             expected,
             "{name}"
         );
+    }
+}
+
+#[test]
+fn detector_rail_native_lifecycle_ignores_non_minecarts_and_clears_stale_power() {
+    for (name, expected) in cases("detector:") {
+        let args: Vec<_> = name.split(':').skip(1).collect();
+        let original = state(args[0]);
+        let mut level = level(original);
+        for direction in state::HORIZONTAL {
+            level
+                .set_block_state(POS.relative(direction, 1), Block::STONE.default_state())
+                .unwrap();
+        }
+        level.take_effects();
+        match args[1] {
+            "0" => rail::DETECTOR
+                .on_place(original, POS, Block::AIR.default_state(), false, &mut level)
+                .unwrap(),
+            "1" => rail::DETECTOR.tick(original, POS, &mut level).unwrap(),
+            _ => {
+                let actor = crate::entity::item::PrimedTnt::new_at(
+                    &mut level,
+                    Vec3::new(8.5, 64.1, 8.5),
+                    None,
+                )
+                .unwrap();
+                level
+                    .add_entity(PLAYER, EntityState::PrimedTnt(Box::new(actor)))
+                    .unwrap();
+                rail::DETECTOR
+                    .entity_inside(original, POS, PLAYER, &mut level)
+                    .unwrap();
+            }
+        }
+        let effects = level.take_effects();
+        let parts: Vec<_> = expected.split('|').collect();
+        assert_eq!(
+            level.get_block_state(POS).unwrap().id().to_string(),
+            parts[0],
+            "{name}"
+        );
+        let mutations = effects
+            .iter()
+            .filter_map(|effect| match effect {
+                LevelEffect::BlockUpdated { pos, new, .. } => {
+                    Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(
+            mutations,
+            parts[1]
+                .split(';')
+                .filter(|value| !value.is_empty())
+                .map(|value| value.split_once('/').unwrap().0)
+                .collect::<Vec<_>>()
+                .join(";"),
+            "{name}"
+        );
+        assert_eq!(
+            rail::DETECTOR
+                .analog_output_signal(
+                    level.get_block_state(POS).unwrap(),
+                    POS,
+                    Direction::Up,
+                    &mut level
+                )
+                .unwrap()
+                .to_string(),
+            parts[3],
+            "{name}"
+        );
+        assert_eq!(
+            level
+                .has_scheduled_block_tick(POS, Block::DETECTOR_RAIL)
+                .to_string(),
+            parts[4],
+            "{name}"
+        );
+        for direction in Direction::VALUES {
+            assert_eq!(
+                level.get_direct_signal(POS, direction).unwrap(),
+                if level.get_block_state(POS).unwrap().get(p::POWERED).unwrap()
+                    && direction == Direction::Up
+                {
+                    15
+                } else {
+                    0
+                }
+            );
+        }
+    }
+}
+#[test]
+fn dispenser_dropper_hopper_menus_keep_native_open_before_inspection_stat_and_declined_open_stat() {
+    use crate::block::{containers::storage::RandomizableContainerBlockEntity, entity::create};
+    use crate::stats::{Stat, custom};
+    for (name, expected) in cases("container:") {
+        let args: Vec<_> = name.split(':').skip(1).collect();
+        let block = Block::from_protocol_id(args[0].parse().unwrap()).unwrap();
+        let accept = args[1] == "true";
+        let state = block.default_state();
+        let mut level = level(state);
+        player(&mut level);
+        level.set_block_entity(create(POS, state).unwrap()).unwrap();
+        let receiver = level.block_entity_ref(POS).unwrap().unwrap();
+        if !accept {
+            level.entity_mut::<ServerPlayer>(PLAYER).unwrap().game_mode = GameType::Spectator;
+            level
+                .block_entity_mut::<RandomizableContainerBlockEntity>(receiver)
+                .unwrap()
+                .loot_table = Some("minecraft:chests/simple_dungeon".parse().unwrap());
+        }
+        level.take_effects();
+        let result = device::DEVICES
+            .use_without_item(state, POS, &context(Direction::Up), &mut level)
+            .unwrap();
+        assert_eq!(result, InteractionResult::SUCCESS, "{name}");
+        let (kind, stat) = if block == Block::HOPPER {
+            (crate::inventory::MenuKind::Hopper, custom::INSPECT_HOPPER)
+        } else {
+            (
+                crate::inventory::MenuKind::Dispenser,
+                if block == Block::DROPPER {
+                    custom::INSPECT_DROPPER
+                } else {
+                    custom::INSPECT_DISPENSER
+                },
+            )
+        };
+        let actor = level.entity::<ServerPlayer>(PLAYER).unwrap();
+        assert_eq!(
+            actor.stats.get_value(Stat::Custom(stat)),
+            1,
+            "{name} {expected}"
+        );
+        assert_eq!(actor.menus.container_menu.is_some(), accept, "{name}");
+        if let Some(menu) = actor.menus.container_menu {
+            assert_eq!(actor.menus.menu(menu).unwrap().kind, kind, "{name}");
+        }
+        let opened=level.take_effects().into_iter().filter(|effect|matches!(effect,LevelEffect::PlayerPacket{packet,..} if matches!(packet.as_ref(),Packet::OpenScreen(_)))).count();
+        assert_eq!(opened, usize::from(accept), "{name}");
+    }
+}
+
+#[test]
+fn moving_piston_loot_dispatches_moved_state_at_captured_origin() {
+    use crate::{
+        block::{
+            drops::{BlockLootContext, get_drops_from_context},
+            entity::{BlockEntityState, create},
+        },
+        loot::LootParams,
+    };
+    for (name, expected) in cases("moving-drops:") {
+        let args: Vec<_> = name.split(':').skip(1).collect();
+        let moved = state(args[0]);
+        let moving = Block::MOVING_PISTON.default_state();
+        let mut level = level(moving);
+        if args[1] == "true" {
+            let mut entity = create(POS, moving).unwrap();
+            let BlockEntityState::MovingPiston(receiver) = &mut entity else {
+                unreachable!()
+            };
+            receiver.moved_state = moved;
+            level.set_block_entity(entity).unwrap();
+        }
+        let context = BlockLootContext {
+            params: LootParams {
+                origin: Some(Vec3::new(8.5, 64.5, 8.5)),
+                tool: Some(ItemStack::default()),
+                ..LootParams::default()
+            },
+            block_entity: None,
+        };
+        let result = get_drops_from_context(moving, context, &mut level).unwrap();
+        let result = result
+            .iter()
+            .map(|value| {
+                format!(
+                    "{},{}",
+                    value.item().protocol_id(),
+                    crate::entity::player::inventory::count(value)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(result, expected, "{name}");
     }
 }

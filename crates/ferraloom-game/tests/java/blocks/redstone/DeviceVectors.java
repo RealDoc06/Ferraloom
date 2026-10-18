@@ -59,7 +59,7 @@ public final class DeviceVectors extends RedstoneIdentityVectors {
         Actor(Level level){super(level,new com.mojang.authlib.GameProfile(new UUID(1,2),"redstone"));setId(1);setPos(Vec3.atCenterOf(POS));}
         @Override public GameType gameMode(){return GameType.SURVIVAL;}
         @Override public OptionalInt openMenu(net.minecraft.world.MenuProvider provider){
-            calls.add("open:"+provider.getDisplayName().getString());
+            calls.add("open:"+((net.minecraft.network.chat.contents.TranslatableContents)provider.getDisplayName().getContents()).getKey());
             if(!accept)return OptionalInt.empty();
             var menu=provider.createMenu(7,getInventory(),this);
             calls.add("menu:"+(menu==null?-1:BuiltInRegistries.MENU.getId(menu.getType())));
@@ -152,11 +152,75 @@ public final class DeviceVectors extends RedstoneIdentityVectors {
             }
         }
     }
+    void movingDrops(){
+        var moving=Blocks.MOVING_PISTON.defaultBlockState();
+        var doubleSlab=Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE,SlabType.DOUBLE);
+        for(var moved:List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),doubleSlab))for(boolean present:new boolean[]{false,true}){
+            prepare(moving);if(present)getChunkAt(POS).setBlockEntity(MovingPistonBlock.newMovingBlockEntity(POS,moving,moved,Direction.EAST,true,false));
+            var params=new net.minecraft.world.level.storage.loot.LootParams.Builder(this).withParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN,Vec3.atCenterOf(POS)).withParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.TOOL,ItemStack.EMPTY);
+            out("moving-drops:"+Block.getId(moved)+":"+present,String.join(";",moving.getDrops(params).stream().map(RedstoneIdentityVectors::stack).toList()));
+        }
+    }
+    void detectors(){
+        for(var state:Blocks.DETECTOR_RAIL.getStateDefinition().getPossibleStates())for(int operation=0;operation<3;operation++){
+            prepare(state);raw(POS.north(),Blocks.STONE.defaultBlockState());raw(POS.south(),Blocks.STONE.defaultBlockState());raw(POS.east(),Blocks.STONE.defaultBlockState());raw(POS.west(),Blocks.STONE.defaultBlockState());clear();
+            if(operation==0)state.onPlace(this,POS,Blocks.AIR.defaultBlockState(),false);
+            else if(operation==1)state.tick(this,POS,random);
+            else state.entityInside(this,POS,new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,this),InsideBlockEffectApplier.NOOP,true);
+            out("detector:"+Block.getId(state)+":"+operation,Block.getId(getBlockState(POS))+"|"+mutations()+"|"+getBlockState(POS).getAnalogOutputSignal(this,POS,Direction.UP)+"|"+ticks.hasScheduledTick(POS,Blocks.DETECTOR_RAIL));
+        }
+    }
+    void crafterPlacement(){
+        for(int yaw:new int[]{0,90,180,270})for(int pitch:new int[]{-90,-45,0,45,90})for(boolean signal:new boolean[]{false,true}){
+            prepare(Blocks.AIR.defaultBlockState());if(signal)raw(POS.west(),Blocks.REDSTONE_BLOCK.defaultBlockState());
+            var actor=new Actor(this);actor.setYRot(yaw);actor.setYHeadRot(yaw);actor.setXRot(pitch);var stack=new ItemStack(Items.CRAFTER);
+            var context=new net.minecraft.world.item.context.BlockPlaceContext(actor,InteractionHand.MAIN_HAND,stack,hit(Direction.UP));
+            out("crafter-placement:"+yaw+":"+pitch+":"+signal,""+Block.getId(Blocks.CRAFTER.getStateForPlacement(context)));
+        }
+    }
+    void crafterAliases(){
+        for(boolean full:new boolean[]{false,true})for(boolean empty:new boolean[]{false,true}){
+            prepare(Blocks.CRAFTER.defaultBlockState());var entity=(CrafterBlockEntity)getBlockEntity(POS);
+            int slot=full?0:4;entity.setItem(slot,new ItemStack(Items.MILK_BUCKET,1));if(full)entity.setItem(8,new ItemStack(Items.STONE,1));
+            var held=entity.getItem(slot);var input=entity.asCraftInput();
+            entity.setItem(slot,new ItemStack(Items.DIRT,5));if(empty)held.setCount(0);else held.grow(2);
+            var remaining=net.minecraft.world.item.crafting.CraftingRecipe.defaultCraftingReminder(input);
+            out("crafter-alias:"+full+":"+empty,input.width()+","+input.height()+","+input.ingredientCount()+"|"+stack(input.getItem(0))+"|"+(input.getItem(0)==held)+"|"+String.join(";",remaining.stream().map(RedstoneIdentityVectors::stack).toList()));
+        }
+    }
+    void crafters()throws Exception{
+        var remainingField=CrafterBlockEntity.class.getDeclaredField("craftingTicksRemaining");remainingField.setAccessible(true);
+        for(var state:Blocks.CRAFTER.getStateDefinition().getPossibleStates())for(boolean signal:new boolean[]{false,true}){
+            prepare(state);if(signal)raw(POS.west(),Blocks.REDSTONE_BLOCK.defaultBlockState());clear();
+            neighborChanged(state,POS,Blocks.STONE,null,false);var entity=(CrafterBlockEntity)getBlockEntity(POS);
+            out("crafter-edge:"+Block.getId(state)+":"+signal,Block.getId(getBlockState(POS))+"|"+entity.isTriggered()+"|"+ticks.hasScheduledTick(POS,Blocks.CRAFTER));
+        }
+        for(int count:new int[]{Integer.MIN_VALUE,-1,0,1,2,6,Integer.MAX_VALUE}){
+            var state=Blocks.CRAFTER.defaultBlockState().setValue(CrafterBlock.CRAFTING,true);prepare(state);var entity=(CrafterBlockEntity)getBlockEntity(POS);entity.setCraftingTicksRemaining(count);
+            CrafterBlockEntity.serverTick(this,POS,state,entity);
+            out("crafter-ticker:"+count,remainingField.getInt(entity)+"|"+Block.getId(getBlockState(POS)));
+        }
+        for(var orientation:FrontAndTop.values())for(int input=0;input<4;input++)for(int target=0;target<3;target++){
+            var state=Blocks.CRAFTER.defaultBlockState().setValue(BlockStateProperties.ORIENTATION,orientation);prepare(state);var entity=(CrafterBlockEntity)getBlockEntity(POS);
+            if(input==1||input==2)entity.setItem(4,new ItemStack(Items.OAK_LOG,input==1?1:8));
+            if(input==3)for(int i=0;i<9;i++)entity.setItem(i,new ItemStack(Items.IRON_INGOT,2));
+            var into=POS.relative(orientation.front());
+            if(target!=0){raw(into,Blocks.BARREL.defaultBlockState());if(target==2){var barrel=(BarrelBlockEntity)getBlockEntity(into);for(int i=0;i<27;i++)barrel.setItem(i,new ItemStack(Items.DIRT,64));}}
+            var spawned=new ArrayList<String>();onAdd=()->{};
+            callbackSpawn=actor->{if(actor instanceof net.minecraft.world.entity.item.ItemEntity item)spawned.add(stack(item.getItem()));};
+            random.setSeed(42);clear();state.tick(this,POS,random);
+            var destination=getBlockEntity(into);var stored=destination instanceof BarrelBlockEntity barrel?stack(barrel.getItem(0)):"-";
+            out("crafter-execute:"+Block.getId(state)+":"+input+":"+target,Block.getId(getBlockState(POS))+"|"+remainingField.getInt(entity)+"|"+stack(entity.getItem(4))+"|"+stored+"|"+String.join(";",spawned)+"|"+String.join(";",gameplay)+"|"+random.nextLong());
+            callbackSpawn=null;
+        }
+    }
+    java.util.function.Consumer<Entity> callbackSpawn;
+    @Override public boolean addFreshEntity(Entity entity){if(callbackSpawn!=null)callbackSpawn.accept(entity);return super.addFreshEntity(entity);}
     static void runDevices()throws Exception{
         var storage=LevelStorageSource.createDefault(Files.createTempDirectory(Path.of("."),"redstone-devices")).createAccess("world");
         var server=GameTestServer.create(Thread.currentThread(),storage,ServerPacksSource.createVanillaTrustedRepository(),Optional.empty(),false,1);
         server.setPlayerList(new PlayerList(server,server.registries(),storage.createPlayerStorage(),new EmptyNotificationService()){});
-        var level=new DeviceVectors(server,storage);level.daylight();level.rods();level.notes();level.containers();level.destruction();level.ore();System.out.flush();System.exit(0);
+        var level=new DeviceVectors(server,storage);level.daylight();level.rods();level.notes();level.containers();level.destruction();level.ore();level.movingDrops();level.detectors();level.crafterPlacement();level.crafterAliases();level.crafters();System.out.flush();System.exit(0);
     }
 }
 final class DeviceCapture{

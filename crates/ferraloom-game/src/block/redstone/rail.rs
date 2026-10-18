@@ -489,3 +489,120 @@ impl BlockBehavior for RailBlock {
         Ok(())
     }
 }
+
+pub struct DetectorRailBlock;
+pub static DETECTOR: DetectorRailBlock = DetectorRailBlock;
+/// No currently canonical entity subclass extends AbstractMinecart. Keeping this
+/// match exhaustive makes a new vehicle require its native detector integration.
+fn is_minecart(entity: &crate::entity::EntityState) -> bool {
+    use crate::entity::EntityState as E;
+    match entity {
+        E::Cow(_)
+        | E::Player(_)
+        | E::PrimedTnt(_)
+        | E::Item(_)
+        | E::FallingBlock(_)
+        | E::ExperienceOrb(_) => false,
+    }
+}
+fn interacting_minecarts(pos: BlockPos, level: &Level) -> Vec<crate::entity::EntityRef> {
+    level.entities_in(
+        ferraloom_util::Aabb::new(
+            f64::from(pos.x) + 0.2,
+            f64::from(pos.y),
+            f64::from(pos.z) + 0.2,
+            f64::from(pos.x + 1) - 0.2,
+            f64::from(pos.y + 1) - 0.2,
+            f64::from(pos.z + 1) - 0.2,
+        ),
+        |_, entity| is_minecart(entity),
+    )
+}
+/// Port of DetectorRailBlock#checkPressed. Native setBlocksDirty is inherited
+/// Level's empty server method; connected rails receive their own block as source.
+fn check_pressed(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
+    if !RAIL.can_survive(state, pos, &LevelReaderRef::Server(level))?
+        || level.get_block_state(pos)?.block() != state.block()
+    {
+        return Ok(());
+    }
+    let minecarts = interacting_minecarts(pos, level);
+    // Vehicle projection must be provided with the first actual minecart port.
+    if let Some(entity) = minecarts.first() {
+        return Err(LevelError::UnsupportedEntity(
+            level.entity_state(*entity)?.entity_type(),
+        ));
+    }
+    let pressed = !minecarts.is_empty();
+    if pressed != state.get(p::POWERED).unwrap() {
+        let changed = state.with(p::POWERED, pressed).unwrap();
+        level.set_block_and_update(pos, changed)?;
+        for &connection in RailState::new(pos, changed).connections() {
+            let neighbor = level.get_block_state(connection)?;
+            level.neighbor_changed_with_state(
+                neighbor,
+                connection,
+                neighbor.block(),
+                None,
+                false,
+            )?;
+        }
+        level.update_neighbors_at(pos, state.block())?;
+        level.update_neighbors_at(pos.below(1), state.block())?;
+    }
+    if pressed {
+        level.schedule_tick(pos, state.block(), 20)?;
+    }
+    level.update_neighbour_for_output_signal(pos, state.block())
+}
+impl BlockBehavior for DetectorRailBlock {
+    fn on_place(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        old: BlockState,
+        moved: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if old.block() != state.block() {
+            let updated = update_dir(level, pos, state, true)?;
+            level.neighbor_changed_with_state(updated, pos, state.block(), None, moved)?;
+            check_pressed(updated, pos, level)?;
+        }
+        Ok(())
+    }
+    fn tick(&self, state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
+        if state.get(p::POWERED).unwrap() {
+            check_pressed(state, pos, level)?;
+        }
+        Ok(())
+    }
+    fn entity_inside(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !state.get(p::POWERED).unwrap() {
+            check_pressed(state, pos, level)?;
+        }
+        Ok(())
+    }
+    fn analog_output_signal(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        if state.get(p::POWERED).unwrap()
+            && let Some(entity) = interacting_minecarts(pos, level).first()
+        {
+            return Err(LevelError::UnsupportedEntity(
+                level.entity_state(*entity)?.entity_type(),
+            ));
+        }
+        Ok(0)
+    }
+}

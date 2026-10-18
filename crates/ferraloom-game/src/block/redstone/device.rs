@@ -71,6 +71,20 @@ pub fn update_daylight_signal(
     }
     Ok(())
 }
+/// Port of DaylightDetectorBlock#tickEntity. Ticker selection, including the
+/// static dimension skylight gate, belongs to the canonical BE framework.
+pub fn tick_daylight_detector(
+    receiver: crate::block::entity::BlockEntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if level.game_time() % 20 == 0 {
+        let state = level
+            .block_entity::<crate::block::entity::BlockEntityData>(receiver)?
+            .block_state;
+        update_daylight_signal(state, receiver.pos, level)?;
+    }
+    Ok(())
+}
 fn rod_neighbors(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
     let front = super::state::facing(state).opposite();
     let orientation = super::initial_orientation(level, Some(front), None);
