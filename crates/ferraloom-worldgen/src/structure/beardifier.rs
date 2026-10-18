@@ -63,6 +63,42 @@ pub struct Beardifier {
     affected_box: Option<BoundingBox>,
 }
 impl Beardifier {
+    /// StructureManager#startsForStructure followed by forStructuresInChunk.
+    /// Normal jobs pass registry order. Vanilla's cross-structure HashMap uses
+    /// JVM identity hashes, so overlapping structures can differ in float low
+    /// bits across runs; parity fixtures can supply the observed vanilla order.
+    /// Source reference-set order and piece order remain exact within each id.
+    pub fn from_region(
+        region: &crate::region::WorldGenRegion<'_>,
+        structure_order: &[crate::Identifier],
+    ) -> Result<Self, Error> {
+        use crate::region::ChunkStatus;
+        let center = region.center();
+        let references = &region
+            .chunk(center, ChunkStatus::StructureReferences)?
+            .structures
+            .references;
+        let mut pieces = Vec::new();
+        for structure in structure_order {
+            let Some(references) = references.get(structure) else {
+                continue;
+            };
+            for source in references.iter() {
+                let source = ferraloom_util::ChunkPos::unpack(source);
+                let starts = &region
+                    .chunk([source.x, source.z], ChunkStatus::StructureStarts)?
+                    .structures
+                    .starts;
+                if let Some(start) = starts.get(structure)
+                    && start.is_valid()
+                    && start.terrain != TerrainAdjustment::None
+                {
+                    pieces.extend(start.pieces.iter().map(|p| p.terrain_piece(start.terrain)));
+                }
+            }
+        }
+        Ok(Self::for_chunk(center, pieces))
+    }
     /// Port of Beardifier's test constructor. `affected_box` is already inflated.
     pub fn new(
         pieces: Vec<Rigid>,

@@ -1,14 +1,18 @@
 //! ChunkGenerator#applyBiomeDecoration's structure pass. Registry and reference
 //! order are inputs; a job exclusively borrows its region and random stream.
 use super::{
-    BoundingBox, jigsaw::JigsawStart, rule::BlockTags, template::StructureTemplateManager,
+    BoundingBox,
+    jigsaw::JigsawStart,
+    rule::BlockTags,
+    start::{StructurePiece, StructureStart},
+    template::StructureTemplateManager,
 };
 use crate::{
     Error, Identifier,
     decoration::{GenerationStep, StructureDecoration},
     feature::{FeatureContext, FeatureRegistry},
-    generator::NoiseBasedChunkGenerator,
-    region::WorldGenRegion,
+    generator::{ChunkGeneratorAccess, NoiseBasedChunkGenerator},
+    region::{ChunkStatus, WorldGenRegion},
 };
 use ferraloom_data::datapack::ResourceManager;
 use ferraloom_util::random::WorldgenRandom;
@@ -94,6 +98,173 @@ impl JigsawStart {
                     false,
                     tags,
                 )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl StructureStart {
+    /// Port of StructureStart#placeInChunk. Starts are exclusively owned while
+    /// postProcess may change piece bounds, chest flags or entity-spawn flags.
+    pub fn place_in_chunk(
+        &mut self,
+        context: &mut FeatureContext<'_, '_>,
+        templates: &StructureTemplateManager,
+        tags: &BlockTags,
+        bounds: &mut BoundingBox,
+    ) -> Result<(), Error> {
+        let Some(first) = self.pieces.first() else {
+            return Ok(());
+        };
+        let first = first.bounds();
+        let [x, _, z] = first.center();
+        let reference = [x, first.min[1], z];
+        for piece in &mut self.pieces {
+            if !piece.bounds().intersects(*bounds) {
+                continue;
+            }
+            match piece {
+                StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::Stronghold(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::OceanMonument(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::OceanMonumentRoom(piece) => {
+                    piece.post_process_saved(context, *bounds)?
+                }
+                StructurePiece::NetherFortress(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::RuinedPortal(piece) => {
+                    piece.post_process(context, templates, tags, bounds, reference)?
+                }
+                StructurePiece::JungleTemple(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::OceanRuin(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
+                StructurePiece::WoodlandMansion(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
+                StructurePiece::EndCity(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
+                StructurePiece::NetherFossil(piece) => {
+                    piece.post_process(context, templates, tags, bounds, reference)?
+                }
+                StructurePiece::Shipwreck(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
+                StructurePiece::Igloo(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
+                StructurePiece::BuriedTreasure(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::Jigsaw(piece) => {
+                    piece.element.place(
+                        templates,
+                        context,
+                        piece.position,
+                        reference,
+                        piece.rotation,
+                        *bounds,
+                        piece.liquid,
+                        false,
+                        tags,
+                    )?;
+                }
+            }
+        }
+        match self.kind.map(|kind| kind.name()) {
+            Some("minecraft:desert_pyramid") => {
+                super::structures::desert_pyramid::after_place(&self.pieces, context, *bounds)?
+            }
+            Some("minecraft:woodland_mansion") => {
+                super::structures::woodland_mansion::after_place(context, &self.pieces, *bounds)?;
+            }
+            Some(_) => {}
+            None => return Err(Error("valid start has no structure type".into())),
+        }
+        Ok(())
+    }
+}
+
+/// StructureManager-backed decoration using the live region's references and
+/// starts. Reference-set iteration order survives save/reload. A start is taken
+/// from its origin chunk only for its synchronous postProcess call.
+pub struct RegionStructureDecoration<'a> {
+    pub registry: &'a [StructureStep],
+    pub templates: &'a StructureTemplateManager,
+    pub tags: &'a BlockTags,
+    pub generator: &'a dyn ChunkGeneratorAccess,
+    pub features: &'a FeatureRegistry,
+}
+impl<'a> RegionStructureDecoration<'a> {
+    pub fn new(
+        registry: &'a [StructureStep],
+        templates: &'a StructureTemplateManager,
+        tags: &'a BlockTags,
+        generator: &'a dyn ChunkGeneratorAccess,
+        features: &'a FeatureRegistry,
+    ) -> Self {
+        Self {
+            registry,
+            templates,
+            tags,
+            generator,
+            features,
+        }
+    }
+}
+
+impl StructureDecoration for RegionStructureDecoration<'_> {
+    fn place_step(
+        &mut self,
+        step: GenerationStep,
+        region: &mut WorldGenRegion<'_>,
+        random: &mut WorldgenRandom,
+        decoration_seed: i64,
+    ) -> Result<(), Error> {
+        let chunk = region.center();
+        let [x, z] = chunk.map(|p| p.wrapping_mul(16));
+        let bounds = BoundingBox::new(
+            [x, region.min_y() + 1, z],
+            [x + 15, region.min_y() + region.height() - 1, z + 15],
+        );
+        for (index, structure) in self.registry.iter().filter(|s| s.step == step).enumerate() {
+            random.set_feature_seed(decoration_seed, index as i32, step as i32);
+            let references = region
+                .chunk(chunk, ChunkStatus::StructureReferences)?
+                .structures
+                .references
+                .get(&structure.id)
+                .map(|r| r.iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for source in references {
+                let source = ferraloom_util::ChunkPos::unpack(source);
+                let origin = [source.x, source.z];
+                let Some(mut start) = region.take_structure_start(origin, &structure.id)? else {
+                    continue;
+                };
+                // ChunkGenerator#getWritableArea creates a fresh box per start;
+                // individual pieces within that start may expand the same box.
+                let mut piece_bounds = bounds;
+                let result = if start.is_valid() {
+                    start.place_in_chunk(
+                        &mut FeatureContext {
+                            region,
+                            random,
+                            origin: [x, bounds.min[1], z],
+                            generator: self.generator,
+                            registry: self.features,
+                        },
+                        self.templates,
+                        self.tags,
+                        &mut piece_bounds,
+                    )
+                } else {
+                    Ok(())
+                };
+                // Restore even when a game-backed operation returns Unsupported.
+                region.restore_structure_start(origin, structure.id.clone(), start)?;
+                result?;
             }
         }
         Ok(())

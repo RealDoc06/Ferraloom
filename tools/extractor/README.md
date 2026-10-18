@@ -89,6 +89,15 @@ Reversing the item's single block field loses those aliases. The clone-stack
 method's reflected base is `BlockBehaviour`; it creates one item and ignores
 the include-data flag. Overriding block families still require their own port.
 
+`ExtractData <output-dir> --item-crafting-only` regenerates `item_crafting.json`.
+`Item#getCraftingRemainder` is final, returns the `craftingRemainingItem` field
+copied from `Item.Properties` by the constructor, and takes no stack or level.
+It is a per-item template, independent of the `USE_REMAINDER` data component.
+The generated `CraftingRemainder` holds a typed item id/count and persistent
+component patch JSON; the game resolves the patch through protocol codecs.
+`BannerItem#getColor` is recorded alongside it for component-independent banner
+crafting checks.
+
 `fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
 only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
 or state-property inputs. Source and flowing variants retain their own registry

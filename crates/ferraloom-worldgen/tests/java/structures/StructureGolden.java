@@ -334,6 +334,16 @@ public final class StructureGolden {
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);StructureCodecGolden.capture(registries,directory);RegionRandomGolden.capture(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);StructureStartCodecGolden.capture(registries,directory);referenceSets(directory);StructureCodecGolden.capture(registries,directory);StructureStatusGolden.capture(registries,directory);HandwrittenGolden.capture(registries,directory);ShipwreckHeightGolden.capture(registries,directory);JungleTempleGolden.capture(registries,directory);
+        SwampHutGolden.capture(registries,directory);RegionRandomGolden.capture(registries,directory);DesertPyramidGolden.capture(registries,directory);RuinedPortalGolden.capture(registries,directory);MineshaftGolden.capture(registries,directory);NetherFortressGolden.capture(registries,directory);StrongholdGolden.capture(registries,directory);
+        MansionGolden.grids(directory);
+        MansionGolden.pieces(registries,directory);
+        MansionFoundationGolden.capture(registries,directory);
+        MonumentGolden.capture(registries,directory);
+        MonumentRoomGolden.capture(registries,directory);
+        MonumentBuildingGolden.capture(directory);
+        MonumentReloadGolden.capture(registries,directory);
+        LocateGolden.capture(registries,directory);
+        CappedGolden.capture(registries,directory);StrongholdBlocksGolden.capture(registries,directory);NetherFortressBlocksGolden.capture(registries,directory);MineshaftBlocksGolden.capture(registries,directory);
     }
 }
