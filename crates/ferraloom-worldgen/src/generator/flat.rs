@@ -134,6 +134,8 @@ impl FlatLevelGeneratorSettings {
         if let Some(overrides) = &self.structure_overrides {
             value["structure_overrides"] = if let Some(tag) = &self.structure_override_tag {
                 Value::String(format!("#{tag}"))
+            } else if let [only] = overrides.as_slice() {
+                Value::String(only.to_string())
             } else {
                 serde_json::json!(
                     overrides

@@ -34,7 +34,8 @@ public final class FlatGolden {
             "{layers:[],features:0}", "{layers:[],features:256}",
             "{layers:[],features:257}", "{layers:[],features:0.5}",
             "{layers:[],lakes:1}", "{layers:[],biome:7}",
-            "{layers:[],structure_overrides:7}", "{layers:[],structure_overrides:'villages'}"
+            "{layers:[],structure_overrides:7}", "{layers:[],structure_overrides:'villages'}",
+            "{layers:[],structure_overrides:['villages','missing']}", "{layers:[],structure_overrides:['villages','strongholds']}"
         )) {
             var value=JsonParser.parseString(text);var result=FlatLevelGeneratorSettings.CODEC.parse(ops,value);
             var item=new JsonObject();item.add("config",value);item.addProperty("success",result.isSuccess());
@@ -42,7 +43,7 @@ public final class FlatGolden {
             if(partial.isPresent()) {
                 var settings=partial.get();var encoded=FlatLevelGeneratorSettings.CODEC.encodeStart(ops,settings).getOrThrow().getAsJsonObject();
                 var decoded=new JsonObject();decoded.add("layers",encoded.get("layers"));decoded.add("biome",encoded.get("biome"));decoded.add("lakes",encoded.get("lakes"));decoded.add("features",encoded.get("features"));
-                if(settings.structureOverrides().isPresent()) {var overrides=new JsonArray();settings.structureOverrides().get().stream().forEach(holder->overrides.add(holder.unwrapKey().orElseThrow().identifier().toString()));decoded.add("structure_overrides",overrides);} else decoded.add("structure_overrides",JsonNull.INSTANCE);
+                if(settings.structureOverrides().isPresent()) decoded.add("structure_overrides",encoded.get("structure_overrides"));
                 item.add("decoded",decoded);
             }
             cases.add(item);
