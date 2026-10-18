@@ -149,7 +149,11 @@ fn native_traversal_start_cells_ties_negative_faces_and_early_exit() {
             Ok(visited.len() == stop)
         })
         .unwrap();
-        let expected: Vec<_> = f[5].split(';').filter(|p| !p.is_empty()).map(pos).collect();
+        let expected: Vec<_> = f[5]
+            .split(';')
+            .filter(|p| !p.is_empty() && *p != "-")
+            .map(pos)
+            .collect();
         assert_eq!(visited, expected, "{line}");
         cases += 1;
     }
