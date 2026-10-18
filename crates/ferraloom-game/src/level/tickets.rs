@@ -209,6 +209,10 @@ impl TicketStorage {
     pub fn has_pending_source_updates(&self) -> bool {
         !self.updates.is_empty()
     }
+    /// Inspect source-order notifications without consuming the tracker input.
+    pub fn pending_source_updates(&self) -> &[TicketSourceUpdate] {
+        &self.updates
+    }
     pub fn take_source_updates(&mut self) -> Vec<TicketSourceUpdate> {
         std::mem::take(&mut self.updates)
     }

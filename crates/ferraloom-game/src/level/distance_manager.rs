@@ -257,12 +257,12 @@ mod player_tests {
         let origin = SectionPos::new(0, 4, 0);
         manager.update_player(a, Some(origin), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.clone().take_source_updates().len(), 1);
+        assert_eq!(tickets.pending_source_updates().len(), 1);
         manager.run_all_updates(&mut tickets);
         manager.update_player(a, None, &mut tickets);
-        assert!(tickets.clone().take_source_updates().is_empty());
+        assert!(tickets.pending_source_updates().is_empty());
         manager.update_player(b, Some(SectionPos::new(0, 5, 0)), &mut tickets);
-        let changes = tickets.clone().take_source_updates();
+        let changes = tickets.pending_source_updates();
         assert_eq!(
             changes
                 .iter()
@@ -278,7 +278,7 @@ mod player_tests {
         // though a snapshot of only the final player chunk would be unchanged.
         manager.update_player(b, Some(SectionPos::new(1, 5, 0)), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.clone().take_source_updates().len(), 4);
+        assert_eq!(tickets.pending_source_updates().len(), 4);
         manager.run_all_updates(&mut tickets);
         assert_eq!(manager.simulation.level(ChunkPos::new(0, 0)), 21);
         assert_eq!(manager.simulation.level(ChunkPos::new(1, 0)), 22);
