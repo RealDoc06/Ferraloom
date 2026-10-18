@@ -74,7 +74,12 @@ impl MinecraftServer {
                     duration: VarInt(6),
                 },
             };
-            if self.under_spawn_protection(entity, pos)? {
+            if self
+                .level
+                .level
+                .is_under_spawn_protection(entity, pos)
+                .map_err(game_error)?
+            {
                 self.send_interaction_overlay(
                     connection,
                     "build.spawn_protection",
@@ -88,7 +93,11 @@ impl MinecraftServer {
                 .teleport
                 .awaiting_position
                 .is_none()
-                && self.level.level.entity_world_border().is_within_block(pos)
+                && self
+                    .level
+                    .level
+                    .may_interact(entity, pos)
+                    .map_err(game_error)?
             {
                 let context = UseContext {
                     player: entity,
@@ -170,45 +179,6 @@ impl MinecraftServer {
                 .map_err(game_error)?
                 .cooldowns
                 .is_on_cooldown(stack))
-    }
-
-    /// Port of DedicatedServer#isUnderSpawnProtection using the live respawn data.
-    fn under_spawn_protection(&self, entity: EntityRef, pos: BlockPos) -> Result<bool> {
-        let spawn = self
-            .world
-            .level_data
-            .data
-            .get_compound("spawn")
-            .context("missing canonical respawn data")?;
-        let dimension = spawn
-            .get_string("dimension")
-            .context("missing respawn dimension")?
-            .to_string();
-        if self.level.dimension != dimension || self.access.ops.is_empty() {
-            return Ok(false);
-        }
-        let uuid = self
-            .level
-            .level
-            .entity::<ServerPlayer>(entity)
-            .map_err(game_error)?
-            .uuid
-            .to_string();
-        if self
-            .access
-            .ops
-            .iter()
-            .any(|operator| operator.uuid.eq_ignore_ascii_case(&uuid))
-        {
-            return Ok(false);
-        }
-        let radius = self.properties.int("spawn-protection");
-        if radius <= 0 {
-            return Ok(false);
-        }
-        let xd = pos.x.wrapping_sub(self.world.spawn.x).wrapping_abs();
-        let zd = pos.z.wrapping_sub(self.world.spawn.z).wrapping_abs();
-        Ok(xd.max(zd) <= radius)
     }
 
     fn send_build_limit(&mut self, connection: ConnectionId, high: bool, limit: i32) {
