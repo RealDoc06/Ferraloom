@@ -1210,6 +1210,38 @@ fn vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay() {
 }
 
 #[test]
+fn item_pickup_uses_mutable_instabuild_when_inventory_is_full() {
+    use ferraloom_data::Item;
+    use ferraloom_protocol::component::ItemStack;
+    for mode in [player::GameType::Survival, player::GameType::Creative] {
+        for instabuild in [false, true] {
+            let mut level = level(false);
+            let mut player =
+                player::ServerPlayer::new(Uuid::new(1, 2), "pickup".into(), 1, Vec3::ZERO, mode);
+            player.instabuild = instabuild;
+            player
+                .inventory
+                .items
+                .fill_with(|| ItemStack::new(Item::STONE, 64, Default::default()));
+            level
+                .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+                .unwrap();
+            let mut item = item::ItemEntity::new(2, 2);
+            item.set_item(ItemStack::new(Item::STONE, 2, Default::default()));
+            level
+                .add_entity(EntityRef(2), EntityState::Item(Box::new(item)))
+                .unwrap();
+            item::item_entity::player_touch(EntityRef(2), EntityRef(1), &mut level).unwrap();
+            assert_eq!(
+                level.entity::<EntityData>(EntityRef(2)).unwrap().removed,
+                instabuild
+            );
+            assert_eq!(level.take_entity_effects().is_empty(), !instabuild);
+        }
+    }
+}
+
+#[test]
 fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_return() {
     use ferraloom_protocol::component::ItemStack;
     use player::inventory::{count, set_count};

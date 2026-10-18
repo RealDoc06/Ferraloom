@@ -7,7 +7,7 @@ use crate::{
         movement::{self, MovementEmission, MoverType},
         persistence,
         player::{
-            GameType, ServerPlayer,
+            ServerPlayer,
             inventory::{self, copy_with_count, count, max_stack_size, set_count},
         },
         synched_data::EntityDataAccessor,
@@ -236,7 +236,7 @@ pub fn player_touch(
     let org_count = count(&stack);
     let kind = stack.0.as_ref().map(|stack| stack.item);
     let target = level.entity_mut::<ServerPlayer>(player)?;
-    let infinite = matches!(target.game_mode, GameType::Creative);
+    let infinite = target.instabuild();
     let accepted = target
         .inventory
         .add(&mut stack, &mut target.parent.equipment, infinite);
