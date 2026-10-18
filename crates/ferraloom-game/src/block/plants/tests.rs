@@ -4,7 +4,7 @@ use crate::{
     block::{BlockBehavior, LevelAccessRef, LevelReaderRef},
     level::{Level, Region, chunk::LevelChunk, effects::LevelEffect},
 };
-use ferraloom_data::{BlockState, properties as p};
+use ferraloom_data::properties as p;
 use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
