@@ -516,7 +516,7 @@ impl MinecraftServer {
         let threshold = self.properties.int("pause-when-empty-seconds");
         let paused = threshold > 0 && self.empty_ticks >= threshold.saturating_mul(20);
         if paused && !self.was_paused {
-            self.save_all(false).await?;
+            self.save_all(false, false).await?;
         }
         self.was_paused = paused;
         if !paused {
@@ -559,7 +559,7 @@ impl MinecraftServer {
         if !paused {
             self.autosave -= 1;
             if self.autosave <= 0 {
-                self.save_all(false).await?;
+                self.save_all(false, false).await?;
                 self.autosave = 6000;
             }
         }
@@ -1841,7 +1841,7 @@ impl MinecraftServer {
                     Component::translatable("commands.save.saving", vec![]),
                     false,
                 );
-                if self.save_all(flush).await.is_ok() {
+                if self.save_all(flush, true).await.is_ok() {
                     self.command_success(
                         source,
                         &stack,
@@ -1913,13 +1913,14 @@ impl MinecraftServer {
             println!("{message}");
         }
     }
-    async fn save_all(&mut self, flush: bool) -> Result<()> {
+    async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
         self.save_game_rules().await?;
         let snapshots = self
             .level
             .chunks
             .holders
             .values()
+            .filter(|_| self.saving_enabled || force)
             .filter_map(|holder| self.level.level.chunk(holder.position))
             .map(|chunk| self.world.capture_chunk(chunk, self.level.game_time))
             .collect();
@@ -1953,7 +1954,7 @@ impl MinecraftServer {
         for c in self.connections.values_mut() {
             c.disconnect("multiplayer.disconnect.server_shutdown");
         }
-        self.save_all(true).await?;
+        self.save_all(true, true).await?;
         self.flush_outbound();
         // Writers consume their ordered shutdown batch before channels are released.
         self.connections.clear();
