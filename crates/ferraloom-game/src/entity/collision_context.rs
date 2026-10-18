@@ -89,7 +89,7 @@ impl EntityCollisionView {
     ) -> Result<EntityCollisionContext<Self>, LevelError> {
         let (descending, entity_bottom, held_item) = match player {
             Some(player) => {
-                let player = level.entity::<super::ServerPlayer>(player)?;
+                let player = level.entity::<super::player::ServerPlayer>(player)?;
                 (
                     player.shared_flag(1),
                     player.position.y,
