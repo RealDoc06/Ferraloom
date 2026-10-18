@@ -421,6 +421,17 @@ pub fn with_menu_callback<R>(
     level: &mut Level,
     operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
 ) -> Result<R> {
+    level.retain_entity(player)?;
+    let result = with_menu_callback_inner(player, menu, level, operation);
+    level.release_entity(player);
+    result
+}
+fn with_menu_callback_inner<R>(
+    player: EntityRef,
+    menu: MenuRef,
+    level: &mut Level,
+    operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
+) -> Result<R> {
     level
         .entity_mut::<ServerPlayer>(player)?
         .menus

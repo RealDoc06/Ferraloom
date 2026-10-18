@@ -1,6 +1,7 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod add;
 mod block_containers;
+mod clear_grid;
 mod click;
 mod container;
 mod crafted;
@@ -11,6 +12,7 @@ mod crafting_runtime;
 mod listener_copies;
 mod live;
 mod live_crafting;
+mod live_placement;
 mod menu;
 mod menus;
 mod operation;
@@ -41,6 +43,7 @@ pub use crafting_runtime::*;
 pub use listener_copies::{ListenerCopyArena, ListenerCopyRef};
 pub use live::*;
 pub use live_crafting::{LiveRecipeMenuHooks, refresh_live_crafting_result};
+pub use live_placement::place_live_menu_recipe;
 pub use menu::*;
 pub use menus::*;
 pub use operation::{

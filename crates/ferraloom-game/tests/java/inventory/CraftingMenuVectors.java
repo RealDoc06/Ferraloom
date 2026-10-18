@@ -96,6 +96,7 @@ public final class CraftingMenuVectors {
       }
       scenario("fallback-three",false,List.of(new int[]{0,1,0}));scenario("fallback-one",false,List.of(new int[]{0,0,0}));
       scenario("cake",true,List.of(new int[]{0,0,0}));
+      ClearGridVectors.run(manager,registries);
     }
   }
 }

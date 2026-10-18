@@ -68,6 +68,15 @@ pub trait MenuHooks {
     fn validate_live_result(&self, _kind: ResultKind) -> Result<()> {
         Err(MenuError::Unsupported("live result-slot achievements"))
     }
+    fn live_grid_changed_with_hint(
+        &mut self,
+        player: crate::entity::EntityRef,
+        menu: super::MenuRef,
+        _hint: &ferraloom_data::datapack::Identifier,
+        level: &mut crate::level::Level,
+    ) -> Result<()> {
+        self.live_grid_changed(player, menu, level)
+    }
     fn live_item_crafted(
         &mut self,
         _player: crate::entity::EntityRef,

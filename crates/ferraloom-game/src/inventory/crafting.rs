@@ -305,7 +305,7 @@ struct CraftingPlacement<'a, 'b, 'p> {
     operation: super::in_memory::InMemoryMenuOperation<'a, 'b, 'p>,
     hooks: &'b mut dyn MenuHooks,
 }
-fn placement_error(error: MenuError) -> crate::crafting::Error {
+pub(super) fn placement_error(error: MenuError) -> crate::crafting::Error {
     match error {
         MenuError::Crafting(error) => error,
         MenuError::Protocol(error) => crate::crafting::Error::Protocol(error),
@@ -361,36 +361,7 @@ impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_, '_> {
             .is_some())
     }
     fn clear_grid(&mut self) -> crate::crafting::Result<()> {
-        for index in 0..self.operation.menu.crafting_grid().len() {
-            let receiver = self
-                .operation
-                .slot_stack(index + 1)
-                .map_err(placement_error)?;
-            let mut copy = self
-                .operation
-                .read(receiver)
-                .map_err(placement_error)?
-                .clone();
-            let context = &mut self.operation.context;
-            let effects = context.player.inventory.place_item_back_in_inventory(
-                &mut copy,
-                false,
-                context.player.equipment,
-                context.infinite_materials,
-            );
-            if !effects.is_empty() {
-                return Err(placement_error(MenuError::Unsupported(
-                    "recipe grid-clear dropped-stack alias",
-                )));
-            }
-            let copy = self.operation.own(copy);
-            self.operation
-                .set_slot_stack(index + 1, copy, None, self.hooks)
-                .map_err(placement_error)?;
-        }
-        self.operation.menu.local[1].clear_content();
-        self.operation.menu.local[0].clear_content();
-        Ok(())
+        super::clear_grid::clear_grid(&mut self.operation, self.hooks).map_err(placement_error)
     }
     fn take_inventory_item(
         &mut self,

@@ -42,6 +42,21 @@ impl MenuHooks for LiveRecipeMenuHooks {
             Err(MenuError::Unsupported("non-crafting result pickup"))
         }
     }
+    fn live_grid_changed_with_hint(
+        &mut self,
+        player: EntityRef,
+        menu: MenuRef,
+        hint: &ferraloom_data::datapack::Identifier,
+        level: &mut Level,
+    ) -> Result<()> {
+        refresh_live_crafting_result_with_hint(
+            player,
+            menu,
+            self.limited_crafting,
+            Some(hint),
+            level,
+        )
+    }
     fn can_smelt(&self, stack: &ItemStack) -> Result<bool> {
         let recipe_type = match self.kind {
             MenuKind::BlastFurnace => RecipeType::Blasting,
@@ -70,6 +85,15 @@ pub fn refresh_live_crafting_result(
     limited_crafting: bool,
     level: &mut Level,
 ) -> Result<()> {
+    refresh_live_crafting_result_with_hint(player, menu, limited_crafting, None, level)
+}
+pub(super) fn refresh_live_crafting_result_with_hint(
+    player: EntityRef,
+    menu: MenuRef,
+    limited_crafting: bool,
+    hint: Option<&ferraloom_data::datapack::Identifier>,
+    level: &mut Level,
+) -> Result<()> {
     let resources = level.container_resources()?;
     let (stack, recipe) = {
         let owner = level.entity::<ServerPlayer>(player)?;
@@ -85,7 +109,7 @@ pub fn refresh_live_crafting_result(
             RecipeType::Crafting,
             RecipeInput::Crafting(&input),
             resources.crafting.as_ref(),
-            None,
+            hint,
         )?;
         if let Some(recipe) = recipe
             && (recipe.value.is_special()
