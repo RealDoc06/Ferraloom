@@ -633,8 +633,8 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
             Vec3::new(8.5, 64.0, 8.5),
             player::GameType::Survival,
         );
-        player.yaw = f[1].parse().unwrap();
-        player.pitch = f[2].parse().unwrap();
+        player.set_y_rot(f[1].parse().unwrap());
+        player.set_x_rot(f[2].parse().unwrap());
         player.random.set_seed(123);
         level
             .add_entity(player_id, EntityState::Player(Box::new(player)))
