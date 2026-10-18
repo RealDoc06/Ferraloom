@@ -27,6 +27,7 @@ use ferraloom_game::{
             GameType, MovementChecks, MovementResult, PlayerBehavior, PlayerMovement, ServerPlayer,
             move_player_with_checks,
         },
+        teleport::{self as entity_teleport, position_move_rotation},
     },
     inventory::{
         MenuContext, MenuHooks, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
@@ -131,8 +132,6 @@ struct Connection {
     chunks: PlayerChunkSender,
     view: HashSet<ChunkPos>,
     center: Option<ChunkPos>,
-    teleport_id: i32,
-    awaiting_teleport: Option<(i32, Vec3, u64)>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -520,8 +519,6 @@ impl MinecraftServer {
                         chunks: PlayerChunkSender::default(),
                         view: HashSet::new(),
                         center: None,
-                        teleport_id: 0,
-                        awaiting_teleport: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
                         last_action: Instant::now(),
@@ -1279,7 +1276,12 @@ impl MinecraftServer {
             ),
             overlay: false,
         })));
-        teleport(&mut c, pos, yaw, pitch, self.tick);
+        c.push(
+            player.teleport_before_registration(
+                position_move_rotation(pos, Vec3::ZERO, yaw, pitch),
+                0,
+            ),
+        );
         c.push(cb::Packet::ServerData(Box::new(cb::ServerData {
             motd: Component::literal(self.properties.get("motd")),
             icon_bytes: self.favicon.clone().map(common::ByteArray),
@@ -1456,13 +1458,17 @@ impl MinecraftServer {
                 self.handle_pick_item_from_entity(connection, entity, packet)?
             }
             sb::Packet::AcceptTeleportation(p) => {
-                if let Some((pending, _, _)) = self.connections[&connection].awaiting_teleport
-                    && p.id.0 == pending
-                {
-                    self.connections
-                        .get_mut(&connection)
-                        .unwrap()
-                        .awaiting_teleport = None;
+                if p.id.0 == self.player(entity)?.teleport.awaiting_teleport {
+                    if self.player(entity)?.teleport.awaiting_position.is_none()
+                        || [p.x, p.y, p.z].iter().any(|v| v.is_nan())
+                        || !p.y_rot.is_finite()
+                        || !p.x_rot.is_finite()
+                    {
+                        bail!("multiplayer.disconnect.invalid_player_movement");
+                    }
+                    entity_teleport::accept_teleport(entity, p.id.0, &mut self.level.level)
+                        .map_err(game_error)?;
+                    self.update_player_tickets(entity)?;
                     self.movement(
                         connection,
                         entity,
@@ -2301,6 +2307,20 @@ impl MinecraftServer {
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)
     }
+    /// Port of ServerGamePacketListenerImpl#teleport. Gameplay owns the single
+    /// pending teleport; the runtime immediately updates tickets and appends the
+    /// already-built packet to the connection's ordinary ordered output.
+    pub(super) fn teleport_player(
+        &mut self,
+        entity: EntityRef,
+        destination: PositionMoveRotation,
+        relatives: i32,
+    ) -> Result<()> {
+        entity_teleport::teleport_player(entity, destination, relatives, &mut self.level.level)
+            .map_err(game_error)?;
+        self.update_player_tickets(entity)?;
+        self.apply_level_effects()
+    }
     async fn movement(
         &mut self,
         connection: ConnectionId,
@@ -2311,26 +2331,36 @@ impl MinecraftServer {
         horizontal_collision: bool,
     ) -> Result<()> {
         let (yaw, pitch) = rotation;
-        if self.connections[&connection].awaiting_teleport.is_some() {
-            return Ok(());
-        }
         if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
             || !yaw.is_finite()
             || !pitch.is_finite()
         {
             bail!("multiplayer.disconnect.invalid_player_movement");
         }
+        let player = self.player(entity)?;
+        if let Some(position) = player.teleport.awaiting_position {
+            if player.teleport.resend_due(player.connection_ticks) {
+                let destination =
+                    position_move_rotation(position, Vec3::ZERO, player.yaw, player.pitch);
+                self.teleport_player(entity, destination, 0)?;
+            }
+            return Ok(());
+        }
+        let player = self
+            .level
+            .level
+            .entity_mut::<ServerPlayer>(entity)
+            .map_err(game_error)?;
+        player.teleport.awaiting_teleport_time = player.connection_ticks as i32;
         let origin = self.player(entity)?.position;
         if target.distance_to_sqr(origin) > 10000. {
             let player = self.player(entity)?;
             let (yaw, pitch) = (player.yaw, player.pitch);
-            teleport(
-                self.connections.get_mut(&connection).unwrap(),
-                origin,
-                yaw,
-                pitch,
-                self.tick,
-            );
+            self.teleport_player(
+                entity,
+                position_move_rotation(origin, Vec3::ZERO, yaw, pitch),
+                0,
+            )?;
             return Ok(());
         }
         let center = ChunkPos::containing(BlockPos::new(
@@ -2370,13 +2400,11 @@ impl MinecraftServer {
             MovementResult::TooQuickly | MovementResult::Wrongly => {
                 let player = self.player(entity)?;
                 let (position, yaw, pitch) = (player.position, player.yaw, player.pitch);
-                teleport(
-                    self.connections.get_mut(&connection).unwrap(),
-                    position,
-                    yaw,
-                    pitch,
-                    self.tick,
-                );
+                self.teleport_player(
+                    entity,
+                    position_move_rotation(position, Vec3::ZERO, yaw, pitch),
+                    0,
+                )?;
             }
             MovementResult::Accepted => {
                 let player = self
@@ -2502,11 +2530,6 @@ impl MinecraftServer {
                         .entity_mut::<ServerPlayer>(entity)
                         .map_err(game_error)?;
                     player.do_tick();
-                    if let Some((_, position, tick)) = c.awaiting_teleport
-                        && self.tick.saturating_sub(tick) > 20
-                    {
-                        teleport(c, position, player.yaw, player.pitch, self.tick);
-                    }
                     let idle = self.properties.int("player-idle-timeout");
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -2848,22 +2871,10 @@ impl MinecraftServer {
                     let Phase::Play(entity) = self.connections[&id].phase else {
                         continue;
                     };
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
-                        .map_err(game_error)?;
-                    player.position = position;
-                    player.first_good = position;
-                    player.last_good = position;
-                    let (yaw, pitch) = (player.yaw, player.pitch);
-                    teleport(
-                        self.connections.get_mut(&id).unwrap(),
-                        position,
-                        yaw,
-                        pitch,
-                        self.tick,
-                    );
+                    let player = self.player(entity)?;
+                    let destination =
+                        position_move_rotation(position, Vec3::ZERO, player.yaw, player.pitch);
+                    self.teleport_player(entity, destination, 0)?;
                 }
                 self.feedback(source, "Teleported player");
             }
@@ -3139,32 +3150,7 @@ fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry 
         ],
     }
 }
-fn teleport(c: &mut Connection, position: Vec3, yaw: f32, pitch: f32, tick: u64) {
-    c.teleport_id = if c.teleport_id == i32::MAX {
-        0
-    } else {
-        c.teleport_id + 1
-    };
-    c.awaiting_teleport = Some((c.teleport_id, position, tick));
-    c.push(cb::Packet::PlayerPosition(cb::PlayerPosition {
-        id: VarInt(c.teleport_id),
-        change: PositionMoveRotation {
-            position: play::Vec3 {
-                x: position.x,
-                y: position.y,
-                z: position.z,
-            },
-            delta_movement: play::Vec3 {
-                x: 0.,
-                y: 0.,
-                z: 0.,
-            },
-            y_rot: yaw,
-            x_rot: pitch,
-        },
-        relatives: 0,
-    }));
-}
+
 fn light_packet(light: Option<&ChunkLight>) -> LightUpdatePacketData {
     light_packet_with_masks(light, (1_u64 << 26) - 1, (1_u64 << 26) - 1)
 }

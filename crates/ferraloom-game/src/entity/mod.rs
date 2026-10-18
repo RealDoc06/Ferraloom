@@ -19,6 +19,14 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn teleport_relative(
+        self,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::teleport_relative(self, delta, level)
+    }
+
     pub fn count_player_passengers(self, level: &Level) -> Result<i32, LevelError> {
         count_player_passengers(self, level)
     }
@@ -60,6 +68,7 @@ pub mod inside_block;
 mod lifecycle;
 pub mod movement;
 pub mod sounds;
+pub mod teleport;
 mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,

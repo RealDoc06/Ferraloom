@@ -1587,3 +1587,180 @@ fn orb_merges_only_matching_value_and_modulo_forty_group() {
         3
     );
 }
+
+#[test]
+fn relative_teleports_match_native_transform_state_and_packet_flags() {
+    use super::teleport::{calculate_absolute, position_move_rotation, teleport_player};
+    use crate::level::effects::LevelEffect;
+    use ferraloom_protocol::play::clientbound as cb;
+    let source = position_move_rotation(
+        Vec3::new(8.5, 64.25, -12.75),
+        Vec3::new(0.25, -0.125, 0.5),
+        721.25,
+        -28.125,
+    );
+    let change = position_move_rotation(
+        Vec3::new(-0.0, 0.0625, 14.0),
+        Vec3::new(-0.0, 0.2, -0.3),
+        -91.5,
+        120.25,
+    );
+    let mut actual = Vec::new();
+    for flags in [
+        0,
+        1,
+        2,
+        4,
+        8,
+        16,
+        32,
+        64,
+        128,
+        256,
+        511,
+        504,
+        31,
+        255,
+        257,
+        288,
+        384,
+        i32::MAX,
+    ] {
+        let absolute = calculate_absolute(source.clone(), change.clone(), flags);
+        let text = |value: &ferraloom_protocol::play::PositionMoveRotation| {
+            format!(
+                "{:x},{:x},{:x}\t{:x},{:x},{:x}\t{:x},{:x}",
+                value.position.x.to_bits(),
+                value.position.y.to_bits(),
+                value.position.z.to_bits(),
+                value.delta_movement.x.to_bits(),
+                value.delta_movement.y.to_bits(),
+                value.delta_movement.z.to_bits(),
+                value.y_rot.to_bits(),
+                value.x_rot.to_bits()
+            )
+        };
+        actual.push(format!("teleport-transform\t{flags}\t{}", text(&absolute)));
+        let mut level = level(true);
+        let id = EntityRef(1);
+        let mut player = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "teleport".into(),
+            1,
+            Vec3::new(8.5, 64.25, -12.75),
+            player::GameType::Survival,
+        );
+        player.set_y_rot(721.25);
+        player.set_x_rot(-28.125);
+        player.velocity = Vec3::new(0.25, -0.125, 0.5);
+        player.known_movement = player.velocity;
+        player.connection_ticks = 42;
+        let position = player.position;
+        player.movement_this_tick.push_back(Movement {
+            from: Vec3::ZERO,
+            to: position,
+            axis_dependent_original_movement: None,
+        });
+        level
+            .add_entity(id, EntityState::Player(Box::new(player)))
+            .unwrap();
+        teleport_player(id, change.clone(), flags, &mut level).unwrap();
+        let player = level.entity::<player::ServerPlayer>(id).unwrap();
+        let state =
+            position_move_rotation(player.position, player.velocity, player.yaw, player.pitch);
+        actual.push(format!(
+            "teleport-set\t{flags}\t{}\t{:x}\t{:x},{:x},{:x}",
+            text(&state),
+            player.y_head_rot.to_bits(),
+            player.old_position.x.to_bits(),
+            player.old_position.y.to_bits(),
+            player.old_position.z.to_bits()
+        ));
+        assert!(player.movement_this_tick.is_empty());
+        assert_eq!(player.teleport.awaiting_teleport, 1);
+        assert_eq!(player.teleport.awaiting_teleport_time, 42);
+        assert_eq!(player.teleport.awaiting_position, Some(player.position));
+        let packets = level.take_effects();
+        let [LevelEffect::PlayerPacket { recipients, packet }] = packets.as_slice() else {
+            panic!("teleport must enqueue its real packet at the call site")
+        };
+        assert_eq!(recipients, &[id]);
+        let cb::Packet::PlayerPosition(packet) = packet.as_ref() else {
+            panic!("wrong teleport packet")
+        };
+        assert_eq!(packet.id.0, 1);
+        assert_eq!(packet.change, change);
+        assert_eq!(packet.relatives, flags & teleport::Relative::ALL);
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-transform\t") || row.starts_with("teleport-set\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn player_teleport_counter_confirmation_and_mounted_known_movement_are_canonical() {
+    use super::teleport::{
+        accept_teleport, position_move_rotation, teleport_player, teleport_relative,
+    };
+    let mut level = level(true);
+    let id = EntityRef(1);
+    let vehicle = EntityRef(2);
+    let mut player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "teleport".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    player.teleport.awaiting_teleport = i32::MAX - 1;
+    player.connection_ticks = 100;
+    player.known_movement = Vec3::new(9.0, 9.0, 9.0);
+    player.velocity = Vec3::new(1.0, 1.0, 1.0);
+    let mut tnt = item::PrimedTnt::new(2, 123);
+    tnt.parent.velocity = Vec3::new(0.25, -0.125, 0.5);
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    level
+        .add_entity(vehicle, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    start_riding(id, vehicle, true, &mut level).unwrap();
+    teleport_relative(id, Vec3::new(0.0, 0.0625, 0.0), &mut level).unwrap();
+    let player = level.entity::<player::ServerPlayer>(id).unwrap();
+    assert_eq!(player.teleport.awaiting_teleport, 0);
+    assert_eq!(player.position, Vec3::new(8.5, 64.0625, 8.5));
+    assert_vector(
+        player.velocity,
+        Vec3::new(0.25, -0.125, 0.5),
+        "mounted teleport uses vehicle known movement",
+    );
+    assert!(!player.teleport.resend_due(120));
+    assert!(player.teleport.resend_due(121));
+    assert!(!accept_teleport(id, 99, &mut level).unwrap());
+    assert!(accept_teleport(id, 0, &mut level).unwrap());
+    assert!(
+        level
+            .entity::<player::ServerPlayer>(id)
+            .unwrap()
+            .teleport
+            .awaiting_position
+            .is_none()
+    );
+    teleport_player(
+        id,
+        position_move_rotation(Vec3::new(9.0, 65.0, 9.0), Vec3::ZERO, 37.25, -28.125),
+        0,
+        &mut level,
+    )
+    .unwrap();
+    assert_eq!(
+        level
+            .entity::<player::ServerPlayer>(id)
+            .unwrap()
+            .teleport
+            .awaiting_teleport,
+        1
+    );
+}

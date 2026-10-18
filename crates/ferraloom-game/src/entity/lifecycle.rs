@@ -96,18 +96,30 @@ pub fn position_rider(
     passenger: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    if let Some(position) = rider_position(vehicle, passenger, level)? {
+        level.set_entity_pos(passenger, position)?;
+    }
+    Ok(())
+}
+
+/// Captures the same virtual attachment queries for ordinary riding and snapTo.
+pub(crate) fn rider_position(
+    vehicle: EntityRef,
+    passenger: EntityRef,
+    level: &Level,
+) -> Result<Option<ferraloom_util::Vec3>, LevelError> {
     if !level
         .entity::<EntityData>(vehicle)?
         .passengers
         .contains(&passenger)
     {
-        return Ok(());
+        return Ok(None);
     }
     let behavior = level.entity_behavior(vehicle)?;
     let position = behavior.passenger_riding_position(vehicle, passenger, level)?;
     let rider_behavior = level.entity_behavior(passenger)?;
     let attachment = rider_behavior.vehicle_attachment_point(passenger, vehicle, level)?;
-    level.set_entity_pos(passenger, position - attachment)
+    Ok(Some(position - attachment))
 }
 
 /// Port of Entity#rideTick. Tick may replace or remove the vehicle; position
