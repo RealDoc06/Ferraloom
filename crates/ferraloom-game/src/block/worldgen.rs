@@ -95,6 +95,30 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         )
         .map(|value| value.is_some())
     }
+    #[allow(clippy::too_many_arguments)]
+    fn sculk_spread(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        origin: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        charge_count: i32,
+        amount_per_charge: i32,
+        spread_attempts: i32,
+        growth_rounds: i32,
+        spread_rounds: i32,
+    ) -> Result<(), Error> {
+        use ferraloom_worldgen::feature::{FeatureRandom, FeatureRandomSelector};
+        result(super::plants::sculk::spread_patch(
+            &mut LevelAccessRef::Worldgen(region),
+            pos(origin),
+            &mut FeatureRandomSelector::External(FeatureRandom::Region(random)),
+            charge_count,
+            amount_per_charge,
+            spread_attempts,
+            growth_rounds,
+            spread_rounds,
+        ))
+    }
     fn post_process_pos(
         &self,
         state: BlockState,

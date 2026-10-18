@@ -342,10 +342,32 @@ impl MenuTransferContext for InMemoryMenuOperation<'_, '_, '_> {
         self.menu
             .container_mut(self.context, container)
             .set_changed();
+        if self.menu.slots[index].kind == SlotKind::Crafter {
+            self.menu.broadcast_changes(self.context)?;
+        }
         Ok(())
     }
 }
 impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
+    fn quick_craft_slot(
+        &mut self,
+        index: usize,
+        picked: MemoryStackRef,
+        original: MemoryStackRef,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        let amount = count(self.read(original)?) - count(self.read(picked)?);
+        if amount > 0 {
+            if self.menu.slots[index].kind == SlotKind::Result(ResultKind::Crafting) {
+                self.menu.crafting_remove_count =
+                    self.menu.crafting_remove_count.wrapping_add(amount);
+                check_crafting_take_achievements(self, original, hooks)?;
+            } else if let SlotKind::Result(kind) = self.menu.slots[index].kind {
+                hooks.on_take(kind, self.read(original)?, amount)?;
+            }
+        }
+        Ok(())
+    }
     fn menu(&self) -> Result<&AbstractContainerMenu> {
         Ok(self.menu)
     }
@@ -439,6 +461,15 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         index: usize,
         hooks: &mut dyn MenuHooks,
     ) -> Result<MemoryStackRef> {
+        if matches!(self.menu.kind, MenuKind::Inventory | MenuKind::Crafting) {
+            return super::quick_move_crafting::quick_move_crafting_menu_item(self, index, hooks);
+        }
+        if matches!(
+            self.menu.kind,
+            MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
+        ) {
+            return super::quick_move_furnace::quick_move_furnace_menu_item(self, index, hooks);
+        }
         let copy = self.menu.quick_move_stack(self.context, index, hooks)?;
         Ok(self.own(copy))
     }

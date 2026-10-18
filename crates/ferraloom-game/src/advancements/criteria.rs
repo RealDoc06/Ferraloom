@@ -1,14 +1,22 @@
-//! Typed CriteriaTriggers seam. The advancements port will evaluate listeners
-//! here. Until then each trigger is a whole effect under UnportedBehavior;
-//! skipping a trigger never substitutes a predicate result or skips its caller.
+//! Native CriteriaTriggers entry points. Listener matches and award effects run
+//! synchronously; missing runtime facts remain policy-routed Unsupported.
+use super::{
+    live,
+    triggers::{TriggerEvent, TriggerType},
+};
 use crate::{
     block::UnportedOperation,
-    entity::EntityRef,
+    crafting::RecipeHolder,
+    entity::{
+        EntityRef,
+        player::{ServerPlayer, inventory},
+    },
+    inventory::StackRef,
     level::{Level, LevelError},
+    loot::LootParams,
 };
-use ferraloom_protocol::Identifier;
-use ferraloom_protocol::component::ItemStack;
-use ferraloom_util::BlockPos;
+use ferraloom_protocol::{Identifier, component::ItemStack};
+use ferraloom_util::{BlockPos, Vec3};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Trigger {
@@ -16,6 +24,12 @@ pub enum Trigger {
     ItemUsedOnBlock,
     DefaultBlockUse,
     AnyBlockUse,
+    InventoryChanged,
+    RecipeUnlocked,
+    Tick,
+    Location,
+    RewardFunction,
+    Native(TriggerType),
 }
 impl Trigger {
     pub const fn name(self) -> &'static str {
@@ -24,50 +38,228 @@ impl Trigger {
             Self::ItemUsedOnBlock => "item_used_on_block",
             Self::DefaultBlockUse => "default_block_use",
             Self::AnyBlockUse => "any_block_use",
+            Self::InventoryChanged => "inventory_changed",
+            Self::RecipeUnlocked => "recipe_unlocked",
+            Self::Tick => "tick",
+            Self::Location => "location",
+            Self::RewardFunction => "advancement_reward_function",
+            Self::Native(trigger) => trigger.name(),
+        }
+    }
+    pub(super) const fn from_type(trigger: TriggerType) -> Self {
+        match trigger {
+            TriggerType::PlayerGeneratesContainerLoot => Self::GenerateLoot,
+            TriggerType::ItemUsedOnBlock => Self::ItemUsedOnBlock,
+            TriggerType::DefaultBlockUse => Self::DefaultBlockUse,
+            TriggerType::AnyBlockUse => Self::AnyBlockUse,
+            TriggerType::InventoryChanged => Self::InventoryChanged,
+            TriggerType::RecipeUnlocked => Self::RecipeUnlocked,
+            TriggerType::Tick => Self::Tick,
+            TriggerType::Location => Self::Location,
+            trigger => Self::Native(trigger),
         }
     }
 }
-
-/// Port of CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger, with the pre-use stack.
+/// Port of CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger, with the native pre-use
+/// item copy supplied by ServerPlayerGameMode#useItemOn.
 pub fn item_used_on_block(
     level: &mut Level,
-    _player: EntityRef,
-    _pos: BlockPos,
-    _stack: &ItemStack,
+    player: EntityRef,
+    pos: BlockPos,
+    stack: &ItemStack,
 ) -> Result<(), LevelError> {
-    level.unported_operation(UnportedOperation::AdvancementCriterion(
-        Trigger::ItemUsedOnBlock,
-    ))
+    location_event(
+        level,
+        player,
+        pos,
+        Some(stack),
+        TriggerType::ItemUsedOnBlock,
+    )
 }
-/// Port of CriteriaTriggers.DEFAULT_BLOCK_USE.trigger.
+/// Port of CriteriaTriggers.DEFAULT_BLOCK_USE.trigger (BLOCK_USE parameters).
 pub fn default_block_use(
     level: &mut Level,
-    _player: EntityRef,
-    _pos: BlockPos,
+    player: EntityRef,
+    pos: BlockPos,
 ) -> Result<(), LevelError> {
-    level.unported_operation(UnportedOperation::AdvancementCriterion(
-        Trigger::DefaultBlockUse,
-    ))
+    location_event(level, player, pos, None, TriggerType::DefaultBlockUse)
 }
-/// Port of CriteriaTriggers.ANY_BLOCK_USE.trigger, after a consumed interaction.
+/// Port of CriteriaTriggers.ANY_BLOCK_USE.trigger, after consumed interaction.
 pub fn any_block_use(
     level: &mut Level,
-    _player: EntityRef,
-    _pos: BlockPos,
-    _stack: &ItemStack,
+    player: EntityRef,
+    pos: BlockPos,
+    stack: &ItemStack,
 ) -> Result<(), LevelError> {
-    level.unported_operation(UnportedOperation::AdvancementCriterion(
-        Trigger::AnyBlockUse,
-    ))
+    location_event(level, player, pos, Some(stack), TriggerType::AnyBlockUse)
 }
-
-/// Port of CriteriaTriggers.GENERATE_LOOT.trigger, before the table is cleared.
+fn location_event(
+    level: &mut Level,
+    player: EntityRef,
+    pos: BlockPos,
+    stack: Option<&ItemStack>,
+    trigger: TriggerType,
+) -> Result<(), LevelError> {
+    let mut params = LootParams {
+        origin: Some(Vec3::new(
+            f64::from(pos.x) + 0.5,
+            f64::from(pos.y) + 0.5,
+            f64::from(pos.z) + 0.5,
+        )),
+        this_entity: Some(player),
+        block_state: Some(level.get_block_state(pos)?),
+        tool: stack.cloned(),
+        ..Default::default()
+    };
+    // DEFAULT_BLOCK_USE deliberately has neither TOOL nor BLOCK_ENTITY.
+    let block_entity = if stack.is_some() {
+        level.block_entity_ref(pos)?
+    } else {
+        None
+    };
+    if let Some(handle) = block_entity {
+        let receiver = level.block_entity_state(handle)?;
+        params.block_entity = Some(ferraloom_nbt::Tag::Compound(
+            receiver
+                .save_with_full_metadata()
+                .map_err(|_| LevelError::Inventory("advancement block entity NBT"))?,
+        ));
+        params.block_entity_components = Some(receiver.collect_components());
+    }
+    live::trigger(
+        level,
+        player,
+        trigger,
+        TriggerEvent::Location(&params),
+        block_entity,
+    )
+}
+/// Port of CriteriaTriggers.GENERATE_LOOT.trigger before table clearing.
 pub fn generate_loot(
     level: &mut Level,
-    _player: EntityRef,
-    _table: &Identifier,
+    player: EntityRef,
+    table: &Identifier,
 ) -> Result<(), LevelError> {
-    level.unported_operation(UnportedOperation::AdvancementCriterion(
-        Trigger::GenerateLoot,
-    ))
+    live::trigger(
+        level,
+        player,
+        TriggerType::PlayerGeneratesContainerLoot,
+        TriggerEvent::Loot(table),
+        None,
+    )
+}
+/// Port of InventoryChangeTrigger#trigger. The argument is the retained native
+/// lastSlots copy supplied by triggerSlotListeners, independent of slot kind.
+pub fn inventory_changed(
+    level: &mut Level,
+    player: EntityRef,
+    stack: StackRef,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = (|| {
+        let owner = level.entity::<ServerPlayer>(player)?;
+        let (mut full, mut empty, mut occupied) = (0, 0, 0);
+        for slot in 0..43 {
+            let item = owner.inventory.get_item(slot, &owner.parent.equipment);
+            if item.is_empty() {
+                empty += 1;
+            } else {
+                occupied += 1;
+                if inventory::count(item) >= inventory::max_stack_size(item) {
+                    full += 1;
+                }
+            }
+        }
+        live::trigger(
+            level,
+            player,
+            TriggerType::InventoryChanged,
+            TriggerEvent::InventoryLive {
+                player,
+                changed: stack,
+                full,
+                empty,
+                occupied,
+            },
+            None,
+        )
+    })();
+    level.release_stack(stack);
+    result
+}
+/// Port of RecipeUnlockedTrigger#trigger. The recipe holder belongs to the
+/// immutable datapack service, so nested awards never invalidate its borrow.
+pub fn recipe_unlocked(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+) -> Result<(), LevelError> {
+    let id = Identifier::parse(&recipe.id.to_string())
+        .map_err(|_| LevelError::Inventory("advancement recipe identifier"))?;
+    live::trigger(
+        level,
+        player,
+        TriggerType::RecipeUnlocked,
+        TriggerEvent::Recipe {
+            id: &id,
+            ingredients: &[],
+        },
+        None,
+    )
+}
+/// Port of ServerPlayer#triggerRecipeCrafted and RecipeCraftedTrigger#trigger.
+/// The captured list contains native grid receiver identities, including empty
+/// stacks and repeated refs. Retain it across nested award effects, never copy it.
+pub fn recipe_crafted(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    for (index, &stack) in ingredients.iter().enumerate() {
+        if let Err(error) = level.retain_stack(stack) {
+            for &retained in &ingredients[..index] {
+                level.release_stack(retained);
+            }
+            return Err(live::menu_error(error));
+        }
+    }
+    let result = (|| {
+        let id = Identifier::parse(&recipe.id.to_string())
+            .map_err(|_| LevelError::Inventory("advancement recipe identifier"))?;
+        live::trigger(
+            level,
+            player,
+            TriggerType::RecipeCrafted,
+            TriggerEvent::RecipeLive {
+                id: &id,
+                ingredients,
+            },
+            None,
+        )
+    })();
+    for &stack in ingredients {
+        level.release_stack(stack);
+    }
+    result
+}
+/// Port of CriteriaTriggers.TICK at the native ServerPlayer#tick phase.
+pub fn tick(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
+    live::trigger(level, player, TriggerType::Tick, TriggerEvent::Player, None)
+}
+/// Port of CriteriaTriggers.LOCATION at ServerPlayer#doTick's 20-tick tail.
+pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
+    live::trigger(
+        level,
+        player,
+        TriggerType::Location,
+        TriggerEvent::Player,
+        None,
+    )
+}
+/// Explicit boundary for trigger families without a producing live subsystem.
+pub fn unsupported(level: &mut Level, trigger: TriggerType) -> Result<(), LevelError> {
+    level.unported_operation(UnportedOperation::AdvancementCriterion(Trigger::from_type(
+        trigger,
+    )))
 }

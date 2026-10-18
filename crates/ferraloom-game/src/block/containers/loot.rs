@@ -141,10 +141,34 @@ mod tests {
         let handle = level.block_entity_ref(pos).unwrap().unwrap();
         let mut loot = LootData::default();
         loot.tables.insert(table, LootTable::decode(&serde_json::json!({"type":"chest","pools":[{"rolls":1,"entries":[{"type":"item","name":"stone"}]}]})).unwrap());
+        let recipes = Arc::new(RecipeManager::new(Vec::new()).unwrap());
+        let recipe_synchronization = Arc::new(crate::crafting::RecipeSynchronization::new(
+            &recipes,
+            |_| true,
+        ));
+        let advancement_id = Identifier::parse("test:unsupported_food").unwrap();
+        let advancements =
+            Arc::new(crate::advancements::ServerAdvancementManager::new(
+                vec![crate::advancements::AdvancementHolder {
+            id: advancement_id,
+            value: crate::advancements::Advancement::decode(&serde_json::json!({
+                "criteria":{"food":{"trigger":"player_generates_container_loot","conditions":{
+                    "loot_tables":"test:chest",
+                    "player":{"type":"entity_properties","entity":"this","predicate":{
+                        "minecraft:type_specific/player":{"food":{"level":20}}
+                    }}
+                }}}
+            })).unwrap(),
+        }],
+            ));
         level.set_container_resources(
             Arc::new(ContainerResources {
-                recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
+                recipes: Arc::clone(&recipes),
                 loot: Arc::new(loot),
+                advancements: Arc::clone(&advancements),
+                recipe_tags: Default::default(),
+                recipe_synchronization,
             }),
             0,
         );
@@ -161,6 +185,10 @@ mod tests {
                 ))),
             )
             .unwrap();
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .advancements = crate::advancements::PlayerAdvancements::new(&advancements);
         assert_eq!(
             unpack_loot_table(handle, Some(player), &mut level),
             Err(LevelError::UnsupportedAdvancementCriterion(

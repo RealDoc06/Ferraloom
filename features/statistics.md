@@ -6,7 +6,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 |---|---|---|---|---|---|
 | statistics.counter.increment | Increment typed statistics and synchronize dirty values to the owning player | `ServerStatsCounter; StatType; ServerPlayer#awardStat` | `stats::tests::vanilla_counter_arithmetic_same_value_writes_and_requests` | pass | partial |
 | statistics.counter.persist | Save namespaced stat values to player JSON and datafix older statistic formats | `ServerStatsCounter` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
-| statistics.counter.scoreboard | Update linked scoreboard objectives when statistics change | `ServerPlayer#awardStat; ServerScoreboard` | | - | todo |
+| statistics.counter.scoreboard | Update linked scoreboard objectives when statistics change | `ServerPlayer#awardStat; ServerScoreboard` | `stats::tests::live_stat_counter_and_scoreboard_update_in_native_order` | pass | partial |
 | statistics.movement.distance | Count movement distances by locomotion type and vehicle type using vanilla rounding | `ServerPlayer#checkMovementStatistics; ServerPlayer#checkRidingStatistics` | | - | todo |
 | statistics.items.blocks | Award mining, crafting, using, breaking, pickup and drop statistics from their behavior hooks | `Stats; ServerPlayer#awardStat` | | - | todo |
 | statistics.custom-stat.animals-bred | `minecraft:animals_bred` (custom stat) | `net.minecraft.stats.Stats#register` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
@@ -101,3 +101,15 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.counter.partial-json | Keep valid siblings when statistic names or values fail codec parsing | `ServerStatsCounter.STATS_CODEC` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | pass |
 | statistics.counter.jdk25-copy-order | Preserve JDK 25 HashSet copy capacities when draining 12, 24 or all custom dirty statistics into the packet map | `ServerStatsCounter#getDirty; HashSet(Collection)` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
 | statistics.counter.loaded-map-order | Preserve JDK 25 per-group putAll and fastutil destination sizing when loading saved statistics | `ServerStatsCounter.STATS_CODEC; ServerStatsCounter#parse` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
+
+| statistics.request-stats.live | REQUEST_STATS sends and clears the canonical player dirty set through ordered player output | `ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests` | pass | partial |
+
+| statistics.live-counter-scoreboard-order | Player award/reset updates the canonical counter before matching objectives synchronously; counter saturation and score wrapping retain native delta semantics | `ServerPlayer#awardStat; ServerPlayer#resetStat` | `stats::tests::live_stat_counter_and_scoreboard_update_in_native_order` | pass | partial |
+
+| statistics.parity.consumed-chest-open | Bedrock flat Strict chest interaction awards OPEN_CHEST and REQUEST_STATS clears its dirty entry | `ChestBlock#useWithoutItem; ServerPlayer#awardStat` | `ferraloom-parity::opening_chest_awards_and_flushes_statistics` | pass | todo |
+
+| statistics.join-dirty-loaded | Joining marks all loaded statistics dirty before initial recipe packets, for the first REQUEST_STATS response | `PlayerList#placeNewPlayer` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
+| statistics.persistence.legacy-name-file | Native locateStatsFile renames valid name-based statistics files to UUID paths and retains the source path if moving fails; deferred with pre-UUID save/datafix compatibility | `PlayerList#locateStatsFile` | | - | todo |
+| statistics.parity.loaded-save-request | Bedrock flat Strict scenario sends a loaded statistic once per join and retains its exact value through save/restart | `PlayerList#getPlayerStats; PlayerList#save; ServerGamePacketListenerImpl#handleClientCommand` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | pass |
+| statistics.persistence.level-resource | UUID saves use players/stats and the shared player-progress path helper | `LevelResource.PLAYER_STATS_DIR` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | pass |
+| statistics.persistence.old-layout-migration | Migrate older statistics layouts through the filefix workstream; no fallback reader | `PlayerStorageFileFix` | pending | - | todo |
