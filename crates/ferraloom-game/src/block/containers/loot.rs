@@ -120,7 +120,14 @@ mod tests {
     fn lazy_fill_preserves_seed_occupied_slots_and_criterion_boundary() {
         let mut level = Level::new(Region::new(&BEHAVIORS));
         let pos = BlockPos::new(3, 3, 3);
-        let mut chunk = LevelChunk::new(ChunkPos::new(0, 0), 0, 1);
+        let section = ferraloom_chunk::LevelChunkSection::new(
+            ferraloom_chunk::Strategy::block_states(),
+            ferraloom_chunk::Strategy::biomes(Arc::new(
+                ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+            )),
+            ferraloom_chunk::BiomeId(0),
+        );
+        let mut chunk = LevelChunk::new(ChunkPos::new(0, 0), 0..1, section);
         chunk.set_block_state(pos, Block::CHEST.default_state());
         level.add_chunk(chunk).unwrap();
         let table = Identifier::parse("test:chest").unwrap();
