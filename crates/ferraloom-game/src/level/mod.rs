@@ -12,6 +12,7 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+pub mod acquisition;
 mod block_entity;
 pub mod border;
 mod broadcast;
@@ -52,6 +53,11 @@ pub enum LevelError {
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
     DuplicateBlockEntity(crate::block::entity::BlockEntityRef),
     MissingChunk(ChunkPos),
+    ChunkAcquisition(
+        ChunkPos,
+        chunk_holder::ChunkStatus,
+        acquisition::AcquireFailure,
+    ),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
