@@ -1,8 +1,8 @@
 //! Synchronous crafting callbacks at the menu's canonical mutation sites.
 use super::*;
 use crate::crafting::{
-    CraftingContext, CraftingInput, CraftingInputAccess, CraftingInputView, RecipeHolder,
-    RecipeInput, RecipeManager, RecipeSynchronization, RecipeType, ServerRecipeBook,
+    CraftingContext, CraftingInput, CraftingInputAccess, RecipeHolder, RecipeInput, RecipeManager,
+    RecipeSynchronization, RecipeType, ServerRecipeBook,
 };
 use ferraloom_data::datapack::Identifier;
 
@@ -208,7 +208,7 @@ impl AbstractContainerMenu {
             _ => None,
         }
     }
-    fn crafting_grid(&self) -> &[ItemStack] {
+    pub(super) fn crafting_grid(&self) -> &[ItemStack] {
         match &self.local[0] {
             MenuContainer::Crafting(c) => c.items(),
             _ => unreachable!("crafting grid"),
@@ -281,20 +281,9 @@ impl AbstractContainerMenu {
         stack: &ItemStack,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        let amount = self.crafting_remove_count;
-        if let Some(crafting) = hooks.crafting() {
-            if amount > 0 {
-                crafting.item_crafted(self, ctx, stack, Some(amount))?;
-            }
-            if let Some(recipe) = self.crafting_recipe_used.clone() {
-                let input = self.crafting_grid().to_vec();
-                if crafting.award(self, ctx, &recipe, &input)? {
-                    self.crafting_recipe_used = None;
-                }
-            }
-        }
-        self.crafting_remove_count = 0;
-        Ok(())
+        let mut context = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+        let stack = context.own(stack.clone());
+        check_crafting_take_achievements(&mut context, stack, hooks)
     }
     /// Port of ResultSlot#onTake. Remainders are matched after achievement
     /// callbacks, which may have changed the live crafting input.
@@ -306,47 +295,9 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         self.crafting_remove_count = self.crafting_remove_count.wrapping_add(swap_count);
-        self.crafting_check_achievements(ctx, stack, hooks)?;
-        let grid_width = self.crafting_grid_size().expect("crafting menu");
-        let (width, height, left, top, remaining) = {
-            let positioned =
-                CraftingInputView::of_positioned(grid_width, grid_width, self.crafting_grid())?;
-            let input = &positioned.input;
-            let remaining = hooks.crafting().expect("crafting hook").remaining(input)?;
-            (
-                input.width(),
-                input.height(),
-                positioned.left,
-                positioned.top,
-                remaining,
-            )
-        };
         let mut context = super::in_memory::InMemoryMenuOperation::new(self, ctx);
-        let items = match remaining {
-            Some(items) => items.into_iter().map(|stack| context.own(stack)).collect(),
-            None => {
-                let mut items = Vec::with_capacity(width * height);
-                for y in 0..height {
-                    for x in 0..width {
-                        items.push(context.slot_stack(x + left + (y + top) * grid_width + 1)?);
-                    }
-                }
-                items
-            }
-        };
-        apply_crafting_remainders(
-            &mut context,
-            &CraftingRemainders {
-                grid_width,
-                width,
-                height,
-                left,
-                top,
-                items,
-            },
-            hooks,
-        )?;
-        Ok(())
+        let stack = context.own(stack.clone());
+        take_crafting_result_stack(&mut context, stack, hooks)
     }
 }
 

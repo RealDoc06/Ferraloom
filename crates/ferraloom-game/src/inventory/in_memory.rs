@@ -530,6 +530,11 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         stack: MemoryStackRef,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
+        if self.menu.slots[index].kind == SlotKind::Result(ResultKind::Crafting)
+            && hooks.has_crafting()
+        {
+            return take_crafting_result_stack(self, stack, hooks);
+        }
         // The legacy callback API borrows an observed value; mutations continue
         // through the canonical menu/context and are never written back.
         let observed = self.read(stack)?.clone();
