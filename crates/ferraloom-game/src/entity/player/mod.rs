@@ -446,8 +446,7 @@ pub fn move_player_with_checks(
         movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
         level
             .entity_mut::<EntityData>(entity)?
-            .movement_this_tick
-            .pop_back();
+            .remove_latest_movement_recording();
         Ok(MovementResult::Wrongly)
     }
 }

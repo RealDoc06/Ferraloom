@@ -246,6 +246,38 @@ pub trait Entity: Sync {
         let movements = inside_block::collect_movements(entity, level)?;
         inside_block::apply_effects(self, entity, &movements, level)
     }
+    /// Port of Entity#applyEffectsFromBlocks(Vec3,Vec3), without draining or
+    /// replacing movementThisTick/finalMovementsThisTick.
+    fn apply_effects_from_blocks_between(
+        &self,
+        entity: EntityRef,
+        from: ferraloom_util::Vec3,
+        to: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        inside_block::apply_effects(
+            self,
+            entity,
+            &[Movement {
+                from,
+                to,
+                axis_dependent_original_movement: None,
+            }],
+            level,
+        )
+    }
+    /// Port of Entity#getPistonPushReaction. Ported subclasses inherit PUSH_PULL.
+    fn piston_push_reaction(&self) -> ferraloom_data::PushReaction {
+        ferraloom_data::PushReaction::PushPull
+    }
+    /// Port of Entity#isIgnoringBlockTriggers. Spectator filtering is separate.
+    fn is_ignoring_block_triggers(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(true)
     }

@@ -243,6 +243,10 @@ impl EntityData {
             self.pitch = (pitch % 360.0).clamp(-90.0, 90.0);
         }
     }
+    /// Port of Entity#removeLatestMovementRecording; an empty queue is unchanged.
+    pub fn remove_latest_movement_recording(&mut self) {
+        self.movement_this_tick.pop_back();
+    }
     pub fn set_old_pos_and_rot(&mut self) {
         self.old_position = self.position;
         self.interpolation_old_position = self.position;

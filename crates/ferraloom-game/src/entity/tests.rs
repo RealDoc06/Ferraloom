@@ -1313,3 +1313,52 @@ fn orb_merges_only_matching_value_and_modulo_forty_group() {
         3
     );
 }
+
+#[test]
+fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
+    let mut level = level(false);
+    let id = EntityRef(1);
+    level
+        .set_block_state(BlockPos::new(8, 64, 8), Block::WATER.default_state())
+        .unwrap();
+    let mut entity = item::PrimedTnt::new(1, 123);
+    entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    entity.parent.remaining_fire_ticks = 100;
+    let recording = Movement {
+        from: Vec3::new(20.5, 64.0, 8.5),
+        to: Vec3::new(21.5, 64.0, 8.5),
+        axis_dependent_original_movement: None,
+    };
+    entity
+        .parent
+        .movement_this_tick
+        .push_back(recording.clone());
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
+        .unwrap();
+    let behavior = level.entity_behavior(id).unwrap();
+    assert_eq!(
+        behavior.piston_push_reaction(),
+        ferraloom_data::PushReaction::PushPull
+    );
+    assert!(!behavior.is_ignoring_block_triggers(id, &level).unwrap());
+    behavior
+        .apply_effects_from_blocks_between(
+            id,
+            Vec3::new(8.5, 64.0, 8.5),
+            Vec3::new(9.5, 64.0, 8.5),
+            &mut level,
+        )
+        .unwrap();
+    let entity = level.entity::<EntityData>(id).unwrap();
+    assert!(entity.remaining_fire_ticks <= 0);
+    assert_eq!(entity.movement_this_tick.len(), 1);
+    assert_eq!(entity.movement_this_tick[0].from, recording.from);
+    assert_eq!(entity.movement_this_tick[0].to, recording.to);
+    assert!(entity.final_movements_this_tick.is_empty());
+    let entity = level.entity_mut::<EntityData>(id).unwrap();
+    entity.remove_latest_movement_recording();
+    assert!(entity.movement_this_tick.is_empty());
+    entity.remove_latest_movement_recording();
+    assert!(entity.movement_this_tick.is_empty());
+}
