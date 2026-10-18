@@ -36,3 +36,8 @@ collapsing does not hide the codec's raw bits; that cache behavior is separate.
 DataOutputStream and Netty writes for scalar and nested float/double tags, then
 reads both through DataInputStream and ByteBufInputStream. File writes canonicalize
 NaNs; network writes and both readers retain NaN payloads.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-component-maps.sh` captures
+map, patch, stack and template equality across component insertion orders, removal
+orders, signed zeros and NaN payloads. It checks native map entry-sum hashes and
+map/patch hash invariance, and records patch bytes in their original wire order.
