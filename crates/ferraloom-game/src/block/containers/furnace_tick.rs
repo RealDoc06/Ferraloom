@@ -328,7 +328,10 @@ mod tests {
     }
     #[test]
     fn cooking_timeline_relights_and_preserves_missing_recipe_timer() {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         level.set_block_tags(Arc::new(
             TagSet::load(&ResourceManager::new(Vec::new())).unwrap(),
         ));

@@ -293,7 +293,10 @@ mod tests {
             .filter(|line| line.starts_with("pop-resource-rng\t"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.rules_mut().block_drops = Some(false);
             level.set_random_streams(
                 Random::Legacy(LegacyRandomSource::new(fields[1].parse().unwrap())),

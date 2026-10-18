@@ -116,7 +116,10 @@ mod tests {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     #[test]
     fn lazy_fill_preserves_seed_occupied_slots_and_criterion_boundary() {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let pos = BlockPos::new(3, 3, 3);
         let section = ferraloom_chunk::LevelChunkSection::new(
             ferraloom_chunk::Strategy::block_states(),

@@ -140,7 +140,10 @@ mod tests {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     #[test]
     fn seeded_live_runtime_preserves_the_gaussian_cache_between_operations() {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let mut runtime = LiveLootRuntime::new(&mut level, LootRandomSelection::Seeded(-12345));
         let mut expected = LegacyRandomSource::new(-12345);
         for _ in 0..4 {
@@ -151,7 +154,10 @@ mod tests {
     }
     #[test]
     fn named_live_runtime_initializes_without_a_draw_and_rejects_duplicate_providers() {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let id = Identifier::parse("test:empty").unwrap();
         let before = level.container_runtime().sequences.to_nbt();
         let mut runtime =
