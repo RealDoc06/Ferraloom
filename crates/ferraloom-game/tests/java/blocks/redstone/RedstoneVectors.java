@@ -16,10 +16,16 @@ public final class RedstoneVectors extends MutationFixture {
     final List<String> changes = new ArrayList<>();
     final List<String> notifications = new ArrayList<>();
     boolean recording;
-    RedstoneVectors(RegistryAccess registries) { super(new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).registries(),registries.registries())).freeze()); }
+    RedstoneVectors(RegistryAccess registries) { super(new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).registries(),registries.registries())).freeze()); for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++){blockTicks.addContainer(new net.minecraft.world.level.ChunkPos(x,z),new net.minecraft.world.ticks.LevelChunkTicks<>());getChunkAt(new BlockPos(x*16,0,z*16)).setLoaded(true);} }
     final net.minecraft.world.level.entity.EntityLookup<net.minecraft.world.entity.Entity> actors=new net.minecraft.world.level.entity.EntityLookup<>();
     final net.minecraft.world.level.entity.EntitySectionStorage<net.minecraft.world.entity.Entity> sections=new net.minecraft.world.level.entity.EntitySectionStorage<>(net.minecraft.world.entity.Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
     final net.minecraft.world.level.entity.LevelEntityGetter<net.minecraft.world.entity.Entity> getter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(actors,sections);
+    final net.minecraft.world.ticks.LevelTicks<Block> blockTicks=new net.minecraft.world.ticks.LevelTicks<>(key->true);
+    long subTick;
+    @Override public long nextSubTickCount(){return subTick++;}
+    @Override public net.minecraft.world.ticks.LevelTicks<Block> getBlockTicks(){return blockTicks;}
+    @Override public void scheduleTick(BlockPos pos,Block block,int delay){blockTicks.schedule(createTick(pos,block,delay));}
+    @Override public void scheduleTick(BlockPos pos,Block block,int delay,net.minecraft.world.ticks.TickPriority priority){blockTicks.schedule(createTick(pos,block,delay,priority));}
     final net.minecraft.world.TickRateManager clock=new net.minecraft.world.TickRateManager();
     final LinkedHashSet<net.minecraft.world.level.BlockEventData> events=new LinkedHashSet<>();
     @Override public net.minecraft.world.TickRateManager tickRateManager(){return clock;}
@@ -38,6 +44,8 @@ public final class RedstoneVectors extends MutationFixture {
     @Override public long getGameTime(){return time;}
     @Override public boolean isRaining(){return false;}
     @Override public java.util.Collection<net.minecraft.world.entity.boss.enderdragon.EnderDragonPart> dragonParts(){return List.of();}
+    int nextActorId=1;
+    @Override public boolean addFreshEntity(net.minecraft.world.entity.Entity entity){entity.setId(nextActorId++);actor(entity);return true;}
     void actor(net.minecraft.world.entity.Entity entity){actors.add(entity);sections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).add(entity);}
 
     @Override public net.minecraft.world.level.border.WorldBorder getWorldBorder() { return border; }
@@ -205,7 +213,7 @@ public final class RedstoneVectors extends MutationFixture {
             level.drainEvents();steps.add(pistonSnapshot(level));
             if(off==0){level.setBlock(power,Blocks.AIR.defaultBlockState(),3);if(quasi)level.neighborChanged(ORIGIN,Blocks.STONE,null);level.drainEvents();steps.add(pistonSnapshot(level));}
             for(int tick=1;tick<=7;tick++){
-                level.time=tick;level.tickBlockEntities();steps.add(pistonSnapshot(level));
+                level.time=tick;level.tickBlockEntities();if(tick==3&&off==4&&length<=12&&!level.getBlockState(ORIGIN.east()).is(Blocks.PISTON_HEAD))throw new AssertionError("moving piston ticker not registered");steps.add(pistonSnapshot(level));
                 if(tick==off){level.setBlock(power,Blocks.AIR.defaultBlockState(),3);if(quasi)level.neighborChanged(ORIGIN,Blocks.STONE,null);level.drainEvents();steps.add(pistonSnapshot(level));}
             }
             System.out.println("piston-timeline:"+sticky+":"+quasi+":"+length+":"+off+"\t"+String.join("|",steps)+"#"+String.join(";",level.changes));
@@ -214,13 +222,46 @@ public final class RedstoneVectors extends MutationFixture {
     static String pistonSnapshot(RedstoneVectors level) {
         var states=new ArrayList<String>();for(int i=0;i<=14;i++)states.add(""+Block.getId(level.getBlockState(ORIGIN.east(i))));return String.join(",",states);
     }
+    static void dispensing(RegistryAccess r) {
+        for(long seed:new long[]{0,1,12345})for(var direction:Direction.values()) {
+            var level=new RedstoneVectors(r);level.random.setSeed(seed);
+            var state=Blocks.DISPENSER.defaultBlockState().setValue(DispenserBlock.FACING,direction);
+            var source=new net.minecraft.core.dispenser.BlockSource(null,ORIGIN,state,null);
+            net.minecraft.core.dispenser.DefaultDispenseItemBehavior.spawnItem(level,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE),6,direction,DispenserBlock.getDispensePosition(source));
+            var list=new ArrayList<net.minecraft.world.entity.Entity>();level.getEntities().getAll().forEach(list::add);var item=list.getFirst();
+            var pos=item.position();var v=item.getDeltaMovement();
+            System.out.println("dispense-item:"+seed+":"+direction.get3DDataValue()+"\t"+Long.toHexString(Double.doubleToRawLongBits(pos.x))+","+Long.toHexString(Double.doubleToRawLongBits(pos.y))+","+Long.toHexString(Double.doubleToRawLongBits(pos.z))+"/"+Long.toHexString(Double.doubleToRawLongBits(v.x))+","+Long.toHexString(Double.doubleToRawLongBits(v.y))+","+Long.toHexString(Double.doubleToRawLongBits(v.z))+"/"+level.random.nextLong());
+        }
+        for(var item:net.minecraft.core.registries.BuiltInRegistries.ITEM)if(item instanceof net.minecraft.world.item.ProjectileItem projectile)for(var direction:Direction.values()) {
+            var config=projectile.createDispenseConfig();var state=Blocks.DISPENSER.defaultBlockState().setValue(DispenserBlock.FACING,direction);
+            var source=new net.minecraft.core.dispenser.BlockSource(null,ORIGIN,state,null);var pos=config.positionFunction().getDispensePosition(source,direction);
+            System.out.println("projectile-config:"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getId(item)+":"+direction.get3DDataValue()+"\t"+Long.toHexString(Double.doubleToRawLongBits(pos.x()))+","+Long.toHexString(Double.doubleToRawLongBits(pos.y()))+","+Long.toHexString(Double.doubleToRawLongBits(pos.z()))+"/"+Integer.toHexString(Float.floatToRawIntBits(config.power()))+","+Integer.toHexString(Float.floatToRawIntBits(config.uncertainty()))+"/"+config.overrideDispenseEvent().map(Object::toString).orElse("none"));
+        }
+    }
+    static void dispenserTriggers(RegistryAccess r) {
+        for(var block:List.of(Blocks.DISPENSER,Blocks.DROPPER))for(int layout=0;layout<4;layout++) {
+            var level=new RedstoneVectors(r);var state=block.defaultBlockState();level.raw(ORIGIN,state);
+            var power=switch(layout){case 0->ORIGIN.below();case 1->ORIGIN.above();case 2->ORIGIN.above(2);default->ORIGIN.east();};
+            var samples=new ArrayList<String>();
+            for(int tick=0;tick<=7;tick++) {
+                level.time=tick;
+                if(tick==0||tick==1||tick==2||tick==6)level.setBlock(power,(tick==0||tick==2?Blocks.REDSTONE_BLOCK:Blocks.AIR).defaultBlockState(),3);
+                String before=level.getBlockState(ORIGIN).getValue(DispenserBlock.TRIGGERED)+"/"+level.blockTicks.hasScheduledTick(ORIGIN,block);
+                level.neighborChanged(ORIGIN,Blocks.STONE,null);
+                String poked=level.getBlockState(ORIGIN).getValue(DispenserBlock.TRIGGERED)+"/"+level.blockTicks.hasScheduledTick(ORIGIN,block);
+                level.blockTicks.tick(tick,65536,(p,b)->{});
+                samples.add(before+";"+poked+";"+level.blockTicks.hasScheduledTick(ORIGIN,block));
+            }
+            System.out.println("dispenser-trigger:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(block)+":"+layout+"\t"+String.join("|",samples));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

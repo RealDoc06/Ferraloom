@@ -400,6 +400,9 @@ fn check_powered(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<
     Ok(())
 }
 impl BlockBehavior for HopperBlock {
+    fn has_analog_output_signal(&self, _state: BlockState) -> bool {
+        true
+    }
     fn on_place(
         &self,
         state: BlockState,

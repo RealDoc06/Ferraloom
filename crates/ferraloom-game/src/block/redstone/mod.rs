@@ -5,6 +5,7 @@ use ferraloom_data::{Block, BlockClass};
 
 pub mod comparator;
 pub mod diode;
+pub mod dispenser;
 pub mod hopper;
 pub mod lamp;
 pub mod moving_piston;
@@ -25,6 +26,7 @@ pub mod wire;
 #[derive(Default)]
 pub struct RedstoneState {
     pub(crate) wire_signals_suppressed: bool,
+    pub(crate) dispense: dispenser::DispenseRegistry,
     pub(crate) piston_noclip: Option<ferraloom_util::Direction>,
     pub(crate) torch_toggles: std::collections::VecDeque<(ferraloom_util::BlockPos, i64)>,
 }
@@ -137,12 +139,25 @@ pub(crate) fn ported_behavior(
         {
             Some(&sources::SOURCES)
         }
+        BlockClass::DispenserBlock | BlockClass::DropperBlock
+            if matches!(
+                method,
+                M::NeighborChanged
+                    | M::Tick
+                    | M::AnalogOutputSignal
+                    | M::HasAnalogOutputSignal
+                    | M::AffectNeighborsAfterRemoval
+            ) =>
+        {
+            Some(&dispenser::DISPENSER)
+        }
         BlockClass::HopperBlock
             if matches!(
                 method,
                 M::OnPlace
                     | M::NeighborChanged
                     | M::AnalogOutputSignal
+                    | M::HasAnalogOutputSignal
                     | M::AffectNeighborsAfterRemoval
                     | M::EntityInside
             ) =>

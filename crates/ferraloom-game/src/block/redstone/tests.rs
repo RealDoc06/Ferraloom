@@ -754,3 +754,141 @@ fn piston_block_events_short_pulses_and_quasi_timelines_match_vanilla() {
         assert_eq!(changes, expected_changes, "{name} sub-tick mutation order");
     }
 }
+
+#[test]
+fn dispenser_item_spawn_and_projectile_parameters_match_vanilla() {
+    use crate::entity::{EntityData, player::inventory::count};
+    use ferraloom_data::Item;
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::{Vec3, random::RandomSource};
+    for (name, expected) in cases("dispense-item:") {
+        let mut args = name.split(':').skip(1);
+        let seed = args.next().unwrap().parse::<i64>().unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let mut level = level();
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
+        let step = direction.step();
+        let pos = Vec3::new(
+            f64::from(ORIGIN.x) + 0.5 + 0.7 * f64::from(step.x),
+            f64::from(ORIGIN.y) + 0.5 + 0.7 * f64::from(step.y),
+            f64::from(ORIGIN.z) + 0.5 + 0.7 * f64::from(step.z),
+        );
+        let id = dispenser::spawn_item(
+            &mut level,
+            ItemStack::new(Item::STONE, 1, Default::default()),
+            6,
+            direction,
+            pos,
+        )
+        .unwrap();
+        let item = level.entity::<EntityData>(id).unwrap();
+        let pos = item.position;
+        let v = item.velocity;
+        let actual = format!(
+            "{:x},{:x},{:x}/{:x},{:x},{:x}/{}",
+            pos.x.to_bits(),
+            pos.y.to_bits(),
+            pos.z.to_bits(),
+            v.x.to_bits(),
+            v.y.to_bits(),
+            v.z.to_bits(),
+            level.random().next_long()
+        );
+        assert_eq!(actual, expected, "{name}");
+        assert_eq!(
+            count(
+                level
+                    .entity::<crate::entity::item::ItemEntity>(id)
+                    .unwrap()
+                    .item()
+            ),
+            1
+        );
+    }
+    for (name, expected) in cases("projectile-config:") {
+        let mut args = name.split(':').skip(1);
+        let item = Item::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let config = item.dispenser_properties().projectile.unwrap();
+        let pos = dispenser::projectile_position(ORIGIN, direction, config.position);
+        assert_eq!(
+            format!(
+                "{:x},{:x},{:x}/{:x},{:x}/{}",
+                pos.x.to_bits(),
+                pos.y.to_bits(),
+                pos.z.to_bits(),
+                config.power.to_bits(),
+                config.uncertainty.to_bits(),
+                config
+                    .override_dispense_event
+                    .map_or("none".into(), |v| v.to_string())
+            ),
+            expected,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn dispenser_dropper_quasi_triggers_and_four_tick_dedup_match_vanilla() {
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("dispenser-trigger:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let layout = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        level
+            .set_block_state(ORIGIN, block.default_state())
+            .unwrap();
+        let power = match layout {
+            0 => ORIGIN.below(1),
+            1 => ORIGIN.above(1),
+            2 => ORIGIN.above(2),
+            _ => ORIGIN.relative(Direction::East, 1),
+        };
+        let mut samples = Vec::new();
+        for tick in 0..=7 {
+            level.set_game_time(tick);
+            if matches!(tick, 0 | 1 | 2 | 6) {
+                level
+                    .set_block(
+                        power,
+                        if tick == 0 || tick == 2 {
+                            Block::REDSTONE_BLOCK
+                        } else {
+                            Block::AIR
+                        }
+                        .default_state(),
+                        UpdateFlags::ALL,
+                        UPDATE_LIMIT,
+                    )
+                    .unwrap();
+            }
+            let before = format!(
+                "{}/{}",
+                level
+                    .get_block_state(ORIGIN)
+                    .unwrap()
+                    .get(p::TRIGGERED)
+                    .unwrap(),
+                level.has_scheduled_block_tick(ORIGIN, block)
+            );
+            level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+            let poked = format!(
+                "{}/{}",
+                level
+                    .get_block_state(ORIGIN)
+                    .unwrap()
+                    .get(p::TRIGGERED)
+                    .unwrap(),
+                level.has_scheduled_block_tick(ORIGIN, block)
+            );
+            level.tick_scheduled_blocks(tick, 65536).unwrap();
+            samples.push(format!(
+                "{before};{poked};{}",
+                level.has_scheduled_block_tick(ORIGIN, block)
+            ));
+        }
+        assert_eq!(samples.join("|"), expected, "{name}");
+    }
+}
