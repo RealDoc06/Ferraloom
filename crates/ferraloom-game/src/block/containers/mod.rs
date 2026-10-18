@@ -2,6 +2,7 @@
 pub mod access;
 mod behavior;
 pub mod chest;
+pub mod command;
 pub mod crafter;
 pub mod drops;
 pub mod furnace;
@@ -13,5 +14,7 @@ mod placement;
 pub mod runtime;
 pub mod sign;
 mod sign_block;
+pub mod skull;
 pub mod storage;
+pub mod structure;
 pub(crate) use behavior::ported_behavior;

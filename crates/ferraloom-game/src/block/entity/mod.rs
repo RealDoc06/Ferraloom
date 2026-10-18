@@ -23,6 +23,21 @@ pub struct BlockEntityRef {
 }
 
 impl BlockEntityRef {
+    /// Live loadWithComponents: class callbacks complete on the retained receiver
+    /// before the component map is replaced, matching BlockEntity's native order.
+    pub fn load_with_components(
+        self,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.load_additional_live(self, tag, level)?;
+            level.block_entity_mut::<BlockEntityData>(self)?.components =
+                components::load(tag.get_compound("components"));
+            Ok(())
+        })
+    }
     /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
     pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
         let data = level.block_entity::<BlockEntityData>(self)?;
@@ -91,6 +106,15 @@ impl BlockEntityData {
 /// Port of BlockEntity's virtual methods. Implementations are immutable dispatchers.
 pub trait BlockEntity: Sync {
     fn load_additional(&self, _state: &mut BlockEntityState, _tag: &CompoundTag) {}
+    fn load_additional_live(
+        &self,
+        handle: BlockEntityRef,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        Ok(())
+    }
     fn save_additional(
         &self,
         _state: &BlockEntityState,
@@ -144,6 +168,9 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Command(Box<super::containers::command::CommandBlockEntity>),
+    Structure(Box<super::containers::structure::StructureBlockEntity>),
+    Skull(Box<super::containers::skull::SkullBlockEntity>),
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
@@ -159,6 +186,9 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Command(entity) => &entity.parent,
+            Self::Structure(entity) => &entity.parent,
+            Self::Skull(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -174,6 +204,9 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Command(entity) => &mut entity.parent,
+            Self::Structure(entity) => &mut entity.parent,
+            Self::Skull(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -189,6 +222,9 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
+            Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
+            Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -360,6 +396,15 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::COMMAND_BLOCK => Ok(BlockEntityState::Command(Box::new(
+            super::containers::command::CommandBlockEntity::new(data),
+        ))),
+        BlockEntityType::STRUCTURE_BLOCK => Ok(BlockEntityState::Structure(Box::new(
+            super::containers::structure::StructureBlockEntity::new(data),
+        ))),
+        BlockEntityType::SKULL => Ok(BlockEntityState::Skull(Box::new(
+            super::containers::skull::SkullBlockEntity::new(data),
+        ))),
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
         BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
             super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
@@ -432,7 +477,10 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::END_PORTAL
+            BlockEntityType::COMMAND_BLOCK
+                | BlockEntityType::STRUCTURE_BLOCK
+                | BlockEntityType::SKULL
+                | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
                 | BlockEntityType::DROPPER
@@ -473,6 +521,12 @@ macro_rules! projection {
         }
     };
 }
+projection!(super::containers::command::CommandBlockEntity, Command);
+projection!(
+    super::containers::structure::StructureBlockEntity,
+    Structure
+);
+projection!(super::containers::skull::SkullBlockEntity, Skull);
 projection!(ChestBlockEntity, Chest);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
@@ -528,3 +582,6 @@ projection!(
     super::redstone::moving_piston::PistonMovingBlockEntity,
     MovingPiston
 );
+
+#[cfg(test)]
+mod placement_tests;
