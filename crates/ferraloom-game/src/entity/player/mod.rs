@@ -488,6 +488,15 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// Player#getMoveSimulationType is AUTHORITATIVE_SIDE_AND_SERVER.
+    fn can_simulate_movement(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,

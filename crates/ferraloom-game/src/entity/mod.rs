@@ -46,6 +46,7 @@ impl EntityRef {
 }
 
 mod base;
+pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
 pub mod fluid;
@@ -322,6 +323,28 @@ pub trait Entity: Sync {
             level.entity_state(entity)?,
             EntityState::Player(_)
         ))
+    }
+    /// Port of Entity#canSimulateMovement's server AUTHORITATIVE_SIDE branch.
+    /// Player overrides the AUTHORITATIVE_SIDE_AND_SERVER result.
+    fn can_simulate_movement(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        self.is_local_instance_authoritative(entity, level)
+    }
+    fn on_above_bubble_column(
+        &self,
+        entity: EntityRef,
+        drag_down: bool,
+        pos: ferraloom_util::BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        bubble_column::on_above_bubble_column(self, entity, drag_down, pos, level)
+    }
+    fn on_inside_bubble_column(
+        &self,
+        entity: EntityRef,
+        drag_down: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        bubble_column::on_inside_bubble_column(self, entity, drag_down, level)
     }
     fn is_horizontal_collision_minor(
         &self,
