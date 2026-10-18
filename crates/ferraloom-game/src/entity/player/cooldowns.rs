@@ -114,7 +114,7 @@ impl Deref for ServerItemCooldowns {
     }
 }
 fn send(player: EntityRef, group: Identifier, duration: i32, level: &mut Level) {
-    level.region_mut().effects.push(LevelEffect::PlayerPacket {
+    level.emit(LevelEffect::PlayerPacket {
         recipients: vec![player],
         packet: Box::new(cb::Packet::Cooldown(cb::Cooldown {
             cooldown_group: group,
