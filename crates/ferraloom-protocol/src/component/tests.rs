@@ -422,6 +422,11 @@ fn vanilla_persistent_primitive_coercions() {
                 .unwrap()
                 .to_nbt()
                 .unwrap(),
+            "mob_effects" => MobEffectsPredicate::from_nbt(&input)
+                .unwrap()
+                .to_nbt()
+                .unwrap(),
+            "int_bounds" => IntBounds::from_nbt(&input).unwrap().to_nbt().unwrap(),
             "teleport" => {
                 let mut input = input;
                 input
@@ -432,7 +437,7 @@ fn vanilla_persistent_primitive_coercions() {
                 output.as_compound_mut().unwrap().remove("type");
                 output
             }
-            _ => panic!("unknown nested codec"),
+            codec => panic!("unknown nested codec {codec}"),
         };
         let expected = ferraloom_nbt::parse(row["expected"].as_str().unwrap()).unwrap();
         assert_eq!(actual, expected, "nested {}", row["codec"]);
