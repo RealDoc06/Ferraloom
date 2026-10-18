@@ -486,14 +486,14 @@ fn feature_services() -> Arc<crate::level::LevelContext> {
             let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
                 .expect("builder supplies native datapack");
             let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
-            let base = crate::level::LevelContext::fixture(0, 63);
+            let base = crate::level::LevelContext::fixture(0, -63);
             let features = ferraloom_worldgen::feature::FeatureLoader::new(&resources)
                 .unwrap()
                 .load_all()
                 .unwrap();
             Arc::new(crate::level::LevelContext::new(
                 0,
-                63,
+                -63,
                 base.generator.clone(),
                 Arc::new(features),
             ))
@@ -527,7 +527,7 @@ fn feature_level(biome: &str, seed: i64) -> Level {
             level
                 .add_chunk(LevelChunk::new(
                     ChunkPos::new(x, z),
-                    0..20,
+                    -4..20,
                     LevelChunkSection::new(
                         Strategy::block_states(),
                         Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
