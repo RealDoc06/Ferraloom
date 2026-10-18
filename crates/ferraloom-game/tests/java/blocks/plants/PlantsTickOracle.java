@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); groundTicks(level,pos,lines); }
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -90,6 +90,15 @@ public final class PlantsTickOracle {
             }
             level.setBlock(pos,state,816);
             if(block!=FROSTED_ICE)level.setBlock(pos.above(),covers.get(mode),816);
+            if(block==ICE&&mode>=2) {
+                level.setBlock(pos.below(),GLOWSTONE.defaultBlockState(),816);
+                long deadline=System.nanoTime()+2_000_000_000L;
+                while(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos)<=8) {
+                    level.getChunkSource().getLightEngine().tryScheduleUpdate();
+                    if(System.nanoTime()>=deadline)throw new IllegalStateException("native ice light engine did not finish");
+                    try{Thread.sleep(1);}catch(InterruptedException error){throw new RuntimeException(error);}
+                }
+            }
             level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
             String before=snapshot(level,pos);
             int sky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos);
@@ -101,6 +110,24 @@ public final class PlantsTickOracle {
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             String fluids=ticks((net.minecraft.world.ticks.LevelChunkTicks<net.minecraft.world.level.material.Fluid>)level.getChunkAt(pos).getFluidTicks(),net.minecraft.core.registries.BuiltInRegistries.FLUID::getId,level,pos);
             lines.add("ground-tick\t"+Block.getId(state)+"\t"+seed+"\t"+sky+"\t"+blockLight+"\t"+level.getSkyDarken()+"\t"+maxAbove+"\t"+evaporates+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+fluids+"\t"+level.getRandom().nextLong());
+        }
+    }
+    static void eyeblossomTicks(ServerLevel level,BlockPos pos,List<String> lines) {
+        var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
+        for(var block:List.of(OPEN_EYEBLOSSOM,CLOSED_EYEBLOSSOM))for(boolean scheduled:new boolean[]{false,true})for(int mode=0;mode<3;mode++)for(int seed=0;seed<16;seed++) {
+            clear(level,pos);
+            if(mode>0)for(int dx:new int[]{-3,0,3})for(int dz:new int[]{-3,0,3}) {
+                if(dx==0&&dz==0)continue;
+                if(mode==1&&dx!=0&&dz!=0)continue;
+                var at=pos.offset(dx,0,dz);level.setBlock(at.below(),DIRT.defaultBlockState(),816);level.setBlock(at,block.defaultBlockState(),816);
+            }
+            level.setBlock(pos.below(),DIRT.defaultBlockState(),816);level.setBlock(pos,block.defaultBlockState(),816);
+            level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
+            var attribute=level.environmentAttributes().getValue(net.minecraft.world.attribute.EnvironmentAttributes.EYEBLOSSOM_OPEN,pos);
+            String before=snapshot(level,pos);level.getRandom().setSeed(seed);
+            if(scheduled)block.defaultBlockState().tick(level,pos,level.getRandom());else block.defaultBlockState().randomTick(level,pos,level.getRandom());
+            String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
+            lines.add("eyeblossom-tick\t"+Block.getId(block.defaultBlockState())+"\t"+seed+"\t"+scheduled+"\t"+attribute.getSerializedName()+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
         }
     }
     static void extended(ServerLevel level,BlockPos pos,List<String> lines) {
