@@ -389,6 +389,12 @@ impl CompoundTag {
     pub fn iter(&self) -> impl Iterator<Item = (&NbtString, &Tag)> {
         self.values.iter()
     }
+    /// Port of CompoundTag's entry traversal, retaining its JDK HashMap order.
+    pub fn iter_java_order(&self) -> impl Iterator<Item = (&NbtString, &Tag)> {
+        self.java_keys()
+            .into_iter()
+            .map(move |key| (key, self.values.get(key).unwrap()))
+    }
     pub fn values(&self) -> impl Iterator<Item = &Tag> {
         self.values.values()
     }

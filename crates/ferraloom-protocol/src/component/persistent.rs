@@ -128,11 +128,120 @@ macro_rules! persistent_record {
         }
     };
 }
+/// Gson's LazilyParsedNumber uses BigDecimal after integer parsing fails.
+/// NumberLimits rejects over 10,000 characters and scales outside (-10,000, 10,000).
+struct DecimalNumber {
+    negative: bool,
+    digits: Vec<u8>,
+    scale: i32,
+}
+impl DecimalNumber {
+    fn parse(text: &str) -> Result<Self> {
+        if text.len() > 10_000 {
+            return Err(invalid("number length"));
+        }
+        let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
+        let exponent: i32 = exponent.parse().map_err(|_| invalid("number exponent"))?;
+        let fraction = mantissa
+            .split_once('.')
+            .map_or(0, |(_, fraction)| fraction.len());
+        let scale = i32::try_from(fraction)
+            .ok()
+            .and_then(|n| n.checked_sub(exponent))
+            .filter(|n| (-9_999..=9_999).contains(n))
+            .ok_or_else(|| invalid("number scale"))?;
+        Ok(Self {
+            negative: text.starts_with('-'),
+            digits: mantissa
+                .bytes()
+                .filter(u8::is_ascii_digit)
+                .map(|n| n - b'0')
+                .collect(),
+            scale,
+        })
+    }
+    fn integer_bits(&self) -> u64 {
+        let end = (self.digits.len() as i32 - self.scale).max(0) as usize;
+        let mut bits = 0u64;
+        for digit in self
+            .digits
+            .iter()
+            .copied()
+            .chain(std::iter::repeat(0))
+            .take(end)
+        {
+            bits = bits.wrapping_mul(10).wrapping_add(u64::from(digit));
+        }
+        if self.negative {
+            bits.wrapping_neg()
+        } else {
+            bits
+        }
+    }
+    fn exact_long(&self) -> Option<i64> {
+        let end = (self.digits.len() as i32 - self.scale).max(0) as usize;
+        if self
+            .digits
+            .get(end..)
+            .is_some_and(|digits| digits.iter().any(|n| *n != 0))
+        {
+            return None;
+        }
+        let mut magnitude = 0u64;
+        for digit in self
+            .digits
+            .iter()
+            .copied()
+            .chain(std::iter::repeat(0))
+            .take(end)
+        {
+            magnitude = magnitude.checked_mul(10)?.checked_add(u64::from(digit))?;
+        }
+        if self.negative {
+            if magnitude == 1u64 << 63 {
+                Some(i64::MIN)
+            } else {
+                i64::try_from(magnitude).ok().map(|n| -n)
+            }
+        } else {
+            i64::try_from(magnitude).ok()
+        }
+    }
+}
+fn json_number(value: &Json) -> Result<String> {
+    match value {
+        Json::Number(number) => Ok(number.to_string()),
+        _ => Err(invalid("number")),
+    }
+}
+fn json_integer_bits(value: &Json) -> Result<u64> {
+    let text = json_number(value)?;
+    match text.parse::<i64>() {
+        Ok(value) => Ok(value as u64),
+        Err(_) => Ok(DecimalNumber::parse(&text)?.integer_bits()),
+    }
+}
+// NbtOps returns the boxed numeric value, then each primitive codec calls Number's
+// conversion. Integral narrowing wraps; floating-to-integer conversion saturates.
+macro_rules! nbt_number {
+    ($value:expr, $ty:ty) => {
+        match $value {
+            Tag::Byte(n) => Ok(*n as $ty),
+            Tag::Short(n) => Ok(*n as $ty),
+            Tag::Int(n) => Ok(*n as $ty),
+            Tag::Long(n) => Ok(*n as $ty),
+            Tag::Float(n) => Ok(*n as $ty),
+            Tag::Double(n) => Ok(*n as $ty),
+            _ => Err(invalid("number")),
+        }
+    };
+}
 impl Persistent for bool {
     fn from_json(v: &Json) -> Result<Self> {
-        v.as_bool()
-            .or_else(|| v.as_i64().map(|n| n != 0))
-            .ok_or_else(|| invalid("boolean"))
+        v.as_bool().ok_or_else(|| invalid("boolean"))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(f64::from_nbt(v)? != 0.0)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Boolean(*self))
@@ -140,9 +249,10 @@ impl Persistent for bool {
 }
 impl Persistent for i32 {
     fn from_json(v: &Json) -> Result<Self> {
-        v.as_i64()
-            .and_then(|v| v.try_into().ok())
-            .ok_or_else(|| invalid("integer"))
+        Ok(json_integer_bits(v)? as i32)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        nbt_number!(v, i32)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Int(*self))
@@ -152,13 +262,19 @@ impl Persistent for VarInt {
     fn from_json(v: &Json) -> Result<Self> {
         i32::from_json(v).map(Self)
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        i32::from_nbt(v).map(Self)
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         self.0.to_persistent()
     }
 }
 impl Persistent for f32 {
     fn from_json(v: &Json) -> Result<Self> {
-        v.as_f64().map(|v| v as f32).ok_or_else(|| invalid("float"))
+        json_number(v)?.parse().map_err(|_| invalid("float"))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        nbt_number!(v, f32)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Float(*self))
@@ -166,7 +282,10 @@ impl Persistent for f32 {
 }
 impl Persistent for f64 {
     fn from_json(v: &Json) -> Result<Self> {
-        v.as_f64().ok_or_else(|| invalid("double"))
+        json_number(v)?.parse().map_err(|_| invalid("double"))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        nbt_number!(v, f64)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Double(*self))
@@ -286,6 +405,11 @@ impl<T: Persistent> Persistent for Box<T> {
     }
 }
 impl<L: Persistent, R: Persistent> Persistent for Either<L, R> {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        L::from_nbt(v)
+            .map(Self::Left)
+            .or_else(|_| R::from_nbt(v).map(Self::Right))
+    }
     fn from_json(v: &Json) -> Result<Self> {
         L::from_json(v)
             .map(Self::Left)
@@ -336,7 +460,8 @@ fn json_tag(v: &Json) -> Result<Tag> {
         Json::Bool(v) => Tag::Byte(i8::from(*v)),
         Json::String(v) => Tag::String(v.as_str().into()),
         Json::Number(v) => {
-            if let Some(n) = v.as_i64() {
+            let decimal = DecimalNumber::parse(&v.to_string())?;
+            if let Some(n) = decimal.exact_long() {
                 if let Ok(n) = i8::try_from(n) {
                     Tag::Byte(n)
                 } else if let Ok(n) = i16::try_from(n) {
@@ -347,7 +472,7 @@ fn json_tag(v: &Json) -> Result<Tag> {
                     Tag::Long(n)
                 }
             } else {
-                let n = v.as_f64().ok_or_else(|| invalid("number"))?;
+                let n: f64 = v.to_string().parse().map_err(|_| invalid("number"))?;
                 if f64::from(n as f32) == n {
                     Tag::Float(n as f32)
                 } else {
@@ -378,8 +503,15 @@ impl Persistent for Tag {
 }
 impl Persistent for CustomData {
     fn from_json(v: &Json) -> Result<Self> {
-        object(v)?;
-        Ok(Self(json_tag(v)?))
+        let tag = if let Some(snbt) = v.as_str() {
+            Tag::Compound(
+                ferraloom_nbt::parse_compound(snbt).map_err(|_| invalid("compound SNBT"))?,
+            )
+        } else {
+            object(v)?;
+            json_tag(v)?
+        };
+        Ok(Self(tag))
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if self.0.as_compound().is_none() {
@@ -388,10 +520,14 @@ impl Persistent for CustomData {
         self.0.to_persistent()
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
-        if !matches!(v, Tag::Compound(_)) {
-            return Err(invalid("compound tag"));
+        match v {
+            Tag::Compound(_) => Ok(Self(v.clone())),
+            Tag::String(snbt) => Ok(Self(Tag::Compound(
+                ferraloom_nbt::parse_compound(&snbt.to_string_lossy())
+                    .map_err(|_| invalid("compound SNBT"))?,
+            ))),
+            _ => Err(invalid("compound tag")),
         }
-        Ok(Self(v.clone()))
     }
 }
 impl Persistent for Enchantment {
@@ -1245,6 +1381,13 @@ impl Persistent for Fireworks {
             explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let flight_duration = VarInt(field_nbt::<i32>(v, "flight_duration", Some(0))? as u8 as i32);
+        Ok(Self {
+            flight_duration,
+            explosions: field_nbt(v, "explosions", Some(BoundedList(vec![])))?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
         if self.flight_duration.0 > 255 {
@@ -1342,6 +1485,21 @@ impl Persistent for ItemEnchantments {
                         return Err(invalid("enchantment level"));
                     }
                     Ok((Enchantment(registry(k)), VarInt(level)))
+                })
+                .collect::<Result<_>>()?,
+        ))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(
+            v.as_compound()
+                .ok_or_else(|| invalid("component object"))?
+                .iter()
+                .map(|(k, v)| {
+                    let level = i32::from_nbt(v)?;
+                    if !(1..=255).contains(&level) {
+                        return Err(invalid("enchantment level"));
+                    }
+                    Ok((Enchantment(registry(&k.to_string_lossy())), VarInt(level)))
                 })
                 .collect::<Result<_>>()?,
         ))
@@ -1522,6 +1680,20 @@ impl Persistent for GlobalPos {
             pos: BlockPos::new(p[0], p[1], p[2]),
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let p = Vec::<i32>::from_nbt(
+            v.as_compound()
+                .and_then(|v| v.get("pos"))
+                .ok_or_else(|| invalid("position"))?,
+        )?;
+        if p.len() != 3 {
+            return Err(invalid("position"));
+        }
+        Ok(Self {
+            dimension: field_nbt(v, "dimension", None)?,
+            pos: BlockPos::new(p[0], p[1], p[2]),
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Map(vec![
             ("dimension".into(), self.dimension.to_persistent()?),
@@ -1534,7 +1706,10 @@ impl Persistent for GlobalPos {
 }
 impl Persistent for i64 {
     fn from_json(v: &Json) -> Result<Self> {
-        v.as_i64().ok_or_else(|| invalid("long"))
+        Ok(json_integer_bits(v)? as i64)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        nbt_number!(v, i64)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Nbt(Tag::Long(*self)))
@@ -1560,6 +1735,16 @@ impl<T: Persistent, const N: usize> Persistent for [T; N] {
 impl Persistent for Uuid {
     fn from_json(v: &Json) -> Result<Self> {
         let a = Vec::<i32>::from_json(v)?;
+        if a.len() != 4 {
+            return Err(invalid("UUID"));
+        }
+        Ok(Self::new(
+            (i64::from(a[0]) << 32) | (a[1] as u32 as i64),
+            (i64::from(a[2]) << 32) | (a[3] as u32 as i64),
+        ))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let a = Vec::<i32>::from_nbt(v)?;
         if a.len() != 4 {
             return Err(invalid("UUID"));
         }
@@ -1607,6 +1792,35 @@ impl Persistent for ResolvableProfile {
             skin_patch: SkinPatch::from_json(v)?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if matches!(v, Tag::String(_)) {
+            return Ok(Self {
+                profile: Either::Right(PartialProfile {
+                    name: Some(BoundedString(String::from_nbt(v)?)),
+                    id: None,
+                    properties: BoundedList(vec![]),
+                }),
+                skin_patch: SkinPatch {
+                    body: None,
+                    cape: None,
+                    elytra: None,
+                    model: None,
+                },
+            });
+        }
+        let profile = if v
+            .as_compound()
+            .is_some_and(|v| v.get("id").is_some() && v.get("name").is_some())
+        {
+            Either::Left(GameProfile::from_nbt(v)?)
+        } else {
+            Either::Right(PartialProfile::from_nbt(v)?)
+        };
+        Ok(Self {
+            profile,
+            skin_patch: SkinPatch::from_nbt(v)?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = map_entries(self.profile.to_persistent()?)?;
         v.extend(map_entries(self.skin_patch.to_persistent()?)?);
@@ -1625,6 +1839,13 @@ impl Persistent for AttributeModifier {
             id: field(v, "id", None)?,
             amount: field(v, "amount", None)?,
             operation: field(v, "operation", None)?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            id: field_nbt(v, "id", None)?,
+            amount: field_nbt(v, "amount", None)?,
+            operation: field_nbt(v, "operation", None)?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1713,6 +1934,17 @@ impl Persistent for MobEffectDetails {
             hidden_effect: field(v, "hidden_effect", Some(None))?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let show_particles = field_nbt(v, "show_particles", Some(true))?;
+        Ok(Self {
+            amplifier: VarInt(field_nbt::<i32>(v, "amplifier", Some(0))? as u8 as i32),
+            duration: field_nbt(v, "duration", Some(VarInt(0)))?,
+            ambient: field_nbt(v, "ambient", Some(false))?,
+            show_particles,
+            show_icon: field_nbt(v, "show_icon", Some(show_particles))?,
+            hidden_effect: field_nbt(v, "hidden_effect", Some(None))?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
         if self.amplifier.0 > 255 {
@@ -1740,6 +1972,12 @@ impl Persistent for MobEffectInstance {
             details: MobEffectDetails::from_json(v)?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            effect: field_nbt(v, "id", None)?,
+            details: MobEffectDetails::from_nbt(v)?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = map_entries(self.details.to_persistent()?)?;
         v.push(("id".into(), self.effect.to_persistent()?));
@@ -1765,6 +2003,26 @@ impl Persistent for ConsumeEffect {
             }
             Some("minecraft:play_sound" | "play_sound") => {
                 Ok(Self::PlaySound(field(v, "sound", None)?))
+            }
+            _ => Err(invalid("consume effect")),
+        }
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        match field_nbt::<String>(v, "type", None)?.as_str() {
+            "minecraft:apply_effects" | "apply_effects" => Ok(Self::ApplyEffects {
+                effects: field_nbt(v, "effects", None)?,
+                probability: field_nbt(v, "probability", Some(1.0))?,
+            }),
+            "minecraft:remove_effects" | "remove_effects" => {
+                Ok(Self::RemoveEffects(field_nbt(v, "effects", None)?))
+            }
+            "minecraft:clear_all_effects" | "clear_all_effects" => Ok(Self::ClearAllEffects),
+            "minecraft:teleport_randomly" | "teleport_randomly" => Ok(Self::TeleportRandomly {
+                diameter: field_nbt(v, "diameter", Some(16.0))?,
+                directional_particles: field_nbt(v, "directional_particles", Some(true))?,
+            }),
+            "minecraft:play_sound" | "play_sound" => {
+                Ok(Self::PlaySound(field_nbt(v, "sound", None)?))
             }
             _ => Err(invalid("consume effect")),
         }
@@ -1815,13 +2073,9 @@ impl Persistent for ConsumeEffect {
 }
 impl Persistent for TypedEntityData {
     fn from_json(v: &Json) -> Result<Self> {
-        let mut v = object(v)?.clone();
-        let id = v.remove("id").ok_or_else(|| invalid("entity type"))?;
-        Ok(Self {
-            entity_type: EntityType::from_json(&id)?,
-            tag: CustomData::from_json(&Json::Object(v))?,
-        })
+        Self::from_nbt(&CustomData::from_json(v)?.0)
     }
+
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut tag = self.tag.0.clone();
         tag.as_compound_mut()
@@ -1830,7 +2084,7 @@ impl Persistent for TypedEntityData {
         Ok(PersistentValue::Nbt(tag))
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
-        let mut tag = v.clone();
+        let mut tag = CustomData::from_nbt(v)?.0;
         let id = tag
             .as_compound_mut()
             .ok_or_else(|| invalid("entity data"))?
@@ -1844,15 +2098,11 @@ impl Persistent for TypedEntityData {
 }
 impl Persistent for TypedBlockEntityData {
     fn from_json(v: &Json) -> Result<Self> {
-        let mut v = object(v)?.clone();
-        let id = v.remove("id").ok_or_else(|| invalid("block entity type"))?;
-        Ok(Self {
-            entity_type: BlockEntityType::from_json(&id)?,
-            tag: CustomData::from_json(&Json::Object(v))?,
-        })
+        Self::from_nbt(&CustomData::from_json(v)?.0)
     }
+
     fn from_nbt(v: &Tag) -> Result<Self> {
-        let mut tag = v.clone();
+        let mut tag = CustomData::from_nbt(v)?.0;
         let id = tag
             .as_compound_mut()
             .ok_or_else(|| invalid("block entity data"))?
@@ -1953,18 +2203,48 @@ impl Persistent for DataComponentMatchers {
 
 impl Persistent for IntBounds {
     fn from_json(v: &Json) -> Result<Self> {
-        if v.is_number() {
+        let result = if v.is_number() {
             let n = i32::from_json(v)?;
-            Ok(Self {
+            Self {
                 min: Some(n),
                 max: Some(n),
-            })
+            }
         } else {
-            Ok(Self {
+            object(v)?;
+            Self {
                 min: field(v, "min", Some(None))?,
                 max: field(v, "max", Some(None))?,
-            })
-        }
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let result = if matches!(
+            v,
+            Tag::Byte(_)
+                | Tag::Short(_)
+                | Tag::Int(_)
+                | Tag::Long(_)
+                | Tag::Float(_)
+                | Tag::Double(_)
+        ) {
+            let n = i32::from_nbt(v)?;
+            Self {
+                min: Some(n),
+                max: Some(n),
+            }
+        } else {
+            if v.as_compound().is_none() {
+                return Err(invalid("integer bounds"));
+            }
+            Self {
+                min: field_nbt(v, "min", Some(None))?,
+                max: field_nbt(v, "max", Some(None))?,
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
@@ -2013,6 +2293,15 @@ impl Persistent for MapDecorations {
             object(v)?
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), MapDecoration::from_json(v)?)))
+                .collect::<Result<_>>()?,
+        ))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(
+            v.as_compound()
+                .ok_or_else(|| invalid("component object"))?
+                .iter()
+                .map(|(k, v)| Ok((k.to_string_lossy(), MapDecoration::from_nbt(v)?)))
                 .collect::<Result<_>>()?,
         ))
     }
@@ -3014,6 +3303,9 @@ fn validate_component(value: &DataComponent) -> Result<()> {
     }
 }
 impl Persistent for NbtPredicate {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        CustomData::from_nbt(v).map(Self)
+    }
     fn from_json(v: &Json) -> Result<Self> {
         if let Some(s) = v.as_str() {
             let tag = ferraloom_nbt::parse_compound(s)

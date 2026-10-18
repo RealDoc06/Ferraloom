@@ -22,6 +22,21 @@ pub struct BlockEntityRef {
     pub generation: u64,
 }
 
+impl BlockEntityRef {
+    /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
+    pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
+        let data = level.block_entity::<BlockEntityData>(self)?;
+        let (has_level, state) = (data.has_level, data.block_state);
+        if has_level {
+            level.mark_chunk_unsaved(ChunkPos::containing(self.pos))?;
+            if !state.is_air() {
+                level.update_neighbour_for_output_signal(self.pos, state.block())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Port of BlockEntity's shared state. Mutable behavior belongs to the chunk.
 #[derive(Clone, Debug)]
 pub struct BlockEntityData {

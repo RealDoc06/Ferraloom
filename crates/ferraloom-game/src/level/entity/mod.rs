@@ -772,7 +772,10 @@ mod tests {
     #[test]
     fn unassigned_network_id_allocates_one_and_retains_player_identity() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let uuid = Uuid::offline_player("JoinBot");
         let entity = EntityRef(1);
         level
@@ -802,7 +805,10 @@ mod tests {
     #[test]
     fn first_player_gets_one_and_shares_allocation_with_other_entities() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let id = level.next_entity_id();
         let player = ServerPlayer::new(
             Uuid::offline_player("JoinBot"),
@@ -833,7 +839,10 @@ mod removal_tests {
     #[test]
     fn removal_hides_indexes_before_canonical_retirement() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let id = EntityRef(1);
         level
             .add_entity(id, EntityState::Cow(Box::default()))
@@ -868,7 +877,10 @@ mod identity_tests {
     #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         assert_eq!(level.next_entity_ref(), EntityRef(1));
         let existing = EntityRef(40);
         level
@@ -895,7 +907,10 @@ mod visibility_tests {
     #[test]
     fn hidden_sections_keep_uuid_ownership_and_status_callbacks_keep_native_order() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let pos = ChunkPos::new(0, 0);
         for n in 1..=2 {
             level
@@ -963,7 +978,10 @@ mod visibility_tests {
     #[test]
     fn movement_transitions_visibility_and_retirement_keeps_replacement_uuid_index() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(ChunkPos::new(1, 0), Visibility::Ticking)
             .unwrap();

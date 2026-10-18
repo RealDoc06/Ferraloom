@@ -2,9 +2,9 @@ use super::{MineshaftPiece, MineshaftPieceKind};
 use crate::{
     Error,
     biome_manager::{obfuscate_seed, zoom_quart},
-    feature::FeatureContext,
     region::{Heightmap, WorldGenRegion},
     structure::BoundingBox,
+    structure::StructurePlacementContext,
 };
 use ferraloom_data::{
     Block, BlockClass, BlockState,
@@ -17,7 +17,7 @@ impl MineshaftPiece {
     /// access is through the exclusively owned neighborhood and game bridge.
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         if self.invalid_location(context, bounds)? {
@@ -231,7 +231,7 @@ impl MineshaftPiece {
     }
     fn invalid_location(
         &self,
-        context: &FeatureContext<'_, '_>,
+        context: &StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<bool, Error> {
         let b = self.data.bounds;
@@ -316,7 +316,7 @@ impl MineshaftPiece {
     }
     fn box_blocks(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         min: [i32; 3],
         max: [i32; 3],
@@ -334,7 +334,7 @@ impl MineshaftPiece {
     #[allow(clippy::too_many_arguments)]
     fn maybe_box(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         min: [i32; 3],
         max: [i32; 3],
@@ -366,7 +366,7 @@ impl MineshaftPiece {
     }
     fn plank_floor(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         p: [i32; 3],
         bounds: BoundingBox,
     ) -> Result<(), Error> {
@@ -386,7 +386,7 @@ impl MineshaftPiece {
     }
     fn support(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         z: i32,
     ) -> Result<(), Error> {
@@ -442,7 +442,7 @@ impl MineshaftPiece {
     }
     fn maybe_web(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         p: [i32; 3],
         probability: f32,
@@ -474,7 +474,7 @@ impl MineshaftPiece {
     }
     fn chest_minecart(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         p: [i32; 3],
     ) -> Result<(), Error> {
@@ -510,7 +510,7 @@ impl MineshaftPiece {
     }
     fn pillar_or_chain(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         local: [i32; 3],
         bounds: BoundingBox,
     ) -> Result<(), Error> {
@@ -663,7 +663,7 @@ mod tests {
             );
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             let result = piece.post_process(
-                &mut FeatureContext {
+                &mut StructurePlacementContext {
                     region: &mut region,
                     random: &mut random,
                     origin: [0; 3],

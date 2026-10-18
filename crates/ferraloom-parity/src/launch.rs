@@ -159,27 +159,6 @@ pub(crate) async fn launch(
     options: &LaunchOptions,
     root: &Path,
 ) -> Result<Launched> {
-    if matches!(kind, ServerKind::Ferraloom) {
-        ensure!(
-            matches!(options.preset, WorldPreset::Default),
-            "in-process Ferraloom has not ported flat/void generators"
-        );
-        ensure!(
-            options
-                .properties
-                .get("level-type")
-                .is_none_or(|v| matches!(v.as_str(), "normal" | "minecraft:normal"))
-                && options
-                    .properties
-                    .get("generator-settings")
-                    .is_none_or(|v| v.is_empty() || v == "{}"),
-            "in-process Ferraloom does not support generator property overrides yet"
-        );
-        ensure!(
-            options.game_rules.is_empty(),
-            "in-process Ferraloom has not ported /gamerule"
-        );
-    }
     let reservation = TcpListener::bind("127.0.0.1:0")?;
     let address = reservation.local_addr()?;
     let mut props: BTreeMap<String, String> = [

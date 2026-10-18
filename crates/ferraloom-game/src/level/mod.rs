@@ -19,6 +19,9 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+mod container_runtime;
+mod context;
+pub use context::LevelContext;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
@@ -28,6 +31,7 @@ pub mod events;
 pub mod generation;
 pub mod heightmap;
 mod lighting;
+pub mod loot_facts;
 mod mutation;
 mod post_processing;
 mod random;
@@ -69,6 +73,7 @@ pub enum LevelError {
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
+    MissingItemTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -129,6 +134,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
+    container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
     empty_time: i32,
@@ -155,6 +161,7 @@ pub struct Region {
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
+    item_tags: Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::Item>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -168,6 +175,7 @@ impl Region {
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             block_entity_state: block_entity::BlockEntityRuntime::default(),
+            container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
             empty_time: 0,
@@ -191,6 +199,7 @@ impl Region {
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
+            item_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
@@ -204,13 +213,24 @@ impl Region {
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
     region: Option<Region>,
+    context: Arc<LevelContext>,
 }
 
 impl Level {
-    pub fn new(region: Region) -> Self {
+    pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             region: Some(region),
+            context,
         }
+    }
+    pub fn context(&self) -> &Arc<LevelContext> {
+        &self.context
+    }
+    pub fn seed(&self) -> i64 {
+        self.context.seed
+    }
+    pub fn sea_level(&self) -> i32 {
+        self.context.sea_level
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")

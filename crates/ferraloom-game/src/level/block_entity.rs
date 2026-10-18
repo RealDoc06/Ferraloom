@@ -21,7 +21,7 @@ impl ChunkBlockEntities {
     pub(super) fn get(&self, pos: BlockPos) -> Option<&BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_ref()
     }
-    fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
+    pub(super) fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_mut()
     }
     fn insert(&mut self, state: BlockEntityState) {
@@ -75,7 +75,7 @@ impl ChunkBlockEntities {
 #[derive(Default)]
 pub(super) struct BlockEntityRuntime {
     next_generation: u64,
-    detached: HashMap<BlockEntityRef, BlockEntityState>,
+    pub(super) detached: HashMap<BlockEntityRef, BlockEntityState>,
     roots: HashMap<BlockEntityRef, usize>,
     pub(super) tickers: BlockEntityTickers,
 }
@@ -491,7 +491,10 @@ mod tests {
     use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         for x in 0..=1 {
             level
                 .add_chunk(LevelChunk::new(

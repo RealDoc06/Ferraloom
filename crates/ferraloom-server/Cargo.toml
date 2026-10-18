@@ -35,6 +35,7 @@ time = { version = "0.3", features = ["parsing", "formatting", "macros"] }
 
 [dev-dependencies]
 flate2 = "1"
+ferraloom-game = { path = "../ferraloom-game", features = ["test-fixtures"] }
 tempfile = "3"
 
 [lints]

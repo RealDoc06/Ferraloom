@@ -167,3 +167,42 @@ fn java_subnormal_error_messages_use_nearest_two_digits() {
         "Double must not be less than 4.9E-324, found 0.0"
     );
 }
+
+#[test]
+fn case_only_suggestions_keep_java_hash_set_order_before_stable_sort() {
+    use ferraloom_util::collections::JavaHash;
+    for line in include_str!("suggestion-order.tsv").lines() {
+        let columns = line.split('\t').collect::<Vec<_>>();
+        let end = columns[0].parse::<usize>().unwrap();
+        let range = StringRange::at(end);
+        let input = "x".repeat(end);
+        let suggestions = columns[1]
+            .split(';')
+            .map(|text| {
+                if let Some(value) = text.strip_prefix("i:") {
+                    Suggestion::integer(range, value.parse().unwrap())
+                } else {
+                    Suggestion::new(range, text)
+                }
+            })
+            .collect::<Vec<_>>();
+        let hashes = suggestions
+            .iter()
+            .map(|suggestion| suggestion.java_hash_code().to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(hashes, columns[2], "{line}");
+        let result = Suggestions::create(&input, suggestions);
+        let observed = result
+            .list
+            .iter()
+            .map(|suggestion| {
+                suggestion
+                    .integer
+                    .map_or_else(|| suggestion.text.clone(), |value| format!("i:{value}"))
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(observed, columns[3], "{line}");
+    }
+}

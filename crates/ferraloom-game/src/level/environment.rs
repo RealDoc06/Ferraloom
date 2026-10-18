@@ -5,7 +5,7 @@ use crate::block::LevelReaderRef;
 use ferraloom_util::{BlockPos, Vec3, mth};
 pub use ferraloom_worldgen::environment::{
     AttributeKey, AttributeValue, ClockSnapshot, DimensionEnvironment, EnvironmentAttributes,
-    EnvironmentDefinitions, SpatialAttributeInterpolator,
+    EnvironmentDefinitions, SpatialAttributeInterpolator, TriState,
 };
 use ferraloom_worldgen::environment::{EnvironmentAttributeSystem, WeatherSample};
 use ferraloom_worldgen::{Identifier, biome_manager::zoom_quart};
@@ -78,6 +78,12 @@ impl Level {
     }
     pub fn dimension_key(&self) -> Result<&Identifier, LevelError> {
         Ok(&self.environment_runtime()?.dimension)
+    }
+    pub fn clock_ticks(&self, clock: &Identifier) -> Result<i64, LevelError> {
+        self.environment_runtime()?
+            .system
+            .clock_ticks(clock)
+            .ok_or(LevelError::MissingEnvironmentContext)
     }
     fn environment_runtime(&self) -> Result<&EnvironmentRuntime, LevelError> {
         self.region()
@@ -157,6 +163,9 @@ impl Level {
     pub fn water_evaporates(&self, pos: BlockPos) -> Result<bool, LevelError> {
         self.get_value(EnvironmentAttributes::WATER_EVAPORATES, pos)
     }
+    pub fn fast_lava(&self) -> Result<bool, LevelError> {
+        self.get_dimension_value(EnvironmentAttributes::FAST_LAVA)
+    }
     /// Port of Level#updateSkyBrightness, independent of the simulation freeze gate.
     pub fn update_sky_brightness(&mut self) -> Result<(), LevelError> {
         let value = self.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL)?;
@@ -223,7 +232,10 @@ mod tests {
 
     #[test]
     fn canonical_clock_refresh_and_sky_slot_keep_biome_and_spatial_reads_exact() {
-        let mut level = Level::new(Region::new(&EMPTY));
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         assert_eq!(
             level.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL),
             Err(LevelError::MissingEnvironmentContext)
@@ -243,11 +255,12 @@ mod tests {
         }
         let definitions =
             Arc::new(EnvironmentDefinitions::load(&ResourceManager::new(vec![pack])).unwrap());
-        let dimension = definitions
+        let mut dimension = definitions
             .dimension(
                 &json!({"attributes":{"gameplay/water_evaporates":false},"timelines":["day"]}),
             )
             .unwrap();
+        dimension.timelines.push(Arc::new(ferraloom_worldgen::environment::Timeline::decode(&json!({"clock":"overworld","tracks":{"gameplay/fast_lava":{"keyframes":[{"ticks":0,"value":false},{"ticks":10,"value":true}]}}})).unwrap()));
         let clocks = |tick| ClockSnapshot::new([("overworld".parse().unwrap(), tick)]);
         level
             .set_environment_attributes(
@@ -260,6 +273,10 @@ mod tests {
             .unwrap();
         level.set_has_skylight(true);
         assert_eq!(level.sky_darken(), Ok(0));
+        assert_eq!(
+            crate::block::fluid::FlowingFluid::Lava.tick_delay_for(&level),
+            Ok(30)
+        );
         assert_eq!(
             level.get_dimension_value(EnvironmentAttributes::WATER_EVAPORATES),
             Ok(false)
@@ -289,6 +306,23 @@ mod tests {
             level.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL),
             Ok(7.5)
         );
+        assert_eq!(
+            crate::loot::LootFacts::clock_ticks(
+                &level,
+                &ferraloom_protocol::Identifier::parse("overworld").unwrap()
+            )
+            .unwrap(),
+            5
+        );
+        assert_eq!(
+            crate::loot::LootFacts::environment_float(
+                &level,
+                &ferraloom_protocol::Identifier::parse("gameplay/sky_light_level").unwrap(),
+                &crate::loot::LootParams::default()
+            )
+            .unwrap(),
+            7.5
+        );
         assert_eq!(level.sky_darken(), Ok(0));
         level.update_sky_brightness().unwrap();
         assert_eq!(level.sky_darken(), Ok(7));
@@ -304,6 +338,11 @@ mod tests {
         assert_eq!(
             level.dimension_key().unwrap().to_string(),
             "minecraft:overworld"
+        );
+        level.refresh_environment_attributes(clocks(10)).unwrap();
+        assert_eq!(
+            crate::block::fluid::FlowingFluid::Lava.tick_delay_for(&level),
+            Ok(10)
         );
 
         let source =

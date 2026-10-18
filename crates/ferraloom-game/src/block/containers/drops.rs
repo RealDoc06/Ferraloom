@@ -109,7 +109,10 @@ mod tests {
             let fields: Vec<_> = line.split('\t').collect();
             let seed = fields[1].parse().unwrap();
             let count = fields[2].parse().unwrap();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
             let mut stack = ItemStack::new(Item::STONE, count, Default::default());
             let ids = drop_item_stack(&mut level, Vec3::new(-1.2, 64.7, 2.8), &mut stack).unwrap();

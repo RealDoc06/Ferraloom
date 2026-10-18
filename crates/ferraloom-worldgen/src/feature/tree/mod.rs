@@ -71,8 +71,8 @@ fn chance(v: &Value, name: &str) -> Result<f32, Error> {
         Err(Error(format!("{name} outside [0,1]")))
     }
 }
-fn horizontal(c: &mut FeatureContext<'_, '_>) -> Direction {
-    HORIZONTAL[c.random.next_int_bound(4) as usize]
+fn horizontal(random: &mut impl RandomSource) -> Direction {
+    HORIZONTAL[random.next_int_bound(4) as usize]
 }
 fn relative(p: Pos, d: Direction, n: i32) -> Pos {
     let q = step([0; 3], d);
@@ -201,11 +201,11 @@ impl TreeFeature {
         })
     }
     fn valid(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        let s = c.region.block(p)?;
+        let s = c.level.block(p)?;
         Ok(is_air(s) || self.replaceable.contains(&s.block()))
     }
     fn air_or_leaves(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        let s = c.region.block(p)?;
+        let s = c.level.block(p)?;
         Ok(is_air(s) || self.leaves.contains(&s.block()))
     }
     fn below(
@@ -224,17 +224,19 @@ impl TreeFeature {
         c: &mut FeatureContext<'_, '_>,
         out: &mut TreePositions,
     ) -> Result<bool, Error> {
-        let height = self.trunk.height(c.random);
-        let foliage_height = self.foliage.height(c.random, height);
-        let radius = self.foliage.radius(c.random, height - foliage_height);
+        let height = self.trunk.height(&mut c.random()?);
+        let foliage_height = self.foliage.height(&mut c.random()?, height);
+        let radius = self
+            .foliage
+            .radius(&mut c.random()?, height - foliage_height);
         let origin = c.origin;
         let trunk_origin = if let Some(root) = &self.root {
-            root.origin(origin, c.random)
+            root.origin(origin, &mut c.random()?)
         } else {
             origin
         };
-        if origin[1].min(trunk_origin[1]) < c.region.min_y() + 1
-            || origin[1].max(trunk_origin[1]) + height + 1 > c.region.min_y() + c.region.height()
+        if origin[1].min(trunk_origin[1]) < c.level.min_y() + 1
+            || origin[1].max(trunk_origin[1]) + height + 1 > c.level.min_y() + c.level.height()
         {
             return Ok(false);
         }
@@ -245,7 +247,7 @@ impl TreeFeature {
                 for z in -r..=r {
                     let p = add(trunk_origin, [x, y, z]);
                     if !self.trunk.free(self, c, p)?
-                        || !self.ignore_vines && c.region.block(p)?.block() == Block::VINE
+                        || !self.ignore_vines && c.level.block(p)?.block() == Block::VINE
                     {
                         clipped = y - 2;
                         break 'scan;
@@ -293,17 +295,17 @@ impl TreeFeature {
             }
             if distance != 0 {
                 let s = c
-                    .region
+                    .level
                     .block(p)?
                     .with_integer_property("distance", distance as i32)
                     .map_err(|e| Error(format!("{e:?}")))?;
-                c.region.set_block(p, s, 19)?;
+                c.level.set_block(p, s, 19)?;
             }
             shape.insert(p);
             for dir in Direction::VALUES {
                 let q = step(p, dir);
                 if inside(q) && !shape.contains(&q) {
-                    let s = c.region.block(q)?;
+                    let s = c.level.block(q)?;
                     let d = optional_leaf_distance(s, &self.leaf_support).map(i32::from);
                     if let Some(d) = d {
                         let d = d.min(distance as i32 + 1);
@@ -320,6 +322,9 @@ impl TreeFeature {
     }
 }
 impl Feature for TreeFeature {
+    fn tree_minimum_height(&self) -> Option<i32> {
+        Some(self.trunk.base_height())
+    }
     fn place(&self, c: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut out = TreePositions::default();
         if !self.place_tree(c, &mut out)? || out.logs.is_empty() && out.leaves.is_empty() {
@@ -344,7 +349,7 @@ fn put(
     out: &mut Positions,
 ) -> Result<(), Error> {
     out.insert(p);
-    c.region.set_block(p, s, 19)?;
+    c.level.set_block(p, s, 19)?;
     Ok(())
 }
 /// Port of DiscreteVoxelShape#forAllFaces and StructureTemplate#updateShapeAtEdge.
@@ -375,15 +380,15 @@ fn update_shape_at_edge(
                     };
                     if let Some(d) = direction {
                         let q = step(p, d);
-                        let old = c.region.block(p)?;
-                        let neighbor = c.region.block(q)?;
-                        let new = c.region.update_shape(p, d, q, neighbor)?;
+                        let old = c.level.block(p)?;
+                        let neighbor = c.level.block(q)?;
+                        let new = c.level.update_shape(p, d, q, neighbor)?;
                         if new != old {
-                            c.region.set_block(p, new, 2)?;
+                            c.level.set_block(p, new, 2)?;
                         }
-                        let new_neighbor = c.region.update_shape(q, d.opposite(), p, new)?;
+                        let new_neighbor = c.level.update_shape(q, d.opposite(), p, new)?;
                         if new_neighbor != neighbor {
-                            c.region.set_block(q, new_neighbor, 2)?;
+                            c.level.set_block(q, new_neighbor, 2)?;
                         }
                     }
                     last = full;

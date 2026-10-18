@@ -904,6 +904,7 @@ impl World {
     pub fn configure_live_rules(&self, level: &mut Level) {
         level.set_has_skylight(self.dimension.has_skylight);
         let data = self.generator.data();
+        level.set_item_tags(data.item_tags.clone());
         level.set_weather_environment(ferraloom_game::level::weather::WeatherEnvironment {
             temperatures: data.temperatures.clone(),
             biome_names: Arc::new(data.biome_names.clone()),
@@ -914,6 +915,20 @@ impl World {
         rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
+    }
+    /// Capture the dimension's actual generator, configured feature registry and
+    /// WorldOptions seed before constructing the concrete live level.
+    pub fn level_context(
+        &self,
+        resources: &ResourceManager,
+    ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
+        let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
+        Ok(Arc::new(ferraloom_game::level::LevelContext::new(
+            self.seed,
+            self.generator.sea_level(),
+            self.generator.clone(),
+            Arc::new(features),
+        )))
     }
     /// Attach immutable dimension layers after the sole server clock manager
     /// loads. Callers publish its actual snapshot; no local day counter exists.
@@ -1653,14 +1668,25 @@ impl World {
                     .div_euclid(1_000_000) as i64,
             ),
         );
-        let mut spawn = CompoundTag::new();
-        spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        let mut spawn = self
+            .level_data
+            .data
+            .get_compound("spawn")
+            .cloned()
+            .unwrap_or_default();
+        if !spawn.contains_key("dimension") {
+            spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        }
         spawn.insert(
             "pos",
             Tag::IntArray(vec![self.spawn.x, self.spawn.y, self.spawn.z]),
         );
-        spawn.insert("yaw", Tag::Float(0.));
-        spawn.insert("pitch", Tag::Float(0.));
+        if !spawn.contains_key("yaw") {
+            spawn.insert("yaw", Tag::Float(0.));
+        }
+        if !spawn.contains_key("pitch") {
+            spawn.insert("pitch", Tag::Float(0.));
+        }
         self.level_data.data.insert("spawn", Tag::Compound(spawn));
         let access = self.access.clone();
         let level = self.level_data.clone();
@@ -1954,7 +1980,10 @@ mod entity_io_tests {
         }])
         .unwrap();
         io.worker.synchronize(false).await.unwrap();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(pos, Visibility::Tracked)
             .unwrap();

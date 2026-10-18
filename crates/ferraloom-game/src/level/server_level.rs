@@ -9,14 +9,29 @@ pub struct ServerLevel {
     pub dimension: String,
 }
 impl ServerLevel {
-    pub fn new(region: Region, dimension: impl Into<String>) -> Self {
+    pub fn new(
+        region: Region,
+        dimension: impl Into<String>,
+        context: std::sync::Arc<super::LevelContext>,
+    ) -> Self {
         Self {
-            level: Level::new(region),
+            level: Level::new(region, context),
             chunks: ChunkMap::default(),
             tickets: TicketStorage::default(),
             distance_manager: Default::default(),
             game_time: 0,
             dimension: dimension.into(),
         }
+    }
+}
+
+impl ServerLevel {
+    /// Ticket half of ServerLevel#setChunkForced. On a changed addition the runtime
+    /// must finish getChunk synchronously before returning to the command caller.
+    pub fn set_chunk_forced(&mut self, pos: ferraloom_util::ChunkPos, forced: bool) -> bool {
+        self.tickets.set_chunk_forced(pos, forced)
+    }
+    pub fn get_force_loaded_chunks(&self) -> &ferraloom_util::collections::LongOpenHashSet {
+        self.tickets.get_force_loaded_chunks()
     }
 }

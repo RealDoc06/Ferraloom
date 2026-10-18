@@ -25,5 +25,10 @@ public final class DisplayNameVector {
         var component = player.getDisplayName();
         var json = ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE, component).getOrThrow();
         Files.writeString(Path.of(args[0]), new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(json) + "\n");
+        var input=Component.literal("Styled").append(" tail").withStyle(style->style.withColor(net.minecraft.ChatFormatting.RED).withBold(true).withClickEvent(new ClickEvent.RunCommand("/old")).withInsertion("old"));
+        var decorate=Player.class.getDeclaredMethod("decorateDisplayNameComponent",MutableComponent.class);decorate.setAccessible(true);
+        var decorated=(Component)decorate.invoke(player,input);
+        var decoratedJson=ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE,decorated).getOrThrow();
+        Files.writeString(Path.of(args[1]),new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(decoratedJson)+"\n");
     }
 }

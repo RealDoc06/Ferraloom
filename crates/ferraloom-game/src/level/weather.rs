@@ -278,6 +278,9 @@ impl Level {
     ) -> std::result::Result<u8, LevelError> {
         let chunk = ChunkPos::containing(pos);
         self.chunk(chunk).ok_or(LevelError::MissingChunk(chunk))?;
+        if layer == LightLayer::Sky && !self.has_skylight()? {
+            return Ok(0);
+        }
         self.region()
             .weather
             .lights
@@ -527,7 +530,10 @@ mod tests {
     #[test]
     fn rain_query_short_circuits_only_canonical_dry_weather() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(super::super::Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            super::super::Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let pos = BlockPos::new(0, 0, 0);
         assert_eq!(level.is_raining_at(pos), Ok(false));
         level.load_weather(WeatherData {

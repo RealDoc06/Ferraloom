@@ -98,7 +98,10 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(Region::new(behaviors));
+    let mut level = Level::new(
+        Region::new(behaviors),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for x in -2..=2 {
         for z in -2..=2 {
             level

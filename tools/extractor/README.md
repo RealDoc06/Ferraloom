@@ -117,3 +117,14 @@ are immutable registry facts: dimension, biome, clock and weather sampling does
 not participate. Float limits are measured with sanitizeValue at both infinities;
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
+
+`ExtractBlockDropTables <output-json>` records the optional actual block loot
+keys, including shared keys and absent drops. `ExtractBlockMethods` also records
+exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
+cannot silently inherit the base drop behavior.
+
+`ExtractFeatureRequirements <output-json>` captures `FeatureElement#isEnabled`
+against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated server
+currently advertises precisely that set. The generated const queries are named
+`is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
+them for checks against an arbitrary live feature set.
