@@ -512,16 +512,20 @@ fn write_payload(w: &mut impl Write, tag: &Tag, fallback: bool, floats: FloatOut
         Tag::Short(n) => w.write_all(&n.to_be_bytes())?,
         Tag::Int(n) => w.write_all(&n.to_be_bytes())?,
         Tag::Long(n) => w.write_all(&n.to_be_bytes())?,
-        Tag::Float(n) => w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
-            f32::NAN.to_be_bytes()
-        } else {
-            n.to_be_bytes()
-        })?,
-        Tag::Double(n) => w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
-            f64::NAN.to_be_bytes()
-        } else {
-            n.to_be_bytes()
-        })?,
+        Tag::Float(n) => {
+            w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
+                f32::NAN.to_be_bytes()
+            } else {
+                n.to_be_bytes()
+            })?
+        }
+        Tag::Double(n) => {
+            w.write_all(&if matches!(floats, FloatOutput::Canonical) && n.is_nan() {
+                f64::NAN.to_be_bytes()
+            } else {
+                n.to_be_bytes()
+            })?
+        }
         Tag::String(s) => write_utf(w, s, fallback)?,
         Tag::ByteArray(v) => {
             write_len(w, v.len())?;
