@@ -605,7 +605,7 @@ pub(super) fn load_clocks(
 }
 pub(super) fn command_build_context(
     registries: &RegistrySet,
-    resources: &ResourceManager,
+    _resources: &ResourceManager,
     features: RuleFeatures,
 ) -> CommandBuildContext {
     let mut context = CommandBuildContext {
@@ -613,17 +613,29 @@ pub(super) fn command_build_context(
         registries: registries.entries.clone(),
         tags: BTreeMap::new(),
     };
-    for registry in ["block", "item", "entity_type"] {
-        let key = format!("minecraft:{registry}");
-        let tags = ferraloom_data::datapack::load_tags(resources, registry, |id, _| {
-            let id = id.to_string();
-            context.contains(&key, &id).then_some(id)
-        });
+    // Share the resolved registry/tag view sent to clients, including dynamic
+    // registries such as biomes; reparsing a few built-in tag families loses them.
+    use ferraloom_protocol::codec::RegistryContext;
+    for registry in &registries.tags.tags {
         context.tags.insert(
-            key,
-            tags.values
-                .into_iter()
-                .map(|(id, values)| (id.to_string(), values))
+            registry.registry.to_string(),
+            registry
+                .tags
+                .iter()
+                .map(|tag| {
+                    (
+                        tag.name.to_string(),
+                        tag.ids
+                            .iter()
+                            .map(|id| {
+                                registries
+                                    .entry_key(&registry.registry, id.0)
+                                    .expect("resolved registry tag contains a registered entry")
+                                    .to_string()
+                            })
+                            .collect(),
+                    )
+                })
                 .collect(),
         );
     }
@@ -1897,5 +1909,66 @@ impl MinecraftServer {
             ),
             true,
         ))
+    }
+}
+
+#[cfg(test)]
+mod command_context_tests {
+    use super::*;
+    use ferraloom_protocol::{
+        Identifier,
+        codec::VarInt,
+        common::clientbound::{RegistryTags, TagEntry, UpdateTags},
+    };
+    #[test]
+    fn command_context_shares_static_dynamic_and_empty_resolved_tags() {
+        let id = |name: &str| Identifier::parse(name).unwrap();
+        let registries = RegistrySet {
+            entries: BTreeMap::from([(
+                "minecraft:worldgen/biome".into(),
+                vec!["minecraft:plains".into(), "minecraft:desert".into()],
+            )]),
+            tags: UpdateTags {
+                tags: vec![
+                    RegistryTags {
+                        registry: id("minecraft:block"),
+                        tags: vec![TagEntry {
+                            name: id("minecraft:air_tag"),
+                            ids: vec![VarInt(0)],
+                        }],
+                    },
+                    RegistryTags {
+                        registry: id("minecraft:worldgen/biome"),
+                        tags: vec![
+                            TagEntry {
+                                name: id("minecraft:ordered"),
+                                ids: vec![VarInt(1), VarInt(0)],
+                            },
+                            TagEntry {
+                                name: id("minecraft:empty"),
+                                ids: vec![],
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+        let context = command_build_context(
+            &registries,
+            &ResourceManager::new(vec![]),
+            RuleFeatures::default(),
+        );
+        assert_eq!(
+            context.tag("minecraft:block", "minecraft:air_tag"),
+            Some(["minecraft:air".into()].as_slice())
+        );
+        assert_eq!(
+            context.tag("minecraft:worldgen/biome", "minecraft:ordered"),
+            Some(["minecraft:desert".into(), "minecraft:plains".into()].as_slice())
+        );
+        assert_eq!(
+            context.tag("minecraft:worldgen/biome", "minecraft:empty"),
+            Some([].as_slice())
+        );
     }
 }
