@@ -11,6 +11,9 @@ mod attachments;
 #[cfg(test)]
 mod connected_tests;
 mod connections;
+mod decorative;
+#[cfg(test)]
+mod decorative_tests;
 mod orientation;
 mod scaffolding;
 mod slab;
@@ -26,6 +29,9 @@ pub(crate) fn ported_behavior(
 ) -> Option<&'static dyn BlockBehavior> {
     if attachments::supports(block, method) {
         return Some(&attachments::ATTACHMENTS);
+    }
+    if decorative::supports(block, method) {
+        return Some(&decorative::DECORATIVE);
     }
     if scaffolding::supports(block, method) {
         return Some(&scaffolding::SCAFFOLDING);

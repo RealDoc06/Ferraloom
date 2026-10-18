@@ -14,13 +14,14 @@ JAVA = CACHE / 'toolchains/jdk-25.0.4.1+1/bin'
 VANILLA = CACHE / 'vanilla/26.3'
 CLASSPATH = os.pathsep.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar'))]))
 parser = argparse.ArgumentParser()
-parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs', 'connected', 'attachments'], default='orientation')
+parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs', 'connected', 'attachments', 'decorative'], default='orientation')
 family = parser.parse_args().family
 source, bootstrap, expected = {
     'orientation': ('OrientationVectors.java', 'OrientationBootstrap', 42012),
     'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 281554),
     'connected': ('ConnectedVectors.java', 'ConnectedBootstrap', 84864),
     'attachments': ('AttachmentVectors.java', 'AttachmentBootstrap', 268940),
+    'decorative': ('DecorativeVectors.java', 'DecorativeBootstrap', 35092),
 }[family]
 with tempfile.TemporaryDirectory() as temporary:
     classes = Path(temporary)
@@ -30,7 +31,8 @@ with tempfile.TemporaryDirectory() as temporary:
     fixture = classes / 'NeighborFixture.java'
     subprocess.run([str(JAVA / 'java'), '-Xmx512M', '-cp', cp, 'NeighborVectors', 'generate', str(fixture)], cwd=classes, check=True)
     fixture.write_text(fixture.read_text().replace('final class MutationFixture', 'class MutationFixture'))
-    compiled = subprocess.run([str(JAVA / 'javac'), '-cp', cp, '-d', temporary, str(fixture), str(HERE / source)], capture_output=True, text=True)
+    dependencies = [str(HERE / 'AttachmentVectors.java')] if family == 'decorative' else []
+    compiled = subprocess.run([str(JAVA / 'javac'), '-cp', cp, '-d', temporary, str(fixture), *dependencies, str(HERE / source)], capture_output=True, text=True)
     if compiled.returncode:
         raise RuntimeError(compiled.stderr[-8000:])
     result = subprocess.run([str(JAVA / 'java'), '-Xmx512M', '-cp', cp, bootstrap], cwd=classes, capture_output=True, text=True)

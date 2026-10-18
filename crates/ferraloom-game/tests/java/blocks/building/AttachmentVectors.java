@@ -12,7 +12,7 @@ import net.minecraft.world.phys.*;
 
 /** Native attachment queries over all six-face support masks, actual player
  * look orders, static registry support footprints and scaffold distances. */
-public final class AttachmentVectors extends MutationFixture {
+public class AttachmentVectors extends MutationFixture {
     static final BlockPos POS=new BlockPos(8,64,8);
     static final Direction[] SIDES={Direction.NORTH,Direction.EAST,Direction.SOUTH,Direction.WEST};
     static final Set<Class<?>> OWNERS=Set.of(LanternBlock.class,LadderBlock.class,WallTorchBlock.class,AmethystClusterBlock.class,EndRodBlock.class,FaceAttachedHorizontalDirectionalBlock.class,ScaffoldingBlock.class);
