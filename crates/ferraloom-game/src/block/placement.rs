@@ -1,6 +1,6 @@
 //! Shared UseOnContext and BlockPlaceContext queries. Contexts carry handles,
 //! captured hit/stack data and no long borrow of the canonical level.
-use super::{BlockMethod, LevelReaderRef};
+use super::{BlockMethod, LevelAccessRef, LevelReaderRef};
 use crate::{
     entity::{EntityData, EntityRef},
     level::{Level, LevelError},
@@ -331,16 +331,18 @@ impl<'stack> DirectionalPlaceContext<'stack> {
         Ok(Self(context))
     }
 }
-impl LevelReaderRef<'_, '_> {
+impl LevelAccessRef<'_, '_> {
     pub fn get_state_for_placement(
-        &self,
+        &mut self,
         block: Block,
         context: &BlockPlaceContext<'_>,
     ) -> Result<Option<BlockState>, LevelError> {
-        self.required_behavior(block, BlockMethod::GetStateForPlacement)?
+        self.as_reader()
+            .required_behavior(block, BlockMethod::GetStateForPlacement)?
             .get_state_for_placement(block, context, self)
     }
-
+}
+impl LevelReaderRef<'_, '_> {
     pub fn can_be_replaced(
         &self,
         state: BlockState,
@@ -356,11 +358,11 @@ impl LevelReaderRef<'_, '_> {
 }
 impl Level {
     pub fn get_state_for_placement(
-        &self,
+        &mut self,
         block: Block,
         context: &BlockPlaceContext<'_>,
     ) -> Result<Option<BlockState>, LevelError> {
-        LevelReaderRef::Server(self).get_state_for_placement(block, context)
+        LevelAccessRef::Server(self).get_state_for_placement(block, context)
     }
 
     pub fn can_be_replaced(
@@ -443,6 +445,17 @@ mod tests {
                 )
                 .unwrap();
                 let clicked = context.clicked_pos();
+                let actual = format!(
+                    "{},{},{},{},{},{},{},{:.1}",
+                    context.replacing_clicked_on_block(&reader).unwrap(),
+                    clicked.x,
+                    clicked.y,
+                    clicked.z,
+                    context.can_place(&reader).unwrap(),
+                    context.horizontal_direction(&reader).unwrap().name(),
+                    context.is_secondary_use_active(&reader).unwrap(),
+                    context.rotation(&reader).unwrap()
+                );
                 assert_eq!(
                     level.get_state_for_placement(Block::STONE, &context),
                     Ok(Some(Block::STONE.default_state()))
@@ -454,17 +467,7 @@ mod tests {
                         BlockMethod::GetStateForPlacement
                     ))
                 ));
-                format!(
-                    "{},{},{},{},{},{},{},{:.1}",
-                    context.replacing_clicked_on_block(&reader).unwrap(),
-                    clicked.x,
-                    clicked.y,
-                    clicked.z,
-                    context.can_place(&reader).unwrap(),
-                    context.horizontal_direction(&reader).unwrap().name(),
-                    context.is_secondary_use_active(&reader).unwrap(),
-                    context.rotation(&reader).unwrap()
-                )
+                actual
             } else {
                 level
                     .set_block_state(pos, Block::AIR.default_state())
