@@ -5,7 +5,6 @@ use ferraloom_data::{Block, EntityType, Item};
 use ferraloom_protocol::{
     Wire, Writer,
     component::{ItemStack, Persistent, PotionContents},
-    play::clientbound,
 };
 use ferraloom_util::{
     Vec3,
@@ -533,14 +532,14 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
                 let result = player.award(&manager, &key.advancement, &key.criterion, award);
                 effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             }
-        } else if let Some(key) = action.strip_prefix("tab:") {
-            if let Some(packet) = player.set_selected_tab(if key == "null" {
+        } else if let Some(key) = action.strip_prefix("tab:")
+            && let Some(packet) = player.set_selected_tab(if key == "null" {
                 None
             } else {
                 manager.get(&id(key))
-            }) {
-                packets.push(Value::String(wire(&packet)));
-            }
+            })
+        {
+            packets.push(Value::String(wire(&packet)));
         }
         if let Some(packet) = player.flush_dirty(&manager, true) {
             packets.push(Value::String(wire(&packet)));

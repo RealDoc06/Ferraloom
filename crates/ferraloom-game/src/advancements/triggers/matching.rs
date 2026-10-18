@@ -406,10 +406,10 @@ impl TriggerInstance {
                     cause: params,
                 },
             ) => {
-                if let Some(test) = start_position {
-                    if !test.matches(start, context.facts)? {
-                        return Ok(false);
-                    }
+                if let Some(test) = start_position
+                    && !test.matches(start, context.facts)?
+                {
+                    return Ok(false);
                 }
                 distance.is_none_or(|test| test.matches(start, end))
                     && context.optional(cause, params)?
@@ -427,10 +427,10 @@ impl TriggerInstance {
                 }
                 if let Some(test) = item {
                     let mut found = false;
-                    if let Some(entity) = hooked.this_entity {
-                        if let Some(stack) = context.facts.hooked_item(entity)? {
-                            found = test.matches(&stack, context.facts)?;
-                        }
+                    if let Some(entity) = hooked.this_entity
+                        && let Some(stack) = context.facts.hooked_item(entity)?
+                    {
+                        found = test.matches(&stack, context.facts)?;
                     }
                     // Vanilla still checks the caught collection after a hooked-item match.
                     for item in items {

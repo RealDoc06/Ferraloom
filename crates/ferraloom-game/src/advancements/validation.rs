@@ -59,13 +59,13 @@ fn validate_set<T>(
         }
         HolderSet::Direct(values) => {
             for entry in values {
-                if let Holder::Reference(id) = entry {
-                    if !value(id) {
-                        return Err(LootError::MissingReference {
-                            registry,
-                            id: id.clone(),
-                        });
-                    }
+                if let Holder::Reference(id) = entry
+                    && !value(id)
+                {
+                    return Err(LootError::MissingReference {
+                        registry,
+                        id: id.clone(),
+                    });
                 }
             }
         }
@@ -252,7 +252,7 @@ impl Advancement {
                     ..
                 } => {
                     if let Some(value) = start_position {
-                        bindable.push(value);
+                        bindable.push(value.as_ref());
                     }
                     add(&mut conditions, "cause", cause);
                 }

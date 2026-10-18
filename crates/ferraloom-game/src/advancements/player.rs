@@ -56,7 +56,7 @@ pub enum AdvancementEffect {
         advancement: Identifier,
         rewards: AdvancementRewards,
     },
-    Announcement(Component),
+    Announcement(Box<Component>),
     /// Apply after all preceding effects, rereading completion after callbacks.
     MarkVisibility(Identifier),
 }
@@ -227,10 +227,10 @@ impl PlayerAdvancements {
                         .as_ref()
                         .is_some_and(|d| d.announce_to_chat)
                 {
-                    effects.push(AdvancementEffect::Announcement(announcement(
+                    effects.push(AdvancementEffect::Announcement(Box::new(announcement(
                         holder,
                         award.player_name,
-                    )));
+                    ))));
                 }
             }
         }
@@ -365,10 +365,10 @@ impl PlayerAdvancements {
         self.roots_to_update.clear();
         let mut progress = JavaHashMap::new();
         for key in self.progress_changed.iter() {
-            if self.visible.contains(key) {
-                if let Some(value) = self.get_progress(&key.0) {
-                    progress.insert(key.clone(), value.network(key.0.clone()));
-                }
+            if self.visible.contains(key)
+                && let Some(value) = self.get_progress(&key.0)
+            {
+                progress.insert(key.clone(), value.network(key.0.clone()));
             }
         }
         self.progress_changed.clear();

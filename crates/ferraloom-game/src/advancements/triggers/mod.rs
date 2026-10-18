@@ -130,7 +130,7 @@ pub enum TriggerConditions {
         source: Option<ContextAwarePredicate>,
     },
     Distance {
-        start_position: Option<LocationPredicate>,
+        start_position: Option<Box<LocationPredicate>>,
         distance: Option<DistancePredicate>,
         cause: Option<ContextAwarePredicate>,
     },
@@ -294,7 +294,8 @@ impl TriggerInstance {
                 source: pred("source")?,
             },
             NetherTravel | FallFromHeight | RideEntityInLava | FallAfterExplosion => C::Distance {
-                start_position: optional(v, "start_position", LocationPredicate::decode)?,
+                start_position: optional(v, "start_position", LocationPredicate::decode)?
+                    .map(Box::new),
                 distance: optional(v, "distance", DistancePredicate::decode)?,
                 cause: if trigger == FallAfterExplosion {
                     pred("cause")?
