@@ -699,15 +699,12 @@ fn disabled_vine_spreading_does_not_consume_random() {
 }
 
 #[test]
-fn crop_random_ticks_match_real_server_outcomes_and_rng() {
+pub(super) fn crop_random_ticks_match_real_server_outcomes_and_rng() {
     use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
-    use std::io::Read;
-    let mut text = String::new();
-    flate2::read::GzDecoder::new(
-        include_bytes!("../../../tests/java/blocks/plants/random-ticks.tsv.gz").as_slice(),
-    )
-    .read_to_string(&mut text)
-    .unwrap();
+    let text = super::fixtures::native_text(
+        "random-crop",
+        include_bytes!("../../../tests/java/blocks/plants/random-ticks.tsv.gz"),
+    );
     let (blocks, fluids) = tags();
     let pos = BlockPos::new(8, 5, 8);
     let mut count = 0;
@@ -1237,15 +1234,13 @@ fn tree_growth_restores_captured_saplings_and_uses_the_live_random_stream() {
 }
 
 #[test]
-fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
+pub(super) fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
-    use std::{collections::BTreeMap, io::Read};
-    let mut text = String::new();
-    flate2::read::GzDecoder::new(
-        include_bytes!("../../../tests/java/blocks/plants/bonemeal.tsv.gz").as_slice(),
-    )
-    .read_to_string(&mut text)
-    .unwrap();
+    use std::collections::BTreeMap;
+    let text = super::fixtures::native_text(
+        "bonemeal",
+        include_bytes!("../../../tests/java/blocks/plants/bonemeal.tsv.gz"),
+    );
     let (blocks, fluids) = tags();
     let pos = BlockPos::new(8, 100, 8);
     let mut matched = 0;
@@ -1277,6 +1272,7 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         level.rules_mut().block_drops = Some(false);
+        super::fixtures::install_loot(&mut level);
         if f.len() >= 10 {
             level.set_light_snapshot(
                 ChunkPos::containing(pos),
@@ -1345,8 +1341,11 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     }
     assert_eq!(matched + pending, 5808);
     assert!(matched > 0);
+    if std::env::var_os("FERRALOOM_PLANTS_ORACLE").is_some() {
+        assert_eq!(pending, 0);
+    }
     eprintln!(
-        "plant bonemeal: {matched} complete matches; {pending} awaiting drops/redstone owners or native light snapshots"
+        "plant bonemeal: {matched} complete matches; {pending} awaiting native light snapshots"
     );
 }
 

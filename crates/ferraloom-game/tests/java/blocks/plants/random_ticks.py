@@ -49,7 +49,9 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
                 process.kill();process.wait()
     if (path/'oracle-error.txt').exists():raise SystemExit((path/'oracle-error.txt').read_text())
     compressed=gzip.compress(output.read_bytes(),mtime=0)
-    if '--stdout' in sys.argv:
+    if '--output' in sys.argv:
+        Path(sys.argv[sys.argv.index('--output')+1]).write_bytes(compressed)
+    elif '--stdout' in sys.argv:
         print('PLANTS_RANDOM_FIXTURE='+base64.b64encode(compressed).decode())
     else:
         (HERE/'random-ticks.tsv.gz').write_bytes(compressed)
