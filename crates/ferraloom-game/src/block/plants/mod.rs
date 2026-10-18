@@ -29,6 +29,8 @@ pub mod multiface_spreader;
 mod nylium;
 mod pitcher;
 mod placement;
+#[cfg(test)]
+mod placement_tests;
 mod powder_snow;
 mod sapling;
 pub mod sculk;
@@ -37,6 +39,7 @@ mod snow;
 mod survival;
 pub mod tree_grower;
 mod vines;
+mod wall_plants;
 pub use moss::place_at as place_mossy_carpet;
 pub use powder_snow::can_walk_on as can_entity_walk_on_powder_snow;
 pub use survival::place_double_plant;
@@ -49,6 +52,11 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if matches!(block.class(), C::CocoaBlock | C::ShelfMushroomBlock)
+        && matches!(method, M::CanSurvive | M::GetStateForPlacement)
+    {
+        return Some(&wall_plants::WALL_PLANTS);
+    }
     if block.class() == C::HugeMushroomBlock
         && matches!(
             method,
