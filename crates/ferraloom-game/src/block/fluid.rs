@@ -728,15 +728,14 @@ impl BlockBehavior for LiquidBlock {
                     entity_context.entity.liquid_collision_shape(level)?
                 }
             };
-            if let Some(shape) = liquid_shape {
-                if context.is_above(&shape, pos, true)
-                    && context.can_stand_on_fluid(
-                        &level.get_block_state(pos.above(1))?.data().fluid,
-                        &state.data().fluid,
-                    )
-                {
-                    return Ok(shape);
-                }
+            if let Some(shape) = liquid_shape
+                && context.is_above(&shape, pos, true)
+                && context.can_stand_on_fluid(
+                    &level.get_block_state(pos.above(1))?.data().fluid,
+                    &state.data().fluid,
+                )
+            {
+                return Ok(shape);
             }
         }
         Ok(ferraloom_util::shapes::empty())

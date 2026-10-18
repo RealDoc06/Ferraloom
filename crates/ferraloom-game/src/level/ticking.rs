@@ -118,12 +118,12 @@ impl Level {
         while let Some(tick) = self.region_mut().fluid_ticks.poll_this_tick() {
             let state = self.get_block_state(tick.pos)?;
             let fluid = state.data().fluid;
-            if fluid.fluid_type == tick.block {
-                if let Some(flow) = FlowingFluid::from_id(tick.block) {
-                    self.optional_call(state.block(), BlockMethod::FluidTick, |level| {
-                        flow.tick(level, tick.pos, state, fluid)
-                    })?;
-                }
+            if fluid.fluid_type == tick.block
+                && let Some(flow) = FlowingFluid::from_id(tick.block)
+            {
+                self.optional_call(state.block(), BlockMethod::FluidTick, |level| {
+                    flow.tick(level, tick.pos, state, fluid)
+                })?;
             }
         }
         Ok(())
