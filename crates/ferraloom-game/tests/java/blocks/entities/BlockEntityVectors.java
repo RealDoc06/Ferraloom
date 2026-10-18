@@ -21,6 +21,8 @@ public final class BlockEntityVectors {
     var registries=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),dynamic.listRegistries()));
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(DataComponentInitializers.PendingComponents::apply);
     BlockEntityFixture.tickerPhases(dynamic);
+    BlockEntityFixture.scatter(dynamic);
+    BlockEntityFixture.signEdits(dynamic);
     var level=new BlockEntityFixture(dynamic);
     for(var block:List.of(Blocks.CHEST,Blocks.COPPER_CHEST.asList().getFirst(),Blocks.TRAPPED_CHEST,Blocks.BARREL,Blocks.SHULKER_BOX,Blocks.CRAFTER,Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE,Blocks.OAK_SIGN,Blocks.OAK_HANGING_SIGN)){
       var state=block.defaultBlockState();var entity=((EntityBlock)block).newBlockEntity(new BlockPos(1,64,2),state);

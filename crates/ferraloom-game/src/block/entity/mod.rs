@@ -442,3 +442,19 @@ projection!(
     super::containers::furnace::AbstractFurnaceBlockEntity,
     Furnace
 );
+
+/// Port of EntityBlock#newBlockEntity, whose nullable result is distinct from an
+/// unported factory. MovingPistonBlock creates no entity until the piston installs
+/// its explicit moved-state receiver after setBlock returns.
+pub fn new_block_entity(
+    pos: BlockPos,
+    state: BlockState,
+) -> Result<Option<BlockEntityState>, LevelError> {
+    if state.block() == Block::MOVING_PISTON {
+        return Ok(None);
+    }
+    create(pos, state).map(Some)
+}
+pub fn supports_creation(block: Block) -> bool {
+    block == Block::MOVING_PISTON || supports(block)
+}
