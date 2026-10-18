@@ -7,7 +7,7 @@ pub mod equipment;
 mod experience;
 mod interaction;
 mod spawn;
-pub use experience::{give_experience_levels, give_experience_points};
+pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
 pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{

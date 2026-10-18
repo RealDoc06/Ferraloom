@@ -128,7 +128,7 @@ pub fn give_experience_points(
 }
 
 /// Port of ServerPlayer#doTick's SetExperience slot, before LOCATION criteria.
-pub(super) fn send_experience_update(
+pub fn send_experience_update(
     player: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
