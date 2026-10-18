@@ -10,6 +10,7 @@ mod menus;
 mod operation;
 mod server_player;
 mod slot;
+mod stack_runtime;
 mod stacks;
 mod sync;
 mod transfer;
@@ -26,6 +27,7 @@ pub use operation::{
 };
 pub use server_player::*;
 pub use slot::*;
+pub use stack_runtime::{StackOperation, swap_player_hands};
 pub use stacks::{
     StackForward, StackGenerations, StackRef, StackReplacement, StackSlotRef, StackValue,
 };
@@ -42,6 +44,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    MissingStack(StackRef),
     MissingMenu(MenuRef),
     InvalidSlot(i32),
     ContainerTooSmall { actual: usize, expected: usize },
@@ -53,6 +56,7 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::MissingStack(reference) => write!(f, "missing stack receiver {reference:?}"),
             Self::MissingMenu(reference) => write!(f, "missing menu receiver {reference:?}"),
             Self::InvalidSlot(slot) => write!(f, "invalid menu slot {slot}"),
             Self::ContainerTooSmall { actual, expected } => {

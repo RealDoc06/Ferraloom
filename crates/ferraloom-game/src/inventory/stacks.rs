@@ -42,6 +42,12 @@ pub enum StackForward {
     External(StackRef),
 }
 impl StackRef {
+    pub fn address(self) -> super::ContainerSlot {
+        super::ContainerSlot {
+            container: self.container,
+            slot: self.slot,
+        }
+    }
     pub fn local(self) -> StackSlotRef {
         StackSlotRef {
             slot: self.slot,
