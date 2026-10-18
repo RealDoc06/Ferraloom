@@ -79,7 +79,7 @@ macro_rules! registry_set {
 macro_rules! wire_enum {
     ($name:ident { $first:ident = $first_id:literal $(, $variant:ident = $id:literal)* $(,)? }) => {
         #[doc = concat!("Port of ", stringify!($name), "#STREAM_CODEC (ByIdMap ZERO fallback).")]
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         pub enum $name { $first = $first_id, $($variant = $id),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {
