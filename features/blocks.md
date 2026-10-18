@@ -331,3 +331,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |
 
 | blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |
+
+| blocks.drops.context | Native BLOCK context and named loot sequences; reflected per-method getDrops dispatch, optional canonical block-entity NBT/components | `Block#getDrops; BlockBehaviour#getDrops` | Native loot engine vectors; block runtime integration pending | pass | partial |

@@ -5,6 +5,7 @@ use ferraloom_util::{BlockPos, Direction};
 mod clone_item;
 pub mod containers;
 pub mod dispatch;
+pub mod drops;
 pub mod entity;
 pub mod interaction;
 pub use interaction::{InteractionResult, UseContext};
@@ -170,6 +171,26 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getDrops. Subclass ownership is dispatched separately.
+    fn get_drops(
+        &self,
+        state: BlockState,
+        params: crate::loot::LootParams,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        drops::get_base_drops(state, params, level)
+    }
+    /// Port of BlockBehaviour#spawnAfterBreak's base no-op.
+    fn spawn_after_break(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _tool: &ferraloom_protocol::component::ItemStack,
+        _drop_experience: bool,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Block#getStateForPlacement's inherited implementation.
     fn get_state_for_placement(
         &self,
