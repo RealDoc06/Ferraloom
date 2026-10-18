@@ -528,6 +528,14 @@ impl SavedDataCodec for WorldBorder {
     }
 }
 
+impl super::Level {
+    /// Port of Level#getWorldBorder. The region owns the same canonical border
+    /// used by collision, persistence and packet initialization.
+    pub fn world_border(&self) -> &WorldBorder {
+        &self.region().entities.border
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
