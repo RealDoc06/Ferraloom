@@ -194,9 +194,7 @@ impl LootItemCondition {
             )?),
             "minecraft:time_check" => Self::TimeCheck {
                 clock: codec::id(codec::field(v, "clock")?)?,
-                period: codec::optional(v, "period", |v| {
-                    v.as_i64().ok_or_else(|| codec::error("expected long"))
-                })?,
+                period: codec::optional(v, "period", codec::long)?,
                 value: ProviderRange::decode(
                     codec::field(v, "value")?,
                     ContextIntProvider::decode,

@@ -344,8 +344,12 @@ pub trait LootFacts: PredicateContext {
     fn dynamic_drops(&self, _id: &Identifier) -> Result<Vec<ItemStack>> {
         Err(LootError::Unsupported("block_entity.dynamic_drops".into()))
     }
-    fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
-        Ok(true)
+    fn item_enabled(&self, stack: &ItemStack) -> Result<bool> {
+        if stack.is_empty() {
+            Ok(true)
+        } else {
+            Err(LootError::Unsupported("item.required_features".into()))
+        }
     }
 }
 /// All unavailable live facts fail through their default methods.

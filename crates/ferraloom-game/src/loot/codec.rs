@@ -27,6 +27,10 @@ pub(crate) fn kind(v: &Value) -> Result<Identifier> {
 }
 /// JsonOps delegates to Number.intValue: decimal truncation then low 32 bits.
 pub(crate) fn int(v: &Value) -> Result<i32> {
+    Ok(long(v)? as i32)
+}
+/// JsonOps delegates to Number.longValue, including decimal truncation and wrap.
+pub(crate) fn long(v: &Value) -> Result<i64> {
     let number = v
         .as_number()
         .ok_or_else(|| error("expected number"))?
@@ -62,14 +66,14 @@ pub(crate) fn int(v: &Value) -> Result<i32> {
     } else {
         (digits.len(), scale)
     };
-    if zeroes >= 32 {
+    if zeroes >= 64 {
         return Ok(0);
     }
-    let mut result = 0_i32;
+    let mut result = 0_i64;
     for digit in &digits[..length] {
         result = result
             .wrapping_mul(10)
-            .wrapping_add(i32::from(digit - b'0'));
+            .wrapping_add(i64::from(digit - b'0'));
     }
     for _ in 0..zeroes {
         result = result.wrapping_mul(10);

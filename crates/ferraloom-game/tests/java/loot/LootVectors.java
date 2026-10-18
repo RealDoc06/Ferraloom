@@ -110,6 +110,7 @@ public final class LootVectors {
         output.add("item_predicates",predicates);
         var modifiers=new JsonArray();
         var functionDefinitions=List.of(
+            "{\"type\":\"set_loot_table\",\"loot_table_id\":\"archaeology/desert_well\",\"seed\":9223372036854775808}",
             "{\"type\":\"set_components\",\"components\":{\"container\":[{\"slot\":0,\"item\":{\"id\":\"stone\",\"count\":65}}]}}",
             "{\"type\":\"set_components\",\"components\":{\"charged_projectiles\":[{\"id\":\"stone\",\"count\":65}]}}",
             "{\"type\":\"set_lore\",\"lore\":[\"one\",\"two\"],\"mode\":\"replace_all\"}",

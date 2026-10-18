@@ -4,6 +4,15 @@ use ferraloom_protocol::component::{DataComponentPatch, ItemStack};
 use ferraloom_util::random::{LegacyRandomSource, RandomSource};
 use serde_json::json;
 
+// The Java harness explicitly enables FeatureFlags.VANILLA_SET.
+struct VanillaFeatures;
+impl crate::predicates::PredicateContext for VanillaFeatures {}
+impl LootFacts for VanillaFeatures {
+    fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
+        Ok(true)
+    }
+}
+
 #[test]
 fn context_sets_distinguish_missing_empty_and_extra() {
     let mut params = LootParams::default();
@@ -23,7 +32,7 @@ fn provider_failure_boundary_preserves_nested_arithmetic() {
     let mut c = EvalContext {
         params: &params,
         random: &mut random,
-        facts: &NoFacts,
+        facts: &VanillaFeatures,
         visited: Default::default(),
     };
     let p = ContextIntProvider::decode(
@@ -49,7 +58,7 @@ fn single_entry_avoids_selection_draw_and_empty_range_avoids_input_draw() {
     let mut actual = LegacyRandomSource::new(42);
     let mut expected = actual.clone();
     assert_eq!(
-        data.get_random_items(&id, &params, &mut actual, &NoFacts)
+        data.get_random_items(&id, &params, &mut actual, &VanillaFeatures)
             .unwrap(),
         vec![ItemStack::new(
             Item::STONE,
@@ -59,7 +68,7 @@ fn single_entry_avoids_selection_draw_and_empty_range_avoids_input_draw() {
     );
     let condition=Holder::direct(LootItemCondition::decode(&json!({"type":"int_value_check","value":{"type":"uniform","min":0,"max":20},"test":{}})).unwrap());
     assert!(
-        data.test_predicate(&condition, &params, &mut actual, &NoFacts)
+        data.test_predicate(&condition, &params, &mut actual, &VanillaFeatures)
             .unwrap()
     );
     assert_eq!(actual.next_long(), expected.next_long());
@@ -128,14 +137,14 @@ fn synthetic_tables_and_providers_match_real_java() {
         let seed = record["seed"].as_i64().unwrap();
         let mut random = LegacyRandomSource::new(seed);
         let items = data
-            .get_random_items(&id, &params, &mut random, &NoFacts)
+            .get_random_items(&id, &params, &mut random, &VanillaFeatures)
             .unwrap();
         assert_stacks(&items, &record["items"], &record.to_string());
         assert_eq!(random.next_long(), record["next"].as_i64().unwrap());
         let mut random = LegacyRandomSource::new(seed);
         let mut container = vec![ItemStack::default(); 9];
         container[3] = ItemStack::new(Item::APPLE, 1, DataComponentPatch::default());
-        data.fill(&id, &mut container, &params, &mut random, &NoFacts)
+        data.fill(&id, &mut container, &params, &mut random, &VanillaFeatures)
             .unwrap();
         assert_stacks(&container, &record["slots"], &record.to_string());
         assert_eq!(random.next_long(), record["fill_next"].as_i64().unwrap());
@@ -151,7 +160,7 @@ fn synthetic_tables_and_providers_match_real_java() {
                 &mut EvalContext {
                     params: &params,
                     random: &mut random,
-                    facts: &NoFacts,
+                    facts: &VanillaFeatures,
                     visited: Default::default(),
                 },
             )
@@ -205,6 +214,9 @@ impl crate::predicates::PredicateContext for ItemFacts {
     }
 }
 impl LootFacts for ItemFacts {
+    fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
+        Ok(true)
+    }
     fn dynamic_drops(&self, _id: &Identifier) -> Result<Vec<ItemStack>> {
         Ok(Vec::new())
     }
@@ -468,7 +480,7 @@ fn item_modifiers_and_float_arithmetic_match_java() {
                 decode_stack(&record["input"]),
                 &params,
                 &mut random,
-                &NoFacts,
+                &VanillaFeatures,
             )
             .unwrap();
         assert_eq!(
@@ -487,7 +499,7 @@ fn item_modifiers_and_float_arithmetic_match_java() {
         let params = LootParams::default();
         let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
         let result = data
-            .evaluate_float(&provider, &params, &mut random, &NoFacts)
+            .evaluate_float(&provider, &params, &mut random, &VanillaFeatures)
             .unwrap();
         assert_eq!(
             result.to_bits() as i32,
@@ -580,7 +592,7 @@ fn movement_distance_fluid_and_environment_codecs_match_java() {
                     record["original"].as_f64().unwrap() as f32,
                     1.5,
                     record["blocked"].as_bool().unwrap(),
-                    &NoFacts
+                    &VanillaFeatures
                 )
                 .unwrap(),
             record["matches"].as_bool().unwrap(),

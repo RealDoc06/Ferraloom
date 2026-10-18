@@ -104,10 +104,7 @@ impl ComponentFunction {
             },
             "minecraft:set_loot_table" => Self::SetLootTable {
                 table: codec::id(codec::field(v, "loot_table_id")?)?,
-                seed: codec::optional(v, "seed", |v| {
-                    v.as_i64().ok_or_else(|| codec::error("expected long"))
-                })?
-                .unwrap_or(0),
+                seed: codec::optional(v, "seed", codec::long)?.unwrap_or(0),
             },
             "minecraft:set_instrument" => {
                 Self::SetInstrument(HolderSet::from_json(codec::field(v, "options")?)?)
