@@ -4,6 +4,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
+| ticking.runtime.entity-storage | Route entity region IO separately, integrate responses at entity management and synchronize save-all | `ServerLevel#tick; PersistentEntitySectionManager; EntityStorage` | `world::entity_io_tests::entity_region_worker_routes_loads_writes_and_deletions` | - | partial |
 | ticking.server.packet-phase | Process queued packets before the server tick | `MinecraftServer#processPacketsAndTick` | | - | todo |
 | ticking.server.rate-phase | Advance the server tick count and tick-rate manager before child ticks | `MinecraftServer#tickServer` | | - | todo |
 | ticking.server.function-phase | Tick command functions before clocks and dimensions | `MinecraftServer#tickChildren` | | - | todo |

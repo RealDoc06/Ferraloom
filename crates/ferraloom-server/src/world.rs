@@ -4,7 +4,11 @@ use anyhow::{Context, Result, ensure};
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
 use ferraloom_data::{Block, BlockClass, BlockState, EntityType, datapack::ResourceManager};
 use ferraloom_game::block::GameWorldgenBlockBehavior as LocalBlockBehavior;
-use ferraloom_game::level::chunk::LevelChunk;
+use ferraloom_game::level::{
+    Level,
+    chunk::LevelChunk,
+    entity::{EntityLoadRequestId, EntityStorageRequest},
+};
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtString, Tag};
 use ferraloom_storage::{
@@ -25,9 +29,12 @@ use ferraloom_worldgen::{
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
+    future::Future,
     path::Path,
+    pin::Pin,
     sync::{Arc, mpsc},
+    task::{Context as TaskContext, Poll, Waker},
 };
 use tokio::sync::oneshot;
 
@@ -320,6 +327,7 @@ pub struct World {
     pub spawn: BlockPos,
     pub registry: Arc<RegistryAdapter>,
     pub io: IoWorker,
+    entity_io: Option<EntityIo>,
     pub dimensions: WorldDimensions,
     generator: Arc<ChunkGenerator>,
     dimension: DimensionType,
@@ -333,6 +341,48 @@ pub struct World {
     pub saved: BTreeMap<i64, SerializableChunkData>,
     pub lights: BTreeMap<i64, ChunkLight>,
     pub ready: std::collections::HashSet<ChunkPos>,
+}
+/// The entity region worker is distinct from block-chunk storage. Completion
+/// polling returns owned responses; the game integrates its request ordinals.
+struct EntityIo {
+    worker: IoWorker,
+    loads: VecDeque<(EntityLoadRequestId, storage::IoTask<Option<CompoundTag>>)>,
+    stores: VecDeque<storage::IoTask<()>>,
+}
+impl EntityIo {
+    fn submit(&mut self, requests: Vec<EntityStorageRequest>) -> Result<()> {
+        for request in requests {
+            match request {
+                EntityStorageRequest::Load { id, pos } => {
+                    self.loads.push_back((id, self.worker.load(pos)));
+                }
+                EntityStorageRequest::Store { pos, chunk } => {
+                    let tag = chunk.map(|chunk| chunk.write()).transpose()?;
+                    self.stores.push_back(self.worker.store(pos, tag));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn poll(&mut self, level: &mut Level) -> Result<()> {
+        let mut context = TaskContext::from_waker(Waker::noop());
+        while let Some((id, task)) = self.loads.front_mut() {
+            let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
+                break;
+            };
+            let id = *id;
+            self.loads.pop_front();
+            level.complete_entity_chunk_load(id, result)?;
+        }
+        while let Some(task) = self.stores.front_mut() {
+            let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
+                break;
+            };
+            self.stores.pop_front();
+            result?;
+        }
+        Ok(())
+    }
 }
 impl World {
     pub fn open(
@@ -539,6 +589,7 @@ impl World {
             spawn,
             registry,
             io,
+            entity_io: None,
             dimensions: preset.dimensions,
             generator,
             dimension,
@@ -553,6 +604,68 @@ impl World {
             lights: BTreeMap::new(),
             ready: Default::default(),
         })
+    }
+    fn entity_io(&mut self, properties: &ServerProperties) -> Result<&mut EntityIo> {
+        if self.entity_io.is_none() {
+            let version = match properties.get("region-file-compression") {
+                "none" => storage::RegionFileVersion::None,
+                "lz4" => storage::RegionFileVersion::Lz4,
+                _ => storage::RegionFileVersion::Deflate,
+            };
+            self.entity_io = Some(EntityIo {
+                worker: IoWorker::new(
+                    self.access.dimension("minecraft:overworld")?.entities,
+                    version,
+                    properties.boolean("sync-chunk-writes"),
+                )?,
+                loads: VecDeque::new(),
+                stores: VecDeque::new(),
+            });
+        }
+        Ok(self.entity_io.as_mut().unwrap())
+    }
+    /// PersistentEntitySectionManager#tick polling point, also used while frozen.
+    pub fn tick_entity_management(
+        &mut self,
+        level: &mut Level,
+        properties: &ServerProperties,
+    ) -> Result<()> {
+        let io = self.entity_io(properties)?;
+        io.poll(level)?;
+        level.tick_entity_management()?;
+        io.submit(level.take_entity_storage_requests())?;
+        Ok(())
+    }
+    pub async fn save_entities(
+        &mut self,
+        level: &mut Level,
+        properties: &ServerProperties,
+        flush: bool,
+    ) -> Result<()> {
+        let io = self.entity_io(properties)?;
+        if !flush {
+            level.auto_save_entities()?;
+            io.submit(level.take_entity_storage_requests())?;
+            return Ok(());
+        }
+        level.begin_entity_save_all()?;
+        loop {
+            io.submit(level.take_entity_storage_requests())?;
+            io.worker.synchronize(false).await?;
+            io.poll(level)?;
+            if level.poll_entity_save_all()? {
+                io.submit(level.take_entity_storage_requests())?;
+                io.worker.synchronize(true).await?;
+                io.poll(level)?;
+                return Ok(());
+            }
+        }
+    }
+    pub async fn close_entity_storage(&mut self) -> Result<()> {
+        if let Some(io) = &mut self.entity_io {
+            io.worker.shutdown().await?;
+        }
+        Ok(())
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         if let Some(terrain) = self.initial_chunks.remove(&pos.to_long()) {
@@ -1031,4 +1144,65 @@ fn load_terrain(tag: CompoundTag, registry: &RegistryAdapter, pos: ChunkPos) -> 
         disk,
         surface,
     })
+}
+
+#[cfg(test)]
+mod entity_io_tests {
+    use super::*;
+    use ferraloom_game::{
+        Behaviors,
+        level::{Region, entity::Visibility},
+    };
+    use ferraloom_storage::{EntityChunk, IntArray};
+
+    #[tokio::test]
+    async fn entity_region_worker_routes_loads_writes_and_deletions() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let dir = tempfile::tempdir().unwrap();
+        let mut io = EntityIo {
+            worker: IoWorker::new(dir.path(), storage::RegionFileVersion::Deflate, false).unwrap(),
+            loads: VecDeque::new(),
+            stores: VecDeque::new(),
+        };
+        let pos = ChunkPos::new(-2, 3);
+        let mut extra = CompoundTag::new();
+        extra.insert("future", Tag::Int(42));
+        io.submit(vec![EntityStorageRequest::Store {
+            pos,
+            chunk: Some(EntityChunk {
+                data_version: Some(storage::DATA_VERSION),
+                position: Some(IntArray(vec![pos.x, pos.z])),
+                entities: Some(Vec::new()),
+                extra,
+            }),
+        }])
+        .unwrap();
+        io.worker.synchronize(false).await.unwrap();
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        level
+            .update_entity_chunk_status(pos, Visibility::Tracked)
+            .unwrap();
+        io.submit(level.take_entity_storage_requests()).unwrap();
+        io.worker.synchronize(false).await.unwrap();
+        assert!(!level.are_entities_loaded(pos));
+        io.poll(&mut level).unwrap();
+        assert!(!level.are_entities_loaded(pos));
+        level.tick_entity_management().unwrap();
+        assert!(level.are_entities_loaded(pos));
+        assert_eq!(
+            io.worker
+                .load(pos)
+                .await
+                .unwrap()
+                .unwrap()
+                .get_int("future"),
+            Some(42)
+        );
+        io.submit(vec![EntityStorageRequest::Store { pos, chunk: None }])
+            .unwrap();
+        io.worker.synchronize(true).await.unwrap();
+        io.poll(&mut level).unwrap();
+        assert!(io.worker.load(pos).await.unwrap().is_none());
+        io.worker.shutdown().await.unwrap();
+    }
 }

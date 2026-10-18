@@ -523,7 +523,8 @@ impl MinecraftServer {
                 .level
                 .tick_entities()
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            self.level.level.finish_entity_management();
+            self.world
+                .tick_entity_management(&mut self.level.level, &self.properties)?;
         } else {
             self.integrate_jobs()?;
         }
@@ -1842,6 +1843,9 @@ impl MinecraftServer {
         }
     }
     async fn save_all(&mut self, flush: bool) -> Result<()> {
+        self.world
+            .save_entities(&mut self.level.level, &self.properties, flush)
+            .await?;
         let snapshots = self
             .level
             .chunks
@@ -1888,6 +1892,7 @@ impl MinecraftServer {
         if let Some(listener) = self.listener_task.take() {
             listener.await??;
         }
+        self.world.close_entity_storage().await?;
         self.world.io.shutdown().await?;
         println!(
             "Server stopped; world and players saved to {}",
