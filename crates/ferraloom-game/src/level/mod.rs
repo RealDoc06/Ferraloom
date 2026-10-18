@@ -58,6 +58,11 @@ pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedItemInventoryTick(ferraloom_data::Item),
+    UnsupportedItemHurtAndBreak {
+        item: ferraloom_data::Item,
+        amount: i32,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    },
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),

@@ -17,6 +17,11 @@ pub enum UnportedOperation {
     ItemUseOn(ferraloom_data::Item),
     ItemCraftedPostProcess(ferraloom_data::Item),
     ItemInventoryTick(ferraloom_data::Item),
+    ItemHurtAndBreak {
+        item: ferraloom_data::Item,
+        amount: i32,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    },
     PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
@@ -255,6 +260,17 @@ impl UnportedCalls {
                         self.stats.skipped_calls
                     );
                 }
+                UnportedCall::Operation(UnportedOperation::ItemHurtAndBreak {
+                    item,
+                    amount,
+                    slot,
+                }) => {
+                    eprintln!(
+                        "Unported item effect skipped: ItemStack#hurtAndBreak ({}, amount: {amount}, slot: {slot:?}, skipped calls: {})",
+                        item.name(),
+                        self.stats.skipped_calls
+                    );
+                }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
                     "Unported portal use effect skipped: {} (skipped calls: {})",
                     block.name(),
@@ -367,6 +383,9 @@ impl Level {
                 }
                 UnportedOperation::ItemInventoryTick(item) => {
                     LevelError::UnsupportedItemInventoryTick(item)
+                }
+                UnportedOperation::ItemHurtAndBreak { item, amount, slot } => {
+                    LevelError::UnsupportedItemHurtAndBreak { item, amount, slot }
                 }
                 UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {
