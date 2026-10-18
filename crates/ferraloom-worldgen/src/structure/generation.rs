@@ -22,6 +22,7 @@ enum StructureGenerator {
     Jigsaw(Box<JigsawStructure>),
     BuriedTreasure,
     Igloo,
+    EndCity,
     Shipwreck { beached: bool },
     NetherFossil { height: HeightProvider },
     Unsupported(worldgen_structure_type::Id),
@@ -65,6 +66,7 @@ impl StructureGenerators {
                     )),
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
+                    "minecraft:end_city" => StructureGenerator::EndCity,
                     "minecraft:shipwreck" => StructureGenerator::Shipwreck {
                         beached: crate::codec::boolean(crate::codec::field(
                             &resource.json()?,
@@ -224,6 +226,67 @@ impl StructureGenerators {
                     pieces,
                 ));
             }
+            StructureGenerator::EndCity => {
+                use ferraloom_util::{
+                    Rotation,
+                    random::{Algorithm, RandomSource, WorldgenRandom},
+                };
+                let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(7));
+                if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
+                    return Ok(StructureStart::invalid());
+                }
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let rotation = Rotation::VALUES[random.next_int_bound(4) as usize];
+                let dx = if matches!(rotation, Rotation::Clockwise90 | Rotation::Clockwise180) {
+                    -5
+                } else {
+                    5
+                };
+                let dz = if matches!(
+                    rotation,
+                    Rotation::Clockwise180 | Rotation::CounterClockwise90
+                ) {
+                    -5
+                } else {
+                    5
+                };
+                let mut y = i32::MAX;
+                for [sx, sz] in [[x, z], [x, z + dz], [x + dx, z], [x + dx, z + dz]] {
+                    y = y.min(
+                        generator.get_base_height(
+                            sx,
+                            sz,
+                            Heightmap::WorldSurfaceWg,
+                            context.min_y,
+                            context.height,
+                        )? - 1,
+                    );
+                }
+                if y < 60 {
+                    return Ok(StructureStart::invalid());
+                }
+                let position = [x, y, z];
+                if !valid(&(context.biome)(position.map(|v| v >> 2))?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let pieces = super::structures::end_city::start_house_tower(
+                    context.templates,
+                    position,
+                    rotation,
+                    &mut random,
+                )
+                .into_iter()
+                .map(|p| StructurePiece::EndCity(Box::new(p)))
+                .collect();
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    pieces,
+                ));
+            }
             StructureGenerator::NetherFossil { height } => {
                 use ferraloom_data::Block;
                 use ferraloom_util::{
@@ -289,6 +352,9 @@ impl StructureGenerators {
             }
         };
         if !valid(&(context.biome)(position.map(|v| v >> 2))?) {
+            return Ok(StructureStart::invalid());
+        }
+        if pieces.is_empty() {
             return Ok(StructureStart::invalid());
         }
         Ok(StructureStart::new(

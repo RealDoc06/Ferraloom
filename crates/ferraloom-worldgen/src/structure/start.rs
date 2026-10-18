@@ -25,6 +25,7 @@ pub enum StructurePiece {
     Igloo(Box<super::structures::igloo::IglooPiece>),
     Shipwreck(Box<super::structures::shipwreck::ShipwreckPiece>),
     NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
+    EndCity(Box<super::structures::end_city::EndCityPiece>),
 }
 impl StructurePiece {
     pub fn terrain_piece(&self, adjustment: TerrainAdjustment) -> super::TerrainPiece<'_> {
@@ -52,6 +53,7 @@ impl StructurePiece {
             Self::Igloo(p) => p.template.data.bounds,
             Self::Shipwreck(p) => p.template.data.bounds,
             Self::NetherFossil(p) => p.template.data.bounds,
+            Self::EndCity(p) => p.template.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
@@ -61,6 +63,7 @@ impl StructurePiece {
             Self::Igloo(p) => Ok(p.to_nbt()),
             Self::Shipwreck(p) => Ok(p.to_nbt()),
             Self::NetherFossil(p) => Ok(p.to_nbt()),
+            Self::EndCity(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -209,6 +212,13 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:ecp" => {
+                        if let Ok(piece) =
+                            super::structures::end_city::EndCityPiece::from_nbt(templates, tag)
+                        {
+                            pieces.push(StructurePiece::EndCity(Box::new(piece)));
+                        }
+                    }
                     "minecraft:nefos" => {
                         if let Ok(piece) =
                             super::structures::nether_fossil::NetherFossilPiece::from_nbt(

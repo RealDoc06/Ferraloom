@@ -44,22 +44,32 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
             .parse()
             .unwrap())
         };
-        let nether = (case["id"] == "minecraft:nether_fossil").then(|| {
-            crate::generator::NoiseBasedChunkGenerator::new(
-                noise.data.clone(),
-                crate::settings::NoiseGeneratorSettings::decode(
-                    &resources
-                        .require(&"worldgen/noise_settings/nether.json".parse().unwrap())
-                        .unwrap()
-                        .json()
-                        .unwrap(),
+        let nether = (case["id"] == "minecraft:nether_fossil"
+            || case["id"] == "minecraft:end_city")
+            .then(|| {
+                crate::generator::NoiseBasedChunkGenerator::new(
+                    noise.data.clone(),
+                    crate::settings::NoiseGeneratorSettings::decode(
+                        &resources
+                            .require(
+                                &if case["id"] == "minecraft:end_city" {
+                                    "worldgen/noise_settings/end.json"
+                                } else {
+                                    "worldgen/noise_settings/nether.json"
+                                }
+                                .parse()
+                                .unwrap(),
+                            )
+                            .unwrap()
+                            .json()
+                            .unwrap(),
+                    )
+                    .unwrap(),
+                    crate::biome::BiomeSource::Fixed("minecraft:plains".parse().unwrap()),
+                    seed,
                 )
-                .unwrap(),
-                crate::biome::BiomeSource::Fixed("minecraft:plains".parse().unwrap()),
-                seed,
-            )
-            .unwrap()
-        });
+                .unwrap()
+            });
         let generator: &dyn ChunkGeneratorAccess = match &nether {
             Some(nether) => nether,
             None => &flat,
