@@ -15,7 +15,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.tickets.forced | Add and remove persistent forced-chunk tickets | `ServerLevel#setChunkForced; ForceLoadCommand` | | - | todo |
 | chunks.tickets.portal | Keep destination portal chunks loaded while portal travel completes | `PortalForcer; TicketType` | | - | todo |
 | chunks.tickets.ender-pearl | Maintain owner-linked ender pearl tickets across entity ticks and loading | `ThrownEnderpearl` | | - | todo |
-| chunks.unload.safe | Defer chunk unload until pending saves and work are safe to complete | `ChunkMap#processUnloads` | owned save futures, generation claims, ticket/holder identity rechecks and dirty re-save; `chunk_map::tests` holder removal guard | - | partial |
+| chunks.unload.safe | Defer chunk unload until pending saves and work are safe to complete | `ChunkMap#processUnloads` | owned save futures, generation claims, ticket/holder identity rechecks and dirty re-save; `world::generation_order_tests::saving_uses_dimension_sections_and_retains_generation_light_until_live_attachment`; `chunk_map::tests` holder removal guard | - | partial |
 | chunks.unload.entities | Persist and unload entity sections as chunk tracking visibility changes | `PersistentEntitySectionManager` | | - | todo |
 | chunks.save.dirty | Save dirty chunks and avoid overwriting full chunks with protochunks | `ChunkMap#save` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.network.batch-feedback | Adapt chunk batch sending using client batch feedback and pending acknowledgements | `PlayerChunkSender` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |

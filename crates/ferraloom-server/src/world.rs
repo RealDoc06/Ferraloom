@@ -195,9 +195,12 @@ enum LightMutation {
 fn run_light_worker(
     light_in: mpsc::Receiver<LightJob>,
     light_out: tokio::sync::mpsc::UnboundedSender<LitChunk>,
+    min_section: i32,
+    max_section: i32,
+    has_skylight: bool,
 ) {
-    let mut snapshots = SectionSnapshots::new(-4, 20);
-    let mut engine = LevelLightEngine::new(true, true);
+    let mut snapshots = SectionSnapshots::new(min_section, max_section);
+    let mut engine = LevelLightEngine::new(true, has_skylight);
     let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
     let mut full_chunks = std::collections::HashSet::new();
     while let Ok(job) = light_in.recv() {
@@ -305,7 +308,7 @@ fn run_light_worker(
                 (Some((request, pos)), changes)
             }
             LightJob::Unload { pos } => {
-                for y in -4..20 {
+                for y in min_section..max_section {
                     engine.update_section_status(SectionPos::new(pos.x, y, pos.z), true);
                 }
                 engine.set_light_enabled(&snapshots, pos, false);
@@ -347,7 +350,7 @@ fn run_light_worker(
             let key = change.section.chunk().pack();
             affected.insert(key);
             let mask = dirty.entry(key).or_default();
-            let bit = 1_u64 << (change.section.y + 5);
+            let bit = 1_u64 << (change.section.y - min_section + 1);
             match change.layer {
                 LightLayer::Sky => mask.sky |= bit,
                 LightLayer::Block => mask.block |= bit,
@@ -779,7 +782,15 @@ impl World {
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
             .name("ferraloom-light".into())
-            .spawn(move || run_light_worker(light_in, light_out))?;
+            .spawn(move || {
+                run_light_worker(
+                    light_in,
+                    light_out,
+                    dimension.min_y >> 4,
+                    (dimension.min_y + dimension.height) >> 4,
+                    dimension.has_skylight,
+                )
+            })?;
         Ok(Self {
             access,
             level_data,
@@ -838,7 +849,11 @@ impl World {
             .block_tags()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         for terrain in self.initial_chunks.values_mut() {
-            let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
+            let mut chunk = LevelChunk::from_sections(
+                terrain.pos,
+                terrain.disk.y_pos.context("saved chunk minimum section")?,
+                terrain.sections.clone(),
+            );
             chunk.prime_heightmaps(tags);
             write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
         }
@@ -1322,7 +1337,7 @@ impl World {
             disk,
             light: self.lights.get(&pos.pack()).cloned(),
             game_time,
-            light_correct: self.ready.contains(&pos),
+            light_correct: self.light_ready.contains(&pos),
         })
     }
     pub async fn encode_saves(
@@ -1352,10 +1367,10 @@ impl World {
             .map(|terrain| ChunkSaveSnapshot {
                 pos: terrain.pos,
                 sections: terrain.sections,
+                light_correct: terrain.disk.is_light_on == Some(true),
                 disk: terrain.disk,
                 light: None,
                 game_time,
-                light_correct: false,
             })
             .collect();
         for (pos, tag) in self.encode_saves(snapshots).await? {
@@ -1407,10 +1422,12 @@ fn write_runtime_heightmaps(chunk: &LevelChunk, disk: &mut SerializableChunkData
     ] {
         maps.insert(
             name.into(),
-            LongArray(heightmap(
+            LongArray(heightmap_in_dimension(
                 chunk
                     .heightmap(map)
                     .context("full chunk heightmaps not primed")?,
+                chunk.min_y(),
+                chunk.max_y() - chunk.min_y(),
             )),
         );
     }
@@ -1434,25 +1451,27 @@ impl ChunkSaveSnapshot {
             .into_iter()
             .filter_map(|section| section.y.map(|y| (y, section)))
             .collect::<BTreeMap<_, _>>();
+        let min_section = self.disk.y_pos.context("saved chunk minimum section")?;
+        let max_section = min_section + self.sections.len() as i32;
         let mut sections = Vec::new();
         for (index, runtime) in self.sections.iter().enumerate() {
-            let y = -4 + index as i32;
+            let y = min_section + index as i32;
             let mut section = existing.remove(&(y as i8)).unwrap_or_default();
             section.y = Some(y as i8);
             section.update_from_runtime(runtime, registry)?;
-            section.sky_light = self
-                .light
-                .as_ref()
-                .and_then(|l| l.sky.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
-            section.block_light = self
-                .light
-                .as_ref()
-                .and_then(|l| l.block.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            if let Some(light) = &self.light {
+                section.sky_light = light
+                    .sky
+                    .get(&y)
+                    .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+                section.block_light = light
+                    .block
+                    .get(&y)
+                    .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            }
             sections.push(section);
         }
-        for y in [-5, 20] {
+        for y in [min_section - 1, max_section] {
             if let Some(light) = &self.light {
                 let sky = light.sky.get(&y);
                 let block = light.block.get(&y);
@@ -1498,13 +1517,18 @@ pub(crate) fn surface_heights_in_dimension(
         min_y
     })
 }
-/// Port of Heightmap's padded 9-bit SimpleBitStorage for an overworld height.
+/// Port of Heightmap's padded SimpleBitStorage for an overworld height.
 pub fn heightmap(heights: &[i32; 256]) -> Vec<i64> {
-    let mut words = vec![0u64; 256usize.div_ceil(7)];
-    for (i, &y) in heights.iter().enumerate() {
-        words[i / 7] |= ((y + 64) as u64 & 511) << ((i % 7) * 9);
+    heightmap_in_dimension(heights, -64, 384)
+}
+fn heightmap_in_dimension(heights: &[i32; 256], min_y: i32, height: i32) -> Vec<i64> {
+    let bits = 32 - (height as u32).leading_zeros();
+    let per_word = 64 / bits as usize;
+    let mut words = vec![0u64; 256usize.div_ceil(per_word)];
+    for (index, &y) in heights.iter().enumerate() {
+        words[index / per_word] |= ((y - min_y) as u64) << ((index % per_word) * bits as usize);
     }
-    words.into_iter().map(|w| w as i64).collect()
+    words.into_iter().map(|word| word as i64).collect()
 }
 fn new_level_data(properties: &ServerProperties) -> LevelData {
     let mut data = CompoundTag::new();
@@ -1699,7 +1723,7 @@ mod light_worker_tests {
     fn block_light_deltas_update_real_sections_without_completing_generation() {
         let (send, receive) = mpsc::channel();
         let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
-        let worker = std::thread::spawn(move || run_light_worker(receive, reply));
+        let worker = std::thread::spawn(move || run_light_worker(receive, reply, -4, 20, true));
         let pos = ChunkPos::new(0, 0);
         let biome = BiomeId(0);
         let mut sections: Vec<_> = (0..24)
@@ -1760,6 +1784,73 @@ mod light_worker_tests {
 #[cfg(test)]
 mod generation_order_tests {
     use super::*;
+
+    #[test]
+    fn saving_uses_dimension_sections_and_retains_generation_light_until_live_attachment() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registry = RegistryAdapter::new(&RegistrySet::load(&resources).unwrap()).unwrap();
+        let biome = BiomeId(0);
+        let section = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
+            biome,
+        );
+        let disk = SerializableChunkData {
+            y_pos: Some(2),
+            status: Some("minecraft:full".into()),
+            sections: Some(vec![storage::ChunkSection {
+                y: Some(2),
+                sky_light: Some(ByteArray(vec![-1; 2048])),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+        for attached in [false, true] {
+            let snapshot = ChunkSaveSnapshot {
+                pos: ChunkPos::new(0, 0),
+                sections: vec![section.clone(); 2],
+                disk: disk.clone(),
+                light: attached.then(|| ChunkLight {
+                    sky: BTreeMap::from([(1, vec![255; 2048]), (4, vec![255; 2048])]),
+                    ..Default::default()
+                }),
+                game_time: 7,
+                light_correct: true,
+            };
+            let saved = SerializableChunkData::parse(snapshot.encode(&registry).unwrap()).unwrap();
+            let sections = saved.sections.unwrap();
+            let ys = sections.iter().map(|s| s.y.unwrap()).collect::<Vec<_>>();
+            assert_eq!(
+                ys,
+                if attached {
+                    vec![1, 2, 3, 4]
+                } else {
+                    vec![2, 3]
+                }
+            );
+            assert_eq!(saved.is_light_on, Some(true));
+            assert_eq!(
+                sections
+                    .iter()
+                    .find(|s| s.y == Some(2))
+                    .unwrap()
+                    .sky_light
+                    .is_some(),
+                !attached
+            );
+        }
+        let heights = heightmap_in_dimension(&[64; 256], 32, 32);
+        let packed = ferraloom_chunk::SimpleBitStorage::from_raw(
+            6,
+            256,
+            heights.into_iter().map(|word| word as u64).collect(),
+        )
+        .unwrap();
+        assert_eq!(packed.get(255), 32);
+    }
 
     #[tokio::test]
     async fn priority_completion_keeps_statuses_skips_and_chunks_in_request_order() {
