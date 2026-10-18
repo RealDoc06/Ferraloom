@@ -530,3 +530,15 @@ fn collision_property_is_independent_of_the_empty_context_shape() {
             .is_empty()
     );
 }
+
+#[test]
+fn waterlogging_ownership_distinguishes_interfaces_and_slab_overrides() {
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::CanPlaceLiquid));
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::PlaceLiquid));
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::PickupBlock));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::CanPlaceLiquid));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::PlaceLiquid));
+    assert!(!Block::STONE_SLAB.overrides(BlockMethod::PickupBlock));
+    assert!(Block::WATER.overrides(BlockMethod::PickupBlock));
+    assert!(Block::STONE.overrides(BlockMethod::PlaceLiquid));
+}

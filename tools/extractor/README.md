@@ -77,3 +77,9 @@ a constant: collision-shape defaults, for example, call other virtual methods.
 The extractor additionally exercises the base survival and shape-update methods
 for every applicable state with null level/tick/random arguments, proving those
 two known constants require no level behavior or random draws.
+
+Liquid-container and bucket interfaces use `SimpleWaterloggedBlock` as the
+default owner. Reflection resolves inherited interface defaults after concrete
+class overrides. A non-implementing block records `<not implemented>`, so it
+never selects an interface default. Slab waterlogging overrides remain distinct
+from that default even when the slab is currently a single half.
