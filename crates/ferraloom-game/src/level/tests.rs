@@ -898,6 +898,7 @@ static ANALOG: Behaviors = Behaviors::EMPTY.with_block(Block::COMPARATOR, &Trace
 #[test]
 fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
     let mut level = empty_level(&ANALOG);
+    install_tags(&mut level);
     let center = BlockPos::new(8, 0, 8);
     for (pos, block) in [
         (center.north(1), Block::COMPARATOR),
