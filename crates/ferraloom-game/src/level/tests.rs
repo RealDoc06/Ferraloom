@@ -443,6 +443,75 @@ impl BlockBehavior for EventChain {
 }
 static EVENT_BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &EventChain);
 #[test]
+fn block_event_audiences_capture_before_later_event_movement() {
+    use crate::entity::{
+        EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_protocol::play::clientbound::Packet;
+    use ferraloom_util::{Uuid, Vec3};
+    struct MovingEvent;
+    impl BlockBehavior for MovingEvent {
+        fn trigger_event(
+            &self,
+            _: BlockState,
+            _: BlockPos,
+            a: i32,
+            _: i32,
+            level: &mut Level,
+        ) -> Result<bool, LevelError> {
+            if a == 1 {
+                level.set_entity_pos(EntityRef(1000), Vec3::new(100.0, 0.0, 4.0))?;
+            }
+            Ok(true)
+        }
+    }
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &MovingEvent);
+    let mut level = empty_level(&BEHAVIORS);
+    let p = BlockPos::new(4, 0, 4);
+    level
+        .set_block_state(p, Block::STONE.default_state())
+        .unwrap();
+    level.set_chunk_block_ticking(ChunkPos::ZERO, true).unwrap();
+    let player = EntityRef(1000);
+    let network_id = level.next_entity_id();
+    level
+        .add_entity(
+            player,
+            EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::offline_player("EventAudience"),
+                "EventAudience".into(),
+                network_id,
+                Vec3::new(8.0, 0.0, 4.0),
+                GameType::Survival,
+            ))),
+        )
+        .unwrap();
+    level.take_effects();
+    for a in [0, 1] {
+        level.block_event(events::BlockEvent {
+            pos: p,
+            block: Block::STONE,
+            param_a: a,
+            param_b: 0,
+        });
+    }
+    level.run_block_events().unwrap();
+    let effects = level.take_effects();
+    assert!(
+        matches!(&effects[0], LevelEffect::PlayerPacket { recipients,packet }
+        if recipients == &[player] && matches!(packet.as_ref(), Packet::BlockEvent(event) if event.b0 == 0))
+    );
+    assert!(
+        matches!(&effects[1], LevelEffect::PlayerSectionChange { player:id,.. } if *id == player)
+    );
+    assert!(
+        matches!(&effects[2], LevelEffect::PlayerPacket { recipients,packet }
+        if recipients.is_empty() && matches!(packet.as_ref(), Packet::BlockEvent(event) if event.b0 == 1))
+    );
+    assert_eq!(effects.len(), 3);
+}
+#[test]
 fn block_events_drain_reentrant_additions_deduplicate_and_retry_non_ticking_chunks() {
     let mut level = empty_level(&EVENT_BEHAVIORS);
     let pos = BlockPos::new(4, 0, 4);
@@ -467,7 +536,10 @@ fn block_events_drain_reentrant_additions_deduplicate_and_retry_non_ticking_chun
         .take_effects()
         .into_iter()
         .filter_map(|e| match e {
-            LevelEffect::BlockEvent(e) => Some(e.param_a),
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                ferraloom_protocol::play::clientbound::Packet::BlockEvent(event) => Some(event.b0),
+                _ => None,
+            },
             _ => None,
         })
         .collect();

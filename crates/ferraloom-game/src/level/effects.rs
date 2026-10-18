@@ -1,6 +1,5 @@
 //! Ordered integration points for subsystem ports. Effects are captured at the
 //! vanilla call site and consumed at its phase boundary, never from hash order.
-use super::events::BlockEvent;
 use ferraloom_data::BlockState;
 use ferraloom_util::{BlockPos, ChunkPos};
 
@@ -44,7 +43,6 @@ pub enum LevelEffect {
         id: i32,
         data: i32,
     },
-    BlockEvent(BlockEvent),
     WeatherEvent {
         event: u8,
         param: f32,

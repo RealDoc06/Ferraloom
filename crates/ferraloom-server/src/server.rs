@@ -1079,32 +1079,6 @@ impl MinecraftServer {
                 LevelEffect::WeatherEvent { event, param } => {
                     self.broadcast(cb::Packet::GameEvent(cb::GameEvent { event, param }))
                 }
-                LevelEffect::BlockEvent(event) => {
-                    let packet = cb::Packet::BlockEvent(cb::BlockEvent {
-                        pos: event.pos,
-                        b0: event.param_a as u8,
-                        b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.protocol_id())),
-                    });
-                    for &connection in &self.players {
-                        let c = &self.connections[&connection];
-                        let Phase::Play(entity) = c.phase else {
-                            continue;
-                        };
-                        let position = self.player(entity)?.position;
-                        if position.distance_to_sqr(Vec3::new(
-                            f64::from(event.pos.x),
-                            f64::from(event.pos.y),
-                            f64::from(event.pos.z),
-                        )) < 4096.0
-                        {
-                            self.connections
-                                .get_mut(&connection)
-                                .unwrap()
-                                .push(packet.clone());
-                        }
-                    }
-                }
                 LevelEffect::LevelEvent { pos, id, data } => {
                     self.broadcast(cb::Packet::LevelEvent(cb::LevelEvent {
                         event_type: id,

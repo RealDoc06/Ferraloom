@@ -56,7 +56,8 @@ impl Level {
         pitch: f32,
         seed: i64,
     ) -> Result<(), LevelError> {
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::Sound(cb::Sound {
@@ -99,7 +100,8 @@ impl Level {
     ) -> Result<(), LevelError> {
         let data = self.entity::<EntityData>(entity)?;
         let (position, id) = (data.position, data.network_id);
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::SoundEntity(cb::SoundEntity {
@@ -115,7 +117,9 @@ impl Level {
         });
         Ok(())
     }
-    fn sound_audience(
+    /// Port of PlayerList#broadcast's dimension-local distance/exclusion filter.
+    /// Capture before subsequent callbacks can move any recipient.
+    pub(super) fn broadcast_audience(
         &self,
         except: Option<EntityRef>,
         position: Vec3,
