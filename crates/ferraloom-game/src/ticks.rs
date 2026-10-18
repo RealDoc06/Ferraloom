@@ -40,7 +40,7 @@ impl TickPriority {
 }
 
 /// Port of ScheduledTick. Identity is (position, type), not the ordering key.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ScheduledTick<T = Block> {
     pub pos: BlockPos,
     pub block: T,
@@ -210,6 +210,21 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
     }
     pub fn container(&self, chunk: ChunkPos) -> Option<&LevelChunkTicks<T>> {
         self.containers.get(&chunk)
+    }
+    /// Port of the registered LevelChunkTicks#unpack schedule callback. Saved
+    /// ticks enter the dimension index only when they become the queue's head.
+    pub fn unpack_container(&mut self, chunk: ChunkPos, current_tick: i64) {
+        let Some(container) = self.containers.get_mut(&chunk) else {
+            return;
+        };
+        let previous = container.peek();
+        container.unpack(current_tick);
+        if let Some(head) = container.peek()
+            && Some(head) != previous
+        {
+            self.next_tick_for_container
+                .insert(chunk.pack(), head.trigger_tick);
+        }
     }
     pub fn schedule_tick(&mut self, tick: ScheduledTick<T>) -> bool {
         let chunk = ChunkPos::containing(tick.pos);
@@ -546,6 +561,36 @@ mod tests {
             ));
         }
         assert_eq!(output.join(","), vector("saved-unpack"));
+    }
+    #[test]
+    fn registered_saved_ticks_wait_for_start_ticking_and_keep_existing_heads() {
+        let chunk = ChunkPos::new(0, 0);
+        let mut ticks = LevelTicks::default();
+        ticks.add_container(
+            chunk,
+            LevelChunkTicks::from_saved(
+                vec![SavedTick {
+                    block: Block::STONE,
+                    pos: A,
+                    delay: 7,
+                    priority: TickPriority::Normal,
+                }],
+                chunk,
+            ),
+        );
+        let pending = ticks.collect_due(100, 65536).len();
+        let delay = ticks.container(chunk).unwrap().pack(200)[0].delay;
+        assert_eq!(format!("{delay}:{pending}"), vector("registered-pending"));
+        ticks.schedule(B, Block::STONE, 105, TickPriority::Normal);
+        ticks.unpack_container(chunk, 200);
+        ticks.unpack_container(chunk, 500);
+        let mut output = Vec::new();
+        for time in [200, 206, 207] {
+            for tick in ticks.collect_due(time, 65536) {
+                output.push(format!("{}@{time}", label(tick.pos)));
+            }
+        }
+        assert_eq!(output.join(","), vector("late-start-ticking"));
     }
     #[test]
     fn ineligible_containers_keep_ticks_and_unregistered_chunks_reject_them() {

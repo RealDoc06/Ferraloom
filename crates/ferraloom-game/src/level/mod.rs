@@ -269,8 +269,6 @@ impl Level {
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
-        chunk.block_ticks.unpack(region.game_time);
-        chunk.fluid_ticks.unpack(region.game_time);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -278,6 +276,17 @@ impl Level {
             .fluid_ticks
             .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
         region.chunks.insert(pos, chunk);
+        Ok(())
+    }
+    /// Port of ServerLevel#startTickingChunk, after generation post-processing.
+    /// FULL registration alone leaves saved delays relative until this point.
+    pub fn start_ticking_chunk(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        let region = self.region_mut();
+        if !region.chunks.contains_key(&pos) {
+            return Err(LevelError::MissingChunk(pos));
+        }
+        region.block_ticks.unpack_container(pos, region.game_time);
+        region.fluid_ticks.unpack_container(pos, region.game_time);
         Ok(())
     }
     /// Compatibility entry for the scheduled block phase. It uses the same

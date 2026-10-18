@@ -925,10 +925,47 @@ fn block_and_fluid_ticks_survive_unload_nbt_and_reload_with_their_remaining_dela
     loaded.load_saved_ticks(&data).unwrap();
     level.set_game_time(100);
     level.add_chunk(loaded).unwrap();
+    level.set_game_time(200);
     let mut saved = ferraloom_storage::SerializableChunkData::default();
     level.save_chunk_ticks(chunk, &mut saved).unwrap();
     assert_eq!(saved.block_ticks.unwrap()[0].delay, Some(7));
     assert_eq!(saved.fluid_ticks.unwrap()[0].delay, Some(3));
+    level.start_ticking_chunk(chunk).unwrap();
+    assert_eq!(
+        level
+            .region()
+            .block_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        207
+    );
+    assert_eq!(
+        level
+            .region()
+            .fluid_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        203
+    );
+    level.set_game_time(300);
+    level.start_ticking_chunk(chunk).unwrap();
+    assert_eq!(
+        level
+            .region()
+            .block_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        207
+    );
 }
 #[test]
 fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
