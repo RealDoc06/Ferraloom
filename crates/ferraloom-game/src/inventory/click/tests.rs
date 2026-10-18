@@ -84,7 +84,7 @@ fn outside_primary_click_moves_the_original_cursor_into_the_item_entity() {
         let stats = &outer.level.entity::<ServerPlayer>(player).unwrap().stats;
         assert_eq!(stats.get_value(Stat::Dropped(Item::STONE)), amount);
         assert_eq!(
-            stats.get_value(Stat::Custom(custom::DROP)),
+            stats.get_value(Stat::Custom(custom::Id::DROP)),
             i32::from(amount > 0)
         );
         if amount == 0 {
