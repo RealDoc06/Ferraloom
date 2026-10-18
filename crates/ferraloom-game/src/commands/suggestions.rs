@@ -271,7 +271,11 @@ mod tests {
                 );
                 builder.build()
             } else {
-                let wire = if vector.kind == "item" {
+                let wire = if vector.kind == "block" {
+                    CommandArgument::BlockState {}
+                } else if vector.kind == "block_predicate" {
+                    CommandArgument::BlockPredicate {}
+                } else if vector.kind == "item" {
                     CommandArgument::ItemStack {}
                 } else if vector.kind == "entity" {
                     CommandArgument::Entity {
@@ -283,7 +287,16 @@ mod tests {
                 } else {
                     CommandArgument::GameProfile {}
                 };
-                let argument_type = MinecraftArgument::new(wire);
+                let mut argument_type = MinecraftArgument::new(wire);
+                if vector.kind.starts_with("block") {
+                    Arc::make_mut(&mut argument_type.context).tags.insert(
+                        "minecraft:block".into(),
+                        std::collections::BTreeMap::from([(
+                            "example:mixed".into(),
+                            vec!["minecraft:oak_log".into(), "minecraft:chest".into()],
+                        )]),
+                    );
+                }
                 let context = CommandContext::new(
                     Arc::new(source),
                     &vector.input,

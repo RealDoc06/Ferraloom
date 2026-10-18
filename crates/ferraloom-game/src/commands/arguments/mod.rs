@@ -571,6 +571,16 @@ impl ArgumentType for MinecraftArgument {
         _context: &CommandContext<S>,
         mut builder: SuggestionsBuilder,
     ) -> Result<Suggestions, CommandSyntaxException> {
+        if matches!(
+            self.wire,
+            CommandArgument::BlockState {} | CommandArgument::BlockPredicate {}
+        ) {
+            return Ok(blocks::suggestions(
+                &self.context,
+                builder,
+                matches!(self.wire, CommandArgument::BlockPredicate {}),
+            ));
+        }
         if matches!(self.wire, CommandArgument::ItemStack {}) {
             return Ok(items::suggestions(&self.context, builder));
         }

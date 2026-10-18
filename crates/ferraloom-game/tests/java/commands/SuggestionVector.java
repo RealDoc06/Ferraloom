@@ -54,6 +54,36 @@ public final class SuggestionVector {
             var itemContext=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
             vectors.add(capture("item",input,4,item.listSuggestions(itemContext,new SuggestionsBuilder(input,0)).join()));
         }
+        // Bound tags are explicit: the datagen provider otherwise invents unknown tag holders.
+        var blockKey=net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK,net.minecraft.resources.Identifier.parse("example:mixed"));
+        var parentBlocks=registries.lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        var members=List.of("minecraft:oak_log","minecraft:chest").stream().map(name->parentBlocks.getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK,net.minecraft.resources.Identifier.parse(name)))).toList();
+        net.minecraft.core.HolderSet.Named<net.minecraft.world.level.block.Block> mixed=mock(net.minecraft.core.HolderSet.Named.class);
+        doReturn(blockKey).when(mixed).key();
+        doAnswer(call->members.iterator()).when(mixed).iterator();
+        doAnswer(call->members.stream()).when(mixed).stream();
+        var boundRegistries = new net.minecraft.core.HolderLookup.Provider() {
+            public java.util.stream.Stream<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> listRegistryKeys() { return registries.listRegistryKeys(); }
+            public <T> Optional<net.minecraft.core.HolderLookup.RegistryLookup<T>> lookup(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends T>> key) {
+                return registries.lookup(key).map(parent -> new net.minecraft.core.HolderLookup.RegistryLookup.Delegate<T>() {
+                    public net.minecraft.core.HolderLookup.RegistryLookup<T> parent() { return parent; }
+                    public java.util.stream.Stream<net.minecraft.core.HolderSet.Named<T>> listTags() {
+                        return key.equals(net.minecraft.core.registries.Registries.BLOCK) ? java.util.stream.Stream.of((net.minecraft.core.HolderSet.Named<T>)(Object)mixed) : java.util.stream.Stream.empty();
+                    }
+                    public Optional<net.minecraft.core.HolderSet.Named<T>> get(net.minecraft.tags.TagKey<T> tag) {
+                        return tag.equals(blockKey) ? Optional.of((net.minecraft.core.HolderSet.Named<T>)(Object)mixed) : Optional.empty();
+                    }
+                });
+            }
+        };
+        var blocks=net.minecraft.commands.CommandBuildContext.simple(boundRegistries,net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
+        var blockState=net.minecraft.commands.arguments.blocks.BlockStateArgument.block(blocks);
+        var blockPredicate=net.minecraft.commands.arguments.blocks.BlockPredicateArgument.blockPredicate(blocks);
+        for(var input:List.of("sto","stone","stone ","stone[","oak_log","oak_log[","oak_log[a","oak_log[axis","oak_log[axis=","oak_log[axis=q","oak_log[axis=x","oak_log[axis=x,","oak_log[axis=x]","oak_log[axis=x,axis=","chest","chest[","chest[facing=","chest[facing=north,","chest[facing=north]","chest[facing=north]{","wheat[age=","wheat[age=2","wheat[age=2]","stone{","#","#example:missing","#example:mixed","#example:mixed[","#example:mixed[a","#example:mixed[axis","#example:mixed[axis=","#example:mixed[axis=x","#example:mixed[axis=x,","#example:mixed[axis=x]","#example:mixed[facing=n","#example:mixed[unknown=x","#example:mixed[axis=x,axis=")) {
+            var context=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
+            vectors.add(capture("block",input,4,blockState.listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
+            vectors.add(capture("block_predicate",input,4,blockPredicate.listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
+        }
         var resources = List.of(net.minecraft.resources.Identifier.parse("example:thing"),net.minecraft.resources.Identifier.parse("minecraft:thing"),net.minecraft.resources.Identifier.parse("example:other"));
         for (var input : List.of("","!","#","!#","!#th","thing","example:")) {
             vectors.add(capture("resource_prefix",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0),"!#").join()));

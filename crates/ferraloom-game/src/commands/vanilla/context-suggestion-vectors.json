@@ -12771,6 +12771,1112 @@
     ]
   },
   {
+    "kind": "block",
+    "input": "sto",
+    "level": 4,
+    "start": 0,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "minecraft:chiseled_stone_bricks"
+      },
+      {
+        "text": "minecraft:cracked_stone_bricks"
+      },
+      {
+        "text": "minecraft:end_stone"
+      },
+      {
+        "text": "minecraft:end_stone_brick_slab"
+      },
+      {
+        "text": "minecraft:end_stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:end_stone_brick_wall"
+      },
+      {
+        "text": "minecraft:end_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_chiseled_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_cracked_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_mossy_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_stone"
+      },
+      {
+        "text": "minecraft:infested_stone_bricks"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_slab"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_wall"
+      },
+      {
+        "text": "minecraft:mossy_stone_bricks"
+      },
+      {
+        "text": "minecraft:smooth_stone"
+      },
+      {
+        "text": "minecraft:smooth_stone_slab"
+      },
+      {
+        "text": "minecraft:stone"
+      },
+      {
+        "text": "minecraft:stone_brick_slab"
+      },
+      {
+        "text": "minecraft:stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:stone_brick_wall"
+      },
+      {
+        "text": "minecraft:stone_bricks"
+      },
+      {
+        "text": "minecraft:stone_button"
+      },
+      {
+        "text": "minecraft:stone_pressure_plate"
+      },
+      {
+        "text": "minecraft:stone_slab"
+      },
+      {
+        "text": "minecraft:stone_stairs"
+      },
+      {
+        "text": "minecraft:stonecutter"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "sto",
+    "level": 4,
+    "start": 0,
+    "end": 3,
+    "suggestions": [
+      {
+        "text": "minecraft:chiseled_stone_bricks"
+      },
+      {
+        "text": "minecraft:cracked_stone_bricks"
+      },
+      {
+        "text": "minecraft:end_stone"
+      },
+      {
+        "text": "minecraft:end_stone_brick_slab"
+      },
+      {
+        "text": "minecraft:end_stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:end_stone_brick_wall"
+      },
+      {
+        "text": "minecraft:end_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_chiseled_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_cracked_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_mossy_stone_bricks"
+      },
+      {
+        "text": "minecraft:infested_stone"
+      },
+      {
+        "text": "minecraft:infested_stone_bricks"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_slab"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:mossy_stone_brick_wall"
+      },
+      {
+        "text": "minecraft:mossy_stone_bricks"
+      },
+      {
+        "text": "minecraft:smooth_stone"
+      },
+      {
+        "text": "minecraft:smooth_stone_slab"
+      },
+      {
+        "text": "minecraft:stone"
+      },
+      {
+        "text": "minecraft:stone_brick_slab"
+      },
+      {
+        "text": "minecraft:stone_brick_stairs"
+      },
+      {
+        "text": "minecraft:stone_brick_wall"
+      },
+      {
+        "text": "minecraft:stone_bricks"
+      },
+      {
+        "text": "minecraft:stone_button"
+      },
+      {
+        "text": "minecraft:stone_pressure_plate"
+      },
+      {
+        "text": "minecraft:stone_slab"
+      },
+      {
+        "text": "minecraft:stone_stairs"
+      },
+      {
+        "text": "minecraft:stonecutter"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "stone",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "stone",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "stone ",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "stone ",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "stone[",
+    "level": 4,
+    "start": 6,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "stone[",
+    "level": 4,
+    "start": 6,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log",
+    "level": 4,
+    "start": 7,
+    "end": 7,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log",
+    "level": 4,
+    "start": 7,
+    "end": 7,
+    "suggestions": [
+      {
+        "text": "["
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "]"
+      },
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[",
+    "level": 4,
+    "start": 8,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "]"
+      },
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[a",
+    "level": 4,
+    "start": 8,
+    "end": 9,
+    "suggestions": [
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[a",
+    "level": 4,
+    "start": 8,
+    "end": 9,
+    "suggestions": [
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis",
+    "level": 4,
+    "start": 12,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003d",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "x"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003d",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "x"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003dq",
+    "level": 4,
+    "start": 13,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "x"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003dq",
+    "level": 4,
+    "start": 13,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "x"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003dx",
+    "level": 4,
+    "start": 14,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003dx",
+    "level": 4,
+    "start": 14,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003dx,",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003dx,",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003dx]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003dx]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "oak_log[axis\u003dx,axis\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "oak_log[axis\u003dx,axis\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "chest",
+    "level": 4,
+    "start": 5,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "["
+      },
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest",
+    "level": 4,
+    "start": 5,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "["
+      },
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "chest[",
+    "level": 4,
+    "start": 6,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "]"
+      },
+      {
+        "text": "facing\u003d"
+      },
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest[",
+    "level": 4,
+    "start": 6,
+    "end": 6,
+    "suggestions": [
+      {
+        "text": "]"
+      },
+      {
+        "text": "facing\u003d"
+      },
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "chest[facing\u003d",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "east"
+      },
+      {
+        "text": "north"
+      },
+      {
+        "text": "south"
+      },
+      {
+        "text": "west"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest[facing\u003d",
+    "level": 4,
+    "start": 13,
+    "end": 13,
+    "suggestions": [
+      {
+        "text": "east"
+      },
+      {
+        "text": "north"
+      },
+      {
+        "text": "south"
+      },
+      {
+        "text": "west"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "chest[facing\u003dnorth,",
+    "level": 4,
+    "start": 19,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest[facing\u003dnorth,",
+    "level": 4,
+    "start": 19,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "chest[facing\u003dnorth]",
+    "level": 4,
+    "start": 19,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest[facing\u003dnorth]",
+    "level": 4,
+    "start": 19,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "chest[facing\u003dnorth]{",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "chest[facing\u003dnorth]{",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "wheat[age\u003d",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "0"
+      },
+      {
+        "text": "1"
+      },
+      {
+        "text": "2"
+      },
+      {
+        "text": "3"
+      },
+      {
+        "text": "4"
+      },
+      {
+        "text": "5"
+      },
+      {
+        "text": "6"
+      },
+      {
+        "text": "7"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "wheat[age\u003d",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "0"
+      },
+      {
+        "text": "1"
+      },
+      {
+        "text": "2"
+      },
+      {
+        "text": "3"
+      },
+      {
+        "text": "4"
+      },
+      {
+        "text": "5"
+      },
+      {
+        "text": "6"
+      },
+      {
+        "text": "7"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "wheat[age\u003d2",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block_predicate",
+    "input": "wheat[age\u003d2",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "wheat[age\u003d2]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "wheat[age\u003d2]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "stone{",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "stone{",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "#",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "#example:mixed"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:missing",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:missing",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed",
+    "level": 4,
+    "start": 14,
+    "end": 14,
+    "suggestions": [
+      {
+        "text": "["
+      },
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[",
+    "level": 4,
+    "start": 15,
+    "end": 15,
+    "suggestions": [
+      {
+        "text": "]"
+      },
+      {
+        "text": "axis\u003d"
+      },
+      {
+        "text": "facing\u003d"
+      },
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[a",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[a",
+    "level": 4,
+    "start": 15,
+    "end": 16,
+    "suggestions": [
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis",
+    "level": 4,
+    "start": 15,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "axis\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis\u003d",
+    "level": 4,
+    "start": 20,
+    "end": 20,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      },
+      {
+        "text": "x"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis\u003dx",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis\u003dx",
+    "level": 4,
+    "start": 20,
+    "end": 21,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      },
+      {
+        "text": "y"
+      },
+      {
+        "text": "z"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis\u003dx,",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis\u003dx,",
+    "level": 4,
+    "start": 22,
+    "end": 22,
+    "suggestions": [
+      {
+        "text": "facing\u003d"
+      },
+      {
+        "text": "type\u003d"
+      },
+      {
+        "text": "waterlogged\u003d"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis\u003dx]",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis\u003dx]",
+    "level": 4,
+    "start": 22,
+    "end": 22,
+    "suggestions": [
+      {
+        "text": "{"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[facing\u003dn",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[facing\u003dn",
+    "level": 4,
+    "start": 22,
+    "end": 23,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      },
+      {
+        "text": "east"
+      },
+      {
+        "text": "north"
+      },
+      {
+        "text": "south"
+      },
+      {
+        "text": "west"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[unknown\u003dx",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[unknown\u003dx",
+    "level": 4,
+    "start": 23,
+    "end": 24,
+    "suggestions": [
+      {
+        "text": ","
+      },
+      {
+        "text": "]"
+      }
+    ]
+  },
+  {
+    "kind": "block",
+    "input": "#example:mixed[axis\u003dx,axis\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "block_predicate",
+    "input": "#example:mixed[axis\u003dx,axis\u003d",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
     "kind": "resource_prefix",
     "input": "",
     "level": 4,
