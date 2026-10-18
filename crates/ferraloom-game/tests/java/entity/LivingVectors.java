@@ -36,6 +36,14 @@ public final class LivingVectors extends Player {
       loaded.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING,level.registryAccess(),tag));
       System.out.println("living-load-rotation\t"+i+"\t"+Integer.toHexString(Float.floatToRawIntBits(loaded.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yHeadRot))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yBodyRot))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yHeadRotO))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yBodyRotO)));
     }
+    var lavaPos=new BlockPos(8,64,8);
+    level.getChunkAt(lavaPos).getSection(level.getSectionIndex(64)).setBlockState(8,0,8,Blocks.LAVA.defaultBlockState());
+    var lavaEntity=new net.minecraft.world.entity.item.PrimedTnt(net.minecraft.world.entity.EntityTypes.TNT,level);lavaEntity.setPos(8.5,64,8.5);lavaEntity.fallDistance=8;
+    for(int i=0;i<3;i++) {
+      boolean before=lavaEntity.isInLava();lavaEntity.baseTick();
+      System.out.println("lava-base-tick\t"+i+"\t"+before+","+Long.toHexString(Double.doubleToRawLongBits(lavaEntity.fallDistance))+","+lavaEntity.isInLava());
+    }
+    level.getChunkAt(lavaPos).getSection(level.getSectionIndex(64)).setBlockState(8,0,8,Blocks.AIR.defaultBlockState());
     var pos=new BlockPos(8,63,8);
     level.getChunkAt(pos).getSection(level.getSectionIndex(pos.getY())).setBlockState(8,15,8,Blocks.SOUL_SAND.defaultBlockState());
     player.setPos(8.5,64,8.5);

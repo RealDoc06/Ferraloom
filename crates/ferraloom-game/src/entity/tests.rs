@@ -104,6 +104,41 @@ fn loaded_living_head_and_body_yaw_precede_base_yaw_wrapping() {
 }
 
 #[test]
+fn lava_fall_distance_starts_after_the_first_base_tick() {
+    let mut level = level(false);
+    level
+        .set_block_state(BlockPos::new(8, 64, 8), Block::LAVA.default_state())
+        .unwrap();
+    let id = EntityRef(1);
+    let mut tnt = item::PrimedTnt::new(1, 123);
+    tnt.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    tnt.parent.fall_distance = 8.0;
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    let mut actual = Vec::new();
+    for index in 0..3 {
+        let before = level
+            .entity::<EntityData>(id)
+            .unwrap()
+            .is_in_lava(&level)
+            .unwrap();
+        base_tick(&item::PrimedTntBehavior, id, &mut level).unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        actual.push(format!(
+            "lava-base-tick\t{index}\t{before},{:x},{}",
+            base.fall_distance.to_bits(),
+            base.is_in_lava(&level).unwrap()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("lava-base-tick\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     use ferraloom_data::registries::attribute::Id as Attribute;
     use ferraloom_protocol::codec::VarInt;

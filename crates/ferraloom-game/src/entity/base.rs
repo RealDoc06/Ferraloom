@@ -266,6 +266,17 @@ impl EntityData {
     pub fn ticks_frozen(&self) -> i32 {
         self.entity_data.get(synched_data::TICKS_FROZEN).0
     }
+    /// Port of Entity#isInLava: the first base tick is deliberately excluded.
+    pub fn is_in_lava(
+        &self,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(!self.first_tick
+            && self
+                .fluid_interaction
+                .height(ferraloom_data::tags::FluidTags::LAVA, level)?
+                > 0.0)
+    }
     pub fn clear_freeze(&mut self) {
         self.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));
     }

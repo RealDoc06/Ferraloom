@@ -175,21 +175,17 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     super::fluid::update_fluid_interaction(behavior, entity, level)?;
     update_swimming(entity, level)?;
     let base = level.entity::<EntityData>(entity)?;
-    let in_lava = base
-        .fluid_interaction
-        .height(ferraloom_data::tags::FluidTags::LAVA, level)?
-        > 0.0;
     if base.remaining_fire_ticks > 0 {
         if base.entity_type.data().fire_immune {
             level.entity_mut::<EntityData>(entity)?.clear_fire();
         } else {
-            if base.remaining_fire_ticks % 20 == 0 && !in_lava {
+            if base.remaining_fire_ticks % 20 == 0 && !base.is_in_lava(level)? {
                 behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
             }
             level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
         }
     }
-    if in_lava {
+    if level.entity::<EntityData>(entity)?.is_in_lava(level)? {
         level.entity_mut::<EntityData>(entity)?.fall_distance *= 0.5;
     }
     if level.entity::<EntityData>(entity)?.position.y < f64::from(level.min_build_height() - 64) {
