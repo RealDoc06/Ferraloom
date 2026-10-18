@@ -237,6 +237,14 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
@@ -381,7 +389,10 @@ impl Entity for ItemEntityBehavior {
         Ok(true)
     }
 }
-fn move_towards_closest_space(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+pub(crate) fn move_towards_closest_space(
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
     let base = level.entity::<EntityData>(entity)?;
     let y = (base.bounding_box.min_y + base.bounding_box.max_y) / 2.0;
     let pos = BlockPos::containing(base.position.x, y, base.position.z);

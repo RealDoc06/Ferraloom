@@ -11,6 +11,7 @@ use ferraloom_util::shapes::{EntityCollisionContext, EntityCollisionData};
 /// capability when their equipment/locomotion ports arrive, through this view.
 pub struct EntityCollisionView {
     pub entity: EntityRef,
+    living: bool,
 }
 impl EntityCollisionData for EntityCollisionView {
     type Item = Item;
@@ -42,7 +43,7 @@ impl EntityCollisionView {
         &self,
         level: &Level,
     ) -> Result<Option<ferraloom_util::VoxelShape>, LevelError> {
-        if level.entity_state(self.entity)?.as_living().is_none() {
+        if !self.living {
             return Ok(None);
         }
         let behavior = level.entity_behavior(self.entity)?;
@@ -74,7 +75,28 @@ impl EntityCollisionView {
                 .filter(|stack| !stack.is_empty())
                 .and_then(|stack| stack.0.as_ref())
                 .map(|stack| stack.item),
-            entity: Self { entity },
+            entity: Self {
+                entity,
+                living: level.entity_state(entity)?.as_living().is_some(),
+            },
         })
+    }
+    /// Constructors can query collisions before addFreshEntity. Their concrete
+    /// nonliving type is immutable and requires no lookup in the visible index.
+    pub(crate) fn capture_untracked_nonliving(
+        entity: EntityRef,
+        base: &EntityData,
+    ) -> EntityCollisionContext<Self> {
+        EntityCollisionContext {
+            descending: base.shared_flag(1),
+            placement: false,
+            entity_bottom: base.bounding_box.min_y,
+            always_collide_with_fluid: false,
+            held_item: None,
+            entity: Self {
+                entity,
+                living: false,
+            },
+        }
     }
 }

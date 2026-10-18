@@ -4,6 +4,7 @@ use crate::level::{Level, LevelError};
 
 pub mod animal;
 pub mod effects;
+pub mod experience_orb;
 pub mod item;
 pub mod player;
 
@@ -100,6 +101,7 @@ pub enum EntityState {
     PrimedTnt(Box<item::PrimedTnt>),
     Item(Box<item::ItemEntity>),
     FallingBlock(Box<item::FallingBlockEntity>),
+    ExperienceOrb(Box<experience_orb::ExperienceOrb>),
 }
 
 impl EntityState {
@@ -110,6 +112,7 @@ impl EntityState {
             Self::PrimedTnt(_) => EntityType::TNT,
             Self::Item(_) => EntityType::ITEM,
             Self::FallingBlock(_) => EntityType::FALLING_BLOCK,
+            Self::ExperienceOrb(_) => EntityType::EXPERIENCE_ORB,
         }
     }
 
@@ -146,6 +149,7 @@ impl EntityState {
             Self::PrimedTnt(tnt) => &tnt.parent,
             Self::Item(item) => &item.parent,
             Self::FallingBlock(block) => &block.parent,
+            Self::ExperienceOrb(orb) => &orb.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
@@ -155,6 +159,7 @@ impl EntityState {
             Self::PrimedTnt(tnt) => &mut tnt.parent,
             Self::Item(item) => &mut item.parent,
             Self::FallingBlock(block) => &mut block.parent,
+            Self::ExperienceOrb(orb) => &mut orb.parent,
         }
     }
 }
@@ -216,10 +221,19 @@ pub struct DamageSource {
     pub bypasses_cooldown: bool,
 }
 
+/// Shared embedded Entity parent references for the host lifetime tracer.
+pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>) {
+    references.extend(base.vehicle);
+    references.extend(base.passengers.iter().copied());
+}
+
 /// Vanilla virtual methods, separated from canonical embedded-parent state.
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Host lifetime tracing is required for every dispatcher. Declare all held
+    /// EntityRef fields here; UUID lookup references do not retain old states.
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>);
     /// Port of Entity#getPickResult. Vanilla returns null; empty ItemStack is a
     /// distinct successful result and must not erase that distinction.
     fn get_pick_result(
@@ -475,6 +489,7 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
         EntityType::TNT => Some(&item::PrimedTntBehavior),
         EntityType::ITEM => Some(&item::ItemEntityBehavior),
         EntityType::FALLING_BLOCK => Some(&item::FallingBlockBehavior),
+        EntityType::EXPERIENCE_ORB => Some(&experience_orb::ExperienceOrbBehavior),
         _ => None,
     }
 }

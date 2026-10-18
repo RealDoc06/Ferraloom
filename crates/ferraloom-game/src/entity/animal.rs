@@ -67,6 +67,17 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &super::EntityState,
+        references: &mut Vec<super::EntityRef>,
+    ) {
+        super::trace_base_entity_refs(state.as_entity(), references);
+        if let Some(target) = state.as_mob().and_then(|mob| mob.target) {
+            references.push(target);
+        }
+    }
+
     /// Port of Mob#getPickResult for the concrete Cow type.
     fn get_pick_result(
         &self,
