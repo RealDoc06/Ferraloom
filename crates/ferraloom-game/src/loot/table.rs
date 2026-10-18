@@ -290,25 +290,50 @@ impl LootData {
         random: &mut dyn RandomSource,
         facts: &dyn LootFacts,
     ) -> Result<()> {
+        let placements = self.fill_placements(table, params, random, facts, || {
+            Ok(container
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
+                .collect())
+        })?;
+        for (slot, stack) in placements {
+            container[slot] = stack;
+        }
+        Ok(())
+    }
+    /// Port of LootTable#fill up to its Container#setItem calls. The callback
+    /// reads canonical empty slots in ascending order after generation and its
+    /// feature checks. All shuffling draws finish before placements are returned.
+    /// Deliver each placement through the original container handle, including
+    /// its synchronous callbacks, before delivering the next placement.
+    pub fn fill_placements(
+        &self,
+        table: &Identifier,
+        params: &LootParams,
+        random: &mut dyn RandomSource,
+        facts: &dyn LootFacts,
+        available_slots: impl FnOnce() -> Result<Vec<usize>>,
+    ) -> Result<Vec<(usize, ItemStack)>> {
         let mut items = self.get_random_items(table, params, random, facts)?;
-        let mut slots: Vec<_> = container
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, s)| s.is_empty().then_some(slot))
-            .collect();
+        let mut slots = available_slots()?;
         shuffle(&mut slots, random);
         shuffle_and_split_items(&mut items, slots.len(), random);
+        let mut placements = Vec::with_capacity(items.len().min(slots.len()));
         for item in items {
             let Some(slot) = slots.pop() else {
                 break;
             };
-            container[slot] = if item.is_empty() {
-                ItemStack::default()
-            } else {
-                item
-            };
+            placements.push((
+                slot,
+                if item.is_empty() {
+                    ItemStack::default()
+                } else {
+                    item
+                },
+            ));
         }
-        Ok(())
+        Ok(placements)
     }
     /// Port of LootTable#fill's optional seed and named sequence selection.
     pub fn fill_seeded(
@@ -320,13 +345,37 @@ impl LootData {
         sources: &mut LootRandomSources<'_>,
         facts: &dyn LootFacts,
     ) -> Result<()> {
+        let placements =
+            self.fill_seeded_placements(table, params, seed, sources, facts, || {
+                Ok(container
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
+                    .collect())
+            })?;
+        for (slot, stack) in placements {
+            container[slot] = stack;
+        }
+        Ok(())
+    }
+    /// Seed selection for fill_placements, sharing generation and shuffling on
+    /// one stream. The caller delivers the returned placements in their order.
+    pub fn fill_seeded_placements(
+        &self,
+        table: &Identifier,
+        params: &LootParams,
+        seed: i64,
+        sources: &mut LootRandomSources<'_>,
+        facts: &dyn LootFacts,
+        available_slots: impl FnOnce() -> Result<Vec<usize>>,
+    ) -> Result<Vec<(usize, ItemStack)>> {
         if seed != 0 {
-            return self.fill(
+            return self.fill_placements(
                 table,
-                container,
                 params,
                 &mut LegacyRandomSource::new(seed),
                 facts,
+                available_slots,
             );
         }
         let value = self
@@ -338,9 +387,9 @@ impl LootData {
             })?;
         if let Some(sequence) = &value.random_sequence {
             let mut random = sources.sequences.get(sequence, sources.world_seed);
-            self.fill(table, container, params, &mut random, facts)
+            self.fill_placements(table, params, &mut random, facts, available_slots)
         } else {
-            self.fill(table, container, params, sources.level_random, facts)
+            self.fill_placements(table, params, sources.level_random, facts, available_slots)
         }
     }
 }

@@ -89,7 +89,7 @@ pub enum LootItemCondition {
         EntityTarget,
         Vec<(String, ProviderRange<ContextIntProvider>)>,
     ),
-    LocationCheck(Option<LocationPredicate>, [i32; 3]),
+    LocationCheck(Option<Box<LocationPredicate>>, [i32; 3]),
     WeatherCheck {
         raining: Option<bool>,
         thundering: Option<bool>,
@@ -176,7 +176,7 @@ impl LootItemCondition {
                     .collect::<Result<_>>()?,
             ),
             "minecraft:location_check" => Self::LocationCheck(
-                codec::optional(v, "predicate", LocationPredicate::decode)?,
+                codec::optional(v, "predicate", LocationPredicate::decode)?.map(Box::new),
                 [
                     codec::optional(v, "offsetX", codec::int)?.unwrap_or(0),
                     codec::optional(v, "offsetY", codec::int)?.unwrap_or(0),
