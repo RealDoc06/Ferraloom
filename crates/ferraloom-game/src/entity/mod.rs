@@ -11,6 +11,10 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn count_player_passengers(self, level: &Level) -> Result<i32, LevelError> {
+        count_player_passengers(self, level)
+    }
+
     pub fn move_by(
         &mut self,
         level: &mut Level,
@@ -41,10 +45,14 @@ impl EntityRef {
 mod base;
 pub mod collision;
 pub mod collision_context;
+pub mod fluid;
 mod lifecycle;
 pub mod movement;
 mod trace;
-pub use lifecycle::{common_tick, eject_passengers, position_rider, start_riding, stop_riding};
+pub use lifecycle::{
+    base_tick, common_tick, count_player_passengers, eject_passengers, position_rider,
+    start_riding, stop_riding,
+};
 pub mod persistence;
 pub mod synched_data;
 pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
@@ -325,10 +333,27 @@ pub trait Entity: Sync {
         Ok(ferraloom_util::Vec3::ZERO)
     }
 
-    /// Subset of Entity#baseTick: finish the first tick. ServerLevel owns commonTick.
+    fn fluid_interaction_box(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<Option<ferraloom_util::Aabb>, LevelError> {
+        Ok(Some(
+            level
+                .entity::<EntityData>(entity)?
+                .bounding_box
+                .deflate(0.001, 0.001, 0.001),
+        ))
+    }
+    fn is_pushed_by_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(match level.entity_state(entity)? {
+            EntityState::Player(player) => !player.flying,
+            _ => true,
+        })
+    }
+    /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-        level.entity_state_mut(entity)?.as_entity_mut().first_tick = false;
-        Ok(())
+        base_tick(self, entity, level)
     }
 
     fn hurt_server(
@@ -338,7 +363,11 @@ pub trait Entity: Sync {
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
-        hurt_unarmored(entity, level, source, damage)
+        if level.entity_state(entity)?.as_living().is_some() {
+            hurt_unarmored(entity, level, source, damage)
+        } else {
+            Ok(false)
+        }
     }
 }
 
