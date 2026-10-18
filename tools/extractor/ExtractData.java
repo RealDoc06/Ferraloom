@@ -310,10 +310,8 @@ public final class ExtractData {
 
     /** Item#getCraftingRemainder is final and returns an immutable Properties field.
      * No stack, level or component lookup participates in this item-only fact. */
-    private static void itemCrafting(Path dir) throws Exception {
-        var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
-        BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());
-        var ops = registries.createSerializationContext(JsonOps.INSTANCE);
+    private static void itemCrafting(Path dir, com.mojang.serialization.DynamicOps<JsonElement> ops) throws Exception {
+        Files.createDirectories(dir);
         var entries = new JsonArray();
         for (var item : BuiltInRegistries.ITEM) {
             var row = new JsonObject();
@@ -339,7 +337,12 @@ public final class ExtractData {
             stateTransforms(Path.of(args[0]));
             return;
         }
-        if (args.length > 1 && args[1].equals("--item-crafting-only")) { itemCrafting(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--item-crafting-only")) {
+            var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
+            BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());
+            itemCrafting(Path.of(args[0]), registries.createSerializationContext(JsonOps.INSTANCE));
+            return;
+        }
         blockCollisionFlags(Path.of(args[0]));
         blockItems(Path.of(args[0]));
         redstoneStateFacts(Path.of(args[0]));
@@ -405,7 +408,7 @@ public final class ExtractData {
             items.add(out);
         }
         write(dir, "items", items);
-        itemCrafting(dir);
+        itemCrafting(dir, ops);
 
         var entities = new JsonArray();
         for (var type : BuiltInRegistries.ENTITY_TYPE) {

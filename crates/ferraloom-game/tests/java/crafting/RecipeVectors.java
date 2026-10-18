@@ -161,6 +161,20 @@ public final class RecipeVectors {
             }
         }
     }
+    static JsonArray simpleStacks() {
+        var tests=new JsonArray();
+        for(int variant=0;variant<6;variant++) {
+            var input=new ItemStack(Items.STONE);
+            if(variant>=1 && variant<=3)input.set(DataComponents.DAMAGE,5);
+            if(variant>=2 && variant<=3){input.set(DataComponents.MAX_DAMAGE,100);input.set(DataComponents.MAX_STACK_SIZE,1);}
+            if(variant==3)input.set(DataComponents.UNBREAKABLE,net.minecraft.util.Unit.INSTANCE);
+            if(variant==4)input.set(DataComponents.CUSTOM_NAME,Component.literal("not simple"));
+            if(variant==5)input.enchant(registries.lookupOrThrow(Registries.ENCHANTMENT).listElements().findFirst().orElseThrow(),1);
+            var contents=new net.minecraft.world.entity.player.StackedItemContents();contents.accountSimpleStack(input);
+            var test=new JsonObject();test.add("input",encode(input));test.addProperty("can_craft",contents.canCraft(List.of(Ingredient.of(Items.STONE)),null));tests.add(test);
+        }
+        return tests;
+    }
     static void generate() throws Exception {
         var ids=new JsonArray();var displays=new JsonArray();
         for(var holder:manager.getRecipes()) {
@@ -210,7 +224,7 @@ public final class RecipeVectors {
             catch(RuntimeException failure){test.addProperty("accepted",false);}
             codecCases.add(test);
         }
-        var output=new JsonObject();var resourceOrder=new JsonArray();List.of("recipe/a.json","recipe/a-b.json","recipe/a.c.json","recipe/a/a.json").stream().map(Identifier::withDefaultNamespace).sorted().forEach(id->resourceOrder.add(id.getPath()));output.add("resource_order",resourceOrder);output.add("placement_cases",placementVectors());var curses=new JsonArray();registries.lookupOrThrow(Registries.ENCHANTMENT).listElements().filter(h->h.is(net.minecraft.tags.EnchantmentTags.CURSE)).forEach(h->curses.add(h.key().identifier().toString()));output.add("curses",curses);output.add("codec_cases",codecCases);output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
+        var output=new JsonObject();output.add("simple_stacks",simpleStacks());var resourceOrder=new JsonArray();List.of("recipe/a.json","recipe/a-b.json","recipe/a.c.json","recipe/a/a.json").stream().map(Identifier::withDefaultNamespace).sorted().forEach(id->resourceOrder.add(id.getPath()));output.add("resource_order",resourceOrder);output.add("placement_cases",placementVectors());var curses=new JsonArray();registries.lookupOrThrow(Registries.ENCHANTMENT).listElements().filter(h->h.is(net.minecraft.tags.EnchantmentTags.CURSE)).forEach(h->curses.add(h.key().identifier().toString()));output.add("curses",curses);output.add("codec_cases",codecCases);output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
         var packet=new ClientboundUpdateRecipesPacket(manager.getSynchronizedItemProperties(),manager.getSynchronizedStonecutterRecipes());
         var buffer=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);ClientboundUpdateRecipesPacket.STREAM_CODEC.encode(buffer,packet);var bytes=new byte[buffer.readableBytes()];buffer.readBytes(bytes);buffer.release();output.addProperty("update_packet",HexFormat.of().formatHex(bytes));
         // Numeric dynamic ids/tag membership are independently supplied for wire decoding.

@@ -206,9 +206,13 @@ pub(super) fn crafting_remainder(item: Item) -> Result<ItemStack> {
     ))
 }
 
+/// Port of Inventory#isUsableForCrafting and ItemStack#isDamaged.
 pub(super) fn is_usable_for_crafting(input: &ItemStack) -> Result<bool> {
     let components = input.components()?;
-    let damaged = matches!(components.get(ComponentTypeId::DAMAGE), Some(DataComponent::Damage(value)) if value.0 > 0);
+    // Inventory uses ItemStack#isDamaged, not the DAMAGE component alone.
+    let damaged = matches!(components.get(ComponentTypeId::MAX_DAMAGE), Some(DataComponent::MaxDamage(value)) if value.0 > 0)
+        && components.get(ComponentTypeId::UNBREAKABLE).is_none()
+        && matches!(components.get(ComponentTypeId::DAMAGE), Some(DataComponent::Damage(value)) if value.0 > 0);
     let enchanted = matches!(components.get(ComponentTypeId::ENCHANTMENTS), Some(DataComponent::Enchantments(value)) if !value.0.is_empty());
     Ok(!damaged && !enchanted && components.get(ComponentTypeId::CUSTOM_NAME).is_none())
 }
