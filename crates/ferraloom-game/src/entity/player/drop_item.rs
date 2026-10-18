@@ -1,8 +1,8 @@
 //! LivingEntity#drop and #createItemStackToDrop, using canonical entity storage.
 use crate::{
     entity::{
-        EntityData, EntityRef, EntityState, effects::EntityEffect, item::ItemEntity,
-        player::inventory,
+        EntityData, EntityRef, EntityReference, EntityState, effects::EntityEffect,
+        item::ItemEntity, player::inventory,
     },
     level::{Level, LevelError},
 };
@@ -21,20 +21,19 @@ pub fn drop_item(
         return Ok(None);
     }
     let count = inventory::count(&stack);
-    let kind = stack.0.as_ref().unwrap().item;
+    let kind = stack.item();
     let owner = level.entity::<EntityData>(player)?;
     let position = Vec3::new(
         owner.position.x,
         owner.position.y + f64::from(owner.eye_height) - 0.30000001192092896,
         owner.position.z,
     );
-    let uuid = owner.uuid;
     let yaw = owner.yaw;
     let pitch = owner.pitch;
     let mut item = ItemEntity::new_at(level, position, stack);
     item.pickup_delay = 40;
     if thrown_from_hand {
-        item.thrower = Some(uuid);
+        item.thrower = Some(EntityReference::of(player, level)?);
     }
     let owner = level.entity_mut::<EntityData>(player)?;
     let sin_x = mth::sin(f64::from(pitch * 0.017453292_f32));

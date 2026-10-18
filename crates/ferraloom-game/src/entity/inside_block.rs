@@ -89,7 +89,7 @@ impl StepBasedCollector {
 
 fn is_alive(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
     let state = level.entity_state(entity)?;
-    Ok(!state.as_entity().removed && state.as_living().is_none_or(|e| e.health > 0.0))
+    Ok(!state.as_entity().removed && state.as_living().is_none_or(|e| e.health() > 0.0))
 }
 fn affected(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
     let base = level.entity::<EntityData>(entity)?;
@@ -104,10 +104,9 @@ pub fn ignite_for_ticks(
     ticks: i32,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    let base = level.entity_mut::<EntityData>(entity)?;
-    base.remaining_fire_ticks = base.remaining_fire_ticks.max(ticks);
-    base.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));
-    Ok(())
+    level
+        .entity_behavior(entity)?
+        .ignite_for_ticks(entity, ticks, level)
 }
 pub fn clear_fire(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     let base = level.entity_mut::<EntityData>(entity)?;
@@ -153,7 +152,7 @@ pub fn apply_collected<E: Entity + ?Sized>(
                         .data()
                         .fire_immune
                     {
-                        ignite_for_ticks(entity, 300, level)?;
+                        behavior.ignite_for_ticks(entity, 300, level)?;
                     }
                 }
                 InsideBlockEffectType::FireIgnite => {
@@ -171,7 +170,7 @@ pub fn apply_collected<E: Entity + ?Sized>(
                         level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks =
                             remaining.wrapping_add(add);
                         if level.entity::<EntityData>(entity)?.remaining_fire_ticks >= 0 {
-                            ignite_for_ticks(entity, 160, level)?;
+                            behavior.ignite_for_ticks(entity, 160, level)?;
                         }
                     }
                 }
@@ -194,9 +193,14 @@ pub fn apply_collected<E: Entity + ?Sized>(
                     {
                         let pitch =
                             2.0 + level.entity_mut::<EntityData>(entity)?.random.next_float() * 0.4;
-                        level.emit_entity_movement_effect(
-                            movement::MovementEffect::LavaHurtSound { entity, pitch },
-                        );
+                        level.play_sound(
+                            None,
+                            level.entity::<EntityData>(entity)?.position,
+                            ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_BURN,
+                            behavior.sound_source(),
+                            0.4,
+                            pitch,
+                        )?;
                     }
                 }
             }
@@ -259,7 +263,7 @@ fn check_segment<E: Entity + ?Sized>(
     budget: i32,
     level: &mut Level,
 ) -> Result<i32, LevelError> {
-    let dimensions = level.entity::<EntityData>(entity)?.dimensions;
+    let dimensions = &level.entity::<EntityData>(entity)?.dimensions;
     let bb = dimensions.make_bounding_box(to).deflate(
         f64::from(1e-5_f32),
         f64::from(1e-5_f32),
@@ -402,12 +406,7 @@ pub fn apply_effects<E: Entity + ?Sized>(
     if was_on_fire && !is_on_fire(entity, level)?
         || was_freezing && level.entity::<EntityData>(entity)?.ticks_frozen() <= 0
     {
-        let base = level.entity_mut::<EntityData>(entity)?;
-        let pitch = 1.6 + (base.random.next_float() - base.random.next_float()) * 0.4;
-        level.emit_entity_movement_effect(movement::MovementEffect::ExtinguishSound {
-            entity,
-            pitch,
-        });
+        behavior.play_fire_extinguished_sound(entity, level)?;
     }
     let ignited = level.entity::<EntityData>(entity)?.remaining_fire_ticks > previous_fire_ticks;
     if !is_on_fire(entity, level)? && !ignited {

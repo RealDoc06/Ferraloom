@@ -5,7 +5,10 @@ use ferraloom_util::{BlockPos, Direction};
 mod clone_item;
 pub mod containers;
 pub mod dispatch;
+pub mod drops;
 pub mod entity;
+pub mod interaction;
+pub use interaction::{InteractionResult, UseContext};
 mod families;
 pub mod flags;
 pub mod fluid;
@@ -168,6 +171,108 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getMenuProvider's absent base provider.
+    fn get_menu_provider(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &Level,
+    ) -> Result<Option<Box<dyn crate::inventory::MenuProvider>>, LevelError> {
+        Ok(None)
+    }
+    /// Port of BlockBehaviour#getDrops. Subclass ownership is dispatched separately.
+    fn get_drops(
+        &self,
+        state: BlockState,
+        context: drops::BlockLootContext,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        drops::get_base_drops(state, context, level)
+    }
+    /// Port of BlockBehaviour#spawnAfterBreak's base no-op.
+    fn spawn_after_break(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _tool: &ferraloom_protocol::component::ItemStack,
+        _drop_experience: bool,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#setPlacedBy's inherited no-op.
+    fn set_placed_by(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#spawnDestroyByEntityParticles and ServerLevel#levelEvent.
+    fn spawn_destroy_by_entity_particles(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        source: Option<crate::entity::EntityRef>,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        use ferraloom_protocol::play::clientbound as cb;
+        let point = ferraloom_util::Vec3::new(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
+        let mut recipients = Vec::new();
+        for entity in level.all_entities() {
+            if Some(entity) != source
+                && let crate::entity::EntityState::Player(player) = level.entity_state(entity)?
+                && player.position.distance_to_sqr(point) < 64.0 * 64.0
+            {
+                recipients.push(entity);
+            }
+        }
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients,
+            packet: Box::new(cb::Packet::LevelEvent(cb::LevelEvent {
+                event_type: 2001,
+                pos,
+                data: i32::from(state.id()),
+                global_event: false,
+            })),
+        });
+        Ok(())
+    }
+    /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
+    /// remains a required unported call until PiglinAi is implemented.
+    fn player_will_destroy(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<BlockState, LevelError> {
+        level
+            .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
+            .spawn_destroy_by_entity_particles(state, pos, Some(player), level)?;
+        if level.block_tags()?.contains_key(
+            ferraloom_data::tags::BlockTags::GUARDED_BY_PIGLINS,
+            state.block(),
+        ) {
+            return Err(LevelError::UnsupportedEntity(
+                ferraloom_data::EntityType::PIGLIN,
+            ));
+        }
+        level.game_event(
+            ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,
+            ferraloom_util::Vec3::new(
+                f64::from(pos.x) + 0.5,
+                f64::from(pos.y) + 0.5,
+                f64::from(pos.z) + 0.5,
+            ),
+            Some(player),
+            Some(state),
+        );
+        Ok(state)
+    }
     /// Port of Block#getStateForPlacement's inherited implementation.
     fn get_state_for_placement(
         &self,
@@ -239,6 +344,26 @@ pub trait BlockBehavior: Sync {
         _level: &mut Level,
     ) -> Result<i32, LevelError> {
         Ok(0)
+    }
+    /// Port of BlockBehaviour#useWithoutItem's base pass-through.
+    fn use_without_item(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _context: &UseContext,
+        _level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        Ok(InteractionResult::Pass)
+    }
+    /// Port of BlockBehaviour#useItemOn's base empty-hand fallback.
+    fn use_item_on(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _context: &UseContext,
+        _level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        Ok(InteractionResult::TryWithEmptyHand)
     }
     /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
     fn can_be_replaced(
@@ -498,3 +623,18 @@ pub trait BlockBehavior: Sync {
 pub struct BaseBlock;
 impl BlockBehavior for BaseBlock {}
 pub static BASE_BLOCK: BaseBlock = BaseBlock;
+
+/// Port of BaseFireBlock#spawnDestroyByEntityParticles's empty override.
+struct NoDestroyParticles;
+impl BlockBehavior for NoDestroyParticles {
+    fn spawn_destroy_by_entity_particles(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _source: Option<crate::entity::EntityRef>,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+}
+static NO_DESTROY_PARTICLES: NoDestroyParticles = NoDestroyParticles;

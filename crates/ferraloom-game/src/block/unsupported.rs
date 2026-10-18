@@ -2,7 +2,7 @@
 //! remain strict; Warn records a skipped call, never a fabricated return value.
 use super::BlockBehavior;
 use crate::level::{Level, LevelError};
-use ferraloom_data::Block;
+use ferraloom_data::{Block, EntityType};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum UnportedBehavior {
@@ -13,6 +13,9 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    EntityMethod(EntityType, crate::entity::EntityMethod),
+    ItemUseOn(ferraloom_data::Item),
+    PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
     PackReload,
@@ -21,7 +24,12 @@ pub enum UnportedOperation {
 }
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
+    GetMenuProvider,
+    GetDrops,
+    SpawnAfterBreak,
     OnPlace,
+    UseWithoutItem,
+    UseItemOn,
     HandlePrecipitation,
     AffectNeighborsAfterRemoval,
     NeighborChanged,
@@ -57,12 +65,20 @@ pub enum BlockMethod {
     ShouldRedstoneWireConnectTo,
     HasAnalogOutputSignal,
     AnalogOutputSignal,
+    SetPlacedBy,
+    PlayerWillDestroy,
+    SpawnDestroyByEntityParticles,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
         use ferraloom_data::BlockMethod as Vanilla;
         Some(match self {
+            Self::GetMenuProvider => Vanilla::GetMenuProvider,
+            Self::GetDrops => Vanilla::GetDrops,
+            Self::SpawnAfterBreak => Vanilla::SpawnAfterBreak,
             Self::OnPlace => Vanilla::OnPlace,
+            Self::UseWithoutItem => Vanilla::UseWithoutItem,
+            Self::UseItemOn => Vanilla::UseItemOn,
             Self::HandlePrecipitation => Vanilla::HandlePrecipitation,
             Self::AffectNeighborsAfterRemoval => Vanilla::AffectNeighborsAfterRemoval,
             Self::NeighborChanged => Vanilla::NeighborChanged,
@@ -91,6 +107,9 @@ impl BlockMethod {
             Self::ShouldRedstoneWireConnectTo => Vanilla::ShouldRedstoneWireConnectTo,
             Self::HasAnalogOutputSignal => Vanilla::HasAnalogOutputSignal,
             Self::AnalogOutputSignal => Vanilla::GetAnalogOutputSignal,
+            Self::SetPlacedBy => Vanilla::SetPlacedBy,
+            Self::PlayerWillDestroy => Vanilla::PlayerWillDestroy,
+            Self::SpawnDestroyByEntityParticles => Vanilla::SpawnDestroyByEntityParticles,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -100,7 +119,12 @@ impl BlockMethod {
     const fn can_skip(self) -> bool {
         !matches!(
             self,
-            Self::CanSurvive
+            Self::GetMenuProvider
+                | Self::GetDrops
+                | Self::UseWithoutItem
+                | Self::UseItemOn
+                | Self::PlayerWillDestroy
+                | Self::CanSurvive
                 | Self::CanPlaceLiquid
                 | Self::PlaceLiquid
                 | Self::PickupBlock
@@ -125,7 +149,12 @@ impl BlockMethod {
     }
     pub const fn name(self) -> &'static str {
         match self {
+            Self::GetMenuProvider => "getMenuProvider",
+            Self::GetDrops => "getDrops",
+            Self::SpawnAfterBreak => "spawnAfterBreak",
             Self::OnPlace => "onPlace",
+            Self::UseWithoutItem => "useWithoutItem",
+            Self::UseItemOn => "useItemOn",
             Self::HandlePrecipitation => "handlePrecipitation",
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
@@ -161,6 +190,9 @@ impl BlockMethod {
             Self::ShouldRedstoneWireConnectTo => "shouldRedstoneWireConnectTo",
             Self::HasAnalogOutputSignal => "hasAnalogOutputSignal",
             Self::AnalogOutputSignal => "getAnalogOutputSignal",
+            Self::SetPlacedBy => "setPlacedBy",
+            Self::PlayerWillDestroy => "playerWillDestroy",
+            Self::SpawnDestroyByEntityParticles => "spawnDestroyByEntityParticles",
         }
     }
 }
@@ -188,6 +220,24 @@ impl UnportedCalls {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
         if !self.seen.contains(&call) {
             match &call {
+                UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
+                    eprintln!(
+                        "Unported entity effect skipped: {}#{} (skipped calls: {})",
+                        kind.name(),
+                        method.name(),
+                        self.stats.skipped_calls
+                    )
+                }
+                UnportedCall::Operation(UnportedOperation::ItemUseOn(item)) => eprintln!(
+                    "Unported item use effect skipped: {}#useOn (skipped calls: {})",
+                    item.name(),
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
+                    "Unported portal use effect skipped: {} (skipped calls: {})",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
@@ -286,6 +336,11 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::EntityMethod(kind, method) => {
+                    LevelError::UnsupportedEntityMethod(kind, method)
+                }
+                UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
+                UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)
                 }

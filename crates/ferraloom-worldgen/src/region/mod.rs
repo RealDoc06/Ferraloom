@@ -505,8 +505,36 @@ pub struct WorldGenRegion<'a> {
     // --- end vegetation family ---
     pub seed: i64,
     pub sea_level: i32,
+    skip_unsupported: bool,
+    skipped_units: Vec<(String, String)>,
 }
 impl<'a> WorldGenRegion<'a> {
+    /// Temporary game-selected policy at whole feature/piece boundaries. Required
+    /// queries still return errors; only their enclosing unit may abandon work.
+    pub fn set_skip_unsupported(&mut self, enabled: bool) {
+        self.skip_unsupported = enabled;
+    }
+    pub fn finish_generation_unit(
+        &mut self,
+        unit: impl Into<String>,
+        result: Result<(), Error>,
+    ) -> Result<(), Error> {
+        match result {
+            Err(error)
+                if self.skip_unsupported
+                    && (error.0.starts_with("Unsupported:")
+                        || error.0.starts_with("game block behavior: Unsupported")) =>
+            {
+                self.skipped_units.push((unit.into(), error.0));
+                Ok(())
+            }
+            result => result,
+        }
+    }
+    pub fn take_skipped_units(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.skipped_units)
+    }
+
     // --- tree family ---
     pub fn populate_worldgen_beehive(
         &mut self,
@@ -554,6 +582,8 @@ impl<'a> WorldGenRegion<'a> {
         Ok(Self {
             environment: None,
             random: None,
+            skip_unsupported: false,
+            skipped_units: Vec::new(),
             fast_lava: None,
             block_tags: None,
             fluid_tags: None,
@@ -844,9 +874,14 @@ impl<'a> WorldGenRegion<'a> {
             return Ok(false);
         }
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            // ImposterProtoChunk ignores the write, but WorldGenRegion#setBlock
+            // still reports true once its write bounds accepted the position.
+            return Ok(true);
+        }
         if self.chunks[index].status >= ChunkStatus::InitializeLight {
             return Err(Error(
-                "worldgen lit chunk mutation needs a game adapter".into(),
+                "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
             ));
         }
         let old = self.block(p)?;
@@ -926,6 +961,14 @@ impl<'a> WorldGenRegion<'a> {
     /// It intentionally changes only section storage and its derived counts.
     pub fn set_block_in_section(&mut self, p: [i32; 3], state: BlockState) -> Result<(), Error> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
+        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+            return Err(Error(
+                "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
+            ));
+        }
         let chunk = &mut self.chunks[index].chunk;
         if p[1] < chunk.min_y || p[1] >= chunk.min_y + chunk.height {
             return Err(Error("bulk section write outside build height".into()));
@@ -940,6 +983,9 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn mark_post_processing(&mut self, p: [i32; 3]) -> Result<(), Error> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
         let chunk = &mut self.chunks[index].chunk;
         if p[1] >= chunk.min_y && p[1] < chunk.min_y + chunk.height {
             chunk.post_processing.push(p);
@@ -948,6 +994,9 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn set_block_entity(&mut self, p: [i32; 3], tag: CompoundTag) -> Result<(), Error> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
         self.chunks[index].block_entities.insert(p, tag);
         Ok(())
     }
@@ -959,6 +1008,9 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn add_entity(&mut self, chunk: [i32; 2], tag: CompoundTag) -> Result<(), Error> {
         let index = self.index(chunk, ChunkStatus::Empty)?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
         self.chunks[index].entities.push(tag);
         Ok(())
     }
@@ -967,6 +1019,9 @@ impl<'a> WorldGenRegion<'a> {
             [tick.position[0] >> 4, tick.position[2] >> 4],
             ChunkStatus::Empty,
         )?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
         self.chunks[index].block_ticks.schedule(tick);
         Ok(())
     }
@@ -978,6 +1033,9 @@ impl<'a> WorldGenRegion<'a> {
             [tick.position[0] >> 4, tick.position[2] >> 4],
             ChunkStatus::Empty,
         )?;
+        if self.chunks[index].status == ChunkStatus::Full {
+            return Ok(());
+        }
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
     }
@@ -1277,4 +1335,116 @@ impl WorldGenRegion<'_> {
         self.behavior.place_mossy_carpet(self, p, flags)
     }
     // --- end vegetation family ---
+}
+
+#[cfg(test)]
+mod imposter_tests {
+    use super::*;
+    use crate::{
+        generator::{ChunkGenerator, GenerationData},
+        settings::DimensionType,
+    };
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    struct Behavior;
+    impl WorldgenBlockBehavior for Behavior {
+        fn post_process_pos(
+            &self,
+            state: BlockState,
+            _region: &WorldGenRegion<'_>,
+            position: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(state
+                .post_process_y_offset()
+                .map(|offset| [position[0], position[1] + offset, position[2]]))
+        }
+    }
+    #[test]
+    fn full_imposter_ignores_generation_writes_while_lit_proto_requires_relight() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
+        let resources =
+            ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+        let data = std::sync::Arc::new(GenerationData::load(&resources).unwrap());
+        let generator = ChunkGenerator::decode(
+            &serde_json::json!({"type":"minecraft:debug"}),
+            &resources,
+            data,
+            0,
+        )
+        .unwrap();
+        let dimension = DimensionType::decode(
+            &resources
+                .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
+                .unwrap()
+                .json()
+                .unwrap(),
+        )
+        .unwrap();
+        let generated = generator.build_terrain([0, 0], dimension, None).unwrap();
+        let mut chunks = [RegionChunk::new(generated, ChunkStatus::Full)];
+        let before = chunks[0].chunk.block(1, 0, 1);
+        {
+            let mut region = WorldGenRegion::new(
+                &mut chunks,
+                [0, 0],
+                &[ChunkStatus::Full],
+                0,
+                None,
+                &Behavior,
+                0,
+                63,
+            )
+            .unwrap();
+            assert!(
+                region
+                    .set_block([1, 0, 1], Block::STONE.default_state(), 3)
+                    .unwrap()
+            );
+            region
+                .set_block_in_section([1, 0, 1], Block::GOLD_BLOCK.default_state())
+                .unwrap();
+            region
+                .set_block_entity([1, 0, 1], CompoundTag::new())
+                .unwrap();
+            region.add_entity([0, 0], CompoundTag::new()).unwrap();
+            region
+                .schedule_block_tick(SavedTick {
+                    position: [1, 0, 1],
+                    kind: Block::STONE,
+                    priority: 0,
+                })
+                .unwrap();
+            region.mark_post_processing([1, 0, 1]).unwrap();
+            assert_eq!(region.block([1, 0, 1]).unwrap(), before);
+        }
+        assert!(chunks[0].block_entities.is_empty());
+        assert!(chunks[0].entities.is_empty());
+        assert!(chunks[0].block_ticks.ticks().is_empty());
+        assert!(chunks[0].chunk.post_processing.is_empty());
+        chunks[0].status = ChunkStatus::InitializeLight;
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::InitializeLight],
+            0,
+            None,
+            &Behavior,
+            0,
+            63,
+        )
+        .unwrap();
+        assert!(
+            region
+                .set_block([1, 0, 1], Block::STONE.default_state(), 3)
+                .unwrap_err()
+                .0
+                .starts_with("Unsupported: lit ProtoChunk")
+        );
+        assert!(
+            region
+                .set_block_in_section([1, 0, 1], Block::STONE.default_state())
+                .unwrap_err()
+                .0
+                .starts_with("Unsupported: lit ProtoChunk")
+        );
+    }
 }

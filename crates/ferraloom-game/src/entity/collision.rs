@@ -47,6 +47,22 @@ pub fn block_collisions_from_context(
     context: &crate::block::BlockCollisionContext<'_>,
     bb: Aabb,
 ) -> Result<Vec<(BlockPos, VoxelShape)>, LevelError> {
+    let mut result = Vec::new();
+    let _ = visit_block_collisions(level, context, bb, |pos, shape| {
+        result.push((pos, shape));
+        std::ops::ControlFlow::Continue(())
+    })?;
+    Ok(result)
+}
+
+/// Keep BlockCollisions lazy: noCollision stops at the first occupied shape,
+/// before any later block or ownership query can have an observable result.
+fn visit_block_collisions(
+    level: &Level,
+    context: &crate::block::BlockCollisionContext<'_>,
+    bb: Aabb,
+    mut visitor: impl FnMut(BlockPos, VoxelShape) -> std::ops::ControlFlow<()>,
+) -> Result<std::ops::ControlFlow<()>, LevelError> {
     let min = BlockPos::new(
         mth::floor(bb.min_x - 1e-7) - 1,
         mth::floor(bb.min_y - 1e-7) - 1,
@@ -58,7 +74,6 @@ pub fn block_collisions_from_context(
         mth::floor(bb.max_z + 1e-7) + 1,
     );
     let entity_shape = shapes::create_aabb(bb);
-    let mut result = Vec::new();
     for z in min.z..=max.z {
         for y in min.y..=max.y {
             for x in min.x..=max.x {
@@ -82,13 +97,14 @@ pub fn block_collisions_from_context(
                 );
                 if !shape.is_empty()
                     && shapes::join_is_not_empty(&shape, &entity_shape, BooleanOp::And)
+                    && visitor(pos, shape).is_break()
                 {
-                    result.push((pos, shape));
+                    return Ok(std::ops::ControlFlow::Break(()));
                 }
             }
         }
     }
-    Ok(result)
+    Ok(std::ops::ControlFlow::Continue(()))
 }
 
 pub fn entity_collisions(
@@ -152,24 +168,7 @@ pub fn no_collision(
     source: Option<EntityRef>,
     bb: Aabb,
 ) -> Result<bool, LevelError> {
-    if !block_collisions(level, source, bb)?.is_empty()
-        || !entity_collisions(level, source, bb)?.is_empty()
-    {
-        return Ok(false);
-    }
-    if let Some(id) = source {
-        let border = level.entity_world_border();
-        if border.is_inside_close_to_border(level.entity::<EntityData>(id)?.position, bb)
-            && shapes::join_is_not_empty(
-                &border.collision_shape(),
-                &shapes::create_aabb(bb),
-                BooleanOp::And,
-            )
-        {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    level.no_collision(source, bb, false)
 }
 
 /// Port of Entity#collideWithShapes. Axis order depends on the original movement.
@@ -310,7 +309,8 @@ impl Level {
         include_liquids: bool,
     ) -> Result<bool, LevelError> {
         let context = collision_context(source, self, include_liquids)?;
-        if !block_collisions_from_context(self, &context, bb)?.is_empty()
+        if visit_block_collisions(self, &context, bb, |_, _| std::ops::ControlFlow::Break(()))?
+            .is_break()
             || !entity_collisions(self, source, bb)?.is_empty()
         {
             return Ok(false);

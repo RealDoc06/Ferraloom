@@ -39,7 +39,7 @@ impl Entity for TestCow {
             level.set_block_state(PLACED, Block::STONE.default_state())?;
             level.schedule_block_tick(PLACED, Block::STONE, 1, TickPriority::Normal)?;
             // Re-reading sees the callback's mutation, with no restore step.
-            assert_eq!(level.entity::<Cow>(entity)?.as_living().health, 9.0);
+            assert_eq!(level.entity::<Cow>(entity)?.as_living().health(), 9.0);
         }
         Ok(())
     }
@@ -141,11 +141,11 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
         .unwrap();
     region.tick_entities().unwrap();
     assert_eq!(
-        region.entity::<Cow>(ATTACKER).unwrap().as_living().health,
+        region.entity::<Cow>(ATTACKER).unwrap().as_living().health(),
         9.0
     );
     assert_eq!(
-        region.entity::<Cow>(TARGET).unwrap().as_living().health,
+        region.entity::<Cow>(TARGET).unwrap().as_living().health(),
         6.0
     );
     assert_eq!(
@@ -186,7 +186,7 @@ fn living_damage_cooldown_applies_only_the_increase() {
             .unwrap()
     );
     assert_eq!(
-        region.entity::<Cow>(TARGET).unwrap().as_living().health,
+        region.entity::<Cow>(TARGET).unwrap().as_living().health(),
         5.0
     );
     assert_eq!(
