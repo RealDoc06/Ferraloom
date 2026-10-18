@@ -17,6 +17,9 @@ pub struct PreparedFullChunk {
     pub worldgen_entities: Vec<CompoundTag>,
 }
 
+/// Every returned error currently precedes canonical insertion and owns the
+/// original input. Entity Publishing-stage failures require a continuation,
+/// rather than retrying this payload; that path is not enabled here yet.
 pub struct ChunkPublicationError {
     pub source: LevelError,
     pub prepared: PreparedFullChunk,
