@@ -49,7 +49,7 @@ fn heart(
         if !level
             .block_tags()?
             .contains_key(BlockTags::PALE_OAK_LOGS, log.block())
-            || log.get(p::AXIS) != state.get(p::AXIS)
+            || log.get(p::AXIS).expect("tagged pale oak log axis") != state.get(p::AXIS).unwrap()
         {
             return Ok(state);
         }

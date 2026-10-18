@@ -26,10 +26,12 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
     )
 }
 fn tip(state: BlockState) -> Direction {
-    if state.get(p::VERTICAL_DIRECTION) == Some(p::VerticalDirection::Up) {
-        Direction::Up
-    } else {
-        Direction::Down
+    match state
+        .get(p::VERTICAL_DIRECTION)
+        .expect("tagged speleothem vertical direction")
+    {
+        p::VerticalDirection::Up => Direction::Up,
+        p::VerticalDirection::Down => Direction::Down,
     }
 }
 fn with_tip(state: BlockState, direction: Direction) -> BlockState {
