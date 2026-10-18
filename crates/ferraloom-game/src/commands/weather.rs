@@ -62,7 +62,10 @@ mod tests {
         let vectors: Vec<Vector> =
             serde_json::from_str(include_str!("vanilla/weather-vectors.json")).unwrap();
         for vector in vectors {
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(vector.seed)), 0);
             let input = format!(
                 "weather {}{}",

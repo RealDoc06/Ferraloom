@@ -238,10 +238,12 @@ impl ChunkGeneratorAccess for DebugLevelSource {
 pub struct LevelStem {
     pub name: Identifier,
     pub dimension: DimensionType,
+    pub environment: crate::environment::DimensionEnvironment,
     pub generator: Arc<ChunkGenerator>,
 }
 #[derive(Debug)]
 pub struct WorldDimensions {
+    pub environment: Arc<crate::environment::EnvironmentDefinitions>,
     /// Vanilla's built-in order first, followed by remaining dimension entries.
     pub dimensions: Vec<LevelStem>,
 }
@@ -269,22 +271,23 @@ impl WorldPreset {
             .as_object()
             .ok_or_else(|| Error("expected dimension map".into()))?;
         let mut dimensions = Vec::new();
+        let environment = Arc::new(crate::environment::EnvironmentDefinitions::load(resources)?);
         for (name, stem) in entries {
             let name: Identifier = name.parse()?;
             let encoded_type = field(stem, "type")?;
-            let dimension = if encoded_type.is_string() {
+            let dimension_value = if encoded_type.is_string() {
                 let name = id(encoded_type)?;
-                DimensionType::decode(
-                    &resources
-                        .require(&name.with_path(format!("dimension_type/{}.json", name.path()))?)?
-                        .json()?,
-                )?
+                resources
+                    .require(&name.with_path(format!("dimension_type/{}.json", name.path()))?)?
+                    .json()?
             } else {
-                DimensionType::decode(encoded_type)?
+                encoded_type.clone()
             };
+            let dimension = DimensionType::decode(&dimension_value)?;
             dimensions.push(LevelStem {
                 name,
                 dimension,
+                environment: environment.dimension(&dimension_value)?,
                 generator: Arc::new(ChunkGenerator::decode(
                     field(stem, "generator")?,
                     resources,
@@ -306,7 +309,10 @@ impl WorldPreset {
         });
         Ok(Self {
             definition: v.clone(),
-            dimensions: WorldDimensions { dimensions },
+            dimensions: WorldDimensions {
+                dimensions,
+                environment,
+            },
         })
     }
     pub fn load(

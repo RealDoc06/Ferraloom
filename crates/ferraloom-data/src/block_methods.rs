@@ -18,6 +18,8 @@ mod tests {
 
     #[test]
     fn inherited_and_overridden_vanilla_methods_keep_their_identity() {
+        assert!(!Block::STONE.overrides(BlockMethod::HandlePrecipitation));
+        assert!(Block::CAULDRON.overrides(BlockMethod::HandlePrecipitation));
         assert!(!Block::STONE.overrides(BlockMethod::CanSurvive));
         assert!(Block::OAK_SAPLING.overrides(BlockMethod::CanSurvive));
         assert!(!Block::AIR.overrides(BlockMethod::UpdateShape));

@@ -68,6 +68,13 @@ pub struct BiomeTemperatures {
     frozen: NoiseStack,
     info: SimplexNoise,
 }
+/// Port of Biome.Precipitation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Precipitation {
+    None,
+    Rain,
+    Snow,
+}
 impl BiomeTemperatures {
     pub fn load(resources: &ResourceManager) -> Result<Self, Error> {
         let climates = resources
@@ -115,6 +122,20 @@ impl BiomeTemperatures {
             info,
         })
     }
+    pub fn warm_enough_to_rain(&self, id: &Identifier, p: [i32; 3], sea: i32) -> bool {
+        self.temperature(id, p, sea) >= 0.15
+    }
+    /// Shared climate-only part of Biome#getPrecipitationAt. Live game code
+    /// supplies the same zoomed biome and performs its concrete world queries.
+    pub fn precipitation_at(&self, id: &Identifier, p: [i32; 3], sea: i32) -> Precipitation {
+        if !self.climates[id].has_precipitation {
+            Precipitation::None
+        } else if self.warm_enough_to_rain(id, p, sea) {
+            Precipitation::Rain
+        } else {
+            Precipitation::Snow
+        }
+    }
     pub fn temperature(&self, id: &Identifier, p: [i32; 3], sea: i32) -> f32 {
         let climate = self.climates[id];
         let mut temperature = climate.temperature;
@@ -161,7 +182,7 @@ impl BiomeTemperatures {
     ) -> Result<bool, Error> {
         use crate::region::LightLayer;
         use ferraloom_data::{BlockClass, registries::fluid};
-        if self.temperature(id, p, region.sea_level()) >= 0.15 {
+        if self.warm_enough_to_rain(id, p, region.sea_level()) {
             return Ok(false);
         }
         if p[1] < region.min_y()
@@ -189,10 +210,11 @@ impl BiomeTemperatures {
         ] {
             let step = d.step();
             let q = [p[0] + step.x, p[1] + step.y, p[2] + step.z];
-            if !matches!(
-                region.fluid(q)?.fluid_type,
-                fluid::Id::WATER | fluid::Id::FLOWING_WATER
-            ) {
+            let neighbor = region.fluid(q)?.fluid_type;
+            if !region
+                .fluid_tags()?
+                .contains_key(ferraloom_data::tags::FluidTags::WATER, neighbor)
+            {
                 return Ok(true);
             }
         }
@@ -206,9 +228,7 @@ impl BiomeTemperatures {
         p: [i32; 3],
     ) -> Result<bool, Error> {
         use ferraloom_data::Block;
-        if !self.climates[id].has_precipitation
-            || self.temperature(id, p, region.sea_level()) >= 0.15
-        {
+        if self.precipitation_at(id, p, region.sea_level()) != Precipitation::Snow {
             return Ok(false);
         }
         if p[1] < region.min_y()

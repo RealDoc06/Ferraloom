@@ -1,5 +1,6 @@
 //! Vanilla advancement data and player-local engine. World adapters supply facts
 //! and apply returned effects synchronously at the triggering call site.
+pub mod criteria;
 mod data;
 mod player;
 mod progress;

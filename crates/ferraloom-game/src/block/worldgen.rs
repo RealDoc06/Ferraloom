@@ -1,0 +1,433 @@
+//! WorldGenRegion delegates shared virtual methods to the live block registry.
+use super::{BlockMethod, LevelAccessRef, LevelReaderRef};
+use crate::level::LevelError;
+use ferraloom_data::{BlockState, FluidState};
+use ferraloom_util::{BlockPos, Direction, shapes};
+use ferraloom_worldgen::{
+    Error,
+    region::{WorldGenRegion, WorldgenBlockBehavior},
+};
+
+/// Stateless game adapter for the worldgen-owned region. Families not registered
+/// by the game keep the trait's explicit Unsupported result.
+pub struct GameWorldgenBlockBehavior;
+
+fn pos(p: [i32; 3]) -> BlockPos {
+    BlockPos::new(p[0], p[1], p[2])
+}
+fn result<T>(value: Result<T, LevelError>) -> Result<T, Error> {
+    value.map_err(|error| Error(format!("game block behavior: {error:?}")))
+}
+impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
+    fn vine_acceptable_neighbor(
+        &self,
+        region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+        direction: Direction,
+    ) -> Result<bool, Error> {
+        result(super::plants::vine_acceptable_neighbor(
+            &LevelReaderRef::Worldgen(region),
+            pos(p),
+            direction,
+        ))
+    }
+    fn place_double_plant(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_double_plant(
+            &mut LevelAccessRef::Worldgen(region),
+            state,
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn place_mossy_carpet(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_mossy_carpet(
+            &mut LevelAccessRef::Worldgen(region),
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn multiface_state_for_placement(
+        &self,
+        region: &WorldGenRegion<'_>,
+        block: ferraloom_data::Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        result(super::plants::multiface::state_for_placement(
+            &LevelReaderRef::Worldgen(region),
+            block,
+            old,
+            pos(p),
+            face,
+        ))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        face: Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        post: bool,
+    ) -> Result<bool, Error> {
+        result(
+            super::plants::multiface_spreader::spread_from_face_toward_random_direction(
+                &mut LevelAccessRef::Worldgen(region),
+                state,
+                pos(p),
+                face,
+                random,
+                post,
+            ),
+        )
+        .map(|value| value.is_some())
+    }
+    fn post_process_pos(
+        &self,
+        state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+    ) -> Result<Option<[i32; 3]>, Error> {
+        Ok(state
+            .post_process_y_offset()
+            .map(|offset| [p[0], p[1].wrapping_add(offset), p[2]]))
+    }
+    fn is_solid(&self, state: BlockState) -> Result<bool, Error> {
+        Ok(state.is_solid())
+    }
+    fn can_survive(
+        &self,
+        state: BlockState,
+        region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+    ) -> Result<bool, Error> {
+        result(LevelReaderRef::Worldgen(region).can_survive(state, pos(p)))
+    }
+    fn is_outline_full_block(
+        &self,
+        region: &WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+    ) -> Result<bool, Error> {
+        result(LevelReaderRef::Worldgen(region).shape(state, pos(p)))
+            .map(|shape| shapes::is_shape_full_block(&shape))
+    }
+    fn is_collision_full_block(
+        &self,
+        region: &WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+    ) -> Result<bool, Error> {
+        result(LevelReaderRef::Worldgen(region).is_collision_shape_full_block(state, pos(p)))
+    }
+    fn is_collision_empty(&self, region: &WorldGenRegion<'_>, p: [i32; 3]) -> Result<bool, Error> {
+        let reader = LevelReaderRef::Worldgen(region);
+        let p = pos(p);
+        let state = result(reader.get_block_state(p))?;
+        result(reader.collision_shape_without_context(state, p)).map(|shape| shape.is_empty())
+    }
+    fn is_collision_face_full(
+        &self,
+        region: &WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<bool, Error> {
+        result(LevelReaderRef::Worldgen(region).collision_shape_without_context(state, pos(p)))
+            .map(|shape| shapes::is_face_full(&shape, face))
+    }
+    fn has_sturdy_face(
+        &self,
+        state: BlockState,
+        region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<bool, Error> {
+        result(LevelReaderRef::Worldgen(region).is_face_sturdy(state, pos(p), face))
+    }
+    fn state_has_sturdy_face(
+        &self,
+        region: &WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<bool, Error> {
+        self.has_sturdy_face(state, region, p, face)
+    }
+    fn update_shape(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        direction: Direction,
+        neighbor_p: [i32; 3],
+        neighbor: BlockState,
+    ) -> Result<BlockState, Error> {
+        let mut access = LevelAccessRef::Worldgen(region);
+        let state = result(access.get_block_state(pos(p)))?;
+        let behavior = result(
+            access
+                .as_reader()
+                .required_behavior(state.block(), BlockMethod::UpdateShape),
+        )?;
+        result(behavior.update_shape(
+            state,
+            pos(p),
+            direction,
+            pos(neighbor_p),
+            neighbor,
+            &mut access,
+        ))
+    }
+    fn update_from_neighbor_shapes(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        state: BlockState,
+    ) -> Result<BlockState, Error> {
+        result(LevelAccessRef::Worldgen(region).update_from_neighbor_shapes(state, pos(p)))
+    }
+    fn place_liquid(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        fluid: FluidState,
+    ) -> Result<bool, Error> {
+        let mut access = LevelAccessRef::Worldgen(region);
+        let state = result(access.get_block_state(pos(p)))?;
+        let behavior = result(
+            access
+                .as_reader()
+                .required_behavior(state.block(), BlockMethod::PlaceLiquid),
+        )?;
+        result(behavior.place_liquid(state, pos(p), fluid, &mut access))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_data::{
+        Block,
+        datapack::{Pack, ResourceManager},
+        properties,
+    };
+    use ferraloom_worldgen::{
+        generator::{
+            GenerationData,
+            flat::{FlatLayerInfo, FlatLevelGeneratorSettings, FlatLevelSource},
+        },
+        region::{ChunkStatus, RegionChunk},
+        settings::DimensionType,
+    };
+    use std::{path::Path, sync::Arc};
+
+    #[test]
+    fn generation_uses_the_same_survival_shape_waterlogging_and_tick_dispatch() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
+            .expect("builder supplies the vanilla datapack");
+        let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+        let data = Arc::new(GenerationData::load(&resources).unwrap());
+        let generator = FlatLevelSource::new(
+            data.clone(),
+            FlatLevelGeneratorSettings {
+                structure_overrides: Some(Vec::new()),
+                structure_override_tag: None,
+                layers: vec![FlatLayerInfo {
+                    height: 1,
+                    block: Block::DIRT,
+                }],
+                lakes: false,
+                features: false,
+                biome: "plains".parse().unwrap(),
+            },
+        )
+        .unwrap();
+        let dimension = DimensionType::decode(
+            &resources
+                .require(&"dimension_type/overworld.json".parse().unwrap())
+                .unwrap()
+                .json()
+                .unwrap(),
+        )
+        .unwrap();
+        let mut chunks = [RegionChunk::new(
+            generator.build_terrain([0, 0], dimension),
+            ChunkStatus::Features,
+        )];
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Features],
+            0,
+            None,
+            &GameWorldgenBlockBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        let p = [8, dimension.min_y + 1, 8];
+        let environment = Arc::new(
+            ferraloom_worldgen::environment::EnvironmentDefinitions::load(&resources).unwrap(),
+        );
+        let dimension_environment = environment
+            .dimension(
+                &resources
+                    .require(&"dimension_type/overworld.json".parse().unwrap())
+                    .unwrap()
+                    .json()
+                    .unwrap(),
+            )
+            .unwrap();
+        region
+            .set_environment_attributes(environment, &dimension_environment, &data.biome_names)
+            .unwrap();
+        region.set_has_skylight(dimension.has_skylight);
+        assert_eq!(LevelReaderRef::Worldgen(&region).sky_darken(), Ok(0));
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).get_dimension_value(
+                ferraloom_worldgen::environment::EnvironmentAttributes::SKY_LIGHT_LEVEL
+            ),
+            Ok(15.0)
+        );
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).max_local_raw_brightness(pos(p)),
+            Ok(15)
+        );
+        let flower = Block::DANDELION.default_state();
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).can_survive(flower, pos(p)),
+            Err(LevelError::MissingBlockTags)
+        );
+        region.set_block_tags(data.block_tags.clone());
+        region.set_fluid_tags(data.fluid_tags.clone());
+        assert_eq!(
+            LevelAccessRef::Worldgen(&mut region).fast_lava(),
+            Err(LevelError::UnsupportedWorldgenEnvironment)
+        );
+        region.set_fast_lava(dimension.fast_lava);
+        assert!(!LevelAccessRef::Worldgen(&mut region).fast_lava().unwrap());
+        assert!(region.can_survive(flower, p).unwrap());
+        region
+            .set_block([p[0], p[1] - 1, p[2]], Block::STONE.default_state(), 16)
+            .unwrap();
+        region.set_block(p, flower, 16).unwrap();
+        assert!(
+            region
+                .update_shape(
+                    p,
+                    Direction::Down,
+                    [p[0], p[1] - 1, p[2]],
+                    Block::STONE.default_state()
+                )
+                .unwrap()
+                .is_air()
+        );
+        assert!(
+            GameWorldgenBlockBehavior
+                .is_collision_full_block(&region, Block::STONE.default_state(), p)
+                .unwrap()
+        );
+        assert!(
+            GameWorldgenBlockBehavior
+                .is_collision_empty(&region, [0, p[1], 0])
+                .unwrap()
+        );
+        let sand = [9, p[1], 8];
+        region
+            .set_block(sand, Block::SAND.default_state(), 16)
+            .unwrap();
+        region
+            .update_shape(
+                sand,
+                Direction::Down,
+                [9, p[1] - 1, 8],
+                Block::DIRT.default_state(),
+            )
+            .unwrap();
+        let chain = [10, p[1], 8];
+        region
+            .set_block(chain, Block::IRON_CHAIN.default_state(), 16)
+            .unwrap();
+        assert!(
+            region
+                .place_liquid(chain, super::super::fluid::FlowingFluid::Water.source())
+                .unwrap()
+        );
+        assert_eq!(
+            region.block(chain).unwrap().get(properties::WATERLOGGED),
+            Some(true)
+        );
+        let chunk = region.chunk([0, 0], ChunkStatus::Empty).unwrap();
+        assert!(chunk.block_ticks.has_scheduled_tick(sand, &Block::SAND));
+        assert!(
+            chunk
+                .fluid_ticks
+                .has_scheduled_tick(chain, &ferraloom_data::registries::fluid::Id::WATER)
+        );
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).get_block_state(BlockPos::new(32, p[1], 8)),
+            Err(LevelError::MissingChunk(ferraloom_util::ChunkPos::new(
+                2, 0
+            )))
+        );
+        struct PendingWorldgenQuery;
+        impl WorldgenBlockBehavior for PendingWorldgenQuery {
+            fn post_process_pos(
+                &self,
+                _: BlockState,
+                _: &WorldGenRegion<'_>,
+                _: [i32; 3],
+            ) -> Result<Option<[i32; 3]>, Error> {
+                Err(Error("test: required postProcessPos".into()))
+            }
+            fn update_shape(
+                &self,
+                _: &mut WorldGenRegion<'_>,
+                _: [i32; 3],
+                _: Direction,
+                _: [i32; 3],
+                _: BlockState,
+            ) -> Result<BlockState, Error> {
+                Err(Error("test: required updateShape".into()))
+            }
+        }
+        // The preceding checks use the actual game bridge. Required-service
+        // failures use an explicit receiver rather than an unported family.
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Features],
+            0,
+            None,
+            &PendingWorldgenQuery,
+            0,
+            63,
+        )
+        .unwrap();
+        assert_eq!(
+            region
+                .update_shape(
+                    p,
+                    Direction::Down,
+                    [p[0], p[1] - 1, p[2]],
+                    Block::DIRT.default_state()
+                )
+                .unwrap_err()
+                .0,
+            "test: required updateShape"
+        );
+    }
+}

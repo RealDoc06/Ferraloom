@@ -1,6 +1,6 @@
 use super::{distance_manager::FullChunkStatus, heightmap::Heightmap};
 use crate::ticks::LevelChunkTicks;
-use std::ops::Range;
+use std::{cell::OnceCell, ops::Range};
 
 pub use ferraloom_chunk::LevelChunkSection;
 use ferraloom_data::{Block, BlockState};
@@ -14,15 +14,29 @@ pub struct LevelChunk {
     sections: Vec<Option<LevelChunkSection>>,
     empty_section: LevelChunkSection,
     heightmaps: Option<[[i32; 256]; 4]>,
+    generation_heightmaps: [OnceCell<[i32; 256]>; 2],
     pub(super) block_ticks: LevelChunkTicks,
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub(super) requested_full_status: FullChunkStatus,
     pub(super) ticking_ready: bool,
+    pub(super) block_entities: super::block_entity::ChunkBlockEntities,
     inhabited_time: i64,
+    pub(super) pending_generation: super::post_processing::PendingGenerationData,
     pub unsaved: bool,
 }
 
 impl LevelChunk {
+    /// Port of ChunkAccess#markUnsaved and tryMarkSaved. Clear immediately
+    /// before capturing a save; later mutations set the flag again independently.
+    pub fn mark_unsaved(&mut self) {
+        self.unsaved = true;
+    }
+    pub fn try_mark_saved(&mut self) -> bool {
+        std::mem::take(&mut self.unsaved)
+    }
+    pub fn is_unsaved(&self) -> bool {
+        self.unsaved
+    }
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
         Self {
@@ -31,13 +45,16 @@ impl LevelChunk {
             sections: sections.map(|_| None).collect(),
             empty_section,
             heightmaps: None,
+            generation_heightmaps: std::array::from_fn(|_| OnceCell::new()),
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
             // LevelChunk#getFullStatus defaults to FULL until a holder's
             // supplier is attached. This alone never permits broadcasts.
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
+            block_entities: Default::default(),
             inhabited_time: 0,
+            pending_generation: Default::default(),
             unsaved: false,
         }
     }
@@ -59,11 +76,14 @@ impl LevelChunk {
             sections: sections.into_iter().map(Some).collect(),
             empty_section,
             heightmaps: None,
+            generation_heightmaps: std::array::from_fn(|_| OnceCell::new()),
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
+            block_entities: Default::default(),
             inhabited_time: 0,
+            pending_generation: Default::default(),
             unsaved: false,
         }
     }
@@ -91,12 +111,48 @@ impl LevelChunk {
             .get(index)
             .map(|s| s.as_ref().unwrap_or(&self.empty_section))
     }
+    pub fn ticking_ready(&self) -> bool {
+        self.ticking_ready
+    }
+    pub fn heightmap(&self, map: Heightmap) -> Option<&[i32; 256]> {
+        self.heightmaps.as_ref().map(|maps| &maps[map as usize])
+    }
     pub fn height_at(&self, map: Heightmap, x: u8, z: u8) -> Option<i32> {
         self.heightmaps
             .as_ref()
             .map(|h| h[map as usize][usize::from(x) + usize::from(z) * 16])
     }
-    pub(super) fn prime_heightmaps(&mut self, tags: &ferraloom_data::datapack::TagSet<Block>) {
+    /// Port of ChunkAccess#getHeight's lazy WG map priming on a live chunk.
+    /// LevelChunk#setBlockState updates only its four live maps; these two
+    /// generation maps retain their first prime, as the native EnumMap does.
+    pub(super) fn generation_height_at(
+        &self,
+        ocean_floor: bool,
+        x: u8,
+        z: u8,
+        tags: &ferraloom_data::datapack::TagSet<Block>,
+    ) -> i32 {
+        let map = if ocean_floor {
+            Heightmap::OceanFloor
+        } else {
+            Heightmap::WorldSurface
+        };
+        let heights = self.generation_heightmaps[usize::from(ocean_floor)].get_or_init(|| {
+            std::array::from_fn(|i| {
+                self.scan_height(
+                    map,
+                    BlockPos::new(
+                        self.pos.x * 16 + (i & 15) as i32,
+                        self.max_y() - 1,
+                        self.pos.z * 16 + (i >> 4) as i32,
+                    ),
+                    tags,
+                )
+            })
+        });
+        heights[usize::from(x) + usize::from(z) * 16]
+    }
+    pub fn prime_heightmaps(&mut self, tags: &ferraloom_data::datapack::TagSet<Block>) {
         if self.heightmaps.is_some() {
             return;
         }
@@ -193,5 +249,25 @@ impl LevelChunk {
             (pos.z & 15) as u8,
             state,
         ))
+    }
+}
+
+impl super::Level {
+    /// ChunkMap#save's tryMarkSaved step, before snapshot capture, never at IO
+    /// completion. The caller must recheck is_unsaved before final eviction.
+    pub fn try_mark_chunk_saved(&mut self, pos: ChunkPos) -> Result<bool, super::LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .map(LevelChunk::try_mark_saved)
+            .ok_or(super::LevelError::MissingChunk(pos))
+    }
+    pub fn mark_chunk_unsaved(&mut self, pos: ChunkPos) -> Result<(), super::LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(super::LevelError::MissingChunk(pos))?
+            .mark_unsaved();
+        Ok(())
     }
 }

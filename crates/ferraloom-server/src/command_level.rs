@@ -136,6 +136,19 @@ impl MinecraftServer {
                 })?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "time" => {
+                let (result, changed) = self.clocks.command(command, self.level.game_time);
+                if let Some(clock) = changed {
+                    self.level
+                        .level
+                        .refresh_environment_attributes(
+                            super::command_runtime::environment_clock_snapshot(&self.clocks),
+                        )
+                        .map_err(CommandLevelFailure)?;
+                    self.broadcast(self.clock_packet(Some(&clock)));
+                }
+                self.apply_command_result(source, &command.source, result?);
+            }
             "weather" => {
                 let result = ferraloom_game::commands::weather::run(command, &mut self.level.level);
                 self.apply_command_result(source, &command.source, result);
@@ -185,6 +198,10 @@ impl MinecraftServer {
             .add_chunk(chunk)
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         self.level
+            .level
+            .prime_chunk_heightmaps(pos)
+            .map_err(game_error)?;
+        self.level
             .chunks
             .holders
             .get_mut(&pos.pack())
@@ -193,18 +210,34 @@ impl MinecraftServer {
         Ok(())
     }
     pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        let holder = self
-            .level
-            .chunks
-            .holders
-            .get_mut(&light.pos.pack())
-            .context("unknown light job")?;
-        ensure!(holder.request_id == light.request, "stale light completion");
-        holder.status = ChunkStatus::Full;
-        self.world.ready.insert(light.pos);
-        for (pos, data) in light.updates {
-            self.world.lights.insert(pos, data);
+        if let Some((request, pos)) = light.initialized {
+            let holder = self
+                .level
+                .chunks
+                .holders
+                .get_mut(&pos.pack())
+                .context("unknown light job")?;
+            ensure!(holder.request_id == request, "stale light completion");
+            holder.status = ChunkStatus::Full;
+            self.world.ready.insert(pos);
         }
+        for (key, data) in light.updates {
+            self.level
+                .level
+                .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
+            self.world.lights.insert(key, data);
+        }
+        for (key, mask) in light.dirty {
+            self.world.light_chunks_to_broadcast.insert(key);
+            let dirty = self
+                .world
+                .pending_light_updates
+                .entry(ChunkPos::unpack(key))
+                .or_default();
+            dirty.sky |= mask.sky;
+            dirty.block |= mask.block;
+        }
+
         Ok(())
     }
     async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
@@ -243,18 +276,24 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    pub(super) async fn save_command_tickets(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_command_tickets(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage =
             ferraloom_storage::SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = ferraloom_storage::SavedData::new(self.level.tickets.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(
-                ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
-                &mut data,
-            )
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(
+                    ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
+                    &mut data,
+                )
+            })
+            .await??;
+            Ok(())
+        }
     }
 }
 pub(super) fn load_command_tickets(level: &mut ServerLevel, world: &World) -> Result<()> {

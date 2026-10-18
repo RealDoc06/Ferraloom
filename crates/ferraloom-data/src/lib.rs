@@ -9,7 +9,10 @@
 //! ```
 
 mod block_methods;
+mod environment_attributes;
+mod sound_events;
 pub use block_methods::BlockMethod;
+pub use environment_attributes::EnvironmentAttributeData;
 
 pub mod datapack;
 pub use datapack::tags;
@@ -534,6 +537,29 @@ impl Block {
     /// pure block subclass overrides. Air represents an absent block item.
     pub const fn as_item(self) -> Item {
         BLOCK_ITEMS[self.protocol_id() as usize]
+    }
+}
+
+/// Pure BlockEntityType registry facts extracted from the pinned server.
+pub struct BlockEntityTypeData {
+    pub valid_blocks: &'static [Block],
+    pub only_op_can_set_nbt: bool,
+}
+impl registries::block_entity_type::Id {
+    pub const fn valid_blocks(self) -> &'static [Block] {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].valid_blocks
+    }
+    pub const fn only_op_can_set_nbt(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].only_op_can_set_nbt
+    }
+    pub const fn is_valid(self, state: BlockState) -> bool {
+        matches!(state.block().block_entity_type(),Some(kind) if kind.protocol_id() == self.protocol_id())
+    }
+}
+impl Block {
+    /// Port of BlockEntityType#isValid's inverse, indexed by block ID.
+    pub const fn block_entity_type(self) -> Option<registries::block_entity_type::Id> {
+        BLOCK_ENTITY_TYPE_BY_BLOCK[self.protocol_id() as usize]
     }
 }
 

@@ -410,41 +410,6 @@ fn cached_air_fact_matches_vanilla_state_registry() {
 }
 
 #[test]
-fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
-    use crate::{BlockStatePropertyError, properties};
-    let state = Block::WHEAT.default_state();
-    assert!(state.has_integer_property("age"));
-    assert_eq!(
-        state.with_integer_property("age", 7).unwrap(),
-        state.with(properties::AGE, 7).unwrap()
-    );
-    assert_eq!(
-        state.with_integer_property("age", 8),
-        Err(BlockStatePropertyError::InvalidValue(8))
-    );
-    assert_eq!(
-        state.with_integer_property("waterlogged", 0),
-        Err(BlockStatePropertyError::MissingOrNonInteger)
-    );
-    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
-    let wet = Block::OAK_STAIRS
-        .default_state()
-        .with(properties::WATERLOGGED, true)
-        .unwrap();
-    assert_eq!(
-        Block::STONE_STAIRS
-            .default_state()
-            .with_properties_of(wet)
-            .get(properties::WATERLOGGED),
-        Some(true)
-    );
-    // IntegerProperty equality includes its allowed range.
-    let wheat = state.with(properties::AGE, 7).unwrap();
-    let cactus = Block::CACTUS.default_state();
-    assert_eq!(cactus.with_properties_of(wheat), cactus);
-}
-
-#[test]
 fn liquid_and_lava_ignition_are_state_facts_independent_of_waterlogging() {
     use crate::{Block, properties};
     for block in [Block::WATER, Block::LAVA, Block::BUBBLE_COLUMN] {
@@ -590,4 +555,39 @@ fn fluid_random_ticks_follow_the_fluid_type_and_preserve_waterlogged_states() {
             .fluid
             .is_randomly_ticking()
     );
+}
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
 }

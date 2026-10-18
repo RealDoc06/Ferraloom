@@ -1,11 +1,15 @@
 //! Ordered integration points for subsystem ports. Effects are captured at the
 //! vanilla call site and consumed at its phase boundary, never from hash order.
-use super::events::BlockEvent;
 use ferraloom_data::BlockState;
 use ferraloom_util::{BlockPos, ChunkPos};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LevelEffect {
+    /// Accepted transition captured at setEntityPos, including A -> B -> A.
+    PlayerSectionChange {
+        player: crate::entity::EntityRef,
+        section: ferraloom_util::SectionPos,
+    },
     SectionEmptiness {
         chunk: ChunkPos,
         section_y: i32,
@@ -39,10 +43,73 @@ pub enum LevelEffect {
         id: i32,
         data: i32,
     },
-    BlockEvent(BlockEvent),
     WeatherEvent {
         event: u8,
         param: f32,
     },
     PendingPrecipitation(BlockPos),
+    /// Audience is captured at the call site, before subsequent movement or
+    /// removal; the runtime appends to each connection's ordinary outbound stream.
+    PlayerPacket {
+        recipients: Vec<crate::entity::EntityRef>,
+        packet: Box<ferraloom_protocol::play::clientbound::Packet>,
+    },
+    GameEvent {
+        event: ferraloom_data::registries::game_event::Id,
+        position: ferraloom_util::Vec3,
+        source: Option<crate::entity::EntityRef>,
+        affected_state: Option<BlockState>,
+    },
+}
+
+impl super::Level {
+    /// Consume every captured accepted player transition in source order. The
+    /// listener invokes this before synchronous ticket-dependent work.
+    pub fn take_player_section_changes(
+        &mut self,
+    ) -> Vec<(crate::entity::EntityRef, ferraloom_util::SectionPos)> {
+        let mut changes = Vec::new();
+        self.region_mut().effects.retain(|effect| {
+            if let LevelEffect::PlayerSectionChange { player, section } = effect {
+                changes.push((*player, *section));
+                false
+            } else {
+                true
+            }
+        });
+        changes
+    }
+}
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn captured_player_sections_preserve_intermediate_transitions() {
+        use super::*;
+        use crate::{
+            Behaviors,
+            entity::EntityRef,
+            level::{Level, Region},
+        };
+        use ferraloom_util::SectionPos;
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let player = EntityRef(1);
+        let a = SectionPos::new(0, 4, 0);
+        let b = SectionPos::new(1, 4, 0);
+        for section in [a, b, a] {
+            level.emit(LevelEffect::PlayerSectionChange { player, section });
+            level.emit(LevelEffect::CheckLight(BlockPos::ZERO));
+        }
+        assert_eq!(
+            level.take_player_section_changes(),
+            vec![(player, a), (player, b), (player, a)]
+        );
+        assert_eq!(
+            level.take_effects(),
+            vec![LevelEffect::CheckLight(BlockPos::ZERO); 3]
+        );
+    }
 }

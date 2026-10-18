@@ -67,16 +67,22 @@ impl MinecraftServer {
             locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
         })
     }
-    pub(super) async fn save_game_rules(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_game_rules(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage = SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
-            storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
+                storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
+            })
+            .await??;
+            Ok(())
+        }
     }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
         self.game_rules
@@ -236,13 +242,6 @@ impl MinecraftServer {
                     },
                     &[],
                 ));
-            }
-            "time" => {
-                let (result, changed) = self.clocks.command(&command, self.level.game_time);
-                if let Some(clock) = changed {
-                    self.broadcast(self.clock_packet(Some(&clock)));
-                }
-                result?
             }
             "list" => {
                 let uuids = command.literals.iter().any(|literal| literal == "uuids");
@@ -602,6 +601,20 @@ pub(super) fn load_clocks(
         .map(|data| data.value().clone())
         .unwrap_or_default();
     ServerClockManager::load(resources, states).map_err(|error| anyhow::anyhow!("{error}"))
+}
+/// Capture whole ticks from the sole mutable server clock manager. Loaded clock
+/// keys come from validated resource identifiers; saved unknown keys are discarded.
+pub(super) fn environment_clock_snapshot(
+    clocks: &ServerClockManager,
+) -> ferraloom_game::level::environment::ClockSnapshot {
+    ferraloom_game::level::environment::ClockSnapshot::new(clocks.states.0.iter().map(
+        |(id, state)| {
+            (
+                id.parse().expect("registered world-clock identifier"),
+                state.total_ticks,
+            )
+        },
+    ))
 }
 pub(super) fn command_build_context(
     registries: &RegistrySet,

@@ -508,7 +508,10 @@ mod tests {
                 } else {
                     Some(Direction::VALUES[front as usize])
                 };
-                let mut level = Level::new(super::super::Region::new(&BEHAVIORS));
+                let mut level = Level::new(
+                    super::super::Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
                 level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
                 level.rules_mut().redstone_experiments = experiments.parse().unwrap();
                 let orientation = level
