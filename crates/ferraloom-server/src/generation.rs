@@ -34,6 +34,9 @@ pub(crate) struct StructureSnapshot {
     pub pos: ChunkPos,
     pub revision: GenerationRevision,
     pub data: storage::StructureData,
+    /// An unattached FULL imposter still needs a save when its shared starts
+    /// change. Attached chunks instead save their canonical live payload.
+    pub unattached_disk: Option<SerializableChunkData>,
 }
 
 pub(crate) struct GenerationRequest {
@@ -338,6 +341,11 @@ impl GenerationState {
                     pos: ChunkPos::unpack(key),
                     revision: self.revision,
                     data: storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
+                    unattached_disk: Some(
+                        proto
+                            .capture(&self.context, registry)
+                            .map_err(anyhow::Error::msg)?,
+                    ),
                 });
             }
             if key != pos.pack()
