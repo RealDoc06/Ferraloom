@@ -2926,8 +2926,19 @@ mod generation_order_tests {
         {
             level.chunks.ensure_holder(change.pos).ticket_level = change.level;
         }
-        assert_eq!(level.chunks.request(first), Some(0));
-        assert_eq!(level.chunks.request(second), Some(1));
+        for (pos, task) in [(first, 0), (second, 1)] {
+            level.chunks.update_highest_allowed_status(pos);
+            assert_eq!(
+                level
+                    .chunks
+                    .schedule_generation_task(pos, ChunkStatus::Full)
+                    .task
+                    .schedule
+                    .unwrap()
+                    .id,
+                task
+            );
+        }
         assert!(
             level.chunks.holders[&second.pack()].requested_full_status()
                 >= ferraloom_game::level::distance_manager::FullChunkStatus::BlockTicking
@@ -3009,120 +3020,7 @@ mod generation_order_tests {
             world.generation_statuses[&proto.pack()],
             ChunkStatus::Features
         );
-        crate::server::generation_completion::integrate_metadata(&mut level, &mut world).unwrap();
-        for (request, terrain) in chunks {
-            crate::server::generation_completion::integrate_terrain(
-                &mut level, &mut world, request, terrain,
-            )
-            .unwrap();
-        }
-        assert_eq!(level.level.unported_behavior_stats().skipped_calls, 2);
-        assert!(level.level.chunk(second).unwrap().is_unsaved());
-        assert!(!world.ready.contains(&second));
-        assert_eq!(
-            world.saved[&second.pack()].structures,
-            Some(structure_data(second, true))
-        );
-        assert_eq!(
-            world.structure_snapshots[&second.pack()].revision,
-            GenerationRevision(2)
-        );
-        assert_eq!(
-            world.structure_snapshots[&second.pack()]
-                .structures
-                .to_nbt()
-                .unwrap(),
-            structures(second, true).to_nbt().unwrap()
-        );
-        let captured = world.capture_chunk(&level.level, second, 0).unwrap();
-        assert_eq!(captured.disk.structures, Some(structure_data(second, true)));
-        assert_eq!(level.level.chunk(second).unwrap().structures_revision(), 2);
-        let structure = "minecraft:jungle_pyramid".parse().unwrap();
-        assert!(
-            level
-                .level
-                .structure_manager()
-                .get_start_for_structure(second, &structure)
-                .unwrap()
-                .unwrap()
-                .is_valid()
-        );
-        assert_eq!(
-            level
-                .level
-                .structure_manager()
-                .get_references_for_structure(second, &structure)
-                .unwrap()
-                .unwrap()
-                .iter()
-                .collect::<Vec<_>>(),
-            structures(second, true).references[&structure]
-                .iter()
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            level
-                .level
-                .chunk(second)
-                .unwrap()
-                .structures()
-                .to_nbt()
-                .unwrap(),
-            structures(second, true).to_nbt().unwrap()
-        );
-        level.level.try_mark_chunk_saved(second).unwrap();
-        let old_structures = level.level.chunk(second).unwrap().structures();
-        world
-            .integrate_structure_snapshot(StructureSnapshot {
-                pos: second,
-                revision: GenerationRevision(3),
-                data: structure_data(second, false),
-                structures: structures(second, false),
-                unattached_disk: None,
-            })
-            .unwrap();
-        crate::server::generation_completion::publish_structure_updates(&level.level, &mut world)
-            .unwrap();
-        assert_eq!(
-            old_structures.to_nbt().unwrap(),
-            structures(second, true).to_nbt().unwrap()
-        );
-        assert_eq!(level.level.chunk(second).unwrap().structures_revision(), 3);
-        assert!(level.level.chunk(second).unwrap().is_unsaved());
-        // A stale saved-data sidecar is never the live structures save source.
-        world.saved.get_mut(&second.pack()).unwrap().structures =
-            Some(structure_data(second, true));
-        let captured = world.capture_chunk(&level.level, second, 0).unwrap();
-        assert_eq!(
-            captured.disk.structures,
-            Some(structure_data(second, false))
-        );
-        for x in second.x - 1..=second.x + 1 {
-            for z in second.z - 1..=second.z + 1 {
-                world.light_ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        crate::server::generation_completion::queue_ready_promotions(&level, &mut world);
-        assert!(!world.ready.contains(&second));
-        assert_eq!(world.exclusive_ready_tasks.len(), 1);
-        // A queued ready task cannot prepare a recreated/demoted holder. It
-        // stays inert until the exclusive slot checks its captured identity.
-        let holder = level.chunks.holders.get_mut(&second.pack()).unwrap();
-        holder.epoch += 1;
-        holder.ticket_level = 45;
-        crate::server::generation_completion::finish_promotions(&mut level, &mut world).unwrap();
-        assert!(!world.ready.contains(&second));
-        assert!(world.exclusive_ready_tasks.is_empty());
-        level
-            .chunks
-            .holders
-            .get_mut(&second.pack())
-            .unwrap()
-            .ticket_level = 31;
-        crate::server::generation_completion::queue_ready_promotions(&level, &mut world);
-        assert!(!world.ready.contains(&second));
-        crate::server::generation_completion::finish_promotions(&mut level, &mut world).unwrap();
-        assert!(world.ready.contains(&second));
+        let promotion_skips = std::mem::take(&mut world.generation_skips);
         // Cancel a completed later result while it is still held behind an
         // earlier request. It must save its payload without promoting a holder.
         let cancelled = ChunkPos::new(2, 0);
@@ -3213,81 +3111,142 @@ mod generation_order_tests {
         );
         assert!(world.failed_generation.contains(&(cancelled, 8)));
         assert!(world.take_generation_completion().unwrap().is_none());
-        // A later heightmap/publication error must not replay successful
-        // postLoad entity creation when the owned continuation resumes.
-        let mut publishing = ServerLevel::new(
-            Region::new(&BEHAVIORS),
-            "minecraft:overworld",
-            world.level_context(&resources).unwrap(),
-        );
-        for x in 0..9 {
-            publishing.chunks.request(ChunkPos::new(-1024 - x, 0));
+        // The transport exercise above simulated completed task IDs. The live
+        // continuation test below retains its own real scheduled holder tasks.
+        world.settled_generation.clear();
+        world.failed_generation.clear();
+        world.generation_skips = promotion_skips;
+        let mut live =
+            crate::generation::runtime::LiveLevel::install(world, level, Arc::new(properties))
+                .unwrap();
+        for (task, terrain) in chunks {
+            live.generation()
+                .accept_test_terrain(&live.level, task, terrain)
+                .unwrap();
         }
-        let publish_pos = ChunkPos::new(64, 0);
-        let publish_request = publishing.chunks.request(publish_pos).unwrap();
-        let mut terrain = output(publish_pos, "publication").terrain;
-        terrain.revision = GenerationRevision(7);
-        terrain.disk.entities = Some(vec![
-            ferraloom_nbt::parse_compound(
-                "{id:\"minecraft:tnt\",UUID:[I;1,2,3,4],Pos:[1024.5d,0.0d,0.5d],Motion:[0d,0d,0d],Rotation:[0f,0f]}",
-            )
-            .unwrap(),
-        ]);
-        let failure = crate::server::generation_completion::integrate_terrain(
-            &mut publishing,
-            &mut world,
-            publish_request,
-            terrain,
-        )
-        .unwrap_err();
-        assert!(failure.to_string().contains("MissingBlockTags"));
-        let allocated_probe = publishing.level.next_entity_id();
-        assert_eq!(allocated_probe, 2);
-        let light = |revision| LitChunk {
-            initialized: Some(GenerationLightInitialization {
-                request: publish_request,
-                pos: publish_pos,
-                revision: GenerationRevision(revision),
-            }),
-            updates: BTreeMap::from([(publish_pos.pack(), ChunkLight::default())]),
-            dirty: BTreeMap::new(),
-        };
+        live.level.get_full_chunk(first).unwrap();
+        live.level.get_full_chunk(second).unwrap();
+        assert_eq!(live.level.unported_behavior_stats().skipped_calls, 2);
+        assert!(live.level.chunk(second).unwrap().is_unsaved());
         assert!(
-            crate::server::generation_completion::integrate_light(
-                &mut publishing,
-                &mut world,
-                light(6),
-            )
-            .is_err()
+            !live
+                .generation()
+                .with_world(|world| world.ready.contains(&second))
         );
-        assert!(!world.lights.contains_key(&publish_pos.pack()));
-        crate::server::generation_completion::integrate_light(
-            &mut publishing,
-            &mut world,
-            light(7),
-        )
-        .unwrap();
-        assert!(world.lights.contains_key(&publish_pos.pack()));
-        assert!(!world.light_ready.contains(&publish_pos));
-        publishing
-            .level
-            .set_block_tags(world.generator.data().block_tags.clone());
-        crate::server::generation_completion::resume_terrain(
-            &mut publishing,
-            &mut world,
-            publish_request,
-        )
-        .unwrap();
-        // The earlier probe consumed an ID; resuming must allocate nothing else.
-        assert_eq!(publishing.level.next_entity_id(), allocated_probe + 1);
-        assert_eq!(publishing.level.take_entity_management_events().len(), 1);
-        assert!(world.light_ready.contains(&publish_pos));
-        assert!(!world.ready.contains(&publish_pos));
         assert_eq!(
-            publishing.chunks.holders[&publish_pos.pack()].status,
-            ChunkStatus::Full
+            live.generation()
+                .with_world(|world| world.saved[&second.pack()].structures.clone()),
+            Some(structure_data(second, true))
         );
-        world.close_chunk_storage().await.unwrap();
+        assert_eq!(live.level.chunk(second).unwrap().structures_revision(), 2);
+        assert_eq!(
+            live.level
+                .chunk(second)
+                .unwrap()
+                .structures()
+                .to_nbt()
+                .unwrap(),
+            structures(second, true).to_nbt().unwrap()
+        );
+        let structure = "minecraft:jungle_pyramid".parse().unwrap();
+        assert!(
+            live.level
+                .structure_manager()
+                .get_start_for_structure(second, &structure)
+                .unwrap()
+                .unwrap()
+                .is_valid()
+        );
+        assert_eq!(
+            live.level
+                .structure_manager()
+                .get_references_for_structure(second, &structure)
+                .unwrap()
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            structures(second, true).references[&structure]
+                .iter()
+                .collect::<Vec<_>>()
+        );
+        let plan = live
+            .generation()
+            .with_world(|world| world.chunk_save_plan(second, 0))
+            .unwrap();
+        assert_eq!(
+            plan.capture(&live.level).unwrap().disk.structures,
+            Some(structure_data(second, true))
+        );
+        live.level.try_mark_chunk_saved(second).unwrap();
+        let old_structures = live.level.chunk(second).unwrap().structures();
+        live.generation()
+            .with_world_mut(|world| {
+                world.integrate_structure_snapshot(StructureSnapshot {
+                    pos: second,
+                    revision: GenerationRevision(3),
+                    data: structure_data(second, false),
+                    structures: structures(second, false),
+                    unattached_disk: None,
+                })
+            })
+            .unwrap();
+        live.generation()
+            .publish_structure_updates(&live.level)
+            .unwrap();
+        assert_eq!(
+            old_structures.to_nbt().unwrap(),
+            structures(second, true).to_nbt().unwrap()
+        );
+        assert_eq!(live.level.chunk(second).unwrap().structures_revision(), 3);
+        assert!(live.level.chunk(second).unwrap().is_unsaved());
+        live.generation().with_world_mut(|world| {
+            world.saved.get_mut(&second.pack()).unwrap().structures =
+                Some(structure_data(second, true))
+        });
+        let plan = live
+            .generation()
+            .with_world(|world| world.chunk_save_plan(second, 0))
+            .unwrap();
+        assert_eq!(
+            plan.capture(&live.level).unwrap().disk.structures,
+            Some(structure_data(second, false))
+        );
+        // The captured range continuation has an older holder incarnation. Its
+        // exclusive callback must not prepare the current holder at that position.
+        let identity = live
+            .generation()
+            .with_chunks(|chunks| GenerationIdentity::of(&chunks.holders[&second.pack()]));
+        live.generation().with_world_mut(|world| {
+            world.exclusive_ready_tasks.push_back(GenerationIdentity {
+                holder_epoch: 0,
+                ..identity
+            })
+        });
+        live.finish_promotions().unwrap();
+        assert!(
+            !live
+                .generation()
+                .with_world(|world| world.ready.contains(&second))
+        );
+        assert!(
+            live.generation()
+                .with_world(|world| world.exclusive_ready_tasks.is_empty())
+        );
+        let drain = live
+            .generation()
+            .with_world_mut(World::prepare_close_chunk_storage)
+            .unwrap();
+        for task in drain.proto {
+            task.await.unwrap();
+        }
+        for task in drain.chunks {
+            task.await.unwrap().unwrap();
+        }
+        let close = live
+            .generation()
+            .with_world_mut(World::begin_close_chunk_storage)
+            .unwrap();
+        close.await.unwrap();
     }
 }
 

@@ -12,7 +12,6 @@ pub(crate) struct PromotionContinuation {
     pub(crate) prepared_chunk: Option<LevelChunk>,
     pub(crate) entities_registered: bool,
     pub(crate) entity_failure: Option<ferraloom_game::level::entity::WorldgenEntityLoadError>,
-    pub(crate) attached: bool,
     pub(crate) complete: bool,
     pub(crate) center_light_installed: bool,
     pub(crate) stage: Option<ferraloom_game::level::publication::FullChunkStage>,

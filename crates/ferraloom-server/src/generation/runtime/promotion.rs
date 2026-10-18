@@ -31,17 +31,20 @@ impl GenerationRuntime {
             "duplicate FULL promotion"
         );
         let light_revision = terrain.revision;
-        let chunk = world.integrate(task, light_revision, &mut terrain)?;
+        let chunk = world.integrate(task, light_revision, &mut terrain);
+        let (prepared_chunk, error) = match chunk {
+            Ok(chunk) => (Some(chunk), None),
+            Err(error) => (None, Some(error)),
+        };
         world.full_promotions.insert(
             task,
             PromotionContinuation {
                 identity,
                 input: Some(terrain),
                 light_revision,
-                prepared_chunk: Some(chunk),
+                prepared_chunk,
                 entities_registered: false,
                 entity_failure: None,
-                attached: false,
                 complete: false,
                 center_light_installed: false,
                 stage: None,
@@ -51,7 +54,7 @@ impl GenerationRuntime {
                 finalization_failure: None,
             },
         );
-        Ok(())
+        error.map_or(Ok(()), Err)
     }
 
     pub(super) fn reject_reentrant_full(
@@ -154,6 +157,18 @@ impl GenerationRuntime {
         let result = self.run_full_promotion(level, task);
         if self.world.borrow().full_promotions[&task].complete {
             self.jobs.borrow_mut().complete_integration(task);
+        } else if result.is_err() {
+            let identity = self.world.borrow().full_promotions[&task].identity;
+            if let Some(holder) = self
+                .chunks
+                .borrow_mut()
+                .holders
+                .get_mut(&identity.pos.pack())
+                && holder.epoch == identity.holder_epoch
+            {
+                holder.generation.fail_pending(AcquireFailure::Publication);
+            }
+            self.jobs.borrow_mut().complete_integration(task);
         } else {
             self.jobs.borrow_mut().suspend_integration(task);
         }
@@ -161,7 +176,11 @@ impl GenerationRuntime {
         result
     }
 
-    fn run_full_promotion(&self, level: &Level, task: u64) -> Result<()> {
+    pub(super) fn stage_full_promotion(
+        &self,
+        level: &Level,
+        task: u64,
+    ) -> Result<GenerationIdentity> {
         let (identity, stage) = {
             let world = self.world.borrow();
             let continuation = &world.full_promotions[&task];
@@ -223,7 +242,6 @@ impl GenerationRuntime {
                 let mut world = self.world.borrow_mut();
                 let continuation = world.full_promotions.get_mut(&task).unwrap();
                 continuation.stage = Some(staged.token);
-                continuation.attached = true;
                 continuation.input.as_mut().unwrap().disk.entities = Some(staged.worldgen_entities);
             }
             {
@@ -242,6 +260,11 @@ impl GenerationRuntime {
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         }
 
+        Ok(identity)
+    }
+
+    pub(super) fn run_post_load(&self, level: &Level, task: u64) -> Result<()> {
+        let identity = self.world.borrow().full_promotions[&task].identity;
         let entities = {
             let mut world = self.world.borrow_mut();
             let continuation = world.full_promotions.get_mut(&task).unwrap();
@@ -293,49 +316,53 @@ impl GenerationRuntime {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn run_full_promotion(&self, level: &Level, task: u64) -> Result<()> {
+        let identity = self.stage_full_promotion(level, task)?;
+        self.run_post_load(level, task)?;
         self.publish_structure_updates(level)?;
-        let token = {
+        let (token, finalized) = {
             let world = self.world.borrow();
             let continuation = &world.full_promotions[&task];
             ensure!(
                 continuation.entities_registered,
                 "FULL finalization before postLoad"
             );
-            ensure!(
-                !continuation.finalized,
-                "successful FULL finalization cannot repeat"
-            );
-            continuation.stage.unwrap()
+            (continuation.stage.unwrap(), continuation.finalized)
         };
-        let reference = match level.finalize_full_chunk(token) {
-            Ok(reference) => reference,
-            Err(error) => {
-                self.world
-                    .borrow_mut()
-                    .full_promotions
-                    .get_mut(&task)
-                    .unwrap()
-                    .finalization_failure = Some(error);
-                anyhow::bail!("FULL finalization failed; canonical stage/checkpoint retained");
+        let reference = if finalized {
+            token.reference()
+        } else {
+            match level.finalize_full_chunk(token) {
+                Ok(reference) => reference,
+                Err(error) => {
+                    self.world
+                        .borrow_mut()
+                        .full_promotions
+                        .get_mut(&task)
+                        .unwrap()
+                        .finalization_failure = Some(error);
+                    anyhow::bail!("FULL finalization failed; canonical stage/checkpoint retained");
+                }
             }
         };
         ensure!(
-            reference.kind == ChunkKind::Full,
-            "FULL finalization returned proto"
+            reference.kind == ChunkKind::Full && reference == token.reference(),
+            "FULL finalization changed its staged identity"
         );
         {
             let mut world = self.world.borrow_mut();
             let continuation = world.full_promotions.get_mut(&task).unwrap();
             continuation.finalized = true;
-            continuation.complete = true;
-            world.light_ready.insert(identity.pos);
+            continuation.finalization_failure = None;
             if identity.pos == ChunkPos::containing(world.spawn)
                 && !world.level_data.data.contains_key("spawn")
             {
                 world.spawn.y = world.full_promotions[&task].input.as_ref().unwrap().surface
                     [((world.spawn.z & 15) * 16 + (world.spawn.x & 15)) as usize];
             }
-            world.full_promotions.get_mut(&task).unwrap().input = None;
         }
         {
             let mut chunks = self.chunks.borrow_mut();
@@ -347,8 +374,25 @@ impl GenerationRuntime {
                 holder.epoch == identity.holder_epoch,
                 "finalized holder recreated"
             );
-            holder.generation.acquire_status_bump(ChunkStatus::Full);
-            holder.generation.complete(ChunkStatus::Full, reference);
+            if let Some(completed) = holder
+                .generation
+                .chunk_if_present_unchecked(ChunkStatus::Full)
+            {
+                ensure!(
+                    completed == reference,
+                    "FULL future changed its staged identity"
+                );
+            } else {
+                holder.generation.acquire_status_bump(ChunkStatus::Full);
+                holder.generation.complete(ChunkStatus::Full, reference);
+            }
+        }
+        {
+            let mut world = self.world.borrow_mut();
+            let continuation = world.full_promotions.get_mut(&task).unwrap();
+            continuation.complete = true;
+            continuation.input = None;
+            world.light_ready.insert(identity.pos);
         }
         self.confirm_ready_ranges(level)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;

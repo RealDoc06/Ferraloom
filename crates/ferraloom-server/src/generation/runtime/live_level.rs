@@ -86,6 +86,9 @@ impl LiveLevel {
             self.generation().with_world_mut(|world| {
                 world.ready.insert(identity.pos);
             });
+            self.generation()
+                .refresh_loading_status(&self.level, identity.pos)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         }
         self.generation()
             .confirm_ready_ranges(&self.level)

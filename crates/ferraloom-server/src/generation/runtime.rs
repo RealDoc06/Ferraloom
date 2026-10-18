@@ -176,8 +176,20 @@ impl GenerationRuntime {
     fn run_distance_pass(&self, level: &Level) -> Result<bool, LevelError> {
         let mut changed = false;
         loop {
-            let changes = self.distance_changes(level);
-            changed |= !changes.is_empty();
+            let updates = self.distance_changes(level);
+            let graph_changed = !updates.is_empty();
+            changed |= graph_changed;
+            let changes = updates
+                .into_iter()
+                .filter(|change| {
+                    change.level <= 44
+                        || self
+                            .chunks
+                            .borrow()
+                            .holders
+                            .contains_key(&change.pos.pack())
+                })
+                .collect::<Vec<_>>();
             // Native first publishes every visible ticket-level change, then
             // updates highestAllowedStatus for all affected holders.
             for change in &changes {
@@ -189,7 +201,7 @@ impl GenerationRuntime {
                     .borrow_mut()
                     .update_generation_priority(change.pos, change.level);
             }
-            if !changes.is_empty() {
+            if graph_changed {
                 level.clear_chunk_source_cache();
             }
             for change in &changes {
@@ -397,9 +409,6 @@ impl GenerationRuntime {
         match completion {
             Ok(Some((task, terrain))) => {
                 progressed = true;
-                self.publish_generation_statuses();
-                self.publish_generation_skips(level)?;
-                self.publish_structure_updates(level)?;
                 let current = self.jobs.borrow().is_current(&self.chunks.borrow(), task);
                 if current {
                     let target = self.jobs.borrow().get(task).unwrap().token.target;
@@ -414,6 +423,9 @@ impl GenerationRuntime {
                         self.jobs.borrow_mut().complete_integration(task);
                     }
                 }
+                self.publish_generation_statuses();
+                self.publish_generation_skips(level)?;
+                self.publish_structure_updates(level)?;
             }
             Ok(None) => {}
             Err(error) => {
@@ -487,11 +499,62 @@ impl GenerationRuntime {
             }
         }
     }
+    pub(super) fn refresh_loading_status(
+        &self,
+        level: &Level,
+        pos: ChunkPos,
+    ) -> Result<(), LevelError> {
+        let epoch = self
+            .chunks
+            .borrow()
+            .holders
+            .get(&pos.pack())
+            .ok_or(LevelError::MissingChunk(pos))?
+            .epoch;
+        self.status_publications
+            .borrow_mut()
+            .push_back(StatusPublication {
+                pos,
+                epoch,
+                confirmed: None,
+            });
+        self.publish_status_changes(level)
+    }
+
+    /// Controlled transport fixture: the normal worker has already returned the
+    /// supplied owned result. Scheduling, FULL/light and callbacks stay real.
+    #[cfg(test)]
+    pub(crate) fn accept_test_terrain(
+        &self,
+        level: &Level,
+        task: u64,
+        terrain: crate::world::Terrain,
+    ) -> Result<()> {
+        let pos = terrain.pos;
+        let token = self.chunks.borrow().holders[&pos.pack()]
+            .generation
+            .current_task()
+            .filter(|token| token.id == task)
+            .expect("fixture has a scheduled task");
+        self.jobs
+            .borrow_mut()
+            .claim(&mut self.chunks.borrow_mut(), pos, token);
+        self.jobs.borrow_mut().worker_settled(task);
+        self.begin_full_promotion(task, terrain)?;
+        self.publish_generation_statuses();
+        self.publish_generation_skips(level)?;
+        self.publish_structure_updates(level)?;
+        Ok(())
+    }
 
     /// Exact error is retained for diagnostics; status futures carry the typed
     /// failure category rather than losing ownership of a failed continuation.
     fn retain_progress_failure(&self, error: anyhow::Error) -> LevelError {
+        eprintln!("Chunk pipeline failure: {error:?}");
         self.progress_failures.borrow_mut().push(error);
+        for holder in self.chunks.borrow_mut().holders.values_mut() {
+            holder.generation.fail_pending(AcquireFailure::Generation);
+        }
         LevelError::ChunkAcquisition(
             ChunkPos::ZERO,
             ChunkStatus::Full,
@@ -785,6 +848,13 @@ impl AcquireDriver for GenerationRuntime {
         self.status_result(handle)
     }
     fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError> {
+        if !self.progress_failures.borrow().is_empty() {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::Generation,
+            ));
+        }
         if self.run_distance_pass(level)? {
             return Ok(AcquireProgress::DistanceUpdates);
         }
