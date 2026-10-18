@@ -289,7 +289,7 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     base.first_tick = false;
     Ok(())
 }
-fn update_swimming<E: Entity + ?Sized>(
+fn update_swimming<E: super::Entity + ?Sized>(
     behavior: &E,
     entity: EntityRef,
     level: &mut Level,
