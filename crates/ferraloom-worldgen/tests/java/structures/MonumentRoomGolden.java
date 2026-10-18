@@ -28,7 +28,7 @@ public final class MonumentRoomGolden {
             var children=(List<?>)MonumentGolden.field(building,"childPieces");
             for(int childIndex=0;childIndex<children.size();childIndex++) {
                 var child=(StructurePiece)children.get(childIndex);String kind=child.getClass().getSimpleName();
-                if(!Set.of("OceanMonumentEntryRoom","OceanMonumentCoreRoom","OceanMonumentSimpleTopRoom","OceanMonumentSimpleRoom").contains(kind))continue;
+                if(!Set.of("OceanMonumentEntryRoom","OceanMonumentCoreRoom","OceanMonumentSimpleTopRoom","OceanMonumentSimpleRoom","OceanMonumentDoubleXRoom","OceanMonumentDoubleYRoom","OceanMonumentDoubleZRoom","OceanMonumentDoubleXYRoom","OceanMonumentDoubleYZRoom").contains(kind))continue;
                 var original=child.getBoundingBox();child.getBoundingBox().move(-original.minX(),64-original.minY(),-original.minZ());
                 for(int mode=0;mode<2;mode++)for(int clip=0;clip<2;clip++) {
                     int terrain=mode;var changed=new HashMap<BlockPos,BlockState>();var writes=new JsonArray();

@@ -199,6 +199,287 @@ impl RoomPlacer<'_, '_, '_, '_> {
             LIGHT,
         )
     }
+    fn double_horizontal(
+        &mut self,
+        graph: &RoomGraph,
+        id: usize,
+        along_x: bool,
+    ) -> Result<(), Error> {
+        let other = graph.neighbor(
+            id,
+            if along_x {
+                Direction::East
+            } else {
+                Direction::North
+            },
+        );
+        let room = graph.room(id);
+        let neighbor = graph.room(other);
+        let [width, depth] = if along_x { [16, 8] } else { [8, 16] };
+        if room.index / 25 > 0 {
+            self.floor(
+                if along_x { 8 } else { 0 },
+                if along_x { 0 } else { 8 },
+                neighbor.openings[Direction::Down as usize],
+            )?;
+            self.floor(0, 0, room.openings[Direction::Down as usize])?;
+        }
+        if room.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only([1, 4, 1], if along_x { [7, 4, 6] } else { [6, 4, 7] }, GRAY)?;
+        }
+        if neighbor.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only(
+                if along_x { [8, 4, 1] } else { [1, 4, 8] },
+                if along_x { [14, 4, 6] } else { [6, 4, 14] },
+                GRAY,
+            )?;
+        }
+        for y in (1..=3).rev() {
+            self.boxes(
+                &[
+                    ([0, y, 0], [0, y, depth - 1]),
+                    ([width - 1, y, 0], [width - 1, y, depth - 1]),
+                    ([1, y, 0], [width - 1, y, 0]),
+                    ([1, y, depth - 1], [width - 2, y, depth - 1]),
+                ],
+                if y == 2 { GRAY } else { LIGHT },
+            )?;
+        }
+        if along_x {
+            self.fill([5, 1, 0], [10, 1, 4], LIGHT)?;
+            self.fill([6, 2, 0], [9, 2, 3], GRAY)?;
+            self.fill([5, 3, 0], [10, 3, 4], LIGHT)?;
+            self.put([6, 2, 3], LAMP)?;
+            self.put([9, 2, 3], LAMP)?;
+            for (room, direction, a, b) in [
+                (room, Direction::South, [3, 1, 0], [4, 2, 0]),
+                (room, Direction::North, [3, 1, 7], [4, 2, 7]),
+                (room, Direction::West, [0, 1, 3], [0, 2, 4]),
+                (neighbor, Direction::South, [11, 1, 0], [12, 2, 0]),
+                (neighbor, Direction::North, [11, 1, 7], [12, 2, 7]),
+                (neighbor, Direction::East, [15, 1, 3], [15, 2, 4]),
+            ] {
+                if room.openings[direction as usize] {
+                    self.water(a, b)?;
+                }
+            }
+        } else {
+            self.boxes(
+                &[
+                    ([1, 1, 1], [1, 1, 2]),
+                    ([6, 1, 1], [6, 1, 2]),
+                    ([1, 3, 1], [1, 3, 2]),
+                    ([6, 3, 1], [6, 3, 2]),
+                    ([1, 1, 13], [1, 1, 14]),
+                    ([6, 1, 13], [6, 1, 14]),
+                    ([1, 3, 13], [1, 3, 14]),
+                    ([6, 3, 13], [6, 3, 14]),
+                    ([2, 1, 6], [2, 3, 6]),
+                    ([5, 1, 6], [5, 3, 6]),
+                    ([2, 1, 9], [2, 3, 9]),
+                    ([5, 1, 9], [5, 3, 9]),
+                    ([3, 2, 6], [4, 2, 6]),
+                    ([3, 2, 9], [4, 2, 9]),
+                    ([2, 2, 7], [2, 2, 8]),
+                    ([5, 2, 7], [5, 2, 8]),
+                ],
+                LIGHT,
+            )?;
+            for p in [[2, 2, 5], [5, 2, 5], [2, 2, 10], [5, 2, 10]] {
+                self.put(p, LAMP)?;
+            }
+            for p in [[2, 3, 5], [5, 3, 5], [2, 3, 10], [5, 3, 10]] {
+                self.put(p, LIGHT)?;
+            }
+            for (room, direction, a, b) in [
+                (room, Direction::South, [3, 1, 0], [4, 2, 0]),
+                (room, Direction::East, [7, 1, 3], [7, 2, 4]),
+                (room, Direction::West, [0, 1, 3], [0, 2, 4]),
+                (neighbor, Direction::North, [3, 1, 15], [4, 2, 15]),
+                (neighbor, Direction::West, [0, 1, 11], [0, 2, 12]),
+                (neighbor, Direction::East, [7, 1, 11], [7, 2, 12]),
+            ] {
+                if room.openings[direction as usize] {
+                    self.water(a, b)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    fn double_tall(&mut self, graph: &RoomGraph, id: usize, along_x: bool) -> Result<(), Error> {
+        let other = graph.neighbor(
+            id,
+            if along_x {
+                Direction::East
+            } else {
+                Direction::North
+            },
+        );
+        let room = graph.room(id);
+        let neighbor = graph.room(other);
+        let upper = graph.room(graph.neighbor(id, Direction::Up));
+        let other_upper = graph.room(graph.neighbor(other, Direction::Up));
+        if room.index / 25 > 0 {
+            self.floor(
+                if along_x { 8 } else { 0 },
+                if along_x { 0 } else { 8 },
+                neighbor.openings[Direction::Down as usize],
+            )?;
+            self.floor(0, 0, room.openings[Direction::Down as usize])?;
+        }
+        if upper.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only([1, 8, 1], if along_x { [7, 8, 6] } else { [6, 8, 7] }, GRAY)?;
+        }
+        if other_upper.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only(
+                if along_x { [8, 8, 1] } else { [1, 8, 8] },
+                if along_x { [14, 8, 6] } else { [6, 8, 14] },
+                GRAY,
+            )?;
+        }
+        let [w, d] = if along_x { [16, 8] } else { [8, 16] };
+        for y in 1..=7 {
+            self.boxes(
+                &[
+                    ([0, y, 0], [0, y, d - 1]),
+                    ([w - 1, y, 0], [w - 1, y, d - 1]),
+                    ([1, y, 0], [if along_x { 15 } else { 6 }, y, 0]),
+                    ([1, y, d - 1], [w - 2, y, d - 1]),
+                ],
+                if y == 2 || y == 6 { GRAY } else { LIGHT },
+            )?;
+        }
+        if along_x {
+            self.boxes(
+                &[
+                    ([2, 1, 3], [2, 7, 4]),
+                    ([3, 1, 2], [4, 7, 2]),
+                    ([3, 1, 5], [4, 7, 5]),
+                    ([13, 1, 3], [13, 7, 4]),
+                    ([11, 1, 2], [12, 7, 2]),
+                    ([11, 1, 5], [12, 7, 5]),
+                    ([5, 1, 3], [5, 3, 4]),
+                    ([10, 1, 3], [10, 3, 4]),
+                    ([5, 7, 2], [10, 7, 5]),
+                    ([5, 5, 2], [5, 7, 2]),
+                    ([10, 5, 2], [10, 7, 2]),
+                    ([5, 5, 5], [5, 7, 5]),
+                    ([10, 5, 5], [10, 7, 5]),
+                ],
+                LIGHT,
+            )?;
+            for p in [[6, 6, 2], [9, 6, 2], [6, 6, 5], [9, 6, 5]] {
+                self.put(p, LIGHT)?;
+            }
+            self.boxes(&[([5, 4, 3], [6, 4, 4]), ([9, 4, 3], [10, 4, 4])], LIGHT)?;
+            for p in [[5, 4, 2], [5, 4, 5], [10, 4, 2], [10, 4, 5]] {
+                self.put(p, LAMP)?;
+            }
+        } else {
+            for y in 1..=7 {
+                self.fill(
+                    [3, y, 7],
+                    [4, y, 8],
+                    if y == 2 || y == 6 { LAMP } else { BLACK },
+                )?;
+            }
+        }
+        for (near, far, y) in [(room, neighbor, 1), (upper, other_upper, 5)] {
+            if along_x {
+                for (room, direction, a, b) in [
+                    (near, Direction::South, [3, y, 0], [4, y + 1, 0]),
+                    (near, Direction::North, [3, y, 7], [4, y + 1, 7]),
+                    (near, Direction::West, [0, y, 3], [0, y + 1, 4]),
+                    (far, Direction::South, [11, y, 0], [12, y + 1, 0]),
+                    (far, Direction::North, [11, y, 7], [12, y + 1, 7]),
+                    (far, Direction::East, [15, y, 3], [15, y + 1, 4]),
+                ] {
+                    if room.openings[direction as usize] {
+                        self.water(a, b)?;
+                    }
+                }
+            } else {
+                for (room, direction, a, b) in [
+                    (near, Direction::South, [3, y, 0], [4, y + 1, 0]),
+                    (near, Direction::East, [7, y, 3], [7, y + 1, 4]),
+                    (near, Direction::West, [0, y, 3], [0, y + 1, 4]),
+                    (far, Direction::North, [3, y, 15], [4, y + 1, 15]),
+                    (far, Direction::West, [0, y, 11], [0, y + 1, 12]),
+                    (far, Direction::East, [7, y, 11], [7, y + 1, 12]),
+                ] {
+                    if !room.openings[direction as usize] {
+                        continue;
+                    }
+                    self.water(a, b)?;
+                    if y == 5 && matches!(direction, Direction::West | Direction::East) {
+                        let z = if a[2] == 3 { 2 } else { 10 };
+                        let (x0, x1) = if direction == Direction::East {
+                            (5, 6)
+                        } else {
+                            (1, 2)
+                        };
+                        let pillar_x = if direction == Direction::East { 6 } else { 1 };
+                        self.fill([x0, 4, z], [x1, 4, z + 3], LIGHT)?;
+                        self.fill([pillar_x, 1, z], [pillar_x, 3, z], LIGHT)?;
+                        self.fill([pillar_x, 1, z + 3], [pillar_x, 3, z + 3], LIGHT)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn double_y(&mut self, graph: &RoomGraph, id: usize) -> Result<(), Error> {
+        let room = graph.room(id);
+        let above = graph.room(graph.neighbor(id, Direction::Up));
+        if room.index / 25 > 0 {
+            self.floor(0, 0, room.openings[Direction::Down as usize])?;
+        }
+        if above.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only([1, 8, 1], [6, 8, 6], GRAY)?;
+        }
+        self.boxes(
+            &[
+                ([0, 4, 0], [0, 4, 7]),
+                ([7, 4, 0], [7, 4, 7]),
+                ([1, 4, 0], [6, 4, 0]),
+                ([1, 4, 7], [6, 4, 7]),
+                ([2, 4, 1], [2, 4, 2]),
+                ([1, 4, 2], [1, 4, 2]),
+                ([5, 4, 1], [5, 4, 2]),
+                ([6, 4, 2], [6, 4, 2]),
+                ([2, 4, 5], [2, 4, 6]),
+                ([1, 4, 5], [1, 4, 5]),
+                ([5, 4, 5], [5, 4, 6]),
+                ([6, 4, 5], [6, 4, 5]),
+            ],
+            LIGHT,
+        )?;
+        for (room, y) in [(room, 1), (above, 5)] {
+            for (direction, axis, side) in [
+                (Direction::South, false, 0),
+                (Direction::North, false, 7),
+                (Direction::West, true, 0),
+                (Direction::East, true, 7),
+            ] {
+                let pos = |n, level| {
+                    if axis {
+                        [side, level, n]
+                    } else {
+                        [n, level, side]
+                    }
+                };
+                if room.openings[direction as usize] {
+                    self.fill(pos(2, y), pos(2, y + 2), LIGHT)?;
+                    self.fill(pos(5, y), pos(5, y + 2), LIGHT)?;
+                    self.fill(pos(3, y + 2), pos(4, y + 2), LIGHT)?;
+                } else {
+                    self.fill(pos(0, y), pos(7, y + 2), LIGHT)?;
+                    self.fill(pos(0, y + 1), pos(7, y + 1), GRAY)?;
+                }
+            }
+        }
+        Ok(())
+    }
     fn simple(&mut self, graph: &RoomGraph, id: usize, design: i32) -> Result<(), Error> {
         let room = graph.room(id);
         if room.index / 25 > 0 {
@@ -437,6 +718,19 @@ impl MonumentRoom {
                 placer.entry(graph.room(self.room.expect("entry definition")).openings)
             }
             RoomKind::Core => placer.core(),
+            RoomKind::DoubleXY => {
+                placer.double_tall(graph, self.room.expect("double XY definition"), true)
+            }
+            RoomKind::DoubleYZ => {
+                placer.double_tall(graph, self.room.expect("double YZ definition"), false)
+            }
+            RoomKind::DoubleX => {
+                placer.double_horizontal(graph, self.room.expect("double X definition"), true)
+            }
+            RoomKind::DoubleZ => {
+                placer.double_horizontal(graph, self.room.expect("double Z definition"), false)
+            }
+            RoomKind::DoubleY => placer.double_y(graph, self.room.expect("double Y definition")),
             RoomKind::Simple { design } => {
                 placer.simple(graph, self.room.expect("simple definition"), design)
             }
