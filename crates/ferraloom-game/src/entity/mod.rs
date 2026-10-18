@@ -877,4 +877,4 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
 #[cfg(test)]
 mod predicate_facts;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

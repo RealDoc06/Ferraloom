@@ -321,7 +321,7 @@ mod tests {
     }
     #[test]
     fn shared_worldgen_removed_item_mount_keeps_native_riding_links() {
-        let mut level = level();
+        let level = level();
         let mut root = tag("minecraft:item", Uuid::new(0, 1));
         root.insert(
             "Passengers",
@@ -340,7 +340,7 @@ mod tests {
     }
     #[test]
     fn shared_worldgen_registration_publishes_tick_and_visible_indexes_immediately() {
-        let mut level = level();
+        let level = level();
         let pos = ChunkPos::new(0, 0);
         level
             .update_entity_chunk_status(pos, Visibility::Ticking)

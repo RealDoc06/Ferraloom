@@ -253,7 +253,13 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
         let base = level.entity_mut::<EntityData>(rider).unwrap();
         base.velocity = Vec3::new(1.0, 2.0, 3.0);
         base.fall_distance = 8.0;
-        level.tick_passenger(old, rider).unwrap();
+        level
+            .tick_passenger(
+                old,
+                rider,
+                &crate::level::tick_rate::TickRateManager::default(),
+            )
+            .unwrap();
         let base = level.entity::<EntityData>(rider).unwrap();
         let bits = |value: Vec3| {
             format!(

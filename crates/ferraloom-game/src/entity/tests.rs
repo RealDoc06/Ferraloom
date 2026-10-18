@@ -779,7 +779,7 @@ pub(super) fn tags(level: &mut Level) {
         .unwrap(),
     ));
 }
-pub(super) fn level(floor: bool) -> Level {
+pub(crate) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
 fn install_test_environment(level: &mut Level, fast_lava: bool) {
