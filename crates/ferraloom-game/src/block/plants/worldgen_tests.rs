@@ -15,6 +15,19 @@ use ferraloom_worldgen::{
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io::Read, path::Path, sync::Arc};
 
+// The original worldgen fixture adapter supplies storage only. Keep it here to
+// measure exactly which previously pending cases the real game bridge completes.
+struct StorageOnly;
+impl ferraloom_worldgen::region::WorldgenBlockBehavior for StorageOnly {
+    fn post_process_pos(
+        &self,
+        _state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        _position: [i32; 3],
+    ) -> Result<Option<[i32; 3]>, ferraloom_worldgen::Error> {
+        Ok(None)
+    }
+}
 fn cases() -> Vec<Value> {
     let mut bytes = Vec::new();
     flate2::read::GzDecoder::new(
@@ -143,6 +156,8 @@ fn replay(require_pending: bool) {
         .collect::<BTreeMap<_, _>>();
     let fixtures = cases();
     let mut passing = 0;
+    let mut unpended = 0;
+    let mut survival_unpended = 0;
     let mut pending = BTreeMap::<String, usize>::new();
     let mut coverage = BTreeMap::<&str, Coverage>::new();
     for case in &fixtures {
@@ -173,6 +188,44 @@ fn replay(require_pending: bool) {
                 continue;
             }
             Err(error) => panic!("{label}: {error}"),
+        };
+
+        let original_pending = {
+            let mut chunks = bases[case["terrain"].as_str().unwrap()].clone();
+            let origin = point(&case["origin"]);
+            let mut region = WorldGenRegion::new(
+                &mut chunks,
+                [origin[0] >> 4, origin[2] >> 4],
+                &[ChunkStatus::Features; 5],
+                4,
+                None,
+                &StorageOnly,
+                8675309,
+                63,
+            )
+            .unwrap();
+            region.set_has_skylight(true);
+            let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(
+                case["seed"].as_i64().unwrap(),
+            )));
+            let registry = Default::default();
+            let mut context = FeatureContext {
+                region: &mut region,
+                random: &mut random,
+                origin,
+                generator: &generator,
+                registry: &registry,
+            };
+            match feature.place(&mut context) {
+                Ok(_) => None,
+                Err(error) => {
+                    assert!(
+                        known_pending(&error.0),
+                        "unexpected storage-only error {label}: {error}"
+                    );
+                    Some(error.0)
+                }
+            }
         };
         let mut chunks = bases[case["terrain"].as_str().unwrap()].clone();
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(
@@ -250,9 +303,18 @@ fn replay(require_pending: bool) {
             case["fluid_ticks"],
             "fluid ticks {label}"
         );
+        if let Some(error) = original_pending {
+            unpended += 1;
+            if error == "block survival behavior is unavailable" {
+                survival_unpended += 1;
+            }
+        }
         passing += 1;
         coverage.passing += 1;
     }
+    eprintln!(
+        "Real game bridge un-pended {unpended} cases, including {survival_unpended} canSurvive cases"
+    );
     for (name, coverage) in coverage {
         eprintln!(
             "{name}: {} passing, {} pending",
@@ -264,8 +326,8 @@ fn replay(require_pending: bool) {
         pending.values().sum::<usize>()
     );
     assert!(
-        passing > 1600,
-        "real bridge should exceed storage-only baseline"
+        unpended > 2000,
+        "real shared survival should complete most pending vegetation fixtures"
     );
 }
 #[test]

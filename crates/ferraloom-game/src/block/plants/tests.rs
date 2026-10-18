@@ -225,7 +225,7 @@ fn survival_and_six_direction_shape_updates_match_vanilla_levels() {
         }
         count += 1;
     }
-    assert_eq!(count, 75040);
+    assert_eq!(count, 79520);
 }
 
 #[test]
@@ -391,5 +391,61 @@ fn plant_outline_and_empty_context_collision_shapes_match_vanilla() {
         assert_eq!(actual, f[6], "{line}");
         count += 1;
     }
-    assert_eq!(count, 3780);
+    assert_eq!(count, 3810);
+}
+
+#[test]
+fn bamboo_crown_rewrites_and_stage_draws_match_vanilla() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/bamboo.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let below = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+        let two = BlockState::from_id(f[3].parse().unwrap()).unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level.set_block_state(pos.below(1), below).unwrap();
+        level.set_block_state(pos.below(2), two).unwrap();
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[5].parse().unwrap())),
+            0,
+        );
+        bamboo::grow(
+            state,
+            pos,
+            f[4].parse().unwrap(),
+            &mut LevelAccessRef::Server(&mut level),
+        )
+        .unwrap();
+        let output = (-2..=1)
+            .map(|dy| {
+                level
+                    .get_block_state(pos.above(dy))
+                    .unwrap()
+                    .id()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(output, f[6], "{line}");
+        assert_eq!(
+            level.random().next_long(),
+            f[7].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 384);
 }

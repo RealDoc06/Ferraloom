@@ -1,5 +1,6 @@
 //! Shared vanilla vegetation, foliage and ground behavior, on live and generation levels.
 mod access;
+mod bamboo;
 pub mod bonemeal;
 mod column;
 mod coral;
@@ -9,6 +10,7 @@ pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable
 mod geometry;
 mod ground;
 mod growing;
+mod hanging_moss;
 mod leaves;
 mod moss;
 pub mod multiface;
@@ -69,6 +71,17 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         return Some(&geometry::PLANT_SHAPES);
     }
     let behavior: &'static dyn BlockBehavior = match block.class() {
+        C::HangingMossBlock
+            if matches!(
+                method,
+                M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes | M::Tick
+            ) =>
+        {
+            &hanging_moss::HANGING_MOSS
+        }
+
+        C::BambooStalkBlock | C::BambooSaplingBlock if method == M::RandomTick => &bamboo::BAMBOO,
+
         C::MushroomBlock if method == M::RandomTick => &spread::MUSHROOM,
         C::StemBlock if method == M::RandomTick => &spread::STEM,
         C::CactusBlock | C::SugarCaneBlock if method == M::RandomTick => &column::COLUMN_PLANT,

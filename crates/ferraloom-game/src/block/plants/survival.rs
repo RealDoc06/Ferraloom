@@ -13,6 +13,14 @@ pub static PLANT: Plant = Plant;
 pub fn supports(block: Block, method: BlockMethod) -> bool {
     use BlockClass as C;
     use BlockMethod as M;
+    if block == Block::MOSS_CARPET
+        && matches!(
+            method,
+            M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes
+        )
+    {
+        return true;
+    }
     let survival = matches!(
         block.class(),
         C::FlowerBlock
@@ -195,6 +203,7 @@ impl BlockBehavior for Plant {
             return Ok(below.block() == block && !upper(below));
         }
         match block.class() {
+            C::CarpetBlock => Ok(!level.get_block_state(below_pos)?.is_air()),
             C::MangrovePropaguleBlock if state.get(p::HANGING) == Some(true) => tagged(
                 level,
                 level.get_block_state(pos.above(1))?,

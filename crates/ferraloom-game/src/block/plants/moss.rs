@@ -168,3 +168,30 @@ pub fn place_at(
     }
     Ok(())
 }
+
+/// Port of createTopperWithSideChance with the bonemeal all-sides predicate.
+pub fn bonemeal_topper(
+    level: &LevelReaderRef<'_, '_>,
+    pos: BlockPos,
+) -> Result<BlockState, LevelError> {
+    let at = pos.above(1);
+    let old = level.get_block_state(at)?;
+    let is_carpet = old.block() == Block::PALE_MOSS_CARPET;
+    if (is_carpet && old.get(p::BOTTOM) == Some(true)) || (!is_carpet && !old.data().replaceable) {
+        return Ok(Block::AIR.default_state());
+    }
+    let next = updated(
+        Block::PALE_MOSS_CARPET
+            .default_state()
+            .with(p::BOTTOM, false)
+            .unwrap(),
+        at,
+        level,
+        true,
+    )?;
+    Ok(if has_faces(next) && next != old {
+        next
+    } else {
+        Block::AIR.default_state()
+    })
+}

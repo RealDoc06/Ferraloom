@@ -326,11 +326,13 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.leaves-decay-callback | Persistent/distance gates, drops and removal without destroy particles | `LeavesBlock#randomTick` | `plants::tests::leaf_decay_gates_preserve_persistent_and_connected_leaves` | - | todo |
 | blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
 
-| blocks.plants.support-and-neighbor-vectors | Plant survival and all six neighbor directions over relevant supports and light thresholds | Real vanilla `Level` methods | `plants::tests::survival_and_six_direction_shape_updates_match_vanilla_levels` (75,040 vectors) | pass | todo |
+| blocks.plants.support-and-neighbor-vectors | Plant survival and all six neighbor directions over relevant supports and light thresholds | Real vanilla `Level` methods | `plants::tests::survival_and_six_direction_shape_updates_match_vanilla_levels` (79,520 vectors) | pass | todo |
 | blocks.plants.worldgen-bridge | Replay vegetation placement through the real shared block registry | Vanilla feature fixtures | `plants::worldgen_tests::vegetation_fixtures_use_real_game_bridge` | pass | todo |
 
 | blocks.plants.crop-bonemeal-growth-speed | Crop bonemeal increments, torchflower conversion, moisture and crowding growth speed | `CropBlock`, `BeetrootBlock`, `TorchflowerCropBlock` on a real vanilla Level | `plants::tests::crop_bonemeal_and_growth_speed_match_real_vanilla_methods` | pass | todo |
 
 | blocks.plants.snow-melt-threshold | Snow melt uses block light above 11, drop hook and captured destruction context | `SnowLayerBlock#randomTick` | `plants::tests::snow_melts_only_above_eleven_block_light_and_emits_destroy_context` | - | todo |
 
-| blocks.plants.native-shapes | Plant outlines and collision shapes, including position offsets and all registered states | Real vanilla shape methods (3,780 vectors) | `plants::tests::plant_outline_and_empty_context_collision_shapes_match_vanilla` | pass | todo |
+| blocks.plants.native-shapes | Plant outlines and collision shapes, including position offsets and all registered states | Real vanilla shape methods (3,810 vectors) | `plants::tests::plant_outline_and_empty_context_collision_shapes_match_vanilla` | pass | todo |
+
+| blocks.plants.bamboo-crown | Bamboo crown rewrites, age propagation and stopping-stage RNG | `BambooStalkBlock#growBamboo` on a real vanilla Level (384 vectors) | `plants::tests::bamboo_crown_rewrites_and_stage_draws_match_vanilla` | pass | todo |

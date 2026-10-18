@@ -2,7 +2,7 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    crops, multiface_spreader, survival,
+    bamboo, crops, hanging_moss, moss, multiface_spreader, survival,
 };
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -62,7 +62,12 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     use BlockClass as C;
     matches!(
         block.class(),
-        C::CropBlock
+        C::MossyCarpetBlock
+            | C::HangingMossBlock
+            | C::BambooStalkBlock
+            | C::BambooSaplingBlock
+            | C::FireflyBushBlock
+            | C::CropBlock
             | C::BeetrootBlock
             | C::TorchflowerCropBlock
             | C::TallGrassBlock
@@ -76,7 +81,7 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     )
     .then_some(&PLANT_BONEMEAL)
 }
-fn inside_height(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> bool {
+pub(super) fn inside_height(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> bool {
     match level {
         LevelReaderRef::Server(level) => level
             .chunk(ferraloom_util::ChunkPos::containing(pos))
@@ -103,6 +108,31 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<bool, LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MossyCarpetBlock => {
+                Ok(state.get(p::BOTTOM) == Some(true)
+                    && !moss::bonemeal_topper(level, pos)?.is_air())
+            }
+
+            C::HangingMossBlock => {
+                let growth = hanging_moss::growth_position(state, pos, level)?;
+                Ok(level.get_block_state(growth)?.is_air() && inside_height(level, growth))
+            }
+
+            C::BambooSaplingBlock => {
+                Ok(level.get_block_state(pos.above(1))?.is_air()
+                    && inside_height(level, pos.above(1)))
+            }
+            C::BambooStalkBlock => {
+                let above = bamboo::height(level, pos, ferraloom_util::Direction::Up)?;
+                let below = bamboo::height(level, pos, ferraloom_util::Direction::Down)?;
+                let top = level.get_block_state(pos.above(above))?;
+                let growth = pos.above(above + 1);
+                Ok(above + below + 1 < 16
+                    && top.get(p::STAGE) != Some(1)
+                    && inside_height(level, growth)
+                    && level.get_block_state(growth)?.is_air())
+            }
+
             C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock => {
                 Ok(state.get(p::AGE).unwrap() < crops::max_age(state.block()))
             }
@@ -113,7 +143,7 @@ impl BonemealableBlock for PlantBonemeal {
                 && inside_height(level, pos.above(1))),
             C::SeagrassBlock => Ok(level.get_block_state(pos.above(1))?.block() == Block::WATER),
             C::CaveVinesBlock | C::CaveVinesPlantBlock => Ok(state.get(p::BERRIES) == Some(false)),
-            C::BushBlock => {
+            C::BushBlock | C::FireflyBushBlock => {
                 for &d in Plane::Horizontal.faces() {
                     let at = pos.relative(d, 1);
                     if level.get_block_state(at)?.is_air() && level.can_survive(state, at)? {
@@ -148,6 +178,45 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MossyCarpetBlock => {
+                let topper = moss::bonemeal_topper(&level.as_reader(), pos)?;
+                if !topper.is_air() {
+                    level.set_block(pos.above(1), topper, UpdateFlags::ALL)?;
+                }
+            }
+
+            C::HangingMossBlock => {
+                let at = hanging_moss::growth_position(state, pos, &level.as_reader())?;
+                if level.get_block_state(at)?.is_air() {
+                    level.set_block(at, state.with(p::TIP, true).unwrap(), UpdateFlags::ALL)?;
+                }
+            }
+
+            C::BambooSaplingBlock => bamboo::grow_sapling(pos, level)?,
+            C::BambooStalkBlock => {
+                let mut above =
+                    bamboo::height(&level.as_reader(), pos, ferraloom_util::Direction::Up)?;
+                let below =
+                    bamboo::height(&level.as_reader(), pos, ferraloom_util::Direction::Down)?;
+                let mut total = above + below + 1;
+                let count = 1 + level.random()?.next_int_bound(2);
+                for _ in 0..count {
+                    let at = pos.above(above);
+                    let state = level.get_block_state(at)?;
+                    let growth = at.above(1);
+                    if total >= 16
+                        || state.get(p::STAGE) == Some(1)
+                        || !level.get_block_state(growth)?.is_air()
+                        || !inside_height(&level.as_reader(), growth)
+                    {
+                        return Ok(());
+                    }
+                    bamboo::grow(state, at, total, level)?;
+                    above += 1;
+                    total += 1;
+                }
+            }
+
             C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock => {
                 crops::grow_crops(state, pos, level)?
             }
@@ -179,7 +248,7 @@ impl BonemealableBlock for PlantBonemeal {
                     UpdateFlags::CLIENTS,
                 )?;
             }
-            C::BushBlock => {
+            C::BushBlock | C::FireflyBushBlock => {
                 let mut directions = Plane::Horizontal.faces().to_vec();
                 for i in (2..=directions.len()).rev() {
                     let j = level.random()?.next_int_bound(i as i32) as usize;

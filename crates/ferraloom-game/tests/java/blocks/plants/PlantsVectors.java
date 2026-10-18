@@ -34,7 +34,7 @@ public final class PlantsVectors {
             Blocks.TALL_SEAGRASS,Blocks.SEA_PICKLE,Blocks.TALL_GRASS,Blocks.LARGE_FERN,Blocks.SUNFLOWER,
             Blocks.HANGING_ROOTS,Blocks.SPORE_BLOSSOM,Blocks.BIG_DRIPLEAF,Blocks.BIG_DRIPLEAF_STEM,Blocks.SMALL_DRIPLEAF,
             Blocks.PINK_PETALS,Blocks.LEAF_LITTER,Blocks.FIREFLY_BUSH,Blocks.SNOW,Blocks.DEAD_TUBE_CORAL,
-            Blocks.DEAD_TUBE_CORAL_FAN,Blocks.DEAD_TUBE_CORAL_WALL_FAN,Blocks.PALE_MOSS_CARPET,Blocks.GLOW_LICHEN,Blocks.VINE);
+            Blocks.DEAD_TUBE_CORAL_FAN,Blocks.DEAD_TUBE_CORAL_WALL_FAN,Blocks.PALE_MOSS_CARPET,Blocks.GLOW_LICHEN,Blocks.VINE,Blocks.PALE_HANGING_MOSS,Blocks.MOSS_CARPET,Blocks.OPEN_EYEBLOSSOM,Blocks.CLOSED_EYEBLOSSOM);
         List<Block> supports=List.of(Blocks.AIR,Blocks.STONE,Blocks.DIRT,Blocks.GRASS_BLOCK,Blocks.COARSE_DIRT,Blocks.ROOTED_DIRT,
             Blocks.PODZOL,Blocks.MYCELIUM,Blocks.FARMLAND,Blocks.SAND,Blocks.RED_SAND,Blocks.SOUL_SAND,Blocks.NETHERRACK,
             Blocks.CRIMSON_NYLIUM,Blocks.WARPED_NYLIUM,Blocks.MOSS_BLOCK,Blocks.PALE_MOSS_BLOCK,Blocks.CLAY,Blocks.MUD,
@@ -102,6 +102,18 @@ public final class PlantsVectors {
                 float speed=(Float)growthSpeed.invoke(null,block,level,pos);
                 System.out.println("speed\t"+Block.getId(block.defaultBlockState())+"\t"+moisture+"\t"+pattern+"\t"+Float.floatToIntBits(speed));
             }
+        }
+        var growBamboo=BambooStalkBlock.class.getDeclaredMethod("growBamboo",BlockState.class,Level.class,BlockPos.class,RandomSource.class,int.class);
+        growBamboo.setAccessible(true);
+        for(int age=0;age<=1;age++)for(var leaves:net.minecraft.world.level.block.state.properties.BambooLeaves.values())for(boolean twoBelow:new boolean[]{false,true})for(int height:new int[]{1,10,11,15})for(int seed=0;seed<8;seed++){
+            level.chunks.clear();level.trace.clear();level.getRandom().setSeed(seed);
+            var state=Blocks.BAMBOO.defaultBlockState().setValue(BlockStateProperties.AGE_1,age);
+            var below=Blocks.BAMBOO.defaultBlockState().setValue(BlockStateProperties.BAMBOO_LEAVES,leaves);
+            var two=twoBelow?Blocks.BAMBOO.defaultBlockState():Blocks.AIR.defaultBlockState();
+            level.getChunkAt(pos).setBlockState(pos,state,816);level.getChunkAt(pos).setBlockState(pos.below(),below,816);level.getChunkAt(pos).setBlockState(pos.below(2),two,816);
+            growBamboo.invoke(Blocks.BAMBOO,state,level,pos,level.getRandom(),height);
+            var output=new ArrayList<String>();for(int dy=-2;dy<=1;dy++)output.add(""+Block.getId(level.getBlockState(pos.above(dy))));
+            System.out.println("bamboo-grow\t"+Block.getId(state)+"\t"+Block.getId(below)+"\t"+Block.getId(two)+"\t"+height+"\t"+seed+"\t"+String.join(",",output)+"\t"+level.getRandom().nextLong());
         }
     }
 }
