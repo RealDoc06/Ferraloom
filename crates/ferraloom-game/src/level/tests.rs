@@ -1628,7 +1628,7 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
     level.set_unported_behavior(UnportedBehavior::Warn);
     let pos = BlockPos::new(8, 0, 8);
     level
-        .set_block_state(pos, Block::SNOW.default_state())
+        .set_block_state(pos, Block::CANDLE.default_state())
         .unwrap();
     let stack = ItemStack::default();
     assert!(matches!(
@@ -1640,7 +1640,7 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
             Direction::Up
         ),
         Err(LevelError::UnsupportedBlockMethod(
-            Block::SNOW,
+            Block::CANDLE,
             BlockMethod::CanBeReplaced
         ))
     ));
