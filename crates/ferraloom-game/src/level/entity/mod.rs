@@ -294,6 +294,9 @@ impl Level {
     pub fn min_build_height(&self) -> i32 {
         self.region().min_y
     }
+    pub fn max_build_height(&self) -> i32 {
+        self.region().max_y - 1
+    }
 
     pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
         self.region_mut().entities.movement_effects.push(effect);
