@@ -185,7 +185,7 @@ impl LootPoolEntryContainer {
                         })
                         .collect::<Result<Vec<_>>>()?,
                     ItemSet::Named(id) => {
-                        let tags = c.facts.item_tags()?;
+                        let tags = c.facts().item_tags()?;
                         let key = id.to_string().parse().map_err(super::LootError::from)?;
                         let tag = tags.resolve_name(&key).ok_or_else(|| {
                             super::LootError::MissingReference {
@@ -282,8 +282,10 @@ impl ExpandedEntry {
                 }
             }
             ExpandedKind::Dynamic(id) => {
-                for stack in c.facts.dynamic_drops(id)? {
+                let mut ordinal = 0;
+                while let Some(stack) = c.runtime.dynamic_drop_next(id, ordinal, c.params)? {
                     decorated(stack, c)?;
+                    ordinal += 1;
                 }
             }
         }

@@ -1,6 +1,7 @@
 use super::function::stack_count;
 use super::{ContextFloatProvider, EvalContext, Holder, Identifier, LootData, Result, codec};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent, ItemStack};
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 /// Port of ApplyBonusCount's three formula codecs and evaluation.
@@ -42,7 +43,7 @@ impl BonusFormula {
         let count = match self {
             Self::OreDrops => {
                 if level > 0 {
-                    let bonus = (c.random.next_int_bound(level.wrapping_add(2)) - 1).max(0);
+                    let bonus = (c.random().next_int_bound(level.wrapping_add(2)) - 1).max(0);
                     count.wrapping_mul(bonus + 1)
                 } else {
                     count
@@ -53,12 +54,12 @@ impl BonusFormula {
                 if bound <= 0 {
                     return Err(codec::error("nonpositive bonus bound"));
                 }
-                count.wrapping_add(c.random.next_int_bound(bound))
+                count.wrapping_add(c.random().next_int_bound(bound))
             }
             Self::BinomialWithBonusCount { extra, probability } => {
                 let mut result = count;
                 for _ in 0..level.wrapping_add(*extra) {
-                    if c.random.next_float() < *probability {
+                    if c.random().next_float() < *probability {
                         result = result.wrapping_add(1);
                     }
                 }
@@ -94,7 +95,7 @@ pub(crate) fn enchanted_count_increase(
     let Some(entity) = c.params.attacking_entity else {
         return Ok(stack);
     };
-    let level = c.facts.entity_enchantment_level(entity, enchantment)?;
+    let level = c.facts().entity_enchantment_level(entity, enchantment)?;
     if level == 0 {
         return Ok(stack);
     }

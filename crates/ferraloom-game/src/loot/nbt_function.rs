@@ -41,7 +41,7 @@ impl CopyCustomData {
         })
     }
     pub(crate) fn apply(&self, mut stack: ItemStack, c: &EvalContext<'_>) -> Result<ItemStack> {
-        let Some(source) = self.source.get(c.params, c.facts)? else {
+        let Some(source) = self.source.get(c.params, c.facts())? else {
             return Ok(stack);
         };
         let mut result = None;
