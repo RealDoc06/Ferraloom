@@ -70,6 +70,19 @@ impl Default for TicketStorage {
     }
 }
 impl TicketStorage {
+    /// PrepareSpawnTask's addTicketWithRadius(PLAYER_SPAWN, pos, 3). Loading
+    /// reaches FULL through radius three; this ticket never enables simulation.
+    /// Ready#keepAlive calls it again to refresh the native twenty-tick timeout.
+    pub fn add_player_spawn(&mut self, pos: ChunkPos, ticket_tick: u64) {
+        self.add(
+            pos,
+            Ticket {
+                kind: TicketType::PlayerSpawn,
+                level: 30,
+                expires: Some(ticket_tick.wrapping_add(20)),
+            },
+        );
+    }
     pub fn add(&mut self, pos: ChunkPos, ticket: Ticket) {
         let tickets = self.tickets.entry(pos.pack()).or_insert_with(|| {
             self.traversal.insert(pos.pack());
