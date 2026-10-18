@@ -6,7 +6,8 @@
       "uuid": "00000000-0000-0000-0000-000000000001",
       "x": 32.0,
       "alive": true,
-      "tag": "other"
+      "tag": "other",
+      "team": false
     },
     {
       "name": "NearCow",
@@ -14,7 +15,9 @@
       "uuid": "00000000-0000-0000-0000-000000000002",
       "x": 1.0,
       "alive": true,
-      "tag": "pet"
+      "tag": "pet",
+      "team": true,
+      "score": 7
     },
     {
       "name": "FarItem",
@@ -22,7 +25,8 @@
       "uuid": "00000000-0000-0000-0000-000000000003",
       "x": 17.0,
       "alive": true,
-      "tag": "other"
+      "tag": "other",
+      "team": false
     },
     {
       "name": "DeadCow",
@@ -30,7 +34,8 @@
       "uuid": "00000000-0000-0000-0000-000000000004",
       "x": 2.0,
       "alive": false,
-      "tag": "other"
+      "tag": "other",
+      "team": false
     },
     {
       "name": "Bob",
@@ -38,7 +43,9 @@
       "uuid": "00000000-0000-0000-0000-000000000005",
       "x": 0.25,
       "alive": true,
-      "tag": "other"
+      "tag": "other",
+      "team": true,
+      "score": 0
     }
   ],
   "vectors": [
@@ -313,6 +320,133 @@
       "players_only": true,
       "selected": [
         5
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        2,
+        5
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[team\u003d]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        1,
+        3
+      ]
+    },
+    {
+      "selector": "@e[team\u003d]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": [
+        1
+      ]
+    },
+    {
+      "selector": "@e[team\u003d!mixed]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        1,
+        3
+      ]
+    },
+    {
+      "selector": "@e[team\u003d!mixed]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": [
+        1
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d7..}]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        2
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d7..}]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d0}]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d0}]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{missing\u003d0..}]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{missing\u003d0..}]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[team\u003dmixed,scores\u003d{selection\u003d7}]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        2
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed,scores\u003d{selection\u003d7}]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{}]",
+      "source_entity": 1,
+      "players_only": false,
+      "selected": [
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{}]",
+      "source_entity": 1,
+      "players_only": true,
+      "selected": [
+        5,
+        1
       ]
     },
     {
@@ -658,6 +792,133 @@
       "players_only": true,
       "selected": [
         5
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        2,
+        5
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[team\u003d]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        1,
+        3
+      ]
+    },
+    {
+      "selector": "@e[team\u003d]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": [
+        1
+      ]
+    },
+    {
+      "selector": "@e[team\u003d!mixed]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        1,
+        3
+      ]
+    },
+    {
+      "selector": "@e[team\u003d!mixed]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": [
+        1
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d7..}]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        2
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d7..}]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d0}]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{selection\u003d0}]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": [
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{missing\u003d0..}]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{missing\u003d0..}]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[team\u003dmixed,scores\u003d{selection\u003d7}]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        2
+      ]
+    },
+    {
+      "selector": "@e[team\u003dmixed,scores\u003d{selection\u003d7}]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": []
+    },
+    {
+      "selector": "@e[scores\u003d{}]",
+      "source_entity": 2,
+      "players_only": false,
+      "selected": [
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "selector": "@e[scores\u003d{}]",
+      "source_entity": 2,
+      "players_only": true,
+      "selected": [
+        5,
+        1
       ]
     },
     {

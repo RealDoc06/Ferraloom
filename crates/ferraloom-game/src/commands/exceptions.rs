@@ -4,10 +4,7 @@ use ferraloom_brigadier::{
     StringReader,
 };
 use ferraloom_protocol::chat::{Argument, Component, Numeric};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, OnceLock},
-};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct TranslatedMessage {
@@ -19,57 +16,7 @@ impl Message for TranslatedMessage {
         &self.rendered
     }
 }
-pub fn translations() -> &'static BTreeMap<String, String> {
-    static TRANSLATIONS: OnceLock<BTreeMap<String, String>> = OnceLock::new();
-    TRANSLATIONS.get_or_init(|| {
-        serde_json::from_str(include_str!("vanilla/translations.json"))
-            .expect("vanilla command translations")
-    })
-}
-/// Port of TranslatableContents' %s, %n$s and %% substitutions for plain error text.
-pub fn render(key: &str, args: &[String]) -> String {
-    let template = translations().get(key).map_or(key, String::as_str);
-    let mut result = String::new();
-    let mut chars = template.chars().peekable();
-    let mut next_arg = 0;
-    while let Some(c) = chars.next() {
-        if c != '%' {
-            result.push(c);
-            continue;
-        }
-        if chars.peek() == Some(&'%') {
-            chars.next();
-            result.push('%');
-            continue;
-        }
-        let mut digits = String::new();
-        while chars.peek().is_some_and(char::is_ascii_digit) {
-            digits.push(chars.next().unwrap());
-        }
-        let index = if chars.peek() == Some(&'$') {
-            chars.next();
-            digits.parse::<usize>().unwrap_or(1).saturating_sub(1)
-        } else {
-            let i = next_arg;
-            next_arg += 1;
-            i
-        };
-        if chars.next() == Some('s') {
-            result.push_str(args.get(index).map_or("", String::as_str));
-        } else {
-            result.push('%');
-            result.push_str(&digits);
-        }
-    }
-    result
-}
-/// Float.toString formatting used by translatableEscape's numeric arguments.
-pub fn java_float_string(value: f32) -> String {
-    // The Java-checked SNBT printer shares Float.toString's exact decimal selection.
-    let mut text = ferraloom_nbt::Tag::Float(value).to_string();
-    text.pop(); // FloatTag appends the SNBT type suffix after the number.
-    text
-}
+pub use crate::language::{java_float_string, plain_text, render, translations};
 
 pub fn translated(key: &str, args: &[String]) -> TranslatedMessage {
     TranslatedMessage {
@@ -176,41 +123,6 @@ fn parsing_number_name(kind: &str) -> String {
     }
 }
 
-/// Server-side rendering for console feedback; clients receive the original component.
-pub fn plain_text(component: &Component) -> String {
-    use ferraloom_protocol::chat::{Argument, Contents};
-    let mut result = match &component.contents {
-        Contents::Text(text) => text.clone(),
-        Contents::Translatable { key, args, .. } => render(
-            key,
-            &args
-                .iter()
-                .map(|arg| match arg {
-                    Argument::String(s) => s.clone(),
-                    Argument::Number(n) => match n {
-                        ferraloom_protocol::chat::Numeric::Byte(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Short(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Int(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Long(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Float(v) => java_float_string(v.0),
-                        ferraloom_protocol::chat::Numeric::Double(v) => {
-                            let mut text = ferraloom_nbt::Tag::Double(v.0).to_string();
-                            text.pop();
-                            text
-                        }
-                    },
-                    Argument::Boolean(v) => v.to_string(),
-                    Argument::Component(c) => plain_text(c),
-                })
-                .collect::<Vec<_>>(),
-        ),
-        _ => String::new(),
-    };
-    for extra in &component.extra {
-        result.push_str(&plain_text(extra));
-    }
-    result
-}
 /// Port of Commands#finishParsing's second failure line and its suggest-command action.
 pub fn syntax_context(error: &CommandSyntaxException, command: &str) -> Option<Component> {
     use ferraloom_protocol::chat::{ClickEvent, TextColor};

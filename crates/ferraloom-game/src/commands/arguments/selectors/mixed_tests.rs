@@ -5,7 +5,7 @@ use crate::{
     level::{Level, Region, entity::Visibility},
 };
 use ferraloom_data::EntityType;
-use ferraloom_protocol::chat::{Component, Contents};
+use ferraloom_protocol::chat::Component;
 use ferraloom_util::ChunkPos;
 
 #[derive(serde::Deserialize)]
@@ -16,6 +16,8 @@ struct Definition {
     x: f64,
     alive: bool,
     tag: String,
+    team: bool,
+    score: Option<i32>,
 }
 #[derive(serde::Deserialize)]
 struct Vector {
@@ -75,20 +77,7 @@ impl EntityQuery for Query {
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
         let state = self.level.entity_state(entity).ok()?;
         let base = state.as_entity();
-        let name = match state {
-            EntityState::Player(player) => player.name.as_str(),
-            _ => {
-                let component = base
-                    .entity_data
-                    .get(crate::entity::synched_data::CUSTOM_NAME)
-                    .as_ref()
-                    .unwrap();
-                let Contents::Text(name) = &component.contents else {
-                    panic!("fixture custom name must be literal");
-                };
-                name.as_str()
-            }
-        };
+        let name = self.level.entity_plain_text_name(entity).ok()?;
         Some(SelectorEntity {
             name: name.into(),
             uuid: base.uuid,
@@ -107,27 +96,15 @@ impl EntityQuery for Query {
         entity: EntityRef,
         predicate: &SelectorPredicate,
     ) -> Result<bool, CommandSyntaxException> {
-        let state = self.state(entity);
-        let base = state.as_entity();
-        Ok(match predicate {
-            SelectorPredicate::Alive => state.as_living().map_or(!base.removed, |living| {
-                !base.removed && living.health() > 0.
-            }),
-            SelectorPredicate::Name { value, inverted } => {
-                (self.info(entity).unwrap().name == value.as_str()) != *inverted
-            }
-            SelectorPredicate::Type {
-                value,
-                inverted,
-                tag,
-            } => {
-                assert!(!tag);
-                (state.entity_type().name() == value) != *inverted
-            }
-            SelectorPredicate::Tag { value, inverted } => base.tags.contains(value) != *inverted,
-            _ => panic!("fixture predicate not expected: {predicate:?}"),
-        })
+        live_entity_matches(
+            &self.level,
+            self.level.shared().unwrap().scoreboard.scoreboard(),
+            &Default::default(),
+            entity,
+            predicate,
+        )
     }
+
     fn shuffle(&mut self, _: &mut [(EntityRef, f64)]) {
         panic!("mixed order fixture excludes random order");
     }
@@ -146,10 +123,34 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
             .update_entity_chunk_status(ChunkPos::new(x, 0), Visibility::Ticking)
             .unwrap();
     }
+    let mut scoreboard = crate::scoreboard::Scoreboard::default();
+    scoreboard.add_player_team("mixed");
+    scoreboard
+        .add_objective(
+            "selection".into(),
+            crate::scoreboard::Objective::new(
+                crate::scoreboard::ObjectiveCriteria::by_name("dummy").unwrap(),
+                Component::literal("selection"),
+            ),
+        )
+        .unwrap();
     for (index, definition) in vectors.entities.into_iter().enumerate() {
         let kind = EntityType::from_name(&definition.kind).unwrap();
         let handle = EntityRef(index as u64 + 1);
         let uuid = parse_uuid(&definition.uuid).unwrap();
+        let holder = if kind == EntityType::PLAYER {
+            definition.name.clone()
+        } else {
+            uuid.to_string()
+        };
+        if definition.team {
+            scoreboard.add_player_to_team(&holder, "mixed").unwrap();
+        }
+        if let Some(score) = definition.score {
+            scoreboard
+                .set_score(&holder, "selection", score, None, false)
+                .unwrap();
+        }
         let mut state = match kind {
             EntityType::PLAYER => EntityState::Player(Box::new(ServerPlayer::new(
                 uuid,
@@ -180,6 +181,10 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         }
         level.add_entity(handle, state).unwrap();
     }
+    let shared = crate::ServerShared {
+        scoreboard: crate::scoreboard::ServerScoreboard::new(scoreboard),
+    };
+    level.install_shared(Box::new(shared));
     let mut query = Query {
         level,
         players: vec![EntityRef(5), EntityRef(1)],
