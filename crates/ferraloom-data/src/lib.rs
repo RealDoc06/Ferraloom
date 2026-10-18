@@ -239,6 +239,13 @@ impl FluidState {
     }
 }
 
+/// Port of RenderShape. Block#getRenderShape takes only the block state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderShape {
+    Invisible,
+    Model,
+}
+
 /// Port of BlockBehaviour.BlockStateBase's cached state facts.
 #[derive(Clone, Copy, Debug)]
 pub struct BlockStateData {
@@ -261,6 +268,7 @@ pub struct BlockStateData {
     pub replaceable: bool,
     pub push_reaction: PushReaction,
     pub sound: &'static SoundType,
+    pub render_shape: RenderShape,
     pub fluid: FluidState,
 }
 
@@ -272,9 +280,21 @@ pub enum Rarity {
     Epic,
 }
 
+/// Immutable ItemStackTemplate fact; component codecs belong to protocol.
+#[derive(Clone, Copy, Debug)]
+pub struct CraftingRemainder {
+    pub item: Item,
+    pub count: i32,
+    pub components_json: &'static str,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ItemData {
     pub max_stack_size: u32,
+    /// Item#getCraftingRemainder, independent of USE_REMAINDER.
+    pub crafting_remainder: Option<CraftingRemainder>,
+    /// BannerItem#getColor. None for all non-banner items.
+    pub banner_color: Option<&'static str>,
     pub max_damage: u32,
     pub rarity: Rarity,
     pub block: Option<Block>,
@@ -294,6 +314,42 @@ pub enum MobCategory {
     Misc,
 }
 
+/// Native EntityAttachment order, used by EntityDimensions' immutable points.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EntityAttachment {
+    Passenger,
+    Vehicle,
+    NameTag,
+    WardenChest,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityAttachments {
+    points: [&'static [ferraloom_util::Vec3]; 4],
+}
+impl EntityAttachments {
+    pub const fn points(self, attachment: EntityAttachment) -> &'static [ferraloom_util::Vec3] {
+        self.points[attachment as usize]
+    }
+}
+
+/// Native RangedAttribute limits; None on AttributeData preserves an unbounded
+/// base Attribute rather than inventing minimum and maximum values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeRange {
+    pub min: f64,
+    pub max: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeData {
+    pub default_value: f64,
+    pub range: Option<AttributeRange>,
+    pub syncable: bool,
+}
+impl registries::attribute::Id {
+    pub const fn data(self) -> &'static AttributeData {
+        &ATTRIBUTE_DATA[self.protocol_id() as usize]
+    }
+}
 #[derive(Clone, Copy, Debug)]
 pub struct EntityTypeData {
     pub width: f32,
@@ -303,9 +359,11 @@ pub struct EntityTypeData {
     pub category: MobCategory,
     pub tracking_range: u32,
     pub update_interval: u32,
+    pub track_deltas: bool,
     pub fire_immune: bool,
     pub summonable: bool,
     pub attributes: &'static [(registries::attribute::Id, f64)],
+    pub attachments: EntityAttachments,
 }
 
 include!(concat!(env!("OUT_DIR"), "/data.rs"));

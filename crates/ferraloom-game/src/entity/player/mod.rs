@@ -4,7 +4,7 @@ pub use drop_item::drop_item;
 pub mod equipment;
 pub mod inventory;
 use crate::{
-    entity::{EntityData, EntityDataView, EntityState, LivingEntity},
+    entity::{Avatar, EntityData, EntityDataView, EntityState},
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
@@ -38,8 +38,10 @@ impl GameType {
 /// Port of ServerPlayer's join, position, game-mode and persistence state.
 #[derive(Debug)]
 pub struct ServerPlayer {
-    pub parent: LivingEntity,
+    pub parent: Avatar,
     pub inventory: inventory::Inventory,
+    pub menus: crate::inventory::MenuSession,
+    pub recipe_book: crate::crafting::ServerRecipeBook,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -47,6 +49,7 @@ pub struct ServerPlayer {
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
+    pub teleport: super::teleport::TeleportState,
     pub first_good: Vec3,
     pub last_good: Vec3,
     pub received_moves: u32,
@@ -77,29 +80,38 @@ impl ServerPlayer {
         game_mode: GameType,
     ) -> Self {
         Self {
-            parent: LivingEntity {
-                equipment: Default::default(),
-                parent: {
-                    let mut base =
-                        EntityData::new(ferraloom_data::EntityType::PLAYER, network_id, 0);
-                    base.uuid = uuid;
-                    base.set_pos(position);
-                    base
-                },
-                health: 20.,
-                last_hurt: 0.,
-                damage_cooldown_time: 0,
-                hurt_time: 0,
-                hurt_duration: 0,
+            parent: {
+                let mut base = EntityData::from_random(
+                    ferraloom_data::EntityType::PLAYER,
+                    network_id,
+                    crate::level::entity::new_entity_random(),
+                );
+                base.uuid = uuid;
+                base.set_pos(position);
+                let mut avatar = Avatar::with_parent(base);
+                use super::synched_data as data;
+                use ferraloom_protocol::{codec::VarInt, entity_data::OptionalUnsignedInt};
+                avatar.entity_data.define(data::PLAYER_ABSORPTION, 0.0);
+                avatar.entity_data.define(data::PLAYER_SCORE, VarInt(0));
+                avatar
+                    .entity_data
+                    .define(data::SHOULDER_PARROT_LEFT, OptionalUnsignedInt(None));
+                avatar
+                    .entity_data
+                    .define(data::SHOULDER_PARROT_RIGHT, OptionalUnsignedInt(None));
+                avatar
             },
             name,
             inventory: Default::default(),
+            menus: Default::default(),
+            recipe_book: Default::default(),
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
+            teleport: Default::default(),
             first_good: position,
             last_good: position,
             received_moves: 0,
@@ -127,10 +139,39 @@ impl ServerPlayer {
         &mut self,
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
+        if tag.contains_key("recipeBook") {
+            return Err(super::persistence::EntityLoadError::RecipeManagerRequired);
+        }
+        self.load_player_data(tag)
+    }
+
+    /// Port of ServerPlayer#readAdditionalSaveData's recipe hydration against the
+    /// live manager. Optional malformed recipeBook data is diagnosed and skipped
+    /// as ValueInput#read does, without replacing the existing canonical book.
+    pub fn try_load_with_recipes(
+        &mut self,
+        tag: CompoundTag,
+        manager: &crate::crafting::RecipeManager,
+    ) -> Result<(), super::persistence::EntityLoadError> {
+        self.load_player_data(tag)?;
+        if let Some(nbt) = self.parent.parent.saved.get("recipeBook")
+            && let Err(error) = self.recipe_book.load_untrusted(nbt, manager)
+        {
+            eprintln!(
+                "Failed to load recipeBook for player {}: {error}",
+                self.uuid
+            );
+        }
+        Ok(())
+    }
+
+    fn load_player_data(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
-        self.parent.health = self.saved.get_float_or("Health", 20.0);
         let inventory = self
             .saved
             .get_list("Inventory")
@@ -139,11 +180,6 @@ impl ServerPlayer {
         let selected = self.saved.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
-        self.parent.equipment = self
-            .saved
-            .get("equipment")
-            .and_then(|v| equipment::EntityEquipment::from_tag(v).ok())
-            .unwrap_or_default();
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
@@ -151,6 +187,7 @@ impl ServerPlayer {
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
     pub fn save(&self) -> CompoundTag {
         let mut tag = self.parent.parent.save_without_id();
+        tag.insert("recipeBook", self.recipe_book.to_nbt());
         tag.insert("DataVersion", Tag::Int(5023));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
@@ -175,7 +212,7 @@ impl ServerPlayer {
             Tag::List(ListTag(vec![Tag::Float(self.yaw), Tag::Float(self.pitch)])),
         );
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
-        tag.insert("Health", Tag::Float(self.parent.health));
+        self.parent.parent.add_additional_save_data(&mut tag);
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
         tag.insert(
             "Inventory",
@@ -185,18 +222,6 @@ impl ServerPlayer {
             "SelectedItemSlot",
             Tag::Int(self.inventory.selected_slot() as i32),
         );
-        tag.remove("equipment");
-        if !self.parent.equipment.is_empty() {
-            tag.insert(
-                "equipment",
-                Tag::Compound(
-                    self.parent
-                        .equipment
-                        .save()
-                        .expect("canonical equipment stacks"),
-                ),
-            );
-        }
         tag.insert("foodLevel", Tag::Int(20));
         tag.insert("foodSaturationLevel", Tag::Float(5.));
         let creative = matches!(self.game_mode, GameType::Creative | GameType::Spectator);
@@ -217,7 +242,7 @@ impl ServerPlayer {
 }
 /// Embedded-parent projection preserving the bring-up's public field access.
 impl std::ops::Deref for ServerPlayer {
-    type Target = LivingEntity;
+    type Target = Avatar;
     fn deref(&self) -> &Self::Target {
         &self.parent
     }
@@ -485,6 +510,87 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn y_head_rot(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.y_head_rot)
+    }
+    fn dimensions(
+        &self,
+        entity: crate::entity::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<crate::entity::EntityDimensions, LevelError> {
+        super::living::dimensions(self, entity, pose, level)
+    }
+    fn default_dimensions(
+        &self,
+        _entity: crate::entity::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        _level: &Level,
+    ) -> Result<crate::entity::EntityDimensions, LevelError> {
+        Ok(Avatar::default_dimensions(pose))
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: crate::entity::EntityRef,
+        passenger: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<Vec3, LevelError> {
+        super::living::passenger_riding_position(self, entity, passenger, level)
+    }
+    /// Player#rideTick's server dismount gate precedes LivingEntity#rideTick.
+    fn ride_tick(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        if player.shared_flag(1) && player.vehicle.is_some() {
+            crate::entity::stop_riding(entity, level)
+        } else {
+            crate::entity::living_ride_tick(self, entity, level)
+        }
+    }
+
+    /// Player#getMoveSimulationType is AUTHORITATIVE_SIDE_AND_SERVER.
+    fn can_simulate_movement(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+
+    fn on_above_bubble_column(
+        &self,
+        entity: crate::entity::EntityRef,
+        drag_down: bool,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !level.entity::<ServerPlayer>(entity)?.flying {
+            crate::entity::bubble_column::on_above_bubble_column(
+                self, entity, drag_down, pos, level,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn on_inside_bubble_column(
+        &self,
+        entity: crate::entity::EntityRef,
+        drag_down: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !level.entity::<ServerPlayer>(entity)?.flying {
+            crate::entity::bubble_column::on_inside_bubble_column(self, entity, drag_down, level)?;
+        }
+        Ok(())
+    }
+
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,
@@ -493,13 +599,142 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
     }
 
+    fn known_movement(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<Vec3, LevelError> {
+        super::teleport::player_known_movement(entity, level)
+    }
+    fn teleport_relative(
+        &self,
+        entity: crate::entity::EntityRef,
+        delta: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::teleport::teleport_player(
+            entity,
+            super::teleport::position_move_rotation(delta, Vec3::ZERO, 0.0, 0.0),
+            super::teleport::Relative::ALL,
+            level,
+        )
+    }
+    fn is_alive(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(!level.entity::<ServerPlayer>(entity)?.removed
+            && level.entity::<ServerPlayer>(entity)?.health() > 0.0)
+    }
+    fn is_spectator(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Players
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH_HIGH_SPEED
+    }
+    fn play_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::play_sound(self, entity, sound, volume, pitch, true, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::player_step_sound(self, entity, pos, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !self.is_spectator(entity, level)? {
+            crate::entity::sounds::water_splash_effect(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn fire_immune_ticks(&self) -> i32 {
         20
     }
-    fn default_gravity(&self) -> f64 {
-        0.08
+    fn default_gravity(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::GRAVITY,
+            level,
+        )
+    }
+    fn max_up_step(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        Ok(crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::STEP_HEIGHT,
+            level,
+        )? as f32)
+    }
+    fn bounciness(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::BOUNCINESS,
+            level,
+        )
+    }
+    fn air_drag(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::air_drag(entity, level)
+    }
+    fn block_speed_factor(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::block_speed_factor(entity, level)
+    }
+    fn ignite_for_ticks(
+        &self,
+        entity: crate::entity::EntityRef,
+        ticks: i32,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        crate::inventory::tick_container_menu(entity, level)?;
         let (spectator, passenger) = {
             let player = level.entity::<ServerPlayer>(entity)?;
             (
@@ -546,6 +781,133 @@ mod tests {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_data::Block;
     use std::sync::Arc;
+
+    #[test]
+    fn player_health_persistence_hydrates_attributes_before_clamping_health() {
+        let mut player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "health".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        player
+            .attributes
+            .get_instance(ferraloom_data::registries::attribute::Id::MAX_HEALTH)
+            .unwrap()
+            .set_base_value(40.0);
+        player.set_health(35.0);
+        let saved = player.save();
+        let mut loaded = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "health".into(),
+            2,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        loaded
+            .try_load_with_recipes(
+                saved,
+                &crate::crafting::RecipeManager::new(Vec::new()).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(loaded.health(), 35.0);
+        assert_eq!(loaded.max_health(), 40.0);
+        assert_eq!(
+            *loaded.entity_data.get(super::super::synched_data::HEALTH),
+            35.0
+        );
+        assert_eq!(
+            loaded.parent.main_arm(),
+            ferraloom_protocol::entity_data::HumanoidArm::Right
+        );
+    }
+
+    #[test]
+    fn player_recipe_book_load_requires_live_manager_and_filters_unknown_ids() {
+        use super::super::persistence::EntityLoadError;
+        use crate::crafting::{Recipe, RecipeHolder, RecipeManager};
+        use ferraloom_data::{
+            Item,
+            datapack::{TagSet, Tags},
+        };
+        let tags = TagSet::<Item>::from_tags(
+            Tags {
+                values: Default::default(),
+                diagnostics: Vec::new(),
+            },
+            ferraloom_data::ITEMS.len(),
+        )
+        .unwrap();
+        let kept: ferraloom_data::datapack::Identifier = "minecraft:kept".parse().unwrap();
+        let manager = RecipeManager::new(vec![RecipeHolder {
+            id: kept.clone(),
+            value: Recipe::decode(
+                &serde_json::json!({"type":"crafting_special_repairitem"}),
+                &tags,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let make_player = || {
+            ServerPlayer::new(
+                Uuid::new(1, 2),
+                "recipe".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            )
+        };
+        let mut original = make_player();
+        original.recipe_book.add(kept.clone());
+        let mut saved = original.save();
+        let book = saved
+            .get_mut("recipeBook")
+            .unwrap()
+            .as_compound_mut()
+            .unwrap();
+        book.insert("isGuiOpen", Tag::Byte(1));
+        let ids = Tag::List(ListTag(vec![
+            Tag::String("minecraft:kept".into()),
+            Tag::String("minecraft:unknown".into()),
+        ]));
+        book.insert("recipes", ids.clone());
+        book.insert("toBeDisplayed", ids);
+        let mut loaded = make_player();
+        assert_eq!(
+            loaded.try_load(saved.clone()),
+            Err(EntityLoadError::RecipeManagerRequired)
+        );
+        loaded.try_load_with_recipes(saved, &manager).unwrap();
+        assert_eq!(loaded.recipe_book.known(), std::slice::from_ref(&kept));
+        assert!(loaded.recipe_book.highlighted(&kept));
+        assert!(loaded.recipe_book.settings.0[0].open);
+        let mut round_trip = make_player();
+        round_trip
+            .try_load_with_recipes(loaded.save(), &manager)
+            .unwrap();
+        assert_eq!(round_trip.recipe_book.to_nbt(), loaded.recipe_book.to_nbt());
+    }
+
+    #[test]
+    fn malformed_optional_recipe_book_is_diagnosed_and_keeps_the_existing_book() {
+        let manager = crate::crafting::RecipeManager::new(Vec::new()).unwrap();
+        let mut player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "recipe".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        let before = player.recipe_book.to_nbt();
+        let mut saved = player.save();
+        saved.insert(
+            "recipeBook",
+            Tag::String("invalid optional packed data".into()),
+        );
+        player.try_load_with_recipes(saved, &manager).unwrap();
+        assert_eq!(player.recipe_book.to_nbt(), before);
+    }
     #[test]
     fn display_name_matches_java_player_component() {
         let player = ServerPlayer::new(

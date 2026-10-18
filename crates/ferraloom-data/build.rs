@@ -278,9 +278,12 @@ fn blocks(
     reports: &Value,
     extracted: &Value,
     props: &BTreeMap<String, Property>,
+    render_shapes: &Value,
 ) {
+    let render_shapes = render_shapes.as_array().expect("per-state render shapes");
     let blocks = extracted["blocks"].as_array().unwrap();
     let states = extracted["states"].as_array().unwrap();
+    assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
@@ -405,6 +408,9 @@ fn blocks(
         ] {
             write!(out, "{field}: {},", state[field]).unwrap();
         }
+        let render = string(&render_shapes[id]);
+        assert!(matches!(render, "invisible" | "model"));
+        write!(out, "render_shape: RenderShape::{},", pascal(render)).unwrap();
         for field in ["collision", "outline", "occlusion"] {
             write!(out, "{field}: ShapeId({}),", state[field]).unwrap();
         }
@@ -502,14 +508,72 @@ fn voxel_shapes(data: &Value, block_properties: &Value) -> String {
     out
 }
 
-fn items(out: &mut String, items: &Value) {
+fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
         assert_eq!(number(&item["id"]), id as u64);
         let block = item["block"]
             .as_u64()
             .map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
-        writeln!(out, "ItemData {{ max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
+        let facts = &crafting[id];
+        let remainder = facts["remainder"].as_object().map_or_else(|| "None".to_owned(), |r| {
+            let item_id = items.as_array().unwrap().iter().position(|item| item["name"] == r["id"]).expect("crafting remainder item");
+            let count = r.get("count").and_then(Value::as_i64).unwrap_or(1);
+            let components = r.get("components").cloned().unwrap_or_else(|| serde_json::json!({}));
+            format!("Some(CraftingRemainder {{ item: Item({item_id}), count: {count}, components_json: {:?} }})", serde_json::to_string(&components).unwrap())
+        });
+        let banner_color = facts["banner_color"]
+            .as_str()
+            .map_or_else(|| "None".to_owned(), |name| format!("Some({name:?})"));
+        writeln!(out, "ItemData {{ crafting_remainder: {remainder}, banner_color: {banner_color}, max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
+    }
+    out.push_str("];\n");
+}
+
+fn attribute_properties(out: &mut String, attributes: &Value, registries: &Value) {
+    let attributes = attributes.as_array().unwrap();
+    assert_eq!(
+        attributes.len(),
+        registries["minecraft:attribute"]["entries"]
+            .as_object()
+            .unwrap()
+            .len()
+    );
+    writeln!(
+        out,
+        "const ATTRIBUTE_DATA: [AttributeData; {}] = [",
+        attributes.len()
+    )
+    .unwrap();
+    for (id, attribute) in attributes.iter().enumerate() {
+        assert_eq!(number(&attribute["id"]), id as u64);
+        assert_eq!(
+            number(
+                &registries["minecraft:attribute"]["entries"][string(&attribute["name"])]["protocol_id"]
+            ),
+            id as u64
+        );
+        write!(
+            out,
+            "AttributeData {{ default_value: {}, syncable: {}, range: ",
+            float(&attribute["default_value"]),
+            attribute["syncable"]
+        )
+        .unwrap();
+        match (&attribute["min_value"], &attribute["max_value"]) {
+            (Value::Null, Value::Null) => out.push_str("None"),
+            (min, max) => {
+                assert!(min.as_f64().unwrap() <= max.as_f64().unwrap());
+                write!(
+                    out,
+                    "Some(AttributeRange {{ min: {}, max: {} }})",
+                    float(min),
+                    float(max)
+                )
+                .unwrap();
+            }
+        }
+        out.push_str(" },\n");
     }
     out.push_str("];\n");
 }
@@ -526,6 +590,7 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             "fixed_dimensions",
             "tracking_range",
             "update_interval",
+            "track_deltas",
             "fire_immune",
             "summonable",
         ] {
@@ -541,7 +606,29 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             let id = number(&registries["minecraft:attribute"]["entries"][name]["protocol_id"]);
             write!(out, "(registries::attribute::Id({id}), {}),", float(value)).unwrap();
         }
-        out.push_str("] },\n");
+        out.push_str("], attachments: EntityAttachments { points: [");
+        for attachment in ["passenger", "vehicle", "name_tag", "warden_chest"] {
+            let points = entity["attachments"][attachment].as_array().unwrap();
+            assert!(
+                !points.is_empty(),
+                "entity attachment has no fallback points"
+            );
+            out.push_str("&[");
+            for point in points {
+                let values = point.as_array().unwrap();
+                assert_eq!(values.len(), 3);
+                write!(
+                    out,
+                    "ferraloom_util::Vec3 {{ x: {}, y: {}, z: {} }},",
+                    float(&values[0]),
+                    float(&values[1]),
+                    float(&values[2])
+                )
+                .unwrap();
+            }
+            out.push_str("],");
+        }
+        out.push_str("] } },\n");
     }
     out.push_str("];\n");
 }
@@ -708,6 +795,7 @@ fn main() {
     block_methods::generate(root, &block_properties);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
+    let attribute_report = load(root, "attributes");
     for (name, count) in [
         (
             "block",
@@ -751,7 +839,13 @@ fn main() {
     );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
-    blocks(&mut out, &block_report, &block_properties, &props);
+    blocks(
+        &mut out,
+        &block_report,
+        &block_properties,
+        &props,
+        &load(root, "block_render_shapes"),
+    );
     shapes(&mut out, &load(root, "shapes"));
     state_transforms(
         &mut out,
@@ -810,13 +904,14 @@ fn main() {
         redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
     )
     .unwrap();
-    items(&mut out, &item_report);
+    items(&mut out, &item_report, &load(root, "item_crafting"));
     sound_events(
         &mut out,
         &load(root, "sound_events"),
         &registries_report["minecraft:sound_event"],
     );
     entities(&mut out, &entity_report, &registries_report);
+    attribute_properties(&mut out, &attribute_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
     let native = voxel_shapes(&load(root, "voxel_shapes"), &block_properties);

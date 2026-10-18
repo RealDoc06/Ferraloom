@@ -2,7 +2,12 @@ use ferraloom_data::EntityType;
 
 use crate::level::{Level, LevelError};
 
+pub mod ai;
 pub mod animal;
+pub mod avatar;
+pub use avatar::Avatar;
+pub mod living;
+pub use living::LivingEntity;
 pub mod effects;
 pub mod experience_orb;
 pub mod item;
@@ -14,6 +19,14 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn teleport_relative(
+        self,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::teleport_relative(self, delta, level)
+    }
+
     pub fn count_player_passengers(self, level: &Level) -> Result<i32, LevelError> {
         count_player_passengers(self, level)
     }
@@ -46,33 +59,27 @@ impl EntityRef {
 }
 
 mod base;
+pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
+pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
 pub mod movement;
+pub mod sounds;
+pub mod teleport;
 mod trace;
 pub use lifecycle::{
-    base_tick, common_tick, count_player_passengers, eject_passengers, position_rider,
-    start_riding, stop_riding,
+    base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
+    position_rider, ride_tick, start_riding, stop_riding,
 };
 pub mod persistence;
+pub mod reference;
+pub use reference::EntityReference;
 pub mod synched_data;
 pub mod tracking;
 pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
-
-/// Port of LivingEntity's unarmored damage/cooldown state.
-#[derive(Debug)]
-pub struct LivingEntity {
-    pub parent: EntityData,
-    pub equipment: player::equipment::EntityEquipment,
-    pub health: f32,
-    pub last_hurt: f32,
-    pub damage_cooldown_time: i32,
-    pub hurt_time: i32,
-    pub hurt_duration: i32,
-}
 
 /// Port of Mob's entity references. Goals/navigation are added here as ported.
 #[derive(Debug)]
@@ -202,19 +209,6 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
-/// Embedded-parent projection; each struct dereferences only to its immediate parent.
-impl std::ops::Deref for LivingEntity {
-    type Target = EntityData;
-    fn deref(&self) -> &Self::Target {
-        &self.parent
-    }
-}
-impl std::ops::DerefMut for LivingEntity {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.parent
-    }
-}
-
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -250,6 +244,81 @@ pub trait Entity: Sync {
         level: &Level,
     ) -> Result<ferraloom_util::BlockPos, LevelError> {
         movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
+    /// Port of Entity#getKnownMovement; ServerPlayer supplies its client movement.
+    fn known_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        teleport::base_known_movement(self, entity, level)
+    }
+    /// Port of Entity#teleportRelative. The player override uses listener state.
+    fn teleport_relative(
+        &self,
+        entity: EntityRef,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::base_teleport_relative(entity, delta, level)
+    }
+    fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity::<EntityData>(entity)?.removed)
+    }
+    fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn controlling_passenger(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        Ok(None)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Neutral
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn play_sound(
+        &self,
+        entity: EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_sound(self, entity, sound, volume, pitch, false, level)
+    }
+    fn play_fire_extinguished_sound(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_fire_extinguished_sound(self, entity, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_step_sound(self, entity, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::water_splash_effect(self, entity, level)
     }
     fn fire_immune_ticks(&self) -> i32 {
         0
@@ -289,18 +358,8 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         movement::move_entity(self, entity, mover, delta, level)
     }
-    fn max_up_step(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
-        let state = level.entity_state(entity)?;
-        if state.as_living().is_none() {
-            return Ok(0.0);
-        }
-        Ok(state
-            .entity_type()
-            .data()
-            .attributes
-            .iter()
-            .find(|(id, _)| *id == ferraloom_data::registries::attribute::Id::STEP_HEIGHT)
-            .map_or(0.6, |(_, value)| *value as f32))
+    fn max_up_step(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.0)
     }
     fn maybe_back_off_from_edge(
         &self,
@@ -321,6 +380,28 @@ pub trait Entity: Sync {
             EntityState::Player(_)
         ))
     }
+    /// Port of Entity#canSimulateMovement's server AUTHORITATIVE_SIDE branch.
+    /// Player overrides the AUTHORITATIVE_SIDE_AND_SERVER result.
+    fn can_simulate_movement(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        self.is_local_instance_authoritative(entity, level)
+    }
+    fn on_above_bubble_column(
+        &self,
+        entity: EntityRef,
+        drag_down: bool,
+        pos: ferraloom_util::BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        bubble_column::on_above_bubble_column(self, entity, drag_down, pos, level)
+    }
+    fn on_inside_bubble_column(
+        &self,
+        entity: EntityRef,
+        drag_down: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        bubble_column::on_inside_bubble_column(self, entity, drag_down, level)
+    }
     fn is_horizontal_collision_minor(
         &self,
         _entity: EntityRef,
@@ -335,8 +416,12 @@ pub trait Entity: Sync {
     fn bounciness(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
         Ok(0.0)
     }
-    fn default_gravity(&self) -> f64 {
-        0.0
+    fn default_gravity(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
+        Ok(0.0)
+    }
+    /// Port of Entity#getYHeadRot; LivingEntity overrides its stored head angle.
+    fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.0)
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
         Ok(
@@ -347,12 +432,26 @@ pub trait Entity: Sync {
             {
                 0.0
             } else {
-                self.default_gravity()
+                self.default_gravity(entity, level)?
             },
         )
     }
-    fn air_drag(&self) -> f32 {
-        0.98
+    fn air_drag(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.98)
+    }
+    fn block_speed_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        movement::block_speed_factor(entity, level)
+    }
+    fn ignite_for_ticks(
+        &self,
+        entity: EntityRef,
+        ticks: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<EntityData>(entity)?
+            .ignite_for_ticks(ticks);
+        Ok(())
     }
 
     /// Port of LivingEntity#getLiquidCollisionShape's inherited empty result.
@@ -389,24 +488,70 @@ pub trait Entity: Sync {
     ) -> Result<bool, LevelError> {
         Ok(false)
     }
+    fn dimensions(
+        &self,
+        entity: EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<EntityDimensions, LevelError> {
+        Ok(EntityDimensions::for_type(
+            level.entity_state(entity)?.entity_type(),
+        ))
+    }
+    fn default_dimensions(
+        &self,
+        entity: EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<EntityDimensions, LevelError> {
+        Ok(EntityDimensions::for_type(
+            level.entity_state(entity)?.entity_type(),
+        ))
+    }
     fn passenger_riding_position(
         &self,
         entity: EntityRef,
-        _passenger: EntityRef,
+        passenger: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let (position, dimensions) = {
+            let base = level.entity::<EntityData>(entity)?;
+            (base.position, base.dimensions.clone())
+        };
+        Ok(position
+            + self.passenger_attachment_point(entity, passenger, &dimensions, 1.0, level)?)
+    }
+    fn passenger_attachment_point(
+        &self,
+        entity: EntityRef,
+        passenger: EntityRef,
+        dimensions: &EntityDimensions,
+        _scale: f32,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let base = level.entity::<EntityData>(entity)?;
+        let index = base
+            .passengers
+            .iter()
+            .position(|id| *id == passenger)
+            .map_or(-1, |index| index as i32);
+        Ok(dimensions.attachments.get_clamped(
+            dimensions::EntityAttachment::Passenger,
+            index,
+            base.yaw,
+        ))
+    }
+    fn vehicle_attachment_point(
+        &self,
+        entity: EntityRef,
+        _vehicle: EntityRef,
         level: &Level,
     ) -> Result<ferraloom_util::Vec3, LevelError> {
         let base = level.entity::<EntityData>(entity)?;
         Ok(base
-            .position
-            .add_xyz(0.0, f64::from(base.dimensions.height), 0.0))
-    }
-    fn vehicle_attachment_point(
-        &self,
-        _entity: EntityRef,
-        _vehicle: EntityRef,
-        _level: &Level,
-    ) -> Result<ferraloom_util::Vec3, LevelError> {
-        Ok(ferraloom_util::Vec3::ZERO)
+            .dimensions
+            .attachments
+            .get(dimensions::EntityAttachment::Vehicle, 0, base.yaw))
     }
 
     fn fluid_interaction_box(
@@ -431,9 +576,48 @@ pub trait Entity: Sync {
     fn check_despawn(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
         Ok(())
     }
+    /// Port of Entity#updateDataBeforeSync's base virtual method.
+    fn update_data_before_sync(
+        &self,
+        _entity: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#broadcastToPlayer's base predicate.
+    fn broadcast_to_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    /// Port of Entity#startSeenByPlayer's base hook.
+    fn start_seen_by_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#stopSeenByPlayer's base hook.
+    fn stop_seen_by_player(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         base_tick(self, entity, level)
+    }
+
+    fn ride_tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        ride_tick(self, entity, level)
     }
 
     fn hurt_server(
@@ -465,7 +649,7 @@ pub fn hurt_unarmored(
         .entity_state_mut(entity)?
         .as_living_mut()
         .ok_or(LevelError::WrongEntityType(entity))?;
-    if living.parent.removed || living.health <= 0.0 {
+    if living.parent.removed || living.health() <= 0.0 {
         return Ok(false);
     }
     let damage = if damage < 0.0 { 0.0 } else { damage };
@@ -482,7 +666,7 @@ pub fn hurt_unarmored(
         damage
     };
     living.last_hurt = damage;
-    living.health = (living.health - applied).max(0.0);
+    living.set_health(living.health() - applied);
     Ok(true)
 }
 

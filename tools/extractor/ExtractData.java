@@ -254,6 +254,14 @@ public final class ExtractData {
         write(dir, "redstone_state_facts", table);
     }
 
+    // BlockStateBase#getRenderShape delegates only its own BlockState. The
+    // base returns MODEL; all 26.3 overrides return constant INVISIBLE.
+    private static void blockRenderShapes(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) table.add(state.getRenderShape().name().toLowerCase(Locale.ROOT));
+        write(dir, "block_render_shapes", table);
+    }
+
     // BlockBehaviour caches Properties.hasCollision in a final field. No public
     // getter exists; reflect that exact field rather than infer it from shapes.
     private static void blockCollisionFlags(Path dir) throws Exception {
@@ -315,6 +323,81 @@ public final class ExtractData {
         write(dir, "air_states", ids);
     }
 
+    private static void entityTypes(Path dir) throws Exception {
+        var attachmentField = EntityAttachments.class.getDeclaredField("attachments");
+        attachmentField.setAccessible(true);
+        var entities = new JsonArray();
+        for (var type : BuiltInRegistries.ENTITY_TYPE) {
+            var out = new JsonObject();
+            var dimensions = type.getDimensions();
+            out.addProperty("id", BuiltInRegistries.ENTITY_TYPE.getId(type));
+            out.addProperty("name", BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+            out.addProperty("width", dimensions.width());
+            out.addProperty("height", dimensions.height());
+            out.addProperty("eye_height", dimensions.eyeHeight());
+            out.addProperty("fixed_dimensions", dimensions.fixed());
+            out.addProperty("category", type.getCategory().getName());
+            out.addProperty("tracking_range", type.clientTrackingRange());
+            out.addProperty("update_interval", type.updateInterval());
+            out.addProperty("track_deltas", type.trackDeltas());
+            out.addProperty("fire_immune", type.fireImmune());
+            out.addProperty("summonable", type.canSummon());
+            var attachments = new JsonObject();
+            var points = (Map<?, ?>) attachmentField.get(dimensions.attachments());
+            for (var attachment : EntityAttachment.values()) {
+                var vectors = new JsonArray();
+                for (var point : (List<?>) points.get(attachment)) {
+                    var position = (net.minecraft.world.phys.Vec3) point;
+                    var vector = new JsonArray();
+                    vector.add(position.x); vector.add(position.y); vector.add(position.z);
+                    vectors.add(vector);
+                }
+                attachments.add(attachment.name().toLowerCase(Locale.ROOT), vectors);
+            }
+            out.add("attachments", attachments);
+            out.add("attributes", attributes(type));
+            entities.add(out);
+        }
+        write(dir, "entity_types", entities);
+    }
+
+    private static void attributeProperties(Path dir) throws Exception {
+        var attributes = new JsonArray();
+        for (var attribute : BuiltInRegistries.ATTRIBUTE) {
+            var out = new JsonObject();
+            out.addProperty("id", BuiltInRegistries.ATTRIBUTE.getId(attribute));
+            out.addProperty("name", BuiltInRegistries.ATTRIBUTE.getKey(attribute).toString());
+            out.addProperty("default_value", attribute.getDefaultValue());
+            out.addProperty("syncable", attribute.isClientSyncable());
+            if (attribute instanceof RangedAttribute ranged) {
+                out.addProperty("min_value", ranged.getMinValue());
+                out.addProperty("max_value", ranged.getMaxValue());
+            } else {
+                out.add("min_value", JsonNull.INSTANCE);
+                out.add("max_value", JsonNull.INSTANCE);
+            }
+            attributes.add(out);
+        }
+        write(dir, "attributes", attributes);
+    }
+
+    /** Item#getCraftingRemainder is final and returns an immutable Properties field.
+     * No stack, level or component lookup participates in this item-only fact. */
+    private static void itemCrafting(Path dir, com.mojang.serialization.DynamicOps<JsonElement> ops) throws Exception {
+        Files.createDirectories(dir);
+        var entries = new JsonArray();
+        for (var item : BuiltInRegistries.ITEM) {
+            var row = new JsonObject();
+            row.addProperty("id", BuiltInRegistries.ITEM.getId(item));
+            var remainder = item.getCraftingRemainder();
+            row.add("remainder", remainder == null ? JsonNull.INSTANCE : ItemStackTemplate.CODEC.encodeStart(ops, remainder).getOrThrow());
+            if (item instanceof BannerItem banner) row.addProperty("banner_color", banner.getColor().getSerializedName());
+            else row.add("banner_color", JsonNull.INSTANCE);
+            entries.add(row);
+        }
+        write(dir, "item_crafting", entries);
+    }
+
     private static void soundEvents(Path dir) throws Exception {
         var entries = new JsonArray();
         for (var sound : BuiltInRegistries.SOUND_EVENT) {
@@ -330,9 +413,12 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--attributes-only")) { attributeProperties(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--sound-events-only")) { soundEvents(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--block-render-shapes-only")) { blockRenderShapes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
@@ -341,6 +427,13 @@ public final class ExtractData {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        if (args.length > 1 && args[1].equals("--item-crafting-only")) {
+            var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
+            BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());
+            itemCrafting(Path.of(args[0]), registries.createSerializationContext(JsonOps.INSTANCE));
+            return;
+        }
+        blockRenderShapes(Path.of(args[0]));
         blockCollisionFlags(Path.of(args[0]));
         blockItems(Path.of(args[0]));
         fluidRandomTicking(Path.of(args[0]));
@@ -408,25 +501,9 @@ public final class ExtractData {
             items.add(out);
         }
         write(dir, "items", items);
+        itemCrafting(dir, ops);
 
-        var entities = new JsonArray();
-        for (var type : BuiltInRegistries.ENTITY_TYPE) {
-            var out = new JsonObject();
-            var dimensions = type.getDimensions();
-            out.addProperty("id", BuiltInRegistries.ENTITY_TYPE.getId(type));
-            out.addProperty("name", BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
-            out.addProperty("width", dimensions.width());
-            out.addProperty("height", dimensions.height());
-            out.addProperty("eye_height", dimensions.eyeHeight());
-            out.addProperty("fixed_dimensions", dimensions.fixed());
-            out.addProperty("category", type.getCategory().getName());
-            out.addProperty("tracking_range", type.clientTrackingRange());
-            out.addProperty("update_interval", type.updateInterval());
-            out.addProperty("fire_immune", type.fireImmune());
-            out.addProperty("summonable", type.canSummon());
-            out.add("attributes", attributes(type));
-            entities.add(out);
-        }
-        write(dir, "entity_types", entities);
+        entityTypes(dir);
+        attributeProperties(dir);
     }
 }

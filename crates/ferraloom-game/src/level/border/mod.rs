@@ -528,9 +528,134 @@ impl SavedDataCodec for WorldBorder {
     }
 }
 
+impl super::Level {
+    /// Port of Level#getWorldBorder. The region owns the same canonical border
+    /// used by collision, persistence and packet initialization.
+    pub fn world_border(&self) -> &WorldBorder {
+        &self.region().entities.border
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    const VECTORS: &str = include_str!("../../../tests/java/entity/vectors.tsv");
+
+    fn doubles(values: &[f64]) -> String {
+        values
+            .iter()
+            .map(|value| format!("{:x}", value.to_bits()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    #[test]
+    fn vanilla_lerp_extents_preserve_partial_ticks_zero_duration_and_wrapping_time() {
+        let scenarios = [
+            (100.25, 101.75, 4, 100),
+            (1000.125, 7.25, 3, i64::MAX),
+            (11.5, 11.5, 3, 100),
+            (100.0, 10.0, 0, 100),
+            (100.0, 10.0, -1, 100),
+        ];
+        let mut rows = 0;
+        for row in VECTORS
+            .lines()
+            .filter(|row| row.starts_with("border-lerp\t"))
+        {
+            let fields: Vec<_> = row.split('\t').collect();
+            let (from, to, ticks, time) = scenarios[fields[1].parse::<usize>().unwrap()];
+            let mut border = WorldBorder::default();
+            border.set_center(0.25, -0.25);
+            border.lerp_size_between(from, to, ticks, time);
+            for _ in 0..fields[2].parse::<usize>().unwrap() {
+                border.tick();
+            }
+            assert_eq!(
+                doubles(&[
+                    border.size(),
+                    border.min_x(),
+                    border.max_x(),
+                    border.min_z(),
+                    border.max_z(),
+                    border.max_x_at(0.5),
+                    border.max_x_at(1.0),
+                    border.lerp_speed(),
+                    border.lerp_target(),
+                ]),
+                fields[3],
+                "{row}"
+            );
+            assert_eq!(border.lerp_time().to_string(), fields[4], "{row}");
+            let status = match border.status() {
+                BorderStatus::Stationary => "STATIONARY",
+                BorderStatus::Growing => "GROWING",
+                BorderStatus::Shrinking => "SHRINKING",
+            };
+            assert_eq!(status, fields[5], "{row}");
+            rows += 1;
+        }
+        assert_eq!(rows, 20);
+    }
+
+    #[test]
+    fn vanilla_bounds_clamping_proximity_and_collision_rounding_bits() {
+        let scenarios = [
+            (0.0, 0.0, 10.0, 29_999_984),
+            (0.25, -0.25, 10.5, 29_999_984),
+            (29_999_980.0, -29_999_980.0, 100.0, 29_999_984),
+            (-0.25, 0.25, 100.0, 8),
+        ];
+        let mut rows = 0;
+        for row in VECTORS
+            .lines()
+            .filter(|row| row.starts_with("border-geometry\t"))
+        {
+            let fields: Vec<_> = row.split('\t').collect();
+            let (center_x, center_z, size, absolute) =
+                scenarios[fields[1].parse::<usize>().unwrap()];
+            let offset = fields[2].parse::<f64>().unwrap();
+            let mut border = WorldBorder::default();
+            border.set_center(center_x, center_z);
+            border.set_size(size);
+            border.set_absolute_max_size(absolute);
+            let x = center_x + offset;
+            let z = center_z - offset;
+            let position = Vec3::new(x, 70.25, z);
+            let block = BlockPos::containing(x, position.y, z);
+            let bounds = Aabb::new(x - 0.25, 64.0, z - 0.25, x + 0.25, 65.0, z + 0.25);
+            let flags: String = [
+                border.is_within_bounds(x, z),
+                border.is_within_block(block),
+                border.is_within_chunk(ChunkPos::containing(block)),
+                border.is_within_aabb(bounds),
+                border.is_inside_close_to_border(Vec3::new(x, 64.0, z), bounds),
+            ]
+            .map(|flag| if flag { '1' } else { '0' })
+            .into_iter()
+            .collect();
+            assert_eq!(flags, fields[3], "{row}");
+            let clamped = border.clamp_vec3(position);
+            assert_eq!(
+                doubles(&[clamped.x, clamped.y, clamped.z]),
+                fields[4],
+                "{row}"
+            );
+            assert_eq!(
+                doubles(&[
+                    border.distance_to_border(x, z),
+                    border
+                        .collision_shape()
+                        .collide(ferraloom_util::Axis::X, bounds, 4.0),
+                ]),
+                fields[5],
+                "{row}"
+            );
+            rows += 1;
+        }
+        assert_eq!(rows, 20);
+    }
+
     #[test]
     fn game_tick_lerp_preserves_previous_tick_bounds_and_save_resume() {
         let mut border = WorldBorder::default();
