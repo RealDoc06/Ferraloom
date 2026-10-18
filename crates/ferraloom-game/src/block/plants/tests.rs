@@ -1658,3 +1658,76 @@ fn coral_and_hanging_roots_placement_match_native_states_schedules_and_rng() {
     }
     assert_eq!(count, 1680);
 }
+
+#[test]
+fn leaf_distance_and_water_ticks_match_native_updates_in_every_direction() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/leaf-updates.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let neighbor = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+        let direction = Direction::VALUES[f[3].parse::<usize>().unwrap()];
+        let at = pos.relative(direction, 1);
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_block_state(pos, state).unwrap();
+        level.set_block_state(at, neighbor).unwrap();
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(1234)), 0);
+        let actual = level
+            .required_block_behavior(state.block(), BlockMethod::UpdateShape)
+            .unwrap()
+            .update_shape(
+                state,
+                pos,
+                direction,
+                at,
+                neighbor,
+                &mut LevelAccessRef::Server(&mut level),
+            )
+            .unwrap();
+        assert_eq!(actual.id(), f[4].parse::<u16>().unwrap(), "state {line}");
+        assert_eq!(
+            level.random().next_long(),
+            f[5].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        let mut saved = ferraloom_storage::SerializableChunkData::default();
+        level
+            .save_chunk_ticks(ChunkPos::new(0, 0), &mut saved)
+            .unwrap();
+        let mut actual = saved
+            .block_ticks
+            .unwrap_or_default()
+            .iter()
+            .map(|tick| format!("schedule:{}", tick.delay.unwrap()))
+            .collect::<Vec<_>>();
+        actual.extend(
+            saved
+                .fluid_ticks
+                .unwrap_or_default()
+                .iter()
+                .map(|tick| format!("fluid:{}", tick.delay.unwrap())),
+        );
+        let mut expected = f[6]
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected, "ticks {line}");
+        count += 1;
+    }
+    assert_eq!(count, 5376);
+}

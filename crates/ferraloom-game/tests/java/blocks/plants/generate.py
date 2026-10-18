@@ -83,3 +83,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     special='\n'.join(line for line in lines if line.startswith('special-place\t')) + '\n'
     (HERE/'special-placement.tsv.gz').write_bytes(gzip.compress(special.encode(),mtime=0))
     print(f'{len(special.splitlines())} native coral/root placement vectors')
+
+    leaves='\n'.join(line for line in lines if line.startswith('leaf-update\t')) + '\n'
+    (HERE/'leaf-updates.tsv.gz').write_bytes(gzip.compress(leaves.encode(),mtime=0))
+    print(f'{len(leaves.splitlines())} native leaf distance/water update vectors')

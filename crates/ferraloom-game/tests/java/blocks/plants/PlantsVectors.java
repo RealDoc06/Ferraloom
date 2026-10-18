@@ -181,6 +181,17 @@ public final class PlantsVectors {
                 }
             }
         }
+        var leafNeighbors=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.OAK_LOG.defaultBlockState(),Blocks.MANGROVE_ROOTS.defaultBlockState(),
+            Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,1),Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,6),
+            Blocks.OAK_LEAVES.defaultBlockState(),Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.PERSISTENT,true));
+        for(var block:List.of(Blocks.OAK_LEAVES,Blocks.SPRUCE_LEAVES,Blocks.CHERRY_LEAVES,Blocks.MANGROVE_LEAVES))for(var state:block.getStateDefinition().getPossibleStates())
+            for(var neighbor:leafNeighbors)for(var direction:Direction.values()) {
+            level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,state,816);
+            var at=pos.relative(direction);level.getChunkAt(at).setBlockState(at,neighbor,816);
+            level.trace.clear();var random=RandomSource.create(1234);
+            var result=state.updateShape(level,level,pos,direction,at,neighbor,random);
+            System.out.println("leaf-update\t"+Block.getId(state)+"\t"+Block.getId(neighbor)+"\t"+direction.ordinal()+"\t"+Block.getId(result)+"\t"+random.nextLong()+"\t"+String.join(",",level.trace));
+        }
         for(var block:List.of(Blocks.CHORUS_PLANT,Blocks.CHORUS_FLOWER))for(var state:block.getStateDefinition().getPossibleStates())
             for(var below:List.of(Blocks.AIR,Blocks.STONE,Blocks.END_STONE,Blocks.CHORUS_PLANT))for(boolean above:new boolean[]{false,true})for(int mode=0;mode<6;mode++) {
             level.chunks.clear();level.trace.clear();
