@@ -38,3 +38,10 @@ including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 `tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;
 each loaded `TagSet` resolves them once and stores membership in bitsets. Custom
 datapack tags resolve by identifier to a dense `TagId` before simulation reads.
+
+`BlockState::liquid` and `ignited_by_lava` come from the final booleans
+`BlockStateBase` copies directly from `Properties` at construction. They never
+read a world or position. `is_solid` is vanilla's `initCache` legacySolid;
+`replaceable` is already retained in the per-state properties. Vanilla 26.3
+uses loaded `BLOCKS_MOTION_IN_HEIGHTMAP` tags for heightmap membership rather
+than a `blocksMotion` state method.

@@ -165,6 +165,10 @@ public final class ExtractData {
                 else if (post.equals(BlockPos.ZERO.above())) bits |= 2 << 10;
                 else throw new IllegalStateException("Unknown post process offset: " + state);
             }
+            // BlockStateBase copies these final booleans straight from
+            // Properties; neither query reads the level, position or context.
+            if (state.liquid()) bits |= 1 << 12;
+            if (state.ignitedByLava()) bits |= 1 << 13;
             table.add(bits);
         }
         write(dir, "block_state_facts", table);

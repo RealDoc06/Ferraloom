@@ -392,6 +392,14 @@ impl BlockState {
     pub const fn is_solid(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 1 != 0
     }
+    /// Port of BlockStateBase#liquid, copied from Properties.liquid at construction.
+    pub const fn liquid(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 12) != 0
+    }
+    /// Port of BlockStateBase#ignitedByLava, copied from Properties at construction.
+    pub const fn ignited_by_lava(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 13) != 0
+    }
     /// Port of BlockStateBase#hasBlockEntity, a state-only EntityBlock test.
     pub const fn has_block_entity(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 2 != 0
@@ -424,7 +432,7 @@ impl BlockState {
     }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
-        match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
+        match (BLOCK_STATE_FACTS[self.0 as usize] >> 10) & 3 {
             1 => Some(0),
             2 => Some(1),
             _ => None,
