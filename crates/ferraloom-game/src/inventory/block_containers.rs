@@ -629,7 +629,19 @@ mod tests {
         super::super::tick_container_menu(player, &mut level).unwrap();
         let player_state = level.entity::<ServerPlayer>(player).unwrap();
         assert!(player_state.menus.container_menu.is_none());
-        let packets = &player_state.menus.pending_packets;
+        assert!(player_state.menus.pending_packets.is_empty());
+        let packets = level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| match effect {
+                crate::level::LevelEffect::PlayerPacket { recipients, packet }
+                    if recipients == [player] =>
+                {
+                    Some(*packet)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let slot = packets.iter().position(|packet|matches!(packet,ferraloom_protocol::play::clientbound::Packet::ContainerSetSlot(slot) if slot.slot == 0 && count(&slot.item_stack) == 9)).unwrap();
         let close = packets
             .iter()
