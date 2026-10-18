@@ -71,6 +71,13 @@ impl ServerPlayer {
         name
     }
 
+    /// Port of Player#getLuck: the canonical attribute value narrowed to float.
+    pub fn luck(&self) -> f32 {
+        self.attributes
+            .value(ferraloom_data::registries::attribute::Id::LUCK)
+            .expect("player attribute supplier defines LUCK") as f32
+    }
+
     pub fn new(
         uuid: Uuid,
         name: String,
