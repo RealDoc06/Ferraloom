@@ -280,7 +280,7 @@ impl UnportedCalls {
                         "Unported item effect skipped: {} ({}, skipped calls: {})",
                         class.method(),
                         item.name(),
-                        self.stats.skipped_calls
+                        stats.skipped_calls
                     );
                 }
                 UnportedCall::Operation(UnportedOperation::ItemHurtAndBreak {
@@ -291,7 +291,7 @@ impl UnportedCalls {
                     eprintln!(
                         "Unported item effect skipped: ItemStack#hurtAndBreak ({}, amount: {amount}, slot: {slot:?}, skipped calls: {})",
                         item.name(),
-                        self.stats.skipped_calls
+                        stats.skipped_calls
                     );
                 }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
