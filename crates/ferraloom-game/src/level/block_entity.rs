@@ -299,7 +299,7 @@ impl Level {
             }
             let key = ChunkPos::containing(handle.pos);
             let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
-            if chunk.requested_full_status < super::distance_manager::FullChunkStatus::BlockTicking
+            if chunk.full_status() < super::distance_manager::FullChunkStatus::BlockTicking
                 || !self.are_entities_loaded(key)
                 || !self.entity_world_border().is_within_block(handle.pos)
             {

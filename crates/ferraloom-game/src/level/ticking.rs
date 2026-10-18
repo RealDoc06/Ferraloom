@@ -128,7 +128,7 @@ impl Level {
                 && region
                     .chunks
                     .get(&p)
-                    .is_some_and(|chunk| chunk.ticking_ready)
+                    .is_some_and(|chunk| chunk.ticking_ready())
         });
         let result = self.run_collected_blocks();
         self.region_mut().block_ticks.cleanup_after_tick();
@@ -143,7 +143,7 @@ impl Level {
                 && region
                     .chunks
                     .get(&p)
-                    .is_some_and(|chunk| chunk.ticking_ready)
+                    .is_some_and(|chunk| chunk.ticking_ready())
         });
         let result = self.run_collected_fluids();
         self.region_mut().fluid_ticks.cleanup_after_tick();
