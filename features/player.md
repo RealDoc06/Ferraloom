@@ -56,3 +56,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.movement.relative-teleport | Calculate all nine relative position, rotation and motion flags, apply state synchronously and enqueue the exact listener packet | `PositionMoveRotation#calculateAbsolute; Entity#teleportSetPosition; ServerGamePacketListenerImpl#teleport` | `entity::tests::relative_teleports_match_native_transform_state_and_packet_flags` (36 real Java vectors) | pass | partial |
 
 | player.attributes.luck | Read live canonical LUCK modifiers and narrow the result to float for loot context | `Player#getLuck` | `entity::ai::attributes::tests` (canonical map arithmetic; loot integration pending) | - | partial |
+
+| player.abilities.may-build | Read an independently mutable mayBuild ability, persist it, and update it only when applying game-mode abilities | `Player#mayBuild; GameType#updatePlayerAbilities; Abilities.Packed` | `entity::tests::may_build_is_independent_and_game_mode_updates_match_native_abilities` (8 Java cases) | pass | partial |

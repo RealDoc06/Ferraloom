@@ -29,6 +29,14 @@ public final class TeleportVectors {
       player.absSnapTo(destination.x,destination.y,destination.z,player.getYRot(),player.getXRot());
       System.out.println("teleport-confirm-snap\t"+TrackingVectors.vec(destination)+"\t"+TrackingVectors.vec(player.position())+"\t"+TrackingVectors.vec(new Vec3(player.xo,player.yo,player.zo))+"\t"+TrackingVectors.vec(player.oldPosition())+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.getYHeadRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.yRotO)));
     }
+    for(var type:net.minecraft.world.level.GameType.values()) for(boolean flying:List.of(false,true)) {
+      var player=new LivingVectors(fixture);player.getAbilities().flying=flying;
+      type.updatePlayerAbilities(player.getAbilities());
+      boolean mayBuild=player.mayBuild();boolean resultFlying=player.getAbilities().flying;
+      player.getAbilities().mayBuild=!mayBuild;
+      var saved=net.minecraft.world.entity.player.Abilities.Packed.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,player.getAbilities().pack()).getOrThrow().asCompound().orElseThrow();
+      System.out.println("player-may-build\t"+type.getId()+"\t"+flying+"\t"+mayBuild+","+resultFlying+","+player.mayBuild()+","+saved.getBooleanOr("mayBuild",true));
+    }
     var root=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);
     var child=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);
     var grandchild=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);

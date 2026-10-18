@@ -46,6 +46,7 @@ pub struct ServerPlayer {
     pub known_movement: Vec3,
     pub game_mode: GameType,
     pub flying: bool,
+    pub may_build: bool,
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
@@ -77,6 +78,22 @@ impl ServerPlayer {
         self.attributes
             .value(ferraloom_data::registries::attribute::Id::LUCK)
             .expect("player attribute supplier defines LUCK") as f32
+    }
+
+    /// Port of Player#mayBuild. This ability can differ from the game mode.
+    pub fn may_build(&self) -> bool {
+        self.may_build
+    }
+
+    /// Port of GameType#updatePlayerAbilities for the currently ported fields.
+    /// Runtime game-mode transitions also handle their packets and other effects.
+    pub fn update_game_mode_abilities(&mut self) {
+        self.may_build = matches!(self.game_mode, GameType::Survival | GameType::Creative);
+        match self.game_mode {
+            GameType::Creative => {}
+            GameType::Spectator => self.flying = true,
+            GameType::Survival | GameType::Adventure => self.flying = false,
+        }
     }
 
     pub fn new(
@@ -115,6 +132,7 @@ impl ServerPlayer {
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
+            may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
@@ -179,6 +197,8 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
+        // ServerPlayer reads saved abilities before applying its loaded game mode.
+        self.update_game_mode_abilities();
         let inventory = self
             .saved
             .get_list("Inventory")
@@ -240,7 +260,7 @@ impl ServerPlayer {
             "instabuild",
             Tag::Byte(i8::from(self.game_mode == GameType::Creative)),
         );
-        abilities.insert("mayBuild", Tag::Byte(1));
+        abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
         abilities.insert("flySpeed", Tag::Float(0.05));
         abilities.insert("walkSpeed", Tag::Float(0.1));
         tag.insert("abilities", Tag::Compound(abilities));
