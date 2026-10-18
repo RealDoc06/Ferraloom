@@ -70,6 +70,11 @@ pub(crate) fn ported_behavior(
     block: ferraloom_data::Block,
     method: super::BlockMethod,
 ) -> Option<&'static dyn super::BlockBehavior> {
+    if method == super::BlockMethod::SpawnDestroyByEntityParticles
+        && block.is_instance_of(ferraloom_data::BlockClass::BaseFireBlock)
+    {
+        return Some(&super::NO_DESTROY_PARTICLES);
+    }
     if let Some(behavior) = super::families::ported_behavior(block, method) {
         return Some(behavior);
     }

@@ -357,6 +357,29 @@ impl LevelReaderRef<'_, '_> {
     }
 }
 impl Level {
+    /// Port of Block#setPlacedBy dispatch. BlockItem's production caller is
+    /// supplied by the item-placement port.
+    pub fn set_placed_by(
+        &mut self,
+        state: BlockState,
+        pos: BlockPos,
+        by: Option<crate::entity::EntityRef>,
+        stack: &ferraloom_protocol::component::ItemStack,
+    ) -> Result<(), LevelError> {
+        self.required_block_behavior(state.block(), BlockMethod::SetPlacedBy)?
+            .set_placed_by(state, pos, by, stack, self)
+    }
+    /// Port of Block#playerWillDestroy dispatch. The return value is required
+    /// even when the unported whole-effect policy is Warn.
+    pub fn player_will_destroy(
+        &mut self,
+        state: BlockState,
+        pos: BlockPos,
+        player: crate::entity::EntityRef,
+    ) -> Result<BlockState, LevelError> {
+        self.required_block_behavior(state.block(), BlockMethod::PlayerWillDestroy)?
+            .player_will_destroy(state, pos, player, self)
+    }
     pub fn get_state_for_placement(
         &mut self,
         block: Block,

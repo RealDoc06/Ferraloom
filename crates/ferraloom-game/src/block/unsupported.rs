@@ -59,6 +59,9 @@ pub enum BlockMethod {
     ShouldRedstoneWireConnectTo,
     HasAnalogOutputSignal,
     AnalogOutputSignal,
+    SetPlacedBy,
+    PlayerWillDestroy,
+    SpawnDestroyByEntityParticles,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -95,6 +98,9 @@ impl BlockMethod {
             Self::ShouldRedstoneWireConnectTo => Vanilla::ShouldRedstoneWireConnectTo,
             Self::HasAnalogOutputSignal => Vanilla::HasAnalogOutputSignal,
             Self::AnalogOutputSignal => Vanilla::GetAnalogOutputSignal,
+            Self::SetPlacedBy => Vanilla::SetPlacedBy,
+            Self::PlayerWillDestroy => Vanilla::PlayerWillDestroy,
+            Self::SpawnDestroyByEntityParticles => Vanilla::SpawnDestroyByEntityParticles,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -105,6 +111,7 @@ impl BlockMethod {
         !matches!(
             self,
             Self::UseWithoutItem
+                | Self::PlayerWillDestroy
                 | Self::UseItemOn
                 | Self::CanSurvive
                 | Self::CanPlaceLiquid
@@ -169,6 +176,9 @@ impl BlockMethod {
             Self::ShouldRedstoneWireConnectTo => "shouldRedstoneWireConnectTo",
             Self::HasAnalogOutputSignal => "hasAnalogOutputSignal",
             Self::AnalogOutputSignal => "getAnalogOutputSignal",
+            Self::SetPlacedBy => "setPlacedBy",
+            Self::PlayerWillDestroy => "playerWillDestroy",
+            Self::SpawnDestroyByEntityParticles => "spawnDestroyByEntityParticles",
         }
     }
 }
