@@ -69,6 +69,21 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    /// Port of AgeableMob#isBaby; AbstractCow permits baby ages.
+    fn is_baby(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(level.entity::<Cow>(entity)?.parent.parent.parent.age < 0)
+    }
+    fn can_freeze(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::freezing::can_freeze(self, entity, level)
+    }
     fn is_alive(
         &self,
         entity: super::EntityRef,
@@ -76,6 +91,21 @@ impl Entity for CowBehavior {
     ) -> Result<bool, crate::level::LevelError> {
         let cow = level.entity::<Cow>(entity)?;
         Ok(!cow.as_living().removed && cow.as_living().health() > 0.0)
+    }
+    fn push(
+        &self,
+        entity: crate::entity::EntityRef,
+        other: crate::entity::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::pushing::living_push(self, entity, other, level)
+    }
+    fn is_pushable(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        crate::entity::living::climbable::is_pushable(self, entity, level)
     }
     fn controlling_passenger(
         &self,
@@ -149,6 +179,15 @@ impl Entity for CowBehavior {
         level: &mut crate::level::Level,
     ) -> Result<(), crate::level::LevelError> {
         super::living_ride_tick(self, entity, level)
+    }
+
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living_ride_tick_with_tick_rate(self, entity, level, tick_rate)
     }
 
     fn trace_entity_refs(

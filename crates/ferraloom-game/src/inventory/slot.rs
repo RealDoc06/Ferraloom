@@ -1,7 +1,4 @@
-use super::{
-    Container, ItemStack, MenuError, Result, count, is_same_item_same_components, max_stack_size,
-    set_count, split,
-};
+use super::{Container, ItemStack, MenuError, Result, count, max_stack_size};
 use ferraloom_data::Item;
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent, EquipmentSlot};
 
@@ -308,29 +305,11 @@ impl Slot {
     pub fn safe_insert(
         &self,
         container: &mut dyn Container,
-        mut input: ItemStack,
+        input: ItemStack,
         amount: i32,
         hooks: &dyn MenuHooks,
     ) -> Result<ItemStack> {
-        if input.is_empty() || !self.may_place(&input, hooks)? {
-            return Ok(input);
-        }
-        let mut target = container.get_item(self.container_slot);
-        let n = amount
-            .min(count(&input))
-            .min(self.max_stack_size(container, &input) - count(&target));
-        if n > 0 {
-            if target.is_empty() {
-                self.set_by_player(container, split(&mut input, n));
-            } else if is_same_item_same_components(&target, &input) {
-                let left = count(&input) - n;
-                let total = count(&target) + n;
-                set_count(&mut input, left);
-                set_count(&mut target, total);
-                self.set_by_player(container, target);
-            }
-        }
-        Ok(input)
+        super::transfer::safe_insert_container_item_stack(self, container, input, amount, hooks)
     }
     pub fn safe_clone(&self, container: &dyn Container) -> ItemStack {
         let stack = container.get_item(self.container_slot);

@@ -364,6 +364,11 @@ impl GameRules {
     pub fn update_level_rules(&self, rules: &mut crate::level::LevelRules) {
         rules.tnt_explodes = self.boolean(GameRule::TntExplodes);
         rules.entity_drops = self.boolean(GameRule::EntityDrops);
+        rules.max_entity_cramming = self.integer(GameRule::MaxEntityCramming);
+        rules.drowning_damage = self.boolean(GameRule::DrowningDamage);
+        rules.fall_damage = self.boolean(GameRule::FallDamage);
+        rules.fire_damage = self.boolean(GameRule::FireDamage);
+        rules.freeze_damage = self.boolean(GameRule::FreezeDamage);
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);

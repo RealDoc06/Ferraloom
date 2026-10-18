@@ -148,7 +148,7 @@ pub fn known_movement(entity: EntityRef, level: &Level) -> Result<Vec3, LevelErr
 }
 pub(crate) fn player_known_movement(entity: EntityRef, level: &Level) -> Result<Vec3, LevelError> {
     let player = level.entity::<ServerPlayer>(entity)?;
-    if let Some(vehicle) = player.vehicle
+    if let Some(vehicle) = player.vehicle.get()
         && level
             .entity_behavior(vehicle)?
             .controlling_passenger(vehicle, level)?

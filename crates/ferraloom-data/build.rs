@@ -545,6 +545,46 @@ fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("];\n");
 }
 
+fn item_names(out: &mut String, facts: &Value, items: &Value, registries: &Value) {
+    let rows = facts["items"].as_array().expect("item description facts");
+    assert_eq!(rows.len(), items.as_array().unwrap().len());
+    let descriptions: Vec<_> = rows
+        .iter()
+        .enumerate()
+        .map(|(id, row)| {
+            assert_eq!(number(&row["id"]) as usize, id);
+            assert_eq!(row["name"], items[id]["name"]);
+            string(&row["description_id"])
+        })
+        .collect();
+    writeln!(
+        out,
+        "static ITEM_DESCRIPTION_IDS: [&str; {}] = {:?};",
+        descriptions.len(),
+        descriptions
+    )
+    .unwrap();
+    let rows = facts["potions"].as_array().expect("potion name facts");
+    let entries = ordered_entries(&registries["minecraft:potion"]["entries"]);
+    assert_eq!(rows.len(), entries.len());
+    let names: Vec<_> = rows
+        .iter()
+        .enumerate()
+        .map(|(id, row)| {
+            assert_eq!(number(&row["id"]) as usize, id);
+            assert_eq!(string(&row["name"]), entries[id].0);
+            string(&row["effect_name"])
+        })
+        .collect();
+    writeln!(
+        out,
+        "const POTION_EFFECT_NAMES: [&str; {}] = {:?};",
+        names.len(),
+        names
+    )
+    .unwrap();
+}
+
 fn attribute_properties(out: &mut String, attributes: &Value, registries: &Value) {
     let attributes = attributes.as_array().unwrap();
     assert_eq!(
@@ -961,6 +1001,12 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report, &load(root, "item_crafting"));
+    item_names(
+        &mut out,
+        &load(root, "item_names"),
+        &item_report,
+        &registries_report,
+    );
     block_drop_tables::generate(&mut out, &load(root, "block_drop_tables"), block_count);
     feature_requirements::generate(
         &mut out,

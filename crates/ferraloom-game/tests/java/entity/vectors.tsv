@@ -117,6 +117,7 @@ border-geometry	3	-3	11010	c00a000000000000,4051900000000000,400a000000000000	40
 border-geometry	3	0	11010	bfd0000000000000,4051900000000000,3fd0000000000000	401f000000000000,4010000000000000
 border-geometry	3	3	11010	4006000000000000,4051900000000000,c006000000000000	4015000000000000,4010000000000000
 border-geometry	3	6	11010	4017000000000000,4051900000000000,c017000000000000	4002000000000000,4000000000000000
+passenger-lists		2	2,3	3
 riding	dismount	4022000000000000,4051800000000000,4022000000000000	0,0,0	0	false
 riding	switch	4014000000000000,4050feb852000000,4020000000000000	0,0,0	0	true
 synched-float	0	false	0	false
@@ -194,6 +195,487 @@ living-movement	0	3f19999a,3fb47ae147ae147b,3f7ae148,0,3ecccccd,123,0
 living-movement	1	3fa00000,3f8eb851eb851eb8,3f75c290,3fe8000000000000,3f333334,16,0
 living-movement	2	0,0,3f800000,3ff0000000000000,3f800000,246,0
 living-movement	3	3f19999a,3fb47ae147ae147b,0,0,3f0ccccd,2147483647,0
+travel-input	0	3ca3d70a	0	0	0,0,0	8000000000000000,3fbf7ced916872b0,bfe0000000000000	0,3fbf7ced916872b0,bfe0000000000000	0,8000000000000000,3ff0000000000000	false
+travel-input	1	bd4ccccd	42b40000	c2b40000	3f1a36e2eb1c432d,0,0	8000000000000000,3fbf7ced916872b0,bfe0000000000000	0,3fbf7ced916872b0,bfe0000000000000	8000000000000000,3ff0000000000000,0	false
+travel-input	2	3dccccce	c4345000	42150000	3f34b96be9c2da2b,0,0	8000000000000000,3fbf7ced916872b0,bfe0000000000000	0,3fbf7ced916872b0,bfe0000000000000	3f91bcfd60000000,bfe35e78a0000000,3fe97760c0000000	false
+travel-input	3	3ca3d70a	43340000	42b3ff7d	3f34b96be9c2da2d,0,0	8000000000000000,3fbf7ced916872b0,bfe0000000000000	beda86f07d6d3563,3fbf7ced916872b0,bfe0000000000000	3bcbb917c0000000,bff0000000000000,bf1921fb60000000	false
+travel-input	4	bd4ccccd	80000000	80000000	3ff0000000000000,0,0	8000000000000000,3fbf7ced916872b0,bfe0000000000000	bfa99999a0000000,3fbf7ced916872b0,bfe0000000000000	0,8000000000000000,3ff0000000000000	false
+travel-input	5	3dccccce	0	0	3ff0000000000000,3ff0000000000000,3ff0000000000000	8000000000000000,3fbf7ced916872b0,bfe0000000000000	3fad8f72353de33c,3fc722535603b227,bfdc4e11b9584398	0,8000000000000000,3ff0000000000000	false
+travel-input	6	3ca3d70a	42b40000	c2b40000	bfd0000000000000,3fc0000000000000,3fe0000000000000	8000000000000000,3fbf7ced916872b0,bfe0000000000000	bf847ae140000000,3fc010624db43958,bfe028f5c2800000	8000000000000000,3ff0000000000000,0	false
+travel-input	7	bd4ccccd	c4345000	42150000	0,3ff0000000000000,4059000000000000	8000000000000000,3fbf7ced916872b0,bfe0000000000000	bf51d384817f028f,3fbf5c2961181902,bfe1997b8770ea61	3f91bcfd60000000,bfe35e78a0000000,3fe97760c0000000	false
+travel-input	8	3dccccce	43340000	42b3ff7d	bff0000000000000,0,bff0000000000000	8000000000000000,3fbf7ced916872b0,bfe0000000000000	3fb21a186d268786,3fbf7ced916872b0,bfdb7979e4b65e1f	3bcbb917c0000000,bff0000000000000,bf1921fb60000000	false
+travel-input	9	3ca3d70a	80000000	80000000	8000000000000000,0,8000000000000000	8000000000000000,3fbf7ced916872b0,bfe0000000000000	0,3fbf7ced916872b0,bfe0000000000000	0,8000000000000000,3ff0000000000000	false
+travel-friction	0	3dcccccd	3dcccccd	true	0	3dcccccd	3f68f5c3	0	3f800000
+travel-friction	1	3fa00000	3ca3d70a	true	3f199999	3fa00000	3f7ae148	3f000000	3f7d70a4
+travel-friction	2	3dcccccd	3ca3d70a	true	3f19999a	3dcccccd	3f68f5c3	3f800000	3f68f5c3
+travel-friction	3	3fa00000	3cd4fdf3	true	3f19999b	3f9ffffc	3f7ae148	40000000	3f75c290
+travel-friction	4	3dcccccd	3d4ccccd	true	3f7ae148	3cbc00d8	3f68f5c3	42c80000	0
+travel-friction	5	3fa00000	3ca3d70a	true	3f800000	3e8a3d72	3f7ae148	0	3f800000
+travel-friction	6	3dcccccd	3cd4fdf3	true	3f0bc6a9	3dcccccd	3f68f5c3	3f000000	3f747ae2
+travel-friction	7	3fa00000	3ca3d70a	true	3f68f5c3	3eb77252	3f7ae148	3f800000	3f7ae148
+travel-friction	8	3dcccccd	3d4ccccd	false	0	3d4ccccd	3f68f5c3	40000000	3f51eb86
+travel-friction	9	3fa00000	3cd4fdf3	false	3f199999	3cd4fdf3	3f7ae148	42c80000	0
+travel-friction	10	3dcccccd	3ca3d70a	false	3f19999a	3ca3d70a	3f68f5c3	0	3f800000
+travel-friction	11	3fa00000	3ca3d70a	false	3f19999b	3ca3d70a	3f7ae148	3f000000	3f7d70a4
+travel-friction	12	3dcccccd	3dcccccd	false	3f7ae148	3dcccccd	3f68f5c3	3f800000	3f68f5c3
+travel-friction	13	3fa00000	3ca3d70a	false	3f800000	3ca3d70a	3f7ae148	40000000	3f75c290
+travel-friction	14	3dcccccd	3ca3d70a	false	3f0bc6a9	3ca3d70a	3f68f5c3	42c80000	0
+travel-friction	15	3fa00000	3cd4fdf3	false	3f68f5c3	3cd4fdf3	3f7ae148	0	3f800000
+travel-fluid-drag	0	3fb47ae147ae147b	false	false	8000000000000000,3f747ae147ae147b,3fc0000000000000	8000000000000000,0,3fc0000000000000
+travel-fluid-drag	1	3f847ae147ae147b	true	false	8000000000000000,3f447ae147ae147b,3fc0000000000000	8000000000000000,bf689374bc6a7efa,3fc0000000000000
+travel-fluid-drag	2	3f847ae147ae147b	true	false	8000000000000000,3f6db22d0e560419,3fc0000000000000	8000000000000000,3f689374bc6a7efa,3fc0000000000000
+travel-fluid-drag	3	3f847ae147ae147b	false	false	8000000000000000,3f6db22d0e56041a,3fc0000000000000	8000000000000000,3f689374bc6a7efb,3fc0000000000000
+travel-fluid-drag	4	0	true	false	8000000000000000,8000000000000000,3fc0000000000000	8000000000000000,8000000000000000,3fc0000000000000
+travel-fluid-drag	5	bfb47ae147ae147b	true	false	8000000000000000,bf747ae147ae147b,3fc0000000000000	8000000000000000,bf689374bc6a7efa,3fc0000000000000
+travel-fluid-drag	6	3fb47ae147ae147b	false	false	8000000000000000,bf947ae147ae147b,3fc0000000000000	8000000000000000,bf9999999999999a,3fc0000000000000
+travel-fluid-drag	7	3fb47ae147ae147b	true	true	8000000000000000,3fe0000000000000,3fc0000000000000	8000000000000000,3fe0000000000000,3fc0000000000000
+travel-fluid-drag	8	3f847ae147ae147b	true	false	8000000000000000,bf6374bc6a7ef9dc,3fc0000000000000	8000000000000000,bf689374bc6a7efb,3fc0000000000000
+damage-type	minecraft:arrow	arrow	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:bad_respawn_point	badRespawnPoint	always	3dcccccd	hurt	intentional_game_design	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:cactus	cactus	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:campfire	inFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:ignites_armor_stands,minecraft:is_fire,minecraft:no_knockback	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:cramming	cramming	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:dragon_breath	dragonBreath	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-type	minecraft:drown	drown	when_caused_by_living_non_player	0	drowning	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:is_drowning,minecraft:no_impact,minecraft:no_knockback,minecraft:wither_immune_to	minecraft:entity.player.hurt_drown
+damage-type	minecraft:dry_out	dryout	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:ender_pearl	fall	when_caused_by_living_non_player	0	hurt	fall_variants	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:explosion	explosion	always	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fall	fall	when_caused_by_living_non_player	0	hurt	fall_variants	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_anvil	anvil	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_block	fallingBlock	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_stalactite	fallingStalactite	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fireball	fireball	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:always_kills_armor_stands,minecraft:is_fire,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:fireworks	fireworks	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fly_into_wall	flyIntoWall	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:freeze	freeze	when_caused_by_living_non_player	0	freezing	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:is_freezing,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_freeze
+damage-type	minecraft:generic	generic	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:generic_kill	genericKill	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_invulnerability,minecraft:bypasses_resistance,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:hot_floor	hotFloor	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:in_fire	inFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:bypasses_shield,minecraft:ignites_armor_stands,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:in_wall	inWall	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:indirect_magic	indirectMagic	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:lava	lava	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:lightning_bolt	lightningBolt	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:is_lightning,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt
+damage-type	minecraft:mace_smash	mace_smash	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:mace_smash,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:magic	magic	when_caused_by_living_non_player	0	hurt	default	minecraft:always_triggers_silverfish,minecraft:avoids_guardian_thorns,minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_attack	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_attack_no_aggro	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:no_anger,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_projectile	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:on_fire	onFire	when_caused_by_living_non_player	0	burning	default	minecraft:burns_armor_stands,minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:out_of_world	outOfWorld	when_caused_by_living_non_player	0	hurt	default	minecraft:always_most_significant_fall,minecraft:bypasses_armor,minecraft:bypasses_invulnerability,minecraft:bypasses_resistance,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:outside_border	outsideBorder	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:player_attack	player	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:player_explosion	explosion.player	always	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:can_break_armor_stand,minecraft:is_explosion,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:sonic_boom	sonic_boom	always	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_enchantments,minecraft:bypasses_shield,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:spear	spear	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:spit	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:stalagmite	stalagmite	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:starve	starve	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_effects,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:sting	sting	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:sulfur_cube_hot	sulfurCubeHot	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:no_wolf_retaliation,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:sweet_berry_bush	sweetBerryBush	when_caused_by_living_non_player	3dcccccd	poking	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_sweet_berry_bush
+damage-type	minecraft:thorns	thorns	when_caused_by_living_non_player	3dcccccd	thorns	default	minecraft:avoids_guardian_thorns,minecraft:bypasses_wolf_armor,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:thrown	thrown	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:trident	trident	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:unattributed_fireball	onFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:is_fire,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:wind_charge	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:wither	wither	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-type	minecraft:wither_skull	witherSkull	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-codec	0	{"message_id":"custom","scaling":"never","exhaustion":0.1}	true	custom	never	3dcccccd	hurt	default
+damage-codec	1	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":"thorns","death_message_type":"fall_variants"}	true	custom	never	3dcccccd	thorns	fall_variants
+damage-codec	2	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":"bad"}	false	none
+damage-codec	3	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":null}	true	custom	never	3dcccccd	hurt	default
+damage-codec	4	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":5}	false	none
+damage-codec	5	{"message_id":"custom","scaling":"never","exhaustion":0.1,"death_message_type":"bad"}	false	none
+damage-codec	6	{"message_id":"custom","scaling":"never","exhaustion":0.1,"death_message_type":null}	true	custom	never	3dcccccd	hurt	default
+damage-codec	7	{"message_id":"custom","scaling":"always","exhaustion":"0.125"}	false	none
+damage-codec	8	{"message_id":"custom","scaling":"always","exhaustion":true}	false	none
+damage-codec	9	{"message_id":"custom","scaling":"always","exhaustion":1e100}	true	custom	always	7f800000	hurt	default
+damage-codec	10	{"message_id":123,"scaling":"never","exhaustion":-0.0}	false	none
+damage-codec	11	{"message_id":true,"scaling":"never","exhaustion":0}	false	none
+damage-codec	12	{"message_id":"","scaling":"never","exhaustion":-0.0}	true		never	80000000	hurt	default
+damage-codec	13	{"message_id":"custom","scaling":"bad","exhaustion":0}	false	none
+damage-codec	14	{"message_id":"custom","exhaustion":0}	false	none
+damage-codec	15	[]	false	none
+damage-codec	16	null	false	none
+damage-codec	17	{"message_id":"custom","scaling":"never","exhaustion":0.1,"unknown":[1,2,3]}	true	custom	never	3dcccccd	hurt	default
+damage-codec	18	{"message_id":"x","scaling":"never","exhaustion":0.100000000000000005}	true	x	never	3dcccccd	hurt	default
+damage-source	cause-0	minecraft:generic	0	0	true	false	false	none	none	none
+damage-source	cause-1	minecraft:generic	1	1	true	false	true	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	cause-2	minecraft:generic	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	cause-3	minecraft:generic	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	indirect	minecraft:generic	3	2	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	explicit	minecraft:generic	0	0	true	false	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+damage-source	explosion-0-0	minecraft:explosion	0	0	true	true	false	none	none	none
+damage-source	explosion-0-2	minecraft:explosion	0	2	false	true	false	none	none	none
+damage-source	explosion-3-0	minecraft:explosion	3	0	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	explosion-3-2	minecraft:player_explosion	3	2	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+difficulty-read	{}	normal	false	false
+difficulty-read	{difficulty_settings:{}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:1b}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:easy,hardcore:0b,locked:0b}}	easy	false	false
+difficulty-read	{difficulty_settings:{difficulty:peaceful,hardcore:0b,locked:1b}}	peaceful	false	true
+difficulty-read	{difficulty_settings:{difficulty:normal,hardcore:1b,locked:0b}}	normal	true	false
+difficulty-read	{difficulty_settings:{difficulty:wrong,hardcore:1b,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:yes,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:yes}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:3,hardcore:1b,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:256,locked:-1b}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1.5d,locked:0.0d}}	hard	true	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:0.5d,locked:-0.5d}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:0L,locked:4294967296L}}	hard	false	true
+difficulty-initial	false	false	peaceful	peaceful	false
+difficulty-initial	false	false	easy	easy	false
+difficulty-initial	false	false	normal	normal	false
+difficulty-initial	false	false	hard	hard	false
+difficulty-initial	false	true	peaceful	peaceful	true
+difficulty-initial	false	true	easy	easy	true
+difficulty-initial	false	true	normal	normal	true
+difficulty-initial	false	true	hard	hard	true
+difficulty-initial	true	false	peaceful	hard	false
+difficulty-initial	true	false	easy	hard	false
+difficulty-initial	true	false	normal	hard	false
+difficulty-initial	true	false	hard	hard	false
+difficulty-initial	true	true	peaceful	hard	true
+difficulty-initial	true	true	easy	hard	true
+difficulty-initial	true	true	normal	hard	true
+difficulty-initial	true	true	hard	hard	true
+xp-curve	-2147483648	7
+xp-curve	-4	-1
+xp-curve	-3	1
+xp-curve	-1	5
+xp-curve	0	7
+xp-curve	1	9
+xp-curve	14	35
+xp-curve	15	37
+xp-curve	16	42
+xp-curve	29	107
+xp-curve	30	112
+xp-curve	31	121
+xp-curve	100	742
+xp-curve	238609312	-2147483646
+xp-curve	2147483647	2147483481
+xp-award	points	0	0	0	0	0	0	0	0	0	0	0	0	23	-
+xp-award	points	0	0	0	0	1	0	0	0	3e124925	1	1	0	-1	-
+xp-award	points	0	0	0	0	7	0	0	1	0	7	7	0	-1	-
+xp-award	points	0	0	0	0	8	0	0	1	3de38e3e	8	8	0	-1	-
+xp-award	points	14	0.75	200	5	37	0	0	15	3f43759f	237	42	0	-1	-
+xp-award	points	29	0.99	10000	100	100	0	0	30	3f62202e	10100	200	0	-1	-
+xp-award	points	32	0.2	12000	300	-200	0	0	30	3f06db6e	11800	100	0	-1	-
+xp-award	points	1	0.01	1	0	-500	0	0	0	0	0	-500	0	-1	-
+xp-award	points	0	0	2147483647	2147483647	1	0	0	0	3e124925	0	-2147483648	0	-1	-
+xp-award	points	0	0	1	-2147483648	-2	0	0	0	0	0	2147483646	0	-1	-
+xp-award	points	0	-0.0	0	0	0	0	0	0	80000000	0	0	0	23	-
+xp-award	points	0	NaN	0	0	1	0	0	0	7fc00000	1	1	0	-1	-
+xp-award	points	0	1.5	0	0	0	0	0	0	3fc00000	0	0	0	23	-
+xp-award	points	0	0	0	0	10000	201	0	63	3ec4895f	10000	10000	201	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	4	0.25	100	20	1	100	0	5	3e800000	100	20	0	-1	-
+xp-award	levels	4	0.25	100	20	1	101	0	5	3e800000	100	20	101	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	4	0.25	100	20	1	301	201	5	3e800000	100	20	201	-1	-
+xp-award	levels	4	0.25	100	20	1	302	201	5	3e800000	100	20	302	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	29	0.25	100	20	1	201	0	30	3e800000	100	20	201	-1	minecraft:entity.player.levelup:7:3f400000:3f800000:bb20b45fd4d95138
+xp-award	levels	34	0.25	100	20	1	201	0	35	3e800000	100	20	201	-1	minecraft:entity.player.levelup:7:3f400000:3f800000:bb20b45fd4d95138
+xp-award	levels	2147483645	0.5	100	20	10	201	0	2147483647	3f000000	100	20	0	-1	-
+xp-award	levels	10	0.5	100	20	-20	201	0	0	0	0	20	0	-1	-
+xp-award	levels	-5	0.5	100	20	0	201	0	-5	3f000000	100	20	0	23	-
+xp-award	levels	2147483647	0.5	100	20	-2147483648	201	0	0	0	0	20	0	-1	-
+xp-award	levels	4	0.25	100	20	1	16777316	16777216	5	3e800000	100	20	16777216	-1	-
+xp-nbt	absent	0	0	0	0
+xp-nbt	normal	17	3f400000	777	123
+xp-nbt	negative	-5	0	-9	-20
+xp-nbt	wrong	0	0	0	0
+xp-nbt	nan	0	7fc00000	0	0
+entity-equipment-fact	player	head	1	minecraft:leather_boots	true
+entity-equipment-fact	player	head	0	minecraft:air	false
+entity-equipment-fact	player	head	-1	minecraft:air	false
+entity-equipment-fact	player	chest	1	minecraft:leather_boots	true
+entity-equipment-fact	player	chest	0	minecraft:air	false
+entity-equipment-fact	player	chest	-1	minecraft:air	false
+entity-equipment-fact	player	legs	1	minecraft:leather_boots	true
+entity-equipment-fact	player	legs	0	minecraft:air	false
+entity-equipment-fact	player	legs	-1	minecraft:air	false
+entity-equipment-fact	player	feet	1	minecraft:leather_boots	true
+entity-equipment-fact	player	feet	0	minecraft:air	false
+entity-equipment-fact	player	feet	-1	minecraft:air	false
+entity-equipment-fact	player	body	1	minecraft:leather_boots	true
+entity-equipment-fact	player	body	0	minecraft:air	false
+entity-equipment-fact	player	body	-1	minecraft:air	false
+entity-equipment-fact	player	mainhand	1	minecraft:leather_boots	true
+entity-equipment-fact	player	mainhand	0	minecraft:air	false
+entity-equipment-fact	player	mainhand	-1	minecraft:air	false
+entity-equipment-fact	player	offhand	1	minecraft:leather_boots	true
+entity-equipment-fact	player	offhand	0	minecraft:air	false
+entity-equipment-fact	player	offhand	-1	minecraft:air	false
+entity-equipment-fact	cow	head	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	head	0	minecraft:air	false
+entity-equipment-fact	cow	head	-1	minecraft:air	false
+entity-equipment-fact	cow	chest	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	chest	0	minecraft:air	false
+entity-equipment-fact	cow	chest	-1	minecraft:air	false
+entity-equipment-fact	cow	legs	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	legs	0	minecraft:air	false
+entity-equipment-fact	cow	legs	-1	minecraft:air	false
+entity-equipment-fact	cow	feet	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	feet	0	minecraft:air	false
+entity-equipment-fact	cow	feet	-1	minecraft:air	false
+entity-equipment-fact	cow	body	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	body	0	minecraft:air	false
+entity-equipment-fact	cow	body	-1	minecraft:air	false
+entity-equipment-fact	cow	mainhand	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	mainhand	0	minecraft:air	false
+entity-equipment-fact	cow	mainhand	-1	minecraft:air	false
+entity-equipment-fact	cow	offhand	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	offhand	0	minecraft:air	false
+entity-equipment-fact	cow	offhand	-1	minecraft:air	false
+entity-equipment-fact	tnt	head	1	minecraft:air	false
+entity-equipment-fact	tnt	head	0	minecraft:air	false
+entity-equipment-fact	tnt	head	-1	minecraft:air	false
+entity-equipment-fact	tnt	chest	1	minecraft:air	false
+entity-equipment-fact	tnt	chest	0	minecraft:air	false
+entity-equipment-fact	tnt	chest	-1	minecraft:air	false
+entity-equipment-fact	tnt	legs	1	minecraft:air	false
+entity-equipment-fact	tnt	legs	0	minecraft:air	false
+entity-equipment-fact	tnt	legs	-1	minecraft:air	false
+entity-equipment-fact	tnt	feet	1	minecraft:air	false
+entity-equipment-fact	tnt	feet	0	minecraft:air	false
+entity-equipment-fact	tnt	feet	-1	minecraft:air	false
+entity-equipment-fact	tnt	body	1	minecraft:air	false
+entity-equipment-fact	tnt	body	0	minecraft:air	false
+entity-equipment-fact	tnt	body	-1	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	1	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	0	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	-1	minecraft:air	false
+entity-equipment-fact	tnt	offhand	1	minecraft:air	false
+entity-equipment-fact	tnt	offhand	0	minecraft:air	false
+entity-equipment-fact	tnt	offhand	-1	minecraft:air	false
+entity-equipment-order	-2	true	-
+entity-equipment-order	-1	true	head,chest,legs,feet,body,mainhand,offhand
+entity-equipment-order	0	false	head
+entity-equipment-order	1	false	head,chest
+entity-equipment-order	2	false	head,chest,legs
+entity-equipment-order	3	false	head,chest,legs,feet
+entity-equipment-order	4	false	head,chest,legs,feet,body
+entity-equipment-order	5	false	head,chest,legs,feet,body,mainhand
+entity-equipment-order	6	false	head,chest,legs,feet,body,mainhand,offhand
+entity-position-fact	player	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	player	-1	4050333333333333	false	8,64,8	8,64,8	8,64,8	8,0,8	false	false
+entity-position-fact	player	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	1	4050333333333333	false	7,63,9	7,64,9	7,64,9	7,63,9	false	false
+entity-position-fact	player	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	8666	4050333333333333	false	7,63,9	7,63,9	7,64,9	7,63,9	false	false
+entity-position-fact	player	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	player	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	tnt	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	tnt	-1	4050333333333333	false	8,64,8	8,64,8	8,64,8	8,0,8	false	false
+entity-position-fact	tnt	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	1	4050333333333333	false	7,63,9	7,64,9	7,64,9	7,63,9	false	false
+entity-position-fact	tnt	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	8666	4050333333333333	false	7,63,9	7,63,9	7,64,9	7,63,9	false	false
+entity-position-fact	tnt	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	tnt	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	orb	-1	4050333333333333	false	8,64,8	8,64,8	8,63,8	8,0,8	false	false
+entity-position-fact	orb	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	1	4050333333333333	false	7,63,9	7,64,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	8666	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-flags-fact	base	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	player-base	true,true,true,true,true,false,false,true,true,false	false
+entity-flags-fact	player-flying	true,true,true,true,false,true,false,true,true,false	false
+entity-flags-fact	player-glide	true,true,true,true,true,true,false,true,true,true	false
+entity-flags-fact	player-spectator	true,true,true,true,false,false,false,true,true,false	false
+entity-flags-fact	cow-baby	true,true,true,true,true,false,true,true,true,false	false
+entity-flags-fact	cow-glide	true,true,true,true,true,true,false,true,true,true	false
+entity-flags-fact	tnt-glide	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-stone	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-netherite	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-zero	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-negative	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-direct	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-other	true,true,true,true,true,false,false,false,true,false	false
+entity-nbt	player-empty	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
+entity-nbt	player-selected	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[{Slot:0b,count:3,id:"minecraft:stone"}],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItem:{count:3,id:"minecraft:stone"},SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
+entity-nbt	player-zero	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
+entity-nbt	item-live	false	false	{Age:0s,Air:300s,Fire:0s,Health:5s,Invulnerable:0b,Item:{count:3,id:"minecraft:stone"},Motion:[0.0d,0.0d,0.0d],OnGround:0b,PickupDelay:7s,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],UUID:[I;0,0,0,1],fall_distance:0.0d}
+entity-nbt	item-removed	false	false	{Age:0s,Air:300s,Fire:0s,Health:5s,Invulnerable:0b,Item:{count:3,id:"minecraft:stone"},Motion:[0.0d,0.0d,0.0d],OnGround:0b,PickupDelay:7s,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],UUID:[I;0,0,0,1],fall_distance:0.0d}
+entity-nbt	item-riding	false	false	{Age:0s,Air:300s,Fire:0s,Health:5s,Invulnerable:0b,Item:{count:3,id:"minecraft:stone"},Motion:[0.0d,0.0d,0.0d],OnGround:0b,PickupDelay:7s,PortalCooldown:0,Pos:[10.0d,64.0d,-20.0d],Rotation:[0.0f,0.0f],UUID:[I;0,0,0,1],fall_distance:0.0d}
+entity-nbt	mob	false	false	{Age:-17,Air:300s,Fire:0s,Health:7.5f,HurtTime:0s,InLove:0,Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],UUID:[I;0,0,0,1],fall_distance:0.0d}
+item-name	0	{}	{"translate":"block.minecraft.air"}
+item-name	1	{"id":"minecraft:compass"}	{"translate":"item.minecraft.compass"}
+item-name	2	{"id":"minecraft:compass","components":{"minecraft:lodestone_tracker":{}}}	{"translate":"item.minecraft.lodestone_compass"}
+item-name	3	{"id":"minecraft:recovery_compass","components":{"minecraft:lodestone_tracker":{}}}	{"translate":"item.minecraft.recovery_compass"}
+item-name	4	{"id":"minecraft:shield"}	{"translate":"item.minecraft.shield"}
+item-name	5	{"id":"minecraft:shield","components":{"minecraft:base_color":"red"}}	{"translate":"item.minecraft.shield.red"}
+item-name	6	{"id":"minecraft:potion"}	{"translate":"item.minecraft.potion.effect.empty"}
+item-name	7	{"id":"minecraft:potion","components":{"minecraft:potion_contents":{"potion":"minecraft:long_swiftness"}}}	{"translate":"item.minecraft.potion.effect.swiftness"}
+item-name	8	{"id":"minecraft:splash_potion","components":{"minecraft:potion_contents":{"potion":"minecraft:strong_healing","custom_name":"brew"}}}	{"translate":"item.minecraft.splash_potion.effect.brew"}
+item-name	9	{"id":"minecraft:lingering_potion","components":{"minecraft:potion_contents":{"potion":"minecraft:water"}}}	{"translate":"item.minecraft.lingering_potion.effect.water"}
+item-name	10	{"id":"minecraft:tipped_arrow","components":{"minecraft:potion_contents":{"potion":"minecraft:strong_poison"}}}	{"translate":"item.minecraft.tipped_arrow.effect.poison"}
+item-name	11	{"id":"minecraft:player_head"}	{"translate":"block.minecraft.player_head"}
+item-name	12	{"id":"minecraft:player_head","components":{"minecraft:profile":{"name":"Doc"}}}	{"translate":"block.minecraft.player_head.named","with":["Doc"]}
+item-name	13	{"id":"minecraft:stone","components":{"minecraft:item_name":"overridden"}}	"overridden"
+item-name	14	{"id":"minecraft:potion","components":{"!minecraft:potion_contents":{},"minecraft:item_name":"overridden"}}	"overridden"
+entity-name	player	false	metadata	"metadata"	{"text":"metadata","click_event":{"command":"/tell metadata ","action":"suggest_command"},"hover_event":{"id":"minecraft:player","uuid":[0,0,0,1],"name":"metadata","action":"show_entity"},"insertion":"metadata"}
+entity-name	player-custom	false	metadata	"metadata"	{"text":"metadata","click_event":{"command":"/tell metadata ","action":"suggest_command"},"hover_event":{"id":"minecraft:player","uuid":[0,0,0,1],"name":"metadata","action":"show_entity"},"insertion":"metadata"}
+entity-name	mob	false	00000000-0000-0000-0000-000000000001	{"translate":"entity.minecraft.cow"}	{"translate":"entity.minecraft.cow","hover_event":{"id":"minecraft:cow","uuid":[0,0,0,1],"name":{"translate":"entity.minecraft.cow"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	mob-custom	false	00000000-0000-0000-0000-000000000001	{"text":"named","extra":["child"],"bold":true,"insertion":"custom"}	{"text":"named","extra":["child"],"bold":true,"hover_event":{"id":"minecraft:cow","uuid":[0,0,0,1],"name":{"text":"named","extra":["child"],"bold":true,"insertion":"custom"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item	false	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.stone"}	{"translate":"block.minecraft.stone","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.stone"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-stack-custom	false	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.stone"}	{"translate":"block.minecraft.stone","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.stone"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-custom	false	00000000-0000-0000-0000-000000000001	{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"}	{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-zero	false	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.air"}	{"translate":"block.minecraft.air","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.air"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	player	true	metadata	"metadata"	{"text":"","extra":[{"text":"<","bold":true},"metadata",{"text":">","italic":false}],"color":"red","click_event":{"command":"/tell metadata ","action":"suggest_command"},"hover_event":{"id":"minecraft:player","uuid":[0,0,0,1],"name":"metadata","action":"show_entity"},"insertion":"metadata"}
+entity-name	player-custom	true	metadata	"metadata"	{"text":"","extra":[{"text":"<","bold":true},"metadata",{"text":">","italic":false}],"color":"red","click_event":{"command":"/tell metadata ","action":"suggest_command"},"hover_event":{"id":"minecraft:player","uuid":[0,0,0,1],"name":"metadata","action":"show_entity"},"insertion":"metadata"}
+entity-name	mob	true	00000000-0000-0000-0000-000000000001	{"translate":"entity.minecraft.cow"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"entity.minecraft.cow"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:cow","uuid":[0,0,0,1],"name":{"translate":"entity.minecraft.cow"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	mob-custom	true	00000000-0000-0000-0000-000000000001	{"text":"named","extra":["child"],"bold":true,"insertion":"custom"}	{"text":"","extra":[{"text":"<","bold":true},{"text":"named","extra":["child"],"bold":true,"insertion":"custom"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:cow","uuid":[0,0,0,1],"name":{"text":"named","extra":["child"],"bold":true,"insertion":"custom"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item	true	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.stone"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"block.minecraft.stone"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.stone"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-stack-custom	true	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.stone"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"block.minecraft.stone"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.stone"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-custom	true	00000000-0000-0000-0000-000000000001	{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"}	{"text":"","extra":[{"text":"<","bold":true},{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+entity-name	item-zero	true	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.air"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"block.minecraft.air"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.air"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+freeze-counter	-2147483648	cb6a0ea1	false	140
+freeze-counter	-141	bf80ea0f	false	140
+freeze-counter	-1	bbea0ea1	false	140
+freeze-counter	0	0	false	140
+freeze-counter	1	3bea0ea1	false	140
+freeze-counter	70	3f000000	false	140
+freeze-counter	139	3f7e2be3	false	140
+freeze-counter	140	3f800000	true	140
+freeze-counter	141	3f800000	true	140
+freeze-counter	2147483647	3f800000	true	140
+freeze-armor	false	mainhand	1	true
+freeze-armor	false	mainhand	0	true
+freeze-armor	false	mainhand	-1	true
+freeze-armor	false	offhand	1	true
+freeze-armor	false	offhand	0	true
+freeze-armor	false	offhand	-1	true
+freeze-armor	false	feet	1	false
+freeze-armor	false	feet	0	true
+freeze-armor	false	feet	-1	true
+freeze-armor	false	legs	1	false
+freeze-armor	false	legs	0	true
+freeze-armor	false	legs	-1	true
+freeze-armor	false	chest	1	false
+freeze-armor	false	chest	0	true
+freeze-armor	false	chest	-1	true
+freeze-armor	false	head	1	false
+freeze-armor	false	head	0	true
+freeze-armor	false	head	-1	true
+freeze-armor	false	body	1	false
+freeze-armor	false	body	0	true
+freeze-armor	false	body	-1	true
+freeze-armor	false	saddle	1	true
+freeze-armor	false	saddle	0	true
+freeze-armor	false	saddle	-1	true
+freeze-armor	true	mainhand	1	false
+freeze-armor	true	mainhand	0	false
+freeze-armor	true	mainhand	-1	false
+freeze-armor	true	offhand	1	false
+freeze-armor	true	offhand	0	false
+freeze-armor	true	offhand	-1	false
+freeze-armor	true	feet	1	false
+freeze-armor	true	feet	0	false
+freeze-armor	true	feet	-1	false
+freeze-armor	true	legs	1	false
+freeze-armor	true	legs	0	false
+freeze-armor	true	legs	-1	false
+freeze-armor	true	chest	1	false
+freeze-armor	true	chest	0	false
+freeze-armor	true	chest	-1	false
+freeze-armor	true	head	1	false
+freeze-armor	true	head	0	false
+freeze-armor	true	head	-1	false
+freeze-armor	true	body	1	false
+freeze-armor	true	body	0	false
+freeze-armor	true	body	-1	false
+freeze-armor	true	saddle	1	false
+freeze-armor	true	saddle	0	false
+freeze-armor	true	saddle	-1	false
+freeze-frost	false	-2147483648	1	none	3fb99999a0000000
+freeze-frost	false	-141	1	none	3fb99999a0000000
+freeze-frost	false	-1	1	none	3fb99999a0000000
+freeze-frost	false	0	1	none	3fb99999a0000000
+freeze-frost	false	1	1	bf3767dce0000000	3fb98231c3200000
+freeze-frost	false	70	1	bf999999a0000000	3fb3333338000000
+freeze-frost	false	139	1	bfa96ac9e0000000	3fa9c86960000000
+freeze-frost	false	140	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	false	141	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	false	2147483647	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	true	-2147483648	1	none	3fb99999a0000000
+freeze-frost	true	-141	1	none	3fb99999a0000000
+freeze-frost	true	-1	1	none	3fb99999a0000000
+freeze-frost	true	0	1	none	3fb99999a0000000
+freeze-frost	true	1	1	none	3fb99999a0000000
+freeze-frost	true	70	1	none	3fb99999a0000000
+freeze-frost	true	139	1	none	3fb99999a0000000
+freeze-frost	true	140	1	none	3fb99999a0000000
+freeze-frost	true	141	1	none	3fb99999a0000000
+freeze-frost	true	2147483647	1	none	3fb99999a0000000
+living-climb	0	0	0	0	false	41a00000	false	true	none
+living-climb	1	7308	0	0	false	41a00000	true	false	8,64,8
+living-climb	2	10123	0	0	false	41a00000	true	false	8,64,8
+living-climb	3	8795	7308	0	false	41a00000	true	false	8,64,8
+living-climb	4	8799	7308	0	false	41a00000	false	true	none
+living-climb	5	8843	7308	0	false	41a00000	false	true	none
+living-climb	6	8795	0	0	false	41a00000	false	true	none
+living-climb	7	24094	0	0	false	41a00000	true	false	8,64,8
+living-climb	8	24334	0	0	false	41a00000	true	false	8,64,8
+living-climb	9	10123	0	0	true	41a00000	false	true	none
+living-climb	10	7308	0	3	false	41a00000	false	false	none
+living-climb	11	0	0	0	false	7fc00000	false	false	none
+living-climb-cache	true,true,true,false	8,64,8
+entity-push	0	0,0,0	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	1	3f50624dd2f1a9fc,0,0	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	2	3f847ae13fffffff,0,0	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	3	3f847ae140000000,0,0	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fbeb851eb70a3d7,bfd0000000000000,8000000000000000	bfdfae147adc28f6,3fe8000000000000,3ff0000000000000	true	true
+entity-push	4	3fe0000000000000,0,3fd0000000000000	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fb6f2f3d4bd0b71,bfd0000000000000,bf921a185685e91e	bfddbcbcf52f42dc,3fe8000000000000,3ff04868615a17a4	true	true
+entity-push	5	4000000000000000,0,c010000000000000	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fb9999998000000,bfd0000000000000,3fa99999a0000000	bfde666666000000,3fe8000000000000,3fee666666000000	true	true
+entity-push	6	c020000000000000,0,3fe0000000000000	false	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc6666668000000,bfd0000000000000,bf6999999ffffffe	bfe199999a000000,3fe8000000000000,3ff00cccccd00000	true	true
+entity-push	7	c020000000000000,0,3fe0000000000000	true	false	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	8	c020000000000000,0,3fe0000000000000	false	true	true	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	9	c020000000000000,0,3fe0000000000000	false	false	false	true	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe199999a000000,3fe8000000000000,3ff00cccccd00000	false	true
+entity-push	10	c020000000000000,0,3fe0000000000000	false	false	true	false	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc6666668000000,bfd0000000000000,bf6999999ffffffe	bfe0000000000000,3fe8000000000000,3ff0000000000000	true	false
+entity-push	11	c020000000000000,0,3fe0000000000000	false	false	true	true	1	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	12	c020000000000000,0,3fe0000000000000	false	false	true	true	2	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe199999a000000,3fe8000000000000,3ff00cccccd00000	false	true
+entity-push	13	c020000000000000,0,3fe0000000000000	false	false	true	true	3	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc6666668000000,bfd0000000000000,bf6999999ffffffe	bfe0000000000000,3fe8000000000000,3ff0000000000000	true	false
+entity-push	14	c020000000000000,0,3fe0000000000000	false	false	false	false	0	false	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-push	15	c020000000000000,0,3fe0000000000000	false	false	true	true	0	true	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	3fc0000000000000,bfd0000000000000,8000000000000000	bfe0000000000000,3fe8000000000000,3ff0000000000000	false	false
+entity-impulse	0	0,0,0	8000000000000000,3fc0000000000000,bfe0000000000000	0,3fc0000000000000,bfe0000000000000	true
+entity-impulse	1	3fd0000000000000,bfe0000000000000,3fc0000000000000	8000000000000000,3fc0000000000000,bfe0000000000000	3fd0000000000000,bfd8000000000000,bfd8000000000000	true
+entity-impulse	2	7ff8000000000000,0,0	8000000000000000,3fc0000000000000,bfe0000000000000	8000000000000000,3fc0000000000000,bfe0000000000000	false
+entity-impulse	3	0,7ff0000000000000,0	8000000000000000,3fc0000000000000,bfe0000000000000	8000000000000000,3fc0000000000000,bfe0000000000000	false
+push-team-capture	false	false	1,1
+push-team-capture	true	false	1,0
+living-cramming	0	1	0	4096		1805805761979175391	1
+living-cramming	1	0	0	4096	push:100:false	1805805761979175391	1
+living-cramming	1	1	0	4096	hurt:cramming:40c00000,push:100:true	-2297027267632269370	1
+living-cramming	1	1	1	4096	push:100:false	-2297027267632269370	1
+living-cramming	1	2	0	4096	push:100:false	1805805761979175391	1
+living-cramming	3	2	0	4096	hurt:cramming:40c00000,push:100:false,push:101:false,push:102:true	-2297027267632269370	1
+living-cramming	3	2	1	4096	push:100:false,push:101:false,push:102:false	-2297027267632269370	1
+living-cramming	3	2	2	4096	push:100:false,push:101:false,push:102:false	-2297027267632269370	1
+living-cramming	3	3	0	4096	hurt:cramming:40c00000,push:100:false,push:101:false,push:102:true	-2297027267632269370	1
+living-cramming	3	3	1	4096	push:100:false,push:101:false,push:102:false	-2297027267632269370	1
+living-cramming	3	4	0	4096	push:100:false,push:101:false,push:102:false	1805805761979175391	1
+living-cramming	3	1	0	0	push:100:false,push:101:false,push:102:false	-3109364765729502342	1
+living-cramming	3	1	0	4096	hurt:cramming:40c00000,push:100:false,push:101:false,push:102:true	-2297027267632269370	1
+living-cramming	3	1	0	-1	push:100:false,push:101:false,push:102:false	8108487875070533655	1
+living-cramming	3	1	2	4096	hurt:cramming:40c00000,push:100:false,push:101:false,push:102:true	-2297027267632269370	1
+living-push-rate	0	true	1
+living-push-rate	1	true	1
+living-push-rate	2	false	0
 dimensions	cow	3f666666,3fb33333,3fa66666,false	0,3ff5e66660000000,0:0,3ff5e66660000000,0	0,0,0:0,0,0	0,3ff6666660000000,0:0,3ff6666660000000,0	0,3fe6666660000000,0:0,3fe6666660000000,0
 dimensions	baby-cow	3f43d70a,3f9851ec,3f90b43a,false	0,3ff29d70a728f5c0,0:0,3ff29d70a728f5c0,0	0,0,0:0,0,0	0,3ff30a3d7428f5c0,0:0,3ff30a3d7428f5c0,0	0,3fe30a3d7428f5c0,0:0,3fe30a3d7428f5c0,0
 dimensions	happy-ghast	40800000,40800000,40266666,false	0,4010000000000000,3ffb333333333333;bffb333333333333,4010000000000000,0;0,4010000000000000,bffb333333333333;3ffb333333333333,4010000000000000,0:0,4010000000000000,0	0,bfe0000000000000,0:0,bfe0000000000000,0	0,4010000000000000,0:0,4010000000000000,0	0,4000000000000000,0:0,4000000000000000,0
@@ -250,6 +732,20 @@ player-tracking	3	-
 player-tracking	4	S:attributes:minecraft:max_health=4041800000000000[minecraft:bonus=4008000000000000:0]|T:head:64
 player-tracking	5	T:motion:3fc0000000000000,0,0|S:data:0:-128
 player-tracking	6	-
+entity-visibility	TRACKED	TrackingStart:1,TrackingStart:2	3,1,2
+entity-visibility	TICKING	TickingStart:1,TickingStart:2	3,1,2
+entity-visibility	TRACKED	TickingEnd:1,TickingEnd:2	3,1,2
+entity-visibility	HIDDEN	TrackingEnd:1,TrackingEnd:2	3
+entity-visibility	TICKING	TrackingStart:1,TrackingStart:2,TickingStart:1,TickingStart:2	3,1,2
+entity-legacy	unknown-trees	1:1:none:2:false,2:2:1::false	0	2
+entity-creation-order	minecraft:cow	1
+entity-creation-order	minecraft:item	2
+entity-creation-order	minecraft:tnt	3
+entity-creation-order	minecraft:falling_block	4
+entity-creation-order	minecraft:experience_orb	5
+entity-creation-order	minecraft:player	6
+worldgen-shared	nested	99:0:false,1:0:false,2:0:false,3:0:false,4:0:false,5:0:false,6:0:false	1:99:none::false,2:1:none:3/6:false,3:2:2:4/5:false,4:3:3::false,5:4:3::false,6:1:2:7:false,7:5:6::false,8:6:none::false	0
+worldgen-shared	removed-vehicle	1:0:false,2:0:false	1:1:none:2:true,2:2:1::false
 worldgen-entities	preorder	1:0:false,2:0:false,4:0:false	1:1:none,2:0:1,4:0:none	false
 worldgen-entities	duplicate	1:0:false,2:0:false	1:true
 worldgen-entities	unknown-root	0
@@ -688,6 +1184,7 @@ trace	13	bfd3333333333333,4050000029f16b12,402f99999999999a	bfd3333333333333,405
 block-tag	minecraft:fences	minecraft:oak_fence,minecraft:nether_brick_fence,minecraft:spruce_fence,minecraft:birch_fence,minecraft:jungle_fence,minecraft:acacia_fence,minecraft:cherry_fence,minecraft:dark_oak_fence,minecraft:pale_oak_fence,minecraft:mangrove_fence,minecraft:poplar_fence,minecraft:bamboo_fence,minecraft:crimson_fence,minecraft:warped_fence
 block-tag	minecraft:walls	minecraft:resin_brick_wall,minecraft:cobblestone_wall,minecraft:mossy_cobblestone_wall,minecraft:brick_wall,minecraft:prismarine_wall,minecraft:red_sandstone_wall,minecraft:mossy_stone_brick_wall,minecraft:granite_wall,minecraft:stone_brick_wall,minecraft:mud_brick_wall,minecraft:nether_brick_wall,minecraft:andesite_wall,minecraft:red_nether_brick_wall,minecraft:sandstone_wall,minecraft:end_stone_brick_wall,minecraft:diorite_wall,minecraft:blackstone_wall,minecraft:polished_blackstone_brick_wall,minecraft:polished_blackstone_wall,minecraft:tuff_wall,minecraft:polished_tuff_wall,minecraft:tuff_brick_wall,minecraft:sulfur_wall,minecraft:polished_sulfur_wall,minecraft:sulfur_brick_wall,minecraft:cinnabar_wall,minecraft:polished_cinnabar_wall,minecraft:cinnabar_brick_wall,minecraft:cobbled_deepslate_wall,minecraft:polished_deepslate_wall,minecraft:deepslate_tile_wall,minecraft:deepslate_brick_wall
 block-tag	minecraft:climbable	minecraft:ladder,minecraft:vine,minecraft:scaffolding,minecraft:weeping_vines,minecraft:weeping_vines_plant,minecraft:twisting_vines,minecraft:twisting_vines_plant,minecraft:cave_vines,minecraft:cave_vines_plant
+block-tag	minecraft:can_glide_through	minecraft:vine,minecraft:weeping_vines,minecraft:weeping_vines_plant,minecraft:twisting_vines,minecraft:twisting_vines_plant,minecraft:cave_vines,minecraft:cave_vines_plant
 block-tag	minecraft:suppresses_bounce	minecraft:honey_block
 block-tag	minecraft:fall_damage_resetting	minecraft:cobweb,minecraft:ladder,minecraft:vine,minecraft:scaffolding,minecraft:sweet_berry_bush,minecraft:weeping_vines,minecraft:weeping_vines_plant,minecraft:twisting_vines,minecraft:twisting_vines_plant,minecraft:cave_vines,minecraft:cave_vines_plant
 block-tag	minecraft:blocks_fluid_flow	minecraft:stone,minecraft:granite,minecraft:polished_granite,minecraft:diorite,minecraft:polished_diorite,minecraft:andesite,minecraft:polished_andesite,minecraft:grass_block,minecraft:dirt,minecraft:coarse_dirt,minecraft:podzol,minecraft:cobblestone,minecraft:oak_planks,minecraft:spruce_planks,minecraft:birch_planks,minecraft:jungle_planks,minecraft:acacia_planks,minecraft:cherry_planks,minecraft:dark_oak_planks,minecraft:pale_oak_wood,minecraft:pale_oak_planks,minecraft:mangrove_planks,minecraft:poplar_planks,minecraft:bamboo_planks,minecraft:bamboo_mosaic,minecraft:bedrock,minecraft:sand,minecraft:suspicious_sand,minecraft:red_sand,minecraft:gravel,minecraft:suspicious_gravel,minecraft:gold_ore,minecraft:deepslate_gold_ore,minecraft:iron_ore,minecraft:deepslate_iron_ore,minecraft:coal_ore,minecraft:deepslate_coal_ore,minecraft:nether_gold_ore,minecraft:oak_log,minecraft:spruce_log,minecraft:birch_log,minecraft:jungle_log,minecraft:acacia_log,minecraft:cherry_log,minecraft:dark_oak_log,minecraft:pale_oak_log,minecraft:mangrove_log,minecraft:poplar_log,minecraft:mangrove_roots,minecraft:muddy_mangrove_roots,minecraft:bamboo_block,minecraft:stripped_spruce_log,minecraft:stripped_birch_log,minecraft:stripped_jungle_log,minecraft:stripped_acacia_log,minecraft:stripped_cherry_log,minecraft:stripped_dark_oak_log,minecraft:stripped_pale_oak_log,minecraft:stripped_oak_log,minecraft:stripped_mangrove_log,minecraft:stripped_poplar_log,minecraft:stripped_bamboo_block,minecraft:oak_wood,minecraft:spruce_wood,minecraft:birch_wood,minecraft:jungle_wood,minecraft:acacia_wood,minecraft:cherry_wood,minecraft:dark_oak_wood,minecraft:mangrove_wood,minecraft:poplar_wood,minecraft:stripped_oak_wood,minecraft:stripped_spruce_wood,minecraft:stripped_birch_wood,minecraft:stripped_jungle_wood,minecraft:stripped_acacia_wood,minecraft:stripped_cherry_wood,minecraft:stripped_dark_oak_wood,minecraft:stripped_pale_oak_wood,minecraft:stripped_mangrove_wood,minecraft:stripped_poplar_wood,minecraft:oak_leaves,minecraft:spruce_leaves,minecraft:birch_leaves,minecraft:jungle_leaves,minecraft:acacia_leaves,minecraft:cherry_leaves,minecraft:dark_oak_leaves,minecraft:pale_oak_leaves,minecraft:mangrove_leaves,minecraft:red_poplar_leaves,minecraft:orange_poplar_leaves,minecraft:yellow_poplar_leaves,minecraft:azalea_leaves,minecraft:flowering_azalea_leaves,minecraft:sponge,minecraft:wet_sponge,minecraft:glass,minecraft:lapis_ore,minecraft:deepslate_lapis_ore,minecraft:lapis_block,minecraft:dispenser,minecraft:sandstone,minecraft:chiseled_sandstone,minecraft:cut_sandstone,minecraft:note_block,minecraft:white_bed,minecraft:orange_bed,minecraft:magenta_bed,minecraft:light_blue_bed,minecraft:yellow_bed,minecraft:lime_bed,minecraft:pink_bed,minecraft:gray_bed,minecraft:light_gray_bed,minecraft:cyan_bed,minecraft:purple_bed,minecraft:blue_bed,minecraft:brown_bed,minecraft:green_bed,minecraft:red_bed,minecraft:black_bed,minecraft:straw_bed,minecraft:sticky_piston,minecraft:piston,minecraft:piston_head,minecraft:white_wool,minecraft:orange_wool,minecraft:magenta_wool,minecraft:light_blue_wool,minecraft:yellow_wool,minecraft:lime_wool,minecraft:pink_wool,minecraft:gray_wool,minecraft:light_gray_wool,minecraft:cyan_wool,minecraft:purple_wool,minecraft:blue_wool,minecraft:brown_wool,minecraft:green_wool,minecraft:red_wool,minecraft:black_wool,minecraft:white_wool_stairs,minecraft:orange_wool_stairs,minecraft:magenta_wool_stairs,minecraft:light_blue_wool_stairs,minecraft:yellow_wool_stairs,minecraft:lime_wool_stairs,minecraft:pink_wool_stairs,minecraft:gray_wool_stairs,minecraft:light_gray_wool_stairs,minecraft:cyan_wool_stairs,minecraft:purple_wool_stairs,minecraft:blue_wool_stairs,minecraft:brown_wool_stairs,minecraft:green_wool_stairs,minecraft:red_wool_stairs,minecraft:black_wool_stairs,minecraft:white_wool_slab,minecraft:orange_wool_slab,minecraft:magenta_wool_slab,minecraft:light_blue_wool_slab,minecraft:yellow_wool_slab,minecraft:lime_wool_slab,minecraft:pink_wool_slab,minecraft:gray_wool_slab,minecraft:light_gray_wool_slab,minecraft:cyan_wool_slab,minecraft:purple_wool_slab,minecraft:blue_wool_slab,minecraft:brown_wool_slab,minecraft:green_wool_slab,minecraft:red_wool_slab,minecraft:black_wool_slab,minecraft:moving_piston,minecraft:gold_block,minecraft:iron_block,minecraft:bricks,minecraft:tnt,minecraft:bookshelf,minecraft:chiseled_bookshelf,minecraft:acacia_shelf,minecraft:bamboo_shelf,minecraft:birch_shelf,minecraft:cherry_shelf,minecraft:crimson_shelf,minecraft:dark_oak_shelf,minecraft:jungle_shelf,minecraft:mangrove_shelf,minecraft:oak_shelf,minecraft:pale_oak_shelf,minecraft:poplar_shelf,minecraft:spruce_shelf,minecraft:warped_shelf,minecraft:mossy_cobblestone,minecraft:obsidian,minecraft:spawner,minecraft:creaking_heart,minecraft:oak_stairs,minecraft:chest,minecraft:diamond_ore,minecraft:deepslate_diamond_ore,minecraft:diamond_block,minecraft:crafting_table,minecraft:farmland,minecraft:furnace,minecraft:oak_sign,minecraft:spruce_sign,minecraft:birch_sign,minecraft:acacia_sign,minecraft:cherry_sign,minecraft:jungle_sign,minecraft:dark_oak_sign,minecraft:pale_oak_sign,minecraft:mangrove_sign,minecraft:poplar_sign,minecraft:bamboo_sign,minecraft:oak_door,minecraft:cobblestone_stairs,minecraft:oak_wall_sign,minecraft:spruce_wall_sign,minecraft:birch_wall_sign,minecraft:acacia_wall_sign,minecraft:cherry_wall_sign,minecraft:jungle_wall_sign,minecraft:dark_oak_wall_sign,minecraft:pale_oak_wall_sign,minecraft:mangrove_wall_sign,minecraft:poplar_wall_sign,minecraft:bamboo_wall_sign,minecraft:oak_hanging_sign,minecraft:spruce_hanging_sign,minecraft:birch_hanging_sign,minecraft:acacia_hanging_sign,minecraft:cherry_hanging_sign,minecraft:jungle_hanging_sign,minecraft:dark_oak_hanging_sign,minecraft:pale_oak_hanging_sign,minecraft:crimson_hanging_sign,minecraft:warped_hanging_sign,minecraft:mangrove_hanging_sign,minecraft:poplar_hanging_sign,minecraft:bamboo_hanging_sign,minecraft:oak_wall_hanging_sign,minecraft:spruce_wall_hanging_sign,minecraft:birch_wall_hanging_sign,minecraft:acacia_wall_hanging_sign,minecraft:cherry_wall_hanging_sign,minecraft:jungle_wall_hanging_sign,minecraft:dark_oak_wall_hanging_sign,minecraft:pale_oak_wall_hanging_sign,minecraft:mangrove_wall_hanging_sign,minecraft:poplar_wall_hanging_sign,minecraft:crimson_wall_hanging_sign,minecraft:warped_wall_hanging_sign,minecraft:bamboo_wall_hanging_sign,minecraft:stone_pressure_plate,minecraft:iron_door,minecraft:oak_pressure_plate,minecraft:spruce_pressure_plate,minecraft:birch_pressure_plate,minecraft:jungle_pressure_plate,minecraft:acacia_pressure_plate,minecraft:cherry_pressure_plate,minecraft:dark_oak_pressure_plate,minecraft:pale_oak_pressure_plate,minecraft:mangrove_pressure_plate,minecraft:poplar_pressure_plate,minecraft:bamboo_pressure_plate,minecraft:redstone_ore,minecraft:deepslate_redstone_ore,minecraft:ice,minecraft:snow_block,minecraft:cactus,minecraft:clay,minecraft:jukebox,minecraft:oak_fence,minecraft:netherrack,minecraft:soul_sand,minecraft:soul_soil,minecraft:basalt,minecraft:polished_basalt,minecraft:glowstone,minecraft:carved_pumpkin,minecraft:jack_o_lantern,minecraft:cake,minecraft:white_stained_glass,minecraft:orange_stained_glass,minecraft:magenta_stained_glass,minecraft:light_blue_stained_glass,minecraft:yellow_stained_glass,minecraft:lime_stained_glass,minecraft:pink_stained_glass,minecraft:gray_stained_glass,minecraft:light_gray_stained_glass,minecraft:cyan_stained_glass,minecraft:purple_stained_glass,minecraft:blue_stained_glass,minecraft:brown_stained_glass,minecraft:green_stained_glass,minecraft:red_stained_glass,minecraft:black_stained_glass,minecraft:oak_trapdoor,minecraft:spruce_trapdoor,minecraft:birch_trapdoor,minecraft:jungle_trapdoor,minecraft:acacia_trapdoor,minecraft:cherry_trapdoor,minecraft:dark_oak_trapdoor,minecraft:pale_oak_trapdoor,minecraft:mangrove_trapdoor,minecraft:poplar_trapdoor,minecraft:bamboo_trapdoor,minecraft:stone_bricks,minecraft:mossy_stone_bricks,minecraft:cracked_stone_bricks,minecraft:chiseled_stone_bricks,minecraft:packed_mud,minecraft:mud_bricks,minecraft:infested_stone,minecraft:infested_cobblestone,minecraft:infested_stone_bricks,minecraft:infested_mossy_stone_bricks,minecraft:infested_cracked_stone_bricks,minecraft:infested_chiseled_stone_bricks,minecraft:brown_mushroom_block,minecraft:red_mushroom_block,minecraft:mushroom_stem,minecraft:iron_bars,minecraft:copper_bars,minecraft:exposed_copper_bars,minecraft:weathered_copper_bars,minecraft:oxidized_copper_bars,minecraft:waxed_copper_bars,minecraft:waxed_exposed_copper_bars,minecraft:waxed_weathered_copper_bars,minecraft:waxed_oxidized_copper_bars,minecraft:iron_chain,minecraft:copper_chain,minecraft:exposed_copper_chain,minecraft:weathered_copper_chain,minecraft:oxidized_copper_chain,minecraft:waxed_copper_chain,minecraft:waxed_exposed_copper_chain,minecraft:waxed_weathered_copper_chain,minecraft:waxed_oxidized_copper_chain,minecraft:glass_pane,minecraft:pumpkin,minecraft:melon,minecraft:oak_fence_gate,minecraft:brick_stairs,minecraft:stone_brick_stairs,minecraft:mud_brick_stairs,minecraft:mycelium,minecraft:resin_block,minecraft:resin_bricks,minecraft:resin_brick_stairs,minecraft:resin_brick_slab,minecraft:resin_brick_wall,minecraft:chiseled_resin_bricks,minecraft:nether_bricks,minecraft:nether_brick_fence,minecraft:nether_brick_stairs,minecraft:enchanting_table,minecraft:brewing_stand,minecraft:cauldron,minecraft:water_cauldron,minecraft:lava_cauldron,minecraft:powder_snow_cauldron,minecraft:end_portal_frame,minecraft:end_stone,minecraft:dragon_egg,minecraft:redstone_lamp,minecraft:sandstone_stairs,minecraft:emerald_ore,minecraft:deepslate_emerald_ore,minecraft:ender_chest,minecraft:emerald_block,minecraft:spruce_stairs,minecraft:birch_stairs,minecraft:jungle_stairs,minecraft:command_block,minecraft:beacon,minecraft:cobblestone_wall,minecraft:mossy_cobblestone_wall,minecraft:anvil,minecraft:chipped_anvil,minecraft:damaged_anvil,minecraft:trapped_chest,minecraft:light_weighted_pressure_plate,minecraft:heavy_weighted_pressure_plate,minecraft:daylight_detector,minecraft:redstone_block,minecraft:nether_quartz_ore,minecraft:hopper,minecraft:quartz_block,minecraft:chiseled_quartz_block,minecraft:quartz_pillar,minecraft:quartz_stairs,minecraft:dropper,minecraft:white_terracotta,minecraft:orange_terracotta,minecraft:magenta_terracotta,minecraft:light_blue_terracotta,minecraft:yellow_terracotta,minecraft:lime_terracotta,minecraft:pink_terracotta,minecraft:gray_terracotta,minecraft:light_gray_terracotta,minecraft:cyan_terracotta,minecraft:purple_terracotta,minecraft:blue_terracotta,minecraft:brown_terracotta,minecraft:green_terracotta,minecraft:red_terracotta,minecraft:black_terracotta,minecraft:white_stained_glass_pane,minecraft:orange_stained_glass_pane,minecraft:magenta_stained_glass_pane,minecraft:light_blue_stained_glass_pane,minecraft:yellow_stained_glass_pane,minecraft:lime_stained_glass_pane,minecraft:pink_stained_glass_pane,minecraft:gray_stained_glass_pane,minecraft:light_gray_stained_glass_pane,minecraft:cyan_stained_glass_pane,minecraft:purple_stained_glass_pane,minecraft:blue_stained_glass_pane,minecraft:brown_stained_glass_pane,minecraft:green_stained_glass_pane,minecraft:red_stained_glass_pane,minecraft:black_stained_glass_pane,minecraft:acacia_stairs,minecraft:cherry_stairs,minecraft:dark_oak_stairs,minecraft:pale_oak_stairs,minecraft:mangrove_stairs,minecraft:poplar_stairs,minecraft:bamboo_stairs,minecraft:bamboo_mosaic_stairs,minecraft:slime_block,minecraft:barrier,minecraft:iron_trapdoor,minecraft:prismarine,minecraft:prismarine_bricks,minecraft:dark_prismarine,minecraft:prismarine_stairs,minecraft:prismarine_brick_stairs,minecraft:dark_prismarine_stairs,minecraft:prismarine_slab,minecraft:prismarine_brick_slab,minecraft:dark_prismarine_slab,minecraft:sea_lantern,minecraft:hay_block,minecraft:terracotta,minecraft:coal_block,minecraft:packed_ice,minecraft:white_banner,minecraft:orange_banner,minecraft:magenta_banner,minecraft:light_blue_banner,minecraft:yellow_banner,minecraft:lime_banner,minecraft:pink_banner,minecraft:gray_banner,minecraft:light_gray_banner,minecraft:cyan_banner,minecraft:purple_banner,minecraft:blue_banner,minecraft:brown_banner,minecraft:green_banner,minecraft:red_banner,minecraft:black_banner,minecraft:white_wall_banner,minecraft:orange_wall_banner,minecraft:magenta_wall_banner,minecraft:light_blue_wall_banner,minecraft:yellow_wall_banner,minecraft:lime_wall_banner,minecraft:pink_wall_banner,minecraft:gray_wall_banner,minecraft:light_gray_wall_banner,minecraft:cyan_wall_banner,minecraft:purple_wall_banner,minecraft:blue_wall_banner,minecraft:brown_wall_banner,minecraft:green_wall_banner,minecraft:red_wall_banner,minecraft:black_wall_banner,minecraft:red_sandstone,minecraft:chiseled_red_sandstone,minecraft:cut_red_sandstone,minecraft:red_sandstone_stairs,minecraft:oak_slab,minecraft:spruce_slab,minecraft:birch_slab,minecraft:jungle_slab,minecraft:acacia_slab,minecraft:cherry_slab,minecraft:dark_oak_slab,minecraft:pale_oak_slab,minecraft:mangrove_slab,minecraft:poplar_slab,minecraft:bamboo_slab,minecraft:bamboo_mosaic_slab,minecraft:stone_slab,minecraft:sandstone_slab,minecraft:cut_sandstone_slab,minecraft:petrified_oak_slab,minecraft:cobblestone_slab,minecraft:brick_slab,minecraft:stone_brick_slab,minecraft:mud_brick_slab,minecraft:nether_brick_slab,minecraft:quartz_slab,minecraft:red_sandstone_slab,minecraft:cut_red_sandstone_slab,minecraft:smooth_stone,minecraft:smooth_stone_slab,minecraft:smooth_sandstone,minecraft:smooth_quartz,minecraft:smooth_red_sandstone,minecraft:spruce_fence_gate,minecraft:birch_fence_gate,minecraft:jungle_fence_gate,minecraft:acacia_fence_gate,minecraft:cherry_fence_gate,minecraft:dark_oak_fence_gate,minecraft:pale_oak_fence_gate,minecraft:mangrove_fence_gate,minecraft:poplar_fence_gate,minecraft:bamboo_fence_gate,minecraft:spruce_fence,minecraft:birch_fence,minecraft:jungle_fence,minecraft:acacia_fence,minecraft:cherry_fence,minecraft:dark_oak_fence,minecraft:pale_oak_fence,minecraft:mangrove_fence,minecraft:poplar_fence,minecraft:bamboo_fence,minecraft:spruce_door,minecraft:birch_door,minecraft:jungle_door,minecraft:acacia_door,minecraft:cherry_door,minecraft:dark_oak_door,minecraft:pale_oak_door,minecraft:mangrove_door,minecraft:poplar_door,minecraft:bamboo_door,minecraft:purpur_block,minecraft:purpur_slab,minecraft:purpur_pillar,minecraft:purpur_stairs,minecraft:end_stone_bricks,minecraft:dirt_path,minecraft:repeating_command_block,minecraft:chain_command_block,minecraft:frosted_ice,minecraft:magma_block,minecraft:nether_wart_block,minecraft:red_nether_bricks,minecraft:bone_block,minecraft:observer,minecraft:shulker_box,minecraft:white_shulker_box,minecraft:orange_shulker_box,minecraft:magenta_shulker_box,minecraft:light_blue_shulker_box,minecraft:yellow_shulker_box,minecraft:lime_shulker_box,minecraft:pink_shulker_box,minecraft:gray_shulker_box,minecraft:light_gray_shulker_box,minecraft:cyan_shulker_box,minecraft:purple_shulker_box,minecraft:blue_shulker_box,minecraft:brown_shulker_box,minecraft:green_shulker_box,minecraft:red_shulker_box,minecraft:black_shulker_box,minecraft:white_glazed_terracotta,minecraft:orange_glazed_terracotta,minecraft:magenta_glazed_terracotta,minecraft:light_blue_glazed_terracotta,minecraft:yellow_glazed_terracotta,minecraft:lime_glazed_terracotta,minecraft:pink_glazed_terracotta,minecraft:gray_glazed_terracotta,minecraft:light_gray_glazed_terracotta,minecraft:cyan_glazed_terracotta,minecraft:purple_glazed_terracotta,minecraft:blue_glazed_terracotta,minecraft:brown_glazed_terracotta,minecraft:green_glazed_terracotta,minecraft:red_glazed_terracotta,minecraft:black_glazed_terracotta,minecraft:white_concrete,minecraft:orange_concrete,minecraft:magenta_concrete,minecraft:light_blue_concrete,minecraft:yellow_concrete,minecraft:lime_concrete,minecraft:pink_concrete,minecraft:gray_concrete,minecraft:light_gray_concrete,minecraft:cyan_concrete,minecraft:purple_concrete,minecraft:blue_concrete,minecraft:brown_concrete,minecraft:green_concrete,minecraft:red_concrete,minecraft:black_concrete,minecraft:white_concrete_stairs,minecraft:orange_concrete_stairs,minecraft:magenta_concrete_stairs,minecraft:light_blue_concrete_stairs,minecraft:yellow_concrete_stairs,minecraft:lime_concrete_stairs,minecraft:pink_concrete_stairs,minecraft:gray_concrete_stairs,minecraft:light_gray_concrete_stairs,minecraft:cyan_concrete_stairs,minecraft:purple_concrete_stairs,minecraft:blue_concrete_stairs,minecraft:brown_concrete_stairs,minecraft:green_concrete_stairs,minecraft:red_concrete_stairs,minecraft:black_concrete_stairs,minecraft:white_concrete_slab,minecraft:orange_concrete_slab,minecraft:magenta_concrete_slab,minecraft:light_blue_concrete_slab,minecraft:yellow_concrete_slab,minecraft:lime_concrete_slab,minecraft:pink_concrete_slab,minecraft:gray_concrete_slab,minecraft:light_gray_concrete_slab,minecraft:cyan_concrete_slab,minecraft:purple_concrete_slab,minecraft:blue_concrete_slab,minecraft:brown_concrete_slab,minecraft:green_concrete_slab,minecraft:red_concrete_slab,minecraft:black_concrete_slab,minecraft:white_concrete_powder,minecraft:orange_concrete_powder,minecraft:magenta_concrete_powder,minecraft:light_blue_concrete_powder,minecraft:yellow_concrete_powder,minecraft:lime_concrete_powder,minecraft:pink_concrete_powder,minecraft:gray_concrete_powder,minecraft:light_gray_concrete_powder,minecraft:cyan_concrete_powder,minecraft:purple_concrete_powder,minecraft:blue_concrete_powder,minecraft:brown_concrete_powder,minecraft:green_concrete_powder,minecraft:red_concrete_powder,minecraft:black_concrete_powder,minecraft:dried_kelp_block,minecraft:turtle_egg,minecraft:sniffer_egg,minecraft:dried_ghast,minecraft:dead_tube_coral_block,minecraft:dead_brain_coral_block,minecraft:dead_bubble_coral_block,minecraft:dead_fire_coral_block,minecraft:dead_horn_coral_block,minecraft:tube_coral_block,minecraft:brain_coral_block,minecraft:bubble_coral_block,minecraft:fire_coral_block,minecraft:horn_coral_block,minecraft:dead_tube_coral,minecraft:dead_brain_coral,minecraft:dead_bubble_coral,minecraft:dead_fire_coral,minecraft:dead_horn_coral,minecraft:dead_tube_coral_fan,minecraft:dead_brain_coral_fan,minecraft:dead_bubble_coral_fan,minecraft:dead_fire_coral_fan,minecraft:dead_horn_coral_fan,minecraft:dead_tube_coral_wall_fan,minecraft:dead_brain_coral_wall_fan,minecraft:dead_bubble_coral_wall_fan,minecraft:dead_fire_coral_wall_fan,minecraft:dead_horn_coral_wall_fan,minecraft:blue_ice,minecraft:conduit,minecraft:bamboo,minecraft:polished_granite_stairs,minecraft:smooth_red_sandstone_stairs,minecraft:mossy_stone_brick_stairs,minecraft:polished_diorite_stairs,minecraft:mossy_cobblestone_stairs,minecraft:end_stone_brick_stairs,minecraft:stone_stairs,minecraft:smooth_sandstone_stairs,minecraft:smooth_quartz_stairs,minecraft:granite_stairs,minecraft:andesite_stairs,minecraft:red_nether_brick_stairs,minecraft:polished_andesite_stairs,minecraft:diorite_stairs,minecraft:polished_granite_slab,minecraft:smooth_red_sandstone_slab,minecraft:mossy_stone_brick_slab,minecraft:polished_diorite_slab,minecraft:mossy_cobblestone_slab,minecraft:end_stone_brick_slab,minecraft:smooth_sandstone_slab,minecraft:smooth_quartz_slab,minecraft:granite_slab,minecraft:andesite_slab,minecraft:red_nether_brick_slab,minecraft:polished_andesite_slab,minecraft:diorite_slab,minecraft:brick_wall,minecraft:prismarine_wall,minecraft:red_sandstone_wall,minecraft:mossy_stone_brick_wall,minecraft:granite_wall,minecraft:stone_brick_wall,minecraft:mud_brick_wall,minecraft:nether_brick_wall,minecraft:andesite_wall,minecraft:red_nether_brick_wall,minecraft:sandstone_wall,minecraft:end_stone_brick_wall,minecraft:diorite_wall,minecraft:loom,minecraft:barrel,minecraft:smoker,minecraft:blast_furnace,minecraft:cartography_table,minecraft:fletching_table,minecraft:grindstone,minecraft:lectern,minecraft:smithing_table,minecraft:stonecutter,minecraft:bell,minecraft:lantern,minecraft:soul_lantern,minecraft:copper_lantern,minecraft:exposed_copper_lantern,minecraft:weathered_copper_lantern,minecraft:oxidized_copper_lantern,minecraft:waxed_copper_lantern,minecraft:waxed_exposed_copper_lantern,minecraft:waxed_weathered_copper_lantern,minecraft:waxed_oxidized_copper_lantern,minecraft:campfire,minecraft:soul_campfire,minecraft:warped_stem,minecraft:stripped_warped_stem,minecraft:warped_hyphae,minecraft:stripped_warped_hyphae,minecraft:warped_nylium,minecraft:warped_wart_block,minecraft:crimson_stem,minecraft:stripped_crimson_stem,minecraft:crimson_hyphae,minecraft:stripped_crimson_hyphae,minecraft:crimson_nylium,minecraft:shroomlight,minecraft:crimson_planks,minecraft:warped_planks,minecraft:crimson_slab,minecraft:warped_slab,minecraft:crimson_pressure_plate,minecraft:warped_pressure_plate,minecraft:crimson_fence,minecraft:warped_fence,minecraft:crimson_trapdoor,minecraft:warped_trapdoor,minecraft:crimson_fence_gate,minecraft:warped_fence_gate,minecraft:crimson_stairs,minecraft:warped_stairs,minecraft:crimson_door,minecraft:warped_door,minecraft:crimson_sign,minecraft:warped_sign,minecraft:crimson_wall_sign,minecraft:warped_wall_sign,minecraft:structure_block,minecraft:jigsaw,minecraft:test_block,minecraft:test_instance_block,minecraft:composter,minecraft:target,minecraft:bee_nest,minecraft:beehive,minecraft:honey_block,minecraft:honeycomb_block,minecraft:netherite_block,minecraft:ancient_debris,minecraft:crying_obsidian,minecraft:respawn_anchor,minecraft:lodestone,minecraft:blackstone,minecraft:blackstone_stairs,minecraft:blackstone_wall,minecraft:blackstone_slab,minecraft:polished_blackstone,minecraft:polished_blackstone_bricks,minecraft:cracked_polished_blackstone_bricks,minecraft:chiseled_polished_blackstone,minecraft:polished_blackstone_brick_slab,minecraft:polished_blackstone_brick_stairs,minecraft:polished_blackstone_brick_wall,minecraft:gilded_blackstone,minecraft:polished_blackstone_stairs,minecraft:polished_blackstone_slab,minecraft:polished_blackstone_pressure_plate,minecraft:polished_blackstone_wall,minecraft:chiseled_nether_bricks,minecraft:cracked_nether_bricks,minecraft:quartz_bricks,minecraft:candle_cake,minecraft:white_candle_cake,minecraft:orange_candle_cake,minecraft:magenta_candle_cake,minecraft:light_blue_candle_cake,minecraft:yellow_candle_cake,minecraft:lime_candle_cake,minecraft:pink_candle_cake,minecraft:gray_candle_cake,minecraft:light_gray_candle_cake,minecraft:cyan_candle_cake,minecraft:purple_candle_cake,minecraft:blue_candle_cake,minecraft:brown_candle_cake,minecraft:green_candle_cake,minecraft:red_candle_cake,minecraft:black_candle_cake,minecraft:amethyst_block,minecraft:budding_amethyst,minecraft:amethyst_cluster,minecraft:large_amethyst_bud,minecraft:medium_amethyst_bud,minecraft:small_amethyst_bud,minecraft:tuff,minecraft:tuff_slab,minecraft:tuff_stairs,minecraft:tuff_wall,minecraft:polished_tuff,minecraft:polished_tuff_slab,minecraft:polished_tuff_stairs,minecraft:polished_tuff_wall,minecraft:chiseled_tuff,minecraft:tuff_bricks,minecraft:tuff_brick_slab,minecraft:tuff_brick_stairs,minecraft:tuff_brick_wall,minecraft:chiseled_tuff_bricks,minecraft:sulfur,minecraft:potent_sulfur,minecraft:sulfur_slab,minecraft:sulfur_stairs,minecraft:sulfur_wall,minecraft:polished_sulfur,minecraft:polished_sulfur_slab,minecraft:polished_sulfur_stairs,minecraft:polished_sulfur_wall,minecraft:sulfur_bricks,minecraft:sulfur_brick_slab,minecraft:sulfur_brick_stairs,minecraft:sulfur_brick_wall,minecraft:chiseled_sulfur,minecraft:cinnabar,minecraft:cinnabar_slab,minecraft:cinnabar_stairs,minecraft:cinnabar_wall,minecraft:polished_cinnabar,minecraft:polished_cinnabar_slab,minecraft:polished_cinnabar_stairs,minecraft:polished_cinnabar_wall,minecraft:cinnabar_bricks,minecraft:cinnabar_brick_slab,minecraft:cinnabar_brick_stairs,minecraft:cinnabar_brick_wall,minecraft:chiseled_cinnabar,minecraft:calcite,minecraft:tinted_glass,minecraft:sculk_sensor,minecraft:calibrated_sculk_sensor,minecraft:sculk,minecraft:sculk_vein,minecraft:sculk_catalyst,minecraft:sculk_shrieker,minecraft:copper_block,minecraft:exposed_copper,minecraft:weathered_copper,minecraft:oxidized_copper,minecraft:waxed_copper_block,minecraft:waxed_exposed_copper,minecraft:waxed_weathered_copper,minecraft:waxed_oxidized_copper,minecraft:copper_ore,minecraft:deepslate_copper_ore,minecraft:cut_copper,minecraft:exposed_cut_copper,minecraft:weathered_cut_copper,minecraft:oxidized_cut_copper,minecraft:waxed_cut_copper,minecraft:waxed_exposed_cut_copper,minecraft:waxed_weathered_cut_copper,minecraft:waxed_oxidized_cut_copper,minecraft:chiseled_copper,minecraft:exposed_chiseled_copper,minecraft:weathered_chiseled_copper,minecraft:oxidized_chiseled_copper,minecraft:waxed_chiseled_copper,minecraft:waxed_exposed_chiseled_copper,minecraft:waxed_weathered_chiseled_copper,minecraft:waxed_oxidized_chiseled_copper,minecraft:cut_copper_stairs,minecraft:exposed_cut_copper_stairs,minecraft:weathered_cut_copper_stairs,minecraft:oxidized_cut_copper_stairs,minecraft:waxed_cut_copper_stairs,minecraft:waxed_exposed_cut_copper_stairs,minecraft:waxed_weathered_cut_copper_stairs,minecraft:waxed_oxidized_cut_copper_stairs,minecraft:cut_copper_slab,minecraft:exposed_cut_copper_slab,minecraft:weathered_cut_copper_slab,minecraft:oxidized_cut_copper_slab,minecraft:waxed_cut_copper_slab,minecraft:waxed_exposed_cut_copper_slab,minecraft:waxed_weathered_cut_copper_slab,minecraft:waxed_oxidized_cut_copper_slab,minecraft:copper_door,minecraft:exposed_copper_door,minecraft:weathered_copper_door,minecraft:oxidized_copper_door,minecraft:waxed_copper_door,minecraft:waxed_exposed_copper_door,minecraft:waxed_weathered_copper_door,minecraft:waxed_oxidized_copper_door,minecraft:copper_trapdoor,minecraft:exposed_copper_trapdoor,minecraft:weathered_copper_trapdoor,minecraft:oxidized_copper_trapdoor,minecraft:waxed_copper_trapdoor,minecraft:waxed_exposed_copper_trapdoor,minecraft:waxed_weathered_copper_trapdoor,minecraft:waxed_oxidized_copper_trapdoor,minecraft:copper_grate,minecraft:exposed_copper_grate,minecraft:weathered_copper_grate,minecraft:oxidized_copper_grate,minecraft:waxed_copper_grate,minecraft:waxed_exposed_copper_grate,minecraft:waxed_weathered_copper_grate,minecraft:waxed_oxidized_copper_grate,minecraft:copper_bulb,minecraft:exposed_copper_bulb,minecraft:weathered_copper_bulb,minecraft:oxidized_copper_bulb,minecraft:waxed_copper_bulb,minecraft:waxed_exposed_copper_bulb,minecraft:waxed_weathered_copper_bulb,minecraft:waxed_oxidized_copper_bulb,minecraft:copper_chest,minecraft:exposed_copper_chest,minecraft:weathered_copper_chest,minecraft:oxidized_copper_chest,minecraft:waxed_copper_chest,minecraft:waxed_exposed_copper_chest,minecraft:waxed_weathered_copper_chest,minecraft:waxed_oxidized_copper_chest,minecraft:lightning_rod,minecraft:exposed_lightning_rod,minecraft:weathered_lightning_rod,minecraft:oxidized_lightning_rod,minecraft:waxed_lightning_rod,minecraft:waxed_exposed_lightning_rod,minecraft:waxed_weathered_lightning_rod,minecraft:waxed_oxidized_lightning_rod,minecraft:dripstone_block,minecraft:pointed_dripstone,minecraft:sulfur_spike,minecraft:moss_block,minecraft:rooted_dirt,minecraft:mud,minecraft:deepslate,minecraft:cobbled_deepslate,minecraft:cobbled_deepslate_stairs,minecraft:cobbled_deepslate_slab,minecraft:cobbled_deepslate_wall,minecraft:polished_deepslate,minecraft:polished_deepslate_stairs,minecraft:polished_deepslate_slab,minecraft:polished_deepslate_wall,minecraft:deepslate_tiles,minecraft:deepslate_tile_stairs,minecraft:deepslate_tile_slab,minecraft:deepslate_tile_wall,minecraft:deepslate_bricks,minecraft:deepslate_brick_stairs,minecraft:deepslate_brick_slab,minecraft:deepslate_brick_wall,minecraft:chiseled_deepslate,minecraft:cracked_deepslate_bricks,minecraft:cracked_deepslate_tiles,minecraft:infested_deepslate,minecraft:smooth_basalt,minecraft:raw_iron_block,minecraft:raw_copper_block,minecraft:raw_gold_block,minecraft:ochre_froglight,minecraft:verdant_froglight,minecraft:pearlescent_froglight,minecraft:reinforced_deepslate,minecraft:decorated_pot,minecraft:crafter,minecraft:trial_spawner,minecraft:vault,minecraft:pale_moss_block
@@ -697,6 +1194,7 @@ block-tag	minecraft:inside_step_sound_blocks	minecraft:glow_lichen,minecraft:lil
 block-tag	minecraft:combination_step_sound_blocks	minecraft:snow,minecraft:resin_clump,minecraft:white_carpet,minecraft:orange_carpet,minecraft:magenta_carpet,minecraft:light_blue_carpet,minecraft:yellow_carpet,minecraft:lime_carpet,minecraft:pink_carpet,minecraft:gray_carpet,minecraft:light_gray_carpet,minecraft:cyan_carpet,minecraft:purple_carpet,minecraft:blue_carpet,minecraft:brown_carpet,minecraft:green_carpet,minecraft:red_carpet,minecraft:black_carpet,minecraft:warped_roots,minecraft:nether_sprouts,minecraft:crimson_roots,minecraft:moss_carpet,minecraft:pale_moss_carpet
 block-tag	minecraft:crystal_sound_blocks	minecraft:amethyst_block,minecraft:budding_amethyst
 entity-tag	minecraft:non_controlling_rider	minecraft:magma_cube,minecraft:slime,minecraft:sulfur_cube
+entity-tag	minecraft:freeze_immune_entity_types	minecraft:polar_bear,minecraft:snow_golem,minecraft:stray,minecraft:wither
 fluid-tag	minecraft:water	minecraft:flowing_water,minecraft:water
 fluid-tag	minecraft:lava	minecraft:flowing_lava,minecraft:lava
 move	obstacle-0	cow	1	4008000000000000,4050000000000000,4012000000000000	3ff8000000000000,0,0	false	false	0	400c666668000000,4050000000000000,4012000000000000	01000	0	8000000000000000,0,0

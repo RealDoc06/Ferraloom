@@ -28,14 +28,8 @@ impl Entity for TestCow {
         // These borrows end before damage calls back into this active entity.
         let target = level.entity::<Cow>(entity)?.as_mob().target;
         if let Some(mut target) = target {
-            target.hurt_server(
-                level,
-                DamageSource {
-                    attacker: Some(entity),
-                    ..DamageSource::default()
-                },
-                4.0,
-            )?;
+            let source = level.damage_sources().mob_attack(entity);
+            target.hurt_server(level, source, 4.0)?;
             level.set_block_state(PLACED, Block::STONE.default_state())?;
             level.schedule_block_tick(PLACED, Block::STONE, 1, TickPriority::Normal)?;
             // Re-reading sees the callback's mutation, with no restore step.
@@ -51,8 +45,9 @@ impl Entity for TestCow {
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
+        let attacker = source.causing_entity();
         let accepted = hurt_unarmored(entity, level, source, damage)?;
-        if accepted && let Some(mut attacker) = source.attacker {
+        if accepted && let Some(mut attacker) = attacker {
             assert_eq!(
                 level.entity::<Cow>(attacker)?.as_living().parent.tick_count,
                 1
@@ -60,7 +55,8 @@ impl Entity for TestCow {
             assert!(!level.entity::<Cow>(attacker)?.as_living().parent.first_tick);
             // Adversarial virtual override, like damage reflection: enter the
             // attacker synchronously while its outer tick frame remains active.
-            attacker.hurt_server(level, DamageSource::default(), 1.0)?;
+            let source = level.damage_sources().generic();
+            attacker.hurt_server(level, source, 1.0)?;
         }
         Ok(accepted)
     }
@@ -170,21 +166,18 @@ fn living_damage_cooldown_applies_only_the_increase() {
         .add_entity(TARGET, EntityState::Cow(Box::default()))
         .unwrap();
     let mut entity = TARGET;
+    let source = region.damage_sources().generic();
     assert!(
         entity
-            .hurt_server(&mut region, DamageSource::default(), 3.0)
+            .hurt_server(&mut region, source.clone(), 3.0)
             .unwrap()
     );
     assert!(
         !entity
-            .hurt_server(&mut region, DamageSource::default(), 2.0)
+            .hurt_server(&mut region, source.clone(), 2.0)
             .unwrap()
     );
-    assert!(
-        entity
-            .hurt_server(&mut region, DamageSource::default(), 5.0)
-            .unwrap()
-    );
+    assert!(entity.hurt_server(&mut region, source, 5.0).unwrap());
     assert_eq!(
         region.entity::<Cow>(TARGET).unwrap().as_living().health(),
         5.0

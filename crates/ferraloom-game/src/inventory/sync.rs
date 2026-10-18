@@ -11,6 +11,19 @@ pub enum RemoteSlot {
     Hash(HashedStack),
 }
 impl RemoteSlot {
+    pub(super) fn force_owned(&mut self, stack: ItemStack) {
+        if !matches!(self, Self::Placeholder) {
+            *self = Self::Stack(stack);
+        }
+    }
+    pub(super) fn matches_readonly(&self, stack: &ItemStack) -> Result<bool> {
+        match self {
+            Self::Placeholder => Ok(true),
+            Self::Unknown => Ok(false),
+            Self::Stack(remote) => Ok(matches(remote, stack)),
+            Self::Hash(hash) => Ok(hash.matches(stack)?),
+        }
+    }
     pub fn force(&mut self, stack: &ItemStack) {
         if !matches!(self, Self::Placeholder) {
             *self = Self::Stack(stack.clone());
