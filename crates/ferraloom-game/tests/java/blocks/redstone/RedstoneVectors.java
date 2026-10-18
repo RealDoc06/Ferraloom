@@ -17,11 +17,12 @@ public final class RedstoneVectors extends MutationFixture {
     final List<String> changes = new ArrayList<>();
     final List<String> notifications = new ArrayList<>();
     boolean recording;
-    RedstoneVectors(RegistryAccess registries) { super(new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).registries(),registries.registries())).freeze()); for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++){blockTicks.addContainer(new net.minecraft.world.level.ChunkPos(x,z),new net.minecraft.world.ticks.LevelChunkTicks<>());getChunkAt(new BlockPos(x*16,0,z*16)).setLoaded(true);} }
+    RedstoneVectors(RegistryAccess registries) { super(new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).registries(),registries.registries())).freeze()); for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++){var chunk=new net.minecraft.world.level.ChunkPos(x,z);var ticks=new net.minecraft.world.ticks.LevelChunkTicks<Block>();tickContainers.put(chunk.pack(),ticks);blockTicks.addContainer(chunk,ticks);getChunkAt(new BlockPos(x*16,0,z*16)).setLoaded(true);} }
     final net.minecraft.world.level.entity.EntityLookup<net.minecraft.world.entity.Entity> actors=new net.minecraft.world.level.entity.EntityLookup<>();
     final net.minecraft.world.level.entity.EntitySectionStorage<net.minecraft.world.entity.Entity> sections=new net.minecraft.world.level.entity.EntitySectionStorage<>(net.minecraft.world.entity.Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
     final net.minecraft.world.level.entity.LevelEntityGetter<net.minecraft.world.entity.Entity> getter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(actors,sections);
     final net.minecraft.world.ticks.LevelTicks<Block> blockTicks=new net.minecraft.world.ticks.LevelTicks<>(key->true);
+    final Map<Long,net.minecraft.world.ticks.LevelChunkTicks<Block>> tickContainers=new HashMap<>();
     long subTick;
     @Override public long nextSubTickCount(){return subTick++;}
     @Override public net.minecraft.world.ticks.LevelTicks<Block> getBlockTicks(){return blockTicks;}
@@ -219,6 +220,35 @@ public final class RedstoneVectors extends MutationFixture {
                 outputs.add(calculate.invoke(Blocks.COMPARATOR,level,ORIGIN,state)+":"+should.invoke(Blocks.COMPARATOR,level,ORIGIN,state));
             }
             System.out.println("container-comparator:"+BuiltInRegistries.BLOCK.getId(block)+":"+pattern+":"+gap+":"+blocked+"\t"+String.join("|",outputs));
+        }
+    }
+    static void repeaters(RegistryAccess r){
+        for(var direction:Direction.Plane.HORIZONTAL)for(int delay=1;delay<=4;delay++)for(boolean powered:new boolean[]{false,true})for(boolean lockedProperty:new boolean[]{false,true})for(boolean input:new boolean[]{false,true})for(int side=0;side<6;side++)for(int output=0;output<3;output++){
+            var level=new RedstoneVectors(r);level.time=37;
+            var state=Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING,direction).setValue(RepeaterBlock.DELAY,delay).setValue(RepeaterBlock.POWERED,powered).setValue(RepeaterBlock.LOCKED,lockedProperty);
+            var sideDirection=direction.getClockWise();
+            var sideState=switch(side){
+                case 1->Blocks.REDSTONE_BLOCK.defaultBlockState();
+                case 2->Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING,sideDirection).setValue(RepeaterBlock.POWERED,true);
+                case 3->Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING,sideDirection.getOpposite()).setValue(RepeaterBlock.POWERED,true);
+                case 4->Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING,sideDirection);
+                case 5->Blocks.COMPARATOR.defaultBlockState().setValue(ComparatorBlock.FACING,sideDirection).setValue(ComparatorBlock.POWERED,true);
+                default->Blocks.AIR.defaultBlockState();
+            };
+            var outputState=output==0?Blocks.AIR.defaultBlockState():Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING,output==1?direction.getOpposite():direction);
+            level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());level.raw(ORIGIN,state);
+            level.raw(ORIGIN.relative(direction),(input?Blocks.REDSTONE_BLOCK:Blocks.AIR).defaultBlockState());
+            level.raw(ORIGIN.relative(sideDirection),sideState);level.raw(ORIGIN.relative(direction.getOpposite()),outputState);
+            if(side==5)((net.minecraft.world.level.block.entity.ComparatorBlockEntity)level.getBlockEntity(ORIGIN.relative(sideDirection))).setOutputSignal(7);
+            boolean locked=((RepeaterBlock)Blocks.REPEATER).isLocked(level,ORIGIN,state);
+            level.begin();level.neighborChanged(ORIGIN,Blocks.STONE,null);level.neighborChanged(ORIGIN,Blocks.STONE,null);
+            level.time=38;level.raw(ORIGIN.relative(direction),(input?Blocks.AIR:Blocks.REDSTONE_BLOCK).defaultBlockState());level.neighborChanged(ORIGIN,Blocks.STONE,null);
+            // Pack retains insertion order after repeated scheduling requests;
+            // the input change must not replace an already queued repeater tick.
+            level.scheduleTick(ORIGIN.above(3),Blocks.STONE,19);
+            var ticks=new ArrayList<String>();var container=level.tickContainers.get(net.minecraft.world.level.ChunkPos.pack(ORIGIN));
+            for(var tick:container.pack(level.time))ticks.add(tick.pos().toShortString()+"/"+BuiltInRegistries.BLOCK.getId(tick.type())+"/"+(level.time+tick.delay())+"/"+tick.priority().getValue());
+            System.out.println("repeater-schedule:"+Block.getId(state)+":"+input+":"+side+":"+output+"\t"+locked+"|"+String.join(";",ticks)+"|"+String.join(";",level.changes));
         }
     }
     static void targets(RegistryAccess r){
@@ -526,7 +556,7 @@ public final class RedstoneVectors extends MutationFixture {
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);targets(registries);torchInputs(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);targets(registries);torchInputs(registries);repeaters(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

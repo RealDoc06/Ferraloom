@@ -117,6 +117,130 @@ fn native_mutations(value: &str) -> String {
 }
 
 #[test]
+fn repeater_delays_locks_priorities_and_tick_dedup_match_vanilla() {
+    use crate::block::entity::{BlockEntityData, BlockEntityState, BlockEntityType};
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("repeater-schedule:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let input = args.next().unwrap().parse::<bool>().unwrap();
+        let side = args.next().unwrap().parse::<u8>().unwrap();
+        let output = args.next().unwrap().parse::<u8>().unwrap();
+        let direction = state::facing(state);
+        let side_direction = direction.clockwise();
+        let side_state = match side {
+            1 => Block::REDSTONE_BLOCK.default_state(),
+            2..=4 => state::with_facing(
+                Block::REPEATER.default_state(),
+                if side == 3 {
+                    side_direction.opposite()
+                } else {
+                    side_direction
+                },
+            )
+            .with(p::POWERED, side != 4)
+            .unwrap(),
+            5 => state::with_facing(Block::COMPARATOR.default_state(), side_direction)
+                .with(p::POWERED, true)
+                .unwrap(),
+            _ => Block::AIR.default_state(),
+        };
+        let output_state = if output == 0 {
+            Block::AIR.default_state()
+        } else {
+            state::with_facing(
+                Block::REPEATER.default_state(),
+                if output == 1 {
+                    direction.opposite()
+                } else {
+                    direction
+                },
+            )
+        };
+        let mut level = level();
+        level.set_game_time(37);
+        for (pos, state) in [
+            (ORIGIN, state),
+            (ORIGIN.below(1), Block::STONE.default_state()),
+            (
+                ORIGIN.relative(direction, 1),
+                if input {
+                    Block::REDSTONE_BLOCK
+                } else {
+                    Block::AIR
+                }
+                .default_state(),
+            ),
+            (ORIGIN.relative(side_direction, 1), side_state),
+            (ORIGIN.relative(direction.opposite(), 1), output_state),
+        ] {
+            level.set_block_state(pos, state).unwrap();
+        }
+        if side == 5 {
+            let pos = ORIGIN.relative(side_direction, 1);
+            let mut entity = comparator::ComparatorBlockEntity::new(
+                BlockEntityData::new(BlockEntityType::COMPARATOR, pos, side_state).unwrap(),
+            );
+            entity.output = 7;
+            level
+                .set_block_entity(BlockEntityState::Comparator(Box::new(entity)))
+                .unwrap();
+        }
+        let locked = diode::locked(&LevelReaderRef::Server(&level), ORIGIN, state).unwrap();
+        level.take_effects();
+        level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+        level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+        level.set_game_time(38);
+        level
+            .set_block_state(
+                ORIGIN.relative(direction, 1),
+                if input {
+                    Block::AIR
+                } else {
+                    Block::REDSTONE_BLOCK
+                }
+                .default_state(),
+            )
+            .unwrap();
+        level.neighbor_changed(ORIGIN, Block::STONE, None).unwrap();
+        level
+            .schedule_block_tick_after(ORIGIN.above(3), Block::STONE, 19)
+            .unwrap();
+        let changes = state_mutations(&mut level);
+        let mut data = ferraloom_storage::SerializableChunkData::default();
+        level
+            .save_chunk_ticks(ChunkPos::containing(ORIGIN), &mut data)
+            .unwrap();
+        let ticks = data
+            .block_ticks
+            .unwrap()
+            .into_iter()
+            .map(|tick| {
+                let block =
+                    Block::from_name(&tick.id.unwrap().to_string_checked().unwrap()).unwrap();
+                format!(
+                    "{}, {}, {}/{}/{}/{}",
+                    tick.x.unwrap(),
+                    tick.y.unwrap(),
+                    tick.z.unwrap(),
+                    block.protocol_id(),
+                    38 + tick.delay.unwrap(),
+                    tick.priority.unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut expected = expected.split('|');
+        assert_eq!(locked.to_string(), expected.next().unwrap(), "{name} lock");
+        assert_eq!(ticks.join(";"), expected.next().unwrap(), "{name} ticks");
+        assert_eq!(
+            changes,
+            native_mutations(expected.next().unwrap()),
+            "{name} changes"
+        );
+    }
+}
+
+#[test]
 fn target_placement_preserves_scheduled_pulses_and_resets_unscheduled_power() {
     use ferraloom_data::properties as p;
     for (name, expected) in cases("target-place:") {
