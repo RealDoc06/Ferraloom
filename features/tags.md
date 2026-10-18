@@ -909,3 +909,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | tags.tag.worldgen.structure.village | `minecraft:worldgen/structure/village` (tag) | `data/minecraft/tags/worldgen/structure/village.json`; `TagLoader#load; TagLoader#build` | | - | todo |
 | tags.tag.worldgen.world-preset.extended | `minecraft:worldgen/world_preset/extended` (tag) | `data/minecraft/tags/worldgen/world_preset/extended.json`; `TagLoader#load; TagLoader#build` | | - | todo |
 | tags.tag.worldgen.world-preset.normal | `minecraft:worldgen/world_preset/normal` (tag) | `data/minecraft/tags/worldgen/world_preset/normal.json`; `TagLoader#load; TagLoader#build` | | - | todo |
+| tags.runtime.typed-keys | Typed vanilla keys with dense ordinals resolved at datapack load | `TagKey; TagLoader` | `ferraloom_data::datapack::tests::generated_tag_keys_cover_vanilla_and_static_registries_resolve` | pass | todo |
+| tags.runtime.bitset | Registry-typed constant-time membership, preserving ordered iteration and custom tag resolution | `Holder#is; TagLoader` | `ferraloom_data::datapack::tests::resolved_tags_preserve_order_and_test_membership_across_words` | pass | todo |

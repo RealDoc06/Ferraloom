@@ -306,41 +306,6 @@ fn every_state_rotation_and_mirror_matches_vanilla_registry() {
 }
 
 #[test]
-fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
-    use crate::{BlockStatePropertyError, properties};
-    let state = Block::WHEAT.default_state();
-    assert!(state.has_integer_property("age"));
-    assert_eq!(
-        state.with_integer_property("age", 7).unwrap(),
-        state.with(properties::AGE, 7).unwrap()
-    );
-    assert_eq!(
-        state.with_integer_property("age", 8),
-        Err(BlockStatePropertyError::InvalidValue(8))
-    );
-    assert_eq!(
-        state.with_integer_property("waterlogged", 0),
-        Err(BlockStatePropertyError::MissingOrNonInteger)
-    );
-    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
-    let wet = Block::OAK_STAIRS
-        .default_state()
-        .with(properties::WATERLOGGED, true)
-        .unwrap();
-    assert_eq!(
-        Block::STONE_STAIRS
-            .default_state()
-            .with_properties_of(wet)
-            .get(properties::WATERLOGGED),
-        Some(true)
-    );
-    // IntegerProperty equality includes its allowed range.
-    let wheat = state.with(properties::AGE, 7).unwrap();
-    let cactus = Block::CACTUS.default_state();
-    assert_eq!(cactus.with_properties_of(wheat), cactus);
-}
-
-#[test]
 fn cached_face_occlusion_distinguishes_faces_and_non_occluding_blocks() {
     use ferraloom_util::Direction;
     for face in Direction::VALUES {
@@ -393,4 +358,88 @@ fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
         Block::MAGMA_BLOCK.default_state().post_process_y_offset(),
         Some(1)
     );
+}
+
+#[test]
+fn block_class_hierarchy_matches_extracted_vanilla_classes() {
+    use crate::{Block, BlockClass};
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/generated/block_classes.json")).unwrap();
+    for (&block, concrete) in crate::registries::block::ALL
+        .iter()
+        .zip(data["blocks"].as_array().unwrap())
+    {
+        let index = concrete.as_u64().unwrap() as usize;
+        assert_eq!(
+            block.class().java_name(),
+            data["classes"][index]["name"].as_str().unwrap()
+        );
+        for (class_index, &class) in BlockClass::ALL.iter().enumerate() {
+            assert_eq!(
+                block.is_instance_of(class),
+                data["classes"][index]["instances"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|id| id.as_u64().unwrap() as usize == class_index),
+                "{} {class:?}",
+                block.name()
+            );
+        }
+    }
+    assert!(Block::TALL_SEAGRASS.is_instance_of(BlockClass::DoublePlantBlock));
+    assert!(Block::PALE_MOSS_CARPET.is_instance_of(BlockClass::MossyCarpetBlock));
+    assert!(Block::OAK_STAIRS.is_instance_of(BlockClass::SimpleWaterloggedBlock));
+    assert!(!Block::STONE.is_instance_of(BlockClass::DoublePlantBlock));
+    const CONCRETE: BlockClass = Block::STONE.class();
+    const IS_BLOCK: bool = Block::STONE.is_instance_of(BlockClass::Block);
+    assert_eq!(CONCRETE, BlockClass::Block);
+    assert!(std::hint::black_box(IS_BLOCK));
+}
+
+#[test]
+fn cached_air_fact_matches_vanilla_state_registry() {
+    let ids: Vec<u16> =
+        serde_json::from_str(include_str!("../../../data/generated/air_states.json")).unwrap();
+    for id in 0..crate::BLOCK_STATES.len() {
+        let state = crate::BlockState::from_id(id as u16).unwrap();
+        assert_eq!(state.is_air(), ids.contains(&(id as u16)));
+    }
+    const AIR: bool = crate::Block::AIR.default_state().is_air();
+    assert!(std::hint::black_box(AIR));
+}
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
 }

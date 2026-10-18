@@ -88,6 +88,7 @@ impl<T: PartialEq> ProtoChunkTicks<T> {
 pub struct RegionChunk {
     pub chunk: GeneratedChunk,
     pub status: ChunkStatus,
+    pub structures: crate::structure::pipeline::ChunkStructures,
     pub block_entities: BTreeMap<[i32; 3], CompoundTag>,
     pub entities: Vec<CompoundTag>,
     pub block_ticks: ProtoChunkTicks<Block>,
@@ -105,6 +106,7 @@ impl RegionChunk {
             .set(chunk.ocean_floor)
             .unwrap();
         Self {
+            structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
             chunk,
             status,
             block_entities: BTreeMap::new(),
@@ -120,14 +122,71 @@ impl RegionChunk {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
-    fn destroy_block(
+    // --- ore and cave family ---
+    fn multiface_state_for_placement(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _block: Block,
+        _old: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        Err(Error("Unsupported: multiface_state_for_placement".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: multiface_spread".into()))
+    }
+    fn sculk_can_spread_from(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: sculk_can_spread_from".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn sculk_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _origin: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _charge_count: i32,
+        _amount_per_charge: i32,
+        _spread_attempts: i32,
+        _growth_rounds: i32,
+        _spread_rounds: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: sculk_spread".into()))
+    }
+    fn set_loot_table(
         &self,
         _region: &mut WorldGenRegion<'_>,
         _p: [i32; 3],
-        _drop: bool,
-    ) -> Result<bool, Error> {
-        Err(Error("Unsupported: destroy_block".into()))
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: RandomizableContainer#setBlockEntityLootTable".into(),
+        ))
     }
+    fn set_spawner_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _kind: ferraloom_data::EntityType,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
+    }
+    // --- end ore and cave family ---
     // --- tree family ---
     fn populate_worldgen_beehive(
         &self,
@@ -174,14 +233,6 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<BlockState, Error> {
         Err(Error("Unsupported: update_from_neighbor_shapes".into()))
     }
-    fn update_neighbors_at(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _block: Block,
-    ) -> Result<(), Error> {
-        Err(Error("Unsupported: update_neighbors_at".into()))
-    }
     fn load_block_entity(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -201,6 +252,81 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
+
+    // --- vegetation family ---
+    fn vine_acceptable_neighbor(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _direction: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: VineBlock.isAcceptableNeighbour".into()))
+    }
+    fn place_double_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _flags: u32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: DoublePlantBlock.placeAt".into()))
+    }
+    // MossyCarpetBlock.placeAt uses Level#getRandom, not the feature stream.
+    fn place_mossy_carpet(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _flags: u32,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: MossyCarpetBlock.placeAt and level random".into(),
+        ))
+    }
+    // --- end vegetation family ---
+    // --- nether, end and misc family ---
+    /// Delegates ChorusFlowerBlock#generatePlant, including connected shapes.
+    fn generate_chorus_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _radius: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: ChorusFlowerBlock.generatePlant".into()))
+    }
+    fn configure_end_gateway(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _exit: [i32; 3],
+        _exact: bool,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: TheEndGatewayBlockEntity.setExitPosition".into(),
+        ))
+    }
+    fn is_collision_empty(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: BlockState.getCollisionShape".into()))
+    }
+    /// Creates and inserts EndCrystal, draws its yaw only after successful
+    /// creation, then places bedrock and FireBlock#getState at its feet.
+    fn create_end_spike_crystal(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _beam: Option<[i32; 3]>,
+        _invulnerable: bool,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: EndCrystal creation and FireBlock.getState".into(),
+        ))
+    }
+    // --- end nether, end and misc family ---
 
     fn has_block_entity(&self, state: BlockState) -> bool {
         state.has_block_entity()
@@ -247,25 +373,24 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("block survival behavior is unavailable".into()))
     }
-    fn is_unobstructed(
-        &self,
-        _state: BlockState,
-        _region: &WorldGenRegion<'_>,
-        _position: [i32; 3],
-    ) -> Result<bool, Error> {
-        Err(Error("block collision behavior is unavailable".into()))
-    }
 }
 
 pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
+    block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
+    fluid_tags: Option<
+        std::sync::Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
+    >,
     chunks: &'a mut [RegionChunk],
     center: [i32; 2],
     dependencies: &'a [ChunkStatus],
     write_radius: i32,
     generation_bounds: Option<(i32, i32)>,
     behavior: &'a dyn WorldgenBlockBehavior,
+    // --- vegetation family ---
+    has_skylight: Option<bool>,
+    // --- end vegetation family ---
     pub seed: i64,
     pub sea_level: i32,
 }
@@ -315,18 +440,112 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            block_tags: None,
+            fluid_tags: None,
             chunks,
             center,
             dependencies,
             write_radius,
             generation_bounds,
             behavior,
+            has_skylight: None,
             seed,
             sea_level,
         })
     }
+    // --- ore and cave family ---
+    pub fn multiface_state_for_placement(
+        &self,
+        block: Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        self.behavior
+            .multiface_state_for_placement(self, block, old, p, face)
+    }
+    pub fn multiface_spread(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .multiface_spread(self, state, p, face, random, mark_post_processing)
+    }
+    pub fn sculk_can_spread_from(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.sculk_can_spread_from(self, p)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn sculk_spread(
+        &mut self,
+        origin: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        charge_count: i32,
+        amount_per_charge: i32,
+        spread_attempts: i32,
+        growth_rounds: i32,
+        spread_rounds: i32,
+    ) -> Result<(), Error> {
+        self.behavior.sculk_spread(
+            self,
+            origin,
+            random,
+            charge_count,
+            amount_per_charge,
+            spread_attempts,
+            growth_rounds,
+            spread_rounds,
+        )
+    }
+    pub fn set_loot_table(
+        &mut self,
+        p: [i32; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_loot_table(self, p, table, random)
+    }
+    pub fn set_spawner_entity(
+        &mut self,
+        p: [i32; 3],
+        kind: ferraloom_data::EntityType,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_spawner_entity(self, p, kind, random)
+    }
+    // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
+    }
+    pub fn set_block_tags(
+        &mut self,
+        tags: std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>,
+    ) {
+        self.block_tags = Some(tags);
+    }
+    pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, Error> {
+        self.block_tags
+            .as_deref()
+            .ok_or_else(|| Error("Unsupported: block tag context unavailable".into()))
+    }
+    pub fn set_fluid_tags(
+        &mut self,
+        tags: std::sync::Arc<
+            ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>,
+        >,
+    ) {
+        self.fluid_tags = Some(tags);
+    }
+    pub fn fluid_tags(
+        &self,
+    ) -> Result<&ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>, Error>
+    {
+        self.fluid_tags
+            .as_deref()
+            .ok_or_else(|| Error("Unsupported: fluid tag context unavailable".into()))
     }
     fn distance(&self, p: [i32; 2]) -> usize {
         p[0].abs_diff(self.center[0])
@@ -349,6 +568,30 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn chunk(&self, p: [i32; 2], requested: ChunkStatus) -> Result<&RegionChunk, Error> {
         Ok(&self.chunks[self.index(p, requested)?])
+    }
+
+    /// Structure metadata belongs to the exclusively borrowed origin chunk,
+    /// independently of the radius in which this step may write blocks.
+    pub fn take_structure_start(
+        &mut self,
+        origin: [i32; 2],
+        structure: &crate::Identifier,
+    ) -> Result<Option<crate::structure::start::StructureStart>, Error> {
+        let index = self.index(origin, ChunkStatus::StructureStarts)?;
+        Ok(self.chunks[index].structures.starts.remove(structure))
+    }
+    pub fn restore_structure_start(
+        &mut self,
+        origin: [i32; 2],
+        structure: crate::Identifier,
+        start: crate::structure::start::StructureStart,
+    ) -> Result<(), Error> {
+        let index = self.index(origin, ChunkStatus::StructureStarts)?;
+        self.chunks[index]
+            .structures
+            .starts
+            .insert(structure, start);
+        Ok(())
     }
     pub fn min_y(&self) -> i32 {
         self.chunks
@@ -541,8 +784,13 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
     }
-    pub fn destroy_block(&mut self, p: [i32; 3], drop: bool) -> Result<bool, Error> {
-        self.behavior.destroy_block(self, p, drop)
+    /// Port of WorldGenRegion#destroyBlock. Generation ignores drops and the
+    /// breaker; only an existing non-air state triggers the normal region write.
+    pub fn destroy_block(&mut self, p: [i32; 3], _drop: bool) -> Result<bool, Error> {
+        if self.block(p)?.is_air() {
+            return Ok(false);
+        }
+        self.set_block(p, Block::AIR.default_state(), 3)
     }
     pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
         self.behavior.place_liquid(self, p, fluid)
@@ -554,6 +802,13 @@ impl<'a> WorldGenRegion<'a> {
         neighbor_p: [i32; 3],
         neighbor_state: BlockState,
     ) -> Result<BlockState, Error> {
+        let state = self.block(p)?;
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior
             .update_shape(self, p, direction, neighbor_p, neighbor_state)
     }
@@ -562,10 +817,19 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<BlockState, Error> {
+        // Block#updateFromNeighbourShapes applies updateShape in each direction.
+        // The base implementation is identity and consumes no random values.
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior.update_from_neighbor_shapes(self, p, state)
     }
-    pub fn update_neighbors_at(&mut self, p: [i32; 3], block: Block) -> Result<(), Error> {
-        self.behavior.update_neighbors_at(self, p, block)
+    /// WorldGenRegion inherits LevelAccessor's empty updateNeighborsAt.
+    pub fn update_neighbors_at(&mut self, _p: [i32; 3], _block: Block) -> Result<(), Error> {
+        Ok(())
     }
     pub fn load_block_entity(
         &mut self,
@@ -609,9 +873,103 @@ impl<'a> WorldGenRegion<'a> {
         }
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::CanSurvive)
+        {
+            return Ok(true);
+        }
         self.behavior.can_survive(state, self, p)
     }
-    pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_unobstructed(state, self, p)
+    /// EntityGetter#isUnobstructed always succeeds: WorldGenRegion#getEntities
+    /// returns an empty list, including for shapes spanning other chunks.
+    pub fn is_unobstructed(&self, _state: BlockState, _p: [i32; 3]) -> Result<bool, Error> {
+        Ok(true)
     }
+    // --- nether, end and misc family ---
+    pub fn generate_chorus_plant(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        radius: i32,
+    ) -> Result<(), Error> {
+        self.behavior.generate_chorus_plant(self, p, random, radius)
+    }
+    pub fn configure_end_gateway(
+        &mut self,
+        p: [i32; 3],
+        exit: [i32; 3],
+        exact: bool,
+    ) -> Result<(), Error> {
+        self.behavior.configure_end_gateway(self, p, exit, exact)
+    }
+    pub fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
+        match self.block(p)?.cached_collision_empty() {
+            Some(empty) => Ok(empty),
+            None => self.behavior.is_collision_empty(self, p),
+        }
+    }
+    pub fn create_end_spike_crystal(
+        &mut self,
+        p: [i32; 3],
+        beam: Option<[i32; 3]>,
+        invulnerable: bool,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior
+            .create_end_spike_crystal(self, p, beam, invulnerable, random)
+    }
+    // --- end nether, end and misc family ---
+}
+
+/// The light layers queried by LevelReader during feature placement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LightLayer {
+    Block,
+    Sky,
+}
+
+impl WorldGenRegion<'_> {
+    // --- vegetation family ---
+    /// Port of BlockAndLightGetter#getBrightness before INITIALIZE_LIGHT.
+    /// No section light exists yet: block light is zero and sky storage returns 15.
+    /// A feature placing an emitter does not initialize or propagate lighting.
+    pub fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
+        let chunk = self.chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if chunk.status >= ChunkStatus::InitializeLight {
+            return Err(Error(
+                "Unsupported: initialized worldgen light storage".into(),
+            ));
+        }
+        Ok(match layer {
+            LightLayer::Block => 0,
+            LightLayer::Sky => match self.has_skylight {
+                Some(true) => 15,
+                Some(false) => 0,
+                None => return Err(Error("Unsupported: worldgen skylight context".into())),
+            },
+        })
+    }
+    pub fn set_has_skylight(&mut self, has_skylight: bool) {
+        self.has_skylight = Some(has_skylight);
+    }
+    pub fn vine_acceptable_neighbor(
+        &self,
+        p: [i32; 3],
+        direction: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.vine_acceptable_neighbor(self, p, direction)
+    }
+    pub fn place_double_plant(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        self.behavior.place_double_plant(self, state, p, flags)
+    }
+    pub fn place_mossy_carpet(&mut self, p: [i32; 3], flags: u32) -> Result<(), Error> {
+        self.behavior.place_mossy_carpet(self, p, flags)
+    }
+    // --- end vegetation family ---
 }

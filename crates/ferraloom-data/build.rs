@@ -1,4 +1,7 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_methods.rs"]
+mod block_methods;
+
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
@@ -487,6 +490,63 @@ fn state_transforms(out: &mut String, tables: &Value, state_count: usize) {
     }
 }
 
+// Java class/interface identity is generated separately from state properties.
+fn block_classes(out: &mut String, data: &Value, block_count: usize) {
+    let classes = data["classes"].as_array().unwrap();
+    let blocks = data["blocks"].as_array().unwrap();
+    assert_eq!(blocks.len(), block_count);
+    let names = classes
+        .iter()
+        .map(|c| string(&c["name"]))
+        .collect::<Vec<_>>();
+    let variants = names
+        .iter()
+        .map(|name| pascal(name.rsplit('.').next().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        variants.iter().collect::<BTreeSet<_>>().len(),
+        variants.len(),
+        "class name collision"
+    );
+    out.push_str("/// Vanilla concrete block classes, superclasses and implemented interfaces.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]\n#[repr(u16)]\npub enum BlockClass {\n");
+    for variant in &variants {
+        writeln!(out, "{variant},").unwrap();
+    }
+    out.push_str("}\nimpl BlockClass {\npub const ALL: &[Self] = &[");
+    for variant in &variants {
+        write!(out, "Self::{variant},").unwrap();
+    }
+    out.push_str("];\npub const fn java_name(self) -> &'static str { BLOCK_CLASS_NAMES[self as usize] }\n}\n");
+    writeln!(
+        out,
+        "const BLOCK_CLASS_NAMES: [&str; {}] = {names:?};",
+        names.len()
+    )
+    .unwrap();
+    write!(out, "const BLOCK_CLASSES: [BlockClass; {block_count}] = [").unwrap();
+    for class in blocks {
+        write!(out, "BlockClass::{},", variants[number(class) as usize]).unwrap();
+    }
+    out.push_str("];\n");
+    let words = classes.len().div_ceil(64);
+    writeln!(
+        out,
+        "const BLOCK_CLASS_INSTANCES: [[u64; {words}]; {}] = [",
+        classes.len()
+    )
+    .unwrap();
+    for class in classes {
+        let mut bits = vec![0u64; words];
+        for parent in class["instances"].as_array().unwrap() {
+            let index = number(parent) as usize;
+            assert!(index < classes.len());
+            bits[index / 64] |= 1u64 << (index % 64);
+        }
+        writeln!(out, "{bits:?},").unwrap();
+    }
+    out.push_str("];\n");
+}
+
 /// Cached face occlusion is independent of the level and block position.
 fn face_occlusion(out: &mut String, values: &Value, state_count: usize) {
     let values = values.as_array().expect("face occlusion array");
@@ -512,11 +572,57 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     out.push_str("];\n");
 }
 
+/// Tag names and registry identities are extracted separately from membership.
+fn tag_keys(root: &Path, registries: &Value) {
+    let groups = load(root, "tag_keys");
+    let mut out =
+        String::from("// Generated vanilla tag keys. Membership belongs to the loaded datapack.\n");
+    for (registry, group) in groups.as_object().unwrap() {
+        let class = string(&group["class"]);
+        let registry_path = registry.strip_prefix("minecraft:").unwrap();
+        let entry = if registries.get(registry).is_some() {
+            let entry = format!("crate::registries::{}::Id", ident(registry));
+            writeln!(out, "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
+            writeln!(out, "impl StaticTagElement for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
+            entry
+        } else {
+            let entry = format!("{}Entry", class.trim_end_matches("Tags"));
+            writeln!(out, "/// Runtime id in the loaded {registry} registry.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] pub struct {entry}(pub u32);").unwrap();
+            writeln!(
+                out,
+                "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
+            )
+            .unwrap();
+            entry
+        };
+        writeln!(out, "pub struct {class};\nimpl {class} {{").unwrap();
+        for (ordinal, (key, name)) in group["keys"].as_object().unwrap().iter().enumerate() {
+            writeln!(
+                out,
+                "pub const {key}: TagKey<{entry}> = TagKey::vanilla({name}, {ordinal});"
+            )
+            .unwrap();
+        }
+        writeln!(out, "pub const ALL: &[TagKey<{entry}>] = &[").unwrap();
+        for key in group["keys"].as_object().unwrap().keys() {
+            writeln!(out, "Self::{key},").unwrap();
+        }
+        out.push_str("];\n}\n");
+    }
+    std::fs::write(
+        Path::new(&std::env::var("OUT_DIR").unwrap()).join("tag_keys.rs"),
+        out,
+    )
+    .unwrap();
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
+    tag_keys(root, &registries_report);
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
+    block_methods::generate(root, &block_properties);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
     for (name, count) in [
@@ -537,6 +643,11 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    block_classes(
+        &mut out,
+        &load(root, "block_classes"),
+        block_properties["blocks"].as_array().unwrap().len(),
+    );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
     blocks(&mut out, &block_report, &block_properties, &props);
@@ -546,6 +657,16 @@ fn main() {
         &load(root, "state_transforms"),
         block_properties["states"].as_array().unwrap().len(),
     );
+    let state_count = block_properties["states"].as_array().unwrap().len();
+    let mut is_air = vec![false; state_count];
+    for id in load(root, "air_states").as_array().unwrap() {
+        is_air[number(id) as usize] = true;
+    }
+    writeln!(
+        out,
+        "static STATE_IS_AIR: [bool; {state_count}] = {is_air:?};"
+    )
+    .unwrap();
     face_occlusion(
         &mut out,
         &load(root, "face_occlusion"),

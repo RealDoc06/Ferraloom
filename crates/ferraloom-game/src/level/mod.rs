@@ -10,6 +10,11 @@ use crate::{
 };
 
 pub mod chunk;
+pub mod chunk_holder;
+pub mod chunk_map;
+pub mod distance_manager;
+pub mod server_level;
+pub mod tickets;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
@@ -71,6 +76,12 @@ impl Level {
         self.region.as_mut().expect("level is parked")
     }
 
+    pub fn chunk(&self, pos: ChunkPos) -> Option<&chunk::LevelChunk> {
+        self.region().chunks.get(&pos)
+    }
+    pub fn remove_chunk(&mut self, pos: ChunkPos) -> Option<chunk::LevelChunk> {
+        self.region_mut().chunks.remove(&pos)
+    }
     pub fn add_chunk(&mut self, chunk: chunk::LevelChunk) -> Result<(), LevelError> {
         let pos = chunk.pos();
         let region = self.region_mut();

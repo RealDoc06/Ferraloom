@@ -170,6 +170,41 @@ public final class ExtractData {
         write(dir, "block_state_facts", table);
     }
 
+    private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
+        if (type == null || !classes.add(type)) return;
+        collectClasses(type.getSuperclass(), classes);
+        for (var parent : type.getInterfaces()) collectClasses(parent, classes);
+    }
+
+    private static void blockClasses(Path dir) throws Exception {
+        var found = new HashSet<Class<?>>();
+        for (var block : BuiltInRegistries.BLOCK) collectClasses(block.getClass(), found);
+        var classes = found.stream().sorted(Comparator.comparing(Class::getName)).toList();
+        var definitions = new JsonArray();
+        for (var type : classes) {
+            var entry = new JsonObject();
+            entry.addProperty("name", type.getName());
+            var parents = new JsonArray();
+            for (int i = 0; i < classes.size(); i++) {
+                if (classes.get(i).isAssignableFrom(type)) parents.add(i);
+            }
+            entry.add("instances", parents);
+            definitions.add(entry);
+        }
+        var blocks = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) blocks.add(classes.indexOf(block.getClass()));
+        var out = new JsonObject();
+        out.add("classes", definitions);
+        out.add("blocks", blocks);
+        write(dir, "block_classes", out);
+    }
+
+    private static void airStates(Path dir) throws Exception {
+        var ids = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) if (state.isAir()) ids.add(Block.getId(state));
+        write(dir, "air_states", ids);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
@@ -179,6 +214,10 @@ public final class ExtractData {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        airStates(Path.of(args[0]));
+        if (args.length > 1 && args[1].equals("--air-states-only")) return;
+        blockClasses(Path.of(args[0]));
+        if (args.length > 1 && args[1].equals("--block-classes-only")) return;
         for (var field : Arrays.stream(SoundType.class.getFields()).sorted(Comparator.comparing(java.lang.reflect.Field::getName)).toList()) {
             if (field.getType() == SoundType.class) SOUND_NAMES.putIfAbsent((SoundType) field.get(null), field.getName().toLowerCase(Locale.ROOT));
         }

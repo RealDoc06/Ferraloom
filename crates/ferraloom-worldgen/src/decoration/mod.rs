@@ -52,7 +52,7 @@ pub mod sorter;
 use crate::{
     Identifier,
     feature::{FeatureContext, FeatureRegistry},
-    generator::NoiseBasedChunkGenerator,
+    generator::ChunkGeneratorAccess,
 };
 use ferraloom_util::random::{Random, XoroshiroRandomSource};
 use std::collections::BTreeSet;
@@ -87,14 +87,11 @@ impl DecorationPlan {
     pub fn apply_biome_decoration(
         &self,
         region: &mut WorldGenRegion<'_>,
-        generator: &NoiseBasedChunkGenerator,
+        generator: &dyn ChunkGeneratorAccess,
         registry: &FeatureRegistry,
         structures: &mut impl StructureDecoration,
     ) -> Result<(), Error> {
         let center = region.center();
-        let origin = [center[0] * 16, region.min_y(), center[1] * 16];
-        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
-        let decoration_seed = random.set_decoration_seed(region.seed, origin[0], origin[2]);
         let mut biomes = BTreeSet::new();
         for z in center[1] - 1..=center[1] + 1 {
             for x in center[0] - 1..=center[0] + 1 {
@@ -106,7 +103,7 @@ impl DecorationPlan {
                         for y in 0..4 {
                             for z in 0..4 {
                                 let id = section.biomes().get(x, y, z);
-                                let name = &generator.data.biome_names[id.0 as usize];
+                                let name = &generator.data().biome_names[id.0 as usize];
                                 if self.possible_biomes.contains(name) {
                                     biomes.insert(name.clone());
                                 }
@@ -116,6 +113,30 @@ impl DecorationPlan {
                 }
             }
         }
+        self.apply_for_biomes(region, generator, registry, structures, &biomes)
+    }
+
+    /// The caller supplies exactly the possible-biome-filtered union of every
+    /// section in the vanilla 3x3 neighborhood. Fresh flat chunks have a fixed
+    /// biome, so local-only features can use that union without borrowing
+    /// neighbors. General features still require the full owned write region.
+    pub fn apply_for_biomes(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        generator: &dyn ChunkGeneratorAccess,
+        registry: &FeatureRegistry,
+        structures: &mut impl StructureDecoration,
+        biomes: &BTreeSet<Identifier>,
+    ) -> Result<(), Error> {
+        if !biomes.is_subset(&self.possible_biomes) {
+            return Err(Error("decoration biome union exceeds biome source".into()));
+        }
+        region.set_block_tags(generator.data().block_tags.clone());
+        region.set_fluid_tags(generator.data().fluid_tags.clone());
+        let center = region.center();
+        let origin = [center[0] * 16, region.min_y(), center[1] * 16];
+        let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
+        let decoration_seed = random.set_decoration_seed(region.seed, origin[0], origin[2]);
         for step in 0..self.steps.len().max(GenerationStep::ALL.len()) {
             if let Some(&generation_step) = GenerationStep::ALL.get(step) {
                 structures.place_step(generation_step, region, &mut random, decoration_seed)?;
@@ -124,7 +145,7 @@ impl DecorationPlan {
                 continue;
             };
             let mut features = BTreeSet::new();
-            for biome in &biomes {
+            for biome in biomes {
                 if let Some(entries) = registry
                     .biome_features
                     .get(biome)

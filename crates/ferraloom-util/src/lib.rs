@@ -3,6 +3,7 @@
 //! Integer operations deliberately preserve Java overflow and shift behavior.
 //! Floating-point expressions retain vanilla's evaluation order and precision.
 
+pub mod collections;
 pub mod core;
 pub mod java;
 pub mod mth;

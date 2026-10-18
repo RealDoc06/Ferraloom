@@ -6,12 +6,16 @@ use crate::{
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
 use ferraloom_data::{
     Block, BlockState,
-    datapack::{ResourceManager, load_tags},
+    datapack::{ResourceManager, TagSet, load_tags},
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
+
+pub mod flat;
+pub mod preset;
+pub use preset::{ChunkGenerator, LevelStem, WorldDimensions, WorldPreset};
 
 #[derive(Clone, Debug)]
 pub struct GenerationData {
@@ -23,6 +27,9 @@ pub struct GenerationData {
     pub biome_names: Vec<Identifier>,
     pub biome_ids: BTreeMap<Identifier, BiomeId>,
     pub biome_tags: BTreeMap<Identifier, Vec<Identifier>>,
+    pub block_tags: Arc<TagSet<Block>>,
+    pub fluid_tags: Arc<TagSet<ferraloom_data::registries::fluid::Id>>,
+    pub item_tags: Arc<TagSet<ferraloom_data::Item>>,
     motion_blocking: Arc<HashSet<Block>>,
     motion_blocking_no_leaves: Arc<HashSet<Block>>,
     biome_strategy: Strategy<BiomeId>,
@@ -87,6 +94,22 @@ impl GenerationData {
                 .collect(),
         );
         let ids = (0..biome_names.len()).map(|i| BiomeId(i as u32)).collect();
+        let block_tags = Arc::new(TagSet::from_tags(
+            block_tags,
+            ferraloom_data::registries::block::NAMES.len(),
+        )?);
+        let fluid_tags = Arc::new(TagSet::<ferraloom_data::registries::fluid::Id>::load(
+            resources,
+        )?);
+        let item_tags = Arc::new(TagSet::<ferraloom_data::Item>::load(resources)?);
+        for (name, diagnostics) in [
+            ("fluid", &fluid_tags.diagnostics),
+            ("item", &item_tags.diagnostics),
+        ] {
+            if !diagnostics.is_empty() {
+                return Err(Error(format!("invalid {name} tags: {diagnostics:?}")));
+            }
+        }
         let biome_strategy = Strategy::biomes(Arc::new(
             IdMap::new(ids).map_err(|e| Error(format!("invalid biome registry: {e:?}")))?,
         ));
@@ -99,6 +122,9 @@ impl GenerationData {
             biome_names,
             biome_ids,
             biome_tags: biome_tags.values,
+            block_tags,
+            fluid_tags,
+            item_tags,
             motion_blocking,
             motion_blocking_no_leaves,
             biome_strategy,
@@ -158,6 +184,68 @@ pub struct NoiseBasedChunkGenerator {
     pub settings: NoiseGeneratorSettings,
     pub source: BiomeSource,
     pub random: RandomState,
+}
+/// Port of ChunkGenerator's shared feature and column-query interface.
+pub trait ChunkGeneratorAccess: std::fmt::Debug + Send + Sync {
+    fn data(&self) -> &GenerationData;
+    fn biome_source(&self) -> &BiomeSource;
+    fn min_y(&self) -> i32;
+    fn gen_depth(&self) -> i32;
+    fn sea_level(&self) -> i32;
+    fn get_base_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error>;
+    fn get_base_column(
+        &self,
+        x: i32,
+        z: i32,
+        min_y: i32,
+        height: i32,
+    ) -> Result<Option<NoiseColumn>, Error>;
+    fn get_spawn_height(&self, _min_y: i32, _height: i32) -> i32 {
+        64
+    }
+}
+impl ChunkGeneratorAccess for NoiseBasedChunkGenerator {
+    fn data(&self) -> &GenerationData {
+        &self.data
+    }
+    fn biome_source(&self) -> &BiomeSource {
+        &self.source
+    }
+    fn min_y(&self) -> i32 {
+        self.settings.noise.min_y
+    }
+    fn gen_depth(&self) -> i32 {
+        self.settings.noise.height
+    }
+    fn sea_level(&self) -> i32 {
+        self.settings.sea_level
+    }
+    fn get_base_height(
+        &self,
+        x: i32,
+        z: i32,
+        heightmap: crate::region::Heightmap,
+        min_y: i32,
+        height: i32,
+    ) -> Result<i32, Error> {
+        self.get_base_height(x, z, heightmap, min_y, height)
+    }
+    fn get_base_column(
+        &self,
+        x: i32,
+        z: i32,
+        min_y: i32,
+        height: i32,
+    ) -> Result<Option<NoiseColumn>, Error> {
+        self.get_base_column(x, z, min_y, height)
+    }
 }
 impl NoiseBasedChunkGenerator {
     pub fn new(

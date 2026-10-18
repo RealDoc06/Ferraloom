@@ -265,6 +265,26 @@ own handles/rebindable wrappers, not copies or raw references. Validate current
 state/type and removal on every tick. This preserves `LevelChunk` replacement
 and `Level#tickBlockEntities` pending-list semantics without borrow aliasing.
 
+### Worldgen shares block behavior
+
+Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
+`ServerLevel` and `WorldGenRegion` implement, so worldgen runs real
+`updateShape`, `canSurvive`, `placeLiquid` and block-entity loading. Ferraloom
+keeps one implementation of each behavior in `ferraloom-game`:
+
+- Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'_>`
+  enum (`Server(&mut ServerLevel)` / `Worldgen(&mut WorldGenRegion)`). It is
+  matched statically, so block code still inlines and no `dyn Level` appears
+  on the hot path.
+- `ferraloom-worldgen` cannot depend on game, so it calls those behaviors
+  through `region::WorldgenBlockBehavior`. The game crate implements that trait
+  by delegating to the same `BlockBehavior` table with
+  `LevelAccessRef::Worldgen`. Until a behavior is ported, the trait returns an
+  explicit `Unsupported` error and the affected worldgen parity cases stay
+  pending.
+- Pure state transforms (rotate, mirror) are generated data tables in
+  `ferraloom-data`, extracted from vanilla's own methods.
+
 ## Global state, commands and messages
 
 The global phase is a sequence of the serial slots above, not a second tick

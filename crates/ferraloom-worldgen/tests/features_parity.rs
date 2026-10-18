@@ -645,10 +645,15 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
     let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
     let generator = fixture_generator(&resources);
-    let mut chunks = vec![RegionChunk::new(
-        generator.new_chunk([0, 0]),
-        ChunkStatus::Terrain,
-    )];
+    let mut chunks = vec![
+        RegionChunk::new(generator.new_chunk([0, 0]), ChunkStatus::Terrain),
+        RegionChunk::new(generator.new_chunk([1, 0]), ChunkStatus::Terrain),
+    ];
+    let structure = "ferraloom:test_start".parse().unwrap();
+    chunks[1].structures.starts.insert(
+        structure.clone(),
+        ferraloom_worldgen::structure::start::StructureStart::invalid(),
+    );
     let mut region = WorldGenRegion::new(
         &mut chunks,
         [0, 0],
@@ -660,7 +665,34 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
         63,
     )
     .unwrap();
-    assert!(region.block([16, 0, 0]).is_err());
+    assert!(region.block([32, 0, 0]).is_err());
+    let start = region
+        .take_structure_start([1, 0], &structure)
+        .unwrap()
+        .unwrap();
+    assert!(
+        region
+            .take_structure_start([1, 0], &structure)
+            .unwrap()
+            .is_none()
+    );
+    region
+        .restore_structure_start([1, 0], structure, start)
+        .unwrap();
+    assert!(region.fluid_tags().is_err());
+    region.set_fluid_tags(generator.data.fluid_tags.clone());
+    assert!(region.fluid_tags().unwrap().contains_key(
+        ferraloom_data::tags::FluidTags::WATER,
+        ferraloom_data::registries::fluid::Id::WATER,
+    ));
+    assert!(region.block_tags().is_err());
+    region.set_block_tags(generator.data.block_tags.clone());
+    assert!(
+        region
+            .block_tags()
+            .unwrap()
+            .contains_key(ferraloom_data::tags::BlockTags::DIRT, Block::DIRT,)
+    );
     assert!(
         !region
             .set_block([16, 0, 0], Block::STONE.default_state(), 2)
@@ -713,6 +745,35 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     assert!(region.is_solid([0, 0, 0]).unwrap());
     assert!(
         region
+            .can_survive(Block::STONE.default_state(), [i32::MAX; 3])
+            .unwrap()
+    );
+    assert!(
+        region
+            .can_survive(Block::OAK_SAPLING.default_state(), [0, 0, 0])
+            .is_err()
+    );
+    assert_eq!(
+        region
+            .update_from_neighbor_shapes([0, 0, 0], Block::STONE.default_state())
+            .unwrap(),
+        Block::STONE.default_state()
+    );
+    assert!(
+        region
+            .update_from_neighbor_shapes([0, 0, 0], Block::OAK_SAPLING.default_state())
+            .is_err()
+    );
+    for direction in ferraloom_util::Direction::VALUES {
+        assert_eq!(
+            region
+                .update_shape([0, 0, 0], direction, [0, 1, 0], Block::AIR.default_state())
+                .unwrap(),
+            Block::STONE.default_state()
+        );
+    }
+    assert!(
+        region
             .has_sturdy_face([0, 0, 0], ferraloom_util::Direction::Up)
             .unwrap()
     );
@@ -756,6 +817,17 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .chunk
             .post_processing,
         [[2, 0, 0]]
+    );
+    assert!(region.destroy_block([0, 0, 0], true).unwrap());
+    assert_eq!(region.block([0, 0, 0]).unwrap().block(), Block::AIR);
+    assert!(!region.destroy_block([0, 0, 0], false).unwrap());
+    region
+        .update_neighbors_at([i32::MAX, 0, i32::MAX], Block::STONE)
+        .unwrap();
+    assert!(
+        region
+            .is_unobstructed(Block::STONE.default_state(), [i32::MAX, 0, i32::MAX])
+            .unwrap()
     );
 }
 
@@ -1025,15 +1097,6 @@ fn all_block_predicates_match_vanilla_with_fixed_world_reads() {
             // This fixture exercises only vanilla's unconditional stone rule.
             assert_eq!(state.block(), Block::STONE);
             Ok(true)
-        }
-        fn is_unobstructed(
-            &self,
-            state: BlockState,
-            _: &WorldGenRegion<'_>,
-            p: [i32; 3],
-        ) -> Result<bool, Error> {
-            assert_eq!(state.block(), Block::STONE);
-            Ok(p[0] & 1 == 0)
         }
     }
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();

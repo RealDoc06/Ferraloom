@@ -1,5 +1,6 @@
 import com.google.gson.*;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationHandler;
 import java.nio.file.*;
 import java.util.*;
 import net.minecraft.core.*;
@@ -7,7 +8,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** Tests the real predicates against deterministic reads and entity obstruction. */
 public final class PredicateGolden {
@@ -16,7 +16,8 @@ public final class PredicateGolden {
         var plains=registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
         var level=(LevelAccessor)Proxy.newProxyInstance(PredicateGolden.class.getClassLoader(),new Class<?>[]{LevelAccessor.class},(object,method,args)->switch(method.getName()) {
             case "getBiome" -> plains;
-            case "isUnobstructed" -> (((int)((VoxelShape)args[1]).bounds().minX)&1)==0;
+            case "getEntities" -> List.of();
+            case "isUnobstructed" -> InvocationHandler.invokeDefault(object,method,args);
             default -> method.invoke(delegate,args);
         });
         var cases=new JsonArray();

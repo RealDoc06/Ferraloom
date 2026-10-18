@@ -3,7 +3,7 @@
 use crate::{
     Error, Identifier,
     codec::*,
-    generator::NoiseBasedChunkGenerator,
+    generator::ChunkGeneratorAccess,
     placement::{modifier::PlacementModifier, predicate::PredicateDecodeData},
     region::WorldGenRegion,
 };
@@ -16,7 +16,13 @@ use std::{
     sync::Arc,
 };
 
+pub mod aquatic;
+pub mod end;
+pub mod misc;
+pub mod nether;
 pub mod state_provider;
+pub mod surface;
+pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
@@ -25,7 +31,7 @@ pub struct FeatureContext<'a, 'r> {
     pub region: &'a mut WorldGenRegion<'r>,
     pub random: &'a mut WorldgenRandom,
     pub origin: [i32; 3],
-    pub generator: &'a NoiseBasedChunkGenerator,
+    pub generator: &'a dyn ChunkGeneratorAccess,
     pub registry: &'a FeatureRegistry,
 }
 pub type FeatureFactory =
@@ -94,6 +100,12 @@ impl<'a> FeatureLoader<'a> {
             next_inline: 0,
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        vegetation::register(&mut loader)?;
+        aquatic::register(&mut loader)?;
+        surface::register(&mut loader)?;
+        nether::register(&mut loader)?;
+        end::register(&mut loader)?;
+        misc::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {
@@ -269,6 +281,9 @@ impl<'a> FeatureLoader<'a> {
     }
     pub fn finish(self) -> FeatureRegistry {
         self.registry
+    }
+    pub fn registry(&self) -> &FeatureRegistry {
+        &self.registry
     }
 }
 #[derive(Debug)]
