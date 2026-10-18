@@ -303,7 +303,7 @@ fn argument_node_passes_its_source_to_the_contextual_parser() {
                 .copied()
                 .unwrap_or(false);
             if allowed {
-                self.parse(reader)
+                ArgumentType::parse(self, reader)
             } else {
                 Err(reader.error(ExceptionKind::Custom("denied".into()), &[]))
             }
@@ -317,7 +317,7 @@ fn argument_node_passes_its_source_to_the_contextual_parser() {
         Some(0)
     );
     assert_eq!(
-        Contextual.parse(&mut StringReader::new("hello")).unwrap(),
+        ArgumentType::parse(&Contextual, &mut StringReader::new("hello")).unwrap(),
         "hello"
     );
 }
