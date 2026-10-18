@@ -28,6 +28,7 @@ pub mod emission;
 pub mod entity;
 pub mod environment;
 pub mod events;
+mod features;
 pub mod heightmap;
 pub mod interaction;
 mod lighting;

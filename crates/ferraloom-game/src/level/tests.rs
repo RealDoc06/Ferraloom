@@ -1972,7 +1972,10 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     let chunk = ChunkPos::new(0, 0);
     let pos = BlockPos::new(8, 0, 8);
     let mut tag = CompoundTag::new();
-    tag.insert("id", Tag::String("minecraft:spawner".into()));
+    tag.insert(
+        "id",
+        Tag::String(Block::SPAWNER.block_entity_type().unwrap().name().into()),
+    );
     for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
         tag.insert(key, Tag::Int(value));
     }
