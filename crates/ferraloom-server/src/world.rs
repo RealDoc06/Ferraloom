@@ -1823,7 +1823,14 @@ impl World {
                 .retain(|&queued| queued != pos);
         }
     }
-    pub(crate) fn refresh_terrain_structures(&self, terrain: &mut Terrain) {
+    pub(crate) fn refresh_promotion_structures(&mut self, request: u64) -> Result<()> {
+        let terrain = self
+            .full_promotions
+            .get_mut(&request)
+            .context("missing FULL continuation")?
+            .input
+            .as_mut()
+            .context("missing FULL terrain")?;
         if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
             && snapshot.revision > terrain.revision
         {
@@ -1831,6 +1838,7 @@ impl World {
             terrain.structures = snapshot.structures.clone();
             terrain.revision = snapshot.revision;
         }
+        Ok(())
     }
     pub(crate) fn store_generation_chunk(
         &mut self,

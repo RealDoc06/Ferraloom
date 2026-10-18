@@ -191,6 +191,7 @@ impl GenerationRuntime {
         if stage.is_none() {
             let (prepared, requested) = {
                 let mut world = self.world.borrow_mut();
+                world.refresh_promotion_structures(task)?;
                 let chunks = self.chunks.borrow();
                 let holder = chunks
                     .holders
