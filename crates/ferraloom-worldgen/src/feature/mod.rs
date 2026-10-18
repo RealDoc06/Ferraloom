@@ -18,10 +18,10 @@ use std::{
 
 pub mod aquatic;
 pub mod cave;
-pub mod ore;
 pub mod end;
 pub mod misc;
 pub mod nether;
+pub mod ore;
 pub mod state_provider;
 pub mod surface;
 pub mod vegetation;
