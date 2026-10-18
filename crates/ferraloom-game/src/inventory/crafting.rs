@@ -368,9 +368,7 @@ impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_, '_> {
         index: usize,
         amount: i32,
     ) -> crate::crafting::Result<Self::Stack> {
-        let source = self
-            .operation
-            .inventory_stack(index)
+        let source = MenuClickContext::inventory_stack(&mut self.operation, index)
             .map_err(placement_error)?;
         if amount < count(self.operation.read(source).map_err(placement_error)?) {
             let taken = self
@@ -400,8 +398,7 @@ impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_, '_> {
     ) -> crate::crafting::Result<()> {
         let amount =
             count(self.operation.read(*receiver).map_err(placement_error)?).wrapping_add(amount);
-        self.operation
-            .set_stack_count(*receiver, amount)
+        MenuTransferContext::set_stack_count(&mut self.operation, *receiver, amount)
             .map_err(placement_error)
     }
     fn inventory_changed(&mut self) -> crate::crafting::Result<()> {
