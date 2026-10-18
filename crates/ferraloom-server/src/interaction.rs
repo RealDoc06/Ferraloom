@@ -271,15 +271,9 @@ fn was_block_placement_attempt(
             .is_on_cooldown(stack))
 }
 fn send_build_limit_to(connection: &mut Connection, high: bool, limit: i32) {
-    send_interaction_overlay_to(
-        connection,
-        if high {
-            "build.tooHigh"
-        } else {
-            "build.tooLow"
-        },
-        Argument::Number(Numeric::Int(limit)),
-    );
+    connection.push(ferraloom_game::entity::player::build_limit_packet(
+        high, limit,
+    ));
 }
 fn send_interaction_overlay_to(connection: &mut Connection, key: &str, argument: Argument) {
     let mut content = Component::translatable(key, vec![argument]);
