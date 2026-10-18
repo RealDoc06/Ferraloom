@@ -104,7 +104,29 @@ async fn clicks(session: &mut Session) -> Result<ObservationLog> {
         container_id: VarInt(99),
     }))
     .await?;
-    bot.synchronize().await?;
+    let returned = bot
+        .wait_for("close inventory return", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::SetPlayerInventory(_))
+        })
+        .await?;
+    let cb::Packet::SetPlayerInventory(returned) = returned.as_ref() else {
+        unreachable!()
+    };
+    let menu_slot = match returned.slot.0 {
+        0..=8 => returned.slot.0 + 36,
+        9..=35 => returned.slot.0,
+        40 => 45,
+        slot => anyhow::bail!("unexpected close return slot {slot}"),
+    };
+    // Closing returns the stack immediately, but only the entity tick updates
+    // the menu's remote slot. A ping alone can race that state-ID increment.
+    bot.wait_for("close inventory broadcast", Ticks::DEFAULT, |_, packet| {
+        matches!(packet, cb::Packet::ContainerSetSlot(packet)
+            if packet.container_id.0 == 0
+                && i32::from(packet.slot) == menu_slot
+                && packet.item_stack == returned.contents)
+    })
+    .await?;
     let closed = full_click(bot, -1, 0, play::ContainerInput::Pickup).await?;
     ensure!(
         closed.carried.is_empty(),
