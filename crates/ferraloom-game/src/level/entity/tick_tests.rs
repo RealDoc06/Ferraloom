@@ -111,6 +111,7 @@ fn frozen_entities_with_transitive_player_passengers_still_tick() {
     assert!(crate::entity::start_riding(player, intermediate, true, &mut level).unwrap());
     let mut rate = TickRateManager::default();
     rate.set_frozen(true);
+    rate.tick();
     level.tick_entities_with_tick_rate(&rate).unwrap();
     for id in [root, intermediate, player] {
         assert_eq!(level.entity::<EntityData>(id).unwrap().tick_count, 1);
