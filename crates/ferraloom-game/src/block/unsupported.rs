@@ -33,8 +33,41 @@ pub enum BlockMethod {
     CollisionShape,
     OutlineShape,
     IsFaceSturdy,
+    EntityInsideCollisionShape,
+    UpdateFromNeighbourShapes,
+    TriggerEvent,
+    IsCollisionShapeFullBlock,
 }
 impl BlockMethod {
+    pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
+        use ferraloom_data::BlockMethod as Vanilla;
+        Some(match self {
+            Self::OnPlace => Vanilla::OnPlace,
+            Self::AffectNeighborsAfterRemoval => Vanilla::AffectNeighborsAfterRemoval,
+            Self::NeighborChanged => Vanilla::NeighborChanged,
+            Self::EntityInside => Vanilla::EntityInside,
+            Self::FallOn => Vanilla::FallOn,
+            Self::StepOn => Vanilla::StepOn,
+            Self::BounceOn => Vanilla::BounceOn,
+            Self::UpdateShape | Self::UpdateFromNeighbourShapes => Vanilla::UpdateShape,
+            Self::UpdateIndirectNeighborShapes => Vanilla::UpdateIndirectNeighbourShapes,
+            Self::Tick => Vanilla::Tick,
+            Self::RandomTick => Vanilla::RandomTick,
+            Self::CanSurvive => Vanilla::CanSurvive,
+            Self::CollisionShape => Vanilla::GetCollisionShape,
+            Self::OutlineShape => Vanilla::GetShape,
+            Self::IsFaceSturdy => Vanilla::GetBlockSupportShape,
+            Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
+            Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
+            Self::TriggerEvent => Vanilla::TriggerEvent,
+            Self::CanPlaceLiquid
+            | Self::PlaceLiquid
+            | Self::PickupBlock
+            | Self::FluidTick
+            | Self::FluidRandomTick
+            | Self::BubbleColumnUpdate => return None,
+        })
+    }
     const fn can_skip(self) -> bool {
         !matches!(
             self,
@@ -45,6 +78,10 @@ impl BlockMethod {
                 | Self::CollisionShape
                 | Self::OutlineShape
                 | Self::IsFaceSturdy
+                | Self::EntityInsideCollisionShape
+                | Self::UpdateFromNeighbourShapes
+                | Self::TriggerEvent
+                | Self::IsCollisionShapeFullBlock
         )
     }
     pub const fn name(self) -> &'static str {
@@ -70,6 +107,10 @@ impl BlockMethod {
             Self::CollisionShape => "getCollisionShape",
             Self::OutlineShape => "getShape",
             Self::IsFaceSturdy => "isFaceSturdy",
+            Self::EntityInsideCollisionShape => "getEntityInsideCollisionShape",
+            Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",
+            Self::TriggerEvent => "triggerEvent",
+            Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
         }
     }
 }
@@ -152,7 +193,7 @@ impl Level {
         call: impl FnOnce(&'static dyn BlockBehavior, &mut Level) -> Result<T, LevelError>,
     ) -> Result<Option<T>, LevelError> {
         self.optional_call(block, method, |level| {
-            call(level.block_behavior(block)?, level)
+            call(level.behavior_for_method(block, method)?, level)
         })
     }
     #[inline]

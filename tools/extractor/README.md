@@ -67,3 +67,13 @@ than a `blocksMotion` state method.
 only state), plus redstone conductivity for non-dynamic states. Every registered
 26.3 conductor predicate is either the cache-backed collision-full query or
 `Blocks::always`/`never`; dynamic states retain an explicit missing live query.
+
+`ExtractBlockMethods` records the first class declaring each selected virtual
+method in every registered block's real superclass hierarchy. Signatures include
+parameter types; no behavior sampling determines ownership. `Block::overrides`
+is false for the recorded vanilla base owner (`BlockBehaviour`, or `Block` for
+placement, stepping and falling). This does not imply that every base method is
+a constant: collision-shape defaults, for example, call other virtual methods.
+The extractor additionally exercises the base survival and shape-update methods
+for every applicable state with null level/tick/random arguments, proving those
+two known constants require no level behavior or random draws.

@@ -42,13 +42,9 @@ impl Level {
             }
             let state = self.get_block_state(event.pos)?;
             if state.block() == event.block
-                && self.block_behavior(event.block)?.trigger_event(
-                    state,
-                    event.pos,
-                    event.param_a,
-                    event.param_b,
-                    self,
-                )?
+                && self
+                    .required_block_behavior(event.block, crate::block::BlockMethod::TriggerEvent)?
+                    .trigger_event(state, event.pos, event.param_a, event.param_b, self)?
             {
                 self.emit(LevelEffect::BlockEvent(event));
             }

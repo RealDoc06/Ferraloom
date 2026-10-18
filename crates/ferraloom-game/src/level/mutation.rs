@@ -38,6 +38,9 @@ impl Level {
             .as_deref()
             .ok_or(LevelError::MissingBlockTags)
     }
+    pub(crate) fn custom_block_behavior(&self, block: Block) -> Option<&'static dyn BlockBehavior> {
+        self.region().behaviors.block(block)
+    }
     pub fn block_behavior(&self, block: Block) -> Result<&'static dyn BlockBehavior, LevelError> {
         self.region()
             .behaviors
@@ -45,12 +48,29 @@ impl Level {
             .or_else(|| crate::block::dispatch::vanilla_behavior(block))
             .ok_or(LevelError::UnsupportedBlock(block))
     }
+    pub(crate) fn behavior_for_method(
+        &self,
+        block: Block,
+        method: BlockMethod,
+    ) -> Result<&'static dyn BlockBehavior, LevelError> {
+        if let Some(custom) = self.custom_block_behavior(block) {
+            return Ok(custom);
+        }
+        if method
+            .vanilla_method()
+            .is_some_and(|method| !block.overrides(method))
+        {
+            return Ok(&crate::block::BASE_BLOCK);
+        }
+        crate::block::dispatch::ported_behavior(block, method)
+            .ok_or(LevelError::UnsupportedBlock(block))
+    }
     pub fn required_block_behavior(
         &self,
         block: Block,
         method: BlockMethod,
     ) -> Result<&'static dyn BlockBehavior, LevelError> {
-        self.block_behavior(block)
+        self.behavior_for_method(block, method)
             .map_err(|_| LevelError::UnsupportedBlockMethod(block, method))
     }
     pub(crate) fn emit(&mut self, effect: LevelEffect) {
@@ -216,6 +236,34 @@ impl Level {
             self.emit(LevelEffect::PoiChanged { pos, old, new });
         }
         Ok(true)
+    }
+    /// Port of ServerLevel#updateNeighboursOnBlockSet, used by commands after
+    /// their deferred-update placement pass. The source is the new block.
+    pub fn update_neighbors_on_block_set(
+        &mut self,
+        pos: BlockPos,
+        old: BlockState,
+    ) -> Result<(), LevelError> {
+        let state = self.get_block_state(pos)?;
+        if old.block() != state.block() {
+            self.optional_block_call(
+                old.block(),
+                BlockMethod::AffectNeighborsAfterRemoval,
+                |behavior, level| behavior.affect_neighbors_after_removal(old, pos, false, level),
+            )?;
+        }
+        self.update_neighbors_at(pos, state.block())?;
+        if state.has_analog_output_signal() {
+            self.update_neighbour_for_output_signal(pos, state.block())?;
+        }
+        Ok(())
+    }
+    pub fn update_from_neighbor_shapes(
+        &mut self,
+        state: BlockState,
+        pos: BlockPos,
+    ) -> Result<BlockState, LevelError> {
+        crate::block::LevelAccessRef::Server(self).update_from_neighbor_shapes(state, pos)
     }
     pub fn destroy_block(
         &mut self,

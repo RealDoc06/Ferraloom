@@ -44,6 +44,26 @@ impl LevelReaderRef<'_> {
     }
 }
 impl LevelAccessRef<'_> {
+    /// Port of Block#updateFromNeighbourShapes. This query returns a required
+    /// placement state, so unsupported calls fail even under Warn policy.
+    pub fn update_from_neighbor_shapes(
+        &mut self,
+        mut state: BlockState,
+        pos: BlockPos,
+    ) -> Result<BlockState, LevelError> {
+        for direction in crate::level::redstone::UPDATE_SHAPE_ORDER {
+            let neighbor_pos = pos.relative(direction, 1);
+            let neighbor = self.get_block_state(neighbor_pos)?;
+            let behavior = match self {
+                Self::Server(level) => level.required_block_behavior(
+                    state.block(),
+                    BlockMethod::UpdateFromNeighbourShapes,
+                )?,
+            };
+            state = behavior.update_shape(state, pos, direction, neighbor_pos, neighbor, self)?;
+        }
+        Ok(state)
+    }
     pub fn as_reader(&self) -> LevelReaderRef<'_> {
         match self {
             Self::Server(level) => LevelReaderRef::Server(level),
@@ -94,6 +114,16 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getEntityInsideCollisionShape's base full cube.
+    fn entity_inside_collision_shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::block())
+    }
     /// Port of BlockBehaviour#getCollisionShape for registered base families.
     /// Dynamic overrides must implement this method; no extracted baseline is
     /// treated as a live contextual answer.
@@ -127,7 +157,7 @@ pub trait BlockBehavior: Sync {
         pos: BlockPos,
         level: &LevelReaderRef<'_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
-        self.collision_shape(state, pos, &BlockCollisionContext::empty(), level)
+        level.collision_shape(state, pos, &BlockCollisionContext::empty())
     }
     fn on_place(
         &self,
