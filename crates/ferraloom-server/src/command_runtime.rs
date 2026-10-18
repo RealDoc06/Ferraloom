@@ -155,6 +155,9 @@ impl MinecraftServer {
         broadcast: bool,
     ) {
         let plan = feedback::success_plan(stack, &self.game_rules, broadcast);
+        if !plan.evaluate_message {
+            return;
+        }
         if plan.source {
             self.send_component(source, message.clone());
         }
