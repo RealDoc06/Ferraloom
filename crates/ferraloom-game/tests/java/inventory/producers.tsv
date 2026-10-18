@@ -1,0 +1,5 @@
+producer	inventory	B:oak_planks;S:36:1,4,64;S:37:55,1,64;B:furnace;S:38:1018,1,64	36:1,1,64;37:55,1,64;38:1018,1,64	-	oak_planks,furnace	0		435819906
+producer	crafting-pickup	B:stick;B:crafting_table;B:oak_planks;S:0:-;S:1:-;C:63,4,64	-	63,4,64	oak_planks,stick,crafting_table	4		435819906
+producer	crafting-quick	B:stick;B:crafting_table;B:oak_planks;S:0:-;S:1:-;S:44:63,4,64	44:63,4,64	-	oak_planks,stick,crafting_table	4		435819906
+producer	furnace-pickup	B:iron_ingot_from_smelting_raw_iron;B:stick;S:2:-;C:1018,3,64	-	1018,3,64	stick,iron_ingot_from_smelting_raw_iron	3	3:1,1:1,1:1	-266361987
+producer	furnace-quick	B:iron_ingot_from_smelting_raw_iron;B:stick;S:2:-;S:38:1018,3,64	38:1018,3,64	-	stick,iron_ingot_from_smelting_raw_iron	3	3:1,1:1,1:1	-266361987
