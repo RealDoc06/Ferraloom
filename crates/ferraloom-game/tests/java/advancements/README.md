@@ -35,3 +35,10 @@ damage/count synchronously inside rewards, and records that triggering does not
 apply the caller's later damage or consumption mutation. Rust replays these
 observations through the shared pure matcher and live entries, including a
 retained receiver whose original inventory slot has already been replaced.
+
+`SculkTriggerVectors` calls AVOID_VIBRATION and KILL_MOB_NEAR_SCULK_CATALYST with
+actual player, victim and damage-source objects. It observes player predicates,
+the displaced victim's distance from the player, direct/causing source identity,
+and synchronous XP rewards. Eligibility and fallback selection remain producer
+responsibilities; the Rust replay passes the canonical DamageSource through its
+existing immutable predicate DTO boundary.

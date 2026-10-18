@@ -2,13 +2,13 @@
 //! synchronously; missing runtime facts remain policy-routed Unsupported.
 use super::{
     live,
-    triggers::{TriggerEvent, TriggerType},
+    triggers::{TriggerEvent, TriggerType, create_context},
 };
 use crate::{
     block::UnportedOperation,
     crafting::RecipeHolder,
     entity::{
-        EntityRef,
+        EntityData, EntityRef,
         player::{ServerPlayer, inventory},
     },
     inventory::StackRef,
@@ -304,6 +304,39 @@ pub fn recipe_crafted(
 /// Port of CriteriaTriggers.TICK at the native ServerPlayer#tick phase.
 pub fn tick(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
     live::trigger(level, player, TriggerType::Tick, TriggerEvent::Player, None)
+}
+/// Port of VibrationSystem.User#isValidVibration's AVOID_VIBRATION call.
+/// The producer owns the careful-stepping and vibration-tag eligibility gates.
+pub fn avoid_vibration(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
+    live::trigger(
+        level,
+        player,
+        TriggerType::AvoidVibration,
+        TriggerEvent::Player,
+        None,
+    )
+}
+/// Port of SculkCatalystBlockEntity.CatalystListener#tryAwardItSpreadsAdvancement.
+/// The producer supplies the actual last source or native playerAttack fallback.
+pub fn kill_mob_near_sculk_catalyst(
+    level: &mut Level,
+    player: EntityRef,
+    victim: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+) -> Result<(), LevelError> {
+    let origin = level.entity::<EntityData>(player)?.position;
+    let entity = create_context(origin, victim);
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        player,
+        TriggerType::KillMobNearSculkCatalyst,
+        TriggerEvent::Killed {
+            entity: &entity,
+            source: &source,
+        },
+        None,
+    )
 }
 /// Port of CriteriaTriggers.LOCATION at ServerPlayer#doTick's 20-tick tail.
 pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {

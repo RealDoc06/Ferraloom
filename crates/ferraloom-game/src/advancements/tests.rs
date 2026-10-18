@@ -1310,6 +1310,79 @@ fn vanilla_live_item_triggers_preserve_receivers_and_pre_damage_values() {
 }
 
 #[test]
+fn vanilla_sculk_triggers_use_canonical_player_victim_and_damage_source() {
+    use crate::entity::{
+        EntityData, EntityState, animal::Cow, damage::DamageSource, player::ServerPlayer,
+    };
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("sculk-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:sculk"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(Vec3::new(1.0, 64.0, 2.0));
+        let victim = level.next_entity_ref();
+        let mut victim_data = EntityData::new(EntityType::COW, 2, 0);
+        victim_data.set_pos(Vec3::new(4.0, 64.0, 2.0));
+        level
+            .add_entity(
+                victim,
+                EntityState::Cow(Box::new(Cow::with_parent(victim_data))),
+            )
+            .unwrap();
+        let source = if row["indirect"].as_bool().unwrap() {
+            let holder = level
+                .context()
+                .damage_types()
+                .get(&"arrow".parse().unwrap())
+                .unwrap()
+                .clone();
+            DamageSource::with_entities(holder, Some(victim), Some(player))
+        } else {
+            level.context().damage_sources().player_attack(player)
+        };
+        assert_eq!(source.is_direct(), row["is_direct"].as_bool().unwrap());
+        assert_eq!(
+            source.to_loot_source().damage_type.as_str(),
+            row["damage_type"].as_str().unwrap()
+        );
+        match row["input"]["criteria"]["a"]["trigger"].as_str().unwrap() {
+            "avoid_vibration" => criteria::avoid_vibration(&mut level, player),
+            "kill_mob_near_sculk_catalyst" => {
+                criteria::kill_mob_near_sculk_catalyst(&mut level, player, victim, &source)
+            }
+            _ => unreachable!(),
+        }
+        .unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:sculk"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+    }
+}
+
+#[test]
 fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
