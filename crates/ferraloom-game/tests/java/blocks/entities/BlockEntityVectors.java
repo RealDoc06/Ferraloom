@@ -18,6 +18,26 @@ public final class BlockEntityVectors {
       System.out.println("registry\t"+BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type)+"\t"+String.join(",",blocks));
     }
     var registries=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    for(var block:List.of(Blocks.CHEST,Blocks.COPPER_CHEST.asList().getFirst(),Blocks.TRAPPED_CHEST,Blocks.BARREL,Blocks.SHULKER_BOX,Blocks.CRAFTER,Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE,Blocks.OAK_SIGN,Blocks.OAK_HANGING_SIGN)){
+      var state=block.defaultBlockState();var entity=((EntityBlock)block).newBlockEntity(new BlockPos(1,64,2),state);
+      System.out.println("default-save\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.saveWithoutMetadata(registries));
+      if(entity instanceof net.minecraft.world.Container c){
+        c.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,31));
+        c.setItem(c.getContainerSize()-1,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND,3));
+      }
+      var saved=entity.saveWithFullMetadata(registries);
+      var loaded=BlockEntity.loadStatic(entity.getBlockPos(),state,saved,registries);
+      System.out.println("filled-save\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+saved);
+      System.out.println("roundtrip\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+loaded.saveWithFullMetadata(registries).equals(saved));
+      System.out.println("update-tag\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.getUpdateTag(registries));
+      System.out.println("update-packet\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+(entity.getUpdatePacket()!=null));
+      if(entity instanceof RandomizableContainerBlockEntity random){
+        random.setLootTable(net.minecraft.resources.ResourceKey.create(Registries.LOOT_TABLE,net.minecraft.resources.Identifier.withDefaultNamespace("chests/simple_dungeon")),-9123456789L);
+        System.out.println("loot-save\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.saveWithoutMetadata(registries));
+        random.setLootTableSeed(0);
+        System.out.println("loot-zero\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.saveWithoutMetadata(registries));
+      }
+    }
     var portal=new TheEndPortalBlockEntity(new BlockPos(17,-4,-1),Blocks.END_PORTAL.defaultBlockState());
     for(var pos:List.of(new BlockPos(17,-4,-1),new BlockPos(-1,60,33),new BlockPos(0,0,0))){
       var tag=new CompoundTag();tag.putInt("x",pos.getX());tag.putInt("y",pos.getY());tag.putInt("z",pos.getZ());
