@@ -1,5 +1,5 @@
 //! Port of the 26.3 execution queue. All actions run inline on the exclusive caller.
-use super::{exceptions::error, source::CommandResultCallback};
+use super::source::CommandResultCallback;
 use ferraloom_brigadier::CommandSyntaxException;
 use std::collections::VecDeque;
 
@@ -156,7 +156,10 @@ impl<H> ExecutionContext<H> {
     ) -> Result<(), CommandSyntaxException> {
         let new_sources = new_sources.into_iter().collect::<Vec<_>>();
         if sources.len() + new_sources.len() >= self.fork_limit.max(0) as usize {
-            return Err(error("command.forkLimit", &[self.fork_limit.to_string()]));
+            return Err(super::exceptions::error_with_arguments(
+                "command.forkLimit",
+                vec![super::builtins::integer(self.fork_limit)],
+            ));
         }
         sources.extend(new_sources);
         Ok(())

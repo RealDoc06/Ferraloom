@@ -29,6 +29,9 @@ pub fn string(value: impl Into<String>) -> Argument {
 pub fn integer(value: i32) -> Argument {
     Argument::Number(Numeric::Int(value))
 }
+pub fn long(value: i64) -> Argument {
+    Argument::Number(Numeric::Long(value))
+}
 pub fn component(value: Component) -> Argument {
     Argument::Component(Box::new(value))
 }

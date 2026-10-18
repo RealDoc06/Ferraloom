@@ -52,7 +52,7 @@ public final class ForceLoadVector {
                 }
                 vector.addProperty("value", (int)value);
             } catch (java.lang.reflect.InvocationTargetException failure) {
-                var error = (com.mojang.brigadier.exceptions.CommandSyntaxException)failure.getCause(); vector.addProperty("error", error.getRawMessage().getString());
+                var error = (com.mojang.brigadier.exceptions.CommandSyntaxException)failure.getCause(); vector.addProperty("error", error.getRawMessage().getString());vector.add("error_component",ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE,(Component)error.getRawMessage()).getOrThrow());
             }
             var forced = new JsonArray(); chunks.longStream().sorted().forEach(forced::add); vector.add("forced", forced); results.add(vector);
         }

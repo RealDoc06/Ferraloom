@@ -201,9 +201,9 @@ fn fill<A: PlacementAccess>(
         .wrapping_mul(i64::from(max.z - min.z + 1));
     let limit = access.max_block_modifications();
     if area > i64::from(limit) {
-        return Err(error(
+        return Err(super::exceptions::error_with_arguments(
             "commands.fill.toobig",
-            &[limit.to_string(), area.to_string()],
+            vec![builtins::integer(limit), builtins::long(area)],
         )
         .into());
     }
@@ -302,6 +302,7 @@ mod tests {
         feedback: serde_json::Value,
         value: Option<i32>,
         error: Option<String>,
+        error_component: Option<serde_json::Value>,
     }
     #[derive(Default)]
     struct World {
@@ -418,7 +419,18 @@ mod tests {
             let command = commands.prepare(&vector.command, source.clone()).unwrap();
             match (run(&command, &mut world), vector.error) {
                 (Err(PlacementError::Syntax(error)), Some(expected)) => {
-                    assert_eq!(error.raw_message.text(), expected, "{}", vector.command)
+                    assert_eq!(error.raw_message.text(), expected, "{}", vector.command);
+                    assert_eq!(
+                        serde_json::from_str::<serde_json::Value>(
+                            &super::super::exceptions::error_component(&error)
+                                .to_json()
+                                .unwrap()
+                        )
+                        .unwrap(),
+                        vector.error_component.unwrap(),
+                        "{}",
+                        vector.command
+                    );
                 }
                 (Ok(result), None) => {
                     assert_eq!(Some(result.value), vector.value, "{}", vector.command);

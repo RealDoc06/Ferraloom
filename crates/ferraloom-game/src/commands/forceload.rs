@@ -140,9 +140,9 @@ pub async fn run<A: ForceLoadAccess>(
     let total =
         (i64::from(max.x) - i64::from(min.x) + 1) * (i64::from(max.z) - i64::from(min.z) + 1);
     if total > 256 {
-        return Err(error(
+        return Err(super::exceptions::error_with_arguments(
             "commands.forceload.toobig",
-            &["256".into(), total.to_string()],
+            vec![builtins::integer(256), builtins::long(total)],
         )
         .into());
     }
@@ -219,6 +219,7 @@ mod tests {
         feedback: serde_json::Value,
         forced: Vec<i64>,
         error: Option<String>,
+        error_component: Option<serde_json::Value>,
         value: Option<i32>,
     }
     #[test]
@@ -241,12 +242,19 @@ mod tests {
                 panic!("in-memory ticket mutations must finish immediately");
             };
             if let Some(expected) = vector.error {
+                let error = result.err().unwrap();
                 assert_eq!(
-                    result.err().unwrap().raw_message.text(),
-                    expected,
+                    serde_json::from_str::<serde_json::Value>(
+                        &super::super::exceptions::error_component(&error)
+                            .to_json()
+                            .unwrap()
+                    )
+                    .unwrap(),
+                    vector.error_component.unwrap(),
                     "{}",
                     vector.command
                 );
+                assert_eq!(error.raw_message.text(), expected, "{}", vector.command);
             } else {
                 let output = result.unwrap();
                 assert_eq!(

@@ -65,6 +65,9 @@
     "command": "forceload add 0 0 16 0",
     "feedback": [],
     "error": "No chunks were marked for force loading",
+    "error_component": {
+      "translate": "commands.forceload.added.failure"
+    },
     "forced": [
       0,
       1
@@ -94,6 +97,13 @@
     "command": "forceload query 16 0",
     "feedback": [],
     "error": "Chunk at [1, 0] in minecraft:overworld is not marked for force loading",
+    "error_component": {
+      "translate": "commands.forceload.query.failure",
+      "with": [
+        "[1, 0]",
+        "minecraft:overworld"
+      ]
+    },
     "forced": [
       0
     ]
@@ -179,12 +189,22 @@
     "command": "forceload add -30000001 0",
     "feedback": [],
     "error": "That position is out of this world!",
+    "error_component": {
+      "translate": "argument.pos.outofworld"
+    },
     "forced": []
   },
   {
     "command": "forceload add 0 0 4096 0",
     "feedback": [],
     "error": "Too many chunks in the specified area (maximum 256, but specified 257)",
+    "error_component": {
+      "translate": "commands.forceload.toobig",
+      "with": [
+        256,
+        257
+      ]
+    },
     "forced": []
   }
 ]

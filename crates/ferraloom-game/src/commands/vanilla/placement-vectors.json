@@ -87,6 +87,9 @@
     ],
     "feedback": [],
     "error": "Could not set the block",
+    "error_component": {
+      "translate": "commands.setblock.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -167,6 +170,9 @@
     ],
     "feedback": [],
     "error": "Could not set the block",
+    "error_component": {
+      "translate": "commands.setblock.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -194,6 +200,9 @@
     "trace": [],
     "feedback": [],
     "error": "Could not set the block",
+    "error_component": {
+      "translate": "commands.setblock.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -615,6 +624,9 @@
     ],
     "feedback": [],
     "error": "No blocks were filled",
+    "error_component": {
+      "translate": "commands.fill.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -782,6 +794,9 @@
     "trace": [],
     "feedback": [],
     "error": "No blocks were filled",
+    "error_component": {
+      "translate": "commands.fill.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -3541,6 +3556,9 @@
     ],
     "feedback": [],
     "error": "No blocks were filled",
+    "error_component": {
+      "translate": "commands.fill.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -4922,6 +4940,13 @@
     "trace": [],
     "feedback": [],
     "error": "Too many blocks in the specified area (maximum 2, but specified 6)",
+    "error_component": {
+      "translate": "commands.fill.toobig",
+      "with": [
+        2,
+        6
+      ]
+    },
     "blocks": [
       {
         "pos": [
@@ -5165,6 +5190,9 @@
     "trace": [],
     "feedback": [],
     "error": "Could not set the block",
+    "error_component": {
+      "translate": "commands.setblock.failed"
+    },
     "blocks": [
       {
         "pos": [
@@ -5408,6 +5436,9 @@
     "trace": [],
     "feedback": [],
     "error": "No blocks were filled",
+    "error_component": {
+      "translate": "commands.fill.failed"
+    },
     "blocks": [
       {
         "pos": [

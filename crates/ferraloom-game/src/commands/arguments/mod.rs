@@ -89,9 +89,12 @@ impl Message {
         allow_selectors: bool,
     ) -> Result<Self, CommandSyntaxException> {
         if reader.remaining_length() > 256 {
-            return Err(error(
+            return Err(crate::commands::exceptions::error_with_arguments(
                 "argument.message.too_long",
-                &[reader.remaining_length().to_string(), "256".into()],
+                vec![
+                    crate::commands::builtins::integer(reader.remaining_length() as i32),
+                    crate::commands::builtins::integer(256),
+                ],
             ));
         }
         let text = reader.remaining();

@@ -100,7 +100,7 @@ public final class PlacementVector {
                     } else value=set.invoke(null,source,from,block,Enum.valueOf(setMode,internal),predicate,mode.equals("strict"));
                     vector.addProperty("value",(int)value);
                 } catch(java.lang.reflect.InvocationTargetException failure) {
-                    var error=(com.mojang.brigadier.exceptions.CommandSyntaxException)failure.getCause();vector.addProperty("error",error.getRawMessage().getString());
+                    var error=(com.mojang.brigadier.exceptions.CommandSyntaxException)failure.getCause();vector.addProperty("error",error.getRawMessage().getString());vector.add("error_component",ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE,(Component)error.getRawMessage()).getOrThrow());
                 }
             }
             var states=new JsonArray();world.entrySet().stream().sorted(Comparator.comparingInt((Map.Entry<BlockPos,BlockState> e)->e.getKey().getX()).thenComparingInt(e->e.getKey().getY()).thenComparingInt(e->e.getKey().getZ())).forEach(e->{

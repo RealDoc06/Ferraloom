@@ -10212,8 +10212,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "0",
     "ok": true,
@@ -10223,8 +10223,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "1.2",
     "ok": true,
@@ -10234,8 +10234,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": ".5",
     "ok": true,
@@ -10245,8 +10245,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "-1",
     "ok": true,
@@ -10256,8 +10256,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "-.5",
     "ok": true,
@@ -10267,8 +10267,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "-1234.56",
     "ok": true,
@@ -10278,8 +10278,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "",
     "ok": false,
@@ -10293,8 +10293,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": " ",
     "ok": false,
@@ -10308,8 +10308,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "?",
     "ok": false,
@@ -10323,8 +10323,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "1.5",
     "ok": true,
@@ -10334,8 +10334,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "~ ~ ~",
     "ok": false,
@@ -10349,8 +10349,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "0 1",
     "ok": true,
@@ -10360,8 +10360,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "0 1 2",
     "ok": true,
@@ -10371,8 +10371,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "^ ^ ^",
     "ok": false,
@@ -10386,8 +10386,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "~ ^ ~",
     "ok": false,
@@ -10401,8 +10401,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "@a",
     "ok": false,
@@ -10416,8 +10416,8 @@
   {
     "parser": "brigadier:double",
     "properties": {
-      "min": -5.9999968E7,
-      "max": 5.9999968E7
+      "min": -59999968.0,
+      "max": 59999968.0
     },
     "input": "@e[type=minecraft:player,limit=1]",
     "ok": false,
@@ -15907,5 +15907,51 @@
       ]
     },
     "cursor": 33
+  },
+  {
+    "parser": "minecraft:message",
+    "properties": {},
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ok": true,
+    "cursor": 256
+  },
+  {
+    "parser": "minecraft:message",
+    "properties": {},
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Chat message was too long (257 > maximum 256 characters)",
+    "error_component": {
+      "translate": "argument.message.too_long",
+      "with": [
+        257,
+        256
+      ]
+    },
+    "cursor": 0
+  },
+  {
+    "parser": "minecraft:message",
+    "properties": {},
+    "input": "🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀",
+    "ok": true,
+    "cursor": 256
+  },
+  {
+    "parser": "minecraft:message",
+    "properties": {},
+    "input": "🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀🦀",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Chat message was too long (258 > maximum 256 characters)",
+    "error_component": {
+      "translate": "argument.message.too_long",
+      "with": [
+        258,
+        256
+      ]
+    },
+    "cursor": 0
   }
 ]
