@@ -24,6 +24,7 @@ pub mod entity;
 pub mod events;
 pub mod heightmap;
 mod mutation;
+mod post_processing;
 mod random;
 pub mod redstone;
 mod saved_ticks;
@@ -57,6 +58,8 @@ pub enum LevelError {
     UnsupportedPushEntitiesUp,
     UnsupportedPackReload,
     InvalidSavedTick,
+    InvalidPendingGenerationData,
+    UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
 }
 

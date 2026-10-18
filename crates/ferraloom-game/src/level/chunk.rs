@@ -19,6 +19,7 @@ pub struct LevelChunk {
     pub(super) requested_full_status: FullChunkStatus,
     pub(super) ticking_ready: bool,
     inhabited_time: i64,
+    pub(super) pending_generation: super::post_processing::PendingGenerationData,
     pub unsaved: bool,
 }
 
@@ -38,6 +39,7 @@ impl LevelChunk {
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
             inhabited_time: 0,
+            pending_generation: Default::default(),
             unsaved: false,
         }
     }
@@ -64,6 +66,7 @@ impl LevelChunk {
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
             inhabited_time: 0,
+            pending_generation: Default::default(),
             unsaved: false,
         }
     }
