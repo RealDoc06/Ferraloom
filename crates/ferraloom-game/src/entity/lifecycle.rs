@@ -110,6 +110,33 @@ pub fn position_rider(
     level.set_entity_pos(passenger, position - attachment)
 }
 
+/// Port of Entity#rideTick. Tick may replace or remove the vehicle; position
+/// against the live vehicle after returning from the derived dispatcher.
+pub fn ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
+    behavior.tick(entity, level)?;
+    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle {
+        position_rider(vehicle, entity, level)?;
+    }
+    Ok(())
+}
+
+/// Port of LivingEntity#rideTick; `behavior` remains the concrete subclass for
+/// Entity#rideTick's virtual tick call, including when the rider dismounts.
+pub fn living_ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    ride_tick(behavior, entity, level)?;
+    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+    Ok(())
+}
+
 /// Port of Entity#baseTick. Each borrow ends before fluid, damage or removal calls.
 pub fn base_tick<E: super::Entity + ?Sized>(
     behavior: &E,

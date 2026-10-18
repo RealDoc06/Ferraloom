@@ -690,7 +690,7 @@ impl Level {
     fn tick_passenger(
         &mut self,
         vehicle: EntityRef,
-        mut passenger: EntityRef,
+        passenger: EntityRef,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
         if base.removed || base.vehicle != Some(vehicle) {
@@ -703,9 +703,8 @@ impl Level {
             return Ok(());
         }
         crate::entity::common_tick(passenger, self)?;
-        self.entity_mut::<EntityData>(passenger)?.velocity = Vec3::ZERO;
-        passenger.tick(self)?;
-        crate::entity::position_rider(vehicle, passenger, self)?;
+        self.entity_behavior(passenger)?
+            .ride_tick(passenger, self)?;
         let passengers = self.entity::<EntityData>(passenger)?.passengers.clone();
         for child in passengers {
             self.tick_passenger(passenger, child)?;

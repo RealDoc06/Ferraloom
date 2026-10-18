@@ -120,3 +120,102 @@ fn frozen_entities_with_transitive_player_passengers_still_tick() {
     assert_eq!(base.tick_count, 0);
     assert!(base.custom_data.get_int("despawn_checks").is_none());
 }
+
+struct SwitchMount;
+impl Entity for SwitchMount {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+        references.extend(state.as_mob().and_then(|mob| mob.target));
+    }
+    fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        if let Some(next) = level.entity_state(entity)?.as_mob().unwrap().target {
+            crate::entity::start_riding(entity, next, true, level)?;
+        } else {
+            crate::entity::stop_riding(entity, level)?;
+        }
+        Ok(())
+    }
+    fn ride_tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        crate::entity::living_ride_tick(self, entity, level)
+    }
+}
+
+#[test]
+fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_distance() {
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_entity(EntityType::COW, &SwitchMount);
+    let mut rows = 0;
+    for row in include_str!("../../../tests/java/entity/vectors.tsv")
+        .lines()
+        .filter(|row| row.starts_with("riding\t"))
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        level
+            .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Ticking)
+            .unwrap();
+        let old = add_cow(&mut level);
+        let next = add_cow(&mut level);
+        let rider = add_cow(&mut level);
+        level
+            .set_entity_pos(old, Vec3::new(1.0, 64.0, 1.0))
+            .unwrap();
+        level
+            .set_entity_pos(next, Vec3::new(5.0, 67.0, 8.0))
+            .unwrap();
+        level
+            .set_entity_pos(rider, Vec3::new(9.0, 70.0, 9.0))
+            .unwrap();
+        if fields[1] == "switch" {
+            level
+                .entity_state_mut(rider)
+                .unwrap()
+                .as_mob_mut()
+                .unwrap()
+                .target = Some(next);
+        }
+        crate::entity::start_riding(rider, old, true, &mut level).unwrap();
+        let base = level.entity_mut::<EntityData>(rider).unwrap();
+        base.velocity = Vec3::new(1.0, 2.0, 3.0);
+        base.fall_distance = 8.0;
+        level.tick_passenger(old, rider).unwrap();
+        let base = level.entity::<EntityData>(rider).unwrap();
+        let bits = |value: Vec3| {
+            format!(
+                "{:x},{:x},{:x}",
+                value.x.to_bits(),
+                value.y.to_bits(),
+                value.z.to_bits()
+            )
+        };
+        assert_eq!(bits(base.position), fields[2], "{row}");
+        assert_eq!(bits(base.velocity), fields[3], "{row}");
+        assert_eq!(
+            format!("{:x}", base.fall_distance.to_bits()),
+            fields[4],
+            "{row}"
+        );
+        assert_eq!((base.vehicle == Some(next)).to_string(), fields[5], "{row}");
+        assert_eq!(base.tick_count, 1);
+        rows += 1;
+    }
+    assert_eq!(rows, 2);
+}
+
+#[test]
+fn sneaking_player_dismounts_before_riding_tick_without_zeroing_velocity_or_fall_distance() {
+    let mut level = level();
+    let vehicle = add_cow(&mut level);
+    let player = add_player(&mut level);
+    crate::entity::start_riding(player, vehicle, true, &mut level).unwrap();
+    let base = level.entity_mut::<EntityData>(player).unwrap();
+    base.set_shared_flag(1, true);
+    base.velocity = Vec3::new(1.0, 2.0, 3.0);
+    base.fall_distance = 8.0;
+    crate::entity::Entity::ride_tick(&crate::entity::player::PlayerBehavior, player, &mut level)
+        .unwrap();
+    let base = level.entity::<EntityData>(player).unwrap();
+    assert_eq!(base.vehicle, None);
+    assert_eq!(base.velocity, Vec3::new(1.0, 2.0, 3.0));
+    assert_eq!(base.fall_distance, 8.0);
+    assert_eq!(base.boarding_cooldown, 0);
+}

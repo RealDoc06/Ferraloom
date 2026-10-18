@@ -73,6 +73,14 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn ride_tick(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living_ride_tick(self, entity, level)
+    }
+
     fn trace_entity_refs(
         &self,
         state: &super::EntityState,

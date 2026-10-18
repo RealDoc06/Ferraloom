@@ -488,6 +488,20 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// Player#rideTick's server dismount gate precedes LivingEntity#rideTick.
+    fn ride_tick(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        if player.shared_flag(1) && player.vehicle.is_some() {
+            crate::entity::stop_riding(entity, level)
+        } else {
+            crate::entity::living_ride_tick(self, entity, level)
+        }
+    }
+
     /// Player#getMoveSimulationType is AUTHORITATIVE_SIDE_AND_SERVER.
     fn can_simulate_movement(
         &self,

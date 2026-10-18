@@ -55,8 +55,8 @@ mod lifecycle;
 pub mod movement;
 mod trace;
 pub use lifecycle::{
-    base_tick, common_tick, count_player_passengers, eject_passengers, position_rider,
-    start_riding, stop_riding,
+    base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
+    position_rider, ride_tick, start_riding, stop_riding,
 };
 pub mod persistence;
 pub mod reference;
@@ -494,6 +494,10 @@ pub trait Entity: Sync {
     /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         base_tick(self, entity, level)
+    }
+
+    fn ride_tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        ride_tick(self, entity, level)
     }
 
     fn hurt_server(
