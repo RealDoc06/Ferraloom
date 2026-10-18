@@ -256,6 +256,7 @@ impl Region {
 /// lets the scheduler temporarily park ownership without moving this call facade.
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
+    command_storage: Option<Arc<crate::commands::storage::CommandStorageSnapshot>>,
     shared: Option<Box<crate::ServerShared>>,
     region: Option<Region>,
     context: Arc<LevelContext>,
@@ -267,6 +268,7 @@ pub struct Level {
 impl Level {
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
+            command_storage: None,
             shared: None,
             region: Some(region),
             difficulty: context.initial_difficulty,
@@ -274,6 +276,16 @@ impl Level {
             acquisition: Default::default(),
             acquire_driver: None,
         }
+    }
+    /// Required server-owned storage view, absent until startup installs it.
+    pub fn command_storage(&self) -> Option<&crate::commands::storage::CommandStorageSnapshot> {
+        self.command_storage.as_deref()
+    }
+    pub fn set_command_storage(
+        &mut self,
+        snapshot: Arc<crate::commands::storage::CommandStorageSnapshot>,
+    ) {
+        self.command_storage = Some(snapshot);
     }
     /// The server installs this canonical owner before entering a gameplay phase.
     pub fn shared(&self) -> Result<&crate::ServerShared, LevelError> {

@@ -200,6 +200,7 @@ pub struct MinecraftServer {
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
+    command_storage: ferraloom_game::commands::storage::CommandStorage,
     saving_enabled: bool,
     idle_timeout: i32,
     default_game_mode: GameType,
@@ -287,6 +288,11 @@ impl MinecraftServer {
             )
         };
         let clocks = command_runtime::load_clocks(&world, &resources)?;
+        let command_storage_folder = world.access.path().join("data");
+        let command_storage = tokio::task::spawn_blocking(move || {
+            ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
+        })
+        .await?;
         let command_context = command_runtime::command_build_context(
             &registries,
             &resources,
@@ -311,6 +317,7 @@ impl MinecraftServer {
             .level
             .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard }));
         level.game_time = game_time;
+        level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
             &mut level,
             &world,
@@ -428,6 +435,7 @@ impl MinecraftServer {
             game_rules,
             shared,
             clocks,
+            command_storage,
             command_entity_tags,
             selector_random: None,
             saving_enabled: true,
@@ -596,14 +604,19 @@ impl MinecraftServer {
                     self.autosave = self.autosave.min(self.next_autosave_interval())
                 }
                 TickRateEvent::SprintReport {
-                    completed_ticks,
+                    completed_ticks: _,
                     ticks_per_second,
                     milliseconds_per_tick,
                 } => {
-                    // The commands branch connects the server command source's
-                    // operator feedback when its canonical adapter lands.
-                    println!(
-                        "commands.tick.sprint.report: {completed_ticks} {ticks_per_second} {milliseconds_per_tick}"
+                    let report = ferraloom_game::commands::tick::sprint_report(
+                        ticks_per_second,
+                        milliseconds_per_tick,
+                    );
+                    self.command_success(
+                        None,
+                        &CommandSourceStack::server(4, Vec3::ZERO),
+                        report.message,
+                        report.broadcast,
                     );
                 }
             }
@@ -1605,7 +1618,7 @@ impl MinecraftServer {
                 .entity_world_border()
                 .initialization_packet(),
         ));
-        c.push(self.time_packet());
+        c.push(self.clock_packet(None));
         c.push(cb::Packet::SetDefaultSpawnPosition(
             cb::SetDefaultSpawnPosition {
                 respawn_data: self.default_spawn_data().packet_data(),
@@ -3095,7 +3108,9 @@ impl MinecraftServer {
         }
     }
     fn time_packet(&self) -> cb::Packet {
-        self.clock_packet(None)
+        cb::Packet::SetTime(ferraloom_game::commands::clocks::game_time_sync_packet(
+            self.level.game_time,
+        ))
     }
     fn refresh_status(&mut self) {
         use rand::{Rng, seq::SliceRandom};
@@ -3362,6 +3377,7 @@ impl MinecraftServer {
             .await?;
 
         self.save_game_rules().await?;
+        self.save_command_storage().await?;
         self.save_command_tickets().await?;
         let positions = self
             .level

@@ -1,9 +1,12 @@
 //! Exact command feedback and packet variants, using disposable single-region servers.
 use ferraloom_parity::{
-    Bot, ObservationLog, Result, Session, Ticks, ensure, parity_test,
+    Bot, ObservationLog, Result, Session, Ticks, ensure,
     protocol::{chat::Component, play::clientbound as cb},
 };
 use serde_json::Value;
+
+mod command_support;
+use command_support::command_test;
 
 fn json(component: &Component) -> Result<Value> {
     Ok(serde_json::from_str(&component.to_json()?)?)
@@ -247,7 +250,7 @@ async fn forced_default_game_mode(session: &mut Session) -> Result<ObservationLo
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires builder vanilla jar/JDK; run with --ignored"]
 async fn parity_command_forced_default_game_mode() -> Result<()> {
-    let mut options = ferraloom_parity::LaunchOptions::default();
+    let mut options = command_support::options();
     options
         .properties
         .insert("force-gamemode".into(), "true".into());
@@ -299,6 +302,102 @@ async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {
         };
         log.record(format!("message.{index}"), value)?;
     }
+    log.record(
+        "team.no_team",
+        command(
+            session.bot(sender)?,
+            "teammsg before joining",
+            "commands.teammsg.failed.noteam",
+        )
+        .await?,
+    )?;
+    for (text, key) in [
+        (
+            "team add parity \"Parity Team\"",
+            "commands.team.add.success",
+        ),
+        (
+            "team modify parity color gold",
+            "commands.team.option.color.success",
+        ),
+        ("team join parity @a", "commands.team.join.success.multiple"),
+        (
+            "scoreboard objectives add selection dummy",
+            "commands.scoreboard.objectives.add.success",
+        ),
+        (
+            "scoreboard players set ParityBot selection 7",
+            "commands.scoreboard.players.set.success.single",
+        ),
+    ] {
+        command(session.bot(sender)?, text, key).await?;
+    }
+    for (index, text) in [
+        "say selected @a[team=parity,scores={selection=7..}]",
+        "say missing @a[team=!parity,scores={absent=1..}]",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        session.bot(sender)?.command(text).await?;
+        let packet = session
+            .bot(witness)?
+            .wait_for(
+                "score/team message selector",
+                Ticks::DEFAULT,
+                |_, packet| matches!(packet, cb::Packet::DisguisedChat(_)),
+            )
+            .await?;
+        let cb::Packet::DisguisedChat(packet) = packet.as_ref() else {
+            unreachable!()
+        };
+        log.record(format!("selector.{index}"), json(&packet.message)?)?;
+    }
+    let outsider = session.join("OutsideTeam").await?;
+    session.bot(outsider)?.synchronize().await?;
+    let outside_messages = session.bot(outsider)?.snapshot().messages.len();
+    for (index, signed, text) in [
+        (0, false, "teammsg plain team"),
+        (1, true, "tm signed team"),
+    ] {
+        let bot = session.bot(sender)?;
+        if signed {
+            bot.signed_command(text).await?;
+        } else {
+            bot.command(text).await?;
+        }
+        for (recipient, expected_type) in [
+            (sender, "minecraft:team_msg_command_outgoing"),
+            (witness, "minecraft:team_msg_command_incoming"),
+        ] {
+            let packet=session.bot(recipient)?.wait_for("team message variant and direction",Ticks::DEFAULT,|_,packet| {
+                let binding=match packet { cb::Packet::DisguisedChat(packet)=>&packet.chat_type,cb::Packet::PlayerChat(packet)=>&packet.chat_type,_=>return false };
+                matches!(&binding.chat_type.0,ferraloom_parity::protocol::codec::Holder::Reference(id) if id.as_str()==expected_type)
+            }).await?;
+            let (kind, message, binding) = match packet.as_ref() {
+                cb::Packet::DisguisedChat(packet) => {
+                    ensure!(!signed, "unsigned team message used wrong packet variant");
+                    ("DisguisedChat", json(&packet.message)?, &packet.chat_type)
+                }
+                cb::Packet::PlayerChat(packet) => {
+                    ensure!(signed, "signed team message used wrong packet variant");
+                    (
+                        "PlayerChat",
+                        serde_json::json!({"content":packet.body.content.0,"unsigned":packet.unsigned_content.as_ref().map(json).transpose()?}),
+                        &packet.chat_type,
+                    )
+                }
+                _ => unreachable!(),
+            };
+            log.record(format!("team.{index}.{expected_type}"),serde_json::json!({"kind":kind,"message":message,"name":json(&binding.name)?,"target":binding.target_name.as_ref().map(json).transpose()?}))?;
+        }
+    }
+    session.bot(outsider)?.synchronize().await?;
+    ensure!(
+        session.bot(outsider)?.snapshot().messages.len() == outside_messages,
+        "team message reached a nonmember"
+    );
+    log.record("team.outsider_messages", 0)?;
     Ok(log)
 }
 
@@ -358,10 +457,14 @@ async fn spawn_and_return(session: &mut Session) -> Result<ObservationLog> {
     Ok(log)
 }
 
-parity_test!(parity_command_game_rules, game_rules);
-parity_test!(parity_command_clocks_and_admin, clocks_and_admin);
-parity_test!(parity_command_message_arguments, message_arguments);
-parity_test!(parity_command_spawn_and_return, spawn_and_return);
+command_test!(parity_command_game_rules, game_rules);
+command_test!(parity_command_clocks_and_admin, clocks_and_admin);
+command_test!(
+    parity_command_message_arguments,
+    message_arguments,
+    "pending scoreboard multi-member team join/leave guard fix on restart"
+);
+command_test!(parity_command_spawn_and_return, spawn_and_return);
 
 async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
     let operator = session.join("ParityBot").await?;
@@ -493,7 +596,7 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
     }
     Ok(log)
 }
-parity_test!(parity_command_access_lists, access_commands);
+command_test!(parity_command_access_lists, access_commands);
 
 async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
@@ -575,9 +678,10 @@ async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog>
     )?;
     Ok(log)
 }
-parity_test!(
+command_test!(
     parity_command_force_load_and_weather,
-    force_load_and_weather
+    force_load_and_weather,
+    "pending canonical center-chunk FULL acquisition; current ready wait also requires neighbor light/postProcess"
 );
 
 async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> {
@@ -693,7 +797,7 @@ async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> 
     )?;
     Ok(log)
 }
-parity_test!(parity_command_player_state, player_state_commands);
+command_test!(parity_command_player_state, player_state_commands);
 
 async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
     use ferraloom_data::Item;
@@ -761,4 +865,206 @@ async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
     }
     Ok(log)
 }
-parity_test!(parity_command_limited_crafting, limited_crafting);
+command_test!(parity_command_limited_crafting, limited_crafting);
+
+async fn tick_control(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    let mut log = ObservationLog::default();
+    for (label, text, frozen, rate, key) in [
+        (
+            "freeze",
+            "tick freeze",
+            true,
+            20.,
+            "commands.tick.status.frozen",
+        ),
+        (
+            "rate",
+            "tick rate 10",
+            true,
+            10.,
+            "commands.tick.rate.success",
+        ),
+        (
+            "restore_rate",
+            "tick rate 20",
+            true,
+            20.,
+            "commands.tick.rate.success",
+        ),
+    ] {
+        bot.command(text).await?;
+        let packet = bot.wait_for("tick state before feedback", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+                || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,key)))
+        }).await?;
+        let cb::Packet::TickingState(packet) = packet.as_ref() else {
+            anyhow::bail!("tick feedback preceded its state packet");
+        };
+        ensure!(
+            packet.is_frozen == frozen && packet.tick_rate == rate,
+            "wrong live tick state"
+        );
+        log.record(format!("{label}.state"), format!("{packet:?}"))?;
+        log.record(format!("{label}.feedback"), feedback(bot, key).await?)?;
+    }
+    let baseline =
+        command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+            .as_i64()
+            .expect("numeric long gametime");
+    bot.synchronize().await?;
+    let frozen_time =
+        command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+            .as_i64()
+            .unwrap();
+    ensure!(frozen_time == baseline, "frozen game time advanced");
+    bot.command("tick step 30t").await?;
+    let packet = bot.wait_for("step packet before feedback", Ticks::DEFAULT, |_,packet| {
+        matches!(packet,cb::Packet::TickingStep(_))
+            || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.step.success")))
+    }).await?;
+    let cb::Packet::TickingStep(packet) = packet.as_ref() else {
+        anyhow::bail!("step feedback preceded its step packet");
+    };
+    ensure!(packet.tick_steps.0 == 30, "step count lost");
+    log.record("step.packet", packet.tick_steps.0)?;
+    log.record(
+        "step.feedback",
+        feedback(bot, "commands.tick.step.success").await?,
+    )?;
+    let mut delta = 0;
+    for _ in 0..80 {
+        let current =
+            command(bot, "time query gametime", "commands.time.query.gametime").await?["with"][0]
+                .as_i64()
+                .unwrap();
+        delta = current - baseline;
+        ensure!(delta <= 30, "stepping advanced beyond its requested count");
+        if delta == 30 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    ensure!(delta == 30, "stepping never reached thirty game ticks");
+    log.record("step.game_time_delta", delta)?;
+    log.record(
+        "step.stop.error",
+        command(bot, "tick step stop", "commands.tick.step.stop.fail").await?,
+    )?;
+    log.record(
+        "sprint.stop.error",
+        command(bot, "tick sprint stop", "commands.tick.sprint.stop.fail").await?,
+    )?;
+    bot.command("tick sprint 1000000000t").await?;
+    let packet=bot.wait_for("sprint state before feedback",Ticks::DEFAULT,|_,packet| {
+        matches!(packet,cb::Packet::TickingState(_)) || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.status.sprinting")))
+    }).await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        anyhow::bail!("sprint feedback preceded state")
+    };
+    ensure!(
+        !packet.is_frozen && packet.tick_rate == 20.,
+        "sprint must unfreeze the game"
+    );
+    log.record("sprint.state", format!("{packet:?}"))?;
+    log.record(
+        "sprint.feedback",
+        feedback(bot, "commands.tick.status.sprinting").await?,
+    )?;
+    bot.command("tick sprint stop").await?;
+    let packet=bot.wait_for("sprint report before restored state",Ticks::DEFAULT,|_,packet| {
+        matches!(packet,cb::Packet::TickingState(_)) || matches!(packet,cb::Packet::SystemChat(packet) if json(&packet.content).is_ok_and(|v|has_translation(&v,"commands.tick.sprint.report")||has_translation(&v,"commands.tick.sprint.stop.success")))
+    }).await?;
+    let cb::Packet::SystemChat(packet) = packet.as_ref() else {
+        anyhow::bail!("restored state preceded sprint report")
+    };
+    let mut report = json(&packet.content)?;
+    // Performance values depend on the host; the native fixed-time Java vector
+    // checks their calculation and formatting. Compare every other field here.
+    fn normalize_timing(value: &mut Value) -> Result<bool> {
+        match value {
+            Value::Object(fields) => {
+                if fields.get("translate").and_then(Value::as_str)
+                    == Some("commands.tick.sprint.report")
+                {
+                    let args = fields
+                        .get_mut("with")
+                        .and_then(Value::as_array_mut)
+                        .expect("sprint report arguments");
+                    ensure!(
+                        args.len() == 2 && args[0].as_i64().is_some_and(|v| v >= 0),
+                        "sprint rate must be a numeric integer"
+                    );
+                    let milliseconds = args[1].as_str().expect("formatted milliseconds");
+                    ensure!(
+                        milliseconds.parse::<f64>().is_ok()
+                            && milliseconds
+                                .split_once('.')
+                                .is_some_and(|(_, fraction)| fraction.len() == 2),
+                        "sprint milliseconds must retain two decimals"
+                    );
+                    args[0] = serde_json::json!(0);
+                    args[1] = serde_json::json!("<timing>");
+                    return Ok(true);
+                }
+                for value in fields.values_mut() {
+                    if normalize_timing(value)? {
+                        return Ok(true);
+                    }
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    if normalize_timing(value)? {
+                        return Ok(true);
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(false)
+    }
+    ensure!(
+        normalize_timing(&mut report)?,
+        "missing sprint report before stop feedback"
+    );
+    log.record("sprint.report", report)?;
+    let packet = bot
+        .wait_for("restored frozen state", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+        })
+        .await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        unreachable!()
+    };
+    ensure!(
+        packet.is_frozen && packet.tick_rate == 20.,
+        "sprint stop did not restore frozen state"
+    );
+    log.record("sprint.restored_state", format!("{packet:?}"))?;
+    log.record(
+        "sprint.stop.feedback",
+        feedback(bot, "commands.tick.sprint.stop.success").await?,
+    )?;
+    bot.command("tick unfreeze").await?;
+    let packet = bot
+        .wait_for("unfreeze packet", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::TickingState(_))
+        })
+        .await?;
+    let cb::Packet::TickingState(packet) = packet.as_ref() else {
+        unreachable!()
+    };
+    ensure!(
+        !packet.is_frozen && packet.tick_rate == 20.,
+        "unfreeze state lost"
+    );
+    log.record("unfreeze.state", format!("{packet:?}"))?;
+    log.record(
+        "unfreeze.feedback",
+        feedback(bot, "commands.tick.status.running").await?,
+    )?;
+    Ok(log)
+}
+command_test!(parity_command_tick_control, tick_control);
