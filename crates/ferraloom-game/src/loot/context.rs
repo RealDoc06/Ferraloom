@@ -83,6 +83,7 @@ pub struct LootParams {
     pub damage_source: Option<DamageSource>,
     pub block_state: Option<BlockState>,
     pub block_entity: Option<Tag>,
+    pub block_entity_components: Option<ferraloom_protocol::component::DataComponentMap>,
     pub tool: Option<ItemStack>,
     pub explosion_radius: Option<f32>,
     pub additional_cost_component_allowed: Option<bool>,
@@ -114,7 +115,10 @@ impl LootParams {
             ),
             (Origin, self.origin.is_some()),
             (BlockState, self.block_state.is_some()),
-            (BlockEntity, self.block_entity.is_some()),
+            (
+                BlockEntity,
+                self.block_entity.is_some() || self.block_entity_components.is_some(),
+            ),
             (Tool, self.tool.is_some()),
             (ExplosionRadius, self.explosion_radius.is_some()),
             (
@@ -269,8 +273,28 @@ pub trait LootFacts: PredicateContext {
     ) -> Result<i32> {
         Err(LootError::Unsupported("entity.enchantment_level".into()))
     }
-    fn game_time(&self) -> Result<i64> {
-        Err(LootError::Unsupported("level.game_time".into()))
+    fn smelting_recipe_result(&self, _stack: &ItemStack) -> Result<Option<ItemStack>> {
+        Err(LootError::Unsupported("recipes.smelting".into()))
+    }
+    fn exploration_map(
+        &self,
+        _options: &super::ExplorationMapOptions,
+        _stack: ItemStack,
+        _origin: Vec3,
+    ) -> Result<ItemStack> {
+        Err(LootError::Unsupported("level.exploration_map".into()))
+    }
+    fn enchantment_provider_order(&self, keys: &[Identifier]) -> Result<Vec<Identifier>> {
+        if keys.len() <= 1 {
+            Ok(keys.to_vec())
+        } else {
+            Err(LootError::Unsupported(
+                "java.immutable_map_iteration_order".into(),
+            ))
+        }
+    }
+    fn clock_ticks(&self, _clock: &Identifier) -> Result<i64> {
+        Err(LootError::Unsupported("level.clock_ticks".into()))
     }
     fn weather(&self) -> Result<(bool, bool)> {
         Err(LootError::Unsupported("level.weather".into()))

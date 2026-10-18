@@ -95,6 +95,11 @@ pub enum LootItemCondition {
         thundering: Option<bool>,
     },
     EnchantmentActive(bool),
+    TimeCheck {
+        clock: super::Identifier,
+        period: Option<i64>,
+        value: ProviderRange<ContextIntProvider>,
+    },
     DamageSource(Option<crate::predicates::DamageSourcePredicate>),
     IntValueCheck(
         Holder<ContextIntProvider>,
@@ -182,6 +187,16 @@ impl LootItemCondition {
                 "predicate",
                 crate::predicates::DamageSourcePredicate::decode,
             )?),
+            "minecraft:time_check" => Self::TimeCheck {
+                clock: codec::id(codec::field(v, "clock")?)?,
+                period: codec::optional(v, "period", |v| {
+                    v.as_i64().ok_or_else(|| codec::error("expected long"))
+                })?,
+                value: ProviderRange::decode(
+                    codec::field(v, "value")?,
+                    ContextIntProvider::decode,
+                )?,
+            },
             "minecraft:enchantment_active_check" => {
                 Self::EnchantmentActive(codec::boolean(codec::field(v, "active")?)?)
             }
@@ -193,7 +208,7 @@ impl LootItemCondition {
                 Holder::decode(codec::field(v, "value")?, ContextFloatProvider::decode)?,
                 ProviderRange::decode(codec::field(v, "test")?, ContextFloatProvider::decode)?,
             ),
-            "minecraft:time_check" | "minecraft:environment_attribute_check" => {
+            "minecraft:environment_attribute_check" => {
                 return Err(LootError::Unsupported(format!("loot_condition.{kind}")));
             }
             _ => return Err(codec::error(format!("unknown loot condition {kind}"))),
@@ -339,6 +354,20 @@ impl LootItemCondition {
                 };
                 test.as_ref()
                     .map_or(Ok(true), |test| test.matches(source, origin, c.facts))
+            }
+            Self::TimeCheck {
+                clock,
+                period,
+                value,
+            } => {
+                let mut time = c.facts.clock_ticks(clock)?;
+                if let Some(period) = period {
+                    if *period == 0 {
+                        return Err(LootError::Arithmetic);
+                    }
+                    time = time.wrapping_rem(*period);
+                }
+                value.test(time as i32, data, c)
             }
             Self::EnchantmentActive(active) => Ok(c.params.enchantment_active == Some(*active)),
             Self::IntValueCheck(input, test) => {

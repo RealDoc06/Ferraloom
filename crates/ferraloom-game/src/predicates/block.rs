@@ -18,19 +18,31 @@ impl StatePropertiesPredicate {
     }
     pub fn matches(&self, state: BlockState) -> bool {
         self.0.properties.iter().all(|p| {
-            let Some(layout) = state
-                .block()
-                .data()
-                .properties
-                .iter()
-                .find(|v| v.name == p.name)
-            else {
+            let Some(values) = property_values(state.block(), &p.name) else {
                 return false;
             };
             let Some((_, actual)) = state.properties().find(|(name, _)| *name == p.name) else {
                 return false;
             };
-            let index = |value: &str| layout.names.iter().position(|v| *v == value);
+            let numeric = state.has_integer_property(&p.name);
+            let boolean = values.iter().all(|v| matches!(*v, "true" | "false"));
+            let index = |value: &str| -> Option<i32> {
+                if numeric {
+                    let value = java_integer(value)?;
+                    values
+                        .iter()
+                        .any(|v| v.parse::<i32>().ok() == Some(value))
+                        .then_some(value)
+                } else if boolean {
+                    match value {
+                        "false" => Some(0),
+                        "true" => Some(1),
+                        _ => None,
+                    }
+                } else {
+                    values.iter().position(|v| *v == value).map(|i| i as i32)
+                }
+            };
             let actual = index(actual).expect("state property value");
             match &p.matcher {
                 Either::Left(value) => index(value) == Some(actual),
@@ -177,5 +189,73 @@ impl FluidPredicate {
             return Err(LootError::Unsupported("fluid.property_definition".into()));
         }
         Ok(true)
+    }
+}
+
+/// Derive the private data layout from public registry states once per block.
+/// This can use the data crate's read-only property accessor when it is exposed.
+pub(crate) fn property_values(
+    block: ferraloom_data::Block,
+    name: &str,
+) -> Option<&'static [&'static str]> {
+    type Properties = Vec<(&'static str, Vec<&'static str>)>;
+    static VALUES: std::sync::OnceLock<Vec<std::sync::OnceLock<Properties>>> =
+        std::sync::OnceLock::new();
+    let cache = VALUES.get_or_init(|| {
+        (0..ferraloom_data::BLOCKS.len())
+            .map(|_| std::sync::OnceLock::new())
+            .collect()
+    });
+    let properties = cache[block.protocol_id() as usize].get_or_init(|| {
+        let data = block.data();
+        let mut properties = block
+            .default_state()
+            .properties()
+            .map(|(name, _)| (name, Vec::new()))
+            .collect::<Properties>();
+        for offset in 0..data.state_count {
+            let state = BlockState::from_id(data.first_state + offset).expect("block state range");
+            for ((_, values), (_, value)) in properties.iter_mut().zip(state.properties()) {
+                if !values.contains(&value) {
+                    values.push(value);
+                }
+            }
+        }
+        properties
+    });
+    properties
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|(_, values)| values.as_slice())
+}
+/// IntegerProperty uses Integer.parseInt, including BMP decimal digits and '+';
+/// supplementary digits are rejected because Java traverses UTF-16 chars.
+fn java_integer(input: &str) -> Option<i32> {
+    let (negative, digits) = if let Some(s) = input.strip_prefix('-') {
+        (true, s)
+    } else {
+        (false, input.strip_prefix('+').unwrap_or(input))
+    };
+    if digits.is_empty() {
+        return None;
+    }
+    let mut result = 0_i32;
+    const ZEROES: &[u32] = &[
+        48, 1632, 1776, 1984, 2406, 2534, 2662, 2790, 2918, 3046, 3174, 3302, 3430, 3558, 3664,
+        3792, 3872, 4160, 4240, 6112, 6160, 6470, 6608, 6784, 6800, 6992, 7088, 7232, 7248, 42528,
+        43216, 43264, 43472, 43504, 43600, 44016, 65296,
+    ];
+    for character in digits.chars() {
+        let code = character as u32;
+        let digit = ZEROES
+            .iter()
+            .find_map(|zero| code.checked_sub(*zero).filter(|v| *v < 10))?
+            as i32;
+        result = result.checked_mul(10)?.checked_sub(digit)?;
+    }
+    if negative {
+        Some(result)
+    } else {
+        result.checked_neg()
     }
 }

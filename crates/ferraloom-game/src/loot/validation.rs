@@ -17,11 +17,16 @@ pub struct ValidationProblem {
     pub message: String,
     pub fatal: bool,
 }
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum ValidationReference {
+    Element(&'static str, Identifier),
+    Tag(&'static str, Identifier),
+}
 pub struct ValidationContext<'a> {
     data: &'a LootData,
     params: ContextKeySet,
     path: String,
-    visited: BTreeSet<(&'static str, Identifier)>,
+    visited: BTreeSet<ValidationReference>,
     pub problems: Vec<ValidationProblem>,
 }
 trait Validatable {
@@ -57,7 +62,9 @@ impl ValidationContext<'_> {
     fn holder<T: RegistryValue + Validatable>(&mut self, name: &str, holder: &Holder<T>) {
         self.field(name, |c| {
             let key = match holder {
-                Holder::Reference(id) => Some((T::REGISTRY, id.clone())),
+                Holder::Reference(id) => {
+                    Some(ValidationReference::Element(T::REGISTRY, id.clone()))
+                }
                 _ => None,
             };
             if let Some(key) = &key {
@@ -87,18 +94,10 @@ impl ValidationContext<'_> {
         minimum: usize,
     ) {
         self.field(name, |c| {
-            let key = match set {
-                HolderSet::Tag(id) => Some((T::REGISTRY, id.clone())),
+            let tag_key = match set {
+                HolderSet::Tag(id) => Some(ValidationReference::Tag(T::REGISTRY, id.clone())),
                 _ => None,
             };
-            // Tags and elements have distinct identity, even with matching ids.
-            let tag_key = key.as_ref().map(|(registry, id)| {
-                (
-                    *registry,
-                    Identifier::parse(&format!("{}:tags/{}", id.namespace(), id.path()))
-                        .expect("valid tag path"),
-                )
-            });
             if let Some(key) = &tag_key {
                 if !c.visited.insert(key.clone()) {
                     c.problem("recursive tag reference", true);
@@ -142,9 +141,12 @@ impl LootData {
                 for (id, value) in &self.$field {
                     let mut c = ValidationContext {
                         data: self,
-                        params: $params(value),
+                        params: ($params)(value),
                         path: format!("{}:{id}", $registry),
-                        visited: BTreeSet::from([($registry, id.clone())]),
+                        visited: BTreeSet::from([ValidationReference::Element(
+                            $registry,
+                            id.clone(),
+                        )]),
                         problems: Vec::new(),
                     };
                     value.validate(&mut c);
@@ -191,6 +193,13 @@ impl Validatable for LootPoolEntryContainer {
             EntryKind::Alternatives(children)
             | EntryKind::Sequence(children)
             | EntryKind::Group(children) => {
+                if matches!(&self.kind, EntryKind::Alternatives(_)) {
+                    for child in children.iter().take(children.len().saturating_sub(1)) {
+                        if child.condition.is_none() {
+                            c.problem("unreachable entry", false);
+                        }
+                    }
+                }
                 if children.is_empty() {
                     c.problem("empty children list", false);
                 }
@@ -206,6 +215,28 @@ impl Validatable for LootItemFunction {
     fn validate(&self, c: &mut ValidationContext<'_>) {
         c.optional("condition", &self.condition);
         match &self.kind {
+            FunctionKind::World(function) => match function {
+                super::WorldFunction::ExplorationMap(_) => c.params([ContextParam::Origin]),
+                super::WorldFunction::SetEnchantments { enchantments, .. } => {
+                    for (_, value) in enchantments {
+                        c.holder("enchantments", value);
+                    }
+                }
+                super::WorldFunction::SetStewEffect(effects) => {
+                    for (_, value) in effects {
+                        c.holder("duration", value);
+                    }
+                }
+                _ => {}
+            },
+            FunctionKind::Component(function) => {
+                c.params(function.params());
+                if let super::ComponentFunction::SetLootTable { table, .. } = function {
+                    if !c.data.tables.contains_key(table) {
+                        c.problem(format!("unknown loot_table {table}"), true);
+                    }
+                }
+            }
             FunctionKind::Sequence(functions) => c.set("functions", functions, 0),
             FunctionKind::SetCount { count, .. } => c.holder("count", count),
             FunctionKind::ApplyBonus { .. } => c.params([ContextParam::Tool]),
@@ -262,6 +293,7 @@ impl Validatable for LootItemCondition {
                 c.holder("value", value);
                 c.range(test);
             }
+            Self::TimeCheck { value, .. } => c.range(value),
             Self::EntityScores(_, scores) => {
                 for (name, test) in scores {
                     c.field(name, |c| c.range(test));

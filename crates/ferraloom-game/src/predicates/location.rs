@@ -36,7 +36,7 @@ pub struct LocationPredicate {
 }
 impl LocationPredicate {
     pub fn decode(v: &Value) -> Result<Self> {
-        let set = |v: &Value| Ok(HolderSet::from_json(v)?);
+        let set = |v: &Value| -> Result<HolderSet> { Ok(HolderSet::from_json(v)?) };
         Ok(Self {
             position: codec::optional(v, "position", |v| {
                 Ok([

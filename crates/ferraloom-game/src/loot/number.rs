@@ -103,7 +103,7 @@ impl<T: Scalar> NumberProvider<T> {
             return Ok(Self::Constant(T::decode(v)?));
         }
         let h = |name| Holder::decode(codec::field(v, name)?, Self::decode);
-        let default = |name| {
+        let default = |name| -> Result<Holder<Self>> {
             Ok(
                 codec::optional(v, name, |v| Holder::decode(v, Self::decode))?
                     .unwrap_or_else(|| Holder::direct(Self::Constant(T::zero()))),
@@ -222,6 +222,7 @@ impl<T: Scalar> NumberProvider<T>
 where
     Self: RegistryValue,
 {
+    #[cfg(test)]
     pub(crate) fn get(&self, data: &LootData, context: &mut EvalContext<'_>) -> Result<T> {
         match self.eval(data, context) {
             Ok(value) => Ok(T::sanitize(value)),

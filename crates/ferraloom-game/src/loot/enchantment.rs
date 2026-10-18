@@ -27,7 +27,8 @@ impl LevelBasedValue {
         if v.is_number() {
             return Ok(Self::Constant(codec::float(v)?));
         }
-        let nested = |name| Ok(Box::new(Self::decode(codec::field(v, name)?)?));
+        let nested =
+            |name| -> Result<Box<Self>> { Ok(Box::new(Self::decode(codec::field(v, name)?)?)) };
         Ok(match codec::kind(v)?.as_str() {
             "minecraft:clamped" => {
                 let min = codec::float(codec::field(v, "min")?)?;

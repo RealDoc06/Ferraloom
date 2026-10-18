@@ -4,6 +4,7 @@
 //! never fabricated world state. Named streams are managed by `RandomSequences`.
 mod bonus;
 pub(crate) mod codec;
+mod component_function;
 mod condition;
 mod context;
 mod enchantment;
@@ -15,8 +16,10 @@ mod registry;
 mod sequence;
 mod table;
 mod validation;
+mod world_function;
 
 pub use bonus::BonusFormula;
+pub use component_function::{ComponentFunction, ComponentSource};
 pub use condition::LootItemCondition;
 pub use context::*;
 pub use enchantment::{EnchantmentOperation, LevelBasedValue};
@@ -29,6 +32,7 @@ pub use registry::{Holder, HolderSet, LootData};
 pub use sequence::RandomSequences;
 pub use table::{LootPool, LootRandomSources, LootTable};
 pub use validation::{ValidationContext, ValidationProblem};
+pub use world_function::{ExplorationMapOptions, WorldFunction};
 
 pub use ferraloom_protocol::Identifier;
 use std::fmt;
@@ -48,6 +52,7 @@ pub enum LootError {
     },
     Unsupported(String),
     Arithmetic,
+    Validation(Vec<ValidationProblem>),
 }
 impl fmt::Display for LootError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -61,6 +66,9 @@ impl fmt::Display for LootError {
             ),
             Self::Unsupported(fact) => write!(f, "unsupported loot fact: {fact}"),
             Self::Arithmetic => f.write_str("invalid number provider arithmetic"),
+            Self::Validation(problems) => {
+                write!(f, "{} fatal loot validation problem(s)", problems.len())
+            }
         }
     }
 }

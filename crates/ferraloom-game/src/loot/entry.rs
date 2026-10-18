@@ -53,8 +53,10 @@ pub(crate) struct ExpandedEntry {
 impl LootPoolEntryContainer {
     pub fn decode(v: &Value) -> Result<Self> {
         let kind = codec::kind(v)?;
-        let expand = || Ok(codec::optional(v, "expand", codec::boolean)?.unwrap_or(false));
-        let children = || {
+        let expand = || -> Result<bool> {
+            Ok(codec::optional(v, "expand", codec::boolean)?.unwrap_or(false))
+        };
+        let children = || -> Result<Vec<Self>> {
             Ok(
                 codec::optional(v, "children", |v| codec::list(v, Self::decode))?
                     .unwrap_or_default(),

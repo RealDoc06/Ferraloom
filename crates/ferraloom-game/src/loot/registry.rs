@@ -55,7 +55,7 @@ pub struct LootData {
     pub float_providers: BTreeMap<Identifier, ContextFloatProvider>,
     pub tags: BTreeMap<(&'static str, Identifier), Vec<Identifier>>,
 }
-pub(crate) trait RegistryValue: Sized {
+pub trait RegistryValue: Sized {
     const REGISTRY: &'static str;
     fn registry(data: &LootData) -> &BTreeMap<Identifier, Self>;
 }
@@ -127,13 +127,6 @@ impl LootData {
                         .ok()
                         .filter(|id| data.$field.contains_key(id))
                 });
-                if !loaded.diagnostics.is_empty() {
-                    return Err(codec::error(format!(
-                        "invalid {} tags: {:?}",
-                        <$ty as RegistryValue>::REGISTRY,
-                        loaded.diagnostics
-                    )));
-                }
                 for (id, values) in loaded.values {
                     data.tags.insert(
                         (
@@ -150,6 +143,14 @@ impl LootData {
         load!(modifiers, LootItemFunction);
         load!(int_providers, ContextIntProvider);
         load!(float_providers, ContextFloatProvider);
+        let fatal = data
+            .validate()
+            .into_iter()
+            .filter(|p| p.fatal)
+            .collect::<Vec<_>>();
+        if !fatal.is_empty() {
+            return Err(LootError::Validation(fatal));
+        }
         Ok(data)
     }
 }

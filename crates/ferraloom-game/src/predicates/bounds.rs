@@ -77,7 +77,9 @@ pub struct DistancePredicate {
 }
 impl DistancePredicate {
     pub fn decode(v: &Value) -> Result<Self> {
-        let bound = |name| Ok(codec::optional(v, name, DoubleBounds::decode)?.unwrap_or_default());
+        let bound = |name| -> Result<DoubleBounds> {
+            Ok(codec::optional(v, name, DoubleBounds::decode)?.unwrap_or_default())
+        };
         Ok(Self {
             x: bound("x")?,
             y: bound("y")?,

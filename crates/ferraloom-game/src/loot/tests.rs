@@ -176,6 +176,18 @@ impl crate::predicates::PredicateContext for ItemFacts {
     fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<ferraloom_data::Block>> {
         Ok(&self.blocks)
     }
+    fn entity_equipment(
+        &self,
+        _entity: crate::entity::EntityRef,
+    ) -> Result<Option<Vec<(ferraloom_protocol::component::EquipmentSlot, ItemStack)>>> {
+        Ok(None)
+    }
+    fn entity_specific(
+        &self,
+        _entity: crate::entity::EntityRef,
+    ) -> Result<crate::predicates::EntitySpecificFacts> {
+        Ok(crate::predicates::EntitySpecificFacts::Other)
+    }
     fn entity_flags(
         &self,
         _entity: crate::entity::EntityRef,

@@ -159,6 +159,40 @@ impl LootPool {
     }
 }
 impl LootData {
+    pub fn evaluate_int(
+        &self,
+        provider: &Holder<ContextIntProvider>,
+        params: &LootParams,
+        random: &mut dyn RandomSource,
+        facts: &dyn LootFacts,
+    ) -> Result<i32> {
+        provider.get(
+            self,
+            &mut EvalContext {
+                params,
+                random,
+                facts,
+                visited: BTreeSet::new(),
+            },
+        )
+    }
+    pub fn evaluate_float(
+        &self,
+        provider: &Holder<ContextFloatProvider>,
+        params: &LootParams,
+        random: &mut dyn RandomSource,
+        facts: &dyn LootFacts,
+    ) -> Result<f32> {
+        provider.get(
+            self,
+            &mut EvalContext {
+                params,
+                random,
+                facts,
+                visited: BTreeSet::new(),
+            },
+        )
+    }
     /// Evaluation API for `/loot`; use the caller's validated parameter set and RNG.
     pub fn get_random_items(
         &self,
@@ -205,7 +239,7 @@ impl LootData {
         let random = if let Some(sequence) = &value.random_sequence {
             sources.sequences.get(sequence, sources.world_seed)
         } else {
-            sources.level_random
+            &mut *sources.level_random
         };
         self.get_random_items(table, params, random, facts)
     }

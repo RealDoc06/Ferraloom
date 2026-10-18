@@ -5,6 +5,7 @@ mod damage;
 mod entity;
 mod item;
 mod location;
+pub(crate) use block::property_values;
 pub use block::*;
 pub use bounds::*;
 pub use damage::*;
@@ -24,6 +25,7 @@ use ferraloom_util::{BlockPos, Vec3};
 /// Registry identity for predicates whose holders belong to dynamic registries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PredicateRegistry {
+    Instrument,
     JukeboxSong,
     TrimMaterial,
     TrimPattern,
@@ -39,6 +41,31 @@ pub enum PredicateRegistry {
 /// World facts remain typed and query canonical state at the evaluation point.
 /// Absence and unsupported facts have distinct meanings.
 pub trait PredicateContext {
+    fn resolve_component(
+        &self,
+        _component: &ferraloom_protocol::chat::Component,
+        _entity: EntityRef,
+    ) -> Result<ferraloom_protocol::chat::Component> {
+        Err(LootError::Unsupported("component.resolution".into()))
+    }
+    fn entity_custom_name(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<Option<ferraloom_protocol::chat::Component>> {
+        Err(LootError::Unsupported("entity.custom_name".into()))
+    }
+    fn registry_values(&self, registry: PredicateRegistry) -> Result<Vec<Identifier>> {
+        Err(LootError::Unsupported(format!("registry.{registry:?}")))
+    }
+    fn registry_tag_values(
+        &self,
+        registry: PredicateRegistry,
+        _tag: &Identifier,
+    ) -> Result<Vec<Identifier>> {
+        Err(LootError::Unsupported(format!(
+            "registry.{registry:?}.tag_values"
+        )))
+    }
     fn potion_effects(
         &self,
         _id: &Identifier,
@@ -103,6 +130,49 @@ pub trait PredicateContext {
     }
     fn fluid(&self, _pos: BlockPos) -> Result<FluidState> {
         Err(LootError::Unsupported("level.fluid_state".into()))
+    }
+    fn entity_equipment(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<
+        Option<
+            Vec<(
+                ferraloom_protocol::component::EquipmentSlot,
+                ferraloom_protocol::component::ItemStack,
+            )>,
+        >,
+    > {
+        Err(LootError::Unsupported("entity.living_equipment".into()))
+    }
+    fn entity_specific(&self, _entity: EntityRef) -> Result<EntitySpecificFacts> {
+        Err(LootError::Unsupported("entity.class_specific_state".into()))
+    }
+    fn entity_team(&self, _entity: EntityRef) -> Result<Option<String>> {
+        Err(LootError::Unsupported("entity.team".into()))
+    }
+    fn entity_tick_count(&self, _entity: EntityRef) -> Result<i32> {
+        Err(LootError::Unsupported("entity.tick_count".into()))
+    }
+    fn entity_vehicle(&self, _entity: EntityRef) -> Result<Option<EntityRef>> {
+        Err(LootError::Unsupported("entity.vehicle".into()))
+    }
+    fn entity_target(&self, _entity: EntityRef) -> Result<Option<EntityRef>> {
+        Err(LootError::Unsupported("entity.mob_target".into()))
+    }
+    fn entity_passengers(&self, _entity: EntityRef) -> Result<Vec<EntityRef>> {
+        Err(LootError::Unsupported("entity.passengers".into()))
+    }
+    fn entity_scoreboard_tags(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<std::collections::BTreeSet<String>> {
+        Err(LootError::Unsupported("entity.scoreboard_tags".into()))
+    }
+    fn entity_components(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<ferraloom_protocol::component::DataComponentMap> {
+        Err(LootError::Unsupported("entity.components".into()))
     }
     fn entity_type(&self, _entity: EntityRef) -> Result<EntityType> {
         Err(LootError::Unsupported("entity.type".into()))

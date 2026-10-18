@@ -5,7 +5,7 @@ use super::{
 use crate::predicates::ItemPredicate;
 use ferraloom_data::Item;
 use ferraloom_nbt::{CompoundTag, Tag};
-use ferraloom_protocol::{VarInt, component::*};
+use ferraloom_protocol::{codec::VarInt, component::*};
 use serde_json::Value;
 
 /// Port of LootItemConditionalFunction and LootItemFunctions codecs.
@@ -17,6 +17,8 @@ pub struct LootItemFunction {
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunctionKind {
     Sequence(HolderSet<LootItemFunction>),
+    Component(super::ComponentFunction),
+    World(super::WorldFunction),
     SetCount {
         count: Holder<ContextIntProvider>,
         add: bool,
@@ -161,7 +163,13 @@ impl LootItemFunction {
             },
             "minecraft:explosion_decay" => FunctionKind::ExplosionDecay,
             "minecraft:discard" => FunctionKind::Discard,
-            _ => return Err(LootError::Unsupported(format!("loot_function.{name}"))),
+            _ => match super::ComponentFunction::decode(name.as_str(), v)? {
+                Some(function) => FunctionKind::Component(function),
+                None => match super::WorldFunction::decode(name.as_str(), v)? {
+                    Some(function) => FunctionKind::World(function),
+                    None => return Err(LootError::Unsupported(format!("loot_function.{name}"))),
+                },
+            },
         };
         Ok(Self { condition, kind })
     }
@@ -177,6 +185,8 @@ impl LootItemFunction {
             }
         }
         match &self.kind {
+            FunctionKind::World(function) => stack = function.apply(stack, data, c)?,
+            FunctionKind::Component(function) => stack = function.apply(stack, data, c)?,
             FunctionKind::Sequence(functions) => {
                 for function in functions.resolve(data)? {
                     stack = function.apply(stack, data, c)?;
