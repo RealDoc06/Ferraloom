@@ -103,6 +103,15 @@ border-geometry	3	3	11010	4006000000000000,4051900000000000,c006000000000000	401
 border-geometry	3	6	11010	4017000000000000,4051900000000000,c017000000000000	4002000000000000,4000000000000000
 riding	dismount	4022000000000000,4051800000000000,4022000000000000	0,0,0	0	false
 riding	switch	4014000000000000,4050feb852000000,4020000000000000	0,0,0	0	true
+synched-float	0	false	0	false
+synched-float	1	true	80000000	true
+synched-float	2	false	80000000	true
+synched-float	3	true	7fc00000	true
+synched-float	4	false	7fc00000	true
+synched-float	5	true	3f800000	true
+synched-float	6	false	3f800000	true
+synched-stack	true,true,false,false,true,true,false	false
+synched-prototype	false,true
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0

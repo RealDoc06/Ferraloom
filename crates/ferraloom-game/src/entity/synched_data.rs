@@ -8,10 +8,16 @@ use ferraloom_protocol::{
 };
 
 /// Port of EntityDataAccessor. The value type is checked without casts.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct EntityDataAccessor<T> {
     id: u8,
     value: PhantomData<fn() -> T>,
+}
+impl<T> Copy for EntityDataAccessor<T> {}
+impl<T> Clone for EntityDataAccessor<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 impl<T> EntityDataAccessor<T> {
     pub const fn new(id: u8) -> Self {
@@ -27,9 +33,13 @@ impl<T> EntityDataAccessor<T> {
 }
 
 pub trait SynchedValue: Clone + PartialEq {
+    const IDENTITY_EQUALITY: bool = false;
     fn from_value(value: &EntityDataValue) -> Option<&Self>;
     fn from_value_mut(value: &mut EntityDataValue) -> Option<&mut Self>;
     fn into_value(self) -> EntityDataValue;
+    fn same_value(&self, other: &Self) -> bool {
+        self == other
+    }
 }
 macro_rules! value {
     ($ty:ty, $variant:ident) => {
@@ -61,7 +71,57 @@ value!(Pose, Pose);
 value!(Option<Box<Component>>, OptionalComponent);
 value!(ferraloom_data::BlockState, BlockState);
 value!(ferraloom_util::BlockPos, BlockPos);
-value!(ferraloom_protocol::component::ItemStack, ItemStack);
+
+impl SynchedValue for f32 {
+    fn from_value(value: &EntityDataValue) -> Option<&Self> {
+        if let EntityDataValue::Float(value) = value {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn from_value_mut(value: &mut EntityDataValue) -> Option<&mut Self> {
+        if let EntityDataValue::Float(value) = value {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn into_value(self) -> EntityDataValue {
+        EntityDataValue::Float(self)
+    }
+    /// Float#equals uses floatToIntBits: signed zero differs, NaN payloads agree.
+    fn same_value(&self, other: &Self) -> bool {
+        self.to_bits() == other.to_bits() || self.is_nan() && other.is_nan()
+    }
+}
+
+impl SynchedValue for ferraloom_protocol::component::ItemStack {
+    const IDENTITY_EQUALITY: bool = true;
+    fn from_value(value: &EntityDataValue) -> Option<&Self> {
+        if let EntityDataValue::ItemStack(value) = value {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn from_value_mut(value: &mut EntityDataValue) -> Option<&mut Self> {
+        if let EntityDataValue::ItemStack(value) = value {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn into_value(self) -> EntityDataValue {
+        EntityDataValue::ItemStack(self)
+    }
+    /// ItemStack inherits object identity equality. An owned setter argument is
+    /// another stack; None denotes the shared EMPTY singleton. Mutating the held
+    /// stack through get_mut does not call set or dirty the DataItem in vanilla.
+    fn same_value(&self, other: &Self) -> bool {
+        self.0.is_none() && other.0.is_none()
+    }
+}
 
 pub const SHARED_FLAGS: EntityDataAccessor<i8> = EntityDataAccessor::new(0);
 pub const AIR_SUPPLY: EntityDataAccessor<VarInt> = EntityDataAccessor::new(1);
@@ -77,6 +137,8 @@ struct DataItem {
     initial: EntityDataValue,
     value: EntityDataValue,
     dirty: bool,
+    same_value: fn(&EntityDataValue, &EntityDataValue) -> bool,
+    initial_is_current: bool,
 }
 
 /// Port of SynchedEntityData. Index order is both accessor and packet order.
@@ -110,6 +172,12 @@ impl SynchedEntityData {
             initial: value.clone(),
             value,
             dirty: false,
+            same_value: |a, b| {
+                T::from_value(a)
+                    .unwrap()
+                    .same_value(T::from_value(b).unwrap())
+            },
+            initial_is_current: T::IDENTITY_EQUALITY,
         });
     }
     pub fn get<T: SynchedValue>(&self, accessor: EntityDataAccessor<T>) -> &T {
@@ -133,9 +201,10 @@ impl SynchedEntityData {
     ) -> bool {
         let item = &mut self.items[usize::from(accessor.id)];
         let current = T::from_value(&item.value).expect("metadata accessor type");
-        if force || *current != value {
+        if force || !current.same_value(&value) {
             item.value = value.into_value();
             item.dirty = true;
+            item.initial_is_current = false;
             true
         } else {
             false
@@ -170,7 +239,9 @@ impl SynchedEntityData {
             .items
             .iter()
             .enumerate()
-            .filter(|(_, item)| item.initial != item.value)
+            .filter(|(_, item)| {
+                !item.initial_is_current && !(item.same_value)(&item.initial, &item.value)
+            })
             .map(|(id, item)| DataValue {
                 id: id as u8,
                 value: item.value.clone(),
@@ -203,5 +274,105 @@ mod tests {
         assert_eq!(data.pack_dirty().unwrap().len(), 1);
         data.set(SHARED_FLAGS, 0);
         assert_eq!(data.non_default_values().unwrap()[0].id, 7);
+    }
+
+    #[test]
+    fn vanilla_boxed_float_equality_preserves_signed_zero_and_canonical_nan_comparison() {
+        const FLOAT: EntityDataAccessor<f32> = EntityDataAccessor::new(8);
+        let values = [
+            0.0,
+            -0.0,
+            -0.0,
+            f32::NAN,
+            f32::from_bits(0x7f80_0001),
+            1.0,
+            1.0,
+        ];
+        let mut data = SynchedEntityData::default();
+        data.define(FLOAT, 0.0);
+        let mut rows = 0;
+        for row in include_str!("../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|row| row.starts_with("synched-float\t"))
+        {
+            let fields: Vec<_> = row.split('\t').collect();
+            data.set(FLOAT, values[fields[1].parse::<usize>().unwrap()]);
+            assert_eq!(data.pack_dirty().is_some().to_string(), fields[2], "{row}");
+            assert_eq!(
+                format!("{:x}", data.get(FLOAT).to_bits()),
+                fields[3],
+                "{row}"
+            );
+            assert_eq!(
+                data.non_default_values().is_some().to_string(),
+                fields[4],
+                "{row}"
+            );
+            rows += 1;
+        }
+        assert_eq!(rows, 7);
+    }
+
+    #[test]
+    fn vanilla_stack_setters_compare_identity_and_held_mutations_do_not_dirty_metadata() {
+        use ferraloom_data::Item;
+        use ferraloom_protocol::component::ItemStack;
+        const STACK: EntityDataAccessor<ItemStack> = EntityDataAccessor::new(8);
+        let stone = || ItemStack::new(Item::STONE, 3, Default::default());
+        let mut data = SynchedEntityData::default();
+        data.define(STACK, ItemStack::default());
+        let mut changes = Vec::new();
+        data.set(STACK, stone());
+        changes.push(data.pack_dirty().is_some());
+        data.set(STACK, stone());
+        changes.push(data.pack_dirty().is_some());
+        // Native set(existing reference) keeps the object already held here.
+        let _held = data.get(STACK);
+        changes.push(data.pack_dirty().is_some());
+        data.get_mut(STACK).0.as_mut().unwrap().count = 4;
+        changes.push(data.pack_dirty().is_some());
+        let held = data.get(STACK).clone();
+        data.set_forced(STACK, held, true);
+        changes.push(data.pack_dirty().is_some());
+        data.set(STACK, ItemStack::default());
+        changes.push(data.pack_dirty().is_some());
+        data.set(STACK, ItemStack::default());
+        changes.push(data.pack_dirty().is_some());
+        let expected = include_str!("../../tests/java/entity/vectors.tsv")
+            .lines()
+            .find_map(|row| row.strip_prefix("synched-stack\t"))
+            .unwrap();
+        let actual = format!(
+            "{}\t{}",
+            changes
+                .iter()
+                .map(bool::to_string)
+                .collect::<Vec<_>>()
+                .join(","),
+            data.non_default_values().is_some()
+        );
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn initial_stack_mutations_keep_the_initial_object_identity() {
+        use ferraloom_data::Item;
+        use ferraloom_protocol::component::ItemStack;
+        const STACK: EntityDataAccessor<ItemStack> = EntityDataAccessor::new(8);
+        let mut data = SynchedEntityData::default();
+        data.define(STACK, ItemStack::new(Item::STONE, 1, Default::default()));
+        assert!(data.non_default_values().is_none());
+        data.get_mut(STACK).0.as_mut().unwrap().count = 2;
+        let mutated = data.non_default_values().is_some();
+        let copy = data.get(STACK).clone();
+        data.set(STACK, copy);
+        let expected = include_str!("../../tests/java/entity/vectors.tsv")
+            .lines()
+            .find_map(|row| row.strip_prefix("synched-prototype\t"))
+            .unwrap();
+        assert_eq!(
+            format!("{mutated},{}", data.non_default_values().is_some()),
+            expected
+        );
     }
 }
