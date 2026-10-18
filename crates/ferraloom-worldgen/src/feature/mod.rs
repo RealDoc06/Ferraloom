@@ -16,10 +16,13 @@ use std::{
     sync::Arc,
 };
 
+pub mod aquatic;
 pub mod end;
 pub mod misc;
 pub mod nether;
 pub mod state_provider;
+pub mod surface;
+pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
@@ -97,6 +100,9 @@ impl<'a> FeatureLoader<'a> {
             next_inline: 0,
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        vegetation::register(&mut loader)?;
+        aquatic::register(&mut loader)?;
+        surface::register(&mut loader)?;
         nether::register(&mut loader)?;
         end::register(&mut loader)?;
         misc::register(&mut loader)?;
