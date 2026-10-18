@@ -93,19 +93,19 @@ impl BlockBehavior for PlantPlacement {
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         let block = state.block();
-        let held = context.item_in_hand().0.as_ref().map(|stack| stack.item);
+        let held = context.item_in_hand().item();
         if block.class() == BlockClass::PitcherCropBlock {
             return Ok(false);
         }
         if block.is_instance_of(BlockClass::MultifaceBlock) {
-            return Ok(held != Some(block.as_item())
+            return Ok(held != block.as_item()
                 || Direction::VALUES
                     .into_iter()
                     .any(|face| !multiface::has_face(state, face)));
         }
         if block.class() == BlockClass::SnowLayerBlock {
             let layers = state.get(p::LAYERS).unwrap();
-            return Ok(if held != Some(block.as_item()) || layers >= 8 {
+            return Ok(if held != block.as_item() || layers >= 8 {
                 layers == 1
             } else {
                 !context.replacing_clicked_on_block(level)?
@@ -121,17 +121,14 @@ impl BlockBehavior for PlantPlacement {
                 BlockClass::FlowerBedBlock => state.get(p::FLOWER_AMOUNT).unwrap(),
                 _ => state.get(p::SEGMENT_AMOUNT).unwrap(),
             };
-            if !context.is_secondary_use_active(level)?
-                && held == Some(block.as_item())
-                && amount < 4
-            {
+            if !context.is_secondary_use_active(level)? && held == block.as_item() && amount < 4 {
                 return Ok(true);
             }
         }
         let base = super::super::BASE_BLOCK.can_be_replaced(state, context, level)?;
         Ok(base
             && (!block.is_instance_of(BlockClass::GrowingPlantBodyBlock)
-                || held != Some(growing::family(block).0.as_item())))
+                || held != growing::family(block).0.as_item()))
     }
     fn get_state_for_placement(
         &self,

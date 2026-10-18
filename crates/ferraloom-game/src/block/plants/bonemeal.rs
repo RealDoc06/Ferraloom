@@ -123,6 +123,8 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
             | C::CaveVinesBlock
             | C::CaveVinesPlantBlock
             | C::GlowLichenBlock
+            | C::TallFlowerBlock
+            | C::FlowerBedBlock
     )
     .then_some(&PLANT_BONEMEAL)
 }
@@ -210,7 +212,7 @@ impl BonemealableBlock for PlantBonemeal {
                 Ok(level.get_block_state(pos.below(1))?.is_air()
                     && inside_height(level, pos.below(1)))
             }
-            C::SmallDripleafBlock => Ok(true),
+            C::SmallDripleafBlock | C::TallFlowerBlock | C::FlowerBedBlock => Ok(true),
             C::BigDripleafBlock | C::BigDripleafStemBlock => {
                 let Some(head) = dripleaf::head_pos(state, pos, level)? else {
                     return Ok(false);
@@ -350,6 +352,29 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::FlowerBedBlock if state.get(p::FLOWER_AMOUNT).unwrap() < 4 => {
+                level.set_block(
+                    pos,
+                    state
+                        .with(p::FLOWER_AMOUNT, state.get(p::FLOWER_AMOUNT).unwrap() + 1)
+                        .unwrap(),
+                    UpdateFlags::CLIENTS,
+                )?;
+            }
+            C::TallFlowerBlock | C::FlowerBedBlock => {
+                let LevelAccessRef::Server(level) = level else {
+                    return Err(LevelError::UnsupportedWorldgenBehavior);
+                };
+                super::super::drops::pop_resource(
+                    level,
+                    pos,
+                    ferraloom_protocol::component::ItemStack::new(
+                        state.block().as_item(),
+                        1,
+                        Default::default(),
+                    ),
+                )?;
+            }
             C::GrassBlock => grass_bonemeal::perform(pos, level, source)?,
             C::MushroomBlock => feature_bonemeal::grow_mushroom(state, pos, level)?,
             C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {

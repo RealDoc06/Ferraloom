@@ -29,9 +29,8 @@ pub fn can_walk_on(entity: EntityRef, level: &Level) -> Result<bool, LevelError>
             living
                 .equipment
                 .get(ferraloom_protocol::component::EquipmentSlot::Feet)
-                .0
-                .as_ref()
-                .is_some_and(|boots| boots.item == Item::LEATHER_BOOTS)
+                .item()
+                == Item::LEATHER_BOOTS
         }))
 }
 impl BlockBehavior for PowderSnow {

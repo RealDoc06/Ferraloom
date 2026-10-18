@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); chorusTicks(level,pos,lines); powderShapes(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); chorusTicks(level,pos,lines); powderShapes(level,pos,lines); groundTicks(level,pos,lines); dripleafTicks(level,pos,lines); harvest(level,pos,lines); eyeblossomTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -103,6 +103,34 @@ public final class PlantsTickOracle {
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             String fluids=ticks((net.minecraft.world.ticks.LevelChunkTicks<net.minecraft.world.level.material.Fluid>)level.getChunkAt(pos).getFluidTicks(),net.minecraft.core.registries.BuiltInRegistries.FLUID::getId,level,pos);
             lines.add("ground-tick\t"+Block.getId(state)+"\t"+seed+"\t"+sky+"\t"+blockLight+"\t"+level.getSkyDarken()+"\t"+maxAbove+"\t"+evaporates+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+fluids+"\t"+level.getRandom().nextLong());
+        }
+    }
+    static void harvest(ServerLevel level,BlockPos pos,List<String> lines) {
+        var player=new net.minecraft.server.level.ServerPlayer(level.getServer(),level,new com.mojang.authlib.GameProfile(new java.util.UUID(0,1),"fixture"),net.minecraft.server.level.ClientInformation.createDefault());
+        var hit=new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),net.minecraft.core.Direction.UP,pos,false);
+        for(var block:List.of(SWEET_BERRY_BUSH,CAVE_VINES,CAVE_VINES_PLANT))for(var state:block.getStateDefinition().getPossibleStates())for(int seed=0;seed<8;seed++) {
+            clear(level,pos);level.setBlock(pos.below(),DIRT.defaultBlockState(),816);level.setBlock(pos,state,816);
+            var table=net.minecraft.resources.Identifier.withDefaultNamespace(block==SWEET_BERRY_BUSH?"harvest/sweet_berry_bush":"harvest/cave_vine");
+            level.getServer().getRandomSequences().reset(table,level.getSeed(),0,true,true);
+            level.getRandom().setSeed(seed);
+            var result=state.useWithoutItem(level,player,hit);
+            lines.add("harvest\t"+Block.getId(state)+"\t"+seed+"\t"+result.consumesAction()+"\t"+Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong()+"\t"+level.getServer().getRandomSequence(table).nextLong()+"\t"+level.getSeed());
+        }
+    }
+    static void dripleafTicks(ServerLevel level,BlockPos pos,List<String> lines) {
+        var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
+        var cow=new net.minecraft.world.entity.animal.cow.Cow(net.minecraft.world.entity.EntityTypes.COW,level);
+        for(var state:BIG_DRIPLEAF.getStateDefinition().getPossibleStates())for(boolean powered:new boolean[]{false,true})for(int mode=0;mode<5;mode++)for(int seed=0;seed<4;seed++) {
+            clear(level,pos);level.setBlock(pos.below(),CLAY.defaultBlockState(),816);level.setBlock(pos,state,816);
+            if(powered)level.setBlock(pos.east(),REDSTONE_BLOCK.defaultBlockState(),816);
+            level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
+            cow.setPos(pos.getX()+0.5,pos.getY()+(mode==3?0.6875:1.0),pos.getZ()+0.5);cow.setOnGround(mode!=4);
+            String before=snapshot(level,pos);level.getRandom().setSeed(seed);
+            if(mode==0)state.tick(level,pos,level.getRandom());
+            else if(mode==1)state.handleNeighborChanged(level,pos,REDSTONE_BLOCK,null,false);
+            else state.entityInside(level,pos,cow,null,true);
+            String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
+            lines.add("dripleaf-tick\t"+Block.getId(state)+"\t"+seed+"\t"+mode+"\t"+powered+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
         }
     }
     static void eyeblossomTicks(ServerLevel level,BlockPos pos,List<String> lines) {

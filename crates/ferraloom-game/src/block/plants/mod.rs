@@ -18,6 +18,7 @@ mod grass_bonemeal;
 mod ground;
 mod growing;
 mod hanging_moss;
+mod harvest;
 mod ice;
 mod leaves;
 mod moss;
@@ -121,6 +122,15 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &chorus::CHORUS
         }
 
+        C::SweetBerryBushBlock if matches!(method, M::UseItemOn | M::UseWithoutItem) => {
+            &harvest::HARVEST
+        }
+        C::CaveVinesBlock | C::CaveVinesPlantBlock if method == M::UseWithoutItem => {
+            &harvest::HARVEST
+        }
+        C::BigDripleafBlock if matches!(method, M::Tick | M::NeighborChanged | M::EntityInside) => {
+            &dripleaf::DRIPLEAF
+        }
         C::EyeblossomBlock if matches!(method, M::Tick | M::RandomTick) => &eyeblossom::EYEBLOSSOM,
         C::HangingMossBlock
             if matches!(
@@ -268,3 +278,6 @@ mod cave_worldgen_tests;
 
 #[cfg(test)]
 mod runtime_tests;
+
+#[cfg(test)]
+mod fixtures;

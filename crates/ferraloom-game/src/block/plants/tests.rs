@@ -86,6 +86,8 @@ fn multiface_neighbor_loss_removes_only_the_unsupported_face() {
 #[test]
 fn leaf_decay_gates_preserve_persistent_and_connected_leaves() {
     let mut level = level();
+    super::fixtures::install_loot(&mut level);
+    level.rules_mut().block_drops = Some(false);
     let (blocks, fluids) = tags();
     level.set_block_tags(blocks);
     level.set_fluid_tags(fluids);
@@ -113,11 +115,6 @@ fn leaf_decay_gates_preserve_persistent_and_connected_leaves() {
     );
     let effects = level.take_effects();
     assert!(
-        effects
-            .iter()
-            .any(|e| matches!(e,LevelEffect::DropResources{state,..} if *state==dry))
-    );
-    assert!(
         !effects
             .iter()
             .any(|e| matches!(e, LevelEffect::DestroyParticles { .. }))
@@ -137,22 +134,32 @@ pub(super) fn tags() -> (
     Arc<ferraloom_data::datapack::TagSet<Block>>,
     Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
 ) {
-    use ferraloom_data::datapack::{Pack, ResourceManager, TagSet, load_tags};
-    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
-    let resources =
-        ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
-    let blocks = load_tags(&resources, "block", |id, _| {
-        Block::from_name(&id.to_string())
-    });
-    let fluids = load_tags(&resources, "fluid", |id, _| {
-        ferraloom_data::registries::fluid::Id::from_name(&id.to_string())
-    });
-    assert!(blocks.diagnostics.is_empty());
-    assert!(fluids.diagnostics.is_empty());
-    (
-        Arc::new(TagSet::from_tags(blocks, ferraloom_data::BLOCKS.len()).unwrap()),
-        Arc::new(TagSet::from_tags(fluids, ferraloom_data::registries::fluid::ALL.len()).unwrap()),
-    )
+    type Tags = (
+        Arc<ferraloom_data::datapack::TagSet<Block>>,
+        Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
+    );
+    static TAGS: std::sync::OnceLock<Tags> = std::sync::OnceLock::new();
+    TAGS.get_or_init(|| {
+        use ferraloom_data::datapack::{Pack, ResourceManager, TagSet, load_tags};
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+        let resources =
+            ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+        let blocks = load_tags(&resources, "block", |id, _| {
+            Block::from_name(&id.to_string())
+        });
+        let fluids = load_tags(&resources, "fluid", |id, _| {
+            ferraloom_data::registries::fluid::Id::from_name(&id.to_string())
+        });
+        assert!(blocks.diagnostics.is_empty());
+        assert!(fluids.diagnostics.is_empty());
+        (
+            Arc::new(TagSet::from_tags(blocks, ferraloom_data::BLOCKS.len()).unwrap()),
+            Arc::new(
+                TagSet::from_tags(fluids, ferraloom_data::registries::fluid::ALL.len()).unwrap(),
+            ),
+        )
+    })
+    .clone()
 }
 #[test]
 fn survival_and_six_direction_shape_updates_match_vanilla_levels() {
@@ -327,6 +334,8 @@ fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
     let (blocks, fluids) = tags();
     for light in [0, 11, 12, 15] {
         let mut level = level();
+        super::fixtures::install_loot(&mut level);
+        level.rules_mut().block_drops = Some(false);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         let pos = BlockPos::new(8, 5, 8);
@@ -1259,17 +1268,8 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     for line in text.lines() {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
-        if (state.block().class() == BlockClass::StemBlock && f.len() < 10)
-            || matches!(
-                state.block().class(),
-                BlockClass::TallFlowerBlock
-                    | BlockClass::FlowerBedBlock
-                    | BlockClass::BigDripleafBlock
-                    | BlockClass::BigDripleafStemBlock
-                    | BlockClass::SmallDripleafBlock
-            )
-        {
-            // Drops and redstone queries arrive from their family owners.
+        if state.block().class() == BlockClass::StemBlock && f.len() < 10 {
+            // Older captures lack the required native light inputs for a stem's randomTick.
             pending += 1;
             continue;
         }

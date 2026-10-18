@@ -58,6 +58,7 @@ fn setup(before: &str, seed: i64) -> Level {
     level.set_block_tags(blocks);
     level.set_fluid_tags(fluids);
     level.rules_mut().block_drops = Some(false);
+    super::fixtures::install_loot(&mut level);
     for ((x, y, z), state) in cells(before) {
         level.set_block_state(POS.offset(x, y, z), state).unwrap();
     }
