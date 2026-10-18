@@ -219,7 +219,6 @@ struct PendingLevelHooks {
     natural_spawn_state: u64,
     natural_spawn_chunks: u64,
     custom_spawners: u64,
-    block_entities: u64,
     poi: u64,
     navigation: u64,
     drops: u64,

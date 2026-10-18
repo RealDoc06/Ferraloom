@@ -1,14 +1,18 @@
 //! Shared immutable environment attribute decoding. Live clocks and biome access
 //! remain with the concrete Level; both live/worldgen readers use these entries.
+mod definitions;
+mod system;
 mod timeline;
 mod value;
 use crate::{Error, Identifier};
+pub use definitions::{DimensionEnvironment, EnvironmentDefinitions};
 use ferraloom_data::registries::{
     attribute_type,
     environment_attribute::{self, Id},
 };
 use serde_json::Value;
 use std::marker::PhantomData;
+pub use system::{EnvironmentAttributeSystem, SpatialAttributeInterpolator, WeatherSample};
 pub use timeline::{AttributeTrack, ClockSnapshot, SampleError, TimeMarker, Timeline};
 pub use value::{AttributeEntry, AttributeValue, BooleanModifier, ScalarValue, TriState};
 
@@ -25,7 +29,7 @@ impl<T> AttributeKey<T> {
             value: PhantomData,
         }
     }
-    pub const fn id(self) -> Id {
+    pub const fn id(&self) -> Id {
         self.id
     }
 }
@@ -36,6 +40,8 @@ impl EnvironmentAttributes {
     pub const WATER_EVAPORATES: AttributeKey<bool> =
         AttributeKey::new(Id::GAMEPLAY_WATER_EVAPORATES);
     pub const FAST_LAVA: AttributeKey<bool> = AttributeKey::new(Id::GAMEPLAY_FAST_LAVA);
+    pub const BEES_STAY_IN_HIVE: AttributeKey<bool> =
+        AttributeKey::new(Id::GAMEPLAY_BEES_STAY_IN_HIVE);
 }
 /// Required-value failure, kept distinct from malformed datapack JSON. An
 /// unported value family is never replaced with its default during sampling.
@@ -76,6 +82,12 @@ impl AttributeMap {
     }
     pub fn get(&self, id: Id) -> Option<&AttributeEntry> {
         self.entries[id.protocol_id() as usize].as_ref()
+    }
+    pub fn attributes(&self) -> impl Iterator<Item = Id> + '_ {
+        environment_attribute::ALL
+            .iter()
+            .copied()
+            .filter(|id| self.get(*id).is_some())
     }
     pub fn apply(&self, id: Id, base: ScalarValue) -> Result<ScalarValue, UnsupportedAttribute> {
         match self.get(id) {
