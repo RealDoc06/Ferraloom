@@ -109,3 +109,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.parity.consumed-chest-open | Bedrock flat Strict chest interaction awards OPEN_CHEST and REQUEST_STATS clears its dirty entry | `ChestBlock#useWithoutItem; ServerPlayer#awardStat` | `ferraloom-parity::opening_chest_awards_and_flushes_statistics` | pending | pending |
 
 | statistics.join-dirty-loaded | Joining marks all loaded statistics dirty before initial recipe packets, for the first REQUEST_STATS response | `PlayerList#placeNewPlayer` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
+| statistics.persistence.legacy-name-file | Native locateStatsFile renames valid name-based statistics files to UUID paths and retains the source path if moving fails; deferred with pre-UUID save/datafix compatibility | `PlayerList#locateStatsFile` | pending | pending | pending |
