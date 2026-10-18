@@ -485,8 +485,11 @@ mod tests {
                 &mut level,
             )
             .unwrap();
-            assert_eq!(drops.len(), 1);
+            // ShulkerBoxBlock#getDrops emits every slot. LootTable's splitter
+            // forwards empty stacks too; popResource consumes their eager RNG.
+            assert_eq!(drops.len(), if contents { 27 } else { 1 });
             if contents {
+                assert!(drops[1..].iter().all(ItemStack::is_empty));
                 assert_eq!(drops[0].0.as_ref().unwrap().item, Item::STONE);
                 assert_eq!(crate::entity::player::inventory::count(&drops[0]), 3);
             } else {
