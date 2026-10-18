@@ -29,6 +29,17 @@ async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<(
         let data = SavedDataStorage::new(root.path().join("world/data"))
             .load::<CompoundTag>("minecraft:world_gen_settings")?
             .unwrap();
+        let level = ferraloom_storage::LevelStorageAccess::open(root.path().join("world"))?
+            .read_level_data()?;
+        assert_eq!(
+            level
+                .data
+                .get_compound("spawn")
+                .unwrap()
+                .get_int_array("pos")
+                .unwrap(),
+            &[0, -60, 0]
+        );
         let generator = data
             .value()
             .get_compound("dimensions")

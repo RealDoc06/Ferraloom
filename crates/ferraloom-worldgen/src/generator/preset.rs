@@ -335,10 +335,16 @@ impl WorldPreset {
             .filter(|name| known.contains_key(name))
             .unwrap_or(fallback);
         let mut preset = Self::load(&selected, resources, data.clone(), seed)?;
-        if selected == "flat".parse()?
-            && let Ok(settings) =
-                FlatLevelGeneratorSettings::decode_partial(generator_settings, resources)
-        {
+        let flat_settings = if selected == "flat".parse()? {
+            match FlatLevelGeneratorSettings::decode_partial(generator_settings, resources) {
+                Ok(settings) => Some(settings),
+                Err(error) if error.0.starts_with("Unsupported:") => return Err(error),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+        if let Some(settings) = flat_settings {
             let generator = Arc::new(ChunkGenerator::Flat(Box::new(FlatLevelSource::new(
                 data, settings,
             )?)));

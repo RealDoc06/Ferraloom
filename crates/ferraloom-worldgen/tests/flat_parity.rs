@@ -262,6 +262,27 @@ fn every_world_preset_and_dedicated_level_type_matches_vanilla() {
             case["level_type"]
         );
     }
+    let inline = resources
+        .require(&"worldgen/biome/plains.json".parse().unwrap())
+        .unwrap()
+        .json()
+        .unwrap();
+    let settings = json!({"layers":[{"height":1,"block":"stone"}],"biome":inline});
+    assert!(
+        WorldPreset::from_server_properties("flat", &settings, &resources, data, 0)
+            .unwrap_err()
+            .0
+            .starts_with("Unsupported: inline biome")
+    );
+    assert!(
+        ferraloom_worldgen::biome::BiomeSource::decode(
+            &json!({"type":"fixed","biome":settings["biome"]}),
+            &resources
+        )
+        .unwrap_err()
+        .0
+        .starts_with("Unsupported: inline biome")
+    );
 }
 
 #[test]

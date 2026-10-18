@@ -98,7 +98,7 @@ fn jigsaw_structure_compounds_round_trip_through_storage_chunk_model() {
             1
         );
         assert_eq!(chunk.known_valid_starts()[&id.parse().unwrap()], 3);
-        let storage = ferraloom_storage::schema::StructureData::from_nbt(packed.clone()).unwrap();
+        let storage = ferraloom_storage::StructureData::from_nbt(packed.clone()).unwrap();
         assert_eq!(storage.to_nbt(), packed);
         let root: CompoundTag = [
             ("DataVersion", Tag::Int(5023)),
@@ -113,7 +113,7 @@ fn jigsaw_structure_compounds_round_trip_through_storage_chunk_model() {
         .into_iter()
         .collect();
         assert_eq!(
-            ferraloom_storage::schema::SerializableChunkData::parse(root.clone())
+            ferraloom_storage::SerializableChunkData::parse(root.clone())
                 .unwrap()
                 .write()
                 .unwrap(),

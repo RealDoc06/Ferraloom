@@ -70,7 +70,7 @@ impl BiomeSource {
                         .get(&tag.parse()?)
                         .cloned()
                         .ok_or_else(|| Error(format!("missing biome tag {tag}")))?
-                } else if entries.is_string() {
+                } else if entries.is_string() || entries.is_object() {
                     vec![biome_id(entries, resources)?]
                 } else {
                     list(entries)?
@@ -225,6 +225,11 @@ impl BiomeSource {
     }
 }
 fn biome_id(v: &Value, resources: &ResourceManager) -> Result<Identifier, Error> {
+    if v.is_object() {
+        return Err(Error(
+            "Unsupported: inline biome holders require section and protocol biome identity".into(),
+        ));
+    }
     let id = id(v)?;
     resources.require(&id.with_path(format!("worldgen/biome/{}.json", id.path()))?)?;
     Ok(id)

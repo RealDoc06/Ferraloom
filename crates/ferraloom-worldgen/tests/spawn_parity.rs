@@ -133,3 +133,94 @@ fn player_candidates_and_random_draw_match_vanilla_schedule_next() {
         assert_eq!(random.next_long(), case["next"].as_i64().unwrap());
     }
 }
+
+#[test]
+fn every_cached_collision_up_face_matches_vanilla_shape_slicing() {
+    let cases = golden(include_bytes!("golden/spawn_collision_faces.json.gz"));
+    for (id, expected) in cases.as_array().unwrap().iter().enumerate() {
+        let state = ferraloom_data::BlockState::from_id(id as u16).unwrap();
+        if let Some(actual) = ferraloom_worldgen::spawn::cached_collision_up_face_full(state) {
+            assert_eq!(Some(actual), expected.as_bool(), "state={id}");
+        }
+    }
+}
+
+struct SpiralWorld {
+    dimension: DimensionType,
+    hit: i32,
+    visited: Vec<[i32; 2]>,
+}
+impl SpawnWorld for SpiralWorld {
+    fn dimension(&self) -> DimensionType {
+        self.dimension
+    }
+    fn ensure_chunk(&mut self, p: [i32; 2]) -> Result<(), Error> {
+        self.visited.push(p);
+        Ok(())
+    }
+    fn height(&mut self, _: Heightmap, x: i32, z: i32) -> Result<i32, Error> {
+        let current = self.visited.last().unwrap();
+        Ok(
+            if self.visited.len() as i32 - 1 == self.hit
+                && x == current[0] * 16 + 1
+                && z == current[1] * 16 + 2
+            {
+                64
+            } else {
+                self.dimension.min_y - 1
+            },
+        )
+    }
+    fn has_fluid(&mut self, _: [i32; 3]) -> Result<bool, Error> {
+        Ok(false)
+    }
+    fn collision_up_face_full(&mut self, p: [i32; 3]) -> Result<bool, Error> {
+        Ok(p[1] == 64)
+    }
+    fn no_collision_no_liquid(&mut self, _: [i32; 3]) -> Result<bool, Error> {
+        Err(Error("unexpected player collision".into()))
+    }
+}
+
+#[test]
+fn initial_spawn_spiral_and_selection_match_real_vanilla_control_flow() {
+    let resources = ResourceManager::new(vec![
+        Pack::vanilla_jar(Path::new(
+            &std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap(),
+        ))
+        .unwrap(),
+    ]);
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let mut loaded = None;
+    let mut key = None;
+    for case in golden(include_bytes!("golden/initial_spawn_spiral.json.gz"))
+        .as_array()
+        .unwrap()
+    {
+        let name: ferraloom_worldgen::Identifier =
+            case["preset"].as_str().unwrap().parse().unwrap();
+        let seed = case["seed"].as_i64().unwrap();
+        if key.as_ref() != Some(&(name.clone(), seed)) {
+            loaded = Some(WorldPreset::load(&name, &resources, data.clone(), seed).unwrap());
+            key = Some((name, seed));
+        }
+        let stem = loaded.as_ref().unwrap().dimensions.overworld();
+        let mut world = SpiralWorld {
+            dimension: stem.dimension,
+            hit: case["hit"].as_i64().unwrap() as i32,
+            visited: Vec::new(),
+        };
+        let position = ferraloom_worldgen::spawn::initial_spawn(
+            &mut world,
+            stem.generator.as_ref(),
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(serde_json::to_value(position).unwrap(), case["position"]);
+        assert_eq!(
+            serde_json::to_value(world.visited).unwrap(),
+            case["visited"]
+        );
+    }
+}

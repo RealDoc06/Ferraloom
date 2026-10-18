@@ -48,6 +48,12 @@ impl FlatLevelGeneratorSettings {
         Ok(settings)
     }
     pub fn decode_partial(v: &Value, resources: &ResourceManager) -> Result<Self, Error> {
+        if v.get("biome").is_some_and(Value::is_object) {
+            return Err(Error(
+                "Unsupported: inline biome holders require section and protocol biome identity"
+                    .into(),
+            ));
+        }
         let known_biomes = resources.registry("worldgen/biome");
         let biome = v
             .get("biome")
