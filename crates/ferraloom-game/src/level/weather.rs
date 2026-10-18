@@ -8,10 +8,7 @@ use ferraloom_worldgen::{
     Identifier,
     biome_manager::{BiomeTemperatures, Precipitation, zoom_quart},
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 /// Dimension-owned biome inputs; climate math is shared with worldgen.
 pub struct WeatherEnvironment {
@@ -102,7 +99,7 @@ pub(super) struct Weather {
     thunder: f32,
     pending_precipitation_calls: u64,
     environment: Option<WeatherEnvironment>,
-    lights: HashMap<ChunkPos, ChunkLightSnapshot>,
+    lights: super::store::SnapshotMap<ChunkPos, ChunkLightSnapshot>,
 }
 impl Weather {
     fn from_saved(data: WeatherData) -> Self {
@@ -259,8 +256,20 @@ impl Level {
     pub fn set_weather_environment(&mut self, environment: WeatherEnvironment) {
         self.region_mut().weather.environment = Some(environment);
     }
+    /// Exclusive imports retire obsolete snapshots immediately. Managed imports
+    /// use the same store and retain versions until an exclusive boundary.
     pub fn set_light_snapshot(&mut self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
-        self.region_mut().weather.lights.insert(pos, snapshot);
+        self.publish_light_snapshot(pos, snapshot);
+        self.prune_light_snapshots();
+    }
+    pub fn publish_light_snapshot(&self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
+        self.region().weather.lights.insert(pos, snapshot);
+    }
+    pub(super) fn prune_light_snapshots(&mut self) {
+        self.region_mut().weather.lights.prune();
+    }
+    pub(super) fn remove_light_snapshot(&mut self, pos: ChunkPos) {
+        self.region_mut().weather.lights.remove(&pos);
     }
     pub(super) fn weather_environment(
         &self,
@@ -277,7 +286,6 @@ impl Level {
         pos: BlockPos,
     ) -> std::result::Result<u8, LevelError> {
         let chunk = ChunkPos::containing(pos);
-        self.chunk(chunk).ok_or(LevelError::MissingChunk(chunk))?;
         if layer == LightLayer::Sky && !self.has_skylight()? {
             return Ok(0);
         }
@@ -303,7 +311,17 @@ impl Level {
         quart: [i32; 3],
     ) -> std::result::Result<ferraloom_chunk::BiomeId, LevelError> {
         let p = ChunkPos::new(quart[0] >> 2, quart[2] >> 2);
-        let chunk = self.chunk(p).ok_or(LevelError::MissingChunk(p))?;
+        let chunk = if let Some(driver) = &self.acquire_driver {
+            match self.get_chunk(p, super::chunk_holder::ChunkStatus::Biomes, false)? {
+                Some(reference) if reference.kind == super::acquisition::ChunkKind::Full => {
+                    self.resolve_full_chunk(reference)?
+                }
+                Some(reference) => return driver.proto_noise_biome(reference, quart),
+                None => return driver.uncached_noise_biome(quart),
+            }
+        } else {
+            self.chunk(p).ok_or(LevelError::MissingChunk(p))?
+        };
         let y = quart[1].clamp(chunk.min_y() >> 2, (chunk.max_y() - 1) >> 2);
         let section = chunk
             .section(y >> 2)
@@ -317,12 +335,28 @@ impl Level {
         map: super::heightmap::Heightmap,
         pos: BlockPos,
     ) -> std::result::Result<BlockPos, LevelError> {
-        let p = ChunkPos::containing(pos);
-        let chunk = self.chunk(p).ok_or(LevelError::MissingChunk(p))?;
-        let height = chunk
-            .height_at(map, (pos.x & 15) as u8, (pos.z & 15) as u8)
-            .ok_or(LevelError::UnsupportedWeatherQuery)?;
+        let height = self.get_height(map, pos.x, pos.z)?;
         Ok(BlockPos::new(pos.x, height, pos.z))
+    }
+    /// Port of Level#getHeight, including its non-loading presence guard.
+    pub fn get_height(
+        &self,
+        map: super::heightmap::Heightmap,
+        x: i32,
+        z: i32,
+    ) -> std::result::Result<i32, LevelError> {
+        if !(-30_000_000..30_000_000).contains(&x) || !(-30_000_000..30_000_000).contains(&z) {
+            return Ok(self.sea_level().wrapping_add(1));
+        }
+        let p = ChunkPos::new(x >> 4, z >> 4);
+        if !self.has_chunk(p) {
+            return Ok(self.min_build_height());
+        }
+        let chunk = self.get_full_chunk(p)?;
+        let height = chunk
+            .height_at(map, (x & 15) as u8, (z & 15) as u8)
+            .ok_or(LevelError::UnsupportedWeatherQuery)?;
+        Ok(height)
     }
     /// Port of Level#precipitationAt and isRainingAt, including sky and the
     /// motion-blocking heightmap before the zoomed biome climate query.

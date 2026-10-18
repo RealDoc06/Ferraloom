@@ -70,8 +70,44 @@ impl CommandSigningContext {
         }
     }
 }
+/// Port of TeamMsgCommand#sendMessage's target decoration. Inner display-name
+/// insertion/hover and the outer team color remain intact beneath this patch.
+pub fn team_chat_target(mut display: Component) -> Component {
+    use ferraloom_protocol::chat::{ClickEvent, HoverEvent};
+    display.style.hover_event = Some(HoverEvent::ShowText(Box::new(Component::translatable(
+        "chat.type.team.hover",
+        vec![],
+    ))));
+    display.style.click_event = Some(ClickEvent::SuggestCommand("/teammsg ".into()));
+    display
+}
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn team_target_component_matches_native_style_layering() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            color: bool,
+            component: serde_json::Value,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/team-message-vectors.json")).unwrap();
+        for vector in vectors {
+            let mut board = crate::scoreboard::Scoreboard::default();
+            let team = board.add_player_team("parity");
+            team.display_name = super::Component::literal("Parity Team");
+            team.display_name.style.bold = Some(true);
+            if vector.color {
+                team.color = Some(ferraloom_protocol::play::TeamColor::Gold);
+            }
+            let component = super::team_chat_target(team.formatted_display_name());
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&component.to_json().unwrap()).unwrap(),
+                vector.component
+            );
+        }
+    }
+
     use super::*;
     use std::sync::Arc;
     #[test]

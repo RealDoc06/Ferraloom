@@ -594,6 +594,7 @@
   "commands.tick.query.rate.running": "Target tick rate: %s per second.\nAverage time per tick: %sms (Target: %sms)",
   "commands.tick.query.rate.sprinting": "Target tick rate: %s per second (ignored, reference only).\nAverage time per tick: %sms",
   "commands.tick.rate.success": "Set the target tick rate to %s per second",
+  "commands.tick.sprint.report": "Sprint completed with %s ticks per second, or %s ms per tick",
   "commands.tick.sprint.stop.fail": "No tick sprint in progress",
   "commands.tick.sprint.stop.success": "Interrupted the current tick sprint",
   "commands.tick.status.frozen": "The game is frozen",

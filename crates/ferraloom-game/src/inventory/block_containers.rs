@@ -29,6 +29,16 @@ impl BlockMenuContainer<'_> {
     }
 }
 impl Container for BlockMenuContainer<'_> {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        let (index, slot) = self.locate(slot);
+        if let BlockEntityState::Crafter(crafter) = &mut *self.states[index] {
+            crafter.set_slot_state(slot, true);
+        }
+        self.states[index]
+            .container_mut()
+            .unwrap()
+            .reassign_item(slot)
+    }
     fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
         let (index, slot) = self.locate(slot);
         self.states[index]
@@ -274,11 +284,11 @@ mod tests {
             kind: MenuKind::Chest { rows: 3 },
             title: ferraloom_protocol::chat::Component::literal("Chest"),
         };
-        let packets = super::super::open_menu(player, &provider, level).unwrap();
-        assert!(matches!(
-            packets[0],
-            ferraloom_protocol::play::clientbound::Packet::OpenScreen(_)
-        ));
+        assert!(
+            super::super::open_menu_live(player, &provider, level)
+                .unwrap()
+                .is_some()
+        );
     }
     #[test]
     fn live_close_packet_precedes_container_close_callbacks() {
@@ -530,7 +540,7 @@ mod tests {
             kind: MenuKind::Furnace,
             title: ferraloom_protocol::chat::Component::literal("Furnace"),
         };
-        open_menu(player, &provider, &mut level).unwrap();
+        open_menu_live(player, &provider, &mut level).unwrap();
         let furnace = level
             .block_entity_mut::<AbstractFurnaceBlockEntity>(handle)
             .unwrap();
@@ -565,7 +575,7 @@ mod tests {
                 kind: MenuKind::Chest { rows: 3 },
                 title: ferraloom_protocol::chat::Component::literal("replacement"),
             };
-            open_menu(player, &provider, context.level)?;
+            open_menu_live(player, &provider, context.level)?;
             context.level.collect_detached_block_entities();
             let slot = ContainerSlot {
                 container: ContainerHandle::BlockEntity(old),

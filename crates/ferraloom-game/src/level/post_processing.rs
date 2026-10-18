@@ -56,7 +56,7 @@ impl Level {
         pos: BlockPos,
     ) -> Result<Option<crate::block::entity::BlockEntityRef>, LevelError> {
         let key = ChunkPos::containing(pos);
-        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        let chunk = self.get_full_chunk(key)?;
         if let Some(state) = chunk.block_entities.get(pos) {
             return Ok(Some(state.data().reference()));
         }

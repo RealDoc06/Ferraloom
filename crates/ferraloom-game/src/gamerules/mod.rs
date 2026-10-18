@@ -362,6 +362,10 @@ impl GameRules {
     /// Supplies the live level's exact rule fields after load and every mutation,
     /// before callbacks or another command can query the simulation.
     pub fn update_level_rules(&self, rules: &mut crate::level::LevelRules) {
+        rules.block_drops = Some(self.boolean(GameRule::BlockDrops));
+        rules.spread_vines = self.boolean(GameRule::SpreadVines);
+        rules.mob_griefing = self.boolean(GameRule::MobGriefing);
+        rules.max_snow_accumulation_height = self.integer(GameRule::MaxSnowAccumulationHeight);
         rules.tnt_explodes = self.boolean(GameRule::TntExplodes);
         rules.entity_drops = self.boolean(GameRule::EntityDrops);
         rules.max_entity_cramming = self.integer(GameRule::MaxEntityCramming);

@@ -875,12 +875,23 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         assert!(player.menus.pending_packets.is_empty());
     }
     tick_container_menu(handle, &mut level).unwrap();
-    let player = level.entity_mut::<ServerPlayer>(handle).unwrap();
+    let packets = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            crate::level::effects::LevelEffect::PlayerPacket { recipients, packet }
+                if recipients == [handle] =>
+            {
+                Some(*packet)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     assert!(
-        matches!(player.menus.pending_packets.as_slice(), [ferraloom_protocol::play::clientbound::Packet::ContainerSetSlot(packet)] if packet.slot == 36 && packet.state_id.0 == 2 && count(&packet.item_stack)==2)
+        matches!(packets.as_slice(), [ferraloom_protocol::play::clientbound::Packet::ContainerSetSlot(packet)] if packet.slot == 36 && packet.state_id.0 == 2 && count(&packet.item_stack)==2)
     );
-    player.menus.pending_packets.clear();
     tick_container_menu(handle, &mut level).unwrap();
+    assert!(level.take_effects().is_empty());
     assert!(
         level
             .entity::<ServerPlayer>(handle)

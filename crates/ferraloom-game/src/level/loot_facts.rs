@@ -17,7 +17,7 @@ use ferraloom_data::{
 };
 use ferraloom_nbt::Tag;
 use ferraloom_protocol::component::{DataComponentMap, EquipmentSlot, ItemStack};
-use ferraloom_util::{BlockPos, ChunkPos, Vec3};
+use ferraloom_util::{BlockPos, Vec3};
 use std::collections::BTreeSet;
 
 // The per-invocation runtime returns its held Level through the existing cold
@@ -87,7 +87,7 @@ impl PredicateContext for Level {
         }
     }
     fn loaded(&self, pos: BlockPos) -> Result<bool> {
-        Ok(self.is_in_valid_bounds(pos) && self.chunk(ChunkPos::containing(pos)).is_some())
+        Ok(Level::is_loaded(self, pos))
     }
     fn block(&self, pos: BlockPos) -> Result<BlockState> {
         self.get_block_state(pos).map_err(required)
@@ -304,6 +304,7 @@ mod tests {
         level::{Region, chunk::LevelChunk},
     };
     use ferraloom_data::datapack::ResourceManager;
+    use ferraloom_util::ChunkPos;
     use std::sync::Arc;
     static EMPTY: Behaviors = Behaviors::EMPTY;
 

@@ -116,6 +116,23 @@ impl MinecraftServer {
             Ok(())
         }
     }
+    /// Capture dirty storage before constructing Send IO, as for rules/clocks.
+    pub(super) fn save_command_storage(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
+        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let dirty = self.command_storage.take_dirty();
+        async move {
+            tokio::task::spawn_blocking(move || {
+                for (id, mut data) in dirty {
+                    storage.save(&id, &mut data)?;
+                }
+                Ok::<_, ferraloom_storage::Error>(())
+            })
+            .await??;
+            Ok(())
+        }
+    }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
         self.game_rules
             .update_level_rules(self.level.level.rules_mut());
@@ -265,16 +282,7 @@ impl MinecraftServer {
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
-            "teammsg" => {
-                return Err(exceptions::error(
-                    if stack.entity.is_none() {
-                        "permissions.requires.entity"
-                    } else {
-                        "commands.teammsg.failed.noteam"
-                    },
-                    &[],
-                ));
-            }
+            "teammsg" => self.message_command(source, &command)?,
             "list" => {
                 let uuids = command.literals.iter().any(|literal| literal == "uuids");
                 let names = self
@@ -478,7 +486,10 @@ use ferraloom_game::commands::arguments::selectors::{
     EntityQuery, SelectorEntity, SelectorPredicate, rotation_matches,
 };
 impl EntityQuery for MinecraftServer {
-    fn candidates(&self, _players_only: bool) -> Vec<EntityRef> {
+    fn candidates(&self, players_only: bool) -> Vec<EntityRef> {
+        if !players_only {
+            return self.level.level.all_entities();
+        }
         self.players
             .iter()
             .filter_map(|id| match self.connections[id].phase {
@@ -487,10 +498,66 @@ impl EntityQuery for MinecraftServer {
             })
             .collect()
     }
+    fn candidates_in(
+        &self,
+        players_only: bool,
+        bounds: Option<ferraloom_util::Aabb>,
+    ) -> Vec<EntityRef> {
+        if players_only {
+            return self.candidates(true);
+        }
+        bounds.map_or_else(
+            || self.level.level.all_entities(),
+            |bounds| self.level.level.entities_in(bounds, |_, _| true),
+        )
+    }
+    fn entity_by_uuid(&self, uuid: Uuid, players_only: bool) -> Option<EntityRef> {
+        if players_only {
+            self.candidates(true)
+                .into_iter()
+                .find(|entity| self.player(*entity).is_ok_and(|player| player.uuid == uuid))
+        } else {
+            self.level.level.entity_by_uuid(uuid)
+        }
+    }
+    fn players_in_level(&self, dimension: &str) -> Vec<EntityRef> {
+        if dimension != "minecraft:overworld" {
+            return Vec::new();
+        }
+        // Players are always tracked; the canonical lookup retains level join order.
+        self.level
+            .level
+            .all_entities()
+            .into_iter()
+            .filter(|entity| self.player(*entity).is_ok())
+            .collect()
+    }
+    fn bounding_box(&self, entity: EntityRef) -> Option<ferraloom_util::Aabb> {
+        self.level
+            .level
+            .entity_state(entity)
+            .ok()
+            .map(|state| state.as_entity().bounding_box)
+    }
+    fn validate_candidate(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<(), ferraloom_brigadier::CommandSyntaxException> {
+        if self
+            .level
+            .level
+            .entity_state(entity)
+            .is_ok_and(|state| !matches!(state, ferraloom_game::entity::EntityState::Player(_)))
+        {
+            // The later entity naming/NBT read API has not landed in this base.
+            return Err(exceptions::error("ferraloom.selector.pending", &[]));
+        }
+        Ok(())
+    }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
         let player = self.player(entity).ok()?;
         Some(SelectorEntity {
-            name: &player.name,
+            name: player.name.as_str().into(),
             uuid: player.uuid,
             player: true,
             dimension: "minecraft:overworld",
@@ -500,8 +567,17 @@ impl EntityQuery for MinecraftServer {
         })
     }
     fn display_name(&self, entity: EntityRef) -> Component {
-        self.player(entity)
-            .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
+        let Ok(player) = self.player(entity) else {
+            return Component::literal("");
+        };
+        let plain = Component::literal(&player.name);
+        let name = self
+            .shared()
+            .scoreboard
+            .scoreboard()
+            .get_players_team(&player.name)
+            .map_or_else(|| plain.clone(), |team| team.formatted_name(plain.clone()));
+        player.decorate_display_name_component(name)
     }
     fn matches(
         &mut self,
@@ -517,7 +593,14 @@ impl EntityQuery for MinecraftServer {
             SelectorPredicate::GameMode { value, inverted } => {
                 (player.game_mode == *value) != *inverted
             }
-            SelectorPredicate::Team { value, inverted } => value.is_empty() != *inverted,
+            SelectorPredicate::Team { value, inverted } => {
+                let team = self
+                    .shared()
+                    .scoreboard
+                    .scoreboard()
+                    .get_players_team(&player.name);
+                (team.map_or("", |team| team.name()) == value) != *inverted
+            }
             SelectorPredicate::Type {
                 value,
                 tag,
@@ -551,7 +634,15 @@ impl EntityQuery for MinecraftServer {
             }
             SelectorPredicate::Pitch(range) => rotation_matches(*range, player.pitch),
             SelectorPredicate::Yaw(range) => rotation_matches(*range, player.yaw),
-            SelectorPredicate::Scores(scores) => scores.is_empty(),
+            SelectorPredicate::Scores(scores) => {
+                let scoreboard = self.shared().scoreboard.scoreboard();
+                scores.iter().all(|(objective, range)| {
+                    scoreboard.get_objective(objective).is_some()
+                        && scoreboard
+                            .get_player_score(&player.name, objective)
+                            .is_some_and(|score| range.contains(f64::from(score.value)))
+                })
+            }
             SelectorPredicate::Advancements(_) | SelectorPredicate::Predicate { .. } => {
                 return Err(exceptions::error("ferraloom.selector.pending", &[]));
             }
@@ -722,6 +813,41 @@ impl MinecraftServer {
         } else {
             "message"
         };
+        let team_receivers = if command.command == "teammsg" {
+            let entity = command
+                .source
+                .entity
+                .ok_or_else(|| exceptions::error("permissions.requires.entity", &[]))?;
+            let player = self
+                .player(entity)
+                .map_err(|_| exceptions::error("ferraloom.selector.pending", &[]))?;
+            let scoreboard = self.shared().scoreboard.scoreboard();
+            let team = scoreboard
+                .get_players_team(&player.name)
+                .ok_or_else(|| exceptions::error("commands.teammsg.failed.noteam", &[]))?;
+            let team_name = team.name().to_owned();
+            let target =
+                ferraloom_game::commands::message::team_chat_target(team.formatted_display_name());
+            let receivers = self
+                .players
+                .iter()
+                .copied()
+                .filter(|id| {
+                    let Phase::Play(receiver) = self.connections[id].phase else {
+                        return false;
+                    };
+                    receiver == entity
+                        || self
+                            .player(receiver)
+                            .ok()
+                            .and_then(|player| scoreboard.get_players_team(&player.name))
+                            .is_some_and(|team| team.name() == team_name)
+                })
+                .collect::<Vec<_>>();
+            Some((entity, receivers, target))
+        } else {
+            None
+        };
         let targets = if command.command == "msg" {
             let Some(ArgumentValue::Entity(selector)) = command.argument("targets") else {
                 unreachable!()
@@ -754,16 +880,31 @@ impl MinecraftServer {
                 salt: message.salt,
                 last_seen: message.last_seen.to_vec(),
             });
-        let name = command.source.display_name(|entity| {
-            self.player(entity)
-                .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
-        });
-        let count = if let Some(targets) = targets {
+        let name = command
+            .source
+            .display_name(|entity| self.display_name(entity));
+        let count = if let Some((entity, receivers, target)) = team_receivers {
+            for receiver in &receivers {
+                let outgoing = matches!(self.connections[receiver].phase, Phase::Play(handle) if handle == entity);
+                self.send_command_chat_to(
+                    *receiver,
+                    signed.as_ref(),
+                    &content,
+                    ChatTypeBound {
+                        chat_type: ChatTypeHolder(Holder::Reference(id(if outgoing {
+                            "team_msg_command_outgoing"
+                        } else {
+                            "team_msg_command_incoming"
+                        }))),
+                        name: name.clone(),
+                        target_name: Some(target.clone()),
+                    },
+                );
+            }
+            receivers.len() as i32
+        } else if let Some(targets) = targets {
             for entity in &targets {
-                let target_name = self
-                    .player(*entity)
-                    .map_err(|_| exceptions::error("argument.entity.notfound.player", &[]))?
-                    .display_name();
+                let target_name = self.display_name(*entity);
                 let target=self.players.iter().copied().find(|id|matches!(self.connections[id].phase,Phase::Play(handle) if handle==*entity)).unwrap();
                 let outgoing = ChatTypeBound {
                     chat_type: ChatTypeHolder(Holder::Reference(id("msg_command_outgoing"))),
@@ -1955,6 +2096,42 @@ impl MinecraftServer {
             ),
             true,
         ))
+    }
+}
+
+impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer {
+    fn formatted_score(
+        &mut self,
+        holder: &str,
+        objective: &str,
+    ) -> std::result::Result<Component, ferraloom_game::commands::components::ResolutionError> {
+        Ok(self
+            .shared()
+            .scoreboard
+            .scoreboard()
+            .formatted_score(holder, objective))
+    }
+
+    fn nbt_data(
+        &mut self,
+        _source: &CommandSourceStack,
+        data: &protocol::chat::DataSource,
+    ) -> std::result::Result<
+        Vec<ferraloom_nbt::CompoundTag>,
+        ferraloom_game::commands::components::ResolutionError,
+    > {
+        use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
+        match data {
+            protocol::chat::DataSource::Storage(id) => {
+                let storage = self
+                    .level
+                    .level
+                    .command_storage()
+                    .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
+                Ok(vec![storage.get(id)?])
+            }
+            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+        }
     }
 }
 

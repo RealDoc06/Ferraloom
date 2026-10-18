@@ -1,13 +1,16 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod block_containers;
 mod container;
+mod crafted;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
+mod listener_copies;
 mod live;
 mod menu;
 mod menus;
 mod operation;
+mod operation_stacks;
 mod server_player;
 mod slot;
 mod stack_runtime;
@@ -16,8 +19,10 @@ mod sync;
 mod transfer;
 
 pub use container::*;
+pub use crafted::crafted_item_post_process;
 pub use crafting::*;
 pub use crafting_runtime::*;
+pub use listener_copies::{ListenerCopyArena, ListenerCopyRef};
 pub use live::*;
 pub use menu::*;
 pub use menus::*;
@@ -32,7 +37,10 @@ pub use stacks::{
     StackForward, StackGenerations, StackRef, StackReplacement, StackSlotRef, StackValue,
 };
 pub use sync::*;
-pub use transfer::{MenuTransferContext, move_live_menu_item_stack_to, move_menu_item_stack_to};
+pub use transfer::{
+    MenuTransferContext, move_live_menu_item_stack_to, move_menu_item_stack_to,
+    safe_insert_live_menu_item_stack, safe_insert_menu_item_stack,
+};
 
 use crate::entity::player::inventory::{
     copy_with_count as with_count, count, is_same_item_same_components, is_stackable,
@@ -44,6 +52,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    MissingListenerCopy(ListenerCopyRef),
     MissingStack(StackRef),
     MissingMenu(MenuRef),
     InvalidSlot(i32),
@@ -56,6 +65,9 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::MissingListenerCopy(reference) => {
+                write!(f, "missing listener copy {reference:?}")
+            }
             Self::MissingStack(reference) => write!(f, "missing stack receiver {reference:?}"),
             Self::MissingMenu(reference) => write!(f, "missing menu receiver {reference:?}"),
             Self::InvalidSlot(slot) => write!(f, "invalid menu slot {slot}"),

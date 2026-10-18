@@ -48,6 +48,12 @@ impl SimulationChunkTracker {
     pub fn run_all_updates(&mut self) {
         self.graph.run_all_updates();
     }
+    /// Construct explicit simulation membership for manually owned test chunks.
+    /// Production changes always enter through TicketStorage's source updates.
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub(super) fn set_fixture_level(&mut self, pos: ChunkPos, level: i32) {
+        self.graph.set_level(pos.pack(), level);
+    }
 }
 
 /// One LoadingChunkTracker#setLevel call in fixed-point queue order. Holder

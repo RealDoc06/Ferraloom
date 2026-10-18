@@ -29,8 +29,8 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
         world.request(0, pos);
         let terrain = tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
-                let mut completed = world.poll_terrain()?;
-                if let Some((_, terrain)) = completed.pop() {
+                world.poll_generation_progress()?;
+                if let Some((_, terrain)) = world.take_generation_completion()? {
                     break Ok::<_, anyhow::Error>(terrain);
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;

@@ -1,4 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -34,11 +37,13 @@ mod lighting;
 pub mod loot_facts;
 mod mutation;
 mod post_processing;
+pub mod publication;
 mod random;
 pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+mod simulation_access;
 pub(crate) mod store;
 pub mod structure_manager;
 mod structure_services;
@@ -51,6 +56,7 @@ pub mod weather;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
@@ -64,6 +70,7 @@ pub enum LevelError {
         chunk_holder::ChunkStatus,
         acquisition::AcquireFailure,
     ),
+    UnsupportedChunkEntityPublication(ChunkPos),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
@@ -164,6 +171,7 @@ impl Default for LevelRules {
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
+    next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
@@ -184,8 +192,7 @@ pub struct Region {
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
-    block_ticking_chunks: HashSet<ChunkPos>,
-    entity_ticking_chunks: HashSet<ChunkPos>,
+    simulation: RefCell<simulation::SimulationChunkTracker>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
     // The family owner replaces its pending state/registration stub together.
     #[allow(dead_code)]
@@ -206,6 +213,7 @@ impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
             chunks: store::InsertOnlyMap::default(),
+            next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
@@ -226,8 +234,7 @@ impl Region {
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
-            block_ticking_chunks: HashSet::new(),
-            entity_ticking_chunks: HashSet::new(),
+            simulation: RefCell::new(simulation::SimulationChunkTracker::default()),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
             redstone: crate::block::redstone::RedstoneState::default(),
             block_events: events::BlockEvents::default(),
@@ -249,20 +256,36 @@ impl Region {
 /// lets the scheduler temporarily park ownership without moving this call facade.
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
+    command_storage: Option<Arc<crate::commands::storage::CommandStorageSnapshot>>,
     shared: Option<Box<crate::ServerShared>>,
     region: Option<Region>,
     context: Arc<LevelContext>,
     difficulty: ferraloom_protocol::play::Difficulty,
+    acquisition: acquisition::ChunkAcquisition,
+    acquire_driver: Option<Box<dyn acquisition::AcquireDriver>>,
 }
 
 impl Level {
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
+            command_storage: None,
             shared: None,
             region: Some(region),
             difficulty: context.initial_difficulty,
             context,
+            acquisition: Default::default(),
+            acquire_driver: None,
         }
+    }
+    /// Required server-owned storage view, absent until startup installs it.
+    pub fn command_storage(&self) -> Option<&crate::commands::storage::CommandStorageSnapshot> {
+        self.command_storage.as_deref()
+    }
+    pub fn set_command_storage(
+        &mut self,
+        snapshot: Arc<crate::commands::storage::CommandStorageSnapshot>,
+    ) {
+        self.command_storage = Some(snapshot);
     }
     /// The server installs this canonical owner before entering a gameplay phase.
     pub fn shared(&self) -> Result<&crate::ServerShared, LevelError> {
@@ -319,27 +342,39 @@ impl Level {
         self.region().chunks.get(&pos)
     }
     pub fn remove_chunk(&mut self, pos: ChunkPos) -> Option<chunk::LevelChunk> {
+        self.acquisition.clear_cache();
         let region = self.region_mut();
         let mut chunk = region.chunks.remove(&pos)?;
         chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
         chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
-        region.block_ticking_chunks.remove(&pos);
-        region.entity_ticking_chunks.remove(&pos);
+        self.remove_light_snapshot(pos);
         Some(chunk)
     }
     pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {
         let pos = chunk.pos();
+        let attached_only = self.acquire_driver.is_none();
         let region = self.region_mut();
         if region.chunks.contains_key(&pos) {
             return Err(LevelError::DuplicateChunk(pos));
         }
-        if region.chunks.is_empty() {
+        if attached_only && region.chunks.is_empty() {
             region.min_y = chunk.min_y();
             region.max_y = chunk.max_y();
         }
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
+        chunk.publication_generation = region
+            .next_chunk_generation
+            .get()
+            .checked_add(1)
+            .expect("chunk identities exhausted");
+        region
+            .next_chunk_generation
+            .set(chunk.publication_generation);
+        region
+            .block_entity_state
+            .register_published_chunk(&mut chunk);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -421,10 +456,7 @@ impl Level {
             return Ok(Block::VOID_AIR.default_state());
         }
         let chunk_pos = ChunkPos::containing(pos);
-        self.region()
-            .chunks
-            .get(&chunk_pos)
-            .ok_or(LevelError::MissingChunk(chunk_pos))
+        self.get_full_chunk(chunk_pos)
             .map(|chunk| chunk.get_block_state(pos))
     }
     /// Low-level mutation, before Level#setBlock's neighbor/lighting hooks.
@@ -435,6 +467,7 @@ impl Level {
         state: BlockState,
     ) -> Result<BlockState, LevelError> {
         let chunk_pos = ChunkPos::containing(pos);
+        self.get_full_chunk(chunk_pos)?;
         self.region_mut()
             .chunks
             .get_mut(&chunk_pos)
