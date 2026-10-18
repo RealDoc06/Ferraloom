@@ -5,12 +5,12 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1942 | 0 | 1933 | 9 | 0 |
-| [Block entities](features/block-entities.md) | 70 | 70 | 0 | 0 | 0 |
-| [Blocks](features/blocks.md) | 316 | 316 | 0 | 0 | 0 |
+| [Block entities](features/block-entities.md) | 76 | 70 | 6 | 0 | 0 |
+| [Blocks](features/blocks.md) | 322 | 320 | 2 | 0 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 37 | 31 | 6 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2641 | 2496 | 27 | 118 | 0 |
+| [Commands and argument types](features/commands.md) | 2642 | 2497 | 27 | 118 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2135 | 2 | 30 | 2103 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
@@ -18,7 +18,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Fluids](features/fluids.md) | 25 | 25 | 0 | 0 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 63 | 18 | 17 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
-| [Game rules](features/game-rules.md) | 73 | 0 | 4 | 69 | 0 |
+| [Game rules](features/game-rules.md) | 74 | 1 | 4 | 69 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
@@ -43,10 +43,10 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
-| [Ticking, game events and vibrations](features/ticking.md) | 146 | 146 | 0 | 0 | 0 |
+| [Ticking, game events and vibrations](features/ticking.md) | 183 | 179 | 4 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
-| [World generation](features/worldgen.md) | 3107 | 2641 | 167 | 299 | 0 |
-| **Total** | **19041** | **12101** | **4074** | **2866** | **0** |
+| [World generation](features/worldgen.md) | 3110 | 2642 | 168 | 300 | 0 |
+| **Total** | **19095** | **12141** | **4087** | **2867** | **0** |
