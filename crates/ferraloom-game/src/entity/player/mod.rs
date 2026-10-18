@@ -1,6 +1,7 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::drop_item;
+mod contact;
 pub mod cooldowns;
 pub mod equipment;
 mod interaction;
@@ -794,6 +795,10 @@ impl crate::entity::Entity for PlayerBehavior {
             crate::entity::movement::set_on_ground(entity, false, None, level)?;
         }
         crate::entity::base_tick(self, entity, level)?;
+        // Known slice-1 gap before Player#aiStep's touch point: LivingEntity
+        // server travel, block effects, freezing/damage and pushing are unported.
+        // Slice 2 ports these predecessors; live pickup parity remains pending.
+        contact::touch_entities(entity, level)?;
         cooldowns::tick(entity, level)?;
         level
             .entity_mut::<ServerPlayer>(entity)?

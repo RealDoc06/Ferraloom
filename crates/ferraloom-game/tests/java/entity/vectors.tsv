@@ -405,6 +405,12 @@ cooldown	iterator-expire	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:group
 cooldown	overflow-add	0,0,0,nan,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:2
 cooldown	overflow-end	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:0
 cooldown	wrap-tick	0,0,0,0,0,0,0,0,nan,0,0,0,0,nan,0,0,0,0,0,0	minecraft:shared:2
+player-contact	0	3,6,4,2	402cffffff99999a,404fc00000000000,bff8000003333333;4031199999cccccd,4050933333000000,3ff199999ccccccd	63b6619458e5a47b
+player-contact	1	3,4,7,2,5	402cffffff99999a,4050000000000000,bff8000003333333;4033fd70a4000000,4050733333000000,3fffd70a40000000	63b6619458e5a47b
+player-contact	2	3,6,4,2	402cffffff99999a,404fc00000000000,bff8000003333333;4031199999cccccd,4050933333000000,3ff199999ccccccd	63b6619458e5a47b
+player-contact	3	-	none	b8f2fa7663b66194
+player-contact	4	-	none	b8f2fa7663b66194
+player-contact	5	-	none	b8f2fa7663b66194
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0
