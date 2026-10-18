@@ -32,6 +32,419 @@ fn assert_vector(actual: Vec3, expected: Vec3, label: &str) {
         "{label}: {actual:?} != {expected:?}"
     );
 }
+
+#[test]
+fn no_collision_stops_at_first_shape_and_retains_later_required_reads() {
+    let mut actual = Vec::new();
+    for block in [Block::STONE, Block::AIR, Block::WATER] {
+        for liquids in [false, true] {
+            let mut level = level(false);
+            level.remove_chunk(ChunkPos::new(0, 1)).unwrap();
+            level
+                .set_block_state(BlockPos::new(0, 64, 0), block.default_state())
+                .unwrap();
+            let result = match level.no_collision(
+                None,
+                ferraloom_util::Aabb::new(0.1, 64.1, 0.1, 0.9, 64.9, 16.2),
+                liquids,
+            ) {
+                Ok(clear) => clear.to_string(),
+                Err(crate::level::LevelError::MissingChunk(pos)) => {
+                    assert_eq!(pos, ChunkPos::new(0, 1));
+                    "required-read".to_owned()
+                }
+                Err(error) => panic!("unexpected collision query error: {error}"),
+            };
+            actual.push(format!(
+                "no-collision-order\t{}\t{liquids}\t{result}",
+                block.name()
+            ));
+        }
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("no-collision-order\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn loaded_living_head_and_body_yaw_precede_base_yaw_wrapping() {
+    use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+    let mut actual = Vec::new();
+    for (index, rotation) in [721.25, -721.25, f32::NAN, 37.25].into_iter().enumerate() {
+        let mut player = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "rotation".into(),
+            1,
+            Vec3::ZERO,
+            player::GameType::Survival,
+        );
+        player.set_y_rot(11.25);
+        let mut tag = CompoundTag::new();
+        tag.insert(
+            "Rotation",
+            Tag::List(ListTag(vec![Tag::Float(rotation), Tag::Float(0.0)])),
+        );
+        player.try_load(tag).unwrap();
+        actual.push(format!(
+            "living-load-rotation\t{index}\t{:x},{:x},{:x},{:x},{:x}",
+            player.yaw.to_bits(),
+            player.y_head_rot.to_bits(),
+            player.y_body_rot.to_bits(),
+            player.old_y_head_rot.to_bits(),
+            player.old_y_body_rot.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-load-rotation\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn lava_fall_distance_starts_after_the_first_base_tick() {
+    let mut level = level(false);
+    level
+        .set_block_state(BlockPos::new(8, 64, 8), Block::LAVA.default_state())
+        .unwrap();
+    let id = EntityRef(1);
+    let mut tnt = item::PrimedTnt::new(1, 123);
+    tnt.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    tnt.parent.fall_distance = 8.0;
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    let mut actual = Vec::new();
+    for index in 0..3 {
+        let before = level
+            .entity::<EntityData>(id)
+            .unwrap()
+            .is_in_lava(&level)
+            .unwrap();
+        base_tick(&item::PrimedTntBehavior, id, &mut level).unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        actual.push(format!(
+            "lava-base-tick\t{index}\t{before},{:x},{}",
+            base.fall_distance.to_bits(),
+            base.is_in_lava(&level).unwrap()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("lava-base-tick\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
+    use ferraloom_data::registries::attribute::Id as Attribute;
+    use ferraloom_protocol::codec::VarInt;
+    let mut level = level(true);
+    level
+        .set_block_state(BlockPos::new(8, 63, 8), Block::SOUL_SAND.default_state())
+        .unwrap();
+    let id = EntityRef(1);
+    let player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "movement".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    let attributes = [
+        Attribute::STEP_HEIGHT,
+        Attribute::GRAVITY,
+        Attribute::AIR_DRAG_MODIFIER,
+        Attribute::BOUNCINESS,
+        Attribute::MOVEMENT_EFFICIENCY,
+        Attribute::BURNING_TIME,
+    ];
+    let values = [
+        [0.6, 0.08, 1.0, 0.0, 0.0, 1.0],
+        [1.25, 0.015, 2.0, 0.75, 0.5, 0.125],
+        [0.0, -0.1, 0.0, 1.25, 1.0, 2.0],
+        [0.6, 0.08, 100.0, 0.0, 0.25, 1024.0],
+    ];
+    let mut actual = Vec::new();
+    for (index, values) in values.into_iter().enumerate() {
+        for (attribute, value) in attributes.into_iter().zip(values) {
+            level
+                .entity_mut::<LivingEntity>(id)
+                .unwrap()
+                .attributes
+                .get_instance(attribute)
+                .unwrap()
+                .set_base_value(value);
+        }
+        {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.entity_data.set(synched_data::NO_GRAVITY, index == 2);
+            base.remaining_fire_ticks = -20;
+            base.entity_data
+                .set(synched_data::TICKS_FROZEN, VarInt(100));
+        }
+        inside_block::ignite_for_ticks(id, if index == 3 { i32::MAX } else { 123 }, &mut level)
+            .unwrap();
+        let behavior = level.entity_behavior(id).unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        actual.push(format!(
+            "living-movement\t{index}\t{:x},{:x},{:x},{:x},{:x},{},{}",
+            behavior.max_up_step(id, &level).unwrap().to_bits(),
+            behavior.effective_gravity(id, &level).unwrap().to_bits(),
+            behavior.air_drag(id, &level).unwrap().to_bits(),
+            behavior.bounciness(id, &level).unwrap().to_bits(),
+            behavior.block_speed_factor(id, &level).unwrap().to_bits(),
+            base.remaining_fire_ticks,
+            base.ticks_frozen(),
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-movement\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_steps() {
+    use dimensions::EntityAttachment;
+    use ferraloom_protocol::entity_data::Pose;
+    fn vector_bits(point: Vec3) -> String {
+        format!(
+            "{:x},{:x},{:x}",
+            point.x.to_bits(),
+            point.y.to_bits(),
+            point.z.to_bits()
+        )
+    }
+    fn row(name: &str, dimensions: &EntityDimensions) -> String {
+        let mut row = format!(
+            "dimensions\t{name}\t{:x},{:x},{:x},{}",
+            dimensions.width.to_bits(),
+            dimensions.height.to_bits(),
+            dimensions.eye_height.to_bits(),
+            dimensions.fixed
+        );
+        for attachment in [
+            EntityAttachment::Passenger,
+            EntityAttachment::Vehicle,
+            EntityAttachment::NameTag,
+            EntityAttachment::WardenChest,
+        ] {
+            let points = (0..dimensions.attachments.points(attachment).len())
+                .map(|index| vector_bits(dimensions.attachments.get(attachment, index as i32, 0.0)))
+                .collect::<Vec<_>>()
+                .join(";");
+            row.push_str(&format!(
+                "\t{points}:{}",
+                vector_bits(dimensions.attachments.get_average(attachment))
+            ));
+        }
+        row
+    }
+    let cow = EntityDimensions::for_type(ferraloom_data::EntityType::COW);
+    let ghast = EntityDimensions::for_type(ferraloom_data::EntityType::HAPPY_GHAST);
+    let mut actual = vec![
+        row("cow", &cow),
+        row(
+            "baby-cow",
+            &cow.scale(0.5, 0.5).with_eye_height(0.665).scale(1.7, 1.7),
+        ),
+        row("happy-ghast", &ghast),
+    ];
+    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "dimensions".into(),
+        1,
+        Vec3::ZERO,
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+        .unwrap();
+    level
+        .entity_mut::<LivingEntity>(EntityRef(1))
+        .unwrap()
+        .attributes
+        .get_instance(ferraloom_data::registries::attribute::Id::SCALE)
+        .unwrap()
+        .set_base_value(1.7);
+    for (index, pose) in [
+        Pose::Standing,
+        Pose::FallFlying,
+        Pose::Sleeping,
+        Pose::Swimming,
+        Pose::SpinAttack,
+        Pose::Crouching,
+        Pose::LongJumping,
+        Pose::Dying,
+        Pose::Croaking,
+        Pose::UsingTongue,
+        Pose::Sitting,
+        Pose::Roaring,
+        Pose::Sniffing,
+        Pose::Emerging,
+        Pose::Digging,
+        Pose::Sliding,
+        Pose::Shooting,
+        Pose::Inhaling,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let dimensions = player::PlayerBehavior
+            .dimensions(EntityRef(1), pose, &level)
+            .unwrap();
+        actual.push(row(&format!("player-{index}"), &dimensions));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("dimensions\t"))
+        .collect();
+    assert_eq!(actual, expected);
+    let points = ghast.attachments.scale(0.7, 1.3, 0.7);
+    let mut actual = Vec::new();
+    for rotation in [-180.0_f32, -90.0, 0.0, 37.3, 90.0, 180.0] {
+        for index in [-1, 0, 3, 5] {
+            actual.push(format!(
+                "attachment\t{:x}\t{index}\t{}",
+                rotation.to_bits(),
+                vector_bits(points.get_clamped(EntityAttachment::Passenger, index, rotation))
+            ));
+        }
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("attachment\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_positions() {
+    fn check(label: &str, id: EntityRef, level: &Level) {
+        let prefix = format!("size-refresh\t{label}\t");
+        let expected: Vec<_> = VECTORS
+            .lines()
+            .find_map(|line| line.strip_prefix(&prefix))
+            .unwrap()
+            .split('\t')
+            .collect();
+        let base = level.entity::<EntityData>(id).unwrap();
+        assert_vector(base.position, vector(expected[0]), label);
+        assert_vector(
+            Vec3::new(
+                base.bounding_box.min_x,
+                base.bounding_box.min_y,
+                base.bounding_box.min_z,
+            ),
+            vector(expected[1]),
+            label,
+        );
+        assert_vector(
+            Vec3::new(
+                base.bounding_box.max_x,
+                base.bounding_box.max_y,
+                base.bounding_box.max_z,
+            ),
+            vector(expected[2]),
+            label,
+        );
+    }
+    struct ResizeBehavior;
+    impl Entity for ResizeBehavior {
+        fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+            trace_base_entity_refs(state.as_entity(), references);
+        }
+        fn dimensions(
+            &self,
+            entity: EntityRef,
+            _pose: ferraloom_protocol::entity_data::Pose,
+            level: &Level,
+        ) -> Result<EntityDimensions, crate::level::LevelError> {
+            let saved = &level.entity::<EntityData>(entity)?.saved;
+            Ok(EntityDimensions::scalable(
+                saved.get_float_or("width", 0.5),
+                saved.get_float_or("height", 0.5),
+            ))
+        }
+    }
+    let mut level = level(true);
+    for y in 64..=66 {
+        level
+            .set_block_state(BlockPos::new(9, y, 8), Block::STONE.default_state())
+            .unwrap();
+    }
+    let entity = EntityRef(1);
+    let mut tnt = item::PrimedTnt::new(1, 4);
+    tnt.parent.set_pos(Vec3::new(8.7, 64.0, 8.5));
+    level
+        .add_entity(entity, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    dimensions::refresh_dimensions(&ResizeBehavior, entity, &mut level).unwrap();
+    let base = level.entity_mut::<EntityData>(entity).unwrap();
+    base.first_tick = false;
+    base.saved.insert("width", ferraloom_nbt::Tag::Float(1.0));
+    base.saved.insert("height", ferraloom_nbt::Tag::Float(2.0));
+    dimensions::refresh_dimensions(&ResizeBehavior, entity, &mut level).unwrap();
+    check("growth", entity, &level);
+    let base = level.entity_mut::<EntityData>(entity).unwrap();
+    base.saved.insert("width", ferraloom_nbt::Tag::Float(0.5));
+    base.saved.insert("height", ferraloom_nbt::Tag::Float(0.5));
+    dimensions::refresh_dimensions(&ResizeBehavior, entity, &mut level).unwrap();
+    level
+        .set_entity_pos(entity, Vec3::new(8.7, 64.0, 8.5))
+        .unwrap();
+    for x in 5..=12 {
+        for z in 5..=12 {
+            level
+                .set_block_state(BlockPos::new(x, 65, z), Block::STONE.default_state())
+                .unwrap();
+        }
+    }
+    let base = level.entity_mut::<EntityData>(entity).unwrap();
+    base.saved.insert("width", ferraloom_nbt::Tag::Float(1.0));
+    base.saved.insert("height", ferraloom_nbt::Tag::Float(2.0));
+    dimensions::refresh_dimensions(&ResizeBehavior, entity, &mut level).unwrap();
+    check("growth-low-ceiling", entity, &level);
+    let player = EntityRef(2);
+    let mut state = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "resize".into(),
+        2,
+        Vec3::new(8.7, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    state.first_tick = false;
+    state
+        .attributes
+        .get_instance(ferraloom_data::registries::attribute::Id::SCALE)
+        .unwrap()
+        .set_base_value(1.7);
+    level
+        .add_entity(player, EntityState::Player(Box::new(state)))
+        .unwrap();
+    dimensions::set_pose(
+        player,
+        ferraloom_protocol::entity_data::Pose::Crouching,
+        &mut level,
+    )
+    .unwrap();
+    dimensions::set_pose(
+        player,
+        ferraloom_protocol::entity_data::Pose::Standing,
+        &mut level,
+    )
+    .unwrap();
+    check("player-growth", player, &level);
+}
 pub(super) fn tags(level: &mut Level) {
     let block_values = VECTORS
         .lines()
@@ -655,7 +1068,10 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
         assert_vector(dropped.parent.velocity, vector(f[4]), row);
         assert_eq!(dropped.parent.network_id, 2);
         assert_eq!(dropped.pickup_delay, 40);
-        assert_eq!(dropped.thrower, Some(Uuid::new(1, 2)));
+        assert_eq!(
+            dropped.thrower.unwrap().uuid(&level).unwrap(),
+            Uuid::new(1, 2)
+        );
         n += 1;
     }
     assert_eq!(n, 3);

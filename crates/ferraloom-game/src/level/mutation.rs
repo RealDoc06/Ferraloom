@@ -20,11 +20,35 @@ impl Level {
     pub fn rules_mut(&mut self) -> &mut LevelRules {
         &mut self.region_mut().rules
     }
+    /// Install LevelChunk's four live heightmaps when a full chunk enters the
+    /// simulation. Raw section writes remain a storage-only operation.
+    pub fn prime_chunk_heightmaps(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        let tags = self
+            .region()
+            .tags
+            .clone()
+            .ok_or(LevelError::MissingBlockTags)?;
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?
+            .prime_heightmaps(&tags);
+        Ok(())
+    }
     pub fn set_block_tags(&mut self, tags: Arc<TagSet<Block>>) {
         self.region_mut().tags = Some(tags);
     }
     pub fn set_fluid_tags(&mut self, tags: Arc<TagSet<ferraloom_data::registries::fluid::Id>>) {
         self.region_mut().fluid_tags = Some(tags);
+    }
+    pub fn set_entity_type_tags(&mut self, tags: Arc<TagSet<ferraloom_data::EntityType>>) {
+        self.region_mut().entity_type_tags = Some(tags);
+    }
+    pub fn entity_type_tags(&self) -> Result<&TagSet<ferraloom_data::EntityType>, LevelError> {
+        self.region()
+            .entity_type_tags
+            .as_deref()
+            .ok_or(LevelError::MissingEntityTypeTags)
     }
     pub fn fluid_tags(&self) -> Result<&TagSet<ferraloom_data::registries::fluid::Id>, LevelError> {
         self.region()
@@ -56,19 +80,7 @@ impl Level {
         if let Some(custom) = self.custom_block_behavior(block) {
             return Ok(custom);
         }
-        if method
-            .vanilla_method()
-            .is_some_and(|method| !block.overrides(method))
-        {
-            if matches!(
-                method,
-                BlockMethod::CanPlaceLiquid | BlockMethod::PlaceLiquid | BlockMethod::PickupBlock
-            ) {
-                return Ok(&crate::block::fluid::SIMPLE_WATERLOGGED_BLOCK);
-            }
-            return Ok(&crate::block::BASE_BLOCK);
-        }
-        crate::block::dispatch::ported_behavior(block, method)
+        crate::block::dispatch::registered_behavior(block, method)
             .ok_or(LevelError::UnsupportedBlock(block))
     }
     pub fn required_block_behavior(

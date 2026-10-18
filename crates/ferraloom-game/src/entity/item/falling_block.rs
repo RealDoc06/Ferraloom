@@ -183,8 +183,12 @@ impl Entity for FallingBlockBehavior {
         }
         Ok(false)
     }
-    fn default_gravity(&self) -> f64 {
-        0.04
+    fn default_gravity(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        Ok(0.04)
     }
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
@@ -292,8 +296,9 @@ impl Entity for FallingBlockBehavior {
                 }
             }
         }
+        let air = self.air_drag(entity, level)?;
         let base = level.entity_mut::<EntityData>(entity)?;
-        base.velocity = base.velocity.scale(f64::from(self.air_drag()));
+        base.velocity = base.velocity.scale(f64::from(air));
         base.requires_precise_position = base.horizontal_collision || base.vertical_collision;
         Ok(())
     }

@@ -24,6 +24,7 @@ public final class ExtractBlockMethods {
         "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
         "getAnalogOutputSignal", "hasAnalogOutputSignal",
         "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack", "canBeReplaced",
+        "handlePrecipitation",
         "getSignal", "getDirectSignal", "isSignalSource", "ownSignal", "shouldRedstoneWireConnectTo"
     );
 

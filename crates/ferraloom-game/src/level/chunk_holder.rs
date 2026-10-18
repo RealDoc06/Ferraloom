@@ -35,6 +35,8 @@ pub struct ChunkHolder {
     pub position: ChunkPos,
     pub status: ChunkStatus,
     pub request_id: u64,
+    /// A holder may exist for a proto dependency before runtime requests FULL.
+    pub generation_requested: bool,
     pub epoch: u64,
     pub ticket_level: i32,
     old_ticket_level: i32,
@@ -55,6 +57,7 @@ impl ChunkHolder {
             position,
             status: ChunkStatus::Empty,
             request_id,
+            generation_requested: false,
             epoch: 0,
             ticket_level: MAX_LOADED_LEVEL + 1,
             old_ticket_level: MAX_LOADED_LEVEL + 1,

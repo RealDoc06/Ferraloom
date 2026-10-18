@@ -17,6 +17,7 @@ mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
+pub mod chunk_task_dispatcher;
 pub mod distance_manager;
 pub mod effects;
 pub mod entity;
@@ -37,6 +38,8 @@ pub mod weather;
 pub enum LevelError {
     Inventory(&'static str),
     MissingChunk(ChunkPos),
+    WorldgenMutationFailed(BlockPos),
+    UnsupportedWorldgenEnvironment,
     OutsideBuildHeight,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
@@ -48,9 +51,11 @@ pub enum LevelError {
     UnsupportedBlockEntity(Block),
     MissingBlockTags,
     MissingFluidTags,
+    MissingEntityTypeTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
+    UnsupportedPushEntitiesUp,
     UnsupportedPackReload,
     InvalidSavedTick,
     WrongChunkHeight(ChunkPos),
@@ -65,6 +70,7 @@ pub struct LevelRules {
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
+    pub max_snow_accumulation_height: i32,
     pub water_source_conversion: bool,
     pub lava_source_conversion: bool,
     pub fast_lava: bool,
@@ -79,6 +85,7 @@ impl Default for LevelRules {
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
+            max_snow_accumulation_height: 1,
             water_source_conversion: true,
             lava_source_conversion: false,
             fast_lava: false,
@@ -113,6 +120,7 @@ pub struct Region {
     tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
+    entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -142,6 +150,7 @@ impl Region {
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
             fluid_tags: None,
+            entity_type_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
@@ -211,18 +220,14 @@ impl Level {
         region.chunks.insert(pos, chunk);
         Ok(())
     }
-    /// Port of ServerLevel's blockTicks phase: collect first, then invoke callbacks.
+    /// Compatibility entry for the scheduled block phase. It uses the same
+    /// native simulation, ticking-future and entity-load gates as the runtime.
     pub fn tick_scheduled_blocks(
         &mut self,
         game_time: i64,
         budget: usize,
     ) -> Result<(), LevelError> {
-        self.region_mut().game_time = game_time;
-        let region = self.region_mut();
-        region.block_ticks.collect(game_time, budget, |_| true);
-        let result = self.run_collected_blocks();
-        self.region_mut().block_ticks.cleanup_after_tick();
-        result
+        self.tick_block_phase(game_time, budget)
     }
     fn run_collected_blocks(&mut self) -> Result<(), LevelError> {
         while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {

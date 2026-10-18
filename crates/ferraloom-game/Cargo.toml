@@ -12,6 +12,7 @@ ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
 ferraloom-chunk.workspace = true
+ferraloom-light.workspace = true
 ferraloom-worldgen.workspace = true
 ferraloom-storage.workspace = true
 ferraloom-brigadier.workspace = true

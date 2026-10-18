@@ -222,7 +222,7 @@ pub(crate) fn follow_nearby_player(entity: EntityRef, level: &mut Level) -> Resu
         nearest.filter(|id| {
             level
                 .entity::<ServerPlayer>(*id)
-                .is_ok_and(|p| p.parent.health > 0.0)
+                .is_ok_and(|p| p.parent.health() > 0.0)
         })
     } else {
         current
@@ -253,8 +253,12 @@ impl Entity for ExperienceOrbBehavior {
         }
     }
 
-    fn default_gravity(&self) -> f64 {
-        0.03
+    fn default_gravity(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        Ok(0.03)
     }
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
@@ -322,7 +326,7 @@ impl Entity for ExperienceOrbBehavior {
         self.move_by(entity, level, MoverType::SelfMovement, velocity)?;
         self.apply_effects_from_blocks(entity, level)?;
         let on_ground = level.entity::<EntityData>(entity)?.on_ground;
-        let mut friction = self.air_drag();
+        let mut friction = self.air_drag(entity, level)?;
         if on_ground {
             friction *= level
                 .get_block_state(self.block_pos_below_that_affects_my_movement(entity, level)?)?
@@ -353,7 +357,7 @@ impl Entity for ExperienceOrbBehavior {
         if orb.parent.permanently_invulnerable || orb.parent.removed {
             return Ok(false);
         }
-        orb.parent.needs_sync = true;
+        orb.parent.mark_hurt();
         orb.health = (orb.health as f32 - damage) as i32;
         if orb.health <= 0 {
             level.remove_entity(entity)?;

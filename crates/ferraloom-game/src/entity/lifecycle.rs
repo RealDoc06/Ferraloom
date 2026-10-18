@@ -1,5 +1,5 @@
 //! Entity common ticking and riding, with short canonical borrows around callbacks.
-use super::{EntityData, EntityRef, EntityState, synched_data};
+use super::{EntityData, EntityRef, EntityState};
 use crate::level::{Level, LevelError};
 use ferraloom_protocol::entity_data::Pose;
 
@@ -52,9 +52,9 @@ pub fn start_riding(
         .copied();
     let player_first = player
         && first.is_some_and(|id| !matches!(level.entity_state(id), Ok(EntityState::Player(_))));
+    super::dimensions::set_pose(entity, Pose::Standing, level)?;
     {
         let rider = level.entity_mut::<EntityData>(entity)?;
-        rider.entity_data.set(synched_data::POSE, Pose::Standing);
         rider.vehicle = Some(vehicle);
     }
     let passengers = &mut level.entity_mut::<EntityData>(vehicle)?.passengers;
@@ -110,6 +110,33 @@ pub fn position_rider(
     level.set_entity_pos(passenger, position - attachment)
 }
 
+/// Port of Entity#rideTick. Tick may replace or remove the vehicle; position
+/// against the live vehicle after returning from the derived dispatcher.
+pub fn ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
+    behavior.tick(entity, level)?;
+    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle {
+        position_rider(vehicle, entity, level)?;
+    }
+    Ok(())
+}
+
+/// Port of LivingEntity#rideTick; `behavior` remains the concrete subclass for
+/// Entity#rideTick's virtual tick call, including when the rider dismounts.
+pub fn living_ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    ride_tick(behavior, entity, level)?;
+    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+    Ok(())
+}
+
 /// Port of Entity#baseTick. Each borrow ends before fluid, damage or removal calls.
 pub fn base_tick<E: super::Entity + ?Sized>(
     behavior: &E,
@@ -148,21 +175,17 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     super::fluid::update_fluid_interaction(behavior, entity, level)?;
     update_swimming(entity, level)?;
     let base = level.entity::<EntityData>(entity)?;
-    let in_lava = base
-        .fluid_interaction
-        .height(ferraloom_data::tags::FluidTags::LAVA, level)?
-        > 0.0;
     if base.remaining_fire_ticks > 0 {
         if base.entity_type.data().fire_immune {
             level.entity_mut::<EntityData>(entity)?.clear_fire();
         } else {
-            if base.remaining_fire_ticks % 20 == 0 && !in_lava {
+            if base.remaining_fire_ticks % 20 == 0 && !base.is_in_lava(level)? {
                 behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
             }
             level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
         }
     }
-    if in_lava {
+    if level.entity::<EntityData>(entity)?.is_in_lava(level)? {
         level.entity_mut::<EntityData>(entity)?.fall_distance *= 0.5;
     }
     if level.entity::<EntityData>(entity)?.position.y < f64::from(level.min_build_height() - 64) {

@@ -75,7 +75,7 @@ impl CollisionContext for BlockCollisionContext<'_> {
         }
     }
 }
-impl LevelReaderRef<'_> {
+impl LevelReaderRef<'_, '_> {
     pub fn entity_inside_collision_shape(
         &self,
         state: BlockState,
@@ -90,9 +90,7 @@ impl LevelReaderRef<'_> {
         state: BlockState,
         method: BlockMethod,
     ) -> Result<&'static dyn super::BlockBehavior, LevelError> {
-        match self {
-            Self::Server(level) => level.required_block_behavior(state.block(), method),
-        }
+        self.required_behavior(state.block(), method)
     }
     pub fn collision_shape(
         &self,

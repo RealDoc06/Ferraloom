@@ -1,6 +1,6 @@
 //! PersistentEntitySectionManager's state machine. The server executes the
 //! owned requests on its IO worker and returns results at the management phase.
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use super::Visibility;
 use crate::{
@@ -215,17 +215,20 @@ impl Level {
                     .empty_chunks
                     .insert(load.pos.pack());
             }
-            // Validate the entire batch before callbacks can expose a partial
-            // passenger tree. An unsupported chunk must never be saved as empty.
-            let mut uuids = HashSet::new();
-            for (id, state) in &loaded {
-                let uuid = state.as_entity().uuid;
-                if self.region().entities.known_uuids.contains(&uuid) || !uuids.insert(uuid) {
-                    return Err(LevelError::DuplicateEntity(*id).into());
-                }
-            }
+            // The stream includes passengers even if their vehicle's duplicate
+            // UUID prevents its registration. Keep that Java object reachable
+            // solely through held handles, with no index or level callback.
             for (id, state) in loaded {
-                self.add_entity_with_origin(id, state, true)?;
+                if self
+                    .region()
+                    .entities
+                    .known_uuids
+                    .contains(&state.as_entity().uuid)
+                {
+                    self.retain_unmanaged_entity(id, state);
+                } else {
+                    self.add_entity_with_origin(id, state, true)?;
+                }
             }
             self.region_mut()
                 .entities
