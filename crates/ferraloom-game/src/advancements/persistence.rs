@@ -13,6 +13,26 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub(crate) enum PlayerProgressDirectory {
+    Advancements,
+    Stats,
+}
+/// Port of LevelResource.PLAYER_ADVANCEMENTS_DIR / PLAYER_STATS_DIR and the
+/// PlayerList UUID filename. Both resources live under the native `players` root.
+pub(crate) fn player_progress_path(
+    world: &Path,
+    uuid: Uuid,
+    directory: PlayerProgressDirectory,
+) -> PathBuf {
+    world
+        .join("players")
+        .join(match directory {
+            PlayerProgressDirectory::Advancements => "advancements",
+            PlayerProgressDirectory::Stats => "stats",
+        })
+        .join(format!("{uuid}.json"))
+}
+
 pub struct LoadedPlayerProgress {
     pub advancements: PlayerAdvancements,
     pub stats: ServerStatsCounter,
@@ -155,6 +175,14 @@ mod tests {
         }
         let zone = TimeZone::posix("EST5EDT,M3.2.0,M11.1.0").unwrap();
         let save = PlayerProgressSave::capture_in_zone(&player, Path::new("world"), &zone).unwrap();
+        assert_eq!(
+            save.advancement_path,
+            Path::new("world/players/advancements/00000000-0000-0000-0000-000000000000.json")
+        );
+        assert_eq!(
+            save.stats_path,
+            Path::new("world/players/stats/00000000-0000-0000-0000-000000000000.json")
+        );
         let value: serde_json::Value = serde_json::from_slice(&save.advancements).unwrap();
         assert_eq!(
             value["test:dst"]["criteria"]["before"],

@@ -500,7 +500,7 @@ impl PlayerAdvancements {
         self.load_json(manager, &json)
     }
     pub fn save_path(world: &Path, uuid: ferraloom_protocol::Uuid) -> PathBuf {
-        world.join("advancements").join(format!("{uuid}.json"))
+        super::player_progress_path(world, uuid, super::PlayerProgressDirectory::Advancements)
     }
 }
 /// Port of Advancement#decorateName and AdvancementType#createAnnouncement.

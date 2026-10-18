@@ -337,7 +337,11 @@ impl ServerStatsCounter {
         Ok((result, diagnostics))
     }
     pub fn save_path(world: &Path, uuid: ferraloom_protocol::Uuid) -> PathBuf {
-        world.join("stats").join(format!("{uuid}.json"))
+        crate::advancements::player_progress_path(
+            world,
+            uuid,
+            crate::advancements::PlayerProgressDirectory::Stats,
+        )
     }
 }
 /// Pure REQUEST_STATS branch of ServerGamePacketListenerImpl#handleClientCommand.

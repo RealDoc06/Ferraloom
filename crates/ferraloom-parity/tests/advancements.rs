@@ -249,10 +249,13 @@ async fn loaded_stats_and_tab(session: &mut Session) -> Result<ObservationLog> {
 async fn loaded_statistics_and_advancement_tab_survive_save() -> Result<()> {
     let fixture = tempfile::tempdir()?;
     let uuid = ferraloom_util::Uuid::offline_player("ParityBot");
-    std::fs::create_dir(fixture.path().join("stats"))?;
-    std::fs::create_dir(fixture.path().join("advancements"))?;
+    std::fs::create_dir_all(fixture.path().join("players/stats"))?;
+    std::fs::create_dir_all(fixture.path().join("players/advancements"))?;
     std::fs::write(
-        fixture.path().join("stats").join(format!("{uuid}.json")),
+        fixture
+            .path()
+            .join("players/stats")
+            .join(format!("{uuid}.json")),
         serde_json::to_vec(
             &serde_json::json!({"DataVersion":5023,"stats":{"minecraft:custom":{"minecraft:open_chest":7}}}),
         )?,
@@ -260,7 +263,7 @@ async fn loaded_statistics_and_advancement_tab_survive_save() -> Result<()> {
     std::fs::write(
         fixture
             .path()
-            .join("advancements")
+            .join("players/advancements")
             .join(format!("{uuid}.json")),
         serde_json::to_vec(
             &serde_json::json!({"DataVersion":5023,"minecraft:story/root":{"criteria":{"crafting_table":"2026-10-18 00:00:00 +0000"},"done":true}}),
