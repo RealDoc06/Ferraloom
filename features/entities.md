@@ -42,7 +42,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.ai.path-search | Search nodes with vanilla cost, heuristic, visited-node budget and target reach rules | `PathFinder#findPath` | | - | todo |
 | entities.ai.path-follow | Follow waypoints, handle doors and recompute or abandon stuck paths | `PathNavigation` | | - | todo |
 | entities.ai.target-visibility | Apply targeting range, line of sight, invisibility, team and attackability tests | `TargetingConditions; Sensing` | | - | todo |
-| entities.ai.attributes | Apply base and transient attribute values to movement, health and AI ranges | `AttributeMap; AttributeInstance` | | - | todo |
+| entities.ai.attributes | Apply base and transient attribute values to movement, health and AI ranges | `AttributeMap; AttributeInstance` | `entity::ai::attributes::tests::real_attribute_instances_preserve_hash_arithmetic_identity_and_callbacks; entity::ai::attributes::tests::lazy_instances_and_mutations_use_the_native_dirty_sets` (living integration pending) | pass | partial |
 | entities.breeding.age-love | Apply breeding items, love duration, offspring creation and baby growth | `Animal; AgeableMob` | | - | todo |
 | entities.taming.owner | Persist taming, owner, sitting and owner-directed target behavior | `TamableAnimal` | | - | todo |
 | entities.anger.persistence | Track universal and targeted persistent anger with player-death forgiveness | `NeutralMob` | | - | todo |
@@ -713,3 +713,4 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.storage.query-order | Traverse accessible sections by signed packed section key and insertion order within sections | `EntitySectionStorage; EntityLookup; EntityTickList` |  | - | partial |
 | entities.movement.large-shape-cursor | Preserve BlockCollisions cursor boundary exclusions and cached large-shape facts | `BlockCollisions; BlockStateBase.Cache` | `data::tests::cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing; entity::tests` | - | partial |
 | entities.movement.world-border | Clamp movement with border bounds and native partial-tick lerping, including zero duration and wrapping start times; retain border saved data | `WorldBorder` | `level::border::tests` | - | partial |
+| entities.attributes.persistence | Save permanent modifiers only and retain valid partial attribute codec results | `AttributeInstance.Packed; TagValueInput#read` | `entity::ai::attributes::persistence::tests::packed_codec_retains_native_partial_values_and_permanent_modifiers` | pass | partial |

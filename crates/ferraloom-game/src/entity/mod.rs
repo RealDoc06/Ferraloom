@@ -2,6 +2,7 @@ use ferraloom_data::EntityType;
 
 use crate::level::{Level, LevelError};
 
+pub mod ai;
 pub mod animal;
 pub mod effects;
 pub mod experience_orb;

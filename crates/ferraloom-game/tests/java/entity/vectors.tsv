@@ -112,6 +112,32 @@ synched-float	5	true	3f800000	true
 synched-float	6	false	3f800000	true
 synched-stack	true,true,false,false,true,true,false	false
 synched-prototype	false,true
+attribute	default	3fe6666666666666	3fe6666666666666			0
+attribute	base	3fc0000000000000	3fc0000000000000			1
+attribute	three-operations	3fc0000000000000	3fe2ed916872b020	first,base,total	base,total	4
+attribute	changed-operation	3fc0000000000000	3fec645a1cac0830	first,base,total	base,total	5
+attribute	same-object	3fc0000000000000	3fec645a1cac0830	first,base,total	base,total	5
+attribute	equal-new-object	3fc0000000000000	3fec645a1cac0830	first,base,total	base,total	6
+attribute	remove-changed-operation	3fc0000000000000	3fe2ed916872b020	base,total	base,total	7
+attribute	remove-all-stale-operation	3fc0000000000000	3fd4cccccccccccd			9
+attribute	rehash	3fc0000000000000	4011b33332000000	entry_0,entry_1,entry_2,entry_3,entry_4,entry_5,entry_6,entry_7,entry_8,entry_9,entry_10,entry_11,entry_12,entry_13,entry_14,entry_15,entry_16,entry_17,entry_18,entry_19,entry_20,entry_21,entry_22,entry_23,entry_24,entry_25,entry_26,entry_27,entry_28,entry_29,entry_30,entry_31,entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_0,entry_1,entry_2,entry_3,entry_4,entry_5,entry_6,entry_7,entry_8,entry_9,entry_10,entry_11,entry_12,entry_13,entry_14,entry_15,entry_16,entry_17,entry_18,entry_19,entry_20,entry_21,entry_22,entry_23,entry_24,entry_25,entry_26,entry_27,entry_28,entry_29,entry_30,entry_31,entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	49
+attribute	replace-large	3fc0000000000000	4011b3332e000000	entry_0,entry_1,entry_2,entry_3,entry_4,entry_5,entry_6,entry_7,entry_8,entry_9,entry_10,entry_11,entry_12,entry_13,entry_14,entry_15,entry_16,entry_17,entry_18,entry_19,entry_20,entry_21,entry_22,entry_23,entry_24,entry_25,entry_26,entry_27,entry_28,entry_29,entry_30,entry_31,entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_0,entry_1,entry_2,entry_3,entry_4,entry_5,entry_6,entry_7,entry_8,entry_9,entry_10,entry_11,entry_12,entry_13,entry_14,entry_15,entry_16,entry_17,entry_18,entry_19,entry_20,entry_21,entry_22,entry_23,entry_24,entry_25,entry_26,entry_27,entry_28,entry_29,entry_30,entry_31,entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	50
+attribute	shrink	3fc0000000000000	3ffc8f5c2c000000	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	82
+attribute	replace	3fc0000000000000	3ffc8f5c2c000000	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	83
+attribute	nan	7ff8000000000000	0	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	84
+attribute	positive-infinity	7ff0000000000000	4090000000000000	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	85
+attribute	negative-infinity	fff0000000000000	0	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	entry_32,entry_33,entry_34,entry_35,entry_36,entry_37,entry_38,entry_39	86
+attribute	negative-zero	8000000000000000	8000000000000000			87
+attribute	equal-positive-zero	8000000000000000	8000000000000000			87
+attribute-map	fresh	0	0	0
+attribute-map	created	1	1	1
+attribute-map	unchanged	0	0	1
+attribute-map	modified	1	1	1
+attribute-nbt	0	true	0:
+attribute-nbt	1	false	0:
+attribute-nbt	2	false	403e000000000000:yes
+attribute-nbt	3	false	0:
+attribute-nbt	4	false	none
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0
