@@ -17,6 +17,9 @@ binaries, assets or Java sources are committed.
 `ExtractData <output-dir> --entities-only` regenerates only `entity_types.json`,
 including `EntityType#trackDeltas`. Delta tracking is independent of tracking
 range and update interval; game code must use the extracted boolean.
+Each type also retains all four `EntityDimensions.attachments` lists. Extraction
+reads the immutable native map directly, preserving unrotated double coordinates
+and registered offsets independently of bounding-box dimensions.
 
 Shapes are AABB lists in block-local coordinates, queried with
 `EmptyBlockGetter.INSTANCE`, `BlockPos.ZERO`, and an empty collision context.

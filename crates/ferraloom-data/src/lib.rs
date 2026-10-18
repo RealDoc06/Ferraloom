@@ -293,6 +293,24 @@ pub enum MobCategory {
     Misc,
 }
 
+/// Native EntityAttachment order, used by EntityDimensions' immutable points.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EntityAttachment {
+    Passenger,
+    Vehicle,
+    NameTag,
+    WardenChest,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityAttachments {
+    points: [&'static [ferraloom_util::Vec3]; 4],
+}
+impl EntityAttachments {
+    pub const fn points(self, attachment: EntityAttachment) -> &'static [ferraloom_util::Vec3] {
+        self.points[attachment as usize]
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct EntityTypeData {
     pub width: f32,
@@ -306,6 +324,7 @@ pub struct EntityTypeData {
     pub fire_immune: bool,
     pub summonable: bool,
     pub attributes: &'static [(registries::attribute::Id, f64)],
+    pub attachments: EntityAttachments,
 }
 
 include!(concat!(env!("OUT_DIR"), "/data.rs"));

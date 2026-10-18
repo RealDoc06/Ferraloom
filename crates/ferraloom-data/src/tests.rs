@@ -25,6 +25,60 @@ fn entity_delta_tracking_is_native_type_data_independent_of_update_intervals() {
     assert_ne!(EntityType::BAT.data().update_interval, i32::MAX as u32);
 }
 
+#[test]
+fn native_entity_attachments_preserve_registered_offsets_and_all_fallbacks() {
+    use ferraloom_util::Vec3;
+    let cow = EntityType::COW.data();
+    assert_eq!(
+        cow.attachments.points(EntityAttachment::Passenger),
+        &[Vec3::new(0.0, f64::from(1.36875_f32), 0.0)]
+    );
+    assert_ne!(
+        cow.attachments.points(EntityAttachment::Passenger)[0].y,
+        f64::from(cow.height)
+    );
+    let tnt = EntityType::TNT.data();
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::Vehicle),
+        &[Vec3::ZERO]
+    );
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::NameTag)[0]
+            .y
+            .to_bits(),
+        f64::from(tnt.height).to_bits()
+    );
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::WardenChest)[0]
+            .y
+            .to_bits(),
+        f64::from(tnt.height / 2.0).to_bits()
+    );
+    assert_eq!(
+        EntityType::PLAYER
+            .data()
+            .attachments
+            .points(EntityAttachment::Vehicle),
+        &[Vec3::new(0.0, 0.6, 0.0)]
+    );
+    for data in ENTITY_TYPES {
+        for attachment in [
+            EntityAttachment::Passenger,
+            EntityAttachment::Vehicle,
+            EntityAttachment::NameTag,
+            EntityAttachment::WardenChest,
+        ] {
+            assert!(!data.attachments.points(attachment).is_empty());
+            assert!(
+                data.attachments
+                    .points(attachment)
+                    .iter()
+                    .all(|point| point.x.is_finite() && point.y.is_finite() && point.z.is_finite())
+            );
+        }
+    }
+}
+
 fn check_property<T: PropertyValue + Debug>(
     state: BlockState,
     property: Property<T>,

@@ -316,6 +316,8 @@ public final class ExtractData {
     }
 
     private static void entityTypes(Path dir) throws Exception {
+        var attachmentField = EntityAttachments.class.getDeclaredField("attachments");
+        attachmentField.setAccessible(true);
         var entities = new JsonArray();
         for (var type : BuiltInRegistries.ENTITY_TYPE) {
             var out = new JsonObject();
@@ -332,6 +334,19 @@ public final class ExtractData {
             out.addProperty("track_deltas", type.trackDeltas());
             out.addProperty("fire_immune", type.fireImmune());
             out.addProperty("summonable", type.canSummon());
+            var attachments = new JsonObject();
+            var points = (Map<?, ?>) attachmentField.get(dimensions.attachments());
+            for (var attachment : EntityAttachment.values()) {
+                var vectors = new JsonArray();
+                for (var point : (List<?>) points.get(attachment)) {
+                    var position = (net.minecraft.world.phys.Vec3) point;
+                    var vector = new JsonArray();
+                    vector.add(position.x); vector.add(position.y); vector.add(position.z);
+                    vectors.add(vector);
+                }
+                attachments.add(attachment.name().toLowerCase(Locale.ROOT), vectors);
+            }
+            out.add("attachments", attachments);
             out.add("attributes", attributes(type));
             entities.add(out);
         }

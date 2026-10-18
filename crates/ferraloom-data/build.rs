@@ -520,7 +520,29 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             let id = number(&registries["minecraft:attribute"]["entries"][name]["protocol_id"]);
             write!(out, "(registries::attribute::Id({id}), {}),", float(value)).unwrap();
         }
-        out.push_str("] },\n");
+        out.push_str("], attachments: EntityAttachments { points: [");
+        for attachment in ["passenger", "vehicle", "name_tag", "warden_chest"] {
+            let points = entity["attachments"][attachment].as_array().unwrap();
+            assert!(
+                !points.is_empty(),
+                "entity attachment has no fallback points"
+            );
+            out.push_str("&[");
+            for point in points {
+                let values = point.as_array().unwrap();
+                assert_eq!(values.len(), 3);
+                write!(
+                    out,
+                    "ferraloom_util::Vec3 {{ x: {}, y: {}, z: {} }},",
+                    float(&values[0]),
+                    float(&values[1]),
+                    float(&values[2])
+                )
+                .unwrap();
+            }
+            out.push_str("],");
+        }
+        out.push_str("] } },\n");
     }
     out.push_str("];\n");
 }
