@@ -159,6 +159,7 @@ pub fn resolve_components(
     Ok(resolved)
 }
 /// Port of ScoreboardCommand. targets/sources retain selector/wildcard order and display information.
+/// Component arguments have already passed ComponentArgument resolution in the adapter.
 pub fn execute(
     board: &mut ServerScoreboard,
     command: &PreparedCommand,

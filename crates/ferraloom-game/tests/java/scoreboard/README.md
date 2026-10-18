@@ -38,3 +38,9 @@ and Entity display/feedback implementations. Player and named-cow joins, same-te
 rejoins, transfers, and duplicate/unchanged leaves compare exact feedback and
 packet bytes. The harness asserts the single feedback sees the new team's
 prefix, suffix and color; Rust reads the canonical Level only after mutation.
+
+`DynamicCommandVectors` captures seven competing-failure cases from the real
+registered commands. The scoreboard parity scenario consumes these vectors:
+objective/team lookup precedes display-name resolution, while fixed number-format
+contents resolve before the callback's objective/holder lookups and duplicate
+creation checks. Both parity scenarios also cover successful live components.

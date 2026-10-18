@@ -74,7 +74,8 @@ pub fn execute(
     execute_with_feedback(board, command, members)?.resolve_feedback(|holder| Ok(holder.feedback()))
 }
 /// Port of TeamCommand#joinTeam/#leaveTeam: all mutations happen here,
-/// synchronously, before the returned feedback supplier is evaluated.
+/// synchronously, before the returned feedback supplier is evaluated. Component
+/// arguments have already passed ComponentArgument resolution in the adapter.
 pub fn execute_with_feedback(
     board: &mut ServerScoreboard,
     command: &PreparedCommand,
