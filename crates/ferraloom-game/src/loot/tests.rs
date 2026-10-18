@@ -177,8 +177,64 @@ fn synthetic_tables_and_providers_match_real_java() {
 struct ItemFacts {
     items: ferraloom_data::datapack::TagSet<Item>,
     blocks: ferraloom_data::datapack::TagSet<ferraloom_data::Block>,
+    registry_tags: std::collections::BTreeMap<(&'static str, Identifier), Vec<Identifier>>,
+}
+impl ItemFacts {
+    fn load(resources: &ferraloom_data::datapack::ResourceManager) -> Self {
+        let mut registry_tags = std::collections::BTreeMap::new();
+        for registry in ["instrument", "damage_type"] {
+            let entries = resources.registry(registry);
+            let values = ferraloom_data::datapack::load_tags(resources, registry, |id, _| {
+                entries
+                    .contains_key(id)
+                    .then(|| Identifier::parse(&id.to_string()).unwrap())
+            });
+            for (id, values) in values.values {
+                registry_tags.insert(
+                    (registry, Identifier::parse(&id.to_string()).unwrap()),
+                    values,
+                );
+            }
+        }
+        Self {
+            items: ferraloom_data::datapack::TagSet::load(resources).unwrap(),
+            blocks: ferraloom_data::datapack::TagSet::load(resources).unwrap(),
+            registry_tags,
+        }
+    }
 }
 impl crate::predicates::PredicateContext for ItemFacts {
+    fn registry_tag_values(
+        &self,
+        registry: crate::predicates::PredicateRegistry,
+        tag: &Identifier,
+    ) -> Result<Vec<Identifier>> {
+        let key = match registry {
+            crate::predicates::PredicateRegistry::Instrument => "instrument",
+            crate::predicates::PredicateRegistry::DamageType => "damage_type",
+            _ => {
+                return Err(LootError::Unsupported(format!(
+                    "registry.{registry:?}.tag_values"
+                )));
+            }
+        };
+        self.registry_tags
+            .get(&(key, tag.clone()))
+            .cloned()
+            .ok_or_else(|| LootError::MissingReference {
+                registry: key,
+                id: tag.clone(),
+            })
+    }
+    fn tag_contains(
+        &self,
+        registry: crate::predicates::PredicateRegistry,
+        tag: &Identifier,
+        value: &Identifier,
+    ) -> Result<bool> {
+        Ok(self.registry_tag_values(registry, tag)?.contains(value))
+    }
+
     fn item_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Item>> {
         Ok(&self.items)
     }
@@ -232,10 +288,7 @@ fn vanilla_resources() -> ferraloom_data::datapack::ResourceManager {
 #[test]
 fn item_predicate_acceptance_matches_real_java() {
     let resources = vanilla_resources();
-    let facts = ItemFacts {
-        items: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-        blocks: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-    };
+    let facts = ItemFacts::load(&resources);
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     for record in vectors["item_predicates"].as_array().unwrap() {
@@ -281,10 +334,7 @@ fn all_available_builtin_tables_match_real_java() {
         ContextFloatProvider,
         "context_float_provider"
     );
-    let facts = ItemFacts {
-        items: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-        blocks: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-    };
+    let facts = ItemFacts::load(&resources);
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     let mut matched = 0;
@@ -406,10 +456,7 @@ fn random_sequence_seeds_and_saved_words_match_java() {
 fn block_and_location_acceptance_matches_java() {
     use crate::predicates::*;
     let resources = vanilla_resources();
-    let item_facts = ItemFacts {
-        items: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-        blocks: ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
-    };
+    let item_facts = ItemFacts::load(&resources);
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     for record in vectors["block_predicates"].as_array().unwrap() {

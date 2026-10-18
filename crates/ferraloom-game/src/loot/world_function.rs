@@ -142,7 +142,13 @@ impl WorldFunction {
                     .iter()
                     .map(|(key, _)| key.clone())
                     .collect::<Vec<_>>();
-                let ordered = c.facts.enchantment_provider_order(&keys)?;
+                // Literal levels commute and consume no RNG. Otherwise vanilla's
+                // Map.copyOf iteration needs the running JVM's captured order.
+                let ordered = if enchantments.iter().all(|(_,value)|matches!(value,Holder::Inline(value) if matches!(**value,ContextIntProvider::Constant(_)))) {
+                    keys
+                } else {
+                    c.facts.enchantment_provider_order(&keys)?
+                };
                 for key in ordered {
                     let provider = &enchantments
                         .iter()

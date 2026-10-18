@@ -1,4 +1,4 @@
-use super::{EvalContext, LootError, NbtProvider, Result, codec};
+use super::{EvalContext, NbtProvider, Result, codec};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtPath, Tag};
 use ferraloom_protocol::component::*;
 use serde_json::Value;
@@ -15,9 +15,7 @@ pub struct CopyOperation {
     pub target: String,
     pub op: NbtMergeStrategy,
 }
-/// Port of CopyCustomDataFunction. Mutable multi-target merge awaits the NBT
-/// path mutation API; such requests return Unsupported rather than overwriting
-/// distinct target compounds with a single merged value.
+/// Port of CopyCustomDataFunction, including independent live target mutation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyCustomData {
     pub source: NbtProvider,
@@ -55,57 +53,45 @@ impl CopyCustomData {
             if sources.is_empty() {
                 continue;
             }
-            let target = result.get_or_insert_with(|| {
-                match stack
-                    .components()
-                    .expect("validated components")
-                    .get(ComponentTypeId::CUSTOM_DATA)
-                {
-                    Some(DataComponent::CustomData(v)) => v.0.clone(),
-                    _ => Tag::Compound(CompoundTag::new()),
-                }
-            });
+            if result.is_none() {
+                result = Some(
+                    match stack.components()?.get(ComponentTypeId::CUSTOM_DATA) {
+                        Some(DataComponent::CustomData(value)) => value.0.copy(),
+                        _ => Tag::Compound(CompoundTag::new()),
+                    },
+                );
+            }
+            let target = result.as_mut().expect("initialized target");
             let path = NbtPath::parse(&operation.target).expect("validated path");
             match operation.op {
                 NbtMergeStrategy::Replace => {
                     let _ = path.set(target, sources.last().expect("nonempty"));
                 }
                 NbtMergeStrategy::Append => {
-                    if let Ok(targets) = path.get_or_create(target, &Tag::List(ListTag::default()))
-                    {
-                        let lists = targets.iter().filter(|v| matches!(v, Tag::List(_))).count();
-                        if lists != 0 && lists != targets.len() {
-                            return Err(LootError::Unsupported(
-                                "nbt_path.mutable_mixed_targets".into(),
-                            ));
-                        }
-                        if lists != 0 {
-                            let _ = path.insert(-1, target, &sources);
-                        }
-                    }
+                    let _ = path.get_or_create_and_update(
+                        target,
+                        &Tag::List(ListTag::default()),
+                        |target| {
+                            if let Tag::List(list) = target {
+                                list.extend(sources.iter().map(Tag::copy));
+                            }
+                        },
+                    );
                 }
                 NbtMergeStrategy::Merge => {
-                    if let Ok(targets) =
-                        path.get_or_create(target, &Tag::Compound(CompoundTag::new()))
-                    {
-                        let mut compounds = targets.iter().filter_map(Tag::as_compound);
-                        if let Some(first) = compounds.next() {
-                            if targets.iter().any(|v| v.as_compound().is_none())
-                                || compounds.any(|v| v != first)
-                            {
-                                return Err(LootError::Unsupported(
-                                    "nbt_path.mutable_distinct_targets".into(),
-                                ));
-                            }
-                            let mut merged = first.clone();
-                            for source in &sources {
-                                if let Some(source) = source.as_compound() {
-                                    merged.merge(source);
+                    let _ = path.get_or_create_and_update(
+                        target,
+                        &Tag::Compound(CompoundTag::new()),
+                        |target| {
+                            if let Tag::Compound(compound) = target {
+                                for source in &sources {
+                                    if let Some(source) = source.as_compound() {
+                                        compound.merge(source);
+                                    }
                                 }
                             }
-                            let _ = path.set(target, &Tag::Compound(merged));
-                        }
-                    }
+                        },
+                    );
                 }
             }
         }

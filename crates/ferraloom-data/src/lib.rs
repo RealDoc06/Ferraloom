@@ -22,7 +22,6 @@ use std::marker::PhantomData;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockState(u16);
 
-
 impl BlockState {
     pub const fn from_id(id: u16) -> Option<Self> {
         if (id as usize) < BLOCK_STATES.len() {
@@ -491,4 +490,3 @@ mod property_value_tests {
         assert_eq!(Block::STONE.default_state().property_values("age"), None);
     }
 }
-

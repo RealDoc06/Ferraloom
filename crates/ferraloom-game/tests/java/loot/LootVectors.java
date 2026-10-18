@@ -110,6 +110,7 @@ public final class LootVectors {
         output.add("item_predicates",predicates);
         var modifiers=new JsonArray();
         var functionDefinitions=List.of(
+            "{\"type\":\"sequence\",\"functions\":[{\"type\":\"set_custom_data\",\"tag\":\"{targets:[{keep:1},{keep:2},17],lists:[[1],{skip:1},[3]]}\"},{\"type\":\"copy_custom_data\",\"source\":\"block_entity\",\"ops\":[{\"source\":\"data.obj\",\"target\":\"targets[]\",\"op\":\"merge\"},{\"source\":\"data.values[]\",\"target\":\"lists[]\",\"op\":\"append\"}]}]}",
             "{\"type\":\"set_loot_table\",\"loot_table_id\":\"archaeology/desert_well\",\"seed\":9223372036854775808}",
             "{\"type\":\"set_components\",\"components\":{\"container\":[{\"slot\":0,\"item\":{\"id\":\"stone\",\"count\":65}}]}}",
             "{\"type\":\"set_components\",\"components\":{\"charged_projectiles\":[{\"id\":\"stone\",\"count\":65}]}}",
@@ -226,6 +227,12 @@ public final class LootVectors {
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();lookup=load();BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p->p.apply());
+        if(args[0].equals("--map-order")) {
+            var json=JsonParser.parseString("{\"type\":\"set_enchantments\",\"enchantments\":{\"fire_protection\":1,\"projectile_protection\":2,\"protection\":3}}");
+            var function=net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
+            var encoded=net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.encodeStart(lookup.createSerializationContext(JsonOps.INSTANCE),function).getOrThrow();
+            System.out.println("enchantment_map_order="+encoded.getAsJsonObject().getAsJsonObject("enchantments").keySet());return;
+        }
         var server=missing(MinecraftServer.class);level=missing(ServerLevel.class);
         doReturn(server).when(level).getServer();doReturn(FeatureFlags.VANILLA_SET).when(level).enabledFeatures();
         doReturn(new ReloadableServerRegistries.Holder(lookup)).when(server).reloadableRegistries();
