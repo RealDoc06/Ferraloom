@@ -1820,8 +1820,23 @@ impl MinecraftServer {
             let action = Commands::action(prepared);
             match action {
                 CommandAction::Run(command) => {
-                    if self.run_level_command(source, &command).await? {
-                        continue;
+                    match self.run_level_command(source, &command).await {
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(error) => {
+                            if let Some(syntax) =
+                                error.downcast_ref::<ferraloom_brigadier::CommandSyntaxException>()
+                            {
+                                self.command_failure(
+                                    source,
+                                    &stack,
+                                    ferraloom_game::commands::exceptions::error_component(syntax),
+                                );
+                                stack.callback.on_failure();
+                                continue;
+                            }
+                            return Err(error);
+                        }
                     }
                     if let Err(error) = self.run_builtin(source, *command) {
                         self.command_failure(
