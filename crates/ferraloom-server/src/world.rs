@@ -15,7 +15,7 @@ use ferraloom_storage::{
     self as storage, ByteArray, IoWorker, LevelData, LevelStorageAccess, LongArray, SavedData,
     SavedDataStorage, SectionRegistry, SerializableChunkData,
 };
-use ferraloom_util::{Aabb, BlockPos, ChunkPos};
+use ferraloom_util::{Aabb, BlockPos, ChunkPos, SectionPos};
 use ferraloom_worldgen::{
     decoration::{DecorationPlan, GenerationStep, StructureDecoration},
     feature::FeatureRegistry,
@@ -121,15 +121,121 @@ pub struct ChunkLight {
     pub sky: BTreeMap<i32, Vec<u8>>,
     pub block: BTreeMap<i32, Vec<u8>>,
 }
-pub struct LitChunk {
-    pub request: u64,
-    pub pos: ChunkPos,
-    pub updates: BTreeMap<i64, ChunkLight>,
+#[derive(Clone, Copy, Default)]
+pub struct LightDirtySections {
+    pub sky: u64,
+    pub block: u64,
 }
-struct LightJob {
-    request: u64,
-    pos: ChunkPos,
-    sections: Vec<LevelChunkSection>,
+pub struct LitChunk {
+    /// Delta relighting never completes or resets a generation request.
+    pub initialized: Option<(u64, ChunkPos)>,
+    pub updates: BTreeMap<i64, ChunkLight>,
+    pub dirty: BTreeMap<i64, LightDirtySections>,
+}
+enum LightJob {
+    Initialize {
+        request: u64,
+        pos: ChunkPos,
+        sections: Vec<LevelChunkSection>,
+    },
+    Changed {
+        chunks: Vec<(ChunkPos, Vec<LevelChunkSection>)>,
+        changes: Vec<LightMutation>,
+    },
+}
+enum LightMutation {
+    CheckBlock(BlockPos),
+    SectionStatus(SectionPos, bool),
+}
+
+/// Off-tick ThreadedLevelLightEngine worker. Messages and dirty effects retain
+/// submission order; only owned section snapshots cross the worker boundary.
+fn run_light_worker(
+    light_in: mpsc::Receiver<LightJob>,
+    light_out: tokio::sync::mpsc::UnboundedSender<LitChunk>,
+) {
+    let mut snapshots = SectionSnapshots::new(-4, 20);
+    let mut engine = LevelLightEngine::new(true, true);
+    let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
+    while let Ok(job) = light_in.recv() {
+        let (initialized, changes) = match job {
+            LightJob::Initialize {
+                request,
+                pos,
+                sections,
+            } => {
+                snapshots.insert_chunk(
+                    pos,
+                    sections
+                        .into_iter()
+                        .map(|section| Some(Cow::Owned(section)))
+                        .collect(),
+                );
+                let mut changes = engine.initialize_light(&snapshots, pos, false).sections;
+                changes.extend(engine.light_chunk(&snapshots, pos, false).sections);
+                (Some((request, pos)), changes)
+            }
+            LightJob::Changed { chunks, changes } => {
+                for (pos, sections) in chunks {
+                    snapshots.insert_chunk(
+                        pos,
+                        sections
+                            .into_iter()
+                            .map(|section| Some(Cow::Owned(section)))
+                            .collect(),
+                    );
+                }
+                for change in changes {
+                    match change {
+                        LightMutation::CheckBlock(pos) => engine.check_block(pos),
+                        LightMutation::SectionStatus(pos, empty) => {
+                            engine.update_section_status(pos, empty)
+                        }
+                    }
+                }
+                (None, engine.run_light_updates(&snapshots).sections)
+            }
+        };
+        let mut affected = std::collections::BTreeSet::new();
+        let mut dirty = BTreeMap::<i64, LightDirtySections>::new();
+        if let Some((_, pos)) = initialized {
+            affected.insert(pos.pack());
+        }
+        for change in changes {
+            let key = change.section.chunk().pack();
+            affected.insert(key);
+            let mask = dirty.entry(key).or_default();
+            let bit = 1_u64 << (change.section.y + 5);
+            match change.layer {
+                LightLayer::Sky => mask.sky |= bit,
+                LightLayer::Block => mask.block |= bit,
+            }
+            let light = lights.entry(key).or_default();
+            let layers = match change.layer {
+                LightLayer::Sky => &mut light.sky,
+                LightLayer::Block => &mut light.block,
+            };
+            if let Some(data) = change.data {
+                layers.insert(change.section.y, data.to_bytes().to_vec());
+            } else {
+                layers.remove(&change.section.y);
+            }
+        }
+        let updates = affected
+            .into_iter()
+            .filter_map(|key| lights.get(&key).map(|data| (key, data.clone())))
+            .collect();
+        if light_out
+            .send(LitChunk {
+                initialized,
+                updates,
+                dirty,
+            })
+            .is_err()
+        {
+            break;
+        }
+    }
 }
 
 struct FlatDecoration {
@@ -341,6 +447,8 @@ pub struct World {
     pub saved: BTreeMap<i64, SerializableChunkData>,
     pub lights: BTreeMap<i64, ChunkLight>,
     pub ready: std::collections::HashSet<ChunkPos>,
+    pub pending_light_updates: std::collections::HashMap<ChunkPos, LightDirtySections>,
+    pub light_chunks_to_broadcast: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 /// The entity region worker is distinct from block-chunk storage. Completion
 /// polling returns owned responses; the game integrates its request ordinals.
@@ -536,52 +644,7 @@ impl World {
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
             .name("ferraloom-light".into())
-            .spawn(move || {
-                let mut snapshots = SectionSnapshots::new(-4, 20);
-                let mut engine = LevelLightEngine::new(true, true);
-                let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
-                while let Ok(job) = light_in.recv() {
-                    snapshots.insert_chunk(
-                        job.pos,
-                        job.sections
-                            .into_iter()
-                            .map(|s| Some(Cow::Owned(s)))
-                            .collect(),
-                    );
-                    let initialize = engine.initialize_light(&snapshots, job.pos, false);
-                    let update = engine.light_chunk(&snapshots, job.pos, false);
-                    let mut affected = std::collections::BTreeSet::new();
-                    affected.insert(job.pos.pack());
-                    for change in initialize.sections.into_iter().chain(update.sections) {
-                        let key = change.section.chunk().pack();
-                        affected.insert(key);
-                        let light = lights.entry(key).or_default();
-                        let layers = match change.layer {
-                            LightLayer::Sky => &mut light.sky,
-                            LightLayer::Block => &mut light.block,
-                        };
-                        if let Some(data) = change.data {
-                            layers.insert(change.section.y, data.to_bytes().to_vec());
-                        } else {
-                            layers.remove(&change.section.y);
-                        }
-                    }
-                    let updates = affected
-                        .into_iter()
-                        .filter_map(|key| lights.get(&key).map(|data| (key, data.clone())))
-                        .collect();
-                    if light_out
-                        .send(LitChunk {
-                            request: job.request,
-                            pos: job.pos,
-                            updates,
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            })?;
+            .spawn(move || run_light_worker(light_in, light_out))?;
         Ok(Self {
             access,
             level_data,
@@ -603,7 +666,42 @@ impl World {
             saved: BTreeMap::new(),
             lights: BTreeMap::new(),
             ready: Default::default(),
+            pending_light_updates: Default::default(),
+            light_chunks_to_broadcast: Default::default(),
         })
+    }
+    pub fn configure_live_rules(&self, level: &mut Level) {
+        let rules = level.rules_mut();
+        rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
+        rules.fast_lava = self.dimension.fast_lava;
+        rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
+    }
+    pub async fn save_live_level_context(&mut self, level: &Level) -> Result<()> {
+        // Startup's generated spawn-search chunks may not have entered Level.
+        // Prime their actual predicates without creating another simulation RNG.
+        let tags = level
+            .block_tags()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        for terrain in self.initial_chunks.values_mut() {
+            let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
+            chunk.prime_heightmaps(tags);
+            write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
+        }
+        let weather = *level.weather();
+        let border = level.entity_world_border().clone();
+        let path = self.access.path().join("data");
+        self.saving
+            .run(move || -> Result<()> {
+                let saved = SavedDataStorage::new(path);
+                saved.save("minecraft:weather", &mut SavedData::new(weather))?;
+                saved.save(
+                    ferraloom_game::level::border::SAVED_DATA_ID,
+                    &mut SavedData::new(border),
+                )?;
+                Ok(())
+            })
+            .await??;
+        Ok(())
     }
     fn entity_io(&mut self, properties: &ServerProperties) -> Result<&mut EntityIo> {
         if self.entity_io.is_none() {
@@ -623,6 +721,16 @@ impl World {
             });
         }
         Ok(self.entity_io.as_mut().unwrap())
+    }
+    pub fn submit_entity_requests(
+        &mut self,
+        requests: Vec<EntityStorageRequest>,
+        properties: &ServerProperties,
+    ) -> Result<()> {
+        if !requests.is_empty() {
+            self.entity_io(properties)?.submit(requests)?;
+        }
+        Ok(())
     }
     /// PersistentEntitySectionManager#tick polling point, also used while frozen.
     pub fn tick_entity_management(
@@ -722,8 +830,47 @@ impl World {
         }
         Ok(done)
     }
+    pub fn queue_block_light_changes(
+        &self,
+        level: &Level,
+        effects: Vec<ferraloom_game::level::effects::LevelEffect>,
+    ) -> Result<()> {
+        use ferraloom_game::level::effects::LevelEffect;
+        if effects.is_empty() {
+            return Ok(());
+        }
+        let mut positions = std::collections::HashSet::new();
+        let mut chunks = Vec::new();
+        let mut changes = Vec::new();
+        for effect in effects {
+            let (pos, change) = match effect {
+                LevelEffect::CheckLight(pos) => {
+                    (ChunkPos::containing(pos), LightMutation::CheckBlock(pos))
+                }
+                LevelEffect::SectionEmptiness {
+                    chunk,
+                    section_y,
+                    empty,
+                } => (
+                    chunk,
+                    LightMutation::SectionStatus(
+                        SectionPos::new(chunk.x, section_y, chunk.z),
+                        empty,
+                    ),
+                ),
+                _ => unreachable!("only light effects enter the light worker"),
+            };
+            if positions.insert(pos) {
+                let chunk = level.chunk(pos).context("light change in missing chunk")?;
+                chunks.push((pos, chunk.sections().cloned().collect()));
+            }
+            changes.push(change);
+        }
+        self.light_tx.send(LightJob::Changed { chunks, changes })?;
+        Ok(())
+    }
     pub fn integrate(&mut self, request: u64, terrain: Terrain) -> Result<LevelChunk> {
-        self.light_tx.send(LightJob {
+        self.light_tx.send(LightJob::Initialize {
             request,
             pos: terrain.pos,
             sections: terrain.sections.clone(),
@@ -749,26 +896,7 @@ impl World {
             .save_chunk_ticks(pos, &mut disk)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         disk.inhabited_time = Some(chunk.inhabited_time());
-        let maps = disk.heightmaps.get_or_insert_with(BTreeMap::new);
-        use ferraloom_game::level::heightmap::Heightmap;
-        for (map, name) in [
-            (Heightmap::WorldSurface, "WORLD_SURFACE"),
-            (Heightmap::OceanFloor, "OCEAN_FLOOR"),
-            (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
-            (
-                Heightmap::MotionBlockingNoLeaves,
-                "MOTION_BLOCKING_NO_LEAVES",
-            ),
-        ] {
-            maps.insert(
-                name.into(),
-                LongArray(heightmap(
-                    chunk
-                        .heightmap(map)
-                        .context("full chunk heightmaps not primed")?,
-                )),
-            );
-        }
+        write_runtime_heightmaps(chunk, &mut disk)?;
         Ok(ChunkSaveSnapshot {
             pos,
             sections: chunk.sections().cloned().collect(),
@@ -845,6 +973,29 @@ impl World {
             .await??;
         Ok(())
     }
+}
+fn write_runtime_heightmaps(chunk: &LevelChunk, disk: &mut SerializableChunkData) -> Result<()> {
+    let maps = disk.heightmaps.get_or_insert_with(BTreeMap::new);
+    use ferraloom_game::level::heightmap::Heightmap;
+    for (map, name) in [
+        (Heightmap::WorldSurface, "WORLD_SURFACE"),
+        (Heightmap::OceanFloor, "OCEAN_FLOOR"),
+        (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
+        (
+            Heightmap::MotionBlockingNoLeaves,
+            "MOTION_BLOCKING_NO_LEAVES",
+        ),
+    ] {
+        maps.insert(
+            name.into(),
+            LongArray(heightmap(
+                chunk
+                    .heightmap(map)
+                    .context("full chunk heightmaps not primed")?,
+            )),
+        );
+    }
+    Ok(())
 }
 pub struct ChunkSaveSnapshot {
     pos: ChunkPos,
@@ -1236,5 +1387,69 @@ mod entity_io_tests {
         io.poll(&mut level).unwrap();
         assert!(io.worker.load(pos).await.unwrap().is_none());
         io.worker.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod light_worker_tests {
+    use super::*;
+
+    #[test]
+    fn block_light_deltas_update_real_sections_without_completing_generation() {
+        let (send, receive) = mpsc::channel();
+        let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
+        let worker = std::thread::spawn(move || run_light_worker(receive, reply));
+        let pos = ChunkPos::new(0, 0);
+        let biome = BiomeId(0);
+        let mut sections: Vec<_> = (0..24)
+            .map(|_| {
+                LevelChunkSection::new(
+                    Strategy::block_states(),
+                    Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
+                    biome,
+                )
+            })
+            .collect();
+        send.send(LightJob::Initialize {
+            request: 7,
+            pos,
+            sections: sections.clone(),
+        })
+        .unwrap();
+        assert_eq!(results.blocking_recv().unwrap().initialized, Some((7, pos)));
+        let source = BlockPos::new(8, 64, 8);
+        sections[8].set_block_state(8, 0, 8, Block::GLOWSTONE.default_state());
+        send.send(LightJob::Changed {
+            chunks: vec![(pos, sections.clone())],
+            changes: vec![
+                LightMutation::SectionStatus(SectionPos::new(0, 4, 0), false),
+                LightMutation::CheckBlock(source),
+            ],
+        })
+        .unwrap();
+        let lit = results.blocking_recv().unwrap();
+        assert_eq!(lit.initialized, None);
+        let light = &lit.updates[&pos.pack()];
+        assert_eq!(light.block[&4][68] & 15, 15);
+        sections[8].set_block_state(8, 0, 8, Block::AIR.default_state());
+        send.send(LightJob::Changed {
+            chunks: vec![(pos, sections)],
+            changes: vec![
+                LightMutation::SectionStatus(SectionPos::new(0, 4, 0), true),
+                LightMutation::CheckBlock(source),
+            ],
+        })
+        .unwrap();
+        let dark = results.blocking_recv().unwrap();
+        assert_eq!(dark.initialized, None);
+        assert_eq!(
+            dark.updates[&pos.pack()]
+                .block
+                .get(&4)
+                .map_or(0, |data| data[68] & 15),
+            0
+        );
+        drop(send);
+        worker.join().unwrap();
     }
 }
