@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Identifier, Reader, Wire, Writer,
-    codec::{RegistryContext, StreamCodec},
+    codec::{RegistryContext, StreamCodec, VarInt},
     entity_data::EntityDataItems,
 };
 use serde_json::Value;
@@ -319,4 +319,271 @@ fn vanilla_scalar_untrusted_patch_needs_no_registry_context() {
     let mut writer = Writer::new();
     patch.encode_delimited(&mut writer).unwrap();
     assert_eq!(writer.as_slice(), bytes);
+}
+
+/// DFU's real primitive codecs, including Gson NumberLimits and NbtOps conversions.
+#[test]
+fn vanilla_persistent_primitive_coercions() {
+    use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+    let fixture: Value = serde_json::from_str(include_str!("primitive-fixtures.json")).unwrap();
+    fn json_values(value: &Value) -> Value {
+        serde_json::json!({
+            "int": i32::from_json(value).ok().map(|n| n.to_string()),
+            "long": i64::from_json(value).ok().map(|n| n.to_string()),
+            "float": f32::from_json(value).ok().map(|n| format!("{:x}", n.to_bits())),
+            "double": f64::from_json(value).ok().map(|n| format!("{:x}", n.to_bits())),
+            "bool": bool::from_json(value).ok().map(|n| n.to_string()),
+            "string": String::from_json(value).ok(),
+        })
+    }
+    fn nbt_values(value: &Tag) -> Value {
+        assert_eq!(
+            VarInt::from_nbt(value).ok().map(|n| n.0),
+            i32::from_nbt(value).ok()
+        );
+        serde_json::json!({
+            "int": i32::from_nbt(value).ok().map(|n| n.to_string()),
+            "long": i64::from_nbt(value).ok().map(|n| n.to_string()),
+            "float": f32::from_nbt(value).ok().map(|n| format!("{:x}", n.to_bits())),
+            "double": f64::from_nbt(value).ok().map(|n| format!("{:x}", n.to_bits())),
+            "bool": bool::from_nbt(value).ok().map(|n| n.to_string()),
+            "string": String::from_nbt(value).ok(),
+        })
+    }
+    fn encoded_values(float: Option<f32>, double: Option<f64>) -> Value {
+        serde_json::json!({
+            "float_nbt": float.map(|n| match n.to_nbt().unwrap() {
+                Tag::Float(value) => format!("{:x}",value.to_bits()),
+                _ => panic!("float codec must emit FloatTag"),
+            }),
+            "float_hash": float.map(|n| n.hash().unwrap().to_string()),
+            "double_nbt": double.map(|n| match n.to_nbt().unwrap() {
+                Tag::Double(value) => format!("{:x}",value.to_bits()),
+                _ => panic!("double codec must emit DoubleTag"),
+            }),
+            "double_hash": double.map(|n| n.hash().unwrap().to_string()),
+        })
+    }
+    for row in fixture["json"].as_array().unwrap() {
+        let input = row["input"].as_str().unwrap();
+        let value = serde_json::from_str(input).unwrap();
+        let label = format!(
+            "JSON {} ({} chars)",
+            input.chars().take(80).collect::<String>(),
+            input.len()
+        );
+        assert_eq!(json_values(&value), row["values"], "{label}");
+        assert_eq!(
+            encoded_values(f32::from_json(&value).ok(), f64::from_json(&value).ok()),
+            row["encoded"],
+            "{label} encoding"
+        );
+        assert_eq!(
+            VarInt::from_json(&value).ok().map(|n| n.0),
+            i32::from_json(&value).ok()
+        );
+    }
+    for row in fixture["nbt"].as_array().unwrap() {
+        let name = row["name"].as_str().unwrap();
+        let value = match name {
+            "byte" => Tag::Byte(-1),
+            "short" => Tag::Short(257),
+            "int" => Tag::Int(i32::MIN),
+            "long" => Tag::Long(4_294_967_297),
+            "longMax" => Tag::Long(i64::MAX),
+            "float" => Tag::Float(-2.9),
+            "double" => Tag::Double(-2.9),
+            "doubleMax" => Tag::Double(f64::MAX),
+            "negativeMax" => Tag::Double(-f64::MAX),
+            "nan" => Tag::Double(f64::NAN),
+            "negativeNan" => Tag::Double(f64::from_bits(0xfff8_0000_0000_0001)),
+            "floatNan" => Tag::Float(f32::NAN),
+            "positiveInfinity" => Tag::Float(f32::INFINITY),
+            "negativeInfinity" => Tag::Double(f64::NEG_INFINITY),
+            "negativeZero" => Tag::Double(-0.0),
+            "fraction" => Tag::Double(0.5),
+            "string" => Tag::String("1".into()),
+            "compound" => Tag::Compound(CompoundTag::new()),
+            "list" => Tag::List(ListTag(vec![])),
+            _ => panic!("unknown probe {name}"),
+        };
+        assert_eq!(nbt_values(&value), row["values"], "NBT {name}");
+        assert_eq!(
+            encoded_values(f32::from_nbt(&value).ok(), f64::from_nbt(&value).ok()),
+            row["encoded"],
+            "NBT {name} encoding"
+        );
+    }
+    for row in fixture["nested"].as_array().unwrap() {
+        let input = ferraloom_nbt::parse(row["nbt"].as_str().unwrap()).unwrap();
+        let actual = match row["codec"].as_str().unwrap() {
+            "fireworks" => Fireworks::from_nbt(&input).unwrap().to_nbt().unwrap(),
+            "details" => MobEffectDetails::from_nbt(&input)
+                .unwrap()
+                .to_nbt()
+                .unwrap(),
+            "mob_effects" => MobEffectsPredicate::from_nbt(&input)
+                .unwrap()
+                .to_nbt()
+                .unwrap(),
+            "int_bounds" => IntBounds::from_nbt(&input).unwrap().to_nbt().unwrap(),
+            "teleport" => {
+                let mut input = input;
+                input
+                    .as_compound_mut()
+                    .unwrap()
+                    .insert("type", Tag::String("minecraft:teleport_randomly".into()));
+                let mut output = ConsumeEffect::from_nbt(&input).unwrap().to_nbt().unwrap();
+                output.as_compound_mut().unwrap().remove("type");
+                output
+            }
+            codec => panic!("unknown nested codec {codec}"),
+        };
+        let expected = ferraloom_nbt::parse(row["expected"].as_str().unwrap()).unwrap();
+        assert_eq!(actual, expected, "nested {}", row["codec"]);
+    }
+    for row in fixture["collection_shapes"].as_array().unwrap() {
+        let text = row["input"].as_str().unwrap();
+        let json: Value = serde_json::from_str(text).unwrap();
+        let nbt = if json.is_null() {
+            Tag::End
+        } else {
+            ferraloom_nbt::parse(text).unwrap()
+        };
+        assert_eq!(
+            CollectionPredicate::<MobEffectsPredicate>::from_json(&json).is_ok(),
+            row["json_accepted"].as_bool().unwrap(),
+            "collection JSON {text}"
+        );
+        assert_eq!(
+            CollectionPredicate::<MobEffectsPredicate>::from_nbt(&nbt).is_ok(),
+            row["nbt_accepted"].as_bool().unwrap(),
+            "collection NBT {text}"
+        );
+    }
+    for row in fixture["double_bounds"].as_array().unwrap() {
+        let name = row["name"].as_str().unwrap();
+        let input = match name {
+            "negative_nan" => Tag::Double(f64::from_bits(0xfff8_0000_0000_0001)),
+            "infinity" => Tag::Double(f64::INFINITY),
+            name => {
+                let mut tag = CompoundTag::new();
+                tag.insert(
+                    "min",
+                    Tag::Double(match name {
+                        "signed_zero" => -0.0,
+                        "nan_min" => f64::NAN,
+                        "swapped" => 2.0,
+                        _ => 0.0,
+                    }),
+                );
+                tag.insert(
+                    "max",
+                    Tag::Double(if name == "nan_max" { f64::NAN } else { 0.0 }),
+                );
+                Tag::Compound(tag)
+            }
+        };
+        let decoded = DoubleBounds::from_nbt(&input);
+        assert_eq!(
+            decoded.is_ok(),
+            row["accepted"].as_bool().unwrap(),
+            "{name}"
+        );
+        if let Ok(value) = decoded {
+            let bits = |n: f64| {
+                format!(
+                    "{:x}",
+                    if n.is_nan() {
+                        f64::NAN.to_bits()
+                    } else {
+                        n.to_bits()
+                    }
+                )
+            };
+            assert_eq!(
+                value.min.map(bits).as_deref(),
+                row["min"].as_str(),
+                "{name} min"
+            );
+            assert_eq!(
+                value.max.map(bits).as_deref(),
+                row["max"].as_str(),
+                "{name} max"
+            );
+            assert_eq!(
+                u64::from(value.to_nbt().unwrap().id()),
+                row["tag_id"].as_u64().unwrap(),
+                "{name} encoding shape"
+            );
+        }
+    }
+    assert!(IntBounds::from_nbt(&ferraloom_nbt::parse("{min:2,max:1}").unwrap()).is_err());
+    assert!(IntBounds::from_json(&serde_json::json!({"min":2,"max":1})).is_err());
+    for input in [
+        Tag::String("#minecraft:test".into()),
+        Tag::List(ListTag(vec![Tag::String("minecraft:pig".into())])),
+        Tag::IntArray(vec![]),
+    ] {
+        assert!(crate::codec::HolderSet::from_nbt(&input).is_ok());
+    }
+    // A component nested in a recipe result must use the same primitive codec.
+    assert_eq!(
+        DataComponent::from_json(
+            &Identifier::parse("minecraft:damage").unwrap(),
+            &serde_json::from_str("4294967297.9").unwrap()
+        )
+        .unwrap(),
+        DataComponent::Damage(VarInt(1))
+    );
+    assert!(
+        DataComponent::from_json(
+            &Identifier::parse("minecraft:enchantment_glint_override").unwrap(),
+            &Value::from(1)
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn vanilla_persistent_compound_or_snbt_alternatives() {
+    use ferraloom_nbt::Tag;
+    let fixture: Value = serde_json::from_str(include_str!("primitive-fixtures.json")).unwrap();
+    for row in fixture["compounds"].as_array().unwrap() {
+        let input: Value = serde_json::from_str(row["input"].as_str().unwrap()).unwrap();
+        let actual = CustomData::from_json(&input);
+        if let Some(expected) = row["compound"].as_str() {
+            let expected = ferraloom_nbt::parse(expected).unwrap();
+            assert_eq!(actual.unwrap().0, expected, "{input}");
+            assert_eq!(
+                NbtPredicate::from_nbt(&expected).unwrap().0.0,
+                expected,
+                "native predicate numeric tag kinds"
+            );
+            let nbt_input = if let Some(text) = input.as_str() {
+                Tag::String(text.into())
+            } else {
+                expected
+            };
+            assert!(CustomData::from_nbt(&nbt_input).is_ok());
+        } else {
+            assert!(actual.is_err(), "{input}");
+            if let Some(text) = input.as_str() {
+                assert!(CustomData::from_nbt(&Tag::String(text.into())).is_err());
+            }
+        }
+        let entity = TypedEntityData::from_json(&input);
+        let block_entity = TypedBlockEntityData::from_json(&input);
+        if let Some(expected) = row["typed"].as_str() {
+            assert_eq!(entity.unwrap().entity_type.0.as_str(), expected);
+            assert_eq!(block_entity.unwrap().entity_type.0.as_str(), expected);
+            if let Some(text) = input.as_str() {
+                assert!(TypedEntityData::from_nbt(&Tag::String(text.into())).is_ok());
+                assert!(TypedBlockEntityData::from_nbt(&Tag::String(text.into())).is_ok());
+            }
+        } else {
+            assert!(entity.is_err());
+            assert!(block_entity.is_err());
+        }
+    }
 }
