@@ -15,6 +15,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+use ferraloom_protocol::component::Persistent;
 use ferraloom_util::{BlockPos, ChunkPos, Uuid, Vec3, mth};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +65,8 @@ pub struct ServerPlayer {
     pub flying: bool,
     pub may_build: bool,
     pub instabuild: bool,
+    ability_flying_speed: f32,
+    ability_walking_speed: f32,
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
     pub cooldowns: cooldowns::ServerItemCooldowns,
@@ -121,6 +124,36 @@ impl ServerPlayer {
     /// Port of Abilities.instabuild.
     pub fn instabuild(&self) -> bool {
         self.instabuild
+    }
+
+    /// Port of Abilities#getFlyingSpeed, independent of Player#getFlyingSpeed.
+    pub fn ability_flying_speed(&self) -> f32 {
+        self.ability_flying_speed
+    }
+    pub fn set_ability_flying_speed(&mut self, speed: f32) {
+        self.ability_flying_speed = speed;
+    }
+    /// Port of Abilities#getWalkingSpeed; aiStep publishes it to MOVEMENT_SPEED.
+    pub fn ability_walking_speed(&self) -> f32 {
+        self.ability_walking_speed
+    }
+    pub fn set_ability_walking_speed(&mut self, speed: f32) {
+        self.ability_walking_speed = speed;
+    }
+    /// Port of Player#getFlyingSpeed. Passenger movement uses the ordinary
+    /// sprint-dependent speed even when the independent flying ability is set.
+    pub fn flying_movement_speed(&self) -> f32 {
+        if self.flying && self.vehicle.get().is_none() {
+            if self.shared_flag(3) {
+                self.ability_flying_speed * 2.0
+            } else {
+                self.ability_flying_speed
+            }
+        } else if self.shared_flag(3) {
+            0.025999999
+        } else {
+            0.02
+        }
     }
 
     /// Port of Player#preventsBlockDrops, independent of the game mode.
@@ -186,6 +219,8 @@ impl ServerPlayer {
             flying: game_mode == GameType::Spectator,
             may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
             instabuild: game_mode == GameType::Creative,
+            ability_flying_speed: 0.05,
+            ability_walking_speed: 0.1,
             last_client_input: ferraloom_protocol::play::Input {
                 forward: false,
                 backward: false,
@@ -266,8 +301,32 @@ impl ServerPlayer {
         self.experience_level = self.saved.get_int_or("XpLevel", 0);
         self.total_experience = self.saved.get_int_or("XpTotal", 0);
         self.set_score(self.saved.get_int_or("Score", 0));
-        if let Some(abilities) = self.saved.get_compound("abilities") {
-            self.instabuild = abilities.get_boolean_or("instabuild", false);
+        if let Some((instabuild, flying, fly_speed, walk_speed)) =
+            self.saved.get_compound("abilities").map(|abilities| {
+                (
+                    abilities
+                        .get("instabuild")
+                        .and_then(|value| bool::from_nbt(value).ok())
+                        .unwrap_or(false),
+                    abilities
+                        .get("flying")
+                        .and_then(|value| bool::from_nbt(value).ok())
+                        .unwrap_or(false),
+                    abilities
+                        .get("flySpeed")
+                        .and_then(|value| f32::from_nbt(value).ok())
+                        .unwrap_or(0.05),
+                    abilities
+                        .get("walkSpeed")
+                        .and_then(|value| f32::from_nbt(value).ok())
+                        .unwrap_or(0.1),
+                )
+            })
+        {
+            self.instabuild = instabuild;
+            self.flying = flying;
+            self.ability_flying_speed = fly_speed;
+            self.ability_walking_speed = walk_speed;
         }
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
@@ -341,8 +400,8 @@ impl ServerPlayer {
         abilities.insert("flying", Tag::Byte(i8::from(self.flying)));
         abilities.insert("instabuild", Tag::Byte(i8::from(self.instabuild)));
         abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
-        abilities.insert("flySpeed", Tag::Float(0.05));
-        abilities.insert("walkSpeed", Tag::Float(0.1));
+        abilities.insert("flySpeed", Tag::Float(self.ability_flying_speed));
+        abilities.insert("walkSpeed", Tag::Float(self.ability_walking_speed));
         tag.insert("abilities", Tag::Compound(abilities));
         tag
     }
@@ -1231,3 +1290,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod ability_tests;
