@@ -94,7 +94,10 @@ mod tests {
         };
         use ferraloom_util::SectionPos;
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let player = EntityRef(1);
         let a = SectionPos::new(0, 4, 0);
         let b = SectionPos::new(1, 4, 0);

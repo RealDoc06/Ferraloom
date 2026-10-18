@@ -97,7 +97,10 @@ mod tests {
 
     #[test]
     fn raw_brightness_matches_native_absent_sky_and_integer_overflow() {
-        let mut level = Level::new(Region::new(&EMPTY));
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         assert_eq!(level.has_skylight(), Err(LevelError::UnsupportedLightQuery));
         let pos = BlockPos::new(8, 8, 8);
         let chunk = ChunkPos::containing(pos);

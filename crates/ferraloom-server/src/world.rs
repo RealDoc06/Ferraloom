@@ -1456,7 +1456,10 @@ mod entity_io_tests {
         }])
         .unwrap();
         io.worker.synchronize(false).await.unwrap();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(pos, Visibility::Tracked)
             .unwrap();

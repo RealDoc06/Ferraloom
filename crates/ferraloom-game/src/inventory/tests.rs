@@ -763,7 +763,10 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         level::{Level, Region},
     };
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let handle = EntityRef(1);
     let player = ServerPlayer::new(
         ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),

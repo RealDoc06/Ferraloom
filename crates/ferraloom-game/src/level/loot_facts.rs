@@ -218,7 +218,10 @@ mod tests {
 
     #[test]
     fn canonical_facts_observe_mutations_and_keep_missing_context_explicit() {
-        let mut level = Level::new(Region::new(&EMPTY));
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         assert!(matches!(
             PredicateContext::item_tags(&level),
             Err(LootError::Unsupported(_))

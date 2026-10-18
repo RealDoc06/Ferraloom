@@ -229,7 +229,10 @@ mod tests {
 
     #[test]
     fn canonical_clock_refresh_and_sky_slot_keep_biome_and_spatial_reads_exact() {
-        let mut level = Level::new(Region::new(&EMPTY));
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         assert_eq!(
             level.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL),
             Err(LevelError::MissingEnvironmentContext)
