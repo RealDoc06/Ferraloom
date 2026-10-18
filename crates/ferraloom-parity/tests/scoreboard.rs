@@ -145,7 +145,7 @@ async fn scores(session: &mut Session) -> Result<ObservationLog> {
     ensure!(
         matches!(
             number_format,
-            Some(ferraloom_parity::protocol::play::NumberFormat::Blank)
+            Some(ferraloom_parity::protocol::play::NumberFormat::Blank {})
         ),
         "join omitted objective blank number format"
     );
