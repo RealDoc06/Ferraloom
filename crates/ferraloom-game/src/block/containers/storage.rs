@@ -63,11 +63,22 @@ impl BaseContainerBlockEntity {
             }
         }
     }
+    pub fn is_locked(&self) -> bool {
+        self.lock.as_ref().is_some_and(|lock| {
+            lock.items.is_some()
+                || lock.count.min.is_some()
+                || lock.count.max.is_some()
+                || !lock.components.exact.is_empty()
+                || !lock.components.partial.0.is_empty()
+        })
+    }
     pub fn collect_components(&self, map: &mut DataComponentMap) {
         if let Some(name) = &self.custom_name {
             set(map, DataComponent::CustomName(Box::new(name.clone())));
         }
-        if let Some(lock) = &self.lock {
+        if self.is_locked()
+            && let Some(lock) = &self.lock
+        {
             set(map, DataComponent::Lock(lock.clone()));
         }
         let last = self

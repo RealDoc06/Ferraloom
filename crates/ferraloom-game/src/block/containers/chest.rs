@@ -64,6 +64,11 @@ impl BlockEntity for StorageBehavior {
         }
         super::drops::drop_contents(entity, level)
     }
+    fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        for key in ["CustomName", "lock", "Items", "LootTable", "LootTableSeed"] {
+            tag.remove(key);
+        }
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         state
             .randomizable_mut()

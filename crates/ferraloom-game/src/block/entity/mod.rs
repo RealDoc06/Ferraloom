@@ -90,6 +90,7 @@ pub trait BlockEntity: Sync {
     ) -> &'static [ComponentTypeId] {
         &[]
     }
+    fn remove_components_from_tag(&self, _tag: &mut CompoundTag) {}
     fn collect_implicit_components(
         &self,
         _state: &BlockEntityState,
@@ -265,6 +266,21 @@ impl BlockEntityState {
                 .cloned()
                 .collect(),
         };
+    }
+    pub fn apply_components_from_item_stack(
+        &mut self,
+        stack: &ferraloom_protocol::component::ItemStack,
+    ) -> ferraloom_protocol::Result<()> {
+        if let Some(stack) = &stack.0 {
+            self.apply_components(
+                DataComponentMap::item_defaults(stack.item)?,
+                &stack.components,
+            );
+        }
+        Ok(())
+    }
+    pub fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        self.behavior().remove_components_from_tag(tag);
     }
     pub fn collect_components(&self) -> DataComponentMap {
         let mut result = self.data().components.clone();

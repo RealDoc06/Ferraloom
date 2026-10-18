@@ -81,6 +81,11 @@ impl SignBlockEntity {
 pub struct SignBehavior;
 pub static SIGN_ENTITY: SignBehavior = SignBehavior;
 impl BlockEntity for SignBehavior {
+    fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        for key in ["front_text", "back_text", "is_waxed"] {
+            tag.remove(key);
+        }
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::Sign(sign) = state else {
             unreachable!()

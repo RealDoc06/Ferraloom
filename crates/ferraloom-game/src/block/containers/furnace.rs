@@ -64,6 +64,11 @@ impl AbstractFurnaceBlockEntity {
 pub struct FurnaceBehavior;
 pub static FURNACE_ENTITY: FurnaceBehavior = FurnaceBehavior;
 impl BlockEntity for FurnaceBehavior {
+    fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        for key in ["CustomName", "lock", "Items"] {
+            tag.remove(key);
+        }
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::Furnace(entity) = state else {
             unreachable!()
