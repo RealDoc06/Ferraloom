@@ -1928,7 +1928,9 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         tag.insert(key, Tag::Int(value));
     }
     tag.insert("future_bytes", Tag::ByteArray(vec![-128, 0, 127]));
-    tag.insert("future_double", Tag::Double(-0.0));
+    // DoubleTag.valueOf and its native binary loader canonicalize signed zero.
+    // Use the canonical constructor before checking untouched pending NBT bytes.
+    tag.insert("future_double", Tag::from(-0.0_f64));
     tag.insert(
         "future_utf16",
         Tag::String(NbtString::from_utf16(vec![0xd800, 0, 0xdc00])),
