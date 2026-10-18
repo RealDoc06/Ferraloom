@@ -24,5 +24,8 @@ serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order
 serde = { version = "1", features = ["derive"] }
 flate2 = "1"
 
+[features]
+test-fixtures = []
+
 [lints]
 workspace = true
