@@ -12,17 +12,14 @@ use std::{io::Read, path::Path};
 // Preserve vanilla registry presence only when the actual patch factory has not
 // landed yet. An available feature always uses its real implementation.
 #[derive(Debug)]
-struct PendingMossPatch(String);
+struct PendingMossPatch;
 const MISSING_MOSS_PATCH: &str = concat!(
-    "Unsupported: configured feature minecraft:pale_moss_patch: ",
-    "unsupported feature type minecraft:vegetation_patch"
+    "Unsupported: configured feature minecraft:pale_moss_patch ",
+    "(missing minecraft:vegetation_patch factory until ore and cave merge)"
 );
 impl Feature for PendingMossPatch {
     fn place(&self, _: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        Err(Error(format!(
-            "Unsupported: configured feature minecraft:pale_moss_patch: {}",
-            self.0
-        )))
+        Err(Error(MISSING_MOSS_PATCH.into()))
     }
 }
 struct UnsupportedBehavior;
@@ -129,17 +126,16 @@ fn run_cases(require_pending: bool) {
     }
     let missing_patch = match loader.feature(&Value::String("minecraft:pale_moss_patch".into())) {
         Ok(_) => None,
-        Err(Error(reason)) if reason.starts_with("unsupported feature type minecraft:") => {
-            Some(reason)
+        Err(Error(reason)) if reason == "unsupported feature type minecraft:vegetation_patch" => {
+            Some(PendingMossPatch)
         }
         Err(e) => panic!("failed to load pale_moss_patch: {e}"),
     };
     let mut registry = loader.finish();
-    if let Some(reason) = missing_patch {
-        registry.features.insert(
-            "pale_moss_patch".parse().unwrap(),
-            Arc::new(PendingMossPatch(reason)),
-        );
+    if let Some(patch) = missing_patch {
+        registry
+            .features
+            .insert("pale_moss_patch".parse().unwrap(), Arc::new(patch));
     }
     let mut baselines = std::collections::BTreeMap::new();
     let mut passed = 0;
@@ -270,7 +266,7 @@ fn supported_controlled_level_cases_match_vanilla() {
     run_cases(false);
 }
 #[test]
-#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive; vegetation_patch and root-system template behavior"]
+#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive; vegetation_patch factory until ore and cave merge; root-system template behavior"]
 fn pending_controlled_level_cases_require_game_behavior() {
     run_cases(true);
 }
