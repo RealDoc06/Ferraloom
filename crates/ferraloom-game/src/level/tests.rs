@@ -2008,3 +2008,45 @@ fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pair
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
 }
+
+#[test]
+fn save_snapshot_marker_keeps_subsequent_live_mutations_dirty() {
+    use crate::block::UpdateFlags;
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let pos = BlockPos::new(8, 0, 8);
+    let chunk = ChunkPos::containing(pos);
+    assert!(!level.try_mark_chunk_saved(chunk).unwrap());
+    level
+        .set_block(
+            pos,
+            Block::STONE.default_state(),
+            UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    assert!(level.try_mark_chunk_saved(chunk).unwrap());
+    let saved_state = level.get_block_state(pos).unwrap();
+    assert!(!level.chunk(chunk).unwrap().is_unsaved());
+    level
+        .set_block(
+            pos,
+            Block::DIRT.default_state(),
+            UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    // Completing the old snapshot cannot clear this later write.
+    assert_eq!(saved_state, Block::STONE.default_state());
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    assert!(level.try_mark_chunk_saved(chunk).unwrap());
+    assert!(!level.try_mark_chunk_saved(chunk).unwrap());
+    level.mark_chunk_unsaved(chunk).unwrap();
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    let missing = ChunkPos::new(2, 0);
+    assert_eq!(
+        level.try_mark_chunk_saved(missing),
+        Err(LevelError::MissingChunk(missing))
+    );
+}

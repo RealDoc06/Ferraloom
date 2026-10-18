@@ -24,6 +24,17 @@ pub struct LevelChunk {
 }
 
 impl LevelChunk {
+    /// Port of ChunkAccess#markUnsaved and tryMarkSaved. Clear immediately
+    /// before capturing a save; later mutations set the flag again independently.
+    pub fn mark_unsaved(&mut self) {
+        self.unsaved = true;
+    }
+    pub fn try_mark_saved(&mut self) -> bool {
+        std::mem::take(&mut self.unsaved)
+    }
+    pub fn is_unsaved(&self) -> bool {
+        self.unsaved
+    }
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
         Self {
@@ -202,5 +213,25 @@ impl LevelChunk {
             (pos.z & 15) as u8,
             state,
         ))
+    }
+}
+
+impl super::Level {
+    /// ChunkMap#save's tryMarkSaved step, before snapshot capture, never at IO
+    /// completion. The caller must recheck is_unsaved before final eviction.
+    pub fn try_mark_chunk_saved(&mut self, pos: ChunkPos) -> Result<bool, super::LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .map(LevelChunk::try_mark_saved)
+            .ok_or(super::LevelError::MissingChunk(pos))
+    }
+    pub fn mark_chunk_unsaved(&mut self, pos: ChunkPos) -> Result<(), super::LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(super::LevelError::MissingChunk(pos))?
+            .mark_unsaved();
+        Ok(())
     }
 }
