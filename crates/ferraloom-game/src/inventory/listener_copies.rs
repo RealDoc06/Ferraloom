@@ -145,7 +145,7 @@ mod tests {
         let stack = arena.get(reference).unwrap();
         format!(
             "{},{},{}",
-            stack.item().id(),
+            stack.item().protocol_id(),
             count(stack),
             max_stack_size(stack)
         )

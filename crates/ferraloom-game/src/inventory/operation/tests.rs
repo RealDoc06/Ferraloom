@@ -20,7 +20,7 @@ struct ReentrantListeners<'a> {
 fn describe(stack: &ItemStack) -> String {
     format!(
         "{},{},{}",
-        stack.item().id(),
+        stack.item().protocol_id(),
         count(stack),
         max_stack_size(stack)
     )
@@ -229,7 +229,10 @@ fn menu_transfer_keeps_the_native_copy_alias_when_either_cache_is_replaced() {
                 StackValue::New(ItemStack::new(Item::STONE, 5, Default::default())),
             )
             .unwrap();
-        with_menu_callback(player, source, &mut level, broadcast_menu_changes).unwrap();
+        with_menu_callback(player, source, &mut level, |context| {
+            broadcast_menu_changes(context)
+        })
+        .unwrap();
         let copy = level
             .entity::<ServerPlayer>(player)
             .unwrap()
@@ -286,9 +289,15 @@ fn menu_transfer_keeps_the_native_copy_alias_when_either_cache_is_replaced() {
                     StackValue::New(ItemStack::new(Item::DIRT, 2, Default::default())),
                 )
                 .unwrap();
-            with_menu_callback(player, source, &mut level, broadcast_menu_changes).unwrap();
+            with_menu_callback(player, source, &mut level, |context| {
+                broadcast_menu_changes(context)
+            })
+            .unwrap();
         } else {
-            with_menu_callback(player, target, &mut level, broadcast_menu_changes).unwrap();
+            with_menu_callback(player, target, &mut level, |context| {
+                broadcast_menu_changes(context)
+            })
+            .unwrap();
         }
         events.push(format!(
             "owners:{}:{}",

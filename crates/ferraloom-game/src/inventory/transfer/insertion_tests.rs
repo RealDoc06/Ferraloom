@@ -18,7 +18,7 @@ struct InsertionFixture {
 fn describe(stack: &ItemStack) -> String {
     format!(
         "{},{},{}",
-        stack.item().id(),
+        stack.item().protocol_id(),
         count(stack),
         max_stack_size(stack)
     )

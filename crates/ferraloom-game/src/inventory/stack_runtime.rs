@@ -539,7 +539,7 @@ mod tests {
                 let describe = |stack: &ItemStack| {
                     format!(
                         "{},{},{}",
-                        stack.item().id(),
+                        stack.item().protocol_id(),
                         count(stack),
                         super::super::max_stack_size(stack)
                     )
