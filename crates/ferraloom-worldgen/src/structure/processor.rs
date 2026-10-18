@@ -90,7 +90,7 @@ impl RuleBlockEntityModifier {
 }
 // JsonOps#convertTo selects the narrowest numeric tag. In 26.3,
 // NbtOps#createList always produces a ListTag, including numeric streams.
-fn json_nbt(v: &Value) -> Result<Tag, Error> {
+pub(super) fn json_nbt(v: &Value) -> Result<Tag, Error> {
     Ok(match v {
         Value::Null => return Err(Error("null is not a structure compound value".into())),
         Value::Bool(v) => Tag::Byte(i8::from(*v)),

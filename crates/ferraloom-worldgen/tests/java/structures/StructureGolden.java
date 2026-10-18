@@ -285,15 +285,22 @@ public final class StructureGolden {
                 var state=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings.value());var generator=terrain.equals("flat")?flat:noise;
                 for(var entry:structures.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList())if(entry.value() instanceof net.minecraft.world.level.levelgen.structure.structures.JigsawStructure structure) {
                     var context=new Structure.GenerationContext(registries,generator,source,state.createClimateSampler(SamplerContext.builder().enableCaches().build()),state,templates,seed,new ChunkPos(chunk[0],chunk[1]),accessor,b->true);
-                    var stub=structure.findGenerationPoint(context);var item=new JsonObject();item.addProperty("structure",entry.key().identifier().toString());item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("chunk",ints(chunk));var pieces=new JsonArray();
+                    var stub=structure.findGenerationPoint(context);var builtPieces=stub.map(s->s.getPiecesBuilder().build()).orElse(null);var item=new JsonObject();item.addProperty("structure",entry.key().identifier().toString());item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("chunk",ints(chunk));var pieces=new JsonArray();
                     if(stub.isPresent()) {
                         var p=stub.get().position();item.add("position",ints(p.getX(),p.getY(),p.getZ()));
-                        for(var piece:stub.get().getPiecesBuilder().build().pieces()) {
+                        for(var piece:builtPieces.pieces()) {
                             var poolPiece=(PoolElementStructurePiece)piece;var value=new JsonObject();value.addProperty("element",elementName(poolPiece.getElement()));value.add("bounds",bounds(piece.getBoundingBox()));var pos=poolPiece.getPosition();value.add("position",ints(pos.getX(),pos.getY(),pos.getZ()));value.addProperty("rotation",poolPiece.getRotation().ordinal());value.addProperty("ground",poolPiece.getGroundLevelDelta());
                             var junctions=new JsonArray();for(var junction:poolPiece.getJunctions()) {var j=new JsonObject();j.add("source",ints(junction.getSourceX(),junction.getSourceGroundY(),junction.getSourceZ()));j.addProperty("delta_y",junction.getDeltaY());j.addProperty("projection",junction.getDestProjection().getName());junctions.add(j);}value.add("junctions",junctions);pieces.add(value);
                         }
                     }
-                    item.add("pieces",pieces);out.add(item);
+                    item.add("pieces",pieces);
+                    if(terrain.equals("flat") && seed==0 && chunk[0]==0 && chunk[1]==0 && stub.isPresent()) {
+                        var serialization=new net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext(RESOURCES,registries,templates);
+                        var start=new StructureStart(structure,new ChunkPos(chunk[0],chunk[1]),3,builtPieces);
+                        var saved=start.createTag(serialization,new ChunkPos(17,-19));item.addProperty("terrain_adjustment",structure.terrainAdaptation().getSerializedName());item.addProperty("start_nbt",saved.toString());item.add("start_bounds",bounds(start.getBoundingBox()));
+                        var loaded=StructureStart.loadStaticStart(serialization,saved,seed);item.addProperty("loaded_nbt",loaded.createTag(serialization,new ChunkPos(17,-19)).toString());item.add("loaded_bounds",bounds(loaded.getBoundingBox()));
+                    }
+                    out.add(item);
                 }
             }
         }
@@ -327,6 +334,6 @@ public final class StructureGolden {
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);StructureCodecGolden.capture(registries,directory);
     }
 }
