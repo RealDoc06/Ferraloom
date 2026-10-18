@@ -96,5 +96,67 @@
     "partial": {
       "minecraft:random_tick_speed": 0
     }
+  },
+  {
+    "input": "{':keep_inventory':true}",
+    "success": true,
+    "partial": {
+      "minecraft:keep_inventory": true
+    }
+  },
+  {
+    "input": "<empty-key>",
+    "success": false,
+    "empty_key": true,
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft:; Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft: missed input: {\"\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{':':true}",
+    "success": false,
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft:; Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft: missed input: {\":\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'Minecraft:keep_inventory':true}",
+    "success": false,
+    "error": "Not a valid resource location: Minecraft:keep_inventory Non [a-z0-9_.-] character in namespace of identifier: Minecraft:keep_inventory; Not a valid resource location: Minecraft:keep_inventory Non [a-z0-9_.-] character in namespace of identifier: Minecraft:keep_inventory missed input: {\"Minecraft:keep_inventory\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'keep Inventory':true}",
+    "success": false,
+    "error": "Not a valid resource location: keep Inventory Non [a-z0-9/._-] character in path of location: minecraft:keep Inventory; Not a valid resource location: keep Inventory Non [a-z0-9/._-] character in path of location: minecraft:keep Inventory missed input: {\"keep Inventory\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'minecraft:keep_inventory:extra':true}",
+    "success": false,
+    "error": "Not a valid resource location: minecraft:keep_inventory:extra Non [a-z0-9/._-] character in path of location: minecraft:keep_inventory:extra; Not a valid resource location: minecraft:keep_inventory:extra Non [a-z0-9/._-] character in path of location: minecraft:keep_inventory:extra missed input: {\"minecraft:keep_inventory:extra\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'other:keep_inventory':true}",
+    "success": false,
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: other:keep_inventory; Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: other:keep_inventory missed input: {\"other:keep_inventory\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'/a':true}",
+    "success": false,
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft:/a; Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft:/a missed input: {\"/a\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{' minecraft:keep_inventory':true}",
+    "success": false,
+    "error": "Not a valid resource location:  minecraft:keep_inventory Non [a-z0-9_.-] character in namespace of identifier:  minecraft:keep_inventory; Not a valid resource location:  minecraft:keep_inventory Non [a-z0-9_.-] character in namespace of identifier:  minecraft:keep_inventory missed input: {\" minecraft:keep_inventory\":1b}",
+    "partial": {}
+  },
+  {
+    "input": "{'Keep_Inventory':true}",
+    "success": false,
+    "error": "Not a valid resource location: Keep_Inventory Non [a-z0-9/._-] character in path of location: minecraft:Keep_Inventory; Not a valid resource location: Keep_Inventory Non [a-z0-9/._-] character in path of location: minecraft:Keep_Inventory missed input: {Keep_Inventory:1b}",
+    "partial": {}
   }
 ]

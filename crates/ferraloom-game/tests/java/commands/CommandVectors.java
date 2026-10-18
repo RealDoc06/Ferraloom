@@ -255,10 +255,13 @@ public final class CommandVectors {
             Files.write(out.resolve("tree-minecart-level-"+level+".bin"),bytes);
         }
         var savedRules = new JsonArray();
-        for (var input : List.of("{}", "1", "[]", "{keep_inventory:true}", "{keep_inventory:0.5d}", "{keep_inventory:256}", "{keep_inventory:-0.5d}", "{'minecraft:keep_inventory':1b,'minecraft:random_tick_speed':2.9d}", "{'minecraft:keep_inventory':'true'}", "{'minecraft:keep_inventory':true,'minecraft:unknown':1}", "{'minecraft:keep_inventory':true,'minecraft:random_tick_speed':-1}", "{'minecraft:random_tick_speed':-1}", "{'minecraft:max_minecart_speed':0}", "{'minecraft:random_tick_speed':2147483648L}", "{'minecraft:random_tick_speed':-0.5d}")) {
-            var tag = net.minecraft.nbt.TagParser.create(net.minecraft.nbt.NbtOps.INSTANCE).parseFully(input);
+        for (var input : List.of("{}", "1", "[]", "{keep_inventory:true}", "{keep_inventory:0.5d}", "{keep_inventory:256}", "{keep_inventory:-0.5d}", "{'minecraft:keep_inventory':1b,'minecraft:random_tick_speed':2.9d}", "{'minecraft:keep_inventory':'true'}", "{'minecraft:keep_inventory':true,'minecraft:unknown':1}", "{'minecraft:keep_inventory':true,'minecraft:random_tick_speed':-1}", "{'minecraft:random_tick_speed':-1}", "{'minecraft:max_minecart_speed':0}", "{'minecraft:random_tick_speed':2147483648L}", "{'minecraft:random_tick_speed':-0.5d}", "{':keep_inventory':true}", "<empty-key>", "{':':true}", "{'Minecraft:keep_inventory':true}", "{'keep Inventory':true}", "{'minecraft:keep_inventory:extra':true}", "{'other:keep_inventory':true}", "{'/a':true}", "{' minecraft:keep_inventory':true}", "{'Keep_Inventory':true}")) {
+            net.minecraft.nbt.Tag tag;
+            if(input.equals("<empty-key>")) { var map=new net.minecraft.nbt.CompoundTag();map.putBoolean("",true);tag=map; }
+            else tag = net.minecraft.nbt.TagParser.create(net.minecraft.nbt.NbtOps.INSTANCE).parseFully(input);
             var result = GameRuleMap.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE,tag);
             var vector = new JsonObject();vector.addProperty("input",input);vector.addProperty("success",result.isSuccess());
+            if(input.equals("<empty-key>")) vector.addProperty("empty_key",true);
             result.error().ifPresent(error -> vector.addProperty("error",error.message()));
             result.resultOrPartial(error -> {}).ifPresent(value -> vector.add("partial",GameRuleMap.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,value).getOrThrow()));
             savedRules.add(vector);

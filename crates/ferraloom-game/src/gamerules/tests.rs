@@ -5,13 +5,21 @@ fn saved_rule_partial_values_and_errors_match_java() {
     struct Vector {
         input: String,
         success: bool,
+        #[serde(default)]
+        empty_key: bool,
         partial: Option<serde_json::Value>,
         error: Option<String>,
     }
     let vectors: Vec<Vector> =
         serde_json::from_str(include_str!("../commands/vanilla/saved-rule-vectors.json")).unwrap();
     for vector in vectors {
-        let tag = ferraloom_nbt::parse(&vector.input).unwrap();
+        let tag = if vector.empty_key {
+            let mut map = CompoundTag::new();
+            map.insert("", Tag::Byte(1));
+            Tag::Compound(map)
+        } else {
+            ferraloom_nbt::parse(&vector.input).unwrap()
+        };
         let result = GameRuleMap::decode_partial(&tag);
         assert_eq!(result.error, vector.error, "{}", vector.input);
         assert_eq!(result.error.is_none(), vector.success, "{}", vector.input);

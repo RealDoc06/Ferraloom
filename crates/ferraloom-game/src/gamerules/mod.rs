@@ -153,21 +153,15 @@ impl GameRuleMap {
         let mut errors = Vec::new();
         let mut missed = CompoundTag::new();
         for (key, value) in compound.iter() {
-            let key_text = key.to_string_lossy();
-            let Some(rule) = GameRule::by_id(&key_text) else {
-                let id = if key_text.contains(':') {
-                    key_text
-                } else {
-                    format!("minecraft:{key_text}")
-                };
-                let message = format!(
-                    "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"
-                );
-                // DispatchedMapCodec reports both the key decode and codec lookup errors.
-                errors.push(message.clone());
-                errors.push(message);
-                missed.insert(key.clone(), value.clone());
-                continue;
+            let rule = match saved_rule_key(&key.to_string_lossy()) {
+                Ok(rule) => rule,
+                Err(message) => {
+                    // DispatchedMapCodec reports both key decode and codec lookup errors.
+                    errors.push(message.clone());
+                    errors.push(message);
+                    missed.insert(key.clone(), value.clone());
+                    continue;
+                }
             };
             match decode_rule_value(rule, value) {
                 Ok(value) => map.values[rule as usize] = Some(value),
@@ -184,6 +178,29 @@ impl GameRuleMap {
             error,
         }
     }
+}
+/// Port of Identifier.CODEC followed by the game-rule registry's by-name lookup.
+fn saved_rule_key(key: &str) -> Result<GameRule, String> {
+    let id = ferraloom_protocol::Identifier::parse(key).map_err(|_| {
+        let (namespace, path) = key.split_once(':').unwrap_or(("minecraft", key));
+        let namespace = if namespace.is_empty() {
+            "minecraft"
+        } else {
+            namespace
+        };
+        let namespace_valid = namespace
+            .bytes()
+            .all(|c| matches!(c, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-'));
+        let detail = if !namespace_valid {
+            format!("Non [a-z0-9_.-] character in namespace of identifier: {namespace}:{path}")
+        } else {
+            format!("Non [a-z0-9/._-] character in path of location: {namespace}:{path}")
+        };
+        format!("Not a valid resource location: {key} {detail}")
+    })?;
+    GameRule::by_id(id.as_str()).ok_or_else(|| {
+        format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}")
+    })
 }
 fn decode_rule_value(rule: GameRule, tag: &Tag) -> Result<GameRuleValue, String> {
     match rule.definition().kind {
