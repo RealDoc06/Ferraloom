@@ -69,6 +69,45 @@ fn swap_timeline<C: MenuClickContext>(
     ));
     Ok(events.join(";"))
 }
+fn quickcraft_timeline<C: MenuClickContext>(
+    context: &mut C,
+    same: impl Fn(&C, C::Stack, C::Stack) -> bool,
+) -> Result<String> {
+    let hooks = &mut UnsupportedMenuHooks;
+    let source = context.own_stack(ItemStack::new(Item::STONE, 10, Default::default()))?;
+    context.set_carried_stack(source)?;
+    for slot in [0, 1] {
+        context.set_by_player(slot, ItemStack::default(), hooks)?;
+    }
+    let held = context.carried_stack()?;
+    for (slot, button) in [(-999, 0), (0, 1), (1, 1), (-999, 2)] {
+        quick_craft_menu_items(context, slot, button, hooks)?;
+    }
+    let current = context.carried_stack()?;
+    let mut events = vec![format!(
+        "copy:{}:{}:{}",
+        same(context, held, current),
+        describe(&context.stack(held)?),
+        describe(&context.stack(current)?),
+    )];
+    for reference in [held, current] {
+        let total = count(&context.stack(reference)?) + 2;
+        context.set_stack_count(reference, total)?;
+    }
+    events.push(format!(
+        "held:{}:{}",
+        describe(&context.stack(held)?),
+        describe(&context.stack(current)?),
+    ));
+    let first = context.slot_stack(0)?;
+    let second = context.slot_stack(1)?;
+    events.push(format!(
+        "targets:{}:{}",
+        describe(&context.stack(first)?),
+        describe(&context.stack(second)?),
+    ));
+    Ok(events.join(";"))
+}
 fn pickup_timeline<C: MenuClickContext>(
     context: &mut C,
     same: impl Fn(&C, C::Stack, C::Stack) -> bool,
@@ -134,6 +173,10 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
         .lines()
         .find_map(|line| line.strip_prefix("listener\tswap\t"))
         .unwrap();
+    let expected_quickcraft = include_str!("../../../tests/java/inventory/listeners.tsv")
+        .lines()
+        .find_map(|line| line.strip_prefix("listener\tquickcraft\t"))
+        .unwrap();
     let make_player = || {
         ServerPlayer::new(
             Uuid::new(0, 1),
@@ -170,6 +213,14 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
             .unwrap(),
             expected_swap
         );
+        assert_eq!(
+            quickcraft_timeline(&mut context, |context, a, b| std::ptr::eq(
+                context.read(a).unwrap(),
+                context.read(b).unwrap()
+            ))
+            .unwrap(),
+            expected_quickcraft
+        );
     }
     assert!(pure.in_memory_stacks.forwards_are_empty());
 
@@ -200,6 +251,13 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
                 context.operation.level.stack(b).unwrap()
             ))?,
             expected_swap
+        );
+        assert_eq!(
+            quickcraft_timeline(&mut context, |context, a, b| std::ptr::eq(
+                context.operation.level.stack(a).unwrap(),
+                context.operation.level.stack(b).unwrap()
+            ))?,
+            expected_quickcraft
         );
         Ok(())
     })

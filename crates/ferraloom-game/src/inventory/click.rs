@@ -2,6 +2,9 @@
 use super::*;
 
 pub trait MenuClickContext: MenuTransferContext {
+    fn menu(&self) -> Result<&AbstractContainerMenu>;
+    fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu>;
+    fn infinite_materials(&self) -> Result<bool>;
     fn carried_stack(&mut self) -> Result<Self::Stack>;
     fn own_stack(&mut self, stack: ItemStack) -> Result<Self::Stack>;
     fn set_carried_stack(&mut self, stack: Self::Stack) -> Result<()>;
@@ -36,6 +39,128 @@ pub trait MenuClickContext: MenuTransferContext {
         stack: Self::Stack,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()>;
+}
+
+/// Port of AbstractContainerMenu#doClick's QUICK_CRAFT state machine. Only the
+/// native source copy is new; every current-carried and slot access is live.
+pub fn quick_craft_menu_items<C: MenuClickContext>(
+    context: &mut C,
+    index: i32,
+    button: i32,
+    hooks: &mut dyn MenuHooks,
+) -> Result<()> {
+    let expected = context.menu()?.quickcraft_status;
+    let status = button & 3;
+    context.menu_mut()?.quickcraft_status = status;
+    if (expected != 1 || status != 2) && expected != status {
+        context.menu_mut()?.reset_quick_craft();
+        return Ok(());
+    }
+    let carried = context.carried_stack()?;
+    if context.stack(carried)?.is_empty() {
+        context.menu_mut()?.reset_quick_craft();
+        return Ok(());
+    }
+    match status {
+        0 => {
+            let kind = (button >> 2) & 3;
+            context.menu_mut()?.quickcraft_type = kind;
+            if kind == 0 || kind == 1 || kind == 2 && context.infinite_materials()? {
+                let menu = context.menu_mut()?;
+                menu.quickcraft_status = 1;
+                menu.clear_quick_craft_slots();
+            } else {
+                context.menu_mut()?.reset_quick_craft();
+            }
+        }
+        1 => {
+            let index = usize::try_from(index).map_err(|_| MenuError::InvalidSlot(index))?;
+            if index >= context.slot_count()? {
+                return Err(MenuError::InvalidSlot(index as i32));
+            }
+            let carried = context.carried_stack()?;
+            if can_quick_replace_menu_item(context, index, carried, true)?
+                && context.may_place(index, carried, hooks)?
+                && (context.menu()?.quickcraft_type == 2
+                    || count(&context.stack(carried)?)
+                        > context.menu()?.quickcraft_slots.len() as i32)
+                && context.menu()?.can_drag_to(&context.menu()?.slots[index])
+            {
+                let menu = context.menu_mut()?;
+                if !menu.quickcraft_slots.contains(&index) {
+                    menu.quickcraft_slots.push(index);
+                    menu.quickcraft_mod_count = menu.quickcraft_mod_count.wrapping_add(1);
+                }
+            }
+        }
+        2 => {
+            let size = context.menu()?.quickcraft_slots.len();
+            if size == 1 {
+                let index = context.menu()?.quickcraft_slots[0];
+                context.menu_mut()?.reset_quick_craft();
+                let button = context.menu()?.quickcraft_type;
+                if button == 0 || button == 1 {
+                    pickup_menu_item(context, index, button, hooks)?;
+                }
+                return Ok(());
+            }
+            if size != 0 {
+                let carried = context.carried_stack()?;
+                // AbstractContainerMenu explicitly copies the carried source.
+                let source = context.own_stack(context.stack(carried)?)?;
+                if context.stack(source)?.is_empty() {
+                    context.menu_mut()?.reset_quick_craft();
+                    return Ok(());
+                }
+                let carried = context.carried_stack()?;
+                let mut remaining = count(&context.stack(carried)?);
+                let expected_mod_count = context.menu()?.quickcraft_mod_count;
+                for offset in 0..size {
+                    // HashSet's iterator checks on next(), before each entry;
+                    // a mutation during the last callback has no next entry.
+                    if context.menu()?.quickcraft_mod_count != expected_mod_count {
+                        return Err(MenuError::ConcurrentQuickCraftModification);
+                    }
+                    let index = context.menu()?.quickcraft_slots[offset];
+                    let carried = context.carried_stack()?;
+                    if can_quick_replace_menu_item(context, index, carried, true)?
+                        && context.may_place(index, carried, hooks)?
+                        && (context.menu()?.quickcraft_type == 2
+                            || count(&context.stack(carried)?)
+                                >= context.menu()?.quickcraft_slots.len() as i32)
+                        && context.menu()?.can_drag_to(&context.menu()?.slots[index])
+                    {
+                        let target = context.slot_stack(index)?;
+                        let carry = if context.stack(target)?.is_empty() {
+                            0
+                        } else {
+                            let target = context.slot_stack(index)?;
+                            count(&context.stack(target)?)
+                        };
+                        let max = max_stack_size(&context.stack(source)?)
+                            .min(context.stack_limit(index, source)?);
+                        let place_count = match context.menu()?.quickcraft_type {
+                            0 => (count(&context.stack(source)?) as f32
+                                / context.menu()?.quickcraft_slots.len() as f32)
+                                .floor() as i32,
+                            1 => 1,
+                            2 => max_stack_size(&context.stack(source)?),
+                            _ => count(&context.stack(source)?),
+                        };
+                        let total = place_count.wrapping_add(carry).min(max);
+                        remaining = remaining.wrapping_sub(total.wrapping_sub(carry));
+                        let copy = with_count(&context.stack(source)?, total);
+                        context.set_by_player(index, copy, hooks)?;
+                    }
+                }
+                context.set_stack_count(source, remaining)?;
+                context.set_carried_stack(source)?;
+            }
+            context.menu_mut()?.reset_quick_craft();
+        }
+        _ => context.menu_mut()?.reset_quick_craft(),
+    }
+    Ok(())
 }
 
 /// Port of Slot#safeTake. onTake runs before its caller grows carried or drops
@@ -355,6 +480,27 @@ pub fn pickup_menu_item<C: MenuClickContext>(
 }
 
 impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
+    fn menu(&self) -> Result<&AbstractContainerMenu> {
+        self.operation
+            .level
+            .entity::<crate::entity::player::ServerPlayer>(self.player)?
+            .menus
+            .menu(self.menu)
+    }
+    fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu> {
+        self.operation
+            .level
+            .entity_mut::<crate::entity::player::ServerPlayer>(self.player)?
+            .menus
+            .menu_mut(self.menu)
+    }
+    fn infinite_materials(&self) -> Result<bool> {
+        Ok(self
+            .operation
+            .level
+            .entity::<crate::entity::player::ServerPlayer>(self.player)?
+            .instabuild())
+    }
     fn carried_stack(&mut self) -> Result<StackRef> {
         self.operation.pin(ContainerSlot {
             container: ContainerHandle::MenuCarried {

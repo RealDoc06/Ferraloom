@@ -193,6 +193,24 @@ public final class ListenerVectors {
     events.add("current:" + InventoryVectors.item(menu.getSlot(0).getItem()) + ":" + InventoryVectors.item(inventory.getItem(0)));
     System.out.println("listener\tswap\t" + String.join(";", events));
   }
+  static void quickcraft(RegistryAccess registries) {
+    var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
+    var menu = InventoryVectors.menu("chest1", player);
+    menu.setCarried(new ItemStack(Items.STONE, 10));
+    var held = menu.getCarried();
+    menu.clicked(-999, 0, ContainerInput.QUICK_CRAFT, player);
+    menu.clicked(0, 1, ContainerInput.QUICK_CRAFT, player);
+    menu.clicked(1, 1, ContainerInput.QUICK_CRAFT, player);
+    menu.clicked(-999, 2, ContainerInput.QUICK_CRAFT, player);
+    var current = menu.getCarried();
+    var events = new ArrayList<String>();
+    events.add("copy:" + (held == current) + ":" + InventoryVectors.item(held) + ":" + InventoryVectors.item(current));
+    held.grow(2);
+    current.grow(2);
+    events.add("held:" + InventoryVectors.item(held) + ":" + InventoryVectors.item(menu.getCarried()));
+    events.add("targets:" + InventoryVectors.item(menu.getSlot(0).getItem()) + ":" + InventoryVectors.item(menu.getSlot(1).getItem()));
+    System.out.println("listener\tquickcraft\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -215,5 +233,6 @@ public final class ListenerVectors {
     pickup(registries);
     for (var kind : new String[]{"partial", "infinite", "empty", "damaged", "detached"}) inventoryAdd(registries, kind);
     swap(registries);
+    quickcraft(registries);
   }
 }

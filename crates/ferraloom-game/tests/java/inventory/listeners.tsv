@@ -13,3 +13,4 @@ listener	inventory-add-empty	added:true;left:-;0:1,64,64;1:1,5,64;40:1,64,64;hel
 listener	inventory-add-damaged	added:true;left:-;0:1,60,64;1:1047,1,1;40:1,63,64;held:1047,2,1;owner:1047,2,1
 listener	inventory-add-detached	added:false;left:1,5,64;0:1,64,64;1:55,64,64;40:1,64,64;held:1,7,64;owner:55,7,64
 listener	swap	self:-:1,64,64:1,6,64;detached:1,2,64:1,64,64;alias:true:true;current:1,11,64:55,3,64
+listener	quickcraft	copy:false:1,10,64:-;held:1,12,64:1,2,64;targets:1,5,64:1,5,64

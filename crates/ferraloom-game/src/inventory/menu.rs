@@ -62,9 +62,11 @@ pub struct AbstractContainerMenu {
     pub carried: ItemStack,
     pub(crate) carried_generations: StackGenerations,
     state_id: i32,
-    quickcraft_type: i32,
-    quickcraft_status: i32,
-    quickcraft_slots: Vec<usize>,
+    pub(super) quickcraft_type: i32,
+    pub(super) quickcraft_status: i32,
+    // JVM Slot identity hashes have non-parity order; use deterministic insertion order.
+    pub(super) quickcraft_slots: Vec<usize>,
+    pub(super) quickcraft_mod_count: i32,
     pub(super) last_slots: Vec<Option<ListenerCopyRef>>,
     pub(super) standalone_listener_copies: Option<ListenerCopyArena>,
     pub(super) player_listener: bool,
@@ -96,6 +98,7 @@ impl AbstractContainerMenu {
             quickcraft_type: -1,
             quickcraft_status: 0,
             quickcraft_slots: Vec::new(),
+            quickcraft_mod_count: 0,
             last_slots: Vec::new(),
             standalone_listener_copies: Some(ListenerCopyArena::default()),
             player_listener: false,
@@ -297,9 +300,13 @@ impl AbstractContainerMenu {
     pub fn quickcraft_mask(header: i32, kind: i32) -> i32 {
         (header & 3) | ((kind & 3) << 2)
     }
-    fn reset_quick_craft(&mut self) {
+    pub(super) fn reset_quick_craft(&mut self) {
         self.quickcraft_status = 0;
+        self.clear_quick_craft_slots();
+    }
+    pub(super) fn clear_quick_craft_slots(&mut self) {
         self.quickcraft_slots.clear();
+        self.quickcraft_mod_count = self.quickcraft_mod_count.wrapping_add(1);
     }
     pub(super) fn can_take_for_pick_all(&self, slot: &Slot) -> bool {
         match self.kind {
@@ -483,89 +490,14 @@ impl AbstractContainerMenu {
         button: i32,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        let expected = self.quickcraft_status;
-        self.quickcraft_status = button & 3;
-        if (expected != 1 || self.quickcraft_status != 2) && expected != self.quickcraft_status
-            || self.carried.is_empty()
-        {
-            self.reset_quick_craft();
-            return Ok(());
-        }
-        match self.quickcraft_status {
-            0 => {
-                self.quickcraft_type = (button >> 2) & 3;
-                if self.quickcraft_type == 0
-                    || self.quickcraft_type == 1
-                    || self.quickcraft_type == 2 && ctx.infinite_materials
-                {
-                    self.quickcraft_status = 1;
-                    self.quickcraft_slots.clear();
-                } else {
-                    self.reset_quick_craft();
-                }
-            }
-            1 => {
-                let slot = self.slot(index)?;
-                if Self::can_item_quick_replace(
-                    &self.get_item(ctx, slot.index),
-                    &self.carried,
-                    true,
-                ) && slot.may_place(&self.carried, hooks)?
-                    && (self.quickcraft_type == 2
-                        || count(&self.carried) > self.quickcraft_slots.len() as i32)
-                    && self.can_drag_to(&slot)
-                    && !self.quickcraft_slots.contains(&slot.index)
-                {
-                    self.quickcraft_slots.push(slot.index);
-                }
-            }
-            2 => {
-                if self.quickcraft_slots.len() == 1 {
-                    let index = self.quickcraft_slots[0];
-                    self.reset_quick_craft();
-                    return self.clicked(
-                        ctx,
-                        index as i32,
-                        self.quickcraft_type,
-                        ContainerInput::Pickup,
-                        hooks,
-                    );
-                }
-                let source = self.carried.clone();
-                let mut remaining = count(&source);
-                let slots = self.quickcraft_slots.clone();
-                for index in &slots {
-                    let slot = self.slots[*index].clone();
-                    if Self::can_item_quick_replace(
-                        &self.get_item(ctx, *index),
-                        &self.carried,
-                        true,
-                    ) && slot.may_place(&self.carried, hooks)?
-                        && (self.quickcraft_type == 2 || count(&self.carried) >= slots.len() as i32)
-                        && self.can_drag_to(&slot)
-                    {
-                        let old = count(&self.get_item(ctx, *index));
-                        let max = max_stack_size(&source)
-                            .min(slot.max_stack_size(self.container(ctx, slot.container), &source));
-                        let added = match self.quickcraft_type {
-                            0 => (count(&source) as f32 / slots.len() as f32).floor() as i32,
-                            1 => 1,
-                            2 => max_stack_size(&source),
-                            _ => count(&source),
-                        };
-                        let new = (added + old).min(max);
-                        remaining -= new - old;
-                        self.set_item_live(ctx, *index, with_count(&source, new), hooks)?;
-                    }
-                }
-                self.set_carried(with_count(&source, remaining));
-                self.reset_quick_craft();
-            }
-            _ => self.reset_quick_craft(),
-        }
-        Ok(())
+        quick_craft_menu_items(
+            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+            index,
+            button,
+            hooks,
+        )
     }
-    fn can_drag_to(&self, _slot: &Slot) -> bool {
+    pub(super) fn can_drag_to(&self, _slot: &Slot) -> bool {
         true
     }
     fn pickup_all(

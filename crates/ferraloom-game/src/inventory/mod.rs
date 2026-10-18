@@ -25,8 +25,8 @@ pub(crate) use add::add_inventory_value;
 pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};
 pub use click::{
     MenuClickContext, can_quick_replace_menu_item, drop_carried_menu_item, pickup_all_menu_items,
-    pickup_live_menu_item, pickup_menu_item, safe_take_menu_item_stack, swap_menu_item,
-    throw_menu_item, try_remove_menu_item_stack,
+    pickup_live_menu_item, pickup_menu_item, quick_craft_menu_items, safe_take_menu_item_stack,
+    swap_menu_item, throw_menu_item, try_remove_menu_item_stack,
 };
 pub use container::*;
 pub use crafted::crafted_item_post_process;
@@ -62,6 +62,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    ConcurrentQuickCraftModification,
     MissingListenerCopy(ListenerCopyRef),
     MissingStack(StackRef),
     MissingMenu(MenuRef),
@@ -75,6 +76,9 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ConcurrentQuickCraftModification => {
+                write!(f, "quick-craft slots changed during iteration")
+            }
             Self::MissingListenerCopy(reference) => {
                 write!(f, "missing listener copy {reference:?}")
             }

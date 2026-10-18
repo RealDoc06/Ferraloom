@@ -346,6 +346,15 @@ impl MenuTransferContext for InMemoryMenuOperation<'_, '_, '_> {
     }
 }
 impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
+    fn menu(&self) -> Result<&AbstractContainerMenu> {
+        Ok(self.menu)
+    }
+    fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu> {
+        Ok(self.menu)
+    }
+    fn infinite_materials(&self) -> Result<bool> {
+        Ok(self.context.infinite_materials)
+    }
     fn carried_stack(&mut self) -> Result<MemoryStackRef> {
         self.capture(MemoryContainer::Carried, 0)
     }
