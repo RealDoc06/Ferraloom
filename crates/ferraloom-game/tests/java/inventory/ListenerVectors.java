@@ -149,6 +149,28 @@ public final class ListenerVectors {
     events.add("component:" + menu.getCarried().has(DataComponents.BUNDLE_CONTENTS) + ":" + InventoryVectors.item(menu.getCarried()));
     System.out.println("listener\tpickup\t" + String.join(";", events));
   }
+  static void inventoryAdd(RegistryAccess registries, String kind) {
+    var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
+    var inventory = player.getInventory();
+    for (int slot = 0; slot < 36; slot++) inventory.setItem(slot, new ItemStack(Items.DIRT, 64));
+    inventory.setItem(0, new ItemStack(Items.STONE, 60));
+    inventory.setItem(40, new ItemStack(Items.STONE, 63));
+    if (kind.equals("empty") || kind.equals("damaged")) inventory.setItem(1, ItemStack.EMPTY);
+    player.getAbilities().instabuild = kind.equals("infinite");
+    var source = new net.minecraft.world.SimpleContainer(1);
+    var input = new ItemStack(kind.equals("damaged") ? Items.IRON_PICKAXE : Items.STONE, kind.equals("damaged") ? 1 : 10);
+    if (kind.equals("damaged")) input.set(DataComponents.DAMAGE, 7);
+    source.setItem(0, input);
+    if (kind.equals("detached")) source.setItem(0, new ItemStack(Items.DIRT, 7));
+    var events = new ArrayList<String>();
+    events.add("added:" + inventory.add(input));
+    events.add("left:" + InventoryVectors.item(input));
+    for (int slot : new int[]{0, 1, 40}) events.add(slot + ":" + InventoryVectors.item(inventory.getItem(slot)));
+    input.grow(2);
+    events.add("held:" + InventoryVectors.item(input));
+    events.add("owner:" + InventoryVectors.item(source.getItem(0)));
+    System.out.println("listener\tinventory-add-" + kind + "\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -169,5 +191,6 @@ public final class ListenerVectors {
     safeInsert(false);
     safeInsert(true);
     pickup(registries);
+    for (var kind : new String[]{"partial", "infinite", "empty", "damaged", "detached"}) inventoryAdd(registries, kind);
   }
 }

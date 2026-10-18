@@ -27,3 +27,8 @@ server-only result calculation while avoiding a running world or sockets.
 The regular `InventoryVectors` fixture uses a concrete non-server Level and
 empty recipe property sets. Those vectors cover storage rules rather than
 recipe computation. All generated expected values come from vanilla execution.
+# Retained insertion
+
+`ListenerVectors` also captures Inventory.add's partial/full/infinite-materials
+returns, damaged-item copyAndClear, and a replaced source receiver. The same
+records drive the value and live-handle insertion adapters.

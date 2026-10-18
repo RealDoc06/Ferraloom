@@ -1,4 +1,5 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
+mod add;
 mod block_containers;
 mod click;
 mod container;
@@ -20,6 +21,8 @@ mod stacks;
 mod sync;
 mod transfer;
 
+pub(crate) use add::add_inventory_value;
+pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};
 pub use click::{
     MenuClickContext, pickup_live_menu_item, pickup_menu_item, try_remove_menu_item_stack,
 };
