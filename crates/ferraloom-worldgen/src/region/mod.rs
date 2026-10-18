@@ -185,14 +185,6 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
     }
     // --- end ore and cave family ---
-    fn destroy_block(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _drop: bool,
-    ) -> Result<bool, Error> {
-        Err(Error("Unsupported: destroy_block".into()))
-    }
     // --- tree family ---
     fn populate_worldgen_beehive(
         &self,
