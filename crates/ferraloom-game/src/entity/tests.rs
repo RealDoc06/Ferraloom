@@ -34,6 +34,41 @@ fn assert_vector(actual: Vec3, expected: Vec3, label: &str) {
 }
 
 #[test]
+fn no_collision_stops_at_first_shape_and_retains_later_required_reads() {
+    let mut actual = Vec::new();
+    for block in [Block::STONE, Block::AIR, Block::WATER] {
+        for liquids in [false, true] {
+            let mut level = level(false);
+            level.remove_chunk(ChunkPos::new(0, 1)).unwrap();
+            level
+                .set_block_state(BlockPos::new(0, 64, 0), block.default_state())
+                .unwrap();
+            let result = match level.no_collision(
+                None,
+                ferraloom_util::Aabb::new(0.1, 64.1, 0.1, 0.9, 64.9, 16.2),
+                liquids,
+            ) {
+                Ok(clear) => clear.to_string(),
+                Err(crate::level::LevelError::MissingChunk(pos)) => {
+                    assert_eq!(pos, ChunkPos::new(0, 1));
+                    "required-read".to_owned()
+                }
+                Err(error) => panic!("unexpected collision query error: {error}"),
+            };
+            actual.push(format!(
+                "no-collision-order\t{}\t{liquids}\t{result}",
+                block.name()
+            ));
+        }
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("no-collision-order\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     use ferraloom_data::registries::attribute::Id as Attribute;
     use ferraloom_protocol::codec::VarInt;

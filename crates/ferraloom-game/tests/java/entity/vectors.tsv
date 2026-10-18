@@ -230,6 +230,12 @@ player-tracking	6	-
 worldgen-entities	preorder	1:0:false,2:0:false,4:0:false	1:1:none,2:0:1,4:0:none	false
 worldgen-entities	duplicate	1:0:false,2:0:false	1:true
 worldgen-entities	unknown-root	0
+no-collision-order	minecraft:stone	false	false
+no-collision-order	minecraft:stone	true	false
+no-collision-order	minecraft:air	false	required-read
+no-collision-order	minecraft:air	true	required-read
+no-collision-order	minecraft:water	false	required-read
+no-collision-order	minecraft:water	true	false
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0
