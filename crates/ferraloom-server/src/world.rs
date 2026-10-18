@@ -404,6 +404,7 @@ impl World {
                                 &mut chunks, [pos.x, pos.z], &[ChunkStatus::Terrain], 0,
                                 None, &LocalBlockBehavior, seed, generator.sea_level(),
                             )?;
+                            region.set_has_skylight(dimension.has_skylight);
                             match generator.as_ref() {
                                 ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
                                 ChunkGenerator::Flat(_) => {
