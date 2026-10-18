@@ -5,7 +5,7 @@ use crate::{
     block::{
         BlockBehavior, BlockMethod, LevelAccessRef, LevelReaderRef, UPDATE_LIMIT, UpdateFlags,
     },
-    level::{Level, LevelError, effects::LevelEffect, redstone::Orientation},
+    level::{Level, LevelError, redstone::Orientation},
     ticks::TickPriority,
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -265,7 +265,12 @@ impl BlockBehavior for RepeaterBlock {
             if self.can_survive(state, pos, &LevelReaderRef::Server(level))? {
                 check_tick(level, pos, state)?;
             } else {
-                level.emit(LevelEffect::DropResources { pos, state });
+                let block_entity = if state.has_block_entity() {
+                    level.get_or_promote_block_entity(pos)?
+                } else {
+                    None
+                };
+                crate::block::drops::drop_resources(state, pos, block_entity, level)?;
                 level.remove_block(pos, false)?;
                 for direction in Direction::VALUES {
                     level.update_neighbors_at(pos.relative(direction, 1), state.block())?;

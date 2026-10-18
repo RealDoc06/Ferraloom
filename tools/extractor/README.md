@@ -158,3 +158,10 @@ and whether each registered receiver implements `Nameable`. The last fact is
 checked against the actual factory receiver for every valid block, including
 aliases. It is independent of whether a receiver currently has a custom name;
 `CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.
+
+`ExtractBlockMethods` records `spawnDestroyParticles` independently from
+`spawnDestroyByEntityParticles`: `Level#destroyBlock` calls the former, whose
+base `Block` implementation redispatches the latter with a null source. The
+only former-method override is `StrawBedBlock` (level event 2014);
+`BaseFireBlock` overrides the latter with no particles. DestroyBlock's breaker
+is loot/game-event context and is not excluded from level event 2001.

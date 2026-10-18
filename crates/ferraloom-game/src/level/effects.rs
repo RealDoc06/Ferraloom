@@ -26,10 +26,6 @@ pub enum LevelEffect {
         old: BlockState,
         new: BlockState,
     },
-    DropResources {
-        pos: BlockPos,
-        state: BlockState,
-    },
     DestroyParticles {
         pos: BlockPos,
         state: BlockState,
