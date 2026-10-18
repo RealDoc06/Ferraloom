@@ -197,7 +197,7 @@ impl EntityStorage {
             return Err(LevelError::DuplicateEntity(id));
         }
         let base = state.as_entity_mut();
-        if base.network_id == 0 {
+        if !base.network_id_allocated {
             base.network_id = self
                 .ids
                 .allocate(&self.lookup)
@@ -206,6 +206,7 @@ impl EntityStorage {
             // distinct stream until the server supplies its entity seed allocator.
             base.random = ferraloom_util::random::LegacyRandomSource::new(id.0 as i64);
             base.uuid = Uuid::insecure(&mut base.random);
+            base.network_id_allocated = true;
         }
         if !self.lookup.add(base.network_id, base.uuid, id) {
             return Err(LevelError::DuplicateEntity(id));
@@ -379,5 +380,44 @@ impl Level {
             region.entity_tick_list.remove(network_id);
             region.entities.retire(id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Behaviors,
+        entity::player::{GameType, ServerPlayer},
+        level::Region,
+    };
+
+    #[test]
+    fn supplied_zero_network_id_retains_player_identity() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let uuid = Uuid::offline_player("JoinBot");
+        let entity = EntityRef(1);
+        level
+            .add_entity(
+                entity,
+                EntityState::Player(Box::new(ServerPlayer::new(
+                    uuid,
+                    "JoinBot".into(),
+                    0,
+                    Vec3::ZERO,
+                    GameType::Survival,
+                ))),
+            )
+            .unwrap();
+        let base = level.entity::<EntityData>(entity).unwrap();
+        assert_eq!(base.network_id, 0);
+        assert_eq!(base.uuid, uuid);
+        assert_eq!(level.entity_by_network_id(0), Some(entity));
+        assert_eq!(level.entity_by_uuid(uuid), Some(entity));
+        assert_eq!(
+            base.save_without_id().get_int_array("UUID").unwrap(),
+            uuid.to_int_array()
+        );
     }
 }

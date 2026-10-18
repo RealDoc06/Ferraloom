@@ -4,7 +4,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | `entity::persistence::tests; level::entity::EntityIdAllocator` | - | partial |
+| entities.lifecycle.uuid-id | Assign runtime entity ids and retain stable UUIDs through save, load and dimension travel | `Entity; ServerLevel#addEntity` | `entity::persistence::tests; level::entity::tests::supplied_zero_network_id_retains_player_identity` | - | partial |
 | entities.lifecycle.metadata | Track synchronized entity data and send dirty metadata to watchers | `SynchedEntityData; ServerEntity#sendChanges` | `entity::synched_data::tests::dirty_metadata_preserves_accessor_order_and_forced_updates` | - | partial |
 | entities.lifecycle.passengers | Maintain riding chains, controlling passengers, dismount positions and recursive saving | `Entity#startRiding; Entity#stopRiding` | `entity::lifecycle` | - | partial |
 | entities.lifecycle.pose-dimensions | Update entity dimensions and collision bounds when pose or size changes | `Entity#refreshDimensions; LivingEntity` | `entity::EntityDimensions` | - | partial |
