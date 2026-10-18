@@ -212,7 +212,7 @@ pub fn load_items(tag: &CompoundTag, items: &mut [ItemStack]) {
     for entry in tag
         .get_list("Items")
         .into_iter()
-        .flatten()
+        .flat_map(|list| list.0.iter())
         .filter_map(Tag::as_compound)
     {
         let slot = usize::from(entry.get_byte_or("Slot", 0) as u8);
