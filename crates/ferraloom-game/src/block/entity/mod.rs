@@ -128,6 +128,8 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Sign(Box<super::containers::sign::SignBlockEntity>),
+    Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     EndPortal(BlockEntityData),
     Chest(Box<ChestBlockEntity>),
     Barrel(Box<BarrelBlockEntity>),
@@ -137,6 +139,8 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Sign(entity) => &entity.parent,
+            Self::Furnace(entity) => &entity.parent.parent,
             Self::EndPortal(data) => data,
             Self::Chest(entity) => &entity.parent.parent.parent,
             Self::Barrel(entity) => &entity.parent.parent.parent,
@@ -146,6 +150,8 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Sign(entity) => &mut entity.parent,
+            Self::Furnace(entity) => &mut entity.parent.parent,
             Self::EndPortal(data) => data,
             Self::Chest(entity) => &mut entity.parent.parent.parent,
             Self::Barrel(entity) => &mut entity.parent.parent.parent,
@@ -155,6 +161,8 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
+            Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::EndPortal(_) => &THE_END_PORTAL,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
             _ => &super::containers::chest::STORAGE_ENTITY,
@@ -179,10 +187,16 @@ impl BlockEntityState {
         }
     }
     pub fn container(&self) -> Option<&BaseContainerBlockEntity> {
-        self.randomizable().map(|entity| &entity.parent)
+        match self {
+            Self::Furnace(entity) => Some(&entity.parent),
+            _ => self.randomizable().map(|entity| &entity.parent),
+        }
     }
     pub fn container_mut(&mut self) -> Option<&mut BaseContainerBlockEntity> {
-        self.randomizable_mut().map(|entity| &mut entity.parent)
+        match self {
+            Self::Furnace(entity) => Some(&mut entity.parent),
+            _ => self.randomizable_mut().map(|entity| &mut entity.parent),
+        }
     }
     /// Port of BlockEntity#loadWithComponents. Unknown/bad component values are reported by the codec and ignored.
     pub fn load_with_components(&mut self, tag: &CompoundTag) {
@@ -294,6 +308,14 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
+        BlockEntityType::SIGN | BlockEntityType::HANGING_SIGN => Ok(BlockEntityState::Sign(
+            Box::new(super::containers::sign::SignBlockEntity::new(data)),
+        )),
+        BlockEntityType::FURNACE | BlockEntityType::SMOKER | BlockEntityType::BLAST_FURNACE => {
+            Ok(BlockEntityState::Furnace(Box::new(
+                super::containers::furnace::AbstractFurnaceBlockEntity::new(data),
+            )))
+        }
         BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST => Ok(BlockEntityState::Chest(
             Box::new(ChestBlockEntity::new(data)),
         )),
@@ -346,6 +368,11 @@ pub fn supports(block: Block) -> bool {
         registry::for_block(block),
         Some(
             BlockEntityType::END_PORTAL
+                | BlockEntityType::SIGN
+                | BlockEntityType::HANGING_SIGN
+                | BlockEntityType::FURNACE
+                | BlockEntityType::SMOKER
+                | BlockEntityType::BLAST_FURNACE
                 | BlockEntityType::CHEST
                 | BlockEntityType::TRAPPED_CHEST
                 | BlockEntityType::BARREL
@@ -411,3 +438,9 @@ pub fn new_block_entity(
 pub fn supports_creation(block: Block) -> bool {
     block == Block::MOVING_PISTON || supports(block)
 }
+
+projection!(super::containers::sign::SignBlockEntity, Sign);
+projection!(
+    super::containers::furnace::AbstractFurnaceBlockEntity,
+    Furnace
+);
