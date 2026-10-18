@@ -464,8 +464,8 @@ impl EntityQuery for MinecraftServer {
             player: true,
             dimension: "minecraft:overworld",
             position: player.position,
-            width: 0.6,
-            height: 1.8,
+            width: f64::from(player.dimensions.width),
+            height: f64::from(player.dimensions.height),
         })
     }
     fn display_name(&self, entity: EntityRef) -> Component {
@@ -502,21 +502,17 @@ impl EntityQuery for MinecraftServer {
                 matched != *inverted
             }
             SelectorPredicate::Tag { value, inverted } => {
-                let tags = player.saved.get_list("Tags");
                 let matched = if value.is_empty() {
-                    tags.is_none_or(|tags| tags.is_empty())
+                    player.tags.is_empty()
                 } else {
-                    tags.is_some_and(|tags| {
-                        tags.iter().any(|tag| {
-                            tag.as_string()
-                                .is_some_and(|tag| tag.to_string_lossy() == *value)
-                        })
-                    })
+                    player.tags.contains(value)
                 };
                 matched != *inverted
             }
             SelectorPredicate::Nbt { value, inverted } => {
-                ferraloom_nbt::compare_nbt(Some(value), Some(&Tag::Compound(player.save())), true)
+                let tag = ferraloom_game::commands::arguments::selectors::player_nbt(player)
+                    .map_err(|_| exceptions::error("ferraloom.selector.pending", &[]))?;
+                ferraloom_nbt::compare_nbt(Some(value), Some(&Tag::Compound(tag)), true)
                     != *inverted
             }
             SelectorPredicate::Level(range) => {

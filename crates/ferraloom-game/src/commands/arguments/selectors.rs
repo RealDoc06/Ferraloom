@@ -1,4 +1,5 @@
 //! Port of EntitySelectorParser and EntitySelectorOptions. Evaluation remains at the caller.
+mod player;
 use super::{identifier, nbt, range::NumberRange};
 use crate::{
     commands::{
@@ -12,6 +13,7 @@ use ferraloom_brigadier::{CommandSyntaxException, StringReader};
 use ferraloom_data::EntityType;
 use ferraloom_nbt::Tag;
 use ferraloom_util::{Uuid, Vec3, mth};
+pub use player::player_nbt;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
