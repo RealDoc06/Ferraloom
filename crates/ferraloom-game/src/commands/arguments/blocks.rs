@@ -113,3 +113,132 @@ pub fn parse(reader: &mut StringReader) -> Result<BlockInput, CommandSyntaxExcep
     }
     result
 }
+
+/// Port of BlockPredicateArgument's concrete-block and tag predicate alternatives.
+#[derive(Clone, Debug)]
+pub enum BlockPredicate {
+    Block(BlockInput),
+    Tag {
+        name: String,
+        blocks: Vec<Block>,
+        properties: BTreeMap<String, String>,
+        nbt: Option<Tag>,
+    },
+}
+impl BlockPredicate {
+    pub fn matches(&self, state: BlockState, block_entity: Option<&Tag>) -> bool {
+        let (block_matches, properties, expected_nbt) = match self {
+            Self::Block(input) => (
+                input.state.block() == state.block(),
+                &input.properties,
+                &input.nbt,
+            ),
+            Self::Tag {
+                blocks,
+                properties,
+                nbt,
+                ..
+            } => (blocks.contains(&state.block()), properties, nbt),
+        };
+        block_matches
+            && properties.iter().all(|(key, value)| {
+                state
+                    .properties()
+                    .any(|(name, actual)| name == key && actual == value)
+            })
+            && expected_nbt.as_ref().is_none_or(|expected| {
+                ferraloom_nbt::compare_nbt(Some(expected), block_entity, true)
+            })
+    }
+}
+pub fn predicate(
+    reader: &mut StringReader,
+    context: &crate::commands::context::CommandBuildContext,
+) -> Result<BlockPredicate, CommandSyntaxException> {
+    if !reader.can_read() || reader.peek() != 35 {
+        return parse(reader).map(BlockPredicate::Block);
+    }
+    let start = reader.cursor();
+    let parsed = (|| {
+        reader.skip();
+        let name = identifier(reader)?;
+        let blocks = context
+            .tag("minecraft:block", &name)
+            .ok_or_else(|| {
+                reader.set_cursor(start);
+                error_at(
+                    reader,
+                    "arguments.block.tag.unknown",
+                    std::slice::from_ref(&name),
+                )
+            })?
+            .iter()
+            .filter_map(|name| Block::from_name(name))
+            .collect();
+        let mut properties = BTreeMap::new();
+        if reader.can_read() && reader.peek() == 91 {
+            reader.skip();
+            let mut value_start = None;
+            reader.skip_whitespace();
+            while reader.can_read() && reader.peek() != 93 {
+                reader.skip_whitespace();
+                let key_start = reader.cursor();
+                let key = reader.read_string()?;
+                // The tag parser intentionally leaves its concrete-block id at the empty default.
+                if properties.contains_key(&key) {
+                    reader.set_cursor(key_start);
+                    return Err(error_at(
+                        reader,
+                        "argument.block.property.duplicate",
+                        &[key, "minecraft:".into()],
+                    ));
+                }
+                reader.skip_whitespace();
+                if !reader.can_read() || reader.peek() != 61 {
+                    reader.set_cursor(key_start);
+                    return Err(error_at(
+                        reader,
+                        "argument.block.property.novalue",
+                        &[key, "minecraft:".into()],
+                    ));
+                }
+                reader.skip();
+                reader.skip_whitespace();
+                value_start = Some(reader.cursor());
+                let value = reader.read_string()?;
+                properties.insert(key, value);
+                reader.skip_whitespace();
+                if reader.can_read() {
+                    value_start = None;
+                    match reader.peek() {
+                        44 => reader.skip(),
+                        93 => break,
+                        _ => return Err(error_at(reader, "argument.block.property.unclosed", &[])),
+                    }
+                }
+            }
+            if !reader.can_read() {
+                if let Some(start) = value_start {
+                    reader.set_cursor(start);
+                }
+                return Err(error_at(reader, "argument.block.property.unclosed", &[]));
+            }
+            reader.skip();
+        }
+        let nbt = if reader.can_read() && reader.peek() == 123 {
+            Some(nbt(reader, true)?)
+        } else {
+            None
+        };
+        Ok(BlockPredicate::Tag {
+            name,
+            blocks,
+            properties,
+            nbt,
+        })
+    })();
+    if parsed.is_err() {
+        reader.set_cursor(start);
+    }
+    parsed
+}

@@ -39,6 +39,7 @@ pub enum ArgumentValue {
     Criteria(scoreboard::ObjectiveCriteria),
     Resources(Vec<String>),
     Block(blocks::BlockInput),
+    BlockPredicate(blocks::BlockPredicate),
     Item(items::ItemInput),
     Boolean(bool),
     Integer(i32),
@@ -281,6 +282,7 @@ impl MinecraftArgument {
                 V::Identifier(if tag { format!("#{value}") } else { value })
             }
             A::BlockState {} => V::Block(blocks::parse(reader)?),
+            A::BlockPredicate {} => V::BlockPredicate(blocks::predicate(reader, &self.context)?),
             A::ItemStack {} => V::Item(items::parse(reader)?),
             A::ItemSlot {} => V::Integer(slots::parse(reader, true)?.slots[0]),
             A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
