@@ -28,6 +28,7 @@ impl Default for Cow {
                         parent: PathfinderMob {
                             parent: Mob {
                                 parent: LivingEntity {
+                                    equipment: Default::default(),
                                     parent: EntityData::default(),
                                     // AbstractCow#createAttributes, not a guessed mob default.
                                     health: 10.0,

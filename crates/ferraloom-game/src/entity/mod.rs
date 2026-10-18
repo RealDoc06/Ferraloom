@@ -62,6 +62,7 @@ pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 #[derive(Debug)]
 pub struct LivingEntity {
     pub parent: EntityData,
+    pub equipment: player::equipment::EntityEquipment,
     pub health: f32,
     pub last_hurt: f32,
     pub damage_cooldown_time: i32,
