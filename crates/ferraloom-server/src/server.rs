@@ -356,6 +356,7 @@ impl MinecraftServer {
     }
     /// Port of MinecraftServer#runServer's 50ms deadline and overload catch-up.
     async fn run(mut self) -> Result<()> {
+        self.prepare_command_tickets().await?;
         println!(
             "Ferraloom 26.3 running; single-region mode. Structure starts/references, general biome decoration and original mob spawning are passthrough."
         );
@@ -755,38 +756,10 @@ impl MinecraftServer {
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         for (request, terrain) in self.world.poll_terrain()? {
-            let pos = terrain.pos;
-            if pos == ChunkPos::containing(self.world.spawn)
-                && !self.world.level_data.data.contains_key("spawn")
-            {
-                self.world.spawn.y = terrain.surface
-                    [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-            }
-            let chunk = self.world.integrate(request, terrain)?;
-            self.level
-                .level
-                .add_chunk(chunk)
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            self.level
-                .chunks
-                .holders
-                .get_mut(&pos.pack())
-                .unwrap()
-                .status = ChunkStatus::InitializeLight;
+            self.integrate_command_terrain(request, terrain)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
-            let holder = self
-                .level
-                .chunks
-                .holders
-                .get_mut(&light.pos.pack())
-                .context("unknown light job")?;
-            ensure!(holder.request_id == light.request, "stale light completion");
-            holder.status = ChunkStatus::Full;
-            self.world.ready.insert(light.pos);
-            for (pos, data) in light.updates {
-                self.world.lights.insert(pos, data);
-            }
+            self.integrate_command_light(light)?;
         }
         Ok(())
     }
@@ -1899,6 +1872,7 @@ impl MinecraftServer {
     }
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
         self.save_game_rules().await?;
+        self.save_command_tickets().await?;
         let snapshots = self
             .level
             .chunks
@@ -1990,6 +1964,7 @@ fn initialize_live_level(
         .load::<WeatherData>("minecraft:weather")?
         .map_or_else(WeatherData::default, |data| *data.value());
     level.level.load_weather(weather);
+    command_level::load_command_tickets(level, world)?;
     Ok(())
 }
 fn game_error(error: LevelError) -> anyhow::Error {

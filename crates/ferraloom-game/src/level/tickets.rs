@@ -303,7 +303,6 @@ impl TicketStorage {
                 cursor.remove();
             }
         }
-        drop(cursor);
         if removed_forced {
             self.rebuild_forced_chunks();
         }
@@ -400,7 +399,11 @@ fn decode_ticket(tag: &Tag) -> Result<(ChunkPos, TicketRecord, Option<String>), 
     let kind = TicketType::by_name(id.as_str()).ok_or_else(|| {
         format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:ticket_type]: {id}")
     })?;
-    let level = ticket_integer(required("level")?)? as i32;
+    let level = match required("level")? {
+        Tag::Float(value) => *value as i32,
+        Tag::Double(value) => *value as i32,
+        value => ticket_integer(value)? as i32,
+    };
     if level < 0 {
         return Err(format!("Value must be non-negative: {level}"));
     }

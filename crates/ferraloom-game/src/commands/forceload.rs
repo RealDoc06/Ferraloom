@@ -8,13 +8,14 @@ use ferraloom_brigadier::CommandSyntaxException;
 use ferraloom_protocol::chat::Component;
 use ferraloom_util::ChunkPos;
 
-pub trait ForceLoadAccess {
+pub trait ForceLoadAccess: Send {
+    type Error: From<CommandSyntaxException>;
     fn forced_chunks(&self) -> Vec<ChunkPos>;
     fn set_chunk_forced(
         &mut self,
         position: ChunkPos,
         forced: bool,
-    ) -> Result<bool, CommandSyntaxException>;
+    ) -> impl std::future::Future<Output = Result<bool, Self::Error>> + Send;
 }
 pub struct ForceLoadOutput {
     pub result: CommandResult,
@@ -42,10 +43,10 @@ fn column(command: &PreparedCommand, name: &str) -> [i32; 2] {
         .position(&command.source, None);
     [position.x.floor() as i32, position.z.floor() as i32]
 }
-pub fn run<A: ForceLoadAccess>(
+pub async fn run<A: ForceLoadAccess>(
     command: &PreparedCommand,
     access: &mut A,
-) -> Result<ForceLoadOutput, CommandSyntaxException> {
+) -> Result<ForceLoadOutput, A::Error> {
     let dimension = &command.source.level.dimension;
     let action = command.literals[1].as_str();
     if action == "query" {
@@ -57,7 +58,8 @@ pub fn run<A: ForceLoadAccess>(
                 return Err(error(
                     "commands.forceload.query.failure",
                     &[chunk_text(position), dimension.clone()],
-                ));
+                )
+                .into());
             }
             return Ok(success(
                 1,
@@ -112,7 +114,7 @@ pub fn run<A: ForceLoadAccess>(
     }
     if action == "remove" && command.literals.iter().any(|literal| literal == "all") {
         for chunk in access.forced_chunks() {
-            access.set_chunk_forced(chunk, false)?;
+            access.set_chunk_forced(chunk, false).await?;
         }
         return Ok(success(
             0,
@@ -131,7 +133,7 @@ pub fn run<A: ForceLoadAccess>(
     let max = [from[0].max(to[0]), from[1].max(to[1])];
     if min.iter().any(|value| *value < -30_000_000) || max.iter().any(|value| *value >= 30_000_000)
     {
-        return Err(error("argument.pos.outofworld", &[]));
+        return Err(error("argument.pos.outofworld", &[]).into());
     }
     let min = ChunkPos::new(min[0] >> 4, min[1] >> 4);
     let max = ChunkPos::new(max[0] >> 4, max[1] >> 4);
@@ -141,14 +143,15 @@ pub fn run<A: ForceLoadAccess>(
         return Err(error(
             "commands.forceload.toobig",
             &["256".into(), total.to_string()],
-        ));
+        )
+        .into());
     }
     let add = action == "add";
     let mut changed = Vec::new();
     for x in min.x..=max.x {
         for z in min.z..=max.z {
             let position = ChunkPos::new(x, z);
-            if access.set_chunk_forced(position, add)? {
+            if access.set_chunk_forced(position, add).await? {
                 changed.push(position);
             }
         }
@@ -156,7 +159,7 @@ pub fn run<A: ForceLoadAccess>(
     let action = if add { "added" } else { "removed" };
     let count = changed.len() as i32;
     if count == 0 {
-        return Err(error(&format!("commands.forceload.{action}.failure"), &[]));
+        return Err(error(&format!("commands.forceload.{action}.failure"), &[]).into());
     }
     Ok(if count == 1 {
         success(
@@ -191,13 +194,14 @@ mod tests {
     #[derive(Default)]
     struct Tickets(LongOpenHashSet);
     impl ForceLoadAccess for Tickets {
+        type Error = CommandSyntaxException;
         fn forced_chunks(&self) -> Vec<ChunkPos> {
             self.0
                 .iter()
                 .map(|chunk| ChunkPos::unpack(*chunk))
                 .collect()
         }
-        fn set_chunk_forced(
+        async fn set_chunk_forced(
             &mut self,
             position: ChunkPos,
             forced: bool,
@@ -226,7 +230,16 @@ mod tests {
             serde_json::from_str(include_str!("vanilla/forceload-vectors.json")).unwrap();
         for vector in vectors {
             let command = commands.prepare(&vector.command, source.clone()).unwrap();
-            let result = run(&command, &mut tickets);
+            use std::{
+                future::Future,
+                pin::pin,
+                task::{Context, Poll, Waker},
+            };
+            let Poll::Ready(result) =
+                pin!(run(&command, &mut tickets)).poll(&mut Context::from_waker(Waker::noop()))
+            else {
+                panic!("in-memory ticket mutations must finish immediately");
+            };
             if let Some(expected) = vector.error {
                 assert_eq!(
                     result.err().unwrap().raw_message.text(),

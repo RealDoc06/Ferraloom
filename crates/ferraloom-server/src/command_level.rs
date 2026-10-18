@@ -136,6 +136,15 @@ impl MinecraftServer {
                 })?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "forceload" => {
+                let output =
+                    ferraloom_game::commands::forceload::run(command, &mut ForcedChunks(self))
+                        .await?;
+                if let Some(message) = output.failure {
+                    self.command_failure(source, &command.source, message);
+                }
+                self.apply_command_result(source, &command.source, output.result);
+            }
             "reload" => {
                 let value = reload::run(
                     command.source.clone(),
@@ -149,5 +158,130 @@ impl MinecraftServer {
             _ => return Ok(false),
         }
         Ok(true)
+    }
+}
+
+impl MinecraftServer {
+    /// Shared completion points for polling and synchronous command chunk requests.
+    pub(super) fn integrate_command_terrain(
+        &mut self,
+        request: u64,
+        terrain: crate::world::Terrain,
+    ) -> Result<()> {
+        let pos = terrain.pos;
+        if pos == ChunkPos::containing(self.world.spawn)
+            && !self.world.level_data.data.contains_key("spawn")
+        {
+            self.world.spawn.y = terrain.surface
+                [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
+        }
+        let chunk = self.world.integrate(request, terrain)?;
+        self.level
+            .level
+            .add_chunk(chunk)
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        self.level
+            .chunks
+            .holders
+            .get_mut(&pos.pack())
+            .unwrap()
+            .status = ChunkStatus::InitializeLight;
+        Ok(())
+    }
+    pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
+        let holder = self
+            .level
+            .chunks
+            .holders
+            .get_mut(&light.pos.pack())
+            .context("unknown light job")?;
+        ensure!(holder.request_id == light.request, "stale light completion");
+        holder.status = ChunkStatus::Full;
+        self.world.ready.insert(light.pos);
+        for (pos, data) in light.updates {
+            self.world.lights.insert(pos, data);
+        }
+        Ok(())
+    }
+    async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
+        self.request_area(position, 0)?;
+        loop {
+            self.integrate_jobs()?;
+            if self.world.ready.contains(&position) {
+                return Ok(());
+            }
+            if let Some((&request, _)) = self.world.pending.first_key_value() {
+                // Preserve the canonical request order even if a later job finished first.
+                let terrain = self.world.pending.remove(&request).unwrap().await??;
+                self.integrate_command_terrain(request, terrain)?;
+            } else {
+                let light = self
+                    .world
+                    .light_rx
+                    .recv()
+                    .await
+                    .context("chunk light worker stopped")?;
+                self.integrate_command_light(light)?;
+            }
+        }
+    }
+    pub(super) async fn prepare_command_tickets(&mut self) -> Result<()> {
+        self.level.tickets.activate_all_deactivated_tickets();
+        let positions = self
+            .level
+            .get_force_loaded_chunks()
+            .iter()
+            .copied()
+            .map(ChunkPos::unpack)
+            .collect::<Vec<_>>();
+        for position in positions {
+            self.command_get_chunk(position).await?;
+        }
+        Ok(())
+    }
+    pub(super) async fn save_command_tickets(&self) -> Result<()> {
+        let storage =
+            ferraloom_storage::SavedDataStorage::new(self.world.access.path().join("data"));
+        let mut data = ferraloom_storage::SavedData::new(self.level.tickets.clone());
+        tokio::task::spawn_blocking(move || {
+            storage.save(
+                ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
+                &mut data,
+            )
+        })
+        .await??;
+        Ok(())
+    }
+}
+pub(super) fn load_command_tickets(level: &mut ServerLevel, world: &World) -> Result<()> {
+    use ferraloom_game::level::tickets::TicketStorage;
+    let storage = ferraloom_storage::SavedDataStorage::new(world.access.path().join("data"));
+    if let Some(data) = storage.load::<Tag>(TicketStorage::STORAGE_ID)? {
+        let decoded = TicketStorage::decode_partial(data.value());
+        if let Some(error) = decoded.error {
+            eprintln!("Failed to parse saved data for minecraft:chunk_tickets: {error}");
+        }
+        level.tickets = decoded.value;
+    }
+    Ok(())
+}
+struct ForcedChunks<'a>(&'a mut MinecraftServer);
+impl ferraloom_game::commands::forceload::ForceLoadAccess for ForcedChunks<'_> {
+    type Error = anyhow::Error;
+    fn forced_chunks(&self) -> Vec<ChunkPos> {
+        self.0
+            .level
+            .get_force_loaded_chunks()
+            .iter()
+            .copied()
+            .map(ChunkPos::unpack)
+            .collect()
+    }
+    async fn set_chunk_forced(&mut self, position: ChunkPos, forced: bool) -> Result<bool> {
+        let changed = self.0.level.set_chunk_forced(position, forced);
+        if forced && changed {
+            self.0.command_get_chunk(position).await?;
+        }
+        Ok(changed)
     }
 }
