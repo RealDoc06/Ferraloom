@@ -50,22 +50,13 @@ pub(crate) fn load_entity_tree(
         .get_string("id")
         .ok_or(EntityPersistenceError::MissingType)?
         .to_string_lossy();
-    let name = if name.contains(':') {
-        name
-    } else {
-        format!("minecraft:{name}")
-    };
+    let name = ferraloom_protocol::Identifier::parse(&name)
+        .map_err(|_| EntityPersistenceError::UnsupportedType(name))?;
+    let name = name.as_str().to_owned();
     let kind = EntityType::from_name(&name)
         .ok_or_else(|| EntityPersistenceError::UnsupportedType(name.clone()))?;
     // Reject unavailable factories before allocating, as EntityType#create does.
-    if !matches!(
-        kind,
-        EntityType::COW
-            | EntityType::ITEM
-            | EntityType::TNT
-            | EntityType::FALLING_BLOCK
-            | EntityType::EXPERIENCE_ORB
-    ) {
+    if !super::has_entity_factory(kind) {
         return Err(EntityPersistenceError::UnsupportedType(name));
     }
     let parent = level.create_entity_data(kind);

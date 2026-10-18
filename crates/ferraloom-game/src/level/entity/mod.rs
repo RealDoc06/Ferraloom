@@ -10,10 +10,12 @@ use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod persistent;
+mod worldgen;
 pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
     PersistentEntitySectionManager,
 };
+pub use worldgen::WorldgenEntityLoadError;
 
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
