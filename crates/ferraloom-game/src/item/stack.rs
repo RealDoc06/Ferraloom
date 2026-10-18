@@ -127,6 +127,29 @@ fn has_infinite_materials(owner: Option<EntityRef>, level: &Level) -> Result<boo
     )
 }
 
+/// Port of ItemStack#hurtAndBreak's current required effect boundary. Slice C
+/// replaces this body for every caller while retaining the same receiver root.
+pub fn hurt_and_break(
+    receiver: StackRef,
+    damage: i32,
+    _player: EntityRef,
+    slot: ferraloom_protocol::component::EquipmentSlot,
+    operation: &mut StackOperation<'_>,
+) -> Result<(), LevelError> {
+    let item = operation
+        .level
+        .stack(receiver)
+        .map_err(receiver_error)?
+        .item();
+    operation
+        .level
+        .unported_operation(UnportedOperation::ItemHurtAndBreak {
+            item,
+            amount: damage,
+            slot,
+        })
+}
+
 pub(super) fn unported_use_on(
     item: Item,
     operation: &mut StackOperation<'_>,

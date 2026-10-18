@@ -216,11 +216,21 @@ pub(super) fn base_use_on(
     use ferraloom_protocol::component::ComponentTypeId;
     let reader = LevelReaderRef::Server(operation.level);
     let stack = context.item_in_hand(&reader)?;
-    if crate::entity::player::inventory::component(stack, ComponentTypeId::BLOCK_TRANSFORMER)
-        .is_some()
+    let transformer = match stack
+        .component(ComponentTypeId::BLOCK_TRANSFORMER)
+        .map_err(|error| super::stack::item_data_error(item, error))?
     {
-        // BlockTransformer is the next item slice, not Item#useOn's empty case.
-        super::stack::unported_use_on(item, operation)
+        Some(ferraloom_protocol::component::DataComponent::BlockTransformer(holder)) => Some(
+            holder
+                .0
+                .to_string()
+                .parse()
+                .expect("validated transformer identifier"),
+        ),
+        _ => None,
+    };
+    if let Some(transformer) = transformer {
+        super::block_transformer::transform_block(item, &transformer, context, operation)
     } else {
         Ok(Some(InteractionResult::Pass))
     }

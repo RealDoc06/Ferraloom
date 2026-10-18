@@ -41,6 +41,9 @@ public final class BlockItemVectors {
         @Override public void gameEvent(Holder event, Vec3 at, GameEvent.Context context) {
             actions.add("event:" + ((net.minecraft.resources.ResourceKey<?>) event.unwrapKey().orElseThrow()).identifier() + ":" + Block.getId(context.affectedState()));
         }
+        @Override public void levelEvent(Entity source, int type, BlockPos pos, int data) {
+            actions.add("level-event:" + type + ":" + data);
+        }
         void put(BlockPos pos, BlockState state) {
             getChunkAt(pos).setBlockState(pos, state, 816);
         }

@@ -91,6 +91,7 @@ pub enum LevelError {
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingBlockTransformers,
     MissingSpawnProtectionContext,
     MissingServerShared,
     MissingBlockTags,
